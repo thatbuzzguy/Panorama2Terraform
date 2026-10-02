@@ -11,12 +11,12 @@ This tool is purpose-built for **migrating Palo Alto firewalls to different plat
 ## 📦 What's Included
 
 - `panorama_to_terraform.py` - Main conversion script (comprehensive parser and generator)
+- `split_device_groups.py` - Device group splitting utility
 - `sample_panorama_config.xml` - Example configuration with all features
-- `MIGRATION_GUIDE.md` - **Complete step-by-step migration workflow**
-- `USAGE_GUIDE.md` - Comprehensive technical documentation
 - `README.md` - This file
 - `quick_start.sh` - Quick start demonstration script
-- `example_interface_report.txt` - Sample interface inventory report
+- `docs/` - Documentation (**MIGRATION_GUIDE.md** step-by-step migration workflow, **USAGE_GUIDE.md** technical documentation, coverage and feature guides)
+- `examples/` - Sample reports (**example_interface_report.txt**, **example_terraform_output.txt**)
 
 ## 🚀 Quick Start
 
@@ -255,7 +255,7 @@ terraform apply
 5. ✅ Verify interface naming for target platform
 6. ✅ Use version control (Git)
 7. ✅ Apply changes incrementally
-8. ✅ See `MIGRATION_GUIDE.md` for detailed procedures
+8. ✅ See `docs/MIGRATION_GUIDE.md` for detailed procedures
 
 ## 🐛 Troubleshooting
 
@@ -278,9 +278,11 @@ terraform apply
 
 ## 📚 Documentation
 
-- **MIGRATION_GUIDE.md** - Complete migration workflow and procedures
-- **USAGE_GUIDE.md** - Technical documentation and API details  
-- **example_interface_report.txt** - Sample interface inventory
+- **docs/MIGRATION_GUIDE.md** - Complete migration workflow and procedures
+- **docs/USAGE_GUIDE.md** - Technical documentation and API details
+- **docs/VERSION_4.0_COMPLETE_COVERAGE.md** - Full object coverage details
+- **examples/example_interface_report.txt** - Sample interface inventory
+- **examples/example_terraform_output.txt** - Sample generated output
 - **README.md** - This overview
 
 ## 🤝 Use Cases
@@ -311,7 +313,7 @@ Current Version: **4.0.0** - **Production-Ready Edition**
 - ✨ **Enhanced interfaces**: Tunnel, Aggregate, Subinterfaces
 - ✨ **Complete coverage**: 95%+ of common Palo Alto objects
 - ✨ **31 Terraform files** generated (was ~15)
-- ✨ See `VERSION_4.0_COMPLETE_COVERAGE.md` for full details
+- ✨ See `docs/VERSION_4.0_COMPLETE_COVERAGE.md` for full details
 
 ### Features in v3.0
 - BGP and OSPF routing protocol support
@@ -368,7 +370,7 @@ This project is **dual-licensed**:
 - Need commercial support and warranty
 - Embedding in proprietary software
 
-**📖 Detailed comparison:** See [DUAL-LICENSING-EXPLAINED.md](DUAL-LICENSING-EXPLAINED.md)
+**📖 Detailed comparison:** See [DUAL-LICENSING-EXPLAINED.md](docs/DUAL-LICENSING-EXPLAINED.md)
 
 **💼 Purchase commercial license:** Contact [Your Email]
 
@@ -385,7 +387,7 @@ This project is **dual-licensed**:
 ## 🆘 Support
 
 ### For Migration Assistance
-1. Review `MIGRATION_GUIDE.md` for detailed procedures
+1. Review `docs/MIGRATION_GUIDE.md` for detailed procedures
 2. Check `INTERFACE_MIGRATION_REPORT.txt` for interface planning
 3. Test in lab environment first
 4. Consult Palo Alto platform compatibility matrix
@@ -411,7 +413,7 @@ This project is **dual-licensed**:
 - Generates Terraform for mixed VR/LR configurations
 - Properly identifies router types in generated files
 - **Impact:** Full support for PAN-OS 10.2+ Advanced Routing Engine migrations
-- See [ADVANCED-ROUTING-ENGINE-SUPPORT.md](ADVANCED-ROUTING-ENGINE-SUPPORT.md) for details
+- See [docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md](docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md) for details
 
 ### v4.0.2 (December 2025) - Multi-VR & Split Script Fixes ⭐
 **🐛 Fixed: Multiple Critical Issues**
@@ -421,7 +423,7 @@ This project is **dual-licensed**:
 - Added template-aware parsing with interface signature deduplication
 - Now captures ALL VRs including multi-VR templates and duplicate names
 - **Impact:** Configs with multiple templates now get all VRs (e.g., found 7 instead of 6)
-- See [MULTI-VR-FIX.md](MULTI-VR-FIX.md) for technical details
+- See [docs/MULTI_VR_MIGRATION_GUIDE.md](docs/MULTI_VR_MIGRATION_GUIDE.md) for technical details
 
 **2. Split Device Groups Script:**
 - **Critical Fix:** split_device_groups.py missing 99% of objects in split files
@@ -429,7 +431,7 @@ This project is **dual-licensed**:
 - Fixed: Duplicate device group detection
 - Now merges ALL shared sections into split files
 - **Impact:** Split files now include all 3,699 addresses, 430 services, etc. (was 0)
-- See [SPLIT-SCRIPT-FIX.md](SPLIT-SCRIPT-FIX.md) for technical details
+- See [docs/DEVICE_GROUP_SPLITTING.md](docs/DEVICE_GROUP_SPLITTING.md) for technical details
 
 **Action Required:**
 - ⚠️ If you have multiple templates with VRs: Regenerate your files
@@ -442,7 +444,7 @@ This project is **dual-licensed**:
 - Changed parse order to prioritize device-group definitions over shared references  
 - Fixed 4 parsing methods: address objects, address groups, service objects, service groups
 - **Impact:** All objects now have correct values populated
-- See [SHARED-OBJECT-REFERENCE-FIX.md](SHARED-OBJECT-REFERENCE-FIX.md) for technical details
+- See [docs/VERSION_4.0_COMPLETE_COVERAGE.md](docs/VERSION_4.0_COMPLETE_COVERAGE.md) for technical details
 - ⚠️ **If you used v4.0.0, regenerate your Terraform files**
 
 ### v4.0.0 (December 2025) - Production Enhancement
