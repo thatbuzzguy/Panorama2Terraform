@@ -33,7 +33,7 @@ python3 panorama_to_terraform.py your_config.xml --output-dir terraform_output
 
 ## 📋 Requirements
 
-- Python 3.6+
+- Python 3.9+
 - Terraform 1.0+
 - Access to Palo Alto Panorama or Firewall
 

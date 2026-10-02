@@ -1,0 +1,16 @@
+# Project tool configuration.
+# Python >= 3.9: Python 3.8 is end-of-life and is no longer supported.
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+# Baseline rule set for the lint gate.
+# E, W: pycodestyle. F: pyflakes. I: import order. UP: modern syntax.
+# B: bugbear. SIM: simplify. C4: comprehensions.
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
