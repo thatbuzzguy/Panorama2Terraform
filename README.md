@@ -308,7 +308,7 @@ Current Version: **4.0.0** - **Production-Ready Edition**
 ### What's New in v4.0
 - ✨ **Production-tested** on 133,000-line config with 10,000+ objects
 - ✨ **16 new object types**: Tags, Custom URLs, App Groups/Filters, PBF, Decryption, etc.
-- ✨ **Terraform Provider 2.0.7** support
+- ✨ **Terraform Provider 2.0.14** support (v2 series baseline)
 - ✨ **36 total object types** (was 20 in v3.0)
 - ✨ **Enhanced interfaces**: Tunnel, Aggregate, Subinterfaces
 - ✨ **Complete coverage**: 95%+ of common Palo Alto objects

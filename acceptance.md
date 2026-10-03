@@ -1,33 +1,30 @@
-# Acceptance — F1.7: Security and robustness tests
+# Acceptance — F2.1: Provider baseline
 
 ## Purpose
-Prove the converter and splitter behave safely on hostile or degenerate
-input, and fix the gaps the tests expose.
+Pin the generated `provider.tf` to a v2 range that is actually verified,
+and record that range in the docs.
 
-## Hostile input (must fail cleanly: non-zero exit, no traceback, no data leak)
-1. Entity expansion ("billion laughs" internal DTD).
-2. External entity reference (XXE, `SYSTEM "file://..."`).
-3. Not well-formed XML (illegal control character in text).
+## Facts established
+- The registry's latest 2.x release is **2.0.14** (the audit's reference
+  version, 128 resource types).
+- The generator currently pins `~> 2.0.7`, which predates six 2.0.x
+  releases and is not the version any test has verified.
 
-## Degenerate input (must produce valid output or skip safely)
-4. Object names containing tab and carriage return: the generated .tf
-   must contain no raw control characters (HCL strings only allow
-   escaped forms). FIX `escape_string` accordingly.
-5. Entries without a `name` attribute: skipped, no crash.
-6. Sanitization collisions: PAN-OS names `a-b`, `a_b`, and `A-B` all
-   sanitize to `a_b` today, producing duplicate Terraform resource
-   addresses (invalid HCL). FIX with a per-type name registry that
-   suffixes duplicates; references recompute the same input string and
-   therefore resolve to the same name.
+## Changes
+1. `generate_provider_config` emits `version = "~> 2.0.14"` with a
+   comment recording that 2.0.14 is the verified v2 baseline.
+2. Goldens (sample + kitchen-sink) regenerated; only `provider.tf` may
+   change in each set.
+3. README provider-version lines updated from 2.0.7 to 2.0.14
+   (recording the supported range; claim verification is F2.11).
+
+## Verification (auto-retarget)
+- F1.4 conformance test reads the pin from the golden `provider.tf`, so it
+  re-runs against 2.0.14 with the same expected split: 43 xfailed,
+  13 xpassed (13 missing types, missing `location` — Epic 2 work).
+- F1.5 `terraform init` gate stays green.
+- Full gate: ruff clean; pytest 106 passed, 46 xfailed, 13 xpassed.
 
 ## Non-goals
-- No deep-nesting memory DoS hardening (record in backlog; would need a
-  size limit on input, a product decision).
-- No Epic 2/3 behavior changes.
-
-## Done when
-- tests/test_robustness.py passes (green tests pin the fixes; hostile
-  cases assert clean failure).
-- Golden files byte-identical (no collisions in sample/kitchen sink).
-- ruff clean; full suite green.
-- Committed with an ASD-STE100 message.
+- No emitter changes (F2.2–F2.4).
+- No README coverage-claim rewrite (F2.11).

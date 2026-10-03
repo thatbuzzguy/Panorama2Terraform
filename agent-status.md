@@ -1,9 +1,24 @@
 # Agent Status
 
 ## Current position
-Epic 1 (testing and linting foundation) is COMPLETE. Next: **Epic 2, F2.1 Provider baseline** (see `to-do.md`).
+Epic 2 (complete provider-v2 support). F2.1 complete. Next: **F2.2 Resource mapping**.
 
 ## Session log
+
+### F2.1 — Provider baseline (this session)
+- The registry's latest 2.x release is 2.0.14 (verified via the registry
+  versions API; it is also the audit's reference version). The old pin
+  `~> 2.0.7` predates six 2.0.x releases.
+- `generate_provider_config` now emits `~> 2.0.14` with a comment
+  recording 2.0.14 as the verified v2 baseline.
+- Goldens regenerated (sample + kitchen-sink). Only `provider.tf`
+  changed in each set, as expected.
+- README current-support line updated to 2.0.14; the v4.0.0 changelog
+  entry stays historical.
+- Verified `terraform init` resolves the pin to exactly v2.0.14
+  (signed install). The F1.4 conformance and F1.5 validate gates run
+  against that version. Same split: 43 xfailed, 13 xpassed.
+- Gate: ruff clean. pytest 106 passed, 46 xfailed, 13 xpassed.
 
 ### F1.7 — Security and robustness (this session)
 - Added `tests/test_robustness.py` (10 tests, all green) plus six fixtures

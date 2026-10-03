@@ -12,6 +12,8 @@ The adversarial audit (`ADVERSARIAL_AUDIT_REPORT.md`) found three blocking probl
 
 Goal 1 is complete (Epic 1): CI runs lint plus a 106-test offline suite (parser units, goldens, schema conformance, edge, robustness) and a `terraform validate` gate. 13 emitted types are missing from provider v2 and no block carries `location`; both are pinned by xfail tests that flip green when Epic 2 lands. Problems 2 and 3 remain.
 
+Epic 2 is in progress: F2.1 (provider baseline `~> 2.0.14`) is complete.
+
 ## Goals
 
 | Goal | Description | Definition of Done |

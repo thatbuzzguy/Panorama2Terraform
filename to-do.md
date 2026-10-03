@@ -7,7 +7,7 @@ validate failures) flip green as this epic lands.
 
 ## Tasks
 
-- [ ] **F2.1 Provider baseline** — Generate a `provider.tf` pinned to the v2 range. Record the supported range.
+- [x] **F2.1 Provider baseline** — Generate a `provider.tf` pinned to the v2 range. Record the supported range. (COMPLETED — pin raised to `~> 2.0.14`, the latest 2.x release and the version the gates verify; goldens regenerated, only `provider.tf` changed; README support line updated)
 - [ ] **F2.2 Resource mapping** — One table maps old emitted names to real v2 resources: `panos_address`, `panos_service`, `panos_security_policy_rule`, `panos_nat_policy_rule`, `panos_bgp_*_routing_profile`, `panos_ospf_*_routing_profile`, `panos_virtual_router_static_route_ipv4`, `panos_ethernet_layer3_subinterface`.
 - [ ] **F2.3 `location` on every resource** — Derive the block from the XML source: `shared`, `device_group`, or `vsys`.
 - [ ] **F2.4 Rewrite emitters to v2 schemas** — Use the real nested blocks (`protocol{}`, `layer3{}`, `auto_key{}`, `position{}`). Put proxy-id inside `panos_ipsec_tunnel`. Remove hardcoded assumptions (for example `panos_virtual_router.default`, the hardcoded OSPF area).
