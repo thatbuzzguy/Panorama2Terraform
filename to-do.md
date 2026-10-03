@@ -9,7 +9,7 @@ Goal 1: CI passes offline. Every emitted resource type and argument is verified 
 - [x] **F1.3 Generator golden-file tests** — generate from a fixture, diff against committed expected output. (COMPLETED — 39 tests, 2 golden sets: sample + kitchen-sink)
 - [x] **F1.4 Provider schema conformance test** — assert every emitted resource type exists in `terraform providers schema -json`; assert required arguments are present. (COMPLETED — 56 cases; 43 xfailed with Epic 2 references, 13 xpassed)
 - [x] **F1.5 CI Terraform gate** — `terraform init -backend=false` + `terraform validate` on generated sample output. (COMPLETED — init green; validate xfail until Epic 2)
-- [ ] **F1.6 Fixture corpus** — edge-case configs: quoted DG names, duplicate names across DGs, multi-vsys, mixed VR/LR, IPv6, multi-port services.
+- [x] **F1.6 Fixture corpus** — Build synthetic configs that cover edge cases: quoted device-group names, duplicate names across device groups, multi-vsys, mixed virtual and logical routers, IPv6, multi-port services. (COMPLETED — 6 edge fixtures, 12 tests, splitter quote bug fixed)
 - [ ] **F1.7 Security and robustness tests** — hostile XML (entity expansion), DTD rejection, control-character escaping, empty and colliding names.
 - [x] **F1.8 Lint both scripts** — `split_device_groups.py` under the same ruff gate as `panorama_to_terraform.py`. (COMPLETED with F1.1)
 

@@ -1,9 +1,28 @@
 # Agent Status
 
 ## Current position
-Epic 1 (testing and lint foundation), F1.5 completed. Next: F1.6 fixture corpus.
+Epic 1 (testing and lint foundation), F1.6 completed. Next: F1.7 security and robustness tests.
 
 ## Session log
+
+### F1.6 — Fixture corpus for edge cases (this session)
+- Added six edge fixtures under tests/fixtures/: edge_quoted_dg_names,
+  edge_dup_names_across_dgs, edge_multi_vsys, edge_mixed_vr_lr,
+  edge_ipv6, edge_multi_port_services.
+- Added tests/test_edge_cases.py (12 tests; 10 pass, 2 xfail):
+  - quoted DG names: splitter now matches attributes in Python instead of
+    f-string XPath (single-quote names used to raise
+    `SyntaxError: invalid predicate`). Fixed split_device_groups.py in
+    both the device-group and template lookups.
+  - duplicate names across DGs: pinned current last-wins behavior (green)
+    and xfail the desired per-DG survival (Epic 3 F3.1).
+  - multi-vsys: both vsys objects parse (green).
+  - mixed VR/LR: VR in template + LR in vsys both parse; routes keep
+    next-vip vs next-vr attribution (green).
+  - IPv6: IPv4 parses (green); IPv6 value retention xfail (Epic 2 F2.4).
+  - multi-port/dual services: port list passes through; dual tcp/udp
+    keeps tcp only (green pin; udp drop added to backlog).
+- Gate: ruff clean. pytest 96 passed, 46 xfailed, 13 xpassed.
 
 ### F1.5 — CI Terraform gate (this session)
 - Added tests/test_terraform_validate.py. It generates the sample output

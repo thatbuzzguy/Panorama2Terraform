@@ -1,31 +1,37 @@
-# Acceptance — F1.5: CI Terraform gate
+# Acceptance — F1.6: Fixture corpus for edge cases
 
 ## Purpose
-Make `terraform init -backend=false` + `terraform validate` on generated
-output a permanent gate. The gate runs in CI as a dedicated job and as a
-pytest test so it is visible in the same suite as the rest of Epic 1.
+Build the shared edge-case fixture set (the test asset all three epics
+build on) and pin current behavior with tests. Red→green markers point at
+the epic that must change behavior.
 
-## Design
-- `tests/test_terraform_validate.py`:
-  - Generate the sample-config output with the converter CLI.
-  - `terraform init -backend=false` must succeed (green today).
-  - `terraform validate` must succeed — the current v1-style output fails
-    against the v2 provider, so this check is `xfail` with Epic 2
-    references (F2.2 resource mapping, F2.3 location, F2.4 arguments).
-    It goes green when Epic 2 lands.
-  - Skip (not fail) when the `terraform` binary is absent, so the
-    Python matrix jobs stay unaffected.
-- CI workflow gains a `terraform-gate` job: installs terraform
-  (hashicorp/setup-terraform, pinned) and runs the validate test.
+## Edge cases (per PLAN.md F1.6)
+1. **Quoted device-group names** — DG names containing single and double
+   quotes. The splitter builds XPath with an f-string, which breaks on
+   single-quote names. FIX the splitter to match attributes in Python
+   (no string interpolation), then pin with a test.
+2. **Duplicate names across device groups** — same object name in two DGs.
+   Current: last-wins (one entry). Pin current behavior (green) and add
+   an xfail asserting both entries survive (Epic 3 F3.1 keyed model).
+3. **Multi-vsys** — objects under vsys1 and vsys2. Pin: both are parsed.
+   (vsys scoping in output is Epic 2 F2.3 / Epic 3.)
+4. **Mixed virtual and logical routers** — VR in a template plus LR in a
+   vsys, static routes with next-vip and next-vr nexthops. Pin: both
+   routers and all routes parse with correct attribution.
+5. **IPv6** — an IPv6 address object. Pin: IPv4 parses. xfail: IPv6 keeps
+   its value (currently dropped to an empty entry; Epic 2 F2.4).
+6. **Multi-port services** — a tcp service with a port list and a dual
+   tcp/udp service. Pin current behavior: port list passes through; dual
+   protocol keeps tcp only (udp loss recorded in backlog).
 
 ## Non-goals
-- No generator changes in this task.
-- No `terraform plan`/`apply` (needs live credentials; out of scope).
+- No Epic 2/3 behavior changes. Red→green cases are xfail.
+- No golden regeneration (edge fixtures are parser-level; the kitchen sink
+  remains the generator's golden source).
 
 ## Done when
-- Locally: `pytest tests/test_terraform_validate.py` shows init green,
-  validate xfailed with Epic 2 references (or green if terraform is
-  absent: skip).
-- CI workflow contains the terraform-gate job.
-- `ruff check .` clean; full suite still green.
+- Six `edge_*.xml` fixtures under tests/fixtures/.
+- tests/test_edge_cases.py passes with the intended xfail set.
+- Splitter no longer breaks on single-quote DG names.
+- ruff clean; full suite green.
 - Committed with an ASD-STE100 message.

@@ -58,9 +58,14 @@ def extract_device_group_config(root: ET.Element, device_group_name: str) -> ET.
     localhost = ET.SubElement(devices, 'entry')
     localhost.set('name', 'localhost.localdomain')
 
-    # Find the specific device group
-    dg_xpath = f".//device-group/entry[@name='{device_group_name}']"
-    source_dg = root.find(dg_xpath)
+    # Find the specific device group. Match the name attribute in Python
+    # rather than interpolating it into an XPath string: names may contain
+    # quote characters, which would break (or silently mismatch) the XPath.
+    source_dg = None
+    for dg in root.findall(".//device-group/entry"):
+        if dg.get("name") == device_group_name:
+            source_dg = dg
+            break
 
     if source_dg is None:
         return None
@@ -104,8 +109,11 @@ def extract_device_group_config(root: ET.Element, device_group_name: str) -> ET.
     # Copy template if it exists (network config)
     # Try to find template with matching name or reference
     template_name = device_group_name.replace('DG-', '').replace('dg-', '')
-    template_xpath = f".//template/entry[@name='{template_name}']"
-    source_template = root.find(template_xpath)
+    source_template = None
+    for template in root.findall(".//template/entry"):
+        if template.get("name") == template_name:
+            source_template = template
+            break
 
     if source_template is None:
         # Try without prefix
