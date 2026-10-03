@@ -1,9 +1,21 @@
 # Agent Status
 
 ## Current position
-Epic 1 (testing and lint foundation), F1.4 completed. Next: F1.5 CI Terraform gate.
+Epic 1 (testing and lint foundation), F1.5 completed. Next: F1.6 fixture corpus.
 
 ## Session log
+
+### F1.5 — CI Terraform gate (this session)
+- Added tests/test_terraform_validate.py. It generates the sample output
+  with the converter CLI, then runs `terraform init -backend=false` (must
+  pass today) and `terraform validate` (xfail until Epic 2 F2.2/F2.3/F2.4
+  rewrite the generator: v1 types unsupported, missing location).
+- The test skips when the terraform binary is absent, so the Python matrix
+  jobs are unaffected.
+- Added a terraform-gate CI job to .github/workflows/python-tests.yml.
+  It installs terraform 1.16.1 (hashicorp/setup-terraform@v3) and runs the
+  validate test. It needs the lint-and-test job.
+- Gate: ruff clean. pytest 86 passed, 44 xfailed, 13 xpassed.
 
 ### F1.4 — Provider schema conformance (this session)
 - Added tests/test_schema_conformance.py. It reads the panos provider

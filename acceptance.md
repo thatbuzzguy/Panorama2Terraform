@@ -1,37 +1,31 @@
-# Acceptance — F1.4: Provider schema conformance test
+# Acceptance — F1.5: CI Terraform gate
 
 ## Purpose
-Make the provider schema the single source of truth for what the generator
-may emit. The test loads `terraform providers schema -json` for the provider
-version declared in the generated `provider.tf` and checks the committed
-golden output against it:
+Make `terraform init -backend=false` + `terraform validate` on generated
+output a permanent gate. The gate runs in CI as a dedicated job and as a
+pytest test so it is visible in the same suite as the rest of Epic 1.
 
-1. Every emitted resource type must exist in the provider schema.
-2. For every emitted resource that exists, each required attribute of that
-   type (for example `location`) must be present in every generated block.
-
-## Red→green design
-The current v1-style generator output fails this test (13 of 28 emitted
-types do not exist in provider v2; required attributes such as `location`
-are missing). The failing checks are marked `xfail` with reasons that
-point at the Epic 2 tasks that fix them (F2.2 resource mapping, F2.3
-location). As Epic 2 lands, cases flip to xpass, then the markers come
-off and the suite goes strict green.
-
-## Scope
-- Tests run against the committed golden .tf files (the golden tests already
-  guarantee fresh generation equals the goldens).
-- Provider version is read from `tests/golden/sample/provider.tf`, so the
-  F2.1 version pin automatically retargets this test.
-- Tests skip (not fail) when the `terraform` binary or registry access is
-  unavailable; F1.5 makes terraform mandatory in CI.
+## Design
+- `tests/test_terraform_validate.py`:
+  - Generate the sample-config output with the converter CLI.
+  - `terraform init -backend=false` must succeed (green today).
+  - `terraform validate` must succeed — the current v1-style output fails
+    against the v2 provider, so this check is `xfail` with Epic 2
+    references (F2.2 resource mapping, F2.3 location, F2.4 arguments).
+    It goes green when Epic 2 lands.
+  - Skip (not fail) when the `terraform` binary is absent, so the
+    Python matrix jobs stay unaffected.
+- CI workflow gains a `terraform-gate` job: installs terraform
+  (hashicorp/setup-terraform, pinned) and runs the validate test.
 
 ## Non-goals
-- No `terraform validate` (F1.5).
 - No generator changes in this task.
+- No `terraform plan`/`apply` (needs live credentials; out of scope).
 
 ## Done when
-- `pytest` runs the conformance tests; expected xfails are reported with
-  Epic 2 task references; CI stays green.
-- `ruff check .` clean.
+- Locally: `pytest tests/test_terraform_validate.py` shows init green,
+  validate xfailed with Epic 2 references (or green if terraform is
+  absent: skip).
+- CI workflow contains the terraform-gate job.
+- `ruff check .` clean; full suite still green.
 - Committed with an ASD-STE100 message.
