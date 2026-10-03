@@ -29,6 +29,7 @@ Useful for multi-HA-pair to multi-virtual-router migrations.
 """
 
 import argparse
+import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -141,6 +142,14 @@ def extract_device_group_config(root: ET.Element, device_group_name: str) -> ET.
 
 def split_panorama_config(input_file: str, output_dir: str = None):
     """Split Panorama configuration by device group"""
+    # Panorama exports never contain a DTD. Reject one before parsing:
+    # ElementTree resolves internal entities ("billion laughs" memory DoS),
+    # and external entity declarations are an XXE vector.
+    raw = Path(input_file).read_text(encoding='utf-8', errors='replace')
+    if re.search(r'<!DOCTYPE', raw, re.IGNORECASE):
+        print("Error: input contains a DTD, which Panorama exports never include")
+        return False
+
     try:
         tree = ET.parse(input_file)
         root = tree.getroot()

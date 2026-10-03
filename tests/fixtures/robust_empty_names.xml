@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!-- Robustness: an address entry without a name attribute must be -->
+<!-- skipped without crashing; the named entry must still parse. -->
+<config>
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <address>
+            <entry>
+              <ip-netmask>10.0.0.9/32</ip-netmask>
+            </entry>
+            <entry name="named-host">
+              <ip-netmask>10.0.0.1/32</ip-netmask>
+            </entry>
+          </address>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

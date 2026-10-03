@@ -1,37 +1,33 @@
-# Acceptance — F1.6: Fixture corpus for edge cases
+# Acceptance — F1.7: Security and robustness tests
 
 ## Purpose
-Build the shared edge-case fixture set (the test asset all three epics
-build on) and pin current behavior with tests. Red→green markers point at
-the epic that must change behavior.
+Prove the converter and splitter behave safely on hostile or degenerate
+input, and fix the gaps the tests expose.
 
-## Edge cases (per PLAN.md F1.6)
-1. **Quoted device-group names** — DG names containing single and double
-   quotes. The splitter builds XPath with an f-string, which breaks on
-   single-quote names. FIX the splitter to match attributes in Python
-   (no string interpolation), then pin with a test.
-2. **Duplicate names across device groups** — same object name in two DGs.
-   Current: last-wins (one entry). Pin current behavior (green) and add
-   an xfail asserting both entries survive (Epic 3 F3.1 keyed model).
-3. **Multi-vsys** — objects under vsys1 and vsys2. Pin: both are parsed.
-   (vsys scoping in output is Epic 2 F2.3 / Epic 3.)
-4. **Mixed virtual and logical routers** — VR in a template plus LR in a
-   vsys, static routes with next-vip and next-vr nexthops. Pin: both
-   routers and all routes parse with correct attribution.
-5. **IPv6** — an IPv6 address object. Pin: IPv4 parses. xfail: IPv6 keeps
-   its value (currently dropped to an empty entry; Epic 2 F2.4).
-6. **Multi-port services** — a tcp service with a port list and a dual
-   tcp/udp service. Pin current behavior: port list passes through; dual
-   protocol keeps tcp only (udp loss recorded in backlog).
+## Hostile input (must fail cleanly: non-zero exit, no traceback, no data leak)
+1. Entity expansion ("billion laughs" internal DTD).
+2. External entity reference (XXE, `SYSTEM "file://..."`).
+3. Not well-formed XML (illegal control character in text).
+
+## Degenerate input (must produce valid output or skip safely)
+4. Object names containing tab and carriage return: the generated .tf
+   must contain no raw control characters (HCL strings only allow
+   escaped forms). FIX `escape_string` accordingly.
+5. Entries without a `name` attribute: skipped, no crash.
+6. Sanitization collisions: PAN-OS names `a-b`, `a_b`, and `A-B` all
+   sanitize to `a_b` today, producing duplicate Terraform resource
+   addresses (invalid HCL). FIX with a per-type name registry that
+   suffixes duplicates; references recompute the same input string and
+   therefore resolve to the same name.
 
 ## Non-goals
-- No Epic 2/3 behavior changes. Red→green cases are xfail.
-- No golden regeneration (edge fixtures are parser-level; the kitchen sink
-  remains the generator's golden source).
+- No deep-nesting memory DoS hardening (record in backlog; would need a
+  size limit on input, a product decision).
+- No Epic 2/3 behavior changes.
 
 ## Done when
-- Six `edge_*.xml` fixtures under tests/fixtures/.
-- tests/test_edge_cases.py passes with the intended xfail set.
-- Splitter no longer breaks on single-quote DG names.
+- tests/test_robustness.py passes (green tests pin the fixes; hostile
+  cases assert clean failure).
+- Golden files byte-identical (no collisions in sample/kitchen sink).
 - ruff clean; full suite green.
 - Committed with an ASD-STE100 message.

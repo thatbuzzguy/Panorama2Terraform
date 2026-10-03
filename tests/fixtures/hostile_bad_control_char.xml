@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!-- Hostile input: not well-formed XML. The text below contains a raw -->
+<!-- 0x01 control character, which is illegal in XML 1.0. The converter -->
+<!-- must fail cleanly (non-zero exit, no traceback). Written by Python -->
+<!-- because the byte cannot be typed here. -->
+<config>
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <address>
+            <entry name="x">
+              <ip-netmask>10.0.0.1/32</ip-netmask>
+            </entry>
+          </address>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

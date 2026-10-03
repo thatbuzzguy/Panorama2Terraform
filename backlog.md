@@ -5,7 +5,7 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 ## Tech Debt
 
 - `.gitignore` consistency: `*.xml` is ignored, yet `sample_panorama_config.xml` is committed (audit §4.9).
-- Escape handling does not cover `\r` and control characters (audit §4.6). Fix lands with F1.7.
+- No input size limit on XML files. DTD rejection (F1.7) removes the entity-expansion DoS, but a multi-GB well-formed file still allocates memory. A size limit is a product decision (pair with F3.8).
 - Parser extraction gaps found by F1.2 unit tests (each silently drops data; fix lands with the Epic 2/3 rewrites):
   - Application filter `description` is not extracted.
   - Service object tags are not extracted.
@@ -26,3 +26,8 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 ## Nice-to-Haves
 
 - Adopt `ruff format` as a gate. A one-time format pass of both legacy scripts is required first (about 1500 changed lines in `panorama_to_terraform.py`). Do it as its own task so the diff stays reviewable.
+
+## Notes on Already-Completed Work
+
+- F3.8 (safe XML input) is implemented: both scripts reject DTDs before parsing (F1.7). If F3.8 is promoted, only `defusedxml` or the size limit remains.
+- F2.7 (collision-safe naming) has a foundation: `TerraformGenerator.unique_resource_name` assigns per-type collision-free names via a registry (F1.7). The hash-of-source-path refinement remains with F2.7.

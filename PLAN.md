@@ -10,6 +10,8 @@ The adversarial audit (`ADVERSARIAL_AUDIT_REPORT.md`) found three blocking probl
 2. **Silent data loss.** Name-keyed parsing drops per-device-group rules, policy order, VLANs, IPv6, and multi-port services.
 3. **No test gate.** CI runs only `py_compile` and `--help`. Nothing verifies the generated Terraform.
 
+Goal 1 is complete (Epic 1): CI runs lint plus a 106-test offline suite (parser units, goldens, schema conformance, edge, robustness) and a `terraform validate` gate. 13 emitted types are missing from provider v2 and no block carries `location`; both are pinned by xfail tests that flip green when Epic 2 lands. Problems 2 and 3 remain.
+
 ## Goals
 
 | Goal | Description | Definition of Done |
@@ -20,18 +22,9 @@ The adversarial audit (`ADVERSARIAL_AUDIT_REPORT.md`) found three blocking probl
 
 A brown-field config is an existing production config: mixed shared objects, per-device-group overrides, template stacks, and multiple virtual systems.
 
-## Epic 1 — Testing and Linting Foundation (Goal 1)
+## Epic 1 — Testing and Linting Foundation (Goal 1) — COMPLETE
 
-Strategy: test against static artifacts, not live devices. The static artifacts are XML fixture configs and the provider schema JSON. Both download without Panorama access.
-
-- [ ] **F1.1 Tooling baseline** — Add pytest and ruff to `requirements.txt`. Run lint and tests in pre-commit and CI.
-- [ ] **F1.2 Parser unit tests** — One test per parse method. Fixtures are isolated XML snippets.
-- [ ] **F1.3 Generator golden-file tests** — Generate from a fixture, diff the result against committed expected output.
-- [ ] **F1.4 Provider schema conformance test** — Load `terraform providers schema -json`. Assert that every emitted resource type exists. Assert that required arguments (for example `location`) are present.
-- [ ] **F1.5 CI Terraform gate** — Run `terraform init -backend=false` and `terraform validate` on generated sample output.
-- [ ] **F1.6 Fixture corpus** — Build synthetic configs that cover edge cases: quoted device-group names, duplicate names across device groups, multi-vsys, mixed virtual and logical routers, IPv6, multi-port services.
-- [ ] **F1.7 Security and robustness tests** — Hostile XML (entity expansion), DTD rejection, control-character escaping, empty and colliding names.
-- [ ] **F1.8 Lint both scripts** — Put `panorama_to_terraform.py` and `split_device_groups.py` under the same gate.
+Test against static artifacts (XML fixtures, provider schema JSON), not live devices. Delivered: tooling gate (pytest + ruff in CI and pre-commit), 42 parser unit tests (5 parser bugs found and fixed), golden-file tests for sample and kitchen-sink output, provider schema conformance (13 of 28 emitted types missing from v2 — xfailed until Epic 2), a `terraform init`/`validate` CI gate, an edge-case fixture corpus (splitter quote bug fixed), and security/robustness tests (DTD rejection, control-character escaping, collision-safe resource names). Suite: 106 passed, 46 xfailed, 13 xpassed. Detail is in the git history.
 
 ## Epic 2 — Complete Support of the Latest Provider (Goal 2)
 
@@ -62,7 +55,7 @@ Strategy: model the Panorama hierarchy before generation. Key objects by (device
 - [ ] **F3.5 Multi-vsys** — Represent vsys in the data model and in `location`.
 - [ ] **F3.6 Multi-device, template-aware parsing** — Use explicit device-group → template association. Replace substring matching.
 - [ ] **F3.7 Rewrite `split_device_groups.py`** — Iterate entries and compare `get('name')`. No f-string XPath. Safe shared-section merge. Covered by F1.2 tests.
-- [ ] **F3.8 Safe XML input** — Reject DTDs or use `defusedxml`.
+- [ ] **F3.8 Safe XML input** — Reject DTDs or use `defusedxml`. (DTD rejection already landed in F1.7; remainder is an input size limit or `defusedxml`.)
 - [ ] **F3.9 Per-device-group reports** — Key the interface migration report and the VPN report by device group. Keep the pre-shared-key placeholder warning in the VPN report.
 - [ ] **F3.10 Architecture document** — Write `docs/ARCHITECTURE.md`: data model, parse pipeline, emit pipeline, and naming rules.
 

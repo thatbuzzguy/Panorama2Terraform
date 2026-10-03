@@ -57,6 +57,13 @@ class PanoramaParser:
 
     def __init__(self, xml_file: str):
         self.xml_file = xml_file
+        # Panorama exports never contain a DTD. Reject one before parsing:
+        # ElementTree resolves internal entities, so a deep entity chain
+        # ("billion laughs") is a memory DoS, and external entities are an
+        # XXE vector. A DTD is the only way either reaches the parser.
+        raw = Path(xml_file).read_text(encoding='utf-8', errors='replace')
+        if re.search(r'<!DOCTYPE', raw, re.IGNORECASE):
+            raise ValueError('input contains a DTD, which Panorama exports never include')
         self.tree = ET.parse(xml_file)
         self.root = self.tree.getroot()
 
@@ -2042,6 +2049,12 @@ class TerraformGenerator:
     def __init__(self, output_dir: str):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        # Collision handling for resource names. Two different PAN-OS names
+        # can sanitize to the same Terraform name (for example 'a-b' and
+        # 'a_b'). The registry maps (scope, input) -> assigned name so a
+        # reference site that recomputes the same input gets the same name.
+        self._name_registry: dict[tuple[str, str], str] = {}
+        self._taken_names: dict[str, set[str]] = {}
 
     def sanitize_name(self, name: str) -> str:
         """Sanitize names for Terraform resource names"""
@@ -2054,14 +2067,45 @@ class TerraformGenerator:
             sanitized = f'_{sanitized}'
         return sanitized.lower()
 
+    def unique_resource_name(self, name: str, scope: str) -> str:
+        """Assign a collision-free Terraform resource name.
+
+        Different PAN-OS names can sanitize to the same Terraform name
+        (for example 'a-b' and 'a_b' both become 'a_b'), which would emit
+        duplicate resource addresses (invalid HCL). The first name keeps
+        the base form; later colliding names get a numeric suffix.
+
+        `scope` separates collision domains per resource type, and the
+        registry makes the result deterministic for a given input, so a
+        reference site that recomputes the same input resolves to the same
+        resource name.
+        """
+        key = (scope, name)
+        if key in self._name_registry:
+            return self._name_registry[key]
+        base = self.sanitize_name(name) or 'unnamed'
+        taken = self._taken_names.setdefault(scope, set())
+        candidate, n = base, 2
+        while candidate in taken:
+            candidate = f'{base}_{n}'
+            n += 1
+        taken.add(candidate)
+        self._name_registry[key] = candidate
+        return candidate
+
     def escape_string(self, value: str) -> str:
         """Escape strings for Terraform"""
         if value is None:
             return '""'
-        # Escape special characters
+        # Escape special characters. HCL quoted strings support the escape
+        # sequences below and no other raw control characters.
         value = value.replace('\\', '\\\\')
         value = value.replace('"', '\\"')
+        value = value.replace('\t', '\\t')
+        value = value.replace('\r', '\\r')
         value = value.replace('\n', '\\n')
+        # Strip any remaining C0 control characters and DEL.
+        value = ''.join(ch for ch in value if ch >= ' ' and ch != '\x7f')
         return f'"{value}"'
 
     def generate_provider_config(self):
@@ -2127,7 +2171,7 @@ variable "device_group" {
         content = '# Address Objects\n\n'
 
         for addr in addresses:
-            resource_name = self.sanitize_name(addr['name'])
+            resource_name = self.unique_resource_name(addr['name'], 'panos_address_object')
 
             content += f'resource "panos_address_object" "{resource_name}" {{\n'
             content += f'  name = {self.escape_string(addr["name"])}\n'
@@ -2164,7 +2208,7 @@ variable "device_group" {
         content = '# Address Groups\n\n'
 
         for grp in groups:
-            resource_name = self.sanitize_name(grp['name'])
+            resource_name = self.unique_resource_name(grp['name'], 'panos_address_group')
 
             content += f'resource "panos_address_group" "{resource_name}" {{\n'
             content += f'  name = {self.escape_string(grp["name"])}\n'
@@ -2192,7 +2236,7 @@ variable "device_group" {
         content = '# Service Objects\n\n'
 
         for svc in services:
-            resource_name = self.sanitize_name(svc['name'])
+            resource_name = self.unique_resource_name(svc['name'], 'panos_service_object')
 
             content += f'resource "panos_service_object" "{resource_name}" {{\n'
             content += f'  name = {self.escape_string(svc["name"])}\n'
@@ -2219,7 +2263,7 @@ variable "device_group" {
         content = '# Service Groups\n\n'
 
         for grp in groups:
-            resource_name = self.sanitize_name(grp['name'])
+            resource_name = self.unique_resource_name(grp['name'], 'panos_service_group')
 
             content += f'resource "panos_service_group" "{resource_name}" {{\n'
             content += f'  name = {self.escape_string(grp["name"])}\n'
@@ -2244,7 +2288,7 @@ variable "device_group" {
         content = '# Tags\n\n'
 
         for tag in tags:
-            resource_name = self.sanitize_name(tag['name'])
+            resource_name = self.unique_resource_name(tag['name'], 'panos_administrative_tag')
 
             content += f'resource "panos_administrative_tag" "{resource_name}" {{\n'
             content += f'  name = {self.escape_string(tag["name"])}\n'
@@ -2268,7 +2312,7 @@ variable "device_group" {
         content = '# Custom URL Categories\n\n'
 
         for cat in categories:
-            resource_name = self.sanitize_name(cat['name'])
+            resource_name = self.unique_resource_name(cat['name'], 'panos_custom_url_category')
 
             content += f'resource "panos_custom_url_category" "{resource_name}" {{\n'
             content += f'  name = {self.escape_string(cat["name"])}\n'
@@ -2294,7 +2338,7 @@ variable "device_group" {
         content = '# Application Groups\n\n'
 
         for ag in app_groups:
-            resource_name = self.sanitize_name(ag['name'])
+            resource_name = self.unique_resource_name(ag['name'], 'panos_application_group')
 
             content += f'resource "panos_application_group" "{resource_name}" {{\n'
             content += f'  name = {self.escape_string(ag["name"])}\n'
@@ -2317,7 +2361,7 @@ variable "device_group" {
         content += '# Note: Application filters may require manual configuration of all attributes\n\n'
 
         for af in app_filters:
-            resource_name = self.sanitize_name(af['name'])
+            resource_name = self.unique_resource_name(af['name'], 'panos_application_filter')
 
             content += f'resource "panos_application_filter" "{resource_name}" {{\n'
             content += f'  name = {self.escape_string(af["name"])}\n'
@@ -2354,7 +2398,7 @@ variable "device_group" {
         content = '# External Dynamic Lists\n\n'
 
         for ext_list in ext_lists:
-            resource_name = self.sanitize_name(ext_list['name'])
+            resource_name = self.unique_resource_name(ext_list['name'], 'panos_external_list')
 
             content += f'resource "panos_external_list" "{resource_name}" {{\n'
             content += f'  name = {self.escape_string(ext_list["name"])}\n'
@@ -2401,7 +2445,7 @@ variable "device_group" {
         content = '# Security Policy Rules\n\n'
 
         for rule in rules:
-            resource_name = self.sanitize_name(rule['name'])
+            resource_name = self.unique_resource_name(rule['name'], 'panos_security_rule_group')
 
             content += f'resource "panos_security_rule_group" "{resource_name}" {{\n'
             content += '  position_keyword = "bottom"\n\n'
@@ -2461,7 +2505,7 @@ variable "device_group" {
         content = '# NAT Policy Rules\n\n'
 
         for rule in rules:
-            resource_name = self.sanitize_name(rule['name'])
+            resource_name = self.unique_resource_name(rule['name'], 'panos_nat_rule_group')
 
             content += f'resource "panos_nat_rule_group" "{resource_name}" {{\n'
             content += '  position_keyword = "bottom"\n\n'
@@ -2665,7 +2709,7 @@ variable "device_group" {
         content = '# Zone Configurations\n\n'
 
         for zone in zones:
-            resource_name = self.sanitize_name(zone['name'])
+            resource_name = self.unique_resource_name(zone['name'], 'panos_zone')
 
             content += f'resource "panos_zone" "{resource_name}" {{\n'
             content += f'  name = {self.escape_string(zone["name"])}\n'
@@ -2715,7 +2759,7 @@ variable "device_group" {
 
         for router in vrouters:
             # Generate base resource name
-            base_resource_name = self.sanitize_name(router['name'])
+            base_resource_name = self.unique_resource_name(router['name'], 'panos_virtual_router')
 
             # If we've seen this name before, add a suffix
             if base_resource_name in resource_name_counts:
@@ -2755,7 +2799,8 @@ variable "device_group" {
             # Generate static routes
             if router.get('static_routes'):
                 for route in router['static_routes']:
-                    route_resource = self.sanitize_name(f"{resource_name}_{route['name']}")
+                    route_key = f"{resource_name}_{route['name']}"
+                    route_resource = self.unique_resource_name(route_key, 'panos_virtual_router_static_route_ipv4')
 
                     content += f'resource "panos_static_route_ipv4" "{route_resource}" {{\n'
                     content += f'  name = {self.escape_string(route["name"])}\n'
@@ -2789,7 +2834,7 @@ variable "device_group" {
             if iface['type'] != 'ethernet':
                 continue
 
-            resource_name = self.sanitize_name(iface['name'])
+            resource_name = self.unique_resource_name(iface['name'], 'panos_ethernet_interface')
 
             if iface['mode'] == 'layer3':
                 content += f'resource "panos_ethernet_interface" "{resource_name}" {{\n'
@@ -2921,7 +2966,7 @@ variable "device_group" {
         if profiles.get('antivirus'):
             content += '# Antivirus Profiles\n'
             for prof in profiles['antivirus']:
-                resource_name = self.sanitize_name(prof['name'])
+                resource_name = self.unique_resource_name(prof['name'], 'panos_antivirus_security_profile')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -2931,7 +2976,7 @@ variable "device_group" {
         if profiles.get('vulnerability'):
             content += '# Vulnerability Protection Profiles\n'
             for prof in profiles['vulnerability']:
-                resource_name = self.sanitize_name(prof['name'])
+                resource_name = self.unique_resource_name(prof['name'], 'panos_vulnerability_security_profile')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -2941,7 +2986,7 @@ variable "device_group" {
         if profiles.get('anti_spyware'):
             content += '# Anti-Spyware Profiles\n'
             for prof in profiles['anti_spyware']:
-                resource_name = self.sanitize_name(prof['name'])
+                resource_name = self.unique_resource_name(prof['name'], 'panos_anti_spyware_security_profile')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -2951,7 +2996,7 @@ variable "device_group" {
         if profiles.get('url_filtering'):
             content += '# URL Filtering Profiles\n'
             for prof in profiles['url_filtering']:
-                resource_name = self.sanitize_name(prof['name'])
+                resource_name = self.unique_resource_name(prof['name'], 'panos_url_filtering_security_profile')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -2961,7 +3006,7 @@ variable "device_group" {
         if profiles.get('file_blocking'):
             content += '# File Blocking Profiles\n'
             for prof in profiles['file_blocking']:
-                resource_name = self.sanitize_name(prof['name'])
+                resource_name = self.unique_resource_name(prof['name'], 'panos_file_blocking_security_profile')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -2971,7 +3016,7 @@ variable "device_group" {
         if profiles.get('wildfire_analysis'):
             content += '# WildFire Analysis Profiles\n'
             for prof in profiles['wildfire_analysis']:
-                resource_name = self.sanitize_name(prof['name'])
+                resource_name = self.unique_resource_name(prof['name'], 'panos_wildfire_analysis_security_profile')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -2988,7 +3033,7 @@ variable "device_group" {
         content = '# Security Profile Groups\n\n'
 
         for grp in groups:
-            resource_name = self.sanitize_name(grp['name'])
+            resource_name = self.unique_resource_name(grp['name'], 'panos_security_profile_group')
 
             content += f'resource "panos_security_profile_group" "{resource_name}" {{\n'
             content += f'  name = {self.escape_string(grp["name"])}\n'
@@ -3040,7 +3085,7 @@ variable "device_group" {
 
         # BGP Peer Groups
         for pg in bgp_config.get('peer_groups', []):
-            resource_name = self.sanitize_name(f"pg_{pg['name']}")
+            resource_name = self.unique_resource_name(f"pg_{pg['name']}", 'panos_bgp_peer_group')
             content += f'resource "panos_bgp_peer_group" "{resource_name}" {{\n'
             content += '  virtual_router = panos_virtual_router.default.name\n'
             content += f'  name = {self.escape_string(pg["name"])}\n'
@@ -3053,7 +3098,7 @@ variable "device_group" {
 
         # BGP Peers
         for peer in bgp_config.get('peers', []):
-            resource_name = self.sanitize_name(f"peer_{peer['name']}")
+            resource_name = self.unique_resource_name(f"peer_{peer['name']}", 'panos_bgp_peer')
             content += f'resource "panos_bgp_peer" "{resource_name}" {{\n'
             content += '  virtual_router = panos_virtual_router.default.name\n'
             content += f'  bgp_peer_group = {self.escape_string(peer.get("peer_group", ""))}\n'
@@ -3098,7 +3143,7 @@ variable "device_group" {
 
         # OSPF Areas
         for area in ospf_config.get('areas', []):
-            resource_name = self.sanitize_name(f"area_{area['area_id']}")
+            resource_name = self.unique_resource_name(f"area_{area['area_id']}", 'panos_ospf_area')
             content += f'resource "panos_ospf_area" "{resource_name}" {{\n'
             content += '  virtual_router = panos_virtual_router.default.name\n'
             content += f'  name = {self.escape_string(area["area_id"])}\n'
@@ -3111,7 +3156,7 @@ variable "device_group" {
 
         # OSPF Interfaces
         for iface in ospf_config.get('interfaces', []):
-            resource_name = self.sanitize_name(f"ospf_{iface['interface']}")
+            resource_name = self.unique_resource_name(f"ospf_{iface['interface']}", 'panos_ospf_area_interface')
             content += f'resource "panos_ospf_area_interface" "{resource_name}" {{\n'
             content += '  virtual_router = panos_virtual_router.default.name\n'
             content += '  ospf_area = "0.0.0.0"  # Adjust to correct area\n'
@@ -3145,7 +3190,7 @@ variable "device_group" {
         if ike_profiles:
             content += '# IKE Crypto Profiles\n\n'
             for profile in ike_profiles:
-                resource_name = self.sanitize_name(f"ike_profile_{profile['name']}")
+                resource_name = self.unique_resource_name(f"ike_profile_{profile['name']}", 'panos_ike_crypto_profile')
                 content += f'resource "panos_ike_crypto_profile" "{resource_name}" {{\n'
                 content += f'  name = {self.escape_string(profile["name"])}\n'
 
@@ -3170,7 +3215,8 @@ variable "device_group" {
         if ipsec_profiles:
             content += '# IPsec Crypto Profiles\n\n'
             for profile in ipsec_profiles:
-                resource_name = self.sanitize_name(f"ipsec_profile_{profile['name']}")
+                profile_key = f"ipsec_profile_{profile['name']}"
+                resource_name = self.unique_resource_name(profile_key, 'panos_ipsec_crypto_profile')
                 content += f'resource "panos_ipsec_crypto_profile" "{resource_name}" {{\n'
                 content += f'  name = {self.escape_string(profile["name"])}\n'
                 content += f'  protocol = {self.escape_string(profile.get("protocol", "esp"))}\n'
@@ -3198,7 +3244,7 @@ variable "device_group" {
             content += '# Update these with actual keys from your key management system!\n\n'
 
             for gw in ike_gateways:
-                resource_name = self.sanitize_name(f"ike_gw_{gw['name']}")
+                resource_name = self.unique_resource_name(f"ike_gw_{gw['name']}", 'panos_ike_gateway')
                 content += f'resource "panos_ike_gateway" "{resource_name}" {{\n'
                 content += f'  name = {self.escape_string(gw["name"])}\n'
                 content += f'  version = {self.escape_string(gw.get("version", "ikev1"))}\n'
@@ -3224,7 +3270,8 @@ variable "device_group" {
                     content += f'  pre_shared_key = {psk}  # *** CHANGE THIS KEY ***\n'
 
                 if gw.get('ike_crypto_profile'):
-                    profile_ref = self.sanitize_name(f"ike_profile_{gw['ike_crypto_profile']}")
+                    ike_key = f"ike_profile_{gw['ike_crypto_profile']}"
+                    profile_ref = self.unique_resource_name(ike_key, 'panos_ike_crypto_profile')
                     content += f'  ike_crypto_profile = panos_ike_crypto_profile.{profile_ref}.name\n'
 
                 if gw.get('local_id'):
@@ -3241,7 +3288,7 @@ variable "device_group" {
         if ipsec_tunnels:
             content += '# IPsec Tunnels\n\n'
             for tunnel in ipsec_tunnels:
-                resource_name = self.sanitize_name(f"tunnel_{tunnel['name']}")
+                resource_name = self.unique_resource_name(f"tunnel_{tunnel['name']}", 'panos_ipsec_tunnel')
                 content += f'resource "panos_ipsec_tunnel" "{resource_name}" {{\n'
                 content += f'  name = {self.escape_string(tunnel["name"])}\n'
 
@@ -3252,18 +3299,20 @@ variable "device_group" {
                     content += '  type = "auto-key"\n'
 
                     if tunnel.get('ike_gateway'):
-                        gw_ref = self.sanitize_name(f"ike_gw_{tunnel['ike_gateway']}")
+                        gw_ref = self.unique_resource_name(f"ike_gw_{tunnel['ike_gateway']}", 'panos_ike_gateway')
                         content += f'  ak_ike_gateway = panos_ike_gateway.{gw_ref}.name\n'
 
                     if tunnel.get('ipsec_crypto_profile'):
-                        profile_ref = self.sanitize_name(f"ipsec_profile_{tunnel['ipsec_crypto_profile']}")
+                        ipsec_key = f"ipsec_profile_{tunnel['ipsec_crypto_profile']}"
+                        profile_ref = self.unique_resource_name(ipsec_key, 'panos_ipsec_crypto_profile')
                         content += f'  ak_ipsec_crypto_profile = panos_ipsec_crypto_profile.{profile_ref}.name\n'
 
                 content += '}\n\n'
 
                 # Proxy IDs
                 for proxy in tunnel.get('proxy_ids', []):
-                    proxy_resource = self.sanitize_name(f"proxy_{tunnel['name']}_{proxy['name']}")
+                    proxy_key = f"proxy_{tunnel['name']}_{proxy['name']}"
+                    proxy_resource = self.unique_resource_name(proxy_key, 'panos_ipsec_tunnel_proxy_id_ipv4')
                     content += f'resource "panos_ipsec_tunnel_proxy_id_ipv4" "{proxy_resource}" {{\n'
                     content += f'  ipsec_tunnel = panos_ipsec_tunnel.{resource_name}.name\n'
                     content += f'  name = {self.escape_string(proxy["name"])}\n'
@@ -3676,6 +3725,10 @@ def main():
 
     except ET.ParseError as e:
         print(f"Error: Failed to parse XML file: {e}")
+        return 1
+    except ValueError as e:
+        # DTD rejection in PanoramaParser raises ValueError.
+        print(f"Error: rejected '{args.input_file}': {e}")
         return 1
     except Exception as e:
         print(f"Error: {e}")

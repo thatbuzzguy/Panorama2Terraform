@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<!-- Robustness: object names containing a tab and a carriage return. -->
+<!-- XML character references (&#9; tab, &#13; CR) survive attribute -->
+<!-- value normalization and reach the parser as real control characters. -->
+<!-- The generated Terraform must escape them (HCL strings cannot carry -->
+<!-- raw control characters). -->
+<config>
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <address>
+            <entry name="tab&#9;ctrl">
+              <ip-netmask>10.0.0.1/32</ip-netmask>
+            </entry>
+            <entry name="cr&#13;ctrl">
+              <ip-netmask>10.0.0.2/32</ip-netmask>
+            </entry>
+          </address>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>
