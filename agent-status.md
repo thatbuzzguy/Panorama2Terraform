@@ -1,9 +1,28 @@
 # Agent Status
 
 ## Current position
-Epic 1 (testing and lint foundation), F1.3 completed. Next: F1.4 provider schema conformance test.
+Epic 1 (testing and lint foundation), F1.4 completed. Next: F1.5 CI Terraform gate.
 
 ## Session log
+
+### F1.4 — Provider schema conformance (this session)
+- Added tests/test_schema_conformance.py. It reads the panos provider
+  source and version from the golden provider.tf, runs
+  `terraform init -backend=false` + `terraform providers schema -json`,
+  and checks the committed golden output against the schema:
+  - every emitted resource type must exist in the provider;
+  - every required attribute of an existing type (e.g. location) must
+    be present in every generated block.
+- Red→green: 13 of 28 emitted types are not in provider v2 and no
+  generated block carries the required `location` attribute. All 43
+  failing cases are xfail-marked with Epic 2 task references (F2.2
+  resource mapping, F2.3 location). 13 cases xpass.
+- Confirmed against the live v2 schema: the 13 missing types match the
+  F2.2 mapping list (panos_address_object, panos_application_filter,
+  panos_bgp*, panos_external_list, panos_ipsec_tunnel_proxy_id_ipv4,
+  panos_layer2_subinterface, panos_nat_rule_group, panos_ospf*,
+  panos_security_rule_group, panos_service_object, panos_static_route_ipv4).
+- Gate: ruff clean. pytest: 85 passed, 43 xfailed, 13 xpassed.
 
 ### F1.3 — Generator golden-file tests (this session)
 - Built `tests/fixtures/kitchen_sink.xml` (761 lines): a merge of all per-method
