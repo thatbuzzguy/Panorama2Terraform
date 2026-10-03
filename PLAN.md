@@ -10,7 +10,7 @@ The adversarial audit (`ADVERSARIAL_AUDIT_REPORT.md`) found three blocking probl
 2. **Silent data loss.** Name-keyed parsing drops per-device-group rules, policy order, VLANs, IPv6, and multi-port services.
 3. **No test gate.** CI runs only `py_compile` and `--help`. Nothing verifies the generated Terraform.
 
-Goal 1 is complete (Epic 1): CI runs lint plus a 106-test offline suite (parser units, goldens, schema conformance, edge, robustness) and a `terraform validate` gate. 15 of the 28 emitted types are missing from provider v2 and no block carries the required `location` block; both are pinned by xfail tests that flip green when Epic 2 lands. Problems 2 and 3 remain.
+Epic 1 is complete; Epic 2 is in progress (F2.1–F2.3 landed: provider pinned to `~> 2.0.14`, resource mapping table, `location` on every resource). 15 of the 28 emitted types are still missing from provider v2 and the attribute shapes still differ; both are pinned by xfail tests that flip green when F2.4–F2.10 land. Problems 2 and 3 remain.
 
 Epic 2 is in progress: F2.1 (provider baseline `~> 2.0.14`) is complete.
 
@@ -34,9 +34,9 @@ Strategy: the provider schema is the single source of truth. No resource names o
 
 Target: `PaloAltoNetworks/panos` provider v2 (2.0.14+ per the audit). Track upstream releases.
 
-- [ ] **F2.1 Provider baseline** — Generate a `provider.tf` pinned to the v2 range. Record the supported range.
-- [ ] **F2.2 Resource mapping** — One table maps old emitted names to real v2 resources: `panos_address`, `panos_service`, `panos_security_policy_rule`, `panos_nat_policy_rule`, `panos_bgp_*_routing_profile`, `panos_ospf_*_routing_profile`, `panos_virtual_router_static_route_ipv4`, `panos_ethernet_layer3_subinterface`.
-- [ ] **F2.3 `location` on every resource** — Derive the block from the XML source: `shared`, `device_group`, or `vsys`.
+- [x] **F2.1 Provider baseline** — Generate a `provider.tf` pinned to the v2 range. Record the supported range. (Pinned `~> 2.0.14`.)
+- [x] **F2.2 Resource mapping** — One table maps old emitted names to real v2 resources. (`resource_mapping.py`; verified against the v2.0.14 schema.)
+- [x] **F2.3 `location` on every resource** — Derive the block from the XML source: `shared`, `device_group`, or `vsys`. (Landed as the defining device group per object, or the default template for network/VPN resources. Per-DG instances and vsys sub-blocks land with F3.1/F3.5.)
 - [ ] **F2.4 Rewrite emitters to v2 schemas** — Use the real nested blocks (`protocol{}`, `layer3{}`, `auto_key{}`, `position{}`). Put proxy-id inside `panos_ipsec_tunnel`. Remove hardcoded assumptions (for example `panos_virtual_router.default`, the hardcoded OSPF area).
 - [ ] **F2.5 Order-preserving policy** — Emit rules in XML order per (device group, rulebase). Remove the blanket `position = "bottom"`.
 - [ ] **F2.6 Dependency wiring** — Add `depends_on` or `.name` references where the provider supports them.
@@ -71,7 +71,7 @@ Strategy: model the Panorama hierarchy before generation. Key objects by (device
 ## Sequencing
 
 1. **Epic 1 first.** It is the gate. No feature lands without tests.
-2. **F3.1 before F2.3 and F2.5.** The `location` block and policy order both depend on the keyed data model.
+2. **F3.1 refines F2.3 and F2.5.** F2.3 landed with the defining device group per object (the keyed model's per-DG instances and vsys sub-blocks land with F3.1). Policy order (F2.5) still needs the keyed model.
 3. **Epic 2 and Epic 3 overlap.** They share the data model and the fixture corpus.
 4. **F2.8 (coverage matrix) lands last in Epic 2.** It measures the final state.
 

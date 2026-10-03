@@ -75,7 +75,23 @@ def test_resource_type_exists_in_provider(rtype, provider_schema):
     assert rtype in provider_schema, f"resource type {rtype!r} does not exist in the panos provider"
 
 
-@pytest.mark.xfail(reason="required attribute missing from generated block; fixed by Epic 2 F2.3", strict=False)
+def test_every_block_has_location():
+    """Every emitted resource block must carry the required location block (F2.3)."""
+    missing = [
+        f"{rtype} block {i}"
+        for rtype, blocks in sorted(EMITTED_BLOCKS.items())
+        for i, args in enumerate(blocks)
+        if 'location' not in args
+    ]
+    assert not missing, f"resource blocks missing the required location block: {missing}"
+
+
+# F2.3 added the location block; the remaining failures are types missing
+# from the schema (renamed by F2.4) and changed attribute shapes (F2.4).
+_XFAIL_REASON_REQUIRED = "required attribute or type missing; the emitters move to v2 schemas in Epic 2 F2.4"
+
+
+@pytest.mark.xfail(reason=_XFAIL_REASON_REQUIRED, strict=False)
 @pytest.mark.parametrize("rtype", EMITTED_TYPES)
 def test_required_attributes_present(rtype, provider_schema):
     """Every required attribute of an emitted type must appear in every block."""

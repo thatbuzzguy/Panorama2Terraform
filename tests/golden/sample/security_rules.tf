@@ -1,6 +1,11 @@
 # Security Policy Rules
 
 resource "panos_security_rule_group" "allow_web_traffic" {
+  location {
+    device_group {
+      name = "Production-DG"
+    }
+  }
   position_keyword = "bottom"
 
   rule {
@@ -18,6 +23,11 @@ resource "panos_security_rule_group" "allow_web_traffic" {
 }
 
 resource "panos_security_rule_group" "allow_db_access" {
+  location {
+    device_group {
+      name = "Production-DG"
+    }
+  }
   position_keyword = "bottom"
 
   rule {
@@ -35,6 +45,11 @@ resource "panos_security_rule_group" "allow_db_access" {
 }
 
 resource "panos_security_rule_group" "block_risky_apps" {
+  location {
+    device_group {
+      name = "Production-DG"
+    }
+  }
   position_keyword = "bottom"
 
   rule {

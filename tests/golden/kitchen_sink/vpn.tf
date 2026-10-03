@@ -6,6 +6,11 @@
 # IKE Crypto Profiles
 
 resource "panos_ike_crypto_profile" "ike_profile_ike_default" {
+  location {
+    template {
+      name = "Shared"
+    }
+  }
   name = "IKE-DEFAULT"
   dh_groups = ["group14"]
   authentications = ["sha256"]
@@ -16,6 +21,11 @@ resource "panos_ike_crypto_profile" "ike_profile_ike_default" {
 # IPsec Crypto Profiles
 
 resource "panos_ipsec_crypto_profile" "ipsec_profile_ipsec_default" {
+  location {
+    template {
+      name = "Shared"
+    }
+  }
   name = "IPSEC-DEFAULT"
   protocol = "esp"
   encryptions = ["aes256"]
@@ -29,6 +39,11 @@ resource "panos_ipsec_crypto_profile" "ipsec_profile_ipsec_default" {
 # Update these with actual keys from your key management system!
 
 resource "panos_ike_gateway" "ike_gw_ike_gw_branch" {
+  location {
+    template {
+      name = "Shared"
+    }
+  }
   name = "IKE-GW-Branch"
   version = "ikev2"
   peer_address_type = "fqdn"
@@ -45,6 +60,11 @@ resource "panos_ike_gateway" "ike_gw_ike_gw_branch" {
 # IPsec Tunnels
 
 resource "panos_ipsec_tunnel" "tunnel_tun_branch" {
+  location {
+    template {
+      name = "Shared"
+    }
+  }
   name = "TUN-Branch"
   tunnel_interface = "tunnel.1"
   type = "auto-key"
@@ -53,6 +73,11 @@ resource "panos_ipsec_tunnel" "tunnel_tun_branch" {
 }
 
 resource "panos_ipsec_tunnel_proxy_id_ipv4" "proxy_tun_branch_proxy_1" {
+  location {
+    template {
+      name = "Shared"
+    }
+  }
   ipsec_tunnel = panos_ipsec_tunnel.tunnel_tun_branch.name
   name = "proxy-1"
   local = "10.0.0.0/8"

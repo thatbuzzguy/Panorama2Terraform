@@ -3,6 +3,11 @@
 # Verify all peer addresses and AS numbers before applying.
 
 resource "panos_bgp" "default" {
+  location {
+    template {
+      name = "Shared"
+    }
+  }
   virtual_router = panos_virtual_router.default.name
   enable = true
   router_id = "10.0.0.1"
@@ -10,6 +15,11 @@ resource "panos_bgp" "default" {
 }
 
 resource "panos_bgp_peer_group" "pg_pg_branch" {
+  location {
+    template {
+      name = "Shared"
+    }
+  }
   virtual_router = panos_virtual_router.default.name
   name = "PG-Branch"
   type = "external"
@@ -17,6 +27,11 @@ resource "panos_bgp_peer_group" "pg_pg_branch" {
 }
 
 resource "panos_bgp_peer" "peer_10_55_0_2" {
+  location {
+    template {
+      name = "Shared"
+    }
+  }
   virtual_router = panos_virtual_router.default.name
   bgp_peer_group = "PG-Branch"
   name = "10.55.0.2"

@@ -1,6 +1,11 @@
 # NAT Policy Rules
 
 resource "panos_nat_rule_group" "outbound_nat" {
+  location {
+    device_group {
+      name = "Production-DG"
+    }
+  }
   position_keyword = "bottom"
 
   rule {
@@ -23,6 +28,11 @@ resource "panos_nat_rule_group" "outbound_nat" {
 }
 
 resource "panos_nat_rule_group" "inbound_web_nat" {
+  location {
+    device_group {
+      name = "Production-DG"
+    }
+  }
   position_keyword = "bottom"
 
   rule {

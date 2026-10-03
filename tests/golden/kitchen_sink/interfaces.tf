@@ -2,6 +2,11 @@
 # Note: These are reference configurations. Adjust for your hardware platform.
 
 resource "panos_ethernet_interface" "ethernet1_1" {
+  location {
+    template {
+      name = "Shared"
+    }
+  }
   name = "ethernet1/1"
   mode = "layer3"
   comment = "Trust uplink"
@@ -10,6 +15,11 @@ resource "panos_ethernet_interface" "ethernet1_1" {
 }
 
 resource "panos_layer2_subinterface" "ethernet1_2" {
+  location {
+    template {
+      name = "Shared"
+    }
+  }
   name = "ethernet1/2"
 }
 

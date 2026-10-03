@@ -1,6 +1,11 @@
 # External Dynamic Lists
 
 resource "panos_external_list" "threat_ips" {
+  location {
+    device_group {
+      name = "Shared"
+    }
+  }
   name = "threat-ips"
   type = "ip"
   url = "https://threat.example.com/list.txt"

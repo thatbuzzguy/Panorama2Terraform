@@ -1,9 +1,27 @@
 # Agent Status
 
 ## Current position
-Epic 2 (complete provider-v2 support). F2.1 and F2.2 complete. Next: **F2.3 Add `location` to every resource**.
+Epic 2 (complete provider-v2 support). F2.1–F2.3 complete. Next: **F2.4 Rewrite emitters to the v2 schemas**.
 
 ## Session log
+
+### F2.3 — location on every resource (this session)
+- v2.0.14 schema fact (corrected from earlier notes): `location` is a
+  required nested BLOCK, and the allowed sub-blocks differ per type.
+  Objects/rules take `device_group`; zones, VRs, static routes,
+  interfaces, VPN resources take `template` (plus ngfw/vsys variants).
+- Parser: `PanoramaParser._parent_map` (ElementTree has no parent
+  pointers) + `device_group_of(elem)`; 12 parse methods now record
+  `device_group` on each object (Shared for shared/top-level entries).
+- Generator: `location_block(resource_type, device_group)` helper +
+  `_TEMPLATE_SCOPED_TYPES` set; inserted as the first attribute of all
+  29 emission points (13 types). DG-scoped resources use the object's
+  defining DG; template-scoped ones use `template { name = "Shared" }`
+  (exact template tracking is F2.4).
+- New green test: every golden resource block carries `location`.
+- Goldens regenerated (24 .tf files changed; provider/variables intact).
+- Conformance shift as designed: test 2 xpasses for all 13 existing
+  types (was xfailed). Suite: 136 passed, 33 xfailed, 26 xpassed.
 
 ### F2.2 — Resource mapping (this session)
 - Ground truth verified against the live v2.0.14 schema (128 types):
