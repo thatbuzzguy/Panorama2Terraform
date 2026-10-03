@@ -1,11 +1,58 @@
 # Agent Status
 
 ## Current position
-Epic 2 (complete provider-v2 support). F2.1–F2.3 complete. Next: **F2.4 Rewrite emitters to the v2 schemas**.
+Epic 2 (complete provider-v2 support). F2.1–F2.4 complete. Next: **F2.5 Order-preserving policy** (replace the blanket `position { where = "last" }` with order-preserving `position` values).
 
 ## Session log
 
-### F2.3 — location on every resource (this session)
+### F2.4 — Rewrite emitters to the v2 schemas (this session)
+- Every emitter now uses the v2.0.14 nested-attribute shapes (verified
+  against `/tmp/schema_2014.json`): `protocol { tcp = {} }`,
+  `layer3 { ipv4 = { ip_address = [...] } }`, `auto_key { ike_gateway,
+  proxy_id }`, `position { where = "last" }`, `dynamic = { dynamic =
+  { filter } }`, tag colors `color1`..`color7`, `nat_type = "ipv4"`
+  (protocol family, not direction). Proxy-ids merged into
+  `panos_ipsec_tunnel`; the standalone proxy-id resource is gone.
+- `hcl_value()` helper renders nested dicts/lists with indentation;
+  `HclRef` emits raw HCL references (static-route `virtual_router`).
+  All call sites pass the two-space indent explicitly except the
+  primitive list renderer; f-strings that reused outer quotes (Python
+  3.12-only syntax, a portability bug for the 3.9 target) are removed.
+- Two-tier naming: `declare_resource_name(name, scope, context)` for
+  declarations (context = defining DG or template, so same-named objects
+  in different DGs get unique addresses), `unique_resource_name(name,
+  scope)` for references (resolves the first declared name). F1.7
+  semantics preserved by tests.
+- Report-only types (BGP x3, OSPF x3, application filter, security
+  profile bodies) go to `MANUAL_SETUP_REPORT.txt` instead of comments in
+  scattered .tf files. Security profile bodies stay report-only: the
+  v2 resources exist but the parser captures only name/description, and
+  emitting empty profiles would silently create misconfigured objects
+  (F2.9 decides).
+- `resource_mapping.py` restructured to the post-rewrite spec:
+  `EMITTED_TYPES` (20, must match goldens exactly) + `REPORT_ONLY_TYPES`
+  (7, each verified absent from the schema). `tests/test_resource_mapping.py`
+  rewritten to match. `docs/RESOURCE_MAPPING.md` rewritten to the new spec.
+- Parser additions: IPv6 address objects (`<ipv6>`, `<ipv6-range>` ->
+  `ip_netmask`, the only v2 address attribute that takes them), dynamic
+  address-group filter serialization (`_dynamic_filter_expr` ->
+  `tag == "web"` style expression). Empty address groups emit a
+  manual-setup comment (v2 requires exactly one of static/dynamic).
+- README rewritten: accurate v2 resource table, report-only list, removed
+  stale v1 type names, marketing claims, and version-history claims that
+  contradict the current code.
+- `test_terraform_validate.py`: xfails removed; kitchen-sink gate added.
+  `test_schema_conformance.py`: xfails removed. `test_edge_cases.py`:
+  IPv6 xfail removed (now passes); same-named-objects-across-DGs xfail
+  kept (parser last-wins dedup is F3.1 territory).
+- Goldens regenerated (sample 8 .tf, kitchen-sink 26 .tf; the old
+  application_filters/bgp/ospf .tf files are gone, their data now in the
+  manual-setup report). `.terraform.lock.hcl` added to .gitignore.
+- Gate: ruff clean (55 violations found and fixed during the session).
+  pytest 176 passed, 1 xfailed (the F3.1 item). terraform validate green
+  on both sample and kitchen-sink output.
+
+### F2.3 — location on every resource
 - v2.0.14 schema fact (corrected from earlier notes): `location` is a
   required nested BLOCK, and the allowed sub-blocks differ per type.
   Objects/rules take `device_group`; zones, VRs, static routes,
@@ -98,18 +145,25 @@ Epic 2 (complete provider-v2 support). F2.1–F2.3 complete. Next: **F2.4 Rewrit
 - F1.6 edge corpus: 6 fixtures, 12 tests; splitter quote bug fixed.
 
 ## Environment notes
-- Python 3.12.3; use `uvx --with pytest==9.1.1 pytest` and
+- Python 3.12.3 locally; the code targets **Python 3.9** (ruff
+  `target-version="py39"`). Python 3.12-only syntax (for example
+  reusing the outer quote inside an f-string) is a bug even when it
+  runs locally; ruff catches it.
+- Use `uvx --with pytest==9.1.1 pytest` and
   `uvx --with ruff==0.16.10 ruff` (PEP 668 blocks system pip installs).
 - terraform 1.16.1 available at /usr/bin/terraform.
 - Converter CLI: `python3 panorama_to_terraform.py <input.xml> [--output-dir DIR]`
   (output dir is a flag, default `terraform_output`).
 - Splitter CLI: `python3 split_device_groups.py <input.xml> [--output-dir DIR]`.
-- Provider v2 schema (128 types) was fetched to /tmp/panos_schema.json in a
-  previous session; refetch with `terraform providers schema -json` if needed.
-- 15 emitted types are missing from v2 (F2.2 mapping targets). `location`
-  is a required nested block (e.g. `location { device_group { name } }` or
-  `location { template { name } }`), not a plain string (verified in the
-  v2.0.14 schema; the earlier "string attribute" note was wrong).
+- Provider v2.0.14 schema (128 types) cached at /tmp/schema_2014.json;
+  shape extract at /tmp/v2_shapes2.txt (the earlier /tmp/v2_shapes.txt is
+  unreliable). Refetch with `terraform providers schema -json` if needed.
+- v2.0.14 uses nested-type ATTRIBUTES (object/list argument syntax), not
+  block types, for all nested structures. `location` is a required
+  nested object argument. `where` accepts first/last/before/after.
+- 7 PAN-OS config types have no v2 resource (BGP x3, OSPF x3, application
+  filter) and go to the manual-setup report; the 20 emitted types are in
+  `resource_mapping.py`.
 
 ## Conventions
 - One task at a time; `acceptance.md` overwritten before each task.

@@ -1,15 +1,20 @@
 # External Dynamic Lists
 
-resource "panos_external_list" "threat_ips" {
-  location {
-    device_group {
+resource "panos_external_dynamic_list" "threat_ips" {
+  location = {
+    device_group = {
       name = "Shared"
     }
   }
   name = "threat-ips"
-  type = "ip"
-  url = "https://threat.example.com/list.txt"
-  recurring = "hourly"
-  description = "Threat IP list"
+  type = {
+    ip = {
+      url = "https://threat.example.com/list.txt"
+      recurring = {
+        hourly = {}
+      }
+      description = "Threat IP list"
+    }
+  }
 }
 

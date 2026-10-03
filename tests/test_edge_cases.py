@@ -5,7 +5,7 @@ xfail with references to the epic that must change behavior:
 
 - duplicate names across device groups: last-wins today; Epic 3 F3.1
   keys objects by (device group, vsys, type, name).
-- IPv6 address objects: value dropped today; Epic 2 F2.4.
+- IPv6 address objects: parsed from the <ipv6> element (F2.4).
 - multi-port / dual-protocol services: current behavior pinned; the udp
   drop is recorded in backlog.md.
 """
@@ -106,7 +106,6 @@ def test_ipv4_object_still_parses(make_parser):
     assert objects["v4-host"]["value"] == "192.168.1.10/32"
 
 
-@pytest.mark.xfail(reason="IPv6 address objects lose their value today; Epic 2 F2.4", strict=False)
 def test_ipv6_object_keeps_value(make_parser):
     """Desired behavior: IPv6 objects keep their address value."""
     parser = make_parser("edge_ipv6.xml")

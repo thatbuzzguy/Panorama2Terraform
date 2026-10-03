@@ -101,9 +101,9 @@ def test_entry_without_name_is_skipped(tmp_path):
                 '--output-dir', str(tmp_path / 'out'), workdir=tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     text = (tmp_path / 'out' / 'address_objects.tf').read_text(encoding='utf-8')
-    assert 'resource "panos_address_object" "named_host"' in text
+    assert 'resource "panos_address" "named_host"' in text
     # Exactly one resource: the unnamed entry must not produce a block.
-    assert len(re.findall(r'resource "panos_address_object"', text)) == 1
+    assert len(re.findall(r'resource "panos_address"', text)) == 1
 
 
 def test_sanitization_collisions_get_unique_names(tmp_path):
@@ -112,7 +112,7 @@ def test_sanitization_collisions_get_unique_names(tmp_path):
                 '--output-dir', str(tmp_path / 'out'), workdir=tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     text = (tmp_path / 'out' / 'address_objects.tf').read_text(encoding='utf-8')
-    names = re.findall(r'resource "panos_address_object" "([^"]+)"', text)
+    names = re.findall(r'resource "panos_address" "([^"]+)"', text)
     # Three distinct resource addresses (duplicates would be invalid HCL).
     assert len(names) == 3
     assert len(set(names)) == 3
@@ -142,7 +142,7 @@ def test_escape_string_strips_illegal_control_chars(generator):
 
 
 def test_unique_resource_name_avoids_collisions(generator):
-    scope = 'panos_address_object'
+    scope = 'panos_address'
     first = generator.unique_resource_name('a-b', scope)
     second = generator.unique_resource_name('a_b', scope)
     third = generator.unique_resource_name('A-B', scope)
@@ -150,4 +150,13 @@ def test_unique_resource_name_avoids_collisions(generator):
     # A reference site recomputes the same input and gets the same name.
     assert generator.unique_resource_name('a_b', scope) == second
     # Collision domains are separate per resource type.
-    assert generator.unique_resource_name('a_b', 'panos_service_object') == 'a_b'
+    assert generator.unique_resource_name('a_b', 'panos_service') == 'a_b'
+
+
+def test_declare_same_name_in_two_contexts_gets_unique_names(generator):
+    """The same PAN-OS name in two device groups must yield two resources."""
+    first = generator.declare_resource_name('default', 'panos_virtual_router', context='DG-A')
+    second = generator.declare_resource_name('default', 'panos_virtual_router', context='DG-B')
+    assert first != second
+    # A reference to the name resolves to a declared name (first declaration wins).
+    assert generator.unique_resource_name('default', 'panos_virtual_router') == first

@@ -6,32 +6,40 @@
 # IKE Crypto Profiles
 
 resource "panos_ike_crypto_profile" "ike_profile_ike_default" {
-  location {
-    template {
+  location = {
+    template = {
       name = "Shared"
     }
   }
   name = "IKE-DEFAULT"
-  dh_groups = ["group14"]
-  authentications = ["sha256"]
-  encryptions = ["aes256"]
-  lifetime_hours = 24
+  encryption = ["aes256"]
+  hash = ["sha256"]
+  dh_group = ["group14"]
+  lifetime = {
+    hours = 24
+  }
 }
 
 # IPsec Crypto Profiles
 
 resource "panos_ipsec_crypto_profile" "ipsec_profile_ipsec_default" {
-  location {
-    template {
+  location = {
+    template = {
       name = "Shared"
     }
   }
   name = "IPSEC-DEFAULT"
-  protocol = "esp"
-  encryptions = ["aes256"]
-  authentications = ["sha256"]
   dh_group = "group14"
-  lifetime_hours = 1
+  esp = {
+    encryption = [ "aes256" ]
+    authentication = [ "sha256" ]
+  }
+  lifetime = {
+    hours = 1
+  }
+  lifesize = {
+    kb = 4608000
+  }
 }
 
 # IKE Gateways
@@ -39,49 +47,61 @@ resource "panos_ipsec_crypto_profile" "ipsec_profile_ipsec_default" {
 # Update these with actual keys from your key management system!
 
 resource "panos_ike_gateway" "ike_gw_ike_gw_branch" {
-  location {
-    template {
+  location = {
+    template = {
       name = "Shared"
     }
   }
   name = "IKE-GW-Branch"
-  version = "ikev2"
-  peer_address_type = "fqdn"
-  peer_address_value = "branch.example.com"
-  auth_type = "pre-shared-key"
-  pre_shared_key = "***CHANGE_ME***"  # *** CHANGE THIS KEY ***
-  ike_crypto_profile = panos_ike_crypto_profile.ike_profile_ike_default.name
-  local_id_type = "ufqdn"
-  local_id_value = "local.example.com"
-  peer_id_type = "ufqdn"
-  peer_id_value = "peer.example.com"
+  protocol = {
+    version = "ikev2"
+    ikev2 = {
+      ike_crypto_profile = panos_ike_crypto_profile.ike_profile_ike_default.name
+    }
+  }
+  peer_address = {
+    fqdn = "branch.example.com"
+  }
+  authentication = {
+    pre_shared_key = {
+      key = "***CHANGE_ME***"
+    }
+  }  # *** CHANGE THIS KEY ***
+  local_id = {
+    id = "local.example.com"
+  }
+  peer_id = {
+    id = "peer.example.com"
+  }
 }
 
 # IPsec Tunnels
 
 resource "panos_ipsec_tunnel" "tunnel_tun_branch" {
-  location {
-    template {
+  location = {
+    template = {
       name = "Shared"
     }
   }
   name = "TUN-Branch"
   tunnel_interface = "tunnel.1"
-  type = "auto-key"
-  ak_ike_gateway = panos_ike_gateway.ike_gw_ike_gw_branch.name
-  ak_ipsec_crypto_profile = panos_ipsec_crypto_profile.ipsec_profile_ipsec_default.name
-}
-
-resource "panos_ipsec_tunnel_proxy_id_ipv4" "proxy_tun_branch_proxy_1" {
-  location {
-    template {
-      name = "Shared"
-    }
+  auto_key = {
+    ike_gateway = [
+{
+        name = panos_ike_gateway.ike_gw_ike_gw_branch.name
+      }
+    ]
+    ipsec_crypto_profile = panos_ipsec_crypto_profile.ipsec_profile_ipsec_default.name
+    proxy_id = [
+{
+        name = "proxy-1"
+        local = "10.0.0.0/8"
+        remote = "192.168.0.0/16"
+        protocol = {
+          number = 17
+        }
+      }
+    ]
   }
-  ipsec_tunnel = panos_ipsec_tunnel.tunnel_tun_branch.name
-  name = "proxy-1"
-  local = "10.0.0.0/8"
-  remote = "192.168.0.0/16"
-  protocol_number = 17
 }
 

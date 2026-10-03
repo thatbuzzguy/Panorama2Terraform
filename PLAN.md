@@ -10,9 +10,7 @@ The adversarial audit (`ADVERSARIAL_AUDIT_REPORT.md`) found three blocking probl
 2. **Silent data loss.** Name-keyed parsing drops per-device-group rules, policy order, VLANs, IPv6, and multi-port services.
 3. **No test gate.** CI runs only `py_compile` and `--help`. Nothing verifies the generated Terraform.
 
-Epic 1 is complete; Epic 2 is in progress (F2.1–F2.3 landed: provider pinned to `~> 2.0.14`, resource mapping table, `location` on every resource). 15 of the 28 emitted types are still missing from provider v2 and the attribute shapes still differ; both are pinned by xfail tests that flip green when F2.4–F2.10 land. Problems 2 and 3 remain.
-
-Epic 2 is in progress: F2.1 (provider baseline `~> 2.0.14`) is complete.
+Epic 1 is complete. Epic 2 is in progress: F2.1–F2.4 have landed (provider pinned to `~> 2.0.14`, resource mapping table, `location` on every resource, emitters rewritten to the v2 attribute shapes). Both committed goldens now pass `terraform validate` against v2.0.14. Remaining Epic 2 work is order preservation, dependency wiring, naming, coverage matrix, report finalization, and cleanup. Audit problem 2 (silent data loss) remains for Epic 3; the test gate (problem 3) landed in Epic 1.
 
 ## Goals
 
@@ -37,8 +35,8 @@ Target: `PaloAltoNetworks/panos` provider v2 (2.0.14+ per the audit). Track upst
 - [x] **F2.1 Provider baseline** — Generate a `provider.tf` pinned to the v2 range. Record the supported range. (Pinned `~> 2.0.14`.)
 - [x] **F2.2 Resource mapping** — One table maps old emitted names to real v2 resources. (`resource_mapping.py`; verified against the v2.0.14 schema.)
 - [x] **F2.3 `location` on every resource** — Derive the block from the XML source: `shared`, `device_group`, or `vsys`. (Landed as the defining device group per object, or the default template for network/VPN resources. Per-DG instances and vsys sub-blocks land with F3.1/F3.5.)
-- [ ] **F2.4 Rewrite emitters to v2 schemas** — Use the real nested blocks (`protocol{}`, `layer3{}`, `auto_key{}`, `position{}`). Put proxy-id inside `panos_ipsec_tunnel`. Remove hardcoded assumptions (for example `panos_virtual_router.default`, the hardcoded OSPF area).
-- [ ] **F2.5 Order-preserving policy** — Emit rules in XML order per (device group, rulebase). Remove the blanket `position = "bottom"`.
+- [x] **F2.4 Rewrite emitters to v2 schemas** — Use the real nested blocks (`protocol{}`, `layer3{}`, `auto_key{}`, `position{}`). Put proxy-id inside `panos_ipsec_tunnel`. Remove hardcoded assumptions (for example `panos_virtual_router.default`, the hardcoded OSPF area). (Landed: every emitted resource uses the v2.0.14 nested attribute shapes; proxy-ids merged into `panos_ipsec_tunnel.auto_key`; report-only types go to `MANUAL_SETUP_REPORT.txt`; sample and kitchen-sink outputs pass `terraform validate`.)
+- [ ] **F2.5 Order-preserving policy** — Emit rules in XML order per (device group, rulebase). Replace the blanket `position { where = "last" }` with order-preserving `position` values.
 - [ ] **F2.6 Dependency wiring** — Add `depends_on` or `.name` references where the provider supports them.
 - [ ] **F2.7 Collision-safe naming** — Build the resource name from the sanitized name plus a short hash of the source path. Handle empty and colliding names.
 - [ ] **F2.8 Coverage matrix** — Maintain a provider-resource ↔ Panorama-XML-element matrix. Give each supported row a fixture test.

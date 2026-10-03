@@ -6,6 +6,7 @@ venv/
 # Terraform
 *.tfstate
 .terraform/
+.terraform.lock.hcl
 
 # Customer data - DON'T commit actual configs!
 *.xml

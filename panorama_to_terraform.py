@@ -380,6 +380,18 @@ class PanoramaParser:
                     addr_obj['type'] = 'ip-range'
                     addr_obj['value'] = ip_range.text
 
+                # IPv6 objects carry their prefix in a dedicated element
+                # (the v2 provider stores any prefix in ip_netmask)
+                ipv6 = addr.find('ipv6')
+                if ipv6 is not None:
+                    addr_obj['type'] = 'ipv6'
+                    addr_obj['value'] = ipv6.text
+
+                ipv6_range = addr.find('ipv6-range')
+                if ipv6_range is not None:
+                    addr_obj['type'] = 'ipv6-range'
+                    addr_obj['value'] = ipv6_range.text
+
                 # Check for FQDN
                 fqdn = addr.find('fqdn')
                 if fqdn is not None:
@@ -443,22 +455,40 @@ class PanoramaParser:
                     if member.text:
                         members.append(member.text)
 
+                # v2 models the tag-based filter as a single expression string
                 dynamic_filter = grp.find('.//dynamic/filter')
+                filter_expr = self._dynamic_filter_expr(dynamic_filter) if dynamic_filter is not None else None
 
                 group_obj = {
                     'name': name,
                     'device_group': self.device_group_of(grp),
                     'static_members': members,
-                    'dynamic_filter': dynamic_filter.text if dynamic_filter is not None else None,
+                    'dynamic_filter': filter_expr,
                     'description': self._get_text(grp, 'description')
                 }
 
                 # Only add/override if this entry has content (members or dynamic filter)
                 # OR if we haven't seen this name yet
-                if (members or dynamic_filter is not None or name not in groups_dict):
+                if (members or filter_expr or name not in groups_dict):
                     groups_dict[name] = group_obj
 
         return list(groups_dict.values())
+
+    def _dynamic_filter_expr(self, filter_elem) -> str:
+        """Serialize a PAN-OS dynamic address filter element to an expression.
+
+        The export format nests the attribute and value elements:
+            <filter><address><tag>web</tag></address></filter>
+        The v2 provider takes a single tag-based filter string, so each
+        attribute/value pair becomes 'attr == "value"' joined by 'and'.
+        """
+        parts = []
+        for attr in filter_elem:
+            for value_elem in attr:
+                val = (value_elem.text or '').strip()
+                if val:
+                    parts.append(f'{value_elem.tag} == "{val}"')
+        return ' and '.join(parts)
 
     def parse_service_objects(self) -> list[dict]:
         """Parse service objects"""
@@ -2073,6 +2103,18 @@ class PanoramaParser:
         return members
 
 
+class HclRef:
+    """A raw HCL expression (e.g. a resource reference) emitted verbatim.
+
+    Terraform resource references such as panos_virtual_router.x.name must
+    not be quoted, so they are wrapped in HclRef when passed to hcl_value().
+    """
+    __slots__ = ('expr',)
+
+    def __init__(self, expr: str):
+        self.expr = expr
+
+
 class TerraformGenerator:
     """Generate Terraform configuration files from Panorama data"""
 
@@ -2097,22 +2139,17 @@ class TerraformGenerator:
             sanitized = f'_{sanitized}'
         return sanitized.lower()
 
-    def unique_resource_name(self, name: str, scope: str) -> str:
-        """Assign a collision-free Terraform resource name.
+    def declare_resource_name(self, name: str, scope: str, context: str = '') -> str:
+        """Assign a collision-free Terraform name for a new resource declaration.
 
         Different PAN-OS names can sanitize to the same Terraform name
-        (for example 'a-b' and 'a_b' both become 'a_b'), which would emit
-        duplicate resource addresses (invalid HCL). The first name keeps
-        the base form; later colliding names get a numeric suffix.
-
-        `scope` separates collision domains per resource type, and the
-        registry makes the result deterministic for a given input, so a
-        reference site that recomputes the same input resolves to the same
-        resource name.
+        (for example 'a-b' and 'a_b' both become 'a_b'), and the same PAN-OS
+        name can exist in two device groups or templates. Both cases would
+        emit duplicate resource addresses (invalid HCL), so the identity key
+        combines scope (resource type), context (device group or template),
+        and name. The first name keeps the base form; later colliding names
+        get a numeric suffix.
         """
-        key = (scope, name)
-        if key in self._name_registry:
-            return self._name_registry[key]
         base = self.sanitize_name(name) or 'unnamed'
         taken = self._taken_names.setdefault(scope, set())
         candidate, n = base, 2
@@ -2120,8 +2157,22 @@ class TerraformGenerator:
             candidate = f'{base}_{n}'
             n += 1
         taken.add(candidate)
-        self._name_registry[key] = candidate
+        # Reference sites resolve by (scope, name); the first declaration wins
+        self._name_registry.setdefault((scope, name), candidate)
         return candidate
+
+    def unique_resource_name(self, name: str, scope: str) -> str:
+        """Resolve the Terraform name a reference site must use.
+
+        Returns the name already assigned to (scope, name) by a declaration
+        when one exists, so a reference that recomputes the same input
+        resolves to the same resource. Falls back to a fresh declaration
+        when the referenced object was never declared in this run.
+        """
+        key = (scope, name)
+        if key in self._name_registry:
+            return self._name_registry[key]
+        return self.declare_resource_name(name, scope)
 
     def escape_string(self, value: str) -> str:
         """Escape strings for Terraform"""
@@ -2144,45 +2195,77 @@ class TerraformGenerator:
     _TEMPLATE_SCOPED_TYPES = {
         'panos_zone',
         'panos_virtual_router',
-        'panos_static_route_ipv4',
+        'panos_virtual_router_static_route_ipv4',
         'panos_ethernet_interface',
-        'panos_layer2_subinterface',
+        'panos_ethernet_layer3_subinterface',
         'panos_ike_crypto_profile',
         'panos_ipsec_crypto_profile',
         'panos_ike_gateway',
         'panos_ipsec_tunnel',
-        'panos_ipsec_tunnel_proxy_id_ipv4',
-        'panos_bgp',
-        'panos_bgp_peer_group',
-        'panos_bgp_peer',
-        'panos_ospf',
-        'panos_ospf_area',
-        'panos_ospf_area_interface',
     }
 
-    def location_block(self, resource_type: str, device_group: Optional[str] = None) -> str:
-        """Required location block for a generated resource (F2.3).
+    def location_block(self, resource_type: str, device_group: Optional[str] = None,
+                       template: Optional[str] = None) -> str:
+        """Required location object for a generated resource (F2.3/F2.4).
 
         Provider v2 requires `location` on every resource. Objects and
         rules are scoped to the device group that defined them (default
         "Shared"). Network and VPN resources are template-scoped; the
-        default "Shared" template is used (F2.4 tracks the exact name).
+        tracked template name is used when known, otherwise the default
+        "Shared" template.
         """
         if resource_type in self._TEMPLATE_SCOPED_TYPES:
             return (
-                '  location {\n'
-                '    template {\n'
-                f'      name = {self.escape_string("Shared")}\n'
+                '  location = {\n'
+                '    template = {\n'
+                f'      name = {self.escape_string(template or "Shared")}\n'
                 '    }\n'
                 '  }\n'
             )
         return (
-            '  location {\n'
-            '    device_group {\n'
+            '  location = {\n'
+            '    device_group = {\n'
             f'      name = {self.escape_string(device_group or "Shared")}\n'
             '    }\n'
             '  }\n'
         )
+
+    def hcl_value(self, value: Any, indent: str = '  ') -> str:
+        """Render a Python value as an HCL expression.
+
+        Provider v2 models nested structures as object/list arguments rather
+        than blocks, so multi-line object and list syntax is required:
+            key = {
+              inner = "value"
+            }
+        Use HclRef for raw expressions (resource references) that must be
+        emitted without quoting.
+        """
+        if isinstance(value, HclRef):
+            return value.expr
+        if value is True:
+            return 'true'
+        if value is False:
+            return 'false'
+        if isinstance(value, int):
+            return str(value)
+        if isinstance(value, str):
+            return self.escape_string(value)
+        if isinstance(value, dict):
+            if not value:
+                return '{}'
+            parts = [f'{indent}  {k} = ' + self.hcl_value(v, indent + '  ')
+                     for k, v in value.items()]
+            return '{\n' + '\n'.join(parts) + f'\n{indent}}}'
+        if isinstance(value, (list, tuple)):
+            if not value:
+                return '[]'
+            if all(not isinstance(item, (dict, list)) for item in value):
+                # Primitive lists stay inline
+                return '[ ' + ', '.join(self.hcl_value(item, '') for item in value) + ' ]'
+            parts = [self.hcl_value(item, indent + '  ') for item in value]
+            return '[\n' + ',\n'.join(parts) + f'\n{indent}]'
+        raise TypeError(f'Cannot render {type(value)} as HCL')
 
     def generate_provider_config(self):
         """Generate provider.tf file"""
@@ -2242,33 +2325,32 @@ variable "device_group" {
             f.write(content)
 
     def generate_address_objects(self, addresses: list[dict]):
-        """Generate address objects Terraform configuration"""
+        """Generate address object Terraform configuration (v2: panos_address)
+
+        The v2 schema exposes one attribute per address type (ip_netmask,
+        ip_range, fqdn, ip_wildcard) instead of a generic value attribute.
+        """
         if not addresses:
             return
 
         content = '# Address Objects\n\n'
 
         for addr in addresses:
-            resource_name = self.unique_resource_name(addr['name'], 'panos_address_object')
+            resource_name = self.declare_resource_name(
+                addr['name'], 'panos_address', context=addr.get('device_group') or ''
+            )
 
-            content += f'resource "panos_address_object" "{resource_name}" {{\n'
-            content += self.location_block('panos_address_object', addr.get('device_group'))
+            content += f'resource "panos_address" "{resource_name}" {{\n'
+            content += self.location_block('panos_address', addr.get('device_group'))
             content += f'  name = {self.escape_string(addr["name"])}\n'
 
             if addr.get('description'):
                 content += f'  description = {self.escape_string(addr["description"])}\n'
 
-            addr_type = addr.get('type', 'ip-netmask')
-            value = addr.get('value', '')
-
-            if addr_type == 'ip-netmask':
-                content += f'  value = {self.escape_string(value)}\n'
-            elif addr_type == 'ip-range':
-                content += '  type = "ip-range"\n'
-                content += f'  value = {self.escape_string(value)}\n'
-            elif addr_type == 'fqdn':
-                content += '  type = "fqdn"\n'
-                content += f'  value = {self.escape_string(value)}\n'
+            value = (addr.get('value') or '').strip()
+            if value:
+                attr = self._address_type_attribute(addr.get('type', 'ip-netmask'))
+                content += f'  {attr} = {self.escape_string(value)}\n'
 
             if addr.get('tags'):
                 tags_str = ', '.join([self.escape_string(tag) for tag in addr['tags']])
@@ -2279,15 +2361,38 @@ variable "device_group" {
         with open(self.output_dir / 'address_objects.tf', 'w') as f:
             f.write(content)
 
+    @staticmethod
+    def _address_type_attribute(addr_type: str) -> str:
+        """Map the parser address type to the v2 panos_address attribute."""
+        mapping = {
+            'ip-netmask': 'ip_netmask',
+            'ip-range': 'ip_range',
+            'ip-wildcard': 'ip_wildcard',
+            'fqdn': 'fqdn',
+        }
+        return mapping.get(addr_type, 'ip_netmask')
+
     def generate_address_groups(self, groups: list[dict]):
-        """Generate address groups Terraform configuration"""
+        """Generate address group Terraform configuration (v2: panos_address_group)"""
         if not groups:
             return
 
         content = '# Address Groups\n\n'
 
         for grp in groups:
-            resource_name = self.unique_resource_name(grp['name'], 'panos_address_group')
+            static_members = grp.get('static_members') or []
+            dynamic_filter = (grp.get('dynamic_filter') or '').strip()
+
+            # The v2 provider requires exactly one of the static member list
+            # or the dynamic filter; an empty group would be invalid, so it is
+            # kept visible as a comment instead of a resource.
+            if not static_members and not dynamic_filter:
+                content += f'# NOTE: address group {grp["name"]} has no members or filter; configure manually\n\n'
+                continue
+
+            resource_name = self.declare_resource_name(
+                grp['name'], 'panos_address_group', context=grp.get('device_group') or ''
+            )
 
             content += f'resource "panos_address_group" "{resource_name}" {{\n'
             content += self.location_block('panos_address_group', grp.get('device_group'))
@@ -2296,12 +2401,13 @@ variable "device_group" {
             if grp.get('description'):
                 content += f'  description = {self.escape_string(grp["description"])}\n'
 
-            if grp.get('static_members'):
-                members_str = ', '.join([self.escape_string(m) for m in grp['static_members']])
-                content += f'  static_value = [{members_str}]\n'
+            if static_members:
+                members_str = ', '.join([self.escape_string(m) for m in static_members])
+                content += f'  static = [{members_str}]\n'
 
-            if grp.get('dynamic_filter'):
-                content += f'  dynamic_value = {self.escape_string(grp["dynamic_filter"])}\n'
+            # v2 dynamic groups: the filter expression lives in dynamic.dynamic
+            if dynamic_filter:
+                content += f'  dynamic = {self.hcl_value({"dynamic": {"filter": dynamic_filter}})}\n'
 
             content += '}\n\n'
 
@@ -2309,27 +2415,38 @@ variable "device_group" {
             f.write(content)
 
     def generate_service_objects(self, services: list[dict]):
-        """Generate service objects Terraform configuration"""
+        """Generate service object Terraform configuration (v2: panos_service)
+
+        The v2 schema nests the port inside a protocol block:
+        protocol { tcp { destination_port = "..." } }
+        """
         if not services:
             return
 
         content = '# Service Objects\n\n'
 
         for svc in services:
-            resource_name = self.unique_resource_name(svc['name'], 'panos_service_object')
+            resource_name = self.declare_resource_name(
+                svc['name'], 'panos_service', context=svc.get('device_group') or ''
+            )
 
-            content += f'resource "panos_service_object" "{resource_name}" {{\n'
-            content += self.location_block('panos_service_object', svc.get('device_group'))
+            content += f'resource "panos_service" "{resource_name}" {{\n'
+            content += self.location_block('panos_service', svc.get('device_group'))
             content += f'  name = {self.escape_string(svc["name"])}\n'
 
             if svc.get('description'):
                 content += f'  description = {self.escape_string(svc["description"])}\n'
 
+            # v2 protocol is a nested object: protocol = { tcp = { destination_port = "..." } }
             protocol = svc.get('protocol', 'tcp')
-            content += f'  protocol = {self.escape_string(protocol)}\n'
-
-            if svc.get('port'):
-                content += f'  destination_port = {self.escape_string(svc["port"])}\n'
+            if protocol in ('tcp', 'udp'):
+                inner: dict = {}
+                if svc.get('port'):
+                    inner['destination_port'] = str(svc['port'])
+                content += f'  protocol = {self.hcl_value({protocol: inner})}\n'
+            else:
+                # v2 only models tcp/udp; note the protocol for manual review
+                content += f'  # NOTE: protocol {protocol} is not modeled by the v2 schema; review manually\n'
 
             content += '}\n\n'
 
@@ -2337,25 +2454,27 @@ variable "device_group" {
             f.write(content)
 
     def generate_service_groups(self, groups: list[dict]):
-        """Generate service groups Terraform configuration"""
+        """Generate service group Terraform configuration (v2: panos_service_group)
+
+        Note: the v2 panos_service_group schema has no description attribute.
+        """
         if not groups:
             return
 
         content = '# Service Groups\n\n'
 
         for grp in groups:
-            resource_name = self.unique_resource_name(grp['name'], 'panos_service_group')
+            resource_name = self.declare_resource_name(
+                grp['name'], 'panos_service_group', context=grp.get('device_group') or ''
+            )
 
             content += f'resource "panos_service_group" "{resource_name}" {{\n'
             content += self.location_block('panos_service_group', grp.get('device_group'))
             content += f'  name = {self.escape_string(grp["name"])}\n'
 
-            if grp.get('description'):
-                content += f'  description = {self.escape_string(grp["description"])}\n'
-
             if grp.get('members'):
                 members_str = ', '.join([self.escape_string(m) for m in grp['members']])
-                content += f'  services = [{members_str}]\n'
+                content += f'  members = [{members_str}]\n'
 
             content += '}\n\n'
 
@@ -2363,24 +2482,39 @@ variable "device_group" {
             f.write(content)
 
     def generate_tags(self, tags: list[dict]):
-        """Generate tags Terraform configuration"""
+        """Generate tag Terraform configuration (v2: panos_administrative_tag)
+
+        The v2 schema uses comments (not comment/description) for the tag text.
+        """
         if not tags:
             return
 
         content = '# Tags\n\n'
 
         for tag in tags:
-            resource_name = self.unique_resource_name(tag['name'], 'panos_administrative_tag')
+            resource_name = self.declare_resource_name(
+                tag['name'], 'panos_administrative_tag', context=tag.get('device_group') or ''
+            )
 
             content += f'resource "panos_administrative_tag" "{resource_name}" {{\n'
             content += self.location_block('panos_administrative_tag', tag.get('device_group'))
             content += f'  name = {self.escape_string(tag["name"])}\n'
 
-            if tag.get('color'):
-                content += f'  color = {self.escape_string(tag["color"])}\n'
+            # v2 uses numeric color names (color1..colorN); PAN-OS exports use
+            # the color words in the GUI order (red, orange, yellow, green, ...)
+            color_map = {
+                'red': 'color1', 'orange': 'color2', 'yellow': 'color3',
+                'green': 'color4', 'blue': 'color5', 'purple': 'color6',
+                'gray': 'color7',
+            }
+            tag_color = (tag.get('color') or '').lower()
+            if tag_color in color_map:
+                content += f'  color = {self.escape_string(color_map[tag_color])}\n'
 
-            if tag.get('comments'):
-                content += f'  comment = {self.escape_string(tag["comments"])}\n'
+            # Parser stores the tag text in comments (or description)
+            tag_text = tag.get('comments') or tag.get('description')
+            if tag_text:
+                content += f'  comments = {self.escape_string(tag_text)}\n'
 
             content += '}\n\n'
 
@@ -2388,26 +2522,30 @@ variable "device_group" {
             f.write(content)
 
     def generate_custom_url_categories(self, categories: list[dict]):
-        """Generate custom URL categories Terraform configuration"""
+        """Generate custom URL category Terraform configuration (v2: panos_custom_url_category)"""
         if not categories:
             return
 
         content = '# Custom URL Categories\n\n'
 
         for cat in categories:
-            resource_name = self.unique_resource_name(cat['name'], 'panos_custom_url_category')
+            resource_name = self.declare_resource_name(
+                cat['name'], 'panos_custom_url_category', context=cat.get('device_group') or ''
+            )
 
             content += f'resource "panos_custom_url_category" "{resource_name}" {{\n'
             content += self.location_block('panos_custom_url_category', cat.get('device_group'))
             content += f'  name = {self.escape_string(cat["name"])}\n'
 
+            if cat.get('type'):
+                content += f'  type = {self.escape_string(cat["type"])}\n'
+
             if cat.get('description'):
                 content += f'  description = {self.escape_string(cat["description"])}\n'
 
             if cat.get('list'):
-                # Split into sites
                 sites_str = ', '.join([self.escape_string(url) for url in cat['list']])
-                content += f'  sites = [{sites_str}]\n'
+                content += f'  list = [{sites_str}]\n'
 
             content += '}\n\n'
 
@@ -2415,14 +2553,16 @@ variable "device_group" {
             f.write(content)
 
     def generate_application_groups(self, app_groups: list[dict]):
-        """Generate application groups Terraform configuration"""
+        """Generate application group Terraform configuration (v2: panos_application_group)"""
         if not app_groups:
             return
 
         content = '# Application Groups\n\n'
 
         for ag in app_groups:
-            resource_name = self.unique_resource_name(ag['name'], 'panos_application_group')
+            resource_name = self.declare_resource_name(
+                ag['name'], 'panos_application_group', context=ag.get('device_group') or ''
+            )
 
             content += f'resource "panos_application_group" "{resource_name}" {{\n'
             content += self.location_block('panos_application_group', ag.get('device_group'))
@@ -2430,77 +2570,57 @@ variable "device_group" {
 
             if ag.get('members'):
                 members_str = ', '.join([self.escape_string(m) for m in ag['members']])
-                content += f'  applications = [{members_str}]\n'
+                content += f'  members = [{members_str}]\n'
 
             content += '}\n\n'
 
         with open(self.output_dir / 'application_groups.tf', 'w') as f:
             f.write(content)
 
-    def generate_application_filters(self, app_filters: list[dict]):
-        """Generate application filters Terraform configuration"""
-        if not app_filters:
-            return
-
-        content = '# Application Filters\n'
-        content += '# Note: Application filters may require manual configuration of all attributes\n\n'
-
-        for af in app_filters:
-            resource_name = self.unique_resource_name(af['name'], 'panos_application_filter')
-
-            content += f'resource "panos_application_filter" "{resource_name}" {{\n'
-            content += self.location_block('panos_application_filter', af.get('device_group'))
-            content += f'  name = {self.escape_string(af["name"])}\n'
-
-            if af.get('category'):
-                cat_str = ', '.join([self.escape_string(c) for c in af['category']])
-                content += f'  category = [{cat_str}]\n'
-
-            if af.get('subcategory'):
-                subcat_str = ', '.join([self.escape_string(s) for s in af['subcategory']])
-                content += f'  subcategory = [{subcat_str}]\n'
-
-            if af.get('technology'):
-                tech_str = ', '.join([self.escape_string(t) for t in af['technology']])
-                content += f'  technology = [{tech_str}]\n'
-
-            if af.get('risk'):
-                risk_str = ', '.join([self.escape_string(r) for r in af['risk']])
-                content += f'  risk = [{risk_str}]\n'
-
-            if af.get('evasive') == 'yes':
-                content += '  evasive = true\n'
-
-            content += '}\n\n'
-
-        with open(self.output_dir / 'application_filters.tf', 'w') as f:
-            f.write(content)
+    # NOTE: application filters have no v2 resource (see resource_mapping.py).
+    # Their parsed data goes to MANUAL_SETUP_REPORT.txt instead.
 
     def generate_external_lists(self, ext_lists: list[dict]):
-        """Generate external dynamic lists Terraform configuration"""
+        """Generate external dynamic list Terraform configuration
+
+        v2: panos_external_dynamic_list. The v2 schema nests the fetch details
+        inside a type block keyed by the list type (ip, domain, url, ...).
+        """
         if not ext_lists:
             return
 
         content = '# External Dynamic Lists\n\n'
 
-        for ext_list in ext_lists:
-            resource_name = self.unique_resource_name(ext_list['name'], 'panos_external_list')
+        # List types the v2 schema models inside the type block
+        v2_types = ('domain', 'imei', 'imsi', 'ip', 'predefined_ip', 'predefined_url', 'url')
+        recurring_keys = ('daily', 'five_minute', 'hourly', 'monthly', 'weekly')
 
-            content += f'resource "panos_external_list" "{resource_name}" {{\n'
-            content += self.location_block('panos_external_list', ext_list.get('device_group'))
+        for ext_list in ext_lists:
+            resource_name = self.declare_resource_name(
+                ext_list['name'], 'panos_external_dynamic_list', context=ext_list.get('device_group') or ''
+            )
+
+            content += f'resource "panos_external_dynamic_list" "{resource_name}" {{\n'
+            content += self.location_block('panos_external_dynamic_list', ext_list.get('device_group'))
             content += f'  name = {self.escape_string(ext_list["name"])}\n'
 
-            if ext_list.get('type'):
-                content += f'  type = {self.escape_string(ext_list["type"])}\n'
-
-            if ext_list.get('url'):
-                content += f'  url = {self.escape_string(ext_list["url"])}\n'
-
-            if ext_list.get('recurring'):
-                content += f'  recurring = {self.escape_string(ext_list["recurring"])}\n'
-
-            if ext_list.get('description'):
-                content += f'  description = {self.escape_string(ext_list["description"])}\n'
+            # v2 type is a nested object keyed by list type
+            lt = ext_list.get('type') or 'ip'
+            if lt in v2_types:
+                type_obj: dict = {}
+                if ext_list.get('url'):
+                    type_obj['url'] = ext_list['url']
+                recurring = ext_list.get('recurring')
+                if recurring in recurring_keys:
+                    type_obj['recurring'] = {recurring: {}}
+                if ext_list.get('description'):
+                    type_obj['description'] = ext_list['description']
+                content += f'  type = {self.hcl_value({lt: type_obj})}\n'
+            else:
+                # Unknown list type: keep the data visible for manual review
+                content += f'  # NOTE: list type {lt} is not modeled by the v2 schema; review manually\n'
+                if ext_list.get('url'):
+                    content += f'  # url = {ext_list["url"]}\n'
 
             content += '}\n\n'
 
@@ -2525,127 +2645,127 @@ variable "device_group" {
             f.write(content)
 
     def generate_security_rules(self, rules: list[dict]):
-        """Generate security policy rules Terraform configuration"""
+        """Generate security policy rules Terraform configuration
+
+        v2: panos_security_policy_rules. Each rule is a rules entry inside a
+        container resource that also carries the required position block.
+        """
         if not rules:
             return
 
         content = '# Security Policy Rules\n\n'
 
         for rule in rules:
-            resource_name = self.unique_resource_name(rule['name'], 'panos_security_rule_group')
+            resource_name = self.declare_resource_name(
+                rule['name'], 'panos_security_policy_rules', context=rule.get('device_group') or ''
+            )
 
-            content += f'resource "panos_security_rule_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_security_rule_group', rule.get('device_group'))
-            content += '  position_keyword = "bottom"\n\n'
-            content += '  rule {\n'
-            content += f'    name = {self.escape_string(rule["name"])}\n'
+            content += f'resource "panos_security_policy_rules" "{resource_name}" {{\n'
+            content += self.location_block('panos_security_policy_rules', rule.get('device_group'))
+            # v2 requires a position block (F2.5 refines the where value)
+            # v2 position is a nested object; where is one of first/last/before/after.
+            # F2.5 replaces the blanket "last" with order-preserving positions.
+            content += f'  position = {self.hcl_value({"where": "last"})}\n\n'
 
+            # v2 rules is a list of objects
+            rule_obj: dict = {'name': rule['name']}
             if rule.get('description'):
-                content += f'    description = {self.escape_string(rule["description"])}\n'
-
+                rule_obj['description'] = rule['description']
             if rule.get('source_zones'):
-                zones_str = ', '.join([self.escape_string(z) for z in rule['source_zones']])
-                content += f'    source_zones = [{zones_str}]\n'
-
+                rule_obj['source_zones'] = list(rule['source_zones'])
             if rule.get('source_addresses'):
-                addrs_str = ', '.join([self.escape_string(a) for a in rule['source_addresses']])
-                content += f'    source_addresses = [{addrs_str}]\n'
-
+                rule_obj['source_addresses'] = list(rule['source_addresses'])
             if rule.get('destination_zones'):
-                zones_str = ', '.join([self.escape_string(z) for z in rule['destination_zones']])
-                content += f'    destination_zones = [{zones_str}]\n'
-
+                rule_obj['destination_zones'] = list(rule['destination_zones'])
             if rule.get('destination_addresses'):
-                addrs_str = ', '.join([self.escape_string(a) for a in rule['destination_addresses']])
-                content += f'    destination_addresses = [{addrs_str}]\n'
-
+                rule_obj['destination_addresses'] = list(rule['destination_addresses'])
             if rule.get('applications'):
-                apps_str = ', '.join([self.escape_string(a) for a in rule['applications']])
-                content += f'    applications = [{apps_str}]\n'
-
+                rule_obj['applications'] = list(rule['applications'])
             if rule.get('services'):
-                svcs_str = ', '.join([self.escape_string(s) for s in rule['services']])
-                content += f'    services = [{svcs_str}]\n'
-
-            action = rule.get('action', 'allow')
-            content += f'    action = {self.escape_string(action)}\n'
-
+                rule_obj['services'] = list(rule['services'])
+            rule_obj['action'] = rule.get('action', 'allow')
             if rule.get('log_start'):
-                content += '    log_start = true\n'
-
+                rule_obj['log_start'] = True
             if rule.get('log_end'):
-                content += '    log_end = true\n'
-
+                rule_obj['log_end'] = True
             if rule.get('disabled'):
-                content += '    disabled = true\n'
+                rule_obj['disabled'] = True
 
-            content += '  }\n'
+            content += f'  rules = {self.hcl_value([rule_obj])}\n'
             content += '}\n\n'
 
         with open(self.output_dir / 'security_rules.tf', 'w') as f:
             f.write(content)
 
     def generate_nat_rules(self, rules: list[dict]):
-        """Generate NAT policy rules Terraform configuration"""
+        """Generate NAT policy rules Terraform configuration
+
+        v2: panos_nat_policy_rules. Translation is modeled as a
+        source_translation block with one of dynamic_ip_and_port, dynamic_ip,
+        or static_ip sub-blocks (v2 names use underscores).
+        """
         if not rules:
             return
 
         content = '# NAT Policy Rules\n\n'
 
         for rule in rules:
-            resource_name = self.unique_resource_name(rule['name'], 'panos_nat_rule_group')
+            resource_name = self.declare_resource_name(
+                rule['name'], 'panos_nat_policy_rules', context=rule.get('device_group') or ''
+            )
 
-            content += f'resource "panos_nat_rule_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_nat_rule_group', rule.get('device_group'))
-            content += '  position_keyword = "bottom"\n\n'
-            content += '  rule {\n'
-            content += f'    name = {self.escape_string(rule["name"])}\n'
+            content += f'resource "panos_nat_policy_rules" "{resource_name}" {{\n'
+            content += self.location_block('panos_nat_policy_rules', rule.get('device_group'))
+            # v2 position is a required nested object; where is one of first/last/before/after.
+            # F2.5 replaces the blanket "last" with order-preserving positions.
+            content += f'  position = {self.hcl_value({"where": "last"})}\n\n'
 
+            # v2 rules is a list of objects
+            rule_obj: dict = {'name': rule['name']}
             if rule.get('description'):
-                content += f'    description = {self.escape_string(rule["description"])}\n'
-
+                rule_obj['description'] = rule['description']
             if rule.get('source_zones'):
-                zones_str = ', '.join([self.escape_string(z) for z in rule['source_zones']])
-                content += '    original_packet {\n'
-                content += f'      source_zones = [{zones_str}]\n'
-
+                rule_obj['source_zones'] = list(rule['source_zones'])
+            # v2 destination_zone is a list
             if rule.get('destination_zone'):
-                content += f'      destination_zone = {self.escape_string(rule["destination_zone"])}\n'
-
+                rule_obj['destination_zone'] = [rule['destination_zone']]
             if rule.get('source_addresses'):
-                addrs_str = ', '.join([self.escape_string(a) for a in rule['source_addresses']])
-                content += f'      source_addresses = [{addrs_str}]\n'
-
+                rule_obj['source_addresses'] = list(rule['source_addresses'])
             if rule.get('destination_addresses'):
-                addrs_str = ', '.join([self.escape_string(a) for a in rule['destination_addresses']])
-                content += f'      destination_addresses = [{addrs_str}]\n'
-
+                rule_obj['destination_addresses'] = list(rule['destination_addresses'])
             if rule.get('service'):
-                content += f'      service = {self.escape_string(rule["service"])}\n'
-
-            content += '    }\n\n'
-
-            # Source translation
-            if rule.get('source_translation_type'):
-                content += '    source_translation {\n'
-                content += f'      type = {self.escape_string(rule["source_translation_type"])}\n'
-                if rule.get('source_translation_address'):
-                    addrs_str = ', '.join([self.escape_string(a) for a in rule['source_translation_address']])
-                    content += f'      translated_addresses = [{addrs_str}]\n'
-                content += '    }\n\n'
-
-            # Destination translation
-            if rule.get('destination_translation_address'):
-                content += '    destination_translation {\n'
-                content += f'      translated_address = {self.escape_string(rule["destination_translation_address"])}\n'
-                if rule.get('destination_translation_port'):
-                    content += f'      translated_port = {self.escape_string(rule["destination_translation_port"])}\n'
-                content += '    }\n\n'
-
+                rule_obj['service'] = rule['service']
             if rule.get('disabled'):
-                content += '    disabled = true\n'
+                rule_obj['disabled'] = True
 
-            content += '  }\n'
+            # Source translation (v2 sub-object names use underscores)
+            st_type = (rule.get('source_translation_type') or '').replace('-', '_')
+            st_addr = rule.get('source_translation_address') or []
+            if st_type in ('dynamic_ip_and_port', 'dynamic_ip', 'static_ip'):
+                # v2 nat_type is the NAT family (ipv4/nat64/nptv6), not the
+                # translation direction; IPv4 is the Panorama default family
+                rule_obj['nat_type'] = 'ipv4'
+                if st_type == 'dynamic_ip_and_port' and st_addr:
+                    # The translation address is the egress interface
+                    rule_obj['source_translation'] = {
+                        st_type: {'interface_address': {'interface': st_addr[0]}}}
+                elif st_type == 'dynamic_ip' and st_addr:
+                    rule_obj['source_translation'] = {
+                        st_type: {'translated_address': list(st_addr)}}
+                elif st_type == 'static_ip' and st_addr:
+                    # static_ip takes a single translated address
+                    rule_obj['source_translation'] = {
+                        st_type: {'translated_address': st_addr[0]}}
+
+            # Destination translation (the direction is implied by which
+            # translation object is present, not by nat_type)
+            if rule.get('destination_translation_address'):
+                dst: dict = {'translated_address': rule['destination_translation_address']}
+                if rule.get('destination_translation_port'):
+                    dst['translated_port'] = int(rule['destination_translation_port'])
+                rule_obj['destination_translation'] = dst
+
+            content += f'  rules = {self.hcl_value([rule_obj])}\n'
             content += '}\n\n'
 
         with open(self.output_dir / 'nat_rules.tf', 'w') as f:
@@ -2791,26 +2911,33 @@ variable "device_group" {
 
 
     def generate_zones(self, zones: list[dict]):
-        """Generate zone Terraform configuration"""
+        """Generate zone Terraform configuration (v2: panos_zone)
+
+        The v2 schema nests membership in a network block:
+        network { layer3 = [...] } or network { layer2 = [...] }
+        """
         if not zones:
             return
 
         content = '# Zone Configurations\n\n'
 
         for zone in zones:
-            resource_name = self.unique_resource_name(zone['name'], 'panos_zone')
+            resource_name = self.declare_resource_name(zone['name'], 'panos_zone', context=zone.get('template') or '')
 
             content += f'resource "panos_zone" "{resource_name}" {{\n'
-            content += self.location_block('panos_zone')
+            content += self.location_block('panos_zone', template=zone.get('template'))
             content += f'  name = {self.escape_string(zone["name"])}\n'
-            content += f'  mode = {self.escape_string(zone["type"])}\n'
 
+            # v2 network object: membership list is keyed by layer type
+            ztype = zone.get('type') or 'layer3'
+            key = 'layer2' if ztype == 'layer2' else 'layer3'
+            network: dict = {}
             if zone.get('interfaces'):
-                ifaces_str = ', '.join([self.escape_string(i) for i in zone['interfaces']])
-                content += f'  interfaces = [{ifaces_str}]\n'
-
+                network[key] = list(zone['interfaces'])
             if zone.get('zone_protection_profile'):
-                content += f'  zone_protection_profile = {self.escape_string(zone["zone_protection_profile"])}\n'
+                network['zone_protection_profile'] = zone['zone_protection_profile']
+            if network:
+                content += f'  network = {self.hcl_value(network)}\n'
 
             content += '}\n\n'
 
@@ -2818,97 +2945,81 @@ variable "device_group" {
             f.write(content)
 
     def generate_virtual_routers(self, vrouters: list[dict]):
-        """Generate virtual/logical router Terraform configuration
+        """Generate virtual router Terraform configuration (v2: panos_virtual_router)
 
-        Supports both:
-        - Virtual Routers (legacy routing engine)
-        - Logical Routers (Advanced Routing Engine - PAN-OS 10.2+)
+        Logical routers (Advanced Routing Engine) emit the same v2 resource.
+        Static routes use the v2 panos_virtual_router_static_route_ipv4
+        resource and reference the owning virtual router resource.
         """
         if not vrouters:
             return
 
-        # Separate routers by type
-        virtual_routers = [r for r in vrouters if r.get('router_type') != 'logical']
-        logical_routers = [r for r in vrouters if r.get('router_type') == 'logical']
-
         content = '# Router Configurations\n'
         content += '# Supports both Virtual Routers (legacy) and Logical Routers (Advanced Routing Engine)\n\n'
 
-        if logical_routers:
-            content += '# NOTE: Your config uses Advanced Routing Engine (PAN-OS 10.2+)\n'
-            content += f'# - {len(virtual_routers)} Virtual Routers (legacy)\n'
-            content += f'# - {len(logical_routers)} Logical Routers (advanced)\n'
-            content += '#\n'
-            content += '# Terraform provider panos supports both types.\n'
-            content += '# Virtual routers use: panos_virtual_router\n'
-            content += '# Logical routers use: panos_logical_router (if supported by provider version)\n'
-            content += '# Check: https://registry.terraform.io/providers/PaloAltoNetworks/panos/latest/docs\n\n'
-
-        # Track resource names to handle duplicates
-        resource_name_counts = {}
-
         for router in vrouters:
-            # Generate base resource name
-            base_resource_name = self.unique_resource_name(router['name'], 'panos_virtual_router')
-
-            # If we've seen this name before, add a suffix
-            if base_resource_name in resource_name_counts:
-                resource_name_counts[base_resource_name] += 1
-                resource_name = f"{base_resource_name}_{resource_name_counts[base_resource_name]}"
-            else:
-                resource_name_counts[base_resource_name] = 1
-                resource_name = base_resource_name
-
-            # Determine router type and resource type
-            router_type = router.get('router_type', 'virtual')
-            is_logical = router_type == 'logical'
+            resource_name = self.declare_resource_name(
+                router['name'], 'panos_virtual_router', context=router.get('template') or ''
+            )
 
             # Add comment showing source and type
             template = router.get('template', 'unknown')
             content += f'# Source: {template}\n'
-            rtype = 'Logical Router (Advanced Routing Engine)' if is_logical else 'Virtual Router (Legacy)'
+            router_type = router.get('router_type', 'virtual')
+            if router_type == 'logical':
+                rtype = 'Logical Router (Advanced Routing Engine)'
+            else:
+                rtype = 'Virtual Router (Legacy)'
             content += f'# Type: {rtype}\n'
 
-            if is_logical:
-                # Note: panos_logical_router may not exist in all provider versions
-                # Users may need to use panos_virtual_router even for logical routers
-                content += '# NOTE: Terraform provider may use panos_virtual_router for logical routers\n'
-                content += '# Check provider documentation for logical router support\n'
-                content += f'resource "panos_virtual_router" "{resource_name}" {{\n'
-                content += self.location_block('panos_virtual_router')
-            else:
-                content += f'resource "panos_virtual_router" "{resource_name}" {{\n'
-                content += self.location_block('panos_virtual_router')
-
+            content += f'resource "panos_virtual_router" "{resource_name}" {{\n'
+            content += self.location_block('panos_virtual_router', template=router.get('template'))
             content += f'  name = {self.escape_string(router["name"])}\n'
 
+            # v2 interfaces is a flat string list
             if router.get('interfaces'):
                 ifaces_str = ', '.join([self.escape_string(i) for i in router['interfaces']])
                 content += f'  interfaces = [{ifaces_str}]\n'
 
             content += '}\n\n'
 
-            # Generate static routes
+            # Generate static routes (v2: panos_virtual_router_static_route_ipv4)
             if router.get('static_routes'):
                 for route in router['static_routes']:
                     route_key = f"{resource_name}_{route['name']}"
-                    route_resource = self.unique_resource_name(route_key, 'panos_virtual_router_static_route_ipv4')
+                    route_resource = self.declare_resource_name(
+                        route_key, 'panos_virtual_router_static_route_ipv4', context=router.get('template') or ''
+                    )
 
-                    content += f'resource "panos_static_route_ipv4" "{route_resource}" {{\n'
-                    content += self.location_block('panos_static_route_ipv4')
+                    content += f'resource "panos_virtual_router_static_route_ipv4" "{route_resource}" {{\n'
+                    content += self.location_block(
+                        'panos_virtual_router_static_route_ipv4',
+                        template=router.get('template'))
                     content += f'  name = {self.escape_string(route["name"])}\n'
+                    # Reference the owning virtual router resource
                     content += f'  virtual_router = panos_virtual_router.{resource_name}.name\n'
 
                     if route.get('destination'):
-                        content += f'  destination = {self.escape_string(route["destination"])}\n'
+                        # PAN-OS exports the default route destination as "default"
+                        destination = route['destination']
+                        if destination == 'default':
+                            destination = '0.0.0.0/0'
+                        content += f'  destination = {self.escape_string(destination)}\n'
 
                     if route.get('nexthop_ip'):
-                        content += f'  next_hop = {self.escape_string(route["nexthop_ip"])}\n'
+                        # v2 nexthop is a nested object
+                        content += f'  nexthop = {self.hcl_value({"ip_address": route["nexthop_ip"]})}\n'
                     elif route.get('nexthop_interface'):
                         content += f'  interface = {self.escape_string(route["nexthop_interface"])}\n'
 
-                    if route.get('metric'):
-                        content += f'  metric = {route["metric"]}\n'
+                    metric = route.get('metric')
+                    if metric is not None:
+                        try:
+                            metric = int(metric)
+                        except (TypeError, ValueError):
+                            metric = None
+                    if metric is not None:
+                        content += f'  metric = {metric}\n'
 
                     content += '}\n\n'
 
@@ -2916,7 +3027,12 @@ variable "device_group" {
             f.write(content)
 
     def generate_ethernet_interfaces(self, interfaces: list[dict]):
-        """Generate ethernet interface Terraform configuration"""
+        """Generate ethernet interface Terraform configuration (v2: panos_ethernet_interface)
+
+        The v2 panos_ethernet_interface has no ipv4 attribute: IPv4
+        addresses on a physical L3 interface are modeled on its .0 layer-3
+        subinterface via panos_ethernet_layer3_subinterface.
+        """
         if not interfaces:
             return
 
@@ -2927,38 +3043,78 @@ variable "device_group" {
             if iface['type'] != 'ethernet':
                 continue
 
-            resource_name = self.unique_resource_name(iface['name'], 'panos_ethernet_interface')
+            name = iface['name']
+            mode = iface.get('mode')
+            parent, dot, tag_str = name.partition('.')
 
-            if iface['mode'] == 'layer3':
-                content += f'resource "panos_ethernet_interface" "{resource_name}" {{\n'
-                content += self.location_block('panos_ethernet_interface')
-                content += f'  name = {self.escape_string(iface["name"])}\n'
-                content += '  mode = "layer3"\n'
-
-                if iface.get('comment'):
-                    content += f'  comment = {self.escape_string(iface["comment"])}\n'
-
-                if iface.get('ip_addresses'):
-                    ips_str = ', '.join([self.escape_string(ip) for ip in iface['ip_addresses']])
-                    content += f'  static_ips = [{ips_str}]\n'
-
+            # Tagged L3 subinterface (ethernet1/2.10): v2 subinterface resource
+            if dot and mode == 'layer3':
+                resource_name = self.declare_resource_name(
+                    name, 'panos_ethernet_layer3_subinterface', context=iface.get('template') or ''
+                )
+                content += f'resource "panos_ethernet_layer3_subinterface" "{resource_name}" {{\n'
+                content += self.location_block('panos_ethernet_layer3_subinterface', template=iface.get('template'))
+                content += f'  name = {self.escape_string(name)}\n'
+                content += f'  parent = {self.escape_string(parent)}\n'
+                if tag_str.isdigit():
+                    content += f'  tag = {int(tag_str)}\n'
                 if iface.get('management_profile'):
-                    content += f'  management_profile = {self.escape_string(iface["management_profile"])}\n'
-
+                    content += f'  interface_management_profile = {self.escape_string(iface["management_profile"])}\n'
+                self._emit_subinterface_ip(content, iface)
                 content += '}\n\n'
+                continue
 
-            elif iface['mode'] == 'layer2':
-                content += f'resource "panos_layer2_subinterface" "{resource_name}" {{\n'
-                content += self.location_block('panos_layer2_subinterface')
-                content += f'  name = {self.escape_string(iface["name"])}\n'
+            # Physical interface
+            resource_name = self.declare_resource_name(
+                name, 'panos_ethernet_interface', context=iface.get('template') or ''
+            )
+            content += f'resource "panos_ethernet_interface" "{resource_name}" {{\n'
+            content += self.location_block('panos_ethernet_interface', template=iface.get('template'))
+            content += f'  name = {self.escape_string(name)}\n'
 
-                if iface.get('comment'):
-                    content += f'  comment = {self.escape_string(iface["comment"])}\n'
+            if iface.get('comment'):
+                content += f'  comment = {self.escape_string(iface["comment"])}\n'
 
+            # The v2 layer3/layer2 object signals the interface mode
+            if mode == 'layer3':
+                l3: dict = {}
+                if iface.get('management_profile'):
+                    l3['interface_management_profile'] = iface['management_profile']
+                content += f'  layer3 = {self.hcl_value(l3)}\n'
+            elif mode == 'layer2':
+                content += '  layer2 = {}\n'
+            elif mode:
+                # tap, virtual-wire, ha, aggregate-group: note for manual review
+                content += f'  # NOTE: mode {mode} requires manual review (v2 block shape not modeled)\n'
+
+            if iface.get('ipv6_addresses'):
+                v6_str = ', '.join(iface['ipv6_addresses'])
+                content += f'  # NOTE: IPv6 addresses ({v6_str}) require manual configuration on the .0 subinterface\n'
+
+            content += '}\n\n'
+
+            # v2 has no ipv4 attribute on the interface: IPv4 lives on the .0 subinterface
+            if mode == 'layer3' and iface.get('ip_addresses'):
+                sub_name = f'{name}.0'
+                sub_resource = self.declare_resource_name(
+                    sub_name, 'panos_ethernet_layer3_subinterface', context=iface.get('template') or ''
+                )
+                content += f'resource "panos_ethernet_layer3_subinterface" "{sub_resource}" {{\n'
+                content += self.location_block('panos_ethernet_layer3_subinterface', template=iface.get('template'))
+                content += f'  name = {self.escape_string(sub_name)}\n'
+                content += f'  parent = {self.escape_string(name)}\n'
+                content += '  tag = 0\n'
+                self._emit_subinterface_ip(content, iface)
                 content += '}\n\n'
 
         with open(self.output_dir / 'interfaces.tf', 'w') as f:
             f.write(content)
+
+    def _emit_subinterface_ip(self, content: str, iface: dict) -> None:
+        """Emit the ip list object for a subinterface resource (v2: list of objects)."""
+        ips = iface.get('ip_addresses') or []
+        if ips:
+            content += f'  ip = {self.hcl_value([{"name": ip} for ip in ips])}\n'
 
     def generate_interface_report(self, interfaces: list[dict]):
         """Generate a text report of interfaces and their IP addresses"""
@@ -3061,7 +3217,9 @@ variable "device_group" {
         if profiles.get('antivirus'):
             content += '# Antivirus Profiles\n'
             for prof in profiles['antivirus']:
-                resource_name = self.unique_resource_name(prof['name'], 'panos_antivirus_security_profile')
+                resource_name = self.declare_resource_name(
+                    prof['name'], 'panos_antivirus_security_profile', context=prof.get('device_group') or ''
+                )
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -3071,7 +3229,9 @@ variable "device_group" {
         if profiles.get('vulnerability'):
             content += '# Vulnerability Protection Profiles\n'
             for prof in profiles['vulnerability']:
-                resource_name = self.unique_resource_name(prof['name'], 'panos_vulnerability_security_profile')
+                resource_name = self.declare_resource_name(
+                    prof['name'], 'panos_vulnerability_security_profile', context=prof.get('device_group') or ''
+                )
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -3081,7 +3241,9 @@ variable "device_group" {
         if profiles.get('anti_spyware'):
             content += '# Anti-Spyware Profiles\n'
             for prof in profiles['anti_spyware']:
-                resource_name = self.unique_resource_name(prof['name'], 'panos_anti_spyware_security_profile')
+                resource_name = self.declare_resource_name(
+                    prof['name'], 'panos_anti_spyware_security_profile', context=prof.get('device_group') or ''
+                )
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -3091,7 +3253,9 @@ variable "device_group" {
         if profiles.get('url_filtering'):
             content += '# URL Filtering Profiles\n'
             for prof in profiles['url_filtering']:
-                resource_name = self.unique_resource_name(prof['name'], 'panos_url_filtering_security_profile')
+                resource_name = self.declare_resource_name(
+                    prof['name'], 'panos_url_filtering_security_profile', context=prof.get('device_group') or ''
+                )
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -3101,7 +3265,9 @@ variable "device_group" {
         if profiles.get('file_blocking'):
             content += '# File Blocking Profiles\n'
             for prof in profiles['file_blocking']:
-                resource_name = self.unique_resource_name(prof['name'], 'panos_file_blocking_security_profile')
+                resource_name = self.declare_resource_name(
+                    prof['name'], 'panos_file_blocking_security_profile', context=prof.get('device_group') or ''
+                )
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -3111,7 +3277,9 @@ variable "device_group" {
         if profiles.get('wildfire_analysis'):
             content += '# WildFire Analysis Profiles\n'
             for prof in profiles['wildfire_analysis']:
-                resource_name = self.unique_resource_name(prof['name'], 'panos_wildfire_analysis_security_profile')
+                resource_name = self.declare_resource_name(
+                    prof['name'], 'panos_wildfire_analysis_security_profile', context=prof.get('device_group') or ''
+                )
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -3121,36 +3289,33 @@ variable "device_group" {
             f.write(content)
 
     def generate_security_profile_groups(self, groups: list[dict]):
-        """Generate security profile group Terraform configuration"""
+        """Generate security profile group Terraform configuration (v2: panos_security_profile_group)
+
+        The v2 schema models each profile category as a string list.
+        """
         if not groups:
             return
 
         content = '# Security Profile Groups\n\n'
 
+        # Profile categories the v2 schema models as lists
+        categories = ('virus', 'spyware', 'vulnerability', 'url_filtering',
+                      'file_blocking', 'wildfire_analysis', 'gtp', 'sctp', 'data_filtering')
+
         for grp in groups:
-            resource_name = self.unique_resource_name(grp['name'], 'panos_security_profile_group')
+            resource_name = self.declare_resource_name(
+                grp['name'], 'panos_security_profile_group', context=grp.get('device_group') or ''
+            )
 
             content += f'resource "panos_security_profile_group" "{resource_name}" {{\n'
             content += self.location_block('panos_security_profile_group', grp.get('device_group'))
             content += f'  name = {self.escape_string(grp["name"])}\n'
 
-            if grp.get('virus') and grp['virus']:
-                content += f'  virus = {self.escape_string(grp["virus"][0])}\n'
-
-            if grp.get('spyware') and grp['spyware']:
-                content += f'  spyware = {self.escape_string(grp["spyware"][0])}\n'
-
-            if grp.get('vulnerability') and grp['vulnerability']:
-                content += f'  vulnerability = {self.escape_string(grp["vulnerability"][0])}\n'
-
-            if grp.get('url_filtering') and grp['url_filtering']:
-                content += f'  url_filtering = {self.escape_string(grp["url_filtering"][0])}\n'
-
-            if grp.get('file_blocking') and grp['file_blocking']:
-                content += f'  file_blocking = {self.escape_string(grp["file_blocking"][0])}\n'
-
-            if grp.get('wildfire_analysis') and grp['wildfire_analysis']:
-                content += f'  wildfire_analysis = {self.escape_string(grp["wildfire_analysis"][0])}\n'
+            for category in categories:
+                members = grp.get(category)
+                if members:
+                    members_str = ', '.join([self.escape_string(m) for m in members])
+                    content += f'  {category} = [{members_str}]\n'
 
             content += '}\n\n'
 
@@ -3158,128 +3323,82 @@ variable "device_group" {
             f.write(content)
 
 
-    def generate_bgp_config(self, bgp_config: dict[str, Any]):
-        """Generate BGP Terraform configuration"""
-        if not bgp_config:
+    def generate_manual_setup_report(self, bgp_config: dict[str, Any],
+                                     ospf_config: dict[str, Any],
+                                     application_filters: list[dict],
+                                     manual_key_tunnels: list[dict]):
+        """Write MANUAL_SETUP_REPORT.txt for items with no v2 resource
+
+        BGP, OSPF, application filters, and manual-key IPsec tunnels have no
+        panos provider v2 resource (see resource_mapping.py). Their parsed
+        data is preserved here instead of being emitted as .tf resources.
+        """
+        if not (bgp_config or ospf_config or application_filters or manual_key_tunnels):
             return
 
-        content = '# BGP Configuration\n'
-        content += '# Note: BGP configuration requires careful validation.\n'
-        content += '# Verify all peer addresses and AS numbers before applying.\n\n'
+        lines = ['MANUAL SETUP REPORT', '=' * 60, '']
+        lines.append('The following configuration items have no panos provider v2 resource.')
+        lines.append('Configure them manually (GUI or CLI) and verify against this report.')
+        lines.append('')
 
-        content += 'resource "panos_bgp" "default" {\n'
-        content += self.location_block('panos_bgp')
-        content += '  virtual_router = panos_virtual_router.default.name\n'
-        content += '  enable = true\n'
+        if bgp_config:
+            lines.append('--- BGP (no v2 resource: panos_bgp, panos_bgp_peer_group, panos_bgp_peer) ---')
+            lines.append(f"  router_id: {bgp_config.get('router_id')}")
+            lines.append(f"  as_number: {bgp_config.get('as_number')}")
+            for pg in bgp_config.get('peer_groups', []):
+                lines.append(f"  peer_group: {pg.get('name')} (type: {pg.get('type')})")
+            for peer in bgp_config.get('peers', []):
+                lines.append(f"  peer: {peer.get('name')} "
+                             f"(peer_as: {peer.get('peer_as')}, "
+                             f"local: {peer.get('local_address_ip') or peer.get('local_address_interface')}, "
+                             f"remote: {peer.get('peer_address_ip')}, "
+                             f"group: {peer.get('peer_group')}, enable: {peer.get('enable')})")
+            lines.append('')
 
-        if bgp_config.get('router_id'):
-            content += f'  router_id = {self.escape_string(bgp_config["router_id"])}\n'
+        if ospf_config:
+            lines.append('--- OSPF (no v2 resource: panos_ospf, panos_ospf_area, panos_ospf_area_interface) ---')
+            lines.append(f"  router_id: {ospf_config.get('router_id')}")
+            for area in ospf_config.get('areas', []):
+                lines.append(f"  area: {area.get('area_id')} (type: {area.get('type')})")
+            for iface in ospf_config.get('interfaces', []):
+                lines.append(f"  interface: {iface.get('interface')} "
+                             f"(enable: {iface.get('enable')}, passive: {iface.get('passive')}, "
+                             f"metric: {iface.get('metric')})")
+            lines.append('')
 
-        if bgp_config.get('as_number'):
-            content += f'  as_number = {self.escape_string(bgp_config["as_number"])}\n'
+        if application_filters:
+            lines.append('--- Application Filters (no v2 resource: panos_application_filter) ---')
+            for af in application_filters:
+                lines.append(f"  {af.get('name')} (dg: {af.get('device_group')}): "
+                             f"category={af.get('category')}, risk={af.get('risk')}, "
+                             f"evasive={af.get('evasive')}")
+            lines.append('')
 
-        content += '}\n\n'
+        if manual_key_tunnels:
+            lines.append('--- Manual-key IPsec tunnels (manual_key block requires key material) ---')
+            for tunnel in manual_key_tunnels:
+                lines.append(f"  {tunnel.get('name')}: peer={tunnel.get('peer_address')}, "
+                             f"local={tunnel.get('local_address')}, "
+                             f"interface={tunnel.get('tunnel_interface')}")
+            lines.append('  See VPN_MIGRATION_REPORT.txt for key management instructions.')
+            lines.append('')
 
-        # BGP Peer Groups
-        for pg in bgp_config.get('peer_groups', []):
-            resource_name = self.unique_resource_name(f"pg_{pg['name']}", 'panos_bgp_peer_group')
-            content += f'resource "panos_bgp_peer_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_bgp_peer_group')
-            content += '  virtual_router = panos_virtual_router.default.name\n'
-            content += f'  name = {self.escape_string(pg["name"])}\n'
+        lines.append('End of report.')
 
-            if pg.get('type'):
-                content += f'  type = {self.escape_string(pg["type"])}\n'
-
-            content += '  depends_on = [panos_bgp.default]\n'
-            content += '}\n\n'
-
-        # BGP Peers
-        for peer in bgp_config.get('peers', []):
-            resource_name = self.unique_resource_name(f"peer_{peer['name']}", 'panos_bgp_peer')
-            content += f'resource "panos_bgp_peer" "{resource_name}" {{\n'
-            content += self.location_block('panos_bgp_peer')
-            content += '  virtual_router = panos_virtual_router.default.name\n'
-            content += f'  bgp_peer_group = {self.escape_string(peer.get("peer_group", ""))}\n'
-            content += f'  name = {self.escape_string(peer["name"])}\n'
-            content += f'  enable = {str(peer.get("enable", True)).lower()}\n'
-
-            if peer.get('peer_as'):
-                content += f'  peer_as = {self.escape_string(peer["peer_as"])}\n'
-
-            if peer.get('local_address_interface'):
-                content += f'  local_address_interface = {self.escape_string(peer["local_address_interface"])}\n'
-
-            if peer.get('local_address_ip'):
-                content += f'  local_address_ip = {self.escape_string(peer["local_address_ip"])}\n'
-
-            if peer.get('peer_address_ip'):
-                content += f'  peer_address_ip = {self.escape_string(peer["peer_address_ip"])}\n'
-
-            content += '  depends_on = [panos_bgp.default]\n'
-            content += '}\n\n'
-
-        with open(self.output_dir / 'bgp.tf', 'w') as f:
-            f.write(content)
-
-    def generate_ospf_config(self, ospf_config: dict[str, Any]):
-        """Generate OSPF Terraform configuration"""
-        if not ospf_config:
-            return
-
-        content = '# OSPF Configuration\n'
-        content += '# Note: OSPF configuration requires careful validation.\n'
-        content += '# Verify all area configurations and interface assignments.\n\n'
-
-        content += 'resource "panos_ospf" "default" {\n'
-        content += self.location_block('panos_ospf')
-        content += '  virtual_router = panos_virtual_router.default.name\n'
-        content += '  enable = true\n'
-
-        if ospf_config.get('router_id'):
-            content += f'  router_id = {self.escape_string(ospf_config["router_id"])}\n'
-
-        content += '}\n\n'
-
-        # OSPF Areas
-        for area in ospf_config.get('areas', []):
-            resource_name = self.unique_resource_name(f"area_{area['area_id']}", 'panos_ospf_area')
-            content += f'resource "panos_ospf_area" "{resource_name}" {{\n'
-            content += self.location_block('panos_ospf_area')
-            content += '  virtual_router = panos_virtual_router.default.name\n'
-            content += f'  name = {self.escape_string(area["area_id"])}\n'
-
-            if area['type'] != 'normal':
-                content += f'  type = {self.escape_string(area["type"])}\n'
-
-            content += '  depends_on = [panos_ospf.default]\n'
-            content += '}\n\n'
-
-        # OSPF Interfaces
-        for iface in ospf_config.get('interfaces', []):
-            resource_name = self.unique_resource_name(f"ospf_{iface['interface']}", 'panos_ospf_area_interface')
-            content += f'resource "panos_ospf_area_interface" "{resource_name}" {{\n'
-            content += self.location_block('panos_ospf_area_interface')
-            content += '  virtual_router = panos_virtual_router.default.name\n'
-            content += '  ospf_area = "0.0.0.0"  # Adjust to correct area\n'
-            content += f'  name = {self.escape_string(iface["interface"])}\n'
-            content += f'  enable = {str(iface.get("enable", True)).lower()}\n'
-
-            if iface.get('passive'):
-                content += '  passive = true\n'
-
-            if iface.get('metric'):
-                content += f'  metric = {iface["metric"]}\n'
-
-            content += '  depends_on = [panos_ospf.default]\n'
-            content += '}\n\n'
-
-        with open(self.output_dir / 'ospf.tf', 'w') as f:
-            f.write(content)
+        with open(self.output_dir / 'MANUAL_SETUP_REPORT.txt', 'w') as f:
+            f.write('\n'.join(lines) + '\n')
 
     def generate_vpn_config(self, ike_gateways: list[dict], ipsec_tunnels: list[dict],
                            ike_profiles: list[dict], ipsec_profiles: list[dict]):
-        """Generate VPN Terraform configuration"""
+        """Generate VPN Terraform configuration (v2 resource shapes)
+
+        v2 changes applied here:
+        - panos_ike_crypto_profile: encryption/hash/dh_group lists, lifetime block
+        - panos_ipsec_crypto_profile: esp block, dh_group string, lifetime/lifesize blocks
+        - panos_ike_gateway: protocol + peer_address + authentication blocks
+        - panos_ipsec_tunnel: proxy_id list entries inside auto_key (no separate
+          panos_ipsec_tunnel_proxy_id_ipv4 resource in v2)
+        """
         if not (ike_gateways or ipsec_tunnels):
             return
 
@@ -3288,155 +3407,199 @@ variable "device_group" {
         content += '# You MUST update all pre-shared keys before applying!\n'
         content += '# Search for "***CHANGE_ME***" and replace with actual keys.\n\n'
 
-        # IKE Crypto Profiles
+        # IKE Crypto Profiles (v2: encryption/hash/dh_group lists + lifetime block)
         if ike_profiles:
             content += '# IKE Crypto Profiles\n\n'
             for profile in ike_profiles:
-                resource_name = self.unique_resource_name(f"ike_profile_{profile['name']}", 'panos_ike_crypto_profile')
+                resource_name = self.declare_resource_name(
+                    f"ike_profile_{profile['name']}", 'panos_ike_crypto_profile', context=profile.get('template') or ''
+                )
                 content += f'resource "panos_ike_crypto_profile" "{resource_name}" {{\n'
-                content += self.location_block('panos_ike_crypto_profile')
+                content += self.location_block('panos_ike_crypto_profile', template=profile.get('template'))
                 content += f'  name = {self.escape_string(profile["name"])}\n'
-
-                if profile.get('dh_groups'):
-                    dh_str = ', '.join([self.escape_string(dh) for dh in profile['dh_groups']])
-                    content += f'  dh_groups = [{dh_str}]\n'
-
-                if profile.get('authentications'):
-                    auth_str = ', '.join([self.escape_string(a) for a in profile['authentications']])
-                    content += f'  authentications = [{auth_str}]\n'
 
                 if profile.get('encryptions'):
                     enc_str = ', '.join([self.escape_string(e) for e in profile['encryptions']])
-                    content += f'  encryptions = [{enc_str}]\n'
+                    content += f'  encryption = [{enc_str}]\n'
+
+                # v2 calls the hash algorithms hash (not authentication)
+                if profile.get('authentications'):
+                    auth_str = ', '.join([self.escape_string(a) for a in profile['authentications']])
+                    content += f'  hash = [{auth_str}]\n'
+
+                if profile.get('dh_groups'):
+                    dh_str = ', '.join([self.escape_string(dh) for dh in profile['dh_groups']])
+                    content += f'  dh_group = [{dh_str}]\n'
 
                 if profile.get('lifetime_hours'):
-                    content += f'  lifetime_hours = {profile["lifetime_hours"]}\n'
+                    try:
+                        hours = int(profile['lifetime_hours'])
+                    except (TypeError, ValueError):
+                        hours = None
+                    if hours is not None:
+                        content += f'  lifetime = {self.hcl_value({"hours": hours})}\n'
 
                 content += '}\n\n'
 
-        # IPsec Crypto Profiles
+        # IPsec Crypto Profiles (v2: esp object + dh_group string + lifetime/lifesize)
         if ipsec_profiles:
             content += '# IPsec Crypto Profiles\n\n'
             for profile in ipsec_profiles:
                 profile_key = f"ipsec_profile_{profile['name']}"
-                resource_name = self.unique_resource_name(profile_key, 'panos_ipsec_crypto_profile')
+                resource_name = self.declare_resource_name(
+                    profile_key, 'panos_ipsec_crypto_profile', context=profile.get('template') or ''
+                )
                 content += f'resource "panos_ipsec_crypto_profile" "{resource_name}" {{\n'
-                content += self.location_block('panos_ipsec_crypto_profile')
+                content += self.location_block('panos_ipsec_crypto_profile', template=profile.get('template'))
                 content += f'  name = {self.escape_string(profile["name"])}\n'
-                content += f'  protocol = {self.escape_string(profile.get("protocol", "esp"))}\n'
 
-                if profile.get('encryptions'):
-                    enc_str = ', '.join([self.escape_string(e) for e in profile['encryptions']])
-                    content += f'  encryptions = [{enc_str}]\n'
-
-                if profile.get('authentications'):
-                    auth_str = ', '.join([self.escape_string(a) for a in profile['authentications']])
-                    content += f'  authentications = [{auth_str}]\n'
-
+                # v2 dh_group is a single string (not a list)
                 if profile.get('dh_group'):
                     content += f'  dh_group = {self.escape_string(profile["dh_group"])}\n'
 
+                # v2 esp object holds the encryption/authentication algorithms
+                esp: dict = {}
+                if profile.get('encryptions'):
+                    esp['encryption'] = list(profile['encryptions'])
+                if profile.get('authentications'):
+                    esp['authentication'] = list(profile['authentications'])
+                if esp:
+                    content += f'  esp = {self.hcl_value(esp)}\n'
+
                 if profile.get('lifetime_hours'):
-                    content += f'  lifetime_hours = {profile["lifetime_hours"]}\n'
+                    try:
+                        hours = int(profile['lifetime_hours'])
+                    except (TypeError, ValueError):
+                        hours = None
+                    if hours is not None:
+                        content += f'  lifetime = {self.hcl_value({"hours": hours})}\n'
+
+                if profile.get('lifetime_kb'):
+                    try:
+                        kb = int(profile['lifetime_kb'])
+                    except (TypeError, ValueError):
+                        kb = None
+                    if kb is not None:
+                        content += f'  lifesize = {self.hcl_value({"kb": kb})}\n'
 
                 content += '}\n\n'
 
-        # IKE Gateways
+        # IKE Gateways (v2: protocol/peer_address/authentication blocks)
         if ike_gateways:
             content += '# IKE Gateways\n'
             content += '# WARNING: Pre-shared keys use placeholder "***CHANGE_ME***"\n'
             content += '# Update these with actual keys from your key management system!\n\n'
 
             for gw in ike_gateways:
-                resource_name = self.unique_resource_name(f"ike_gw_{gw['name']}", 'panos_ike_gateway')
+                resource_name = self.declare_resource_name(
+                    f"ike_gw_{gw['name']}", 'panos_ike_gateway', context=gw.get('template') or ''
+                )
                 content += f'resource "panos_ike_gateway" "{resource_name}" {{\n'
-                content += self.location_block('panos_ike_gateway')
+                content += self.location_block('panos_ike_gateway', template=gw.get('template'))
                 content += f'  name = {self.escape_string(gw["name"])}\n'
-                content += f'  version = {self.escape_string(gw.get("version", "ikev1"))}\n'
+
+                # v2 protocol object: version + ikev1/ikev2 sub-object
+                version = gw.get('version', 'ikev1')
+                if version in ('ikev1', 'ikev2'):
+                    proto_obj: dict = {'version': version}
+                    ver_obj: dict = {}
+                    if gw.get('ike_crypto_profile'):
+                        ike_key = f"ike_profile_{gw['ike_crypto_profile']}"
+                        profile_ref = self.unique_resource_name(ike_key, 'panos_ike_crypto_profile')
+                        # Raw HCL reference: must stay unquoted
+                        ver_obj['ike_crypto_profile'] = HclRef(f'panos_ike_crypto_profile.{profile_ref}.name')
+                    if ver_obj:
+                        proto_obj[version] = ver_obj
+                    content += f'  protocol = {self.hcl_value(proto_obj)}\n'
 
                 if gw.get('peer_address'):
-                    if gw.get('peer_address_type') == 'fqdn':
-                        content += '  peer_address_type = "fqdn"\n'
-                        content += f'  peer_address_value = {self.escape_string(gw["peer_address"])}\n'
-                    else:
-                        content += '  peer_address_type = "ip"\n'
-                        content += f'  peer_address_value = {self.escape_string(gw["peer_address"])}\n'
+                    # v2 peer_address object keyed by fqdn or ip
+                    key = 'fqdn' if gw.get('peer_address_type') == 'fqdn' else 'ip'
+                    content += f'  peer_address = {self.hcl_value({key: gw["peer_address"]})}\n'
 
                 if gw.get('local_address_interface'):
-                    content += f'  interface = {self.escape_string(gw["local_address_interface"])}\n'
+                    content += f'  local_address = {self.hcl_value({"interface": gw["local_address_interface"]})}\n'
                 elif gw.get('local_address'):
-                    content += f'  local_address_value = {self.escape_string(gw["local_address"])}\n'
+                    # Heuristic: dotted-quad values are IPs, otherwise interfaces
+                    local = gw['local_address']
+                    key = 'ip' if self._looks_like_ip(local) else 'interface'
+                    content += f'  local_address = {self.hcl_value({key: local})}\n'
 
-                content += f'  auth_type = {self.escape_string(gw.get("auth_type", "pre-shared-key"))}\n'
-
-                if gw.get('auth_type') == 'pre-shared-key':
-                    # Use placeholder - actual key not in export for security
-                    psk = self.escape_string(gw['pre_shared_key'])
-                    content += f'  pre_shared_key = {psk}  # *** CHANGE THIS KEY ***\n'
-
-                if gw.get('ike_crypto_profile'):
-                    ike_key = f"ike_profile_{gw['ike_crypto_profile']}"
-                    profile_ref = self.unique_resource_name(ike_key, 'panos_ike_crypto_profile')
-                    content += f'  ike_crypto_profile = panos_ike_crypto_profile.{profile_ref}.name\n'
+                # v2 authentication object; pre-shared key only (cert auth is manual)
+                auth_type = gw.get('auth_type', 'pre-shared-key')
+                if auth_type == 'pre-shared-key' and gw.get('pre_shared_key'):
+                    key_obj = self.hcl_value({'pre_shared_key': {'key': gw['pre_shared_key']}})
+                    content += f'  authentication = {key_obj}  # *** CHANGE THIS KEY ***\n'
 
                 if gw.get('local_id'):
-                    content += '  local_id_type = "ufqdn"\n'
-                    content += f'  local_id_value = {self.escape_string(gw["local_id"])}\n'
+                    content += f'  local_id = {self.hcl_value({"id": gw["local_id"]})}\n'
 
                 if gw.get('peer_id'):
-                    content += '  peer_id_type = "ufqdn"\n'
-                    content += f'  peer_id_value = {self.escape_string(gw["peer_id"])}\n'
+                    content += f'  peer_id = {self.hcl_value({"id": gw["peer_id"]})}\n'
 
                 content += '}\n\n'
 
-        # IPsec Tunnels
+        # IPsec Tunnels (v2: auto_key block with nested proxy_id entries)
         if ipsec_tunnels:
             content += '# IPsec Tunnels\n\n'
             for tunnel in ipsec_tunnels:
-                resource_name = self.unique_resource_name(f"tunnel_{tunnel['name']}", 'panos_ipsec_tunnel')
+                if tunnel.get('type') != 'auto-key':
+                    # Manual-key tunnels need key material: manual-setup report only
+                    continue
+
+                resource_name = self.declare_resource_name(
+                    f"tunnel_{tunnel['name']}", 'panos_ipsec_tunnel', context=tunnel.get('template') or ''
+                )
                 content += f'resource "panos_ipsec_tunnel" "{resource_name}" {{\n'
-                content += self.location_block('panos_ipsec_tunnel')
+                content += self.location_block('panos_ipsec_tunnel', template=tunnel.get('template'))
                 content += f'  name = {self.escape_string(tunnel["name"])}\n'
 
                 if tunnel.get('tunnel_interface'):
                     content += f'  tunnel_interface = {self.escape_string(tunnel["tunnel_interface"])}\n'
 
-                if tunnel.get('type') == 'auto-key':
-                    content += '  type = "auto-key"\n'
+                # v2 auto_key object; ike_gateway and proxy_id are lists of objects
+                auto_key: dict = {}
+                if tunnel.get('ike_gateway'):
+                    gw_ref = self.unique_resource_name(f"ike_gw_{tunnel['ike_gateway']}", 'panos_ike_gateway')
+                    # Raw HCL reference: must stay unquoted
+                    auto_key['ike_gateway'] = [{'name': HclRef(f'panos_ike_gateway.{gw_ref}.name')}]
+                if tunnel.get('ipsec_crypto_profile'):
+                    ipsec_key = f"ipsec_profile_{tunnel['ipsec_crypto_profile']}"
+                    profile_ref = self.unique_resource_name(ipsec_key, 'panos_ipsec_crypto_profile')
+                    auto_key['ipsec_crypto_profile'] = HclRef(f'panos_ipsec_crypto_profile.{profile_ref}.name')
 
-                    if tunnel.get('ike_gateway'):
-                        gw_ref = self.unique_resource_name(f"ike_gw_{tunnel['ike_gateway']}", 'panos_ike_gateway')
-                        content += f'  ak_ike_gateway = panos_ike_gateway.{gw_ref}.name\n'
+                # v2 merges proxy IDs into the tunnel as auto_key proxy_id entries
+                proxy_list = []
+                for proxy in tunnel.get('proxy_ids', []):
+                    proxy_obj: dict = {'name': proxy['name']}
+                    if proxy.get('local'):
+                        proxy_obj['local'] = proxy['local']
+                    if proxy.get('remote'):
+                        proxy_obj['remote'] = proxy['remote']
+                    if proxy.get('protocol') is not None:
+                        try:
+                            protocol_number = int(proxy['protocol'])
+                        except (TypeError, ValueError):
+                            protocol_number = None
+                        if protocol_number is not None:
+                            proxy_obj['protocol'] = {'number': protocol_number}
+                    proxy_list.append(proxy_obj)
+                if proxy_list:
+                    auto_key['proxy_id'] = proxy_list
 
-                    if tunnel.get('ipsec_crypto_profile'):
-                        ipsec_key = f"ipsec_profile_{tunnel['ipsec_crypto_profile']}"
-                        profile_ref = self.unique_resource_name(ipsec_key, 'panos_ipsec_crypto_profile')
-                        content += f'  ak_ipsec_crypto_profile = panos_ipsec_crypto_profile.{profile_ref}.name\n'
+                if auto_key:
+                    content += f'  auto_key = {self.hcl_value(auto_key)}\n'
 
                 content += '}\n\n'
 
-                # Proxy IDs
-                for proxy in tunnel.get('proxy_ids', []):
-                    proxy_key = f"proxy_{tunnel['name']}_{proxy['name']}"
-                    proxy_resource = self.unique_resource_name(proxy_key, 'panos_ipsec_tunnel_proxy_id_ipv4')
-                    content += f'resource "panos_ipsec_tunnel_proxy_id_ipv4" "{proxy_resource}" {{\n'
-                    content += self.location_block('panos_ipsec_tunnel_proxy_id_ipv4')
-                    content += f'  ipsec_tunnel = panos_ipsec_tunnel.{resource_name}.name\n'
-                    content += f'  name = {self.escape_string(proxy["name"])}\n'
-
-                    if proxy.get('local'):
-                        content += f'  local = {self.escape_string(proxy["local"])}\n'
-
-                    if proxy.get('remote'):
-                        content += f'  remote = {self.escape_string(proxy["remote"])}\n'
-
-                    if proxy.get('protocol'):
-                        content += f'  protocol_number = {proxy["protocol"]}\n'
-
-                    content += '}\n\n'
-
         with open(self.output_dir / 'vpn.tf', 'w') as f:
             f.write(content)
+
+    @staticmethod
+    def _looks_like_ip(value: str) -> bool:
+        """Return True if the value looks like an IPv4 address (best effort)."""
+        parts = (value or '').split('.')
+        return len(parts) == 4 and all(p.isdigit() for p in parts)
 
     def generate_vpn_report(self, ike_gateways: list[dict], ipsec_tunnels: list[dict]):
         """Generate VPN migration report with key management instructions"""
@@ -3764,7 +3927,7 @@ def main():
         tf_gen.generate_tags(tags)
         tf_gen.generate_custom_url_categories(custom_url_categories)
         tf_gen.generate_application_groups(application_groups)
-        tf_gen.generate_application_filters(application_filters)
+        # Application filters have no v2 resource: they go to the manual setup report
         tf_gen.generate_external_lists(external_lists)
         tf_gen.generate_schedules(schedules)
 
@@ -3794,17 +3957,16 @@ def main():
         tf_gen.generate_pbf_rules(pbf_rules)
         tf_gen.generate_application_override_rules(app_override_rules)
 
-        # Dynamic routing
-        if bgp_config:
-            tf_gen.generate_bgp_config(bgp_config)
-        if ospf_config:
-            tf_gen.generate_ospf_config(ospf_config)
-
         # VPN
         if ike_gateways or ipsec_tunnels:
             tf_gen.generate_vpn_config(ike_gateways, ipsec_tunnels,
                                       ike_crypto_profiles, ipsec_crypto_profiles)
             tf_gen.generate_vpn_report(ike_gateways, ipsec_tunnels)
+
+        # Items with no v2 resource: BGP, OSPF, app filters, manual-key tunnels
+        manual_key_tunnels = [t for t in ipsec_tunnels if t.get('type') != 'auto-key']
+        tf_gen.generate_manual_setup_report(bgp_config, ospf_config,
+                                           application_filters, manual_key_tunnels)
 
         # Reports
         tf_gen.generate_interface_report(interfaces)

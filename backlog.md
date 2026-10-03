@@ -12,10 +12,10 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   - Schedule `description` is not extracted.
   - Security rule profile group references are not extracted.
   - NAT rule `service` in member-list form is captured as whitespace text; only text form works.
-  - Dynamic address group filter extraction captures leading whitespace instead of the filter content.
   - Ethernet subinterfaces (`ethernet.1.10`) are not parsed as individual interfaces; only vlan and aggregate subunits are.
-  - IPv6 address objects (`<ipv6>` elements) are not extracted; the entry degrades to an empty value (pinned by F1.6 edge fixture).
   - Dual-protocol (tcp+udp) service objects keep tcp only; the udp definition is dropped (pinned by F1.6 edge fixture).
+- Stale narrative docs still show v1-era output (type names and file layout): `docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md`, `docs/MULTI_VR_MIGRATION_GUIDE.md`, `docs/MULTI_VR_QUICK_ANSWER.md`, `examples/example_terraform_output.txt`. Refresh when the output stabilizes (F2.11 territory).
+- Security profile bodies are not parsed (antivirus, anti-spyware, vulnerability, URL filtering, file blocking, WildFire, zone protection). The v2 provider has resources for them, but emitting empty profile objects would silently create misconfigured resources. Requires parser work first (F2.9 decision).
 
 ## Out of Scope
 
@@ -30,4 +30,5 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 ## Notes on Already-Completed Work
 
 - F3.8 (safe XML input) is implemented: both scripts reject DTDs before parsing (F1.7). If F3.8 is promoted, only `defusedxml` or the size limit remains.
-- F2.7 (collision-safe naming) has a foundation: `TerraformGenerator.unique_resource_name` assigns per-type collision-free names via a registry (F1.7). The hash-of-source-path refinement remains with F2.7.
+- F2.7 (collision-safe naming) has a foundation: `TerraformGenerator.declare_resource_name` (context-aware declarations) and `unique_resource_name` (references) keep resource names unique per type and context (F1.7, refined in F2.4). The hash-of-source-path refinement remains with F2.7.
+- F2.4 (emitter rewrite) also fixed two F1.6 extraction gaps: dynamic address group filters are serialized from the structured `<filter>` XML, and IPv6 address objects (`<ipv6>`, `<ipv6-range>`) are parsed and emitted.

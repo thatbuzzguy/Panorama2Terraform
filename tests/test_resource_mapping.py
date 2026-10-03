@@ -1,51 +1,45 @@
-"""Resource mapping tests (F2.2).
+"""Resource mapping tests (Epic 2).
 
-resource_mapping.py is the table that maps every type the generator emits
-today to its real provider-v2 home (or None when v2 has no equivalent).
-The F2.4 emitter rewrite consumes it. These tests verify the table itself
-against the live provider schema (v2.0.14, per the golden provider.tf):
+resource_mapping.py is the single source of truth for what the converter
+produces against the panos provider v2:
 
-1. Completeness: the mapping covers exactly the types emitted by the
-   committed goldens. A missing row would let an unmapped type through.
-2. Targets: every non-None target exists in the provider schema.
-3. Report-only: every None entry is genuinely absent from the schema. A
-   false None would hide a real resource behind the migration report.
+- EMITTED_TYPES: the v2 resource types the generator emits. These must
+  match the committed goldens exactly and exist in the provider schema.
+- REPORT_ONLY_TYPES: PAN-OS config types with no v2 resource; their data
+  goes to the manual setup report. A false report-only decision would
+  hide a real resource, so every entry must be absent from the schema.
 """
 
 import pytest
 
 from conftest import emitted_types
-from resource_mapping import RESOURCE_MAPPING
-
-EMITTED = emitted_types()
-MAPPING_KEYS = set(RESOURCE_MAPPING)
-MAPPED = sorted((old, new) for old, new in RESOURCE_MAPPING.items() if new is not None)
-REPORT_ONLY = sorted(old for old, new in RESOURCE_MAPPING.items() if new is None)
+from resource_mapping import EMITTED_TYPES, REPORT_ONLY_TYPES
 
 
-def test_mapping_covers_every_emitted_type():
-    """The mapping must name exactly the types the goldens emit."""
-    missing = sorted(EMITTED - MAPPING_KEYS)
-    extra = sorted(MAPPING_KEYS - EMITTED)
+def test_emitted_types_match_goldens():
+    """The table must name exactly the types the goldens emit."""
+    golden = emitted_types()
+    missing = sorted(golden - EMITTED_TYPES)
+    extra = sorted(EMITTED_TYPES - golden)
     assert not missing, f"emitted types with no mapping row: {missing}"
     assert not extra, f"mapping rows for types the goldens do not emit: {extra}"
 
 
-@pytest.mark.parametrize("old_type, target", MAPPED, ids=[f"{o}->{t}" for o, t in MAPPED])
-def test_mapped_target_exists_in_provider(old_type, target, provider_schema):
-    """Every non-None mapping target must be a real provider v2 resource."""
-    assert target in provider_schema, (
-        f"mapping target {target!r} (for {old_type!r}) does not exist in the panos provider schema"
+@pytest.mark.parametrize("rtype", sorted(EMITTED_TYPES))
+def test_emitted_type_exists_in_provider(rtype, provider_schema):
+    """Every emitted type must be a real provider v2 resource."""
+    assert rtype in provider_schema, (
+        f"{rtype!r} is emitted but does not exist in the panos provider schema"
     )
 
 
-@pytest.mark.parametrize("old_type", REPORT_ONLY, ids=REPORT_ONLY)
-def test_report_only_is_genuinely_absent(old_type, provider_schema):
+@pytest.mark.parametrize("rtype", sorted(REPORT_ONLY_TYPES))
+def test_report_only_is_genuinely_absent(rtype, provider_schema):
     """A report-only row must correspond to a type that is really missing.
 
-    Guards against a report-only decision masking a resource that exists in
-    v2 (which should have been mapped instead).
+    Guards against a report-only decision masking a resource that exists
+    in v2 (which should have been emitted instead).
     """
-    assert old_type not in provider_schema, (
-        f"{old_type!r} is marked report-only but exists in the provider schema; map it to a real target"
+    assert rtype not in provider_schema, (
+        f"{rtype!r} is marked report-only but exists in the provider schema; emit it"
     )

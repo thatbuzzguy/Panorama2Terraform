@@ -9,12 +9,6 @@ committed golden output against it:
 2. For every emitted resource that exists, each required attribute of that
    type (for example ``location``) must be present in every generated block.
 
-Red→green: the current v1-style generator output fails these checks. The
-failing cases are marked ``xfail`` with reasons pointing at the Epic 2
-tasks that fix them (F2.2 resource mapping, F2.3 location). As Epic 2
-lands, cases flip to xpass; then the markers come off and the suite goes
-green.
-
 The tests run against the committed golden .tf files; the golden tests
 already guarantee that a fresh generation equals the goldens.
 """
@@ -64,11 +58,6 @@ EMITTED_TYPES = sorted(EMITTED_BLOCKS)
 # declared in the golden provider.tf.
 
 
-# The emitters move to v2 resource names in F2.4; these parameters then disappear.
-_XFAIL_REASON_TYPES = "emitted type is not in the provider schema; the emitters move to v2 names in Epic 2 F2.4"
-
-
-@pytest.mark.xfail(reason=_XFAIL_REASON_TYPES, strict=False)
 @pytest.mark.parametrize("rtype", EMITTED_TYPES)
 def test_resource_type_exists_in_provider(rtype, provider_schema):
     """Every emitted resource type must exist in the declared provider."""
@@ -86,12 +75,6 @@ def test_every_block_has_location():
     assert not missing, f"resource blocks missing the required location block: {missing}"
 
 
-# F2.3 added the location block; the remaining failures are types missing
-# from the schema (renamed by F2.4) and changed attribute shapes (F2.4).
-_XFAIL_REASON_REQUIRED = "required attribute or type missing; the emitters move to v2 schemas in Epic 2 F2.4"
-
-
-@pytest.mark.xfail(reason=_XFAIL_REASON_REQUIRED, strict=False)
 @pytest.mark.parametrize("rtype", EMITTED_TYPES)
 def test_required_attributes_present(rtype, provider_schema):
     """Every required attribute of an emitted type must appear in every block."""

@@ -1,83 +1,68 @@
-"""Resource mapping: emitted panos resource type -> real provider v2 type (F2.2).
+"""Resource mapping (Epic 2).
 
-This is the single source of truth for the Epic 2 rewrite. The generator
-(F2.4) emits the target column; tests (tests/test_resource_mapping.py)
-verify the table against the live provider schema.
+Single source of truth for what the converter produces against the
+panos provider v2:
+
+    EMITTED_TYPES     - the provider v2 resource types the generator emits.
+    REPORT_ONLY_TYPES - PAN-OS config types with no v2 resource; the
+                        captured data goes to MANUAL_SETUP_REPORT.txt
+                        (and the VPN/interface migration reports) instead.
+
+The generator emits the v2 types directly; the old v1 names
+(panos_address_object, panos_security_rule_group, ...) no longer exist
+anywhere in the code base. The v1 -> v2 rename rationale is preserved in
+docs/RESOURCE_MAPPING.md.
 
 Verified against provider v2.0.14 (128 resource types) with
-`terraform providers schema -json`. The registry's latest 2.x release.
-
-Value semantics:
-    str  -> the v2 resource type to emit (a rename when it differs).
-    None -> v2 has no equivalent resource; the data goes to the
-            migration report instead (F2.9 "real resources or explicit reports").
-
-The 13 types that already exist in v2 map to themselves. They still need
-the required `location` attribute (F2.3) and v2 attribute shapes (F2.4).
+`terraform providers schema -json`.
 """
 
-from typing import Optional
+# Provider v2 resource types emitted by the generator.
+EMITTED_TYPES = frozenset({
+    # Objects (device-group scoped)
+    'panos_address',
+    'panos_address_group',
+    'panos_administrative_tag',
+    'panos_application_group',
+    'panos_custom_url_category',
+    'panos_external_dynamic_list',
+    'panos_service',
+    'panos_service_group',
+    # Policy containers (one resource per device group; ordered rules list)
+    'panos_security_policy_rules',
+    'panos_nat_policy_rules',
+    # Profiles (device-group scoped)
+    'panos_security_profile_group',
+    # Network (template scoped)
+    'panos_ethernet_interface',
+    'panos_ethernet_layer3_subinterface',
+    'panos_virtual_router',
+    'panos_virtual_router_static_route_ipv4',
+    'panos_zone',
+    # VPN (template scoped)
+    'panos_ike_crypto_profile',
+    'panos_ike_gateway',
+    'panos_ipsec_crypto_profile',
+    'panos_ipsec_tunnel',
+})
 
-# Old emitted type -> v2 resource type (or None when v2 has no equivalent).
-RESOURCE_MAPPING: dict[str, Optional[str]] = {
-    # --- already exist in v2 (identity; F2.3/F2.4 fix attributes) ---
-    'panos_address_group': 'panos_address_group',
-    'panos_administrative_tag': 'panos_administrative_tag',
-    'panos_application_group': 'panos_application_group',
-    'panos_custom_url_category': 'panos_custom_url_category',
-    'panos_ethernet_interface': 'panos_ethernet_interface',
-    'panos_ike_crypto_profile': 'panos_ike_crypto_profile',
-    'panos_ike_gateway': 'panos_ike_gateway',
-    'panos_ipsec_crypto_profile': 'panos_ipsec_crypto_profile',
-    'panos_ipsec_tunnel': 'panos_ipsec_tunnel',
-    'panos_security_profile_group': 'panos_security_profile_group',
-    'panos_service_group': 'panos_service_group',
-    'panos_virtual_router': 'panos_virtual_router',
-    'panos_zone': 'panos_zone',
-    # --- renames to real v2 types ---
-    # v2 uses the short names for single objects.
-    'panos_address_object': 'panos_address',
-    'panos_service_object': 'panos_service',
-    # v2 static routes belong to the virtual router.
-    'panos_static_route_ipv4': 'panos_virtual_router_static_route_ipv4',
-    # v2 policy containers: one resource per location holding an ordered
-    # `rules` list plus a `position` block (F2.5 order preservation).
-    'panos_security_rule_group': 'panos_security_policy_rules',
-    'panos_nat_rule_group': 'panos_nat_policy_rules',
-    # v2 name for the dynamic list of external addresses. url/recurring/
-    # description have no v2 home; F2.9 reports them.
-    'panos_external_list': 'panos_external_dynamic_list',
-    # PAN-OS VLAN subinterfaces (e.g. ethernet1/1.5) are exposed in v2 as
-    # layer-3 subinterfaces; F2.4 derives parent/tag from the .unit name.
-    'panos_layer2_subinterface': 'panos_ethernet_layer3_subinterface',
-    # --- merged into another v2 resource ---
-    # v2 has no standalone proxy-id resource. proxy-ids are a list inside
-    # panos_ipsec_tunnel: auto_key { proxy_id = [...] }. F2.4 merges them.
-    'panos_ipsec_tunnel_proxy_id_ipv4': 'panos_ipsec_tunnel',
-    # --- no v2 equivalent: report only (F2.9) ---
+# PAN-OS config types with no v2 provider resource. The converter keeps
+# the data visible in the manual setup report instead of emitting it.
+REPORT_ONLY_TYPES = frozenset({
     # v2 panos_application is a single static application object; an
-    # application filter (category/subcategory/technology/risk lists) is a
-    # different concept and has no v2 resource.
-    'panos_application_filter': None,
+    # application filter (category/subcategory/technology/risk lists) is
+    # a different concept with no v2 resource.
+    'panos_application_filter',
     # v2 exposes only six specialized BGP routing profiles (timer, auth,
-    # dampening, filtering, redistribution, address family). None of them
-    # accepts AS number, router ID, or peer data, so the captured BGP data
-    # has nowhere to go.
-    'panos_bgp': None,
-    'panos_bgp_peer': None,
-    'panos_bgp_peer_group': None,
+    # dampening, filtering, redistribution, address family). None accepts
+    # AS number, router ID, or peer data, so the captured BGP data has
+    # nowhere to go.
+    'panos_bgp',
+    'panos_bgp_peer',
+    'panos_bgp_peer_group',
     # Same shape as BGP: v2 has only auth/interface-timer/SPF-timer/
     # redistribution profiles for OSPF. No area or router-ID resource.
-    'panos_ospf': None,
-    'panos_ospf_area': None,
-    'panos_ospf_area_interface': None,
-}
-
-# Types that map to themselves (already real v2 resource types).
-IDENTITY_TYPES = frozenset(k for k, v in RESOURCE_MAPPING.items() if v == k)
-
-# Types with no v2 equivalent (their data goes to the migration report).
-REPORT_ONLY_TYPES = frozenset(k for k, v in RESOURCE_MAPPING.items() if v is None)
-
-# Types renamed or merged into another v2 resource.
-MAPPED_TYPES = frozenset(RESOURCE_MAPPING) - IDENTITY_TYPES - REPORT_ONLY_TYPES
+    'panos_ospf',
+    'panos_ospf_area',
+    'panos_ospf_area_interface',
+})

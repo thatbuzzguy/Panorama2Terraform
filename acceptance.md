@@ -1,67 +1,57 @@
-# Acceptance Criteria: F2.3 Add `location` to every resource
+# Acceptance Criteria — F2.4: Rewrite emitters to the v2 schemas
 
-## Background
+## Scope
+Apply `resource_mapping.py` to the generator and rewrite every emitter to
+the v2.0.14 attribute shapes (verified from `terraform providers schema`).
+Move the seven report-only types (BGP, OSPF x3, application filter) out of
+the .tf output into a manual-setup report so `terraform validate` can pass.
 
-Provider v2 requires a `location` block on every resource, and the allowed
-sub-blocks differ by resource type (verified in the v2.0.14 schema):
+## Type renames (from RESOURCE_MAPPING)
+- `panos_address_object` → `panos_address`
+- `panos_service_object` → `panos_service`
+- `panos_security_rule_group` → `panos_security_policy_rules`
+- `panos_nat_rule_group` → `panos_nat_policy_rules`
+- `panos_external_list` → `panos_external_dynamic_list`
+- `panos_static_route_ipv4` → `panos_virtual_router_static_route_ipv4`
+- `panos_layer2_subinterface` → `panos_ethernet_layer3_subinterface`
+- `panos_ipsec_tunnel_proxy_id_ipv4` → merged into `panos_ipsec_tunnel.auto_key.proxy_id`
+- No legacy type name appears in any generated .tf file.
 
-- **device_group-scoped** (objects, rules, groups):
-  `panos_address`, `panos_service`, `panos_address_group`,
-  `panos_service_group`, `panos_administrative_tag`,
-  `panos_custom_url_category`, `panos_application_group`,
-  `panos_security_profile_group`, `panos_security_policy_rules`,
-  `panos_nat_policy_rules`, `panos_external_dynamic_list`.
-- **template-scoped** (network/VPN settings): `panos_zone`,
-  `panos_virtual_router`, `panos_virtual_router_static_route_ipv4`,
-  `panos_ethernet_interface`, `panos_ethernet_layer3_subinterface`,
-  `panos_ike_crypto_profile`, `panos_ike_gateway`,
-  `panos_ipsec_crypto_profile`, `panos_ipsec_tunnel`. BGP/OSPF (report
-  only in v2) are also template-scoped in PAN-OS semantics.
+## Attribute shapes (v2.0.14)
+- `panos_address`: `ip_netmask` | `ip_range` | `fqdn` | `ip_wildcard` (from parser `type`/`value`), `description`, `tags`.
+- `panos_service`: `protocol { tcp|udp { destination_port = "..." } }`, `description`, `tags`.
+- `panos_address_group`: `static = [...]`, `description`.
+- `panos_service_group`: `members = [...]` (v2 has no description; drop it).
+- `panos_administrative_tag`: `color`, `comments` (from parser `description`).
+- `panos_custom_url_category`: `type`, `list = [...]`, `description`.
+- `panos_application_group`: `members = [...]`.
+- `panos_security_profile_group`: non-empty profile lists (`virus`, `spyware`, ...).
+- `panos_security_policy_rules`: `position { where = "bottom" }` (F2.5 refines order) + `rules { ... }` with v2 names (`source_zones`, `applications`, `services`, `action`, `log_start`, `log_end`, ...).
+- `panos_nat_policy_rules`: `position { where = "bottom" }` + `rules { ... }` with `nat_type` and `source_translation { dynamic_ip_and_port | dynamic_ip | static_ip { ... } }`.
+- `panos_external_dynamic_list`: `type { ip|domain|url|... { url = "...", recurring { hourly|... {} } } }`.
+- `panos_zone`: `network { layer3 = [...] | layer2 = [...], zone_protection_profile = "..." }`.
+- `panos_virtual_router`: `interfaces = [...]` (flat list, v2 shape).
+- `panos_virtual_router_static_route_ipv4`: `destination`, `nexthop { ip_address }` or `interface`, `virtual_router = "<actual VR name>"` (no `panos_virtual_router.default`), `metric`.
+- `panos_ethernet_interface`: `comment`, `layer3 { interface_management_profile = "..." }` where applicable. v2 has no ipv4 attribute: IPv4 addresses emit as a `panos_ethernet_layer3_subinterface` with `parent`, `tag = 0`, `ip { name = "addr/prefix" }`.
+- `panos_ethernet_layer3_subinterface`: `parent`, `tag` (number), `ip { name = "addr/prefix" }`.
+- `panos_ike_crypto_profile`: `encryption = [...]`, `hash = [...]`, `dh_group = [...]`, `lifetime { hours = N }`.
+- `panos_ipsec_crypto_profile`: `dh_group = "..."`, `esp { encryption = [...], authentication = [...] }`, `lifetime { ... }`, `lifesize { ... }`.
+- `panos_ike_gateway`: `protocol { version = "ikev2|ikev1", ikev2 { ike_crypto_profile = "..." } }`, `peer_address { fqdn = "..." | ip = "..." }`, `authentication { pre_shared_key { key = "..." } }`, `local_id`, `peer_id`.
+- `panos_ipsec_tunnel`: `tunnel_interface`, `auto_key { ike_gateway, ipsec_crypto_profile, proxy_id { name, local, remote, protocol } }`. No separate proxy-id resource. Manual-key tunnels go to the manual-setup report.
 
-The current parser drops the defining device group (objects are merged
-into name-keyed dicts), so the generator cannot name a device group yet.
+## Report-only types
+- `panos_bgp*`, `panos_ospf*`, `panos_application_filter` are NOT emitted as .tf resources.
+- Their parsed data goes to `MANUAL_SETUP_REPORT.txt` (name + key fields + "configure manually" note). No parsed data is silently dropped.
 
-## Changes
-
-1. **Parser** (`panorama_to_terraform.py`):
-   - Build a child->parent map in `PanoramaParser.__init__`
-     (ElementTree has no parent pointers).
-   - `device_group_of(elem)`: walk up to the enclosing
-     `device-group/entry` and return its name; entries under `shared` or
-     at the top level return `Shared` (PAN-OS's shared device group name).
-   - Record `device_group` in every parsed object dict that feeds a
-     device_group-scoped resource: address objects, address groups,
-     service objects, service groups, tags, custom URL categories,
-     application groups, application filters, external lists, security
-     rules, NAT rules, security profile groups.
-2. **Generator** (`panorama_to_terraform.py`):
-   - `location_block(resource_type, device_group)`: emits the required
-     `location { ... }` block. Device_group-scoped types use the object's
-     defining DG (default `Shared`); template-scoped types use
-     `template { name = "Shared" }` (the default template; F2.4 tracks
-     the exact template name).
-   - Insert the block as the first attribute of every emitted resource
-     block (26 emission points).
-3. **Goldens**: regenerate sample + kitchen-sink. Every .tf file with
-   resource blocks gains `location` blocks.
-4. **Tests**:
-   - New green test: every emitted resource block in the goldens carries
-     a `location` block.
-   - F1.4 conformance test 2 (required attributes) flips to xpass for
-     the 13 types that exist in v2.
+## Tests
+- `test_resource_mapping.py` restructured: mapping keys are the frozen legacy set; mapping targets exist in the schema; report-only entries are absent from the schema; generated goldens contain only mapped v2 types.
+- `test_schema_conformance.py`: both parameterized tests now pass for all emitted types → xfail markers removed.
+- `test_terraform_validate.py`: `terraform validate` passes on both generated corpora → xfail removed.
+- `test_robustness.py` collision tests updated to the new type names.
+- Goldens regenerated (sample + kitchen sink).
 
 ## Gate
-
-- `uvx --with ruff==0.16.10 ruff check .` clean.
-- `uvx --with pytest==9.1.1 pytest` green: previous 106 passed plus new
-  tests; no new failures (xfail/xpass split may shift as designed).
-- Parser unit tests (42) still pass: `device_group` is an added field,
-  not a behavior change.
-
-## Non-goals (later features)
-
-- Exact template-name tracking for network/VPN resources (F2.4).
-- Per-device-group resource instances (Epic 3, F3.1).
-- vsys-scoped location sub-blocks (Epic 3, F3.1 keyed model).
-- Making `terraform validate` fully pass (F2.4/F2.10; the 15 missing
-  types and changed attribute shapes still fail).
+- ruff clean; full pytest suite green with no conformance/validate xfails remaining (remaining xfails: Epic 3 per-DG dedup cases only).
+- `terraform validate` passes locally on both corpora.
+- README coverage section updated to the v2 type names.
+- Committed with a detailed ASD-STE100 message.
