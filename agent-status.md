@@ -1,9 +1,24 @@
 # Agent Status
 
 ## Current position
-Epic 1 (testing and lint foundation), F1.2 completed. Next: F1.3 generator golden-file tests.
+Epic 1 (testing and lint foundation), F1.3 completed. Next: F1.4 provider schema conformance test.
 
 ## Session log
+
+### F1.3 — Generator golden-file tests (this session)
+- Built `tests/fixtures/kitchen_sink.xml` (761 lines): a merge of all per-method
+  fixtures into one config that exercises every generator path the sample
+  never reaches (VRs, LRs, VPN, BGP, OSPF, profiles, schedules, PBF, ...).
+  Merge tool: `tools/build_kitchen_sink.py` (rerun when new fixtures land).
+- Committed golden output sets under `tests/golden/`:
+  - `sample/` — 8 .tf files from the sample config.
+  - `kitchen_sink/` — 29 .tf files, every generator path exercised.
+- `tests/test_golden_files.py`: 39 tests (2 file-set + 37 byte-exact).
+  The converter runs once per case via a session fixture.
+- Goldens pin the current v1-style output (e.g. `panos_virtual_router` with
+  an `interfaces` list, `panos_ike_crypto_profile`). The Epic 2 provider-v2
+  rewrite will update them deliberately; the diff is the review surface.
+- Gate: ruff clean; pytest 85 passed (46 parser/smoke + 39 golden).
 
 ### F1.2 — Parser unit tests (this session)
 - Wrote 46 unit tests across 6 modules under `tests/` (one test per parse method,

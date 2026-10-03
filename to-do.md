@@ -6,7 +6,7 @@ Goal 1: CI passes offline. Every emitted resource type and argument is verified 
 
 - [x] **F1.1 Tooling baseline** — pytest + ruff in `requirements.txt`, pre-commit config, CI runs lint and tests, smoke tests for both scripts. (COMPLETED)
 - [x] **F1.2 Parser unit tests** — one test per parse method, isolated XML snippet fixtures. (COMPLETED — found and fixed 5 parser bugs: VR/LR template path, vsys-level VR path, IPsec gateway tag, aggregate IP leak, vlan/loopback/tunnel name collision)
-- [ ] **F1.3 Generator golden-file tests** — generate from a fixture, diff against committed expected output.
+- [x] **F1.3 Generator golden-file tests** — generate from a fixture, diff against committed expected output. (COMPLETED — 39 tests, 2 golden sets: sample + kitchen-sink)
 - [ ] **F1.4 Provider schema conformance test** — assert every emitted resource type exists in `terraform providers schema -json`; assert required arguments are present.
 - [ ] **F1.5 CI Terraform gate** — `terraform init -backend=false` + `terraform validate` on generated sample output.
 - [ ] **F1.6 Fixture corpus** — edge-case configs: quoted DG names, duplicate names across DGs, multi-vsys, mixed VR/LR, IPv6, multi-port services.
