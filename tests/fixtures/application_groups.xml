@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<config version="10.0.0" urldb="paloaltonetworks">
+  <shared>
+    <application-group>
+      <entry name="web-apps">
+        <members>
+          <member>http</member>
+          <member>https</member>
+        </members>
+      </entry>
+    </application-group>
+  </shared>
+</config>

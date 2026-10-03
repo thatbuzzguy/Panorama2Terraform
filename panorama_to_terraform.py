@@ -962,13 +962,16 @@ class PanoramaParser:
         for path in vlan_paths:
             for iface in self.root.findall(path):
                 name = iface.get('name')
-                if not name or name in seen_names:
+                # Dedupe on the namespaced name so a vlan unit number does
+                # not collide with a loopback/tunnel unit of the same number.
+                full_name = f'vlan.{name}'
+                if not name or full_name in seen_names:
                     continue
 
-                seen_names.add(name)
+                seen_names.add(full_name)
 
                 iface_obj = {
-                    'name': f'vlan.{name}',
+                    'name': full_name,
                     'type': 'vlan',
                     'mode': 'layer3',
                     'ip_addresses': [],
@@ -1008,13 +1011,16 @@ class PanoramaParser:
         for path in loopback_paths:
             for iface in self.root.findall(path):
                 name = iface.get('name')
-                if not name or name in seen_names:
+                # Dedupe on the namespaced name so a loopback unit number
+                # does not collide with a vlan/tunnel unit of the same number.
+                full_name = f'loopback.{name}'
+                if not name or full_name in seen_names:
                     continue
 
-                seen_names.add(name)
+                seen_names.add(full_name)
 
                 iface_obj = {
-                    'name': f'loopback.{name}',
+                    'name': full_name,
                     'type': 'loopback',
                     'mode': 'layer3',
                     'ip_addresses': [],
@@ -1048,13 +1054,16 @@ class PanoramaParser:
         for path in tunnel_paths:
             for iface in self.root.findall(path):
                 name = iface.get('name')
-                if not name or name in seen_names:
+                # Dedupe on the namespaced name so a tunnel unit number
+                # does not collide with a vlan/loopback unit of the same number.
+                full_name = f'tunnel.{name}'
+                if not name or full_name in seen_names:
                     continue
 
-                seen_names.add(name)
+                seen_names.add(full_name)
 
                 iface_obj = {
-                    'name': f'tunnel.{name}',
+                    'name': full_name,
                     'type': 'tunnel',
                     'mode': 'layer3',
                     'ip_addresses': [],
@@ -1115,8 +1124,10 @@ class PanoramaParser:
                     iface_obj['mode'] = 'layer3'
                     l3 = iface.find('layer3')
 
-                    # Get IP addresses from main interface
-                    for ip in l3.findall('.//ip/entry'):
+                    # Get IP addresses from the main interface only. Use a
+                    # direct-child lookup so subinterface IPs (nested under
+                    # <units>) do not leak into the parent's address list.
+                    for ip in l3.findall('ip/entry'):
                         ip_name = ip.get('name')
                         if ip_name:
                             iface_obj['ip_addresses'].append(ip_name)
@@ -1169,8 +1180,10 @@ class PanoramaParser:
         """Parse virtual router configurations"""
         vrouters_dict = {}
 
-        # Parse from templates first (most authoritative source)
-        for template in self.root.findall('.//template/entry'):
+        # Parse from templates first (most authoritative source).
+        # Panorama exports use a top-level <templates> element containing
+        # <entry> children (not <template>), so match that exact structure.
+        for template in self.root.findall('.//templates/entry'):
             template_name = template.get('name')
 
             for vr in template.findall('.//network/virtual-router/entry'):
@@ -1219,8 +1232,9 @@ class PanoramaParser:
                 if unique_key not in vrouters_dict or len(interfaces) > len(vrouters_dict[unique_key]['interfaces']):
                     vrouters_dict[unique_key] = vr_obj
 
-        # Also check device-level VRs (less common but possible)
-        for vr in self.root.findall('.//devices/entry/network/virtual-router/entry'):
+        # Also check per-vsys device-level VRs (real exports nest the network
+        # config under devices/entry/vsys/entry, not directly under devices/entry)
+        for vr in self.root.findall('.//devices/entry/vsys/entry/network/virtual-router/entry'):
             name = vr.get('name')
             if not name:
                 continue
@@ -1270,8 +1284,9 @@ class PanoramaParser:
         """
         lrouters_dict = {}
 
-        # Parse from templates first (most authoritative source)
-        for template in self.root.findall('.//template/entry'):
+        # Parse from templates first (most authoritative source).
+        # Panorama exports use <templates><entry>, not <template><entry>.
+        for template in self.root.findall('.//templates/entry'):
             template_name = template.get('name')
 
             for lr in template.findall('.//network/logical-router/entry'):
@@ -1318,8 +1333,9 @@ class PanoramaParser:
                 if unique_key not in lrouters_dict or len(interfaces) > len(lrouters_dict[unique_key]['interfaces']):
                     lrouters_dict[unique_key] = lr_obj
 
-        # Also check device-level logical routers
-        for lr in self.root.findall('.//devices/entry/network/logical-router/entry'):
+        # Also check per-vsys device-level logical routers (network config is
+        # nested under devices/entry/vsys/entry in real exports)
+        for lr in self.root.findall('.//devices/entry/vsys/entry/network/logical-router/entry'):
             name = lr.get('name')
             if not name:
                 continue
@@ -1816,8 +1832,12 @@ class PanoramaParser:
                 if auto_key is not None:
                     tunnel_config['type'] = 'auto-key'
 
-                    # IKE Gateway
-                    ike_gw = auto_key.find('ike-gateway/entry')
+                    # IKE Gateway. Real Panorama exports use <gateway><entry
+                    # name="..."/> under <auto-key>; accept the alternate
+                    # <ike-gateway> tag some tools emit as well.
+                    ike_gw = auto_key.find('gateway/entry')
+                    if ike_gw is None:
+                        ike_gw = auto_key.find('ike-gateway/entry')
                     if ike_gw is not None:
                         tunnel_config['ike_gateway'] = ike_gw.get('name')
 

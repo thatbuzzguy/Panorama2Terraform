@@ -6,6 +6,14 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 
 - `.gitignore` consistency: `*.xml` is ignored, yet `sample_panorama_config.xml` is committed (audit §4.9).
 - Escape handling does not cover `\r` and control characters (audit §4.6). Fix lands with F1.7.
+- Parser extraction gaps found by F1.2 unit tests (each silently drops data; fix lands with the Epic 2/3 rewrites):
+  - Application filter `description` is not extracted.
+  - Service object tags are not extracted.
+  - Schedule `description` is not extracted.
+  - Security rule profile group references are not extracted.
+  - NAT rule `service` in member-list form is captured as whitespace text; only text form works.
+  - Dynamic address group filter extraction captures leading whitespace instead of the filter content.
+  - Ethernet subinterfaces (`ethernet.1.10`) are not parsed as individual interfaces; only vlan and aggregate subunits are.
 
 ## Out of Scope
 

@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<config version="10.0.0" urldb="paloaltonetworks">
+  <shared>
+    <log-settings>
+      <profiles>
+        <entry name="Log-To-SIEM">
+          <description>Forward logs to SIEM</description>
+        </entry>
+      </profiles>
+    </log-settings>
+  </shared>
+</config>

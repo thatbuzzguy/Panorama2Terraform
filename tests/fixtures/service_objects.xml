@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<config version="10.0.0" urldb="paloaltonetworks">
+  <shared>
+    <service>
+      <entry name="TCP-8080">
+        <protocol>
+          <tcp>
+            <port>8080</port>
+          </tcp>
+        </protocol>
+        <description>Custom HTTP port</description>
+        <tag>
+          <member>web</member>
+        </tag>
+      </entry>
+      <entry name="UDP-514">
+        <protocol>
+          <udp>
+            <port>514</port>
+          </udp>
+        </protocol>
+      </entry>
+    </service>
+  </shared>
+</config>

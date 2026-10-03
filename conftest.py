@@ -13,6 +13,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).parent
 SAMPLE_CONFIG = REPO_ROOT / "sample_panorama_config.xml"
+FIXTURES_DIR = REPO_ROOT / "tests" / "fixtures"
 
 
 def _load_module(alias: str, filename: str):
@@ -35,6 +36,16 @@ def converter_module():
 def splitter_module():
     """The split_device_groups script as an importable module."""
     return _load_module("split_device_groups", "split_device_groups.py")
+
+
+@pytest.fixture
+def make_parser(converter_module):
+    """Return a factory that builds a PanoramaParser bound to a fixture file."""
+
+    def _make(fixture_name: str):
+        return converter_module.PanoramaParser(str(FIXTURES_DIR / fixture_name))
+
+    return _make
 
 
 def run_script(filename: str, *args: str) -> subprocess.CompletedProcess:

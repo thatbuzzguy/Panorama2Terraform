@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<config version="10.0.0" urldb="paloaltonetworks">
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <network>
+            <ike>
+              <gateway>
+                <entry name="IKE-GW-Branch">
+                  <protocol>
+                    <ikev2>
+                      <ike-crypto-profile>IKE-DEFAULT</ike-crypto-profile>
+                    </ikev2>
+                  </protocol>
+                  <peer-address>
+                    <fqdn>branch.example.com</fqdn>
+                  </peer-address>
+                  <authentication>
+                    <pre-shared-key>
+                      <profile>psk-profile</profile>
+                    </pre-shared-key>
+                  </authentication>
+                  <local-id>
+                    <id>local.example.com</id>
+                  </local-id>
+                  <peer-id>
+                    <id>peer.example.com</id>
+                  </peer-id>
+                </entry>
+              </gateway>
+            </ike>
+          </network>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

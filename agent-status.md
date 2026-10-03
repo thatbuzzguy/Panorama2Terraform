@@ -1,34 +1,45 @@
 # Agent Status
 
-## Current Position
+## Current position
+Epic 1 (testing and lint foundation), F1.2 completed. Next: F1.3 generator golden-file tests.
 
-- **Epic 1 — Testing and Linting Foundation** (the gate; must finish before Epic 2/3 feature work)
-- **Active task:** F1.2 Parser unit tests (next; acceptance criteria to be written before starting)
+## Session log
 
-## Environment Notes
+### F1.2 — Parser unit tests (this session)
+- Wrote 46 unit tests across 6 modules under `tests/` (one test per parse method,
+  34 isolated XML fixtures in `tests/fixtures/` using the real Panorama structure).
+- Tests found 5 real parser bugs; all fixed and pinned by tests:
+  1. `parse_virtual_routers`/`parse_logical_routers` searched `.//template/entry`
+     but Panorama exports use `<templates><entry>` — template VRs/LRs were silently
+     dropped. The README "Multi-VR support (tested)" claim was not supported because
+     the sample config contains no virtual routers.
+  2. Device-level VR/LR path missed the real location
+     `devices/entry/vsys/entry/network/virtual-router/entry`.
+  3. `parse_ipsec_tunnels` looked for `auto-key/ike-gateway/entry`; real exports use
+     `auto-key/gateway/entry`. Now accepts both.
+  4. Aggregate parent interface collected subinterface IPs (`.//ip/entry` descended
+     into `<units>`). Now direct-child lookup only.
+  5. vlan/loopback/tunnel dedup keyed on the raw unit number, so `loopback.1`
+     silently dropped `tunnel.1` (both unit number 1 — a common real-world case).
+     Now deduped on the namespaced name.
+- Parser extraction gaps (silent data loss) recorded in `backlog.md` for Epic 2/3:
+  app-filter description, service-object tags, schedule description, security-rule
+  profile refs, NAT service member-list form, dynamic address-group filter content.
+- Sample config output re-verified end-to-end (converter runs clean, all 8 files).
+  Baseline snapshot saved at `/tmp/tf_baseline` (not committed).
+- Gate: `ruff check .` clean; `pytest` 50 passed (46 parser + 4 smoke).
 
-- Python 3.12.3, terraform 1.16.1 (`/usr/bin/terraform`), ruff 0.16.10, pytest 9.1.1.
-- PEP 668: system pip is externally managed. Use `uv` / `uvx` for tool installs.
-- `lib_docs/` does not exist yet (mentioned in AGENTS.md; create when needed).
-- Tests must stay offline: fixtures + provider schema JSON are the static artifacts (PLAN.md, Epic 1 strategy).
-- Ruff gate: `ruff check .` (config in `pyproject.toml`, line-length 120). `ruff format` is deliberately not in the gate yet (backlog.md).
-- Tests load the root scripts by file path via `conftest.py` fixtures (`converter_module`, `splitter_module`, `run_script`).
+## Environment notes
+- Python 3.12.3; use `uvx --with pytest==9.1.1 pytest` and
+  `uvx --with ruff==0.16.10 ruff` (PEP 668 blocks system pip installs).
+- terraform 1.16.1 available at /usr/bin/terraform.
+- Converter CLI: `python3 panorama_to_terraform.py <input.xml> [--output-dir DIR]`
+  (output dir is a flag, default `terraform_output`).
+- The sample config has no templates/vsys network config, so VR/LR/BGP/OSPF/IPsec
+  paths were never exercised by the sample-based smoke test.
 
-## Completed
-
-- **F1.1 Tooling baseline** (committed):
-  - `requirements.txt`: pytest 9.1.1, ruff 0.16.10 (pinned).
-  - `pyproject.toml`: ruff (E, W, F, I, UP, B, SIM, C4; line-length 120; target py39) + pytest settings.
-  - Fixed 1022 ruff findings across both scripts (whitespace, typing modernization, unused code, long lines, f-strings without placeholders).
-  - Behavior verified neutral: converter and splitter outputs are byte-identical to pre-change runs on the sample config.
-  - `tests/test_smoke.py`: converter runs on sample and emits the core files; splitter --help and full run pass.
-  - CI: installs `requirements.txt`, runs `ruff check .` then `pytest`; matrix 3.9-3.12; removed unused `python-docx`/`python-pptx`/`openpyxl`.
-  - `.pre-commit-config.yaml`: ruff hook.
-  - README requirement corrected: Python 3.9+ (code now uses 3.9 typing syntax).
-- **F1.8 Lint both scripts** (done as part of F1.1).
-
-## Next Steps (F1.2)
-
-1. Write acceptance criteria for F1.2 into `acceptance.md`.
-2. Enumerate `PanoramaParser` parse methods; write one test per method with isolated XML snippet fixtures under `tests/fixtures/`.
-3. Tests must catch silent drops (e.g. same-named objects across device groups) where the current code has them, so Epic 3 fixes have red-to-green coverage.
+## Conventions
+- One task at a time; `acceptance.md` overwritten before each task.
+- ASD-STE100 in commits and docs.
+- Commit per feature; remove completed items from markdown only when the epic
+  completes (completed items are marked (COMPLETED) until then).
