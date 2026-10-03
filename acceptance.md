@@ -1,30 +1,50 @@
-# Acceptance — F2.1: Provider baseline
+# Acceptance — F2.2: Resource mapping (old emitted name -> real v2 resource)
 
-## Purpose
-Pin the generated `provider.tf` to a v2 range that is actually verified,
-and record that range in the docs.
+## Facts established (verified against provider v2.0.14, 128 resource types)
+- Of the 28 emitted types, **15 are missing** from v2 (not 13 — the audit
+  list omitted `panos_application_filter` and `panos_external_list`; the
+  F1.4 test split of 15 type-XFAIL / 13 type-XPASS confirms 15).
+- 13 types already exist in v2 (they still need `location` + attribute
+  fixes — F2.3/F2.4).
 
-## Facts established
-- The registry's latest 2.x release is **2.0.14** (the audit's reference
-  version, 128 resource types).
-- The generator currently pins `~> 2.0.7`, which predates six 2.0.x
-  releases and is not the version any test has verified.
+## Mapping decisions (the 15 missing)
+| Old emitted type | v2 target | Kind |
+|---|---|---|
+| `panos_address_object` | `panos_address` | rename |
+| `panos_service_object` | `panos_service` | rename |
+| `panos_static_route_ipv4` | `panos_virtual_router_static_route_ipv4` | rename |
+| `panos_security_rule_group` | `panos_security_policy_rules` | rename (container, ordered `rules`) |
+| `panos_nat_rule_group` | `panos_nat_policy_rules` | rename (container, ordered `rules`) |
+| `panos_external_list` | `panos_external_dynamic_list` | rename (url/recurring/description dropped, F2.9 report) |
+| `panos_layer2_subinterface` | `panos_ethernet_layer3_subinterface` | rename (parent/tag derived from `.unit` name) |
+| `panos_ipsec_tunnel_proxy_id_ipv4` | inside `panos_ipsec_tunnel` | merge into `auto_key.proxy_id[]` |
+| `panos_application_filter` | none | report only (v2 `panos_application` is a different concept) |
+| `panos_bgp` | none | report only (v2 has only 6 specialized BGP profiles) |
+| `panos_bgp_peer` | none | report only |
+| `panos_bgp_peer_group` | none | report only |
+| `panos_ospf` | none | report only (v2 has only 4 specialized OSPF profiles) |
+| `panos_ospf_area` | none | report only |
+| `panos_ospf_area_interface` | none | report only |
 
 ## Changes
-1. `generate_provider_config` emits `version = "~> 2.0.14"` with a
-   comment recording that 2.0.14 is the verified v2 baseline.
-2. Goldens (sample + kitchen-sink) regenerated; only `provider.tf` may
-   change in each set.
-3. README provider-version lines updated from 2.0.7 to 2.0.14
-   (recording the supported range; claim verification is F2.11).
+1. `resource_mapping.py` (repo root): `RESOURCE_MAPPING` dict, old type ->
+   v2 type, or `None` for report-only. The single source of truth for F2.4.
+2. `docs/RESOURCE_MAPPING.md`: the human-readable table with rationale.
+3. `tests/test_resource_mapping.py`:
+   - mapping keys == the 28 emitted types (parsed from goldens);
+   - every non-`None` target exists in the v2.0.14 schema;
+   - every `None` entry is genuinely absent from the schema (guards
+     against report-only masking a real resource);
+   - shares the `provider_schema` fixture moved to `conftest.py`
+     (test_schema_conformance.py refactored to use it).
+4. Docs correction: "13 missing" -> "15 missing" in PLAN.md and
+   agent-status.md (the F1.4 note mis-copied the audit's undercount).
 
-## Verification (auto-retarget)
-- F1.4 conformance test reads the pin from the golden `provider.tf`, so it
-  re-runs against 2.0.14 with the same expected split: 43 xfailed,
-  13 xpassed (13 missing types, missing `location` — Epic 2 work).
-- F1.5 `terraform init` gate stays green.
-- Full gate: ruff clean; pytest 106 passed, 46 xfailed, 13 xpassed.
+## Gate
+- ruff clean.
+- Full pytest suite green with the same split (106 passed, 46 xfailed,
+  13 xpassed) plus the new mapping tests passing.
 
 ## Non-goals
-- No emitter changes (F2.2–F2.4).
-- No README coverage-claim rewrite (F2.11).
+- No emitter changes (F2.3/F2.4).
+- No attribute-level rewrites (F2.4).

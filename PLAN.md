@@ -10,7 +10,7 @@ The adversarial audit (`ADVERSARIAL_AUDIT_REPORT.md`) found three blocking probl
 2. **Silent data loss.** Name-keyed parsing drops per-device-group rules, policy order, VLANs, IPv6, and multi-port services.
 3. **No test gate.** CI runs only `py_compile` and `--help`. Nothing verifies the generated Terraform.
 
-Goal 1 is complete (Epic 1): CI runs lint plus a 106-test offline suite (parser units, goldens, schema conformance, edge, robustness) and a `terraform validate` gate. 13 emitted types are missing from provider v2 and no block carries `location`; both are pinned by xfail tests that flip green when Epic 2 lands. Problems 2 and 3 remain.
+Goal 1 is complete (Epic 1): CI runs lint plus a 106-test offline suite (parser units, goldens, schema conformance, edge, robustness) and a `terraform validate` gate. 15 of the 28 emitted types are missing from provider v2 and no block carries the required `location` block; both are pinned by xfail tests that flip green when Epic 2 lands. Problems 2 and 3 remain.
 
 Epic 2 is in progress: F2.1 (provider baseline `~> 2.0.14`) is complete.
 
@@ -26,7 +26,7 @@ A brown-field config is an existing production config: mixed shared objects, per
 
 ## Epic 1 — Testing and Linting Foundation (Goal 1) — COMPLETE
 
-Test against static artifacts (XML fixtures, provider schema JSON), not live devices. Delivered: tooling gate (pytest + ruff in CI and pre-commit), 42 parser unit tests (5 parser bugs found and fixed), golden-file tests for sample and kitchen-sink output, provider schema conformance (13 of 28 emitted types missing from v2 — xfailed until Epic 2), a `terraform init`/`validate` CI gate, an edge-case fixture corpus (splitter quote bug fixed), and security/robustness tests (DTD rejection, control-character escaping, collision-safe resource names). Suite: 106 passed, 46 xfailed, 13 xpassed. Detail is in the git history.
+Test against static artifacts (XML fixtures, provider schema JSON), not live devices. Delivered: tooling gate (pytest + ruff in CI and pre-commit), 42 parser unit tests (5 parser bugs found and fixed), golden-file tests for sample and kitchen-sink output, provider schema conformance (15 of 28 emitted types missing from v2 — xfailed until Epic 2), a `terraform init`/`validate` CI gate, an edge-case fixture corpus (splitter quote bug fixed), and security/robustness tests (DTD rejection, control-character escaping, collision-safe resource names). Suite: 106 passed, 46 xfailed, 13 xpassed. Detail is in the git history.
 
 ## Epic 2 — Complete Support of the Latest Provider (Goal 2)
 

@@ -2,13 +2,13 @@
 
 Goal 2: `terraform validate` passes on all fixture configs. Resource coverage is tracked by test.
 
-Epic 1 is complete; its xfail tests (13 missing v2 types, missing `location`,
+Epic 1 is complete; its xfail tests (15 missing v2 types, missing `location`,
 validate failures) flip green as this epic lands.
 
 ## Tasks
 
 - [x] **F2.1 Provider baseline** — Generate a `provider.tf` pinned to the v2 range. Record the supported range. (COMPLETED — pin raised to `~> 2.0.14`, the latest 2.x release and the version the gates verify; goldens regenerated, only `provider.tf` changed; README support line updated)
-- [ ] **F2.2 Resource mapping** — One table maps old emitted names to real v2 resources: `panos_address`, `panos_service`, `panos_security_policy_rule`, `panos_nat_policy_rule`, `panos_bgp_*_routing_profile`, `panos_ospf_*_routing_profile`, `panos_virtual_router_static_route_ipv4`, `panos_ethernet_layer3_subinterface`.
+- [x] **F2.2 Resource mapping** — One table maps old emitted names to real v2 resources. (COMPLETED — `resource_mapping.py` is the single source of truth; verified against v2.0.14: 13 identity, 7 renames, 1 merge into `panos_ipsec_tunnel`, 7 report-only; `docs/RESOURCE_MAPPING.md` records the rationale; the earlier "13 missing" count corrected to 15)
 - [ ] **F2.3 `location` on every resource** — Derive the block from the XML source: `shared`, `device_group`, or `vsys`.
 - [ ] **F2.4 Rewrite emitters to v2 schemas** — Use the real nested blocks (`protocol{}`, `layer3{}`, `auto_key{}`, `position{}`). Put proxy-id inside `panos_ipsec_tunnel`. Remove hardcoded assumptions (for example `panos_virtual_router.default`, the hardcoded OSPF area).
 - [ ] **F2.5 Order-preserving policy** — Emit rules in XML order per (device group, rulebase). Remove the blanket `position = "bottom"`.

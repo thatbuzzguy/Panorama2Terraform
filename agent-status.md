@@ -1,9 +1,34 @@
 # Agent Status
 
 ## Current position
-Epic 2 (complete provider-v2 support). F2.1 complete. Next: **F2.2 Resource mapping**.
+Epic 2 (complete provider-v2 support). F2.1 and F2.2 complete. Next: **F2.3 Add `location` to every resource**.
 
 ## Session log
+
+### F2.2 — Resource mapping (this session)
+- Ground truth verified against the live v2.0.14 schema (128 types):
+  15 of the 28 emitted types are missing from v2, 13 exist. The audit's
+  "13 missing" list omitted `panos_application_filter` and
+  `panos_external_list`; the F1.4 test split (15 type-XFAIL / 13
+  type-XPASS) confirms 15. Docs corrected.
+- `resource_mapping.py` (repo root): `RESOURCE_MAPPING` dict, old type ->
+  v2 type, or None for report-only. 13 identity, 7 renames
+  (panos_address, panos_service, panos_virtual_router_static_route_ipv4,
+  panos_security_policy_rules, panos_nat_policy_rules,
+  panos_external_dynamic_list, panos_ethernet_layer3_subinterface), 1
+  merge (proxy-id into `panos_ipsec_tunnel.auto_key.proxy_id`), 7
+  report-only (application_filter, bgp x3, ospf x3).
+- `docs/RESOURCE_MAPPING.md`: rationale table for F2.4.
+- `tests/test_resource_mapping.py` (29 tests, all green): mapping keys ==
+  emitted types from goldens; every target exists in the schema; every
+  report-only entry is genuinely absent.
+- Refactor: `provider_schema` fixture + `declared_provider()` +
+  `emitted_types()` moved to conftest.py; test_schema_conformance.py uses
+  them (same split: 43 xfail, 13 xpass).
+- Corrected a wrong note: `location` is a required nested BLOCK (e.g.
+  `location { device_group { name } }`), not a string. F2.3 must emit
+  blocks.
+- Gate: ruff clean. pytest 135 passed, 46 xfailed, 13 xpassed.
 
 ### F2.1 — Provider baseline (this session)
 - The registry's latest 2.x release is 2.0.14 (verified via the registry
@@ -49,8 +74,8 @@ Epic 2 (complete provider-v2 support). F2.1 complete. Next: **F2.2 Resource mapp
 - F1.1/F1.8 tooling + lint gate (ruff, pytest, CI matrix, pre-commit).
 - F1.2 parser unit tests: 42 tests, 34 fixtures; 5 parser bugs fixed.
 - F1.3 golden-file tests: sample + kitchen-sink (29 .tf), 39 tests.
-- F1.4 schema conformance: 56 cases; 43 xfailed (13 types missing from
-  provider v2, missing `location`), 13 xpassed.
+- F1.4 schema conformance: 56 cases; 43 xfailed (15 types missing from
+  provider v2, missing `location`), 13 xpassed (the 13 types that exist).
 - F1.5 CI terraform gate: init green, validate xfail until Epic 2.
 - F1.6 edge corpus: 6 fixtures, 12 tests; splitter quote bug fixed.
 
@@ -63,8 +88,10 @@ Epic 2 (complete provider-v2 support). F2.1 complete. Next: **F2.2 Resource mapp
 - Splitter CLI: `python3 split_device_groups.py <input.xml> [--output-dir DIR]`.
 - Provider v2 schema (128 types) was fetched to /tmp/panos_schema.json in a
   previous session; refetch with `terraform providers schema -json` if needed.
-- 13 emitted types are missing from v2 (F2.2 mapping targets); `location`
-  is a required string attribute (not a block).
+- 15 emitted types are missing from v2 (F2.2 mapping targets). `location`
+  is a required nested block (e.g. `location { device_group { name } }` or
+  `location { template { name } }`), not a plain string (verified in the
+  v2.0.14 schema; the earlier "string attribute" note was wrong).
 
 ## Conventions
 - One task at a time; `acceptance.md` overwritten before each task.
