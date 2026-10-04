@@ -50,6 +50,12 @@ The mapping and rationale are in
 [`resource_mapping.py`](resource_mapping.py) and
 [`docs/RESOURCE_MAPPING.md`](docs/RESOURCE_MAPPING.md).
 
+The provider-resource <-> Panorama-XML-element coverage matrix — one
+row per emitted type with the XML element, fixture, and expected name,
+enforced by `tests/test_coverage_matrix.py` — is in
+[`COVERAGE_MATRIX`](resource_mapping.py) (machine-readable) and
+[`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md) (table + method).
+
 ## Dependency wiring
 
 Name attributes that reference an object exported by the same run are
@@ -144,11 +150,16 @@ platform (see `INTERFACE_MIGRATION_REPORT.txt`).
 
 ## Testing
 
-- `python3 -m pytest` - parser, generator, mapping, and conformance tests
-  (offline: XML fixtures plus the committed provider schema)
+- `python3 -m pytest` - the full suite: parser and generator unit tests,
+  golden byte-for-byte gates, resource-mapping and schema conformance,
+  policy order and dependency wiring, robustness, and the F2.8 coverage
+  matrix row tests. XML fixtures drive the converter; provider schema
+  conformance runs `terraform providers schema -json` against the
+  pinned version (skipped when the `terraform` binary or registry
+  access is unavailable).
 - `tests/test_terraform_validate.py` - `terraform init` + `terraform
-  validate` on the sample and kitchen-sink outputs (skipped when the
-  `terraform` binary is absent)
+  validate` on the sample, kitchen-sink, and crypto-profile-only
+  outputs (skipped when the `terraform` binary is absent)
 - `ruff check .` - lint
 
 ## Documentation
@@ -156,6 +167,7 @@ platform (see `INTERFACE_MIGRATION_REPORT.txt`).
 - [`docs/MIGRATION_GUIDE.md`](docs/MIGRATION_GUIDE.md) - migration workflow
 - [`docs/USAGE_GUIDE.md`](docs/USAGE_GUIDE.md) - technical reference
 - [`docs/RESOURCE_MAPPING.md`](docs/RESOURCE_MAPPING.md) - v2 mapping rationale
+- [`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md) - coverage matrix, row schema, and test methodology
 - [`docs/DEVICE_GROUP_SPLITTING.md`](docs/DEVICE_GROUP_SPLITTING.md) - splitter notes
 
 ## License

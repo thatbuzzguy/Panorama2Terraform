@@ -25,10 +25,17 @@ Acceptance criteria are in `acceptance.md`.
 
 - **Epic 2:** F2.9 (real resources or explicit reports), F2.10 (one-time dead-variable cleanup; its permanent check lands in F4.1), F2.11 (verified claims).
 - **Epic 3:** F3.1 (keyed data model) first, then F3.2–F3.10.
-- **Epic 4:** F4.2 (container table + line tracking; may land during Epic 3), F4.3 (per-entry `CONVERSION_REPORT.txt`; after F3.1), F4.4 (property-level matrix, absorbs F2.8; after F3.1, last in Epic 4).
+- **Epic 4:** F4.2 (container table + line tracking; may land during Epic 3), F4.3 (per-entry `CONVERSION_REPORT.txt`; after F3.1), F4.4 (property-level matrix extending the landed F2.8 type-level matrix; after F3.1, last in Epic 4).
 
 ## Notes
 
+- **F2.8 (type-level coverage matrix) landed 2026-07-13** — finished
+  per direction to continue the previously active task: `COVERAGE_MATRIX`
+  in `resource_mapping.py`, `tests/test_coverage_matrix.py` (61 tests:
+  row set, element grounding, per-row pipeline), `docs/COVERAGE_MATRIX.md`
+  (matrix, row schema, testing methodology). It exposed and fixed the
+  VPN emission gate (standalone crypto profiles were silently dropped)
+  and added the third `terraform validate` case.
 - The static no-dangling-reference rule already exists as a test in
   `tests/test_dependency_wiring.py`; F4.1 shares that rule with the
   runtime check instead of copying it.

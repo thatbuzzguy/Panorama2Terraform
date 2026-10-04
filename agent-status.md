@@ -1,11 +1,54 @@
 # Agent Status
 
 ## Current position
-Roadmap now carries Epic 4 (full traceability and verification). Next: **F4.1 Post-run sanity gate** — acceptance criteria written in `acceptance.md`, task breakdown in `to-do.md`. F4.2 may land during Epic 3; F4.3/F4.4 land after F3.1.
+**F2.8 Coverage matrix landed 2026-07-13** (per direction to continue the
+previously active task): `COVERAGE_MATRIX` in `resource_mapping.py`
+(20 rows, one per emitted type), `tests/test_coverage_matrix.py`
+(61 tests: row set, element grounding, per-row pipeline),
+`docs/COVERAGE_MATRIX.md` (matrix, row schema, testing methodology).
+Also fixed the VPN emission gate it exposed (standalone crypto profiles
+were silently dropped) and added the third `terraform validate` case.
+Roadmap still carries Epic 4; `to-do.md` points at **F4.1 Post-run sanity
+gate** as the next task. F4.4 builds on the landed type-level matrix.
 
 ## Session log
 
-### Roadmap — Epic 4 planning (this session)
+### F2.8 — Coverage matrix (this session)
+- Direction: ignore the Epic 4 re-planning and finish the previously
+  active task, F2.8. `acceptance.md` rewritten for it first.
+- `COVERAGE_MATRIX` in `resource_mapping.py`: one row per
+  `EMITTED_TYPES` type (20 rows). Row fields: `resource`,
+  `xml_element` (Panorama tag path, any scope prefix), `xml_name`
+  (fixture `<entry name>`), `emitted_name` (the `name` the output
+  resource must carry; the `.0` subinterface row differs on purpose),
+  `fixture`, `output_file`.
+- `tests/test_coverage_matrix.py` (61 tests): (1) row set is exactly
+  `EMITTED_TYPES` (drift guard both directions vs
+  `REPORT_ONLY_TYPES`); (2) per row, the fixture exists and contains
+  the row's element with the named entry; (3) per row, the CLI run on
+  the fixture emits a `resource "<type>"` block in `output_file`
+  carrying `name = "<emitted_name>"`. Per-fixture runs are cached per
+  session; block end = first column-0 `}` line (nested values close on
+  indented lines). pytest calls the `ids` callable once per parameter
+  value, not on the list (first attempt failed at collection).
+- **Bug found by the matrix and fixed:** `generate_vpn_config` (and its
+  `main()` caller) gated `vpn.tf` on `ike_gateways or ipsec_tunnels`,
+  so a config with only crypto profiles emitted nothing — inconsistent
+  with the emit-everything-that-maps design. Gate relaxed to any
+  non-empty VPN section; the key-management report stays gated on a
+  gateway or tunnel. Verified valid standalone against v2.0.14.
+- `tests/test_terraform_validate.py`: third case added —
+  `ike_crypto_profiles.xml` (profiles only) must init + validate.
+- Docs: `docs/COVERAGE_MATRIX.md` (matrix table, row schema, testing
+  methodology, how the project verifies Terraform output, maintenance
+  duty); README links it and its Testing section now states the
+  canonical commands and the `terraform providers schema -json`
+  schema source.
+- Gate: ruff clean. pytest 260 passed, 1 xfailed (the F3.1 item).
+  terraform validate green on sample, kitchen-sink, and the new
+  crypto-profile-only output.
+
+### Roadmap — Epic 4 planning (previous session)
 - Added Goal 4 and Epic 4 to `PLAN.md`: F4.1 post-run sanity gate (`--validate` flag, static check module, `SANITY_REPORT.txt`, non-zero exit on FAIL), F4.2 container table + line-tracking `TreeBuilder`, F4.3 per-entry `CONVERSION_REPORT.txt` with consumed-entry marks, F4.4 property-level matrix.
 - **F2.8 moved out of Epic 2 into Epic 4 as F4.4.** Rationale: the matrix becomes a live coverage structure with a permanent maintenance duty (not an end-of-Epic-2 measurement), and it must key on the F3.1 keyed data model, so it lands after F3.1.
 - F2.10 stays in Epic 2 as the one-time dead-variable cleanup; its permanent check (every variable consumed) lands in F4.1.
@@ -284,8 +327,13 @@ Roadmap now carries Epic 4 (full traceability and verification). Next: **F4.1 Po
   `target-version="py39"`). Python 3.12-only syntax (for example
   reusing the outer quote inside an f-string) is a bug even when it
   runs locally; ruff catches it.
-- Use `uvx --with pytest==9.1.1 pytest` and
+- Tests: `python3 -m pytest` (pytest 9.1.1 is preinstalled; pinned in
+  requirements.txt) or `uvx --with pytest==9.1.1 pytest`; lint:
   `uvx --with ruff==0.16.10 ruff` (PEP 668 blocks system pip installs).
+- The provider schema is NOT a pip package. It comes from `terraform
+  init` + `terraform providers schema -json` against the source/version
+  in the golden provider.tf (conftest `provider_schema` fixture;
+  skipped when terraform or the registry is unavailable).
 - terraform 1.16.1 available at /usr/bin/terraform.
 - Converter CLI: `python3 panorama_to_terraform.py <input.xml> [--output-dir DIR]`
   (output dir is a flag, default `terraform_output`).

@@ -2,7 +2,9 @@
 
 The machine-readable table lives in
 [`resource_mapping.py`](../resource_mapping.py). This document records the
-rationale for each decision.
+rationale for each decision. The companion coverage matrix — which
+Panorama XML element feeds each emitted type, and the fixture that
+proves it — is in [`COVERAGE_MATRIX.md`](./COVERAGE_MATRIX.md).
 
 Verified against **provider v2.0.14** (128 resource types) via
 `terraform providers schema -json` (the registry's latest 2.x release).

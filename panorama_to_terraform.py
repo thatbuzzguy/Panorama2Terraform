@@ -3505,8 +3505,13 @@ variable "device_group" {
         - panos_ike_gateway: protocol + peer_address + authentication blocks
         - panos_ipsec_tunnel: proxy_id list entries inside auto_key (no separate
           panos_ipsec_tunnel_proxy_id_ipv4 resource in v2)
+
+        Emission gate (F2.8): every v2 VPN resource type is independently
+        valid, so any non-empty VPN section emits vpn.tf. The legacy gate
+        required a gateway or tunnel, which silently dropped standalone
+        crypto profiles.
         """
-        if not (ike_gateways or ipsec_tunnels):
+        if not (ike_gateways or ipsec_tunnels or ike_profiles or ipsec_profiles):
             return
 
         content = '# IPsec VPN Configuration\n'
@@ -4072,10 +4077,11 @@ def main():
         tf_gen.generate_pbf_rules(pbf_rules)
         tf_gen.generate_application_override_rules(app_override_rules)
 
-        # VPN
+        # VPN: any non-empty section emits vpn.tf (F2.8); the key
+        # management report still needs a gateway or tunnel to mention.
+        tf_gen.generate_vpn_config(ike_gateways, ipsec_tunnels,
+                                  ike_crypto_profiles, ipsec_crypto_profiles)
         if ike_gateways or ipsec_tunnels:
-            tf_gen.generate_vpn_config(ike_gateways, ipsec_tunnels,
-                                      ike_crypto_profiles, ipsec_crypto_profiles)
             tf_gen.generate_vpn_report(ike_gateways, ipsec_tunnels)
 
         # Items with no v2 resource: BGP, OSPF, app filters, manual-key tunnels
