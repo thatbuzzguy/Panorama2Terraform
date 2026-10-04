@@ -5,7 +5,7 @@
 
 # IKE Crypto Profiles
 
-resource "panos_ike_crypto_profile" "ike_profile_ike_default" {
+resource "panos_ike_crypto_profile" "ike_profile_ike_default_58021a99" {
   location = {
     template = {
       name = "Shared"
@@ -22,7 +22,7 @@ resource "panos_ike_crypto_profile" "ike_profile_ike_default" {
 
 # IPsec Crypto Profiles
 
-resource "panos_ipsec_crypto_profile" "ipsec_profile_ipsec_default" {
+resource "panos_ipsec_crypto_profile" "ipsec_profile_ipsec_default_964d437a" {
   location = {
     template = {
       name = "Shared"
@@ -46,7 +46,7 @@ resource "panos_ipsec_crypto_profile" "ipsec_profile_ipsec_default" {
 # WARNING: Pre-shared keys use placeholder "***CHANGE_ME***"
 # Update these with actual keys from your key management system!
 
-resource "panos_ike_gateway" "ike_gw_ike_gw_branch" {
+resource "panos_ike_gateway" "ike_gw_ike_gw_branch_2b6fe510" {
   location = {
     template = {
       name = "Shared"
@@ -56,7 +56,7 @@ resource "panos_ike_gateway" "ike_gw_ike_gw_branch" {
   protocol = {
     version = "ikev2"
     ikev2 = {
-      ike_crypto_profile = panos_ike_crypto_profile.ike_profile_ike_default.name
+      ike_crypto_profile = panos_ike_crypto_profile.ike_profile_ike_default_58021a99.name
     }
   }
   peer_address = {
@@ -77,7 +77,7 @@ resource "panos_ike_gateway" "ike_gw_ike_gw_branch" {
 
 # IPsec Tunnels
 
-resource "panos_ipsec_tunnel" "tunnel_tun_branch" {
+resource "panos_ipsec_tunnel" "tunnel_tun_branch_654a01ce" {
   location = {
     template = {
       name = "Shared"
@@ -88,10 +88,10 @@ resource "panos_ipsec_tunnel" "tunnel_tun_branch" {
   auto_key = {
     ike_gateway = [
 {
-        name = panos_ike_gateway.ike_gw_ike_gw_branch.name
+        name = panos_ike_gateway.ike_gw_ike_gw_branch_2b6fe510.name
       }
     ]
-    ipsec_crypto_profile = panos_ipsec_crypto_profile.ipsec_profile_ipsec_default.name
+    ipsec_crypto_profile = panos_ipsec_crypto_profile.ipsec_profile_ipsec_default_964d437a.name
     proxy_id = [
 {
         name = "proxy-1"

@@ -62,6 +62,21 @@ stay plain strings. The converter never declares a resource just to
 make a reference work, so the output always passes
 `terraform validate`.
 
+## Resource naming
+
+A local resource name is the sanitized PAN-OS name plus an 8-hex digest
+of the object's source identity (resource type, defining device group or
+template, and name). The name is deterministic: the same object always
+gets the same local name, and same-named objects in different device
+groups stay distinct. For example:
+
+```hcl
+resource "panos_address" "web_server_1_a9a88aa6" {
+  name = "web-server-1"
+  ...
+}
+```
+
 ## Report-only configuration
 
 The following have no v2 provider resource. The converter keeps their

@@ -1,6 +1,6 @@
 # Security Profile Groups
 
-resource "panos_security_profile_group" "strict_profile" {
+resource "panos_security_profile_group" "strict_profile_28092dd7" {
   location = {
     device_group = {
       name = "Shared"

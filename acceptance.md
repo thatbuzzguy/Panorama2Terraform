@@ -1,90 +1,67 @@
-# Acceptance Criteria — F2.6: Dependency wiring
+# Acceptance Criteria — F2.7: Collision-safe naming
 
 ## Goal
-Terraform must apply objects in an order that satisfies PAN-OS
-references. Every name attribute that points at an object exported by
-this generator must be a Terraform reference (`<resource>.name`) when
-the target is declared in the same output. Names that point at objects
-outside the export (built-ins such as `any` or `service-ftp`, or
-objects not in the export) must stay plain name strings (brown-field).
-The old `unique_resource_name` fallback declared phantom resources and
-emitted references to resources that `terraform validate` rejects; it
-must be gone.
+Local Terraform resource names must be deterministic (independent of
+emission order) and collision-safe. Today the first declaration of a
+sanitized base name keeps it and later colliding declarations get
+order-dependent counters (`a_b`, `a_b_2`, `a_b_3`): the same input in a
+different order produces different names, and a reference site cannot
+recompute the name. F2.7 builds every local name from the sanitized
+name plus a short hash of the object's source identity.
+
+## Design
+
+`TerraformGenerator.declare_resource_name(name, scope, context)`:
+
+- `base = sanitize_name(name)` or `unnamed` for an empty name.
+- `digest = sha256(f'{scope}|{context}|{name}').hexdigest()[:8]`.
+  The digest is a short hash of the object's source identity — its path
+  in the export: the resource type, the device group or template that
+  defines it, and the PAN-OS name (case-sensitive; it must be the raw
+  name, not the sanitized one, so `a-b` and `a_b` differ).
+- Local name = `base_digest`; if that address is already taken in the
+  scope (a true duplicate declaration or a digest collision), append
+  `_2`, `_3`, ... so the output is always valid HCL.
+- `name_ref` is unchanged: `(scope, name)` registry, first declaration
+  wins, plain string for undeclared names. Context-aware resolution is
+  F3.1.
 
 ## Definition of Done
-1. **Single safe reference resolver.**
-   `TerraformGenerator.name_ref(name, scopes, key=None)` returns an
-   `HclRef` of `scope.<local>.name` when `(scope, key)` was declared in
-   this run, else the plain `name`. Scope order sets precedence
-   (object before group). `key` is the registry key when it differs
-   from the PAN-OS name (VPN composite keys).
-2. **Unsafe fallback removed.**
-   `unique_resource_name` is removed. VPN reference sites use the safe
-   resolver; an undeclared VPN object emits a plain name (brown-field),
+
+1. **Deterministic names.**
+   The local name of an object depends only on its identity, not on
+   emission order or run count: declaring the same objects in different
+   orders assigns each the same name. A duplicate declaration of the same
+   identity gets the counter suffix, so the output stays valid HCL.
+2. **Colliding names.**
+   `a-b`, `a_b`, `A-B` in one scope yield three distinct names, each
+   matching `^a_b_[0-9a-f]{8}$`. The same PAN-OS name in two contexts
+   (for example two device groups) yields two distinct names of the
+   same shape.
+3. **Empty names.**
+   An empty name yields `unnamed_<digest>` — a valid, stable resource
+   name; the counter guard still applies.
+4. **References unchanged.**
+   `name_ref` still returns an `HclRef` for declared names, a plain
+   string for undeclared ones, object scope before group scope, and
    never a reference to an undeclared resource.
-3. **Wired reference sites** (every name list and name attribute):
-   - Address group `static` -> address, then address group
-   - Address `tags` -> administrative tag
-   - Service group `members` -> service, then service group
-   - Security rule `source_zones` / `destination_zones` -> zone
-   - Security rule `source_addresses` / `destination_addresses` ->
-     address, then address group
-   - Security rule `services` -> service, then service group
-   - NAT rule `source_zones`, `destination_zone`, `source_addresses`,
-     `destination_addresses` -> zone / address scopes
-   - NAT rule `service` -> service, then service group
-   - NAT `interface_address.interface` -> ethernet interface, then
-     layer-3 subinterface
-   - Zone `network` members -> ethernet interface, then layer-3
-     subinterface
-   - Virtual router `interfaces` -> ethernet interface, then layer-3
-     subinterface
-   - Layer-3 subinterface `parent` -> ethernet interface
-   - IKE gateway `local_address.interface` -> ethernet interface, then
-     layer-3 subinterface
-   - IKE gateway `ike_crypto_profile` -> IKE crypto profile
-   - Tunnel `auto_key.ike_gateway` -> IKE gateway
-   - Tunnel `auto_key.ipsec_crypto_profile` -> IPsec crypto profile
-4. **Not wired (intentional).**
-   Rule `applications` (built-in PAN-OS app names, no managed scope),
-   zone protection and interface management profiles (F3 scope, and the
-   profile bodies are comment-only so a reference would dangle),
-   security profile group members (profiles are not emitted as
-   resources), `tunnel_interface`, PBF / decryption / app-override
-   rules (comment-only emitters).
-5. **Emit order.**
-   `main()` emits ethernet interfaces before zones and virtual routers
-   so their `.name` lookups resolve at emission time.
-6. **Tests.**
-   - New `tests/test_dependency_wiring.py` (CLI run + structural
-     regexes, matching the existing suite style) with fixture
-     `tests/fixtures/dependency_wiring.xml`:
-     - mixed managed / unmanaged member lists emit a reference plus a
-       plain string in one list
-     - address / address-group name collision resolves to the address;
-       service / service-group collision resolves to the service
-     - zone membership, virtual router interfaces, subinterface parent,
-       and NAT translation interface are wired
-     - an undeclared tunnel gateway emits a plain name (regression: the
-       old code emitted a reference to an undeclared resource)
-     - invariant: every `<type>.<local>.name` reference emitted
-       anywhere in the generated output resolves to a resource
-       declared in that same output
-   - `tests/test_robustness.py` migrates the two
-     `unique_resource_name` tests to `declare_resource_name` +
-     `name_ref`.
-7. **Goldens.**
-   `sample` and `kitchen_sink` regenerate. Changed files are limited to
-   the wired emitters (group lists, rule lists, zone/VR interface
-   lists, subinterface parent, VPN unchanged). `terraform validate`
-   passes on both.
-8. **Docs.**
-   README "Dependency wiring" note; to-do.md, PLAN.md,
-   agent-status.md updated; backlog notes that mention
-   `unique_resource_name` updated; commit.
+5. **Tests.**
+   - `tests/test_robustness.py`: collision and same-context tests
+     rewritten to the hashed shape; new tests for order-independence,
+     empty-name stability, and per-raw-name reference resolution.
+   - `tests/test_dependency_wiring.py`: hardcoded local names replaced
+     by lookups on the PAN-OS `name` attribute so the suite does not
+     depend on the naming scheme; the no-dangling-reference invariant
+     and the terraform gate stay.
+6. **Goldens.**
+   `sample` and `kitchen_sink` regenerate; `terraform validate` passes
+   on both.
+7. **Docs.**
+   README gains a short "Resource naming" note; backlog and
+   to-do/PLAN/agent-status entries updated; commit.
 
 ## Gate
+
 - `ruff check .` clean
 - `pytest` green (terraform validate gates run when terraform exists)
-- `terraform validate` green on the sample, kitchen-sink, and
-  dependency-wiring generated outputs
+- `terraform validate` green on the sample and kitchen-sink outputs

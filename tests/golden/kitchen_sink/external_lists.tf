@@ -1,6 +1,6 @@
 # External Dynamic Lists
 
-resource "panos_external_dynamic_list" "threat_ips" {
+resource "panos_external_dynamic_list" "threat_ips_3c4af1a2" {
   location = {
     device_group = {
       name = "Shared"

@@ -101,9 +101,11 @@ def test_service_group_members_mixed_refs(out_dir):
 
 def test_address_tag_wired_and_ghost_plain(out_dir):
     text = _read(out_dir, "address_objects.tf")
+    tag_local = _local_of(_read(out_dir, "tags.tf"), "panos_administrative_tag", "tag-one")
+    assert tag_local
     m = re.search(r"tags = \[([^\]]*)\]", text)
     assert m is not None
-    assert "panos_administrative_tag.tag_one.name" in m.group(1)
+    assert f"panos_administrative_tag.{tag_local}.name" in m.group(1)
     assert '"tag-ghost"' in m.group(1)
 
 
@@ -111,16 +113,21 @@ def test_address_tag_wired_and_ghost_plain(out_dir):
 
 def test_security_rule_zone_address_service_refs(out_dir):
     text = _read(out_dir, "security_rules.tf")
+    zones = _read(out_dir, "zones.tf")
+    zone_in = _local_of(zones, "panos_zone", "zone-in")
+    zone_out = _local_of(zones, "panos_zone", "zone-out")
+    both = _local_of(_read(out_dir, "address_objects.tf"), "panos_address", "both")
+    svc_both = _local_of(_read(out_dir, "service_objects.tf"), "panos_service", "svc-both")
     # Zones: declared zone refs + ghost zone plain.
-    assert "panos_zone.zone_in.name" in text
-    assert "panos_zone.zone_out.name" in text
+    assert f"panos_zone.{zone_in}.name" in text
+    assert f"panos_zone.{zone_out}.name" in text
     assert '"zone-ghost"' in text
     # Addresses: object scope wins the "both" collision; ghost plain.
-    assert "panos_address.both.name" in text
+    assert f"panos_address.{both}.name" in text
     assert '"ghost-addr"' in text
     assert "panos_address_group" not in text
     # Services: object scope wins the "svc-both" collision; ghost plain.
-    assert "panos_service.svc_both.name" in text
+    assert f"panos_service.{svc_both}.name" in text
     assert '"svc-ghost"' in text
     # Applications are built-in PAN-OS names: never wired.
     m = re.search(r"applications = \[([^\]]*)\]", text)
@@ -130,62 +137,95 @@ def test_security_rule_zone_address_service_refs(out_dir):
 
 def test_nat_rule_refs_and_translation_interface(out_dir):
     text = _read(out_dir, "nat_rules.tf")
-    assert "panos_zone.zone_in.name" in text
+    zone_in = _local_of(_read(out_dir, "zones.tf"), "panos_zone", "zone-in")
+    zone_out = _local_of(_read(out_dir, "zones.tf"), "panos_zone", "zone-out")
+    both = _local_of(_read(out_dir, "address_objects.tf"), "panos_address", "both")
+    svc_both = _local_of(_read(out_dir, "service_objects.tf"), "panos_service", "svc-both")
+    eth11 = _local_of(_read(out_dir, "interfaces.tf"), "panos_ethernet_interface", "ethernet1/1")
+    assert f"panos_zone.{zone_in}.name" in text
     m = re.search(r"destination_zone = \[([^\]]*)\]", text)
-    assert m is not None and "panos_zone.zone_out.name" in m.group(1)
-    assert "panos_address.both.name" in text
+    assert m is not None and f"panos_zone.{zone_out}.name" in m.group(1)
+    assert f"panos_address.{both}.name" in text
     m = re.search(r"^\s+service = (\S+)$", text, re.M)
-    assert m is not None and m.group(1) == "panos_service.svc_both.name"
+    assert m is not None and m.group(1) == f"panos_service.{svc_both}.name"
     m = re.search(r"interface = (\S+)", text)
-    assert m is not None and m.group(1) == "panos_ethernet_interface.ethernet1_1.name"
+    assert m is not None and m.group(1) == f"panos_ethernet_interface.{eth11}.name"
 
 
 # --- Network lists -----------------------------------------------------------
 
+def _iface_locals(out_dir: Path) -> tuple[str, str, str]:
+    """Local names of ethernet1/1, ethernet1/2, and ethernet1/2.10."""
+    text = _read(out_dir, "interfaces.tf")
+    return (
+        _local_of(text, "panos_ethernet_interface", "ethernet1/1"),
+        _local_of(text, "panos_ethernet_interface", "ethernet1/2"),
+        _local_of(text, "panos_ethernet_layer3_subinterface", "ethernet1/2.10"),
+    )
+
+
 def test_zone_network_and_vr_interface_lists(out_dir):
+    eth11, _eth12, eth1210 = _iface_locals(out_dir)
     zones = _read(out_dir, "zones.tf")
     m = re.search(r"layer3 = \[([^\]]*)\]", zones)
     assert m is not None
     # Mixed list: physical interface, subinterface, ghost stays plain.
-    assert "panos_ethernet_interface.ethernet1_1.name" in m.group(1)
-    assert "panos_ethernet_layer3_subinterface.ethernet1_2_10.name" in m.group(1)
+    assert f"panos_ethernet_interface.{eth11}.name" in m.group(1)
+    assert f"panos_ethernet_layer3_subinterface.{eth1210}.name" in m.group(1)
     assert '"ghost-iface"' in m.group(1)
 
     vrs = _read(out_dir, "virtual_routers.tf")
     m = re.search(r"interfaces = \[([^\]]*)\]", vrs)
     assert m is not None
-    assert "panos_ethernet_interface.ethernet1_1.name" in m.group(1)
-    assert "panos_ethernet_layer3_subinterface.ethernet1_2_10.name" in m.group(1)
+    assert f"panos_ethernet_interface.{eth11}.name" in m.group(1)
+    assert f"panos_ethernet_layer3_subinterface.{eth1210}.name" in m.group(1)
     assert '"ghost-iface"' in m.group(1)
 
 
 def test_subinterface_parent_wired(out_dir):
+    eth11, eth12, _eth1210 = _iface_locals(out_dir)
     text = _read(out_dir, "interfaces.tf")
     parents = re.findall(r"^\s+parent = (\S+)$", text, re.M)
     assert len(parents) == 2  # .0 subinterface + tagged subinterface
-    assert "panos_ethernet_interface.ethernet1_1.name" in parents
-    assert "panos_ethernet_interface.ethernet1_2.name" in parents
+    assert f"panos_ethernet_interface.{eth11}.name" in parents
+    assert f"panos_ethernet_interface.{eth12}.name" in parents
 
 
 # --- VPN chain -----------------------------------------------------------------
 
 def test_vpn_references_and_brown_field_fallback(out_dir):
     text = _read(out_dir, "vpn.tf")
+    ike_local = _local_of(text, "panos_ike_crypto_profile", "dw-ike")
+    gw_local = _local_of(text, "panos_ike_gateway", "dw-gw")
+    ipsec_local = _local_of(text, "panos_ipsec_crypto_profile", "dw-ipsec")
+    eth11, _eth12, _eth1210 = _iface_locals(out_dir)
     # Gateway -> IKE crypto profile (declared in this run).
-    assert "panos_ike_crypto_profile.ike_profile_dw_ike.name" in text
+    assert f"panos_ike_crypto_profile.{ike_local}.name" in text
     # Gateway local address -> interface (declared in this run).
     m = re.search(r"local_address = \{\s*interface = (\S+)", text)
-    assert m is not None and m.group(1) == "panos_ethernet_interface.ethernet1_1.name"
+    assert m is not None and m.group(1) == f"panos_ethernet_interface.{eth11}.name"
     # Tunnel -> gateway + IPsec profile (both declared in this run).
-    assert "panos_ike_gateway.ike_gw_dw_gw.name" in text
-    assert "panos_ipsec_crypto_profile.ipsec_profile_dw_ipsec.name" in text
+    assert f"panos_ike_gateway.{gw_local}.name" in text
+    assert f"panos_ipsec_crypto_profile.{ipsec_local}.name" in text
     # Brown-field gateway: plain string, no reference.
     assert '"gw-undeclared"' in text
     # Regression: the old code declared a phantom gateway for the
     # brown-field name. Exactly one gateway resource may exist.
     declared = _declared(out_dir)
     gateways = [local for (rtype, local) in declared if rtype == "panos_ike_gateway"]
-    assert gateways == ["ike_gw_dw_gw"]
+    assert gateways == [gw_local]
+
+
+# --- F2.7 naming -----------------------------------------------------------------
+
+def test_local_names_are_sanitized_name_plus_digest(out_dir):
+    """Every local name is the sanitized name plus an 8-hex digest (F2.7),
+    and no resource address is declared twice."""
+    declared = _declared(out_dir)
+    assert len(declared) == len({(rtype, local) for rtype, local in declared})
+    for rtype, local in declared:
+        assert re.fullmatch(r"[a-z0-9_]+_[0-9a-f]{8}(?:_\d+)?", local), (
+            f"{rtype}.{local} does not match the F2.7 naming shape")
 
 
 # --- Invariant ------------------------------------------------------------------

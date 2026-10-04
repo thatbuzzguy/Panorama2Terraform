@@ -45,6 +45,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import os
 import re
 import xml.etree.ElementTree as ET
@@ -2160,19 +2161,27 @@ class TerraformGenerator:
     def declare_resource_name(self, name: str, scope: str, context: str = '') -> str:
         """Assign a collision-free Terraform name for a new resource declaration.
 
-        Different PAN-OS names can sanitize to the same Terraform name
-        (for example 'a-b' and 'a_b' both become 'a_b'), and the same PAN-OS
-        name can exist in two device groups or templates. Both cases would
-        emit duplicate resource addresses (invalid HCL), so the identity key
-        combines scope (resource type), context (device group or template),
-        and name. The first name keeps the base form; later colliding names
-        get a numeric suffix.
+        The local name is the sanitized PAN-OS name plus a short hash of the
+        object's source identity (F2.7): the path of the entry in the export,
+        made of the resource type (scope), the device group or template that
+        defines it (context), and the raw PAN-OS name. The raw name is in the
+        hash, not the sanitized one: names that sanitize to the same base
+        ('a-b' and 'a_b') still get different digests. The hash makes the
+        name deterministic. The same object always gets the same local name.
+        The name does not depend on emission order or run count. Same-named
+        objects in different device groups or templates stay distinct.
+
+        If the address is already taken in the scope (a duplicate declaration
+        or a digest collision), a numeric suffix follows, so the output is
+        always valid HCL.
         """
         base = self.sanitize_name(name) or 'unnamed'
+        digest = hashlib.sha256(f'{scope}|{context}|{name}'.encode()).hexdigest()[:8]
+        candidate = f'{base}_{digest}'
         taken = self._taken_names.setdefault(scope, set())
-        candidate, n = base, 2
+        n = 2
         while candidate in taken:
-            candidate = f'{base}_{n}'
+            candidate = f'{base}_{digest}_{n}'
             n += 1
         taken.add(candidate)
         # Reference sites resolve by (scope, name); the first declaration wins

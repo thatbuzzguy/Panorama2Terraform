@@ -1,11 +1,53 @@
 # Agent Status
 
 ## Current position
-Epic 2 (complete provider-v2 support). F2.1–F2.6 complete. Next: **F2.7 Collision-safe naming** (resource name = sanitized name + short hash of the source path).
+Epic 2 (complete provider-v2 support). F2.1–F2.7 complete. Next: **F2.8 Coverage matrix** (provider-resource ↔ Panorama-XML-element matrix; every supported row gets a fixture test).
 
 ## Session log
 
-### F2.6 — Dependency wiring (this session)
+### F2.7 — Collision-safe naming (this session)
+- Design: the local name is the sanitized PAN-OS name plus an 8-hex
+  sha256 digest of the object's source identity — the path of the entry
+  in the export: resource type (scope), defining device group or
+  template (context), and the raw name. The raw name is in the digest,
+  not the sanitized one, so `a-b` and `a_b` (same base) stay apart
+  deterministically. The digest makes the name independent of emission
+  order and run count (the old `a_b_2` counter was order-dependent).
+  Empty names get a stable `unnamed_<digest>`. A taken-address counter
+  (`<name>_<digest>_2`) still guards true duplicates, so two resources
+  never share an address.
+- `name_ref` is unchanged: `(scope, name)` registry, first declaration
+  wins, plain string for undeclared names. One improvement falls out for
+  free: each raw name now resolves to its own resource (`name_ref('a_b')`
+  no longer lands on the first-declared `a-b`), but a name that exists
+  in two device groups still resolves first-wins (F3.1 context-keyed
+  registry).
+- Every declare site already passed the object's `device_group` or
+  `template` as `context`, so the change is confined to
+  `declare_resource_name` (plus `import hashlib`). No parser changes.
+- Tests: `tests/test_robustness.py` collision test rewritten to the
+  `base_<digest>` shape with per-raw-name reference resolution; new
+  `test_declare_resource_name_is_order_independent` (two generators,
+  opposite declaration orders, identical address sets),
+  `test_declare_empty_name_gets_a_stable_name`; `test_name_ref_never_
+  dangles` and the two-context test now assert the hashed shape.
+  `tests/test_dependency_wiring.py` no longer hardcodes local names:
+  all lookups resolve by the PAN-OS `name` attribute (`_local_of`,
+  new `_iface_locals` helper), plus a new scheme-level test that every
+  declared local name matches `[a-z0-9_]+_[0-9a-f]{8}(_\d+)?` and no
+  address is declared twice.
+- Goldens regenerated: 24 .tf files changed (sample 6, kitchen-sink 18),
+  all within emitted resources and their references/depends_on; provider,
+  variables, and reports unchanged except the `# Resource:` comment
+  lines in security_profiles.tf.
+- Docs: README gains a "Resource naming" section; backlog `name_ref`
+  note updated (context now in the digest, first-wins resolution stays
+  with F3.1); the F2.7 foundation note removed.
+- Gate: ruff clean. pytest 198 passed, 1 xfailed (the F3.1 item).
+  terraform validate green on sample, kitchen-sink, and the
+  dependency-wiring output.
+
+### F2.6 — Dependency wiring (previous session)
 - Rule: emit a `.name` reference only when the target is declared in
   the same run; names pointing outside the export stay plain
   brown-field strings. The old `unique_resource_name` violated this:

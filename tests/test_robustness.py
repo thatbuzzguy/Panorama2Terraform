@@ -101,7 +101,8 @@ def test_entry_without_name_is_skipped(tmp_path):
                 '--output-dir', str(tmp_path / 'out'), workdir=tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     text = (tmp_path / 'out' / 'address_objects.tf').read_text(encoding='utf-8')
-    assert 'resource "panos_address" "named_host"' in text
+    # F2.7 naming: sanitized name plus an 8-hex digest of the source identity.
+    assert re.search(r'resource "panos_address" "named_host_[0-9a-f]{8}"', text)
     # Exactly one resource: the unnamed entry must not produce a block.
     assert len(re.findall(r'resource "panos_address"', text)) == 1
 
@@ -147,22 +148,55 @@ def test_declare_resource_name_avoids_collisions(generator):
     first = generator.declare_resource_name('a-b', scope)
     second = generator.declare_resource_name('a_b', scope)
     third = generator.declare_resource_name('A-B', scope)
-    assert (first, second, third) == ('a_b', 'a_b_2', 'a_b_3')
-    # A reference site recomputes the same input and resolves to the declared name.
-    ref = generator.name_ref('a_b', (scope,))
-    assert isinstance(ref, panorama_to_terraform.HclRef)
-    assert ref.expr == f'{scope}.{second}.name'
+    names = (first, second, third)
+    # Three distinct resource addresses (duplicates would be invalid HCL).
+    assert len(set(names)) == 3
+    # F2.7: each is the shared sanitized base plus a distinct 8-hex digest
+    # of the raw name, so 'a-b' and 'a_b' stay apart deterministically.
+    for n in names:
+        assert re.fullmatch(r'a_b_[0-9a-f]{8}', n)
+    # A reference site resolves each raw name to its own declared resource.
+    for raw, local in (('a-b', first), ('a_b', second), ('A-B', third)):
+        ref = generator.name_ref(raw, (scope,))
+        assert isinstance(ref, panorama_to_terraform.HclRef)
+        assert ref.expr == f'{scope}.{local}.name'
     # An undeclared name stays a plain brown-field string (never a ref).
     assert generator.name_ref('ghost', (scope,)) == 'ghost'
     # Collision domains are separate per resource type.
-    assert generator.declare_resource_name('a_b', 'panos_service') == 'a_b'
+    assert re.fullmatch(
+        r'a_b_[0-9a-f]{8}', generator.declare_resource_name('a_b', 'panos_service'))
+
+
+def test_declare_resource_name_is_order_independent(tmp_path):
+    """F2.7: the local name depends on the object identity, not emission order."""
+    import panorama_to_terraform
+    scope = 'panos_address'
+    g1 = panorama_to_terraform.TerraformGenerator(str(tmp_path / 'g1'))
+    g2 = panorama_to_terraform.TerraformGenerator(str(tmp_path / 'g2'))
+    for raw in ('a-b', 'a_b', 'A-B'):
+        g1.declare_resource_name(raw, scope)
+    for raw in ('A-B', 'a_b', 'a-b'):
+        g2.declare_resource_name(raw, scope)
+    set1 = {g1.name_ref(r, (scope,)).expr for r in ('a-b', 'a_b', 'A-B')}
+    set2 = {g2.name_ref(r, (scope,)).expr for r in ('a-b', 'a_b', 'A-B')}
+    assert set1 == set2
+
+
+def test_declare_empty_name_gets_a_stable_name(generator):
+    """F2.7: an empty name yields a valid, digest-based resource name."""
+    first = generator.declare_resource_name('', 'panos_zone')
+    assert re.fullmatch(r'unnamed_[0-9a-f]{8}', first)
+    # A second declaration of the same identity takes the counter suffix,
+    # so two resources never share one address (the output stays valid HCL).
+    second = generator.declare_resource_name('', 'panos_zone')
+    assert second == f'{first}_2'
 
 
 def test_name_ref_never_dangles(generator):
     """A name declared in one scope is unreachable through another scope."""
-    generator.declare_resource_name('svc-x', 'panos_service')
+    local = generator.declare_resource_name('svc-x', 'panos_service')
     # The service scope resolves to a reference...
-    assert generator.name_ref('svc-x', ('panos_service',)).expr == 'panos_service.svc_x.name'
+    assert generator.name_ref('svc-x', ('panos_service',)).expr == f'panos_service.{local}.name'
     # ...the address scopes do not (no phantom resource reference).
     assert generator.name_ref('svc-x', ('panos_address', 'panos_address_group')) == 'svc-x'
 
@@ -171,6 +205,9 @@ def test_declare_same_name_in_two_contexts_gets_unique_names(generator):
     """The same PAN-OS name in two device groups must yield two resources."""
     first = generator.declare_resource_name('default', 'panos_virtual_router', context='DG-A')
     second = generator.declare_resource_name('default', 'panos_virtual_router', context='DG-B')
+    # F2.7: both are the sanitized base plus a digest that differs by context.
+    assert re.fullmatch(r'default_[0-9a-f]{8}', first)
+    assert re.fullmatch(r'default_[0-9a-f]{8}', second)
     assert first != second
     # A reference to the name resolves to the first declared name.
     assert generator.name_ref('default', ('panos_virtual_router',)).expr == (
