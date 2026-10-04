@@ -36,7 +36,7 @@ Target: `PaloAltoNetworks/panos` provider v2 (2.0.14+ per the audit). Track upst
 - [x] **F2.2 Resource mapping** — One table maps old emitted names to real v2 resources. (`resource_mapping.py`; verified against the v2.0.14 schema.)
 - [x] **F2.3 `location` on every resource** — Derive the block from the XML source: `shared`, `device_group`, or `vsys`. (Landed as the defining device group per object, or the default template for network/VPN resources. Per-DG instances and vsys sub-blocks land with F3.1/F3.5.)
 - [x] **F2.4 Rewrite emitters to v2 schemas** — Use the real nested blocks (`protocol{}`, `layer3{}`, `auto_key{}`, `position{}`). Put proxy-id inside `panos_ipsec_tunnel`. Remove hardcoded assumptions (for example `panos_virtual_router.default`, the hardcoded OSPF area). (Landed: every emitted resource uses the v2.0.14 nested attribute shapes; proxy-ids merged into `panos_ipsec_tunnel.auto_key`; report-only types go to `MANUAL_SETUP_REPORT.txt`; sample and kitchen-sink outputs pass `terraform validate`.)
-- [ ] **F2.5 Order-preserving policy** — Emit rules in XML order per (device group, rulebase). Replace the blanket `position { where = "last" }` with order-preserving `position` values.
+- [x] **F2.5 Order-preserving policy** — Emit rules in XML order per (device group, rulebase). Replace the blanket `position { where = "last" }` with order-preserving `position` values. (Landed: per-device-group chains in XML order; first rule anchors at the end of the rulebase, each later rule uses `where = "after"` with `directly = true`, the previous rule as pivot, and a `depends_on` on the previous rule so the apply order is the XML order. Pinned by `tests/test_policy_order.py` plus golden assertions. Same-named rules across device groups still deduplicate by name — F3.1.)
 - [ ] **F2.6 Dependency wiring** — Add `depends_on` or `.name` references where the provider supports them.
 - [ ] **F2.7 Collision-safe naming** — Build the resource name from the sanitized name plus a short hash of the source path. Handle empty and colliding names.
 - [ ] **F2.8 Coverage matrix** — Maintain a provider-resource ↔ Panorama-XML-element matrix. Give each supported row a fixture test.
@@ -69,7 +69,7 @@ Strategy: model the Panorama hierarchy before generation. Key objects by (device
 ## Sequencing
 
 1. **Epic 1 first.** It is the gate. No feature lands without tests.
-2. **F3.1 refines F2.3 and F2.5.** F2.3 landed with the defining device group per object (the keyed model's per-DG instances and vsys sub-blocks land with F3.1). Policy order (F2.5) still needs the keyed model.
+2. **F3.1 refines F2.3 and F2.5.** F2.3 landed with the defining device group per object (the keyed model's per-DG instances and vsys sub-blocks land with F3.1). F2.5 landed per-device-group chains on the name-keyed model; F3.1 removes the name dedup so same-named rules in different device groups both survive inside their chains.
 3. **Epic 2 and Epic 3 overlap.** They share the data model and the fixture corpus.
 4. **F2.8 (coverage matrix) lands last in Epic 2.** It measures the final state.
 

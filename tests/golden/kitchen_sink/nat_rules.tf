@@ -38,8 +38,11 @@ resource "panos_nat_policy_rules" "inbound_web_nat" {
     }
   }
   position = {
-    where = "last"
+    where = "after"
+    directly = true
+    pivot = "Outbound-NAT"
   }
+  depends_on = [ panos_nat_policy_rules.outbound_nat ]
 
   rules = [
 {

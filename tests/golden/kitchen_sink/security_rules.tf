@@ -33,8 +33,11 @@ resource "panos_security_policy_rules" "block_risky_apps" {
     }
   }
   position = {
-    where = "last"
+    where = "after"
+    directly = true
+    pivot = "Allow-Web-Traffic"
   }
+  depends_on = [ panos_security_policy_rules.allow_web_traffic ]
 
   rules = [
 {

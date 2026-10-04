@@ -2644,63 +2644,106 @@ variable "device_group" {
         with open(self.output_dir / 'schedules.tf', 'w') as f:
             f.write(content)
 
-    def generate_security_rules(self, rules: list[dict]):
-        """Generate security policy rules Terraform configuration
+    def _policy_rule_chains(self, rules: list[dict]) -> list[list[dict]]:
+        """Group policy rules into per-device-group chains (F2.5).
 
-        v2: panos_security_policy_rules. Each rule is a rules entry inside a
-        container resource that also carries the required position block.
+        The provider places each rule relative to a pivot rule, so rules
+        must emit as independent chains per device group. XML document
+        order is preserved within a chain; chains appear in first-seen
+        order.
+        """
+        chains: dict[str, list[dict]] = {}
+        for rule in rules:
+            chains.setdefault(rule.get('device_group') or 'Shared', []).append(rule)
+        return list(chains.values())
+
+    def _policy_position_block(self, resource_type: str,
+                              prev_rule_name: Optional[str],
+                              prev_resource_name: Optional[str]) -> str:
+        """Render position (and depends_on) for one rule in a chain (F2.5).
+
+        The first rule of a chain anchors the managed block at the end of
+        the rulebase, the least disruptive choice for a brown-field
+        rulebase. Each later rule is placed directly after the previous
+        rule (the provider requires pivot and directly together when
+        where = "after"). The provider fails when the pivot is missing,
+        so the rule also declares depends_on on the previous rule's
+        resource to fix the apply order to the XML order.
+        """
+        if prev_rule_name is None:
+            return f'  position = {self.hcl_value({"where": "last"})}\n\n'
+        position = {'where': 'after', 'directly': True, 'pivot': prev_rule_name}
+        return (
+            f'  position = {self.hcl_value(position)}\n'
+            f'  depends_on = [ {resource_type}.{prev_resource_name} ]\n\n'
+        )
+
+    def generate_security_rules(self, rules: list[dict]):
+        """Generate security policy rules Terraform configuration (F2.5).
+
+        v2: panos_security_policy_rules. One resource per rule, chained
+        per device group in XML order with order-preserving position
+        values (first rule at the end of the rulebase, each later rule
+        directly after the previous one).
         """
         if not rules:
             return
 
         content = '# Security Policy Rules\n\n'
 
-        for rule in rules:
-            resource_name = self.declare_resource_name(
-                rule['name'], 'panos_security_policy_rules', context=rule.get('device_group') or ''
-            )
+        for chain in self._policy_rule_chains(rules):
+            prev_rule_name: Optional[str] = None
+            prev_resource_name: Optional[str] = None
+            for rule in chain:
+                resource_name = self.declare_resource_name(
+                    rule['name'], 'panos_security_policy_rules', context=rule.get('device_group') or ''
+                )
 
-            content += f'resource "panos_security_policy_rules" "{resource_name}" {{\n'
-            content += self.location_block('panos_security_policy_rules', rule.get('device_group'))
-            # v2 requires a position block (F2.5 refines the where value)
-            # v2 position is a nested object; where is one of first/last/before/after.
-            # F2.5 replaces the blanket "last" with order-preserving positions.
-            content += f'  position = {self.hcl_value({"where": "last"})}\n\n'
+                content += f'resource "panos_security_policy_rules" "{resource_name}" {{\n'
+                content += self.location_block('panos_security_policy_rules', rule.get('device_group'))
+                content += self._policy_position_block(
+                    'panos_security_policy_rules', prev_rule_name, prev_resource_name
+                )
 
-            # v2 rules is a list of objects
-            rule_obj: dict = {'name': rule['name']}
-            if rule.get('description'):
-                rule_obj['description'] = rule['description']
-            if rule.get('source_zones'):
-                rule_obj['source_zones'] = list(rule['source_zones'])
-            if rule.get('source_addresses'):
-                rule_obj['source_addresses'] = list(rule['source_addresses'])
-            if rule.get('destination_zones'):
-                rule_obj['destination_zones'] = list(rule['destination_zones'])
-            if rule.get('destination_addresses'):
-                rule_obj['destination_addresses'] = list(rule['destination_addresses'])
-            if rule.get('applications'):
-                rule_obj['applications'] = list(rule['applications'])
-            if rule.get('services'):
-                rule_obj['services'] = list(rule['services'])
-            rule_obj['action'] = rule.get('action', 'allow')
-            if rule.get('log_start'):
-                rule_obj['log_start'] = True
-            if rule.get('log_end'):
-                rule_obj['log_end'] = True
-            if rule.get('disabled'):
-                rule_obj['disabled'] = True
+                # v2 rules is a list of objects
+                rule_obj: dict = {'name': rule['name']}
+                if rule.get('description'):
+                    rule_obj['description'] = rule['description']
+                if rule.get('source_zones'):
+                    rule_obj['source_zones'] = list(rule['source_zones'])
+                if rule.get('source_addresses'):
+                    rule_obj['source_addresses'] = list(rule['source_addresses'])
+                if rule.get('destination_zones'):
+                    rule_obj['destination_zones'] = list(rule['destination_zones'])
+                if rule.get('destination_addresses'):
+                    rule_obj['destination_addresses'] = list(rule['destination_addresses'])
+                if rule.get('applications'):
+                    rule_obj['applications'] = list(rule['applications'])
+                if rule.get('services'):
+                    rule_obj['services'] = list(rule['services'])
+                rule_obj['action'] = rule.get('action', 'allow')
+                if rule.get('log_start'):
+                    rule_obj['log_start'] = True
+                if rule.get('log_end'):
+                    rule_obj['log_end'] = True
+                if rule.get('disabled'):
+                    rule_obj['disabled'] = True
 
-            content += f'  rules = {self.hcl_value([rule_obj])}\n'
-            content += '}\n\n'
+                content += f'  rules = {self.hcl_value([rule_obj])}\n'
+                content += '}\n\n'
+
+                prev_rule_name = rule['name']
+                prev_resource_name = resource_name
 
         with open(self.output_dir / 'security_rules.tf', 'w') as f:
             f.write(content)
 
     def generate_nat_rules(self, rules: list[dict]):
-        """Generate NAT policy rules Terraform configuration
+        """Generate NAT policy rules Terraform configuration (F2.5).
 
-        v2: panos_nat_policy_rules. Translation is modeled as a
+        v2: panos_nat_policy_rules. One resource per rule, chained per
+        device group in XML order with the same order-preserving position
+        semantics as security rules. Translation is modeled as a
         source_translation block with one of dynamic_ip_and_port, dynamic_ip,
         or static_ip sub-blocks (v2 names use underscores).
         """
@@ -2709,64 +2752,70 @@ variable "device_group" {
 
         content = '# NAT Policy Rules\n\n'
 
-        for rule in rules:
-            resource_name = self.declare_resource_name(
-                rule['name'], 'panos_nat_policy_rules', context=rule.get('device_group') or ''
-            )
+        for chain in self._policy_rule_chains(rules):
+            prev_rule_name: Optional[str] = None
+            prev_resource_name: Optional[str] = None
+            for rule in chain:
+                resource_name = self.declare_resource_name(
+                    rule['name'], 'panos_nat_policy_rules', context=rule.get('device_group') or ''
+                )
 
-            content += f'resource "panos_nat_policy_rules" "{resource_name}" {{\n'
-            content += self.location_block('panos_nat_policy_rules', rule.get('device_group'))
-            # v2 position is a required nested object; where is one of first/last/before/after.
-            # F2.5 replaces the blanket "last" with order-preserving positions.
-            content += f'  position = {self.hcl_value({"where": "last"})}\n\n'
+                content += f'resource "panos_nat_policy_rules" "{resource_name}" {{\n'
+                content += self.location_block('panos_nat_policy_rules', rule.get('device_group'))
+                content += self._policy_position_block(
+                    'panos_nat_policy_rules', prev_rule_name, prev_resource_name
+                )
 
-            # v2 rules is a list of objects
-            rule_obj: dict = {'name': rule['name']}
-            if rule.get('description'):
-                rule_obj['description'] = rule['description']
-            if rule.get('source_zones'):
-                rule_obj['source_zones'] = list(rule['source_zones'])
-            # v2 destination_zone is a list
-            if rule.get('destination_zone'):
-                rule_obj['destination_zone'] = [rule['destination_zone']]
-            if rule.get('source_addresses'):
-                rule_obj['source_addresses'] = list(rule['source_addresses'])
-            if rule.get('destination_addresses'):
-                rule_obj['destination_addresses'] = list(rule['destination_addresses'])
-            if rule.get('service'):
-                rule_obj['service'] = rule['service']
-            if rule.get('disabled'):
-                rule_obj['disabled'] = True
+                # v2 rules is a list of objects
+                rule_obj: dict = {'name': rule['name']}
+                if rule.get('description'):
+                    rule_obj['description'] = rule['description']
+                if rule.get('source_zones'):
+                    rule_obj['source_zones'] = list(rule['source_zones'])
+                # v2 destination_zone is a list
+                if rule.get('destination_zone'):
+                    rule_obj['destination_zone'] = [rule['destination_zone']]
+                if rule.get('source_addresses'):
+                    rule_obj['source_addresses'] = list(rule['source_addresses'])
+                if rule.get('destination_addresses'):
+                    rule_obj['destination_addresses'] = list(rule['destination_addresses'])
+                if rule.get('service'):
+                    rule_obj['service'] = rule['service']
+                if rule.get('disabled'):
+                    rule_obj['disabled'] = True
 
-            # Source translation (v2 sub-object names use underscores)
-            st_type = (rule.get('source_translation_type') or '').replace('-', '_')
-            st_addr = rule.get('source_translation_address') or []
-            if st_type in ('dynamic_ip_and_port', 'dynamic_ip', 'static_ip'):
-                # v2 nat_type is the NAT family (ipv4/nat64/nptv6), not the
-                # translation direction; IPv4 is the Panorama default family
-                rule_obj['nat_type'] = 'ipv4'
-                if st_type == 'dynamic_ip_and_port' and st_addr:
-                    # The translation address is the egress interface
-                    rule_obj['source_translation'] = {
-                        st_type: {'interface_address': {'interface': st_addr[0]}}}
-                elif st_type == 'dynamic_ip' and st_addr:
-                    rule_obj['source_translation'] = {
-                        st_type: {'translated_address': list(st_addr)}}
-                elif st_type == 'static_ip' and st_addr:
-                    # static_ip takes a single translated address
-                    rule_obj['source_translation'] = {
-                        st_type: {'translated_address': st_addr[0]}}
+                # Source translation (v2 sub-object names use underscores)
+                st_type = (rule.get('source_translation_type') or '').replace('-', '_')
+                st_addr = rule.get('source_translation_address') or []
+                if st_type in ('dynamic_ip_and_port', 'dynamic_ip', 'static_ip'):
+                    # v2 nat_type is the NAT family (ipv4/nat64/nptv6), not the
+                    # translation direction; IPv4 is the Panorama default family
+                    rule_obj['nat_type'] = 'ipv4'
+                    if st_type == 'dynamic_ip_and_port' and st_addr:
+                        # The translation address is the egress interface
+                        rule_obj['source_translation'] = {
+                            st_type: {'interface_address': {'interface': st_addr[0]}}}
+                    elif st_type == 'dynamic_ip' and st_addr:
+                        rule_obj['source_translation'] = {
+                            st_type: {'translated_address': list(st_addr)}}
+                    elif st_type == 'static_ip' and st_addr:
+                        # static_ip takes a single translated address
+                        rule_obj['source_translation'] = {
+                            st_type: {'translated_address': st_addr[0]}}
 
-            # Destination translation (the direction is implied by which
-            # translation object is present, not by nat_type)
-            if rule.get('destination_translation_address'):
-                dst: dict = {'translated_address': rule['destination_translation_address']}
-                if rule.get('destination_translation_port'):
-                    dst['translated_port'] = int(rule['destination_translation_port'])
-                rule_obj['destination_translation'] = dst
+                # Destination translation (the direction is implied by which
+                # translation object is present, not by nat_type)
+                if rule.get('destination_translation_address'):
+                    dst: dict = {'translated_address': rule['destination_translation_address']}
+                    if rule.get('destination_translation_port'):
+                        dst['translated_port'] = int(rule['destination_translation_port'])
+                    rule_obj['destination_translation'] = dst
 
-            content += f'  rules = {self.hcl_value([rule_obj])}\n'
-            content += '}\n\n'
+                content += f'  rules = {self.hcl_value([rule_obj])}\n'
+                content += '}\n\n'
+
+                prev_rule_name = rule['name']
+                prev_resource_name = resource_name
 
         with open(self.output_dir / 'nat_rules.tf', 'w') as f:
             f.write(content)

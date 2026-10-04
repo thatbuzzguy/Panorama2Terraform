@@ -1,11 +1,47 @@
 # Agent Status
 
 ## Current position
-Epic 2 (complete provider-v2 support). F2.1–F2.4 complete. Next: **F2.5 Order-preserving policy** (replace the blanket `position { where = "last" }` with order-preserving `position` values).
+Epic 2 (complete provider-v2 support). F2.1–F2.5 complete. Next: **F2.6 Dependency wiring** (add `depends_on` or `.name` references where the provider supports them).
 
 ## Session log
 
-### F2.4 — Rewrite emitters to the v2 schemas (this session)
+### F2.5 — Order-preserving policy (this session)
+- Design (verified against provider v2.0.14 source and schema):
+  `position.where` must be first/last/before/after; `after`/`before`
+  require BOTH `pivot` (an existing rule name) and `directly` (bool),
+  and the move fails when the pivot is missing. So a rule that pivots on
+  a rule created in the same apply must also `depends_on` it.
+- Keep the F2.4 one-resource-per-rule structure. Rules group into
+  per-device-group chains in first-seen DG order, XML order within a
+  chain (`_policy_rule_chains`). First rule of a chain: `position =
+  { where = "last" }` (anchor: the managed block appends to the end of
+  the rulebase, least disruptive for brown-field rulebases). Rule i > 1:
+  `position = { where = "after", directly = true, pivot = <previous XML
+  name> }` plus `depends_on = [<type>.<previous local name>]`
+  (`_policy_position_block`). Same semantics for security and NAT rules.
+- New fixture `tests/fixtures/policy_order.xml` (3 DGs: 3+2+1 security
+  rules, 2 NAT rules) and `tests/test_policy_order.py` (8 tests):
+  per-DG XML order, anchor semantics, after/directly/pivot chaining,
+  exact depends_on, no cross-DG pivots or dependencies, NAT parity,
+  and the same chain contract asserted on all four committed golden
+  rule files.
+- Goldens regenerated: only the four rule files changed (sample
+  security 3-rule chain, sample nat 2-rule chain, kitchen-sink
+  security 2-rule chain, kitchen-sink nat 2-rule chain). All other
+  goldens byte-identical.
+- Docs: README policy line corrected to the per-rule chain design;
+  to-do/PLAN mark F2.5 complete; backlog notes the pre/post/shared
+  rulebase tracking gap (F3.1) and the unused `context` argument of
+  `declare_resource_name` (F2.7/F3.1).
+- Known limit (F3.1 territory): rules still deduplicate by name across
+  device groups (pinned xfail), so a same-named rule in a second DG is
+  dropped rather than chained in its own DG. The chain logic already
+  groups by the parser-recorded device group, so F3.1 only needs to
+  stop the dedup.
+- Gate: ruff clean. pytest 184 passed, 1 xfailed (the F3.1 item).
+  terraform validate green on both sample and kitchen-sink output.
+
+### F2.4 — Rewrite emitters to the v2 schemas (previous session)
 - Every emitter now uses the v2.0.14 nested-attribute shapes (verified
   against `/tmp/schema_2014.json`): `protocol { tcp = {} }`,
   `layer3 { ipv4 = { ip_address = [...] } }`, `auto_key { ike_gateway,
