@@ -1,29 +1,38 @@
-# To-Do — Epic 2: Complete Support of the Latest Provider (Goal 2)
+# To-Do — F4.1: Post-Run Sanity Gate (current task)
 
-Goal 2: `terraform validate` passes on all fixture configs. Resource coverage is tracked by test.
+Goal 4: the conversion is fully traceable and verified. F4.1 makes the
+output side true: every run verifies the `.tf` files it wrote, instead of
+leaving verification to the test suite alone.
 
-Epic 1 is complete. F2.1–F2.7 have landed; both committed goldens pass
-`terraform validate` against v2.0.14, and the F1.4/F1.5 conformance and
-validate xfails are removed.
+Acceptance criteria are in `acceptance.md`.
 
-## Tasks
+## Task
 
-- [x] **F2.1 Provider baseline** — Generate a `provider.tf` pinned to the v2 range. Record the supported range. (COMPLETED — pin raised to `~> 2.0.14`, the latest 2.x release and the version the gates verify; goldens regenerated, only `provider.tf` changed; README support line updated)
-- [x] **F2.2 Resource mapping** — One table maps old emitted names to real v2 resources. (COMPLETED — `resource_mapping.py` is the single source of truth; verified against v2.0.14; `docs/RESOURCE_MAPPING.md` records the rationale)
-- [x] **F2.3 `location` on every resource** — Derive the block from the XML source: `shared`, `device_group`, or `vsys`. (COMPLETED — parser tracks the defining device group; every emitted block carries `location { device_group { ... } }` or `location { template { ... } }` per the v2.0.14 schema; goldens regenerated. vsys-scoped location sub-blocks stay with F3.1)
-- [x] **F2.4 Rewrite emitters to v2 schemas** — Use the real nested blocks (`protocol{}`, `layer3{}`, `auto_key{}`, `position{}`). Put proxy-id inside `panos_ipsec_tunnel`. Remove hardcoded assumptions (for example `panos_virtual_router.default`, the hardcoded OSPF area). (COMPLETED — all emitters use the v2.0.14 nested attribute shapes; proxy-ids merged into `panos_ipsec_tunnel.auto_key`; report-only types go to `MANUAL_SETUP_REPORT.txt`; sample and kitchen-sink outputs pass `terraform validate`; Python 3.9-compatible syntax restored)
-- [x] **F2.6 Dependency wiring** — Add `depends_on` or `.name` references where the provider supports them. (COMPLETED — `name_ref` resolves a PAN-OS name to a `.name` reference only when the target is declared in the same run; unwired sites stay plain brown-field strings; interfaces emit before zones and virtual routers so lists resolve; goldens regenerated; `tests/test_dependency_wiring.py` pins the behavior including a no-dangling-reference invariant and a terraform validate gate)
-- [x] **F2.7 Collision-safe naming** — Build the resource name from the sanitized name plus a short hash of the source path. Handle empty and colliding names. (COMPLETED — `declare_resource_name` now assigns `sanitized name + 8-hex sha256 digest of (scope, context, name)`; the digest makes names deterministic and distinct across device groups, empty names get a stable `unnamed_<digest>` form, and a taken-address counter keeps the output valid HCL; goldens regenerated; `tests/test_robustness.py` and `tests/test_dependency_wiring.py` pin the scheme)
-- [ ] **F2.8 Coverage matrix** — Maintain a provider-resource ↔ Panorama-XML-element matrix. Give each supported row a fixture test.
-- [ ] **F2.9 Real resources or explicit reports** — Replace comment-only generators (decryption, PBF, app-override, QoS, log-settings) with real v2 resources or an explicit "manual setup" checklist.
-- [ ] **F2.10 Clean generated config** — Remove dead variables. Every emitted variable is consumed.
-- [ ] **F2.11 Verified claims** — README coverage claims reference F1.4 and F1.5 test evidence. Remove unverified "success rate" claims.
+- [ ] **F4.1 Post-run sanity gate**
+  - [ ] `--validate` CLI flag: after generation, run `terraform init -backend=false -input=false` then `terraform validate` in the output directory. Flag set but binary missing: clear error, non-zero exit (an explicit request is never silently skipped).
+  - [ ] Static check module (pure Python, runs at the end of every conversion):
+    - no dangling references: every `panos_<type>.<local>` reference in the output resolves to a declared resource address,
+    - every resource block carries a `location` block (v2 hard requirement),
+    - every emitted resource type is in `EMITTED_TYPES` (`resource_mapping.py`),
+    - every variable declared in `variables.tf` is consumed (the F2.10 check),
+    - no raw C0 control characters or DEL in any `.tf` file,
+    - expected placeholders (VPN pre-shared keys) are WARN with a pointer to `VPN_MIGRATION_REPORT.txt`; unexpected placeholder tokens are FAIL.
+  - [ ] `SANITY_REPORT.txt` with PASS / WARN / FAIL sections, written even on failure; console summary; non-zero exit on any FAIL (after all output files and the report are written).
+  - [ ] Tests: kitchen-sink output passes all checks (VPN placeholder WARNs); negative fixtures are caught — dangling reference, missing `location`, undeclared type, dead variable — each with the offending file and line in the report; determinism (two runs byte-identical) pinned as a test-side invariant.
+  - [ ] Docs: README documents the flag and the report; `agent-status.md` updated; commit.
+
+## Deferred (tracked in PLAN.md)
+
+- **Epic 2:** F2.9 (real resources or explicit reports), F2.10 (one-time dead-variable cleanup; its permanent check lands in F4.1), F2.11 (verified claims).
+- **Epic 3:** F3.1 (keyed data model) first, then F3.2–F3.10.
+- **Epic 4:** F4.2 (container table + line tracking; may land during Epic 3), F4.3 (per-entry `CONVERSION_REPORT.txt`; after F3.1), F4.4 (property-level matrix, absorbs F2.8; after F3.1, last in Epic 4).
 
 ## Notes
 
-- The provider schema JSON (`terraform providers schema -json`) is the single
-  source of truth for resource names and attributes.
-- F2.8 lands last in Epic 2; it measures the final state.
-- F3.1 (keyed data model) refines F2.3 (per-DG instances, vsys sub-blocks).
-  F3.1 also removes the name-keyed rule deduplication, so same-named rules
-  in different device groups both survive (the F2.5 chains then cover them).
+- The static no-dangling-reference rule already exists as a test in
+  `tests/test_dependency_wiring.py`; F4.1 shares that rule with the
+  runtime check instead of copying it.
+- The coverage report (F4.3/F4.4) keys on logical entries
+  (`<entry name>` plus its properties), not physical lines; the reported
+  line number is the entry's opening tag. Decision recorded in
+  `backlog.md`.

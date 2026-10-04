@@ -1,11 +1,19 @@
 # Agent Status
 
 ## Current position
-Epic 2 (complete provider-v2 support). F2.1–F2.7 complete. Next: **F2.8 Coverage matrix** (provider-resource ↔ Panorama-XML-element matrix; every supported row gets a fixture test).
+Roadmap now carries Epic 4 (full traceability and verification). Next: **F4.1 Post-run sanity gate** — acceptance criteria written in `acceptance.md`, task breakdown in `to-do.md`. F4.2 may land during Epic 3; F4.3/F4.4 land after F3.1.
 
 ## Session log
 
-### F2.7 — Collision-safe naming (this session)
+### Roadmap — Epic 4 planning (this session)
+- Added Goal 4 and Epic 4 to `PLAN.md`: F4.1 post-run sanity gate (`--validate` flag, static check module, `SANITY_REPORT.txt`, non-zero exit on FAIL), F4.2 container table + line-tracking `TreeBuilder`, F4.3 per-entry `CONVERSION_REPORT.txt` with consumed-entry marks, F4.4 property-level matrix.
+- **F2.8 moved out of Epic 2 into Epic 4 as F4.4.** Rationale: the matrix becomes a live coverage structure with a permanent maintenance duty (not an end-of-Epic-2 measurement), and it must key on the F3.1 keyed data model, so it lands after F3.1.
+- F2.10 stays in Epic 2 as the one-time dead-variable cleanup; its permanent check (every variable consumed) lands in F4.1.
+- Sequencing: F4.1 is next (independent of the parser). F4.2 may land during Epic 3. F4.3/F4.4 after F3.1.
+- Design decisions recorded in `backlog.md`: reports key on logical entries (line = opening tag), the matrix is a permanent duty with a drift-detecting test, and the known extraction gaps get fixed when the report confirms them.
+- `acceptance.md` rewritten for F4.1; `to-do.md` now tracks F4.1 with its sub-tasks and a deferred list for Epics 2–4.
+
+### F2.7 — Collision-safe naming (previous session)
 - Design: the local name is the sanitized PAN-OS name plus an 8-hex
   sha256 digest of the object's source identity — the path of the entry
   in the export: resource type (scope), defining device group or

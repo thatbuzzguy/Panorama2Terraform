@@ -1,67 +1,62 @@
-# Acceptance Criteria — F2.7: Collision-safe naming
+# Acceptance Criteria — F4.1: Post-Run Sanity Gate
 
 ## Goal
-Local Terraform resource names must be deterministic (independent of
-emission order) and collision-safe. Today the first declaration of a
-sanitized base name keeps it and later colliding declarations get
-order-dependent counters (`a_b`, `a_b_2`, `a_b_3`): the same input in a
-different order produces different names, and a reference site cannot
-recompute the name. F2.7 builds every local name from the sanitized
-name plus a short hash of the object's source identity.
+Every conversion run verifies the Terraform it writes. Today the
+strongest checks (`terraform init`/`validate`, no dangling references,
+`location` on every resource) exist only as pytest gates; the CLI flow
+writes files and exits 0 even if the output is broken or inconsistent.
+F4.1 moves verification into the product: a `--validate` flag for the
+terraform gate, a static check module that runs on every conversion, and
+a `SANITY_REPORT.txt` the user can read.
 
 ## Design
 
-`TerraformGenerator.declare_resource_name(name, scope, context)`:
-
-- `base = sanitize_name(name)` or `unnamed` for an empty name.
-- `digest = sha256(f'{scope}|{context}|{name}').hexdigest()[:8]`.
-  The digest is a short hash of the object's source identity — its path
-  in the export: the resource type, the device group or template that
-  defines it, and the PAN-OS name (case-sensitive; it must be the raw
-  name, not the sanitized one, so `a-b` and `a_b` differ).
-- Local name = `base_digest`; if that address is already taken in the
-  scope (a true duplicate declaration or a digest collision), append
-  `_2`, `_3`, ... so the output is always valid HCL.
-- `name_ref` is unchanged: `(scope, name)` registry, first declaration
-  wins, plain string for undeclared names. Context-aware resolution is
-  F3.1.
+- **CLI:** `--validate` flag. When set, run `terraform init -backend=false
+  -input=false` then `terraform validate` in the output directory after
+  generation. Flag set but binary absent: clear error, non-zero exit —
+  an explicit request is never silently skipped.
+- **Static checks** (pure Python, always run at the end of `main()`, no
+  terraform required):
+  1. No dangling references: every `panos_<type>.<local>` reference in
+     any `.tf` resolves to a declared resource address.
+  2. `location` present: every resource block carries a `location` block
+     (a v2 hard requirement).
+  3. Known types only: every emitted resource type is in
+     `EMITTED_TYPES` (`resource_mapping.py`).
+  4. Variables consumed: every variable declared in `variables.tf` is
+     referenced somewhere in the output (the F2.10 check).
+  5. Clean strings: no raw C0 control characters or DEL in any `.tf`
+     (defense in depth over `escape_string`).
+  6. Placeholders: expected placeholders (VPN pre-shared keys) are WARN
+     with a pointer to `VPN_MIGRATION_REPORT.txt`; unexpected
+     placeholder tokens are FAIL.
+- **Report:** `SANITY_REPORT.txt` with a PASS / WARN / FAIL section per
+  check, written even on failure; a console summary; non-zero exit on
+  any FAIL (after all output files and the report are written).
+- **Determinism** (two runs, byte-identical output) is a test-side
+  invariant, not a CLI cost.
 
 ## Definition of Done
 
-1. **Deterministic names.**
-   The local name of an object depends only on its identity, not on
-   emission order or run count: declaring the same objects in different
-   orders assigns each the same name. A duplicate declaration of the same
-   identity gets the counter suffix, so the output stays valid HCL.
-2. **Colliding names.**
-   `a-b`, `a_b`, `A-B` in one scope yield three distinct names, each
-   matching `^a_b_[0-9a-f]{8}$`. The same PAN-OS name in two contexts
-   (for example two device groups) yields two distinct names of the
-   same shape.
-3. **Empty names.**
-   An empty name yields `unnamed_<digest>` — a valid, stable resource
-   name; the counter guard still applies.
-4. **References unchanged.**
-   `name_ref` still returns an `HclRef` for declared names, a plain
-   string for undeclared ones, object scope before group scope, and
-   never a reference to an undeclared resource.
-5. **Tests.**
-   - `tests/test_robustness.py`: collision and same-context tests
-     rewritten to the hashed shape; new tests for order-independence,
-     empty-name stability, and per-raw-name reference resolution.
-   - `tests/test_dependency_wiring.py`: hardcoded local names replaced
-     by lookups on the PAN-OS `name` attribute so the suite does not
-     depend on the naming scheme; the no-dangling-reference invariant
-     and the terraform gate stay.
-6. **Goldens.**
-   `sample` and `kitchen_sink` regenerate; `terraform validate` passes
-   on both.
-7. **Docs.**
-   README gains a short "Resource naming" note; backlog and
-   to-do/PLAN/agent-status entries updated; commit.
+1. `python3 panorama_to_terraform.py tests/fixtures/kitchen_sink.xml
+   --output-dir X --validate` exits 0 and its `SANITY_REPORT.txt` shows
+   every check PASS (the VPN pre-shared-key placeholder WARNs).
+2. Negative cases are caught, each with a test: a dangling reference, a
+   resource without `location`, an undeclared type, a dead variable.
+   Each produces a non-zero exit and a FAIL line in the report naming
+   the offending file and line.
+3. `--validate` without a terraform binary: clear error, non-zero exit.
+   Without the flag: the converter works unchanged and never requires
+   terraform.
+4. The existing gates still pass (`test_terraform_validate.py`,
+   `test_schema_conformance.py`, the no-dangling-reference invariant in
+   `test_dependency_wiring.py`); the new static module reuses the same
+   rules, not copies of them.
+5. Docs: README documents the flag and the report; `agent-status.md`
+   updated; commit.
 
 ## Gate
 
 - `ruff check .` clean
-- `pytest` green (terraform validate gates run when terraform exists)
+- `pytest` green (terraform gates run when the binary exists)
 - `terraform validate` green on the sample and kitchen-sink outputs
