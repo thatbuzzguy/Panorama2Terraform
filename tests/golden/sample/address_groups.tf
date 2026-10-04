@@ -8,7 +8,7 @@ resource "panos_address_group" "web_servers" {
   }
   name = "Web-Servers"
   description = "All web servers"
-  static = ["Web-Server-1"]
+  static = [panos_address.web_server_1.name]
 }
 
 resource "panos_address_group" "database_servers" {
@@ -18,7 +18,7 @@ resource "panos_address_group" "database_servers" {
     }
   }
   name = "Database-Servers"
-  static = ["DB-Server-1"]
+  static = [panos_address.db_server_1.name]
 }
 
 resource "panos_address_group" "public_dns_servers" {
@@ -29,6 +29,6 @@ resource "panos_address_group" "public_dns_servers" {
   }
   name = "Public-DNS-Servers"
   description = "Public DNS servers"
-  static = ["Google-DNS-1", "Google-DNS-2"]
+  static = [panos_address.google_dns_1.name, panos_address.google_dns_2.name]
 }
 

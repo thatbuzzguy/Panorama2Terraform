@@ -8,7 +8,7 @@ resource "panos_address_group" "web_servers" {
   }
   name = "Web-Servers"
   description = "All web servers"
-  static = ["Web-Server-1", "Web-Server-2"]
+  static = [panos_address.web_server_1.name, "Web-Server-2"]
 }
 
 resource "panos_address_group" "dynamic_web" {

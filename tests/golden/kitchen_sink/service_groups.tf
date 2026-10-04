@@ -7,6 +7,6 @@ resource "panos_service_group" "web_services" {
     }
   }
   name = "Web-Services"
-  members = ["service-http", "TCP-8080"]
+  members = ["service-http", panos_service.tcp_8080.name]
 }
 

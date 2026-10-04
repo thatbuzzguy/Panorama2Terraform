@@ -1,11 +1,60 @@
 # Agent Status
 
 ## Current position
-Epic 2 (complete provider-v2 support). F2.1–F2.5 complete. Next: **F2.6 Dependency wiring** (add `depends_on` or `.name` references where the provider supports them).
+Epic 2 (complete provider-v2 support). F2.1–F2.6 complete. Next: **F2.7 Collision-safe naming** (resource name = sanitized name + short hash of the source path).
 
 ## Session log
 
-### F2.5 — Order-preserving policy (this session)
+### F2.6 — Dependency wiring (this session)
+- Rule: emit a `.name` reference only when the target is declared in
+  the same run; names pointing outside the export stay plain
+  brown-field strings. The old `unique_resource_name` violated this:
+  it declared a phantom resource for any referenced name (dangling
+  reference, `terraform validate` failure). Removed; `name_ref(name,
+  scopes, key=None)` replaces it — registry lookup only, plain string
+  fallback, and `HclRef.__str__` returns the raw expression as a
+  defense-in-depth measure.
+- Wired sites: address-group `static`, address `tags`,
+  service-group `members`, security rule zones/addresses/services,
+  NAT rule zones/addresses/service and the dynamic-ip-and-port
+  translation `interface`, zone `layer3` members, virtual-router
+  `interfaces`, subinterface `parent` (both tagged and `.0` auto sites),
+  IKE gateway `ike_crypto_profile` and `local_address.interface`,
+  tunnel `ike_gateway` and `ipsec_crypto_profile`. Not wired: rule
+  `applications` (built-in app names), profile-group members (profiles
+  are report-only), zone-protection and interface-management
+  (F3), `tunnel.interface`, comment-only emitters (decryption, PBF,
+  app-override).
+- Object scope wins over group scope on name collisions (scope tuples
+  are ordered: `panos_address` before `panos_address_group`,
+  `panos_service` before `panos_service_group`). Case-sensitive names
+  keep the brown-field default (kitchen-sink tag "Web" does not match
+  declared tag "web" — golden unchanged, correct).
+- `main()` now emits `generate_ethernet_interfaces` before zones and
+  virtual routers: `name_ref` resolves during emission, so declaration
+  order matters.
+- New fixture `tests/fixtures/dependency_wiring.xml` (collisions
+  `both`/`svc-both`, ghost names, VPN chain + brown-field gateway) and
+  `tests/test_dependency_wiring.py` (10 tests): mixed ref/plain lists
+  per site, collision precedence, brown-field fallback, the
+  no-phantom-gateway regression (exactly one `panos_ike_gateway`
+  declared), a no-dangling-reference invariant scan over the whole
+  output, and a terraform init+validate gate on that output.
+- `tests/test_robustness.py`: collision test migrated to
+  `declare_resource_name` + `name_ref`; new `test_name_ref_never_dangles`
+  (a name declared in one scope is not reachable through another).
+- Goldens regenerated: 10 .tf files changed, all within the wired
+  emitters (sample: address_groups, service_groups, security_rules,
+  nat_rules; kitchen-sink: address_groups, service_groups,
+  security_rules, zones, virtual_routers, interfaces). VPN goldens
+  unchanged (their refs were already wired).
+- Docs: README gains a "Dependency wiring" section; backlog
+  `unique_resource_name` notes updated to `name_ref`.
+- Gate: ruff clean. pytest 195 passed, 1 xfailed (the F3.1 item).
+  terraform validate green on sample, kitchen-sink, and the new
+  dependency-wiring output.
+
+### F2.5 — Order-preserving policy (previous session)
 - Design (verified against provider v2.0.14 source and schema):
   `position.where` must be first/last/before/after; `after`/`before`
   require BOTH `pivot` (an existing rule name) and `directly` (bool),

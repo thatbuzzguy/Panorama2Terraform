@@ -21,7 +21,7 @@ resource "panos_ethernet_layer3_subinterface" "ethernet1_1_0" {
     }
   }
   name = "ethernet1/1.0"
-  parent = "ethernet1/1"
+  parent = panos_ethernet_interface.ethernet1_1.name
   tag = 0
 }
 

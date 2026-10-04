@@ -2114,6 +2114,24 @@ class HclRef:
     def __init__(self, expr: str):
         self.expr = expr
 
+    def __str__(self) -> str:
+        # A reference leaked into an f-string still renders as valid HCL.
+        return self.expr
+
+
+# F2.6: resource types a .name reference may target, in lookup order.
+# Object scopes come before group scopes so a name shared by both
+# resolves to the object (PAN-OS policy-reference semantics).
+ADDR_SCOPES = ('panos_address', 'panos_address_group')
+SERVICE_SCOPES = ('panos_service', 'panos_service_group')
+ZONE_SCOPES = ('panos_zone',)
+INTERFACE_SCOPES = ('panos_ethernet_interface', 'panos_ethernet_layer3_subinterface')
+ETH_IFACE_SCOPES = ('panos_ethernet_interface',)
+TAG_SCOPES = ('panos_administrative_tag',)
+IKE_CRYPTO_SCOPES = ('panos_ike_crypto_profile',)
+IPSEC_CRYPTO_SCOPES = ('panos_ipsec_crypto_profile',)
+IKE_GATEWAY_SCOPES = ('panos_ike_gateway',)
+
 
 class TerraformGenerator:
     """Generate Terraform configuration files from Panorama data"""
@@ -2161,18 +2179,24 @@ class TerraformGenerator:
         self._name_registry.setdefault((scope, name), candidate)
         return candidate
 
-    def unique_resource_name(self, name: str, scope: str) -> str:
-        """Resolve the Terraform name a reference site must use.
+    def name_ref(self, name: str, scopes, key: Optional[str] = None):
+        """Resolve a PAN-OS name to a Terraform reference (F2.6).
 
-        Returns the name already assigned to (scope, name) by a declaration
-        when one exists, so a reference that recomputes the same input
-        resolves to the same resource. Falls back to a fresh declaration
-        when the referenced object was never declared in this run.
+        Returns an HclRef of '<scope>.<local>.name' when the object is
+        declared in this run, else the plain name. Names that point at
+        objects outside the export (built-ins, other tenants) stay plain
+        brown-field strings, so this never creates a reference to an
+        undeclared resource. `scopes` is tried in order so an object wins
+        over a group when both carry the same name. `key` is the registry
+        key when it differs from the PAN-OS name (VPN composite keys such
+        as 'ike_gw_<name>').
         """
-        key = (scope, name)
-        if key in self._name_registry:
-            return self._name_registry[key]
-        return self.declare_resource_name(name, scope)
+        lookup = key if key is not None else name
+        for scope in scopes:
+            local = self._name_registry.get((scope, lookup))
+            if local is not None:
+                return HclRef(f'{scope}.{local}.name')
+        return name
 
     def escape_string(self, value: str) -> str:
         """Escape strings for Terraform"""
@@ -2353,7 +2377,10 @@ variable "device_group" {
                 content += f'  {attr} = {self.escape_string(value)}\n'
 
             if addr.get('tags'):
-                tags_str = ', '.join([self.escape_string(tag) for tag in addr['tags']])
+                # F2.6: tags declared in this run become references
+                tags_str = ', '.join([
+                    self.hcl_value(self.name_ref(t, TAG_SCOPES), '') for t in addr['tags']
+                ])
                 content += f'  tags = [{tags_str}]\n'
 
             content += '}\n\n'
@@ -2402,7 +2429,10 @@ variable "device_group" {
                 content += f'  description = {self.escape_string(grp["description"])}\n'
 
             if static_members:
-                members_str = ', '.join([self.escape_string(m) for m in static_members])
+                # F2.6: members declared in this run become references
+                members_str = ', '.join([
+                    self.hcl_value(self.name_ref(m, ADDR_SCOPES), '') for m in static_members
+                ])
                 content += f'  static = [{members_str}]\n'
 
             # v2 dynamic groups: the filter expression lives in dynamic.dynamic
@@ -2473,7 +2503,10 @@ variable "device_group" {
             content += f'  name = {self.escape_string(grp["name"])}\n'
 
             if grp.get('members'):
-                members_str = ', '.join([self.escape_string(m) for m in grp['members']])
+                # F2.6: members declared in this run become references
+                members_str = ', '.join([
+                    self.hcl_value(self.name_ref(m, SERVICE_SCOPES), '') for m in grp['members']
+                ])
                 content += f'  members = [{members_str}]\n'
 
             content += '}\n\n'
@@ -2709,18 +2742,22 @@ variable "device_group" {
                 rule_obj: dict = {'name': rule['name']}
                 if rule.get('description'):
                     rule_obj['description'] = rule['description']
+                # F2.6: zones, addresses and services declared in this run
+                # become references; the rest stay brown-field strings
                 if rule.get('source_zones'):
-                    rule_obj['source_zones'] = list(rule['source_zones'])
+                    rule_obj['source_zones'] = [self.name_ref(z, ZONE_SCOPES) for z in rule['source_zones']]
                 if rule.get('source_addresses'):
-                    rule_obj['source_addresses'] = list(rule['source_addresses'])
+                    rule_obj['source_addresses'] = [self.name_ref(a, ADDR_SCOPES) for a in rule['source_addresses']]
                 if rule.get('destination_zones'):
-                    rule_obj['destination_zones'] = list(rule['destination_zones'])
+                    rule_obj['destination_zones'] = [self.name_ref(z, ZONE_SCOPES) for z in rule['destination_zones']]
                 if rule.get('destination_addresses'):
-                    rule_obj['destination_addresses'] = list(rule['destination_addresses'])
+                    rule_obj['destination_addresses'] = [
+                        self.name_ref(a, ADDR_SCOPES) for a in rule['destination_addresses']]
                 if rule.get('applications'):
+                    # Built-in PAN-OS app names: no managed scope, never wired
                     rule_obj['applications'] = list(rule['applications'])
                 if rule.get('services'):
-                    rule_obj['services'] = list(rule['services'])
+                    rule_obj['services'] = [self.name_ref(s, SERVICE_SCOPES) for s in rule['services']]
                 rule_obj['action'] = rule.get('action', 'allow')
                 if rule.get('log_start'):
                     rule_obj['log_start'] = True
@@ -2770,17 +2807,20 @@ variable "device_group" {
                 rule_obj: dict = {'name': rule['name']}
                 if rule.get('description'):
                     rule_obj['description'] = rule['description']
+                # F2.6: zones, addresses and services declared in this run
+                # become references; the rest stay brown-field strings
                 if rule.get('source_zones'):
-                    rule_obj['source_zones'] = list(rule['source_zones'])
+                    rule_obj['source_zones'] = [self.name_ref(z, ZONE_SCOPES) for z in rule['source_zones']]
                 # v2 destination_zone is a list
                 if rule.get('destination_zone'):
-                    rule_obj['destination_zone'] = [rule['destination_zone']]
+                    rule_obj['destination_zone'] = [self.name_ref(rule['destination_zone'], ZONE_SCOPES)]
                 if rule.get('source_addresses'):
-                    rule_obj['source_addresses'] = list(rule['source_addresses'])
+                    rule_obj['source_addresses'] = [self.name_ref(a, ADDR_SCOPES) for a in rule['source_addresses']]
                 if rule.get('destination_addresses'):
-                    rule_obj['destination_addresses'] = list(rule['destination_addresses'])
+                    rule_obj['destination_addresses'] = [
+                        self.name_ref(a, ADDR_SCOPES) for a in rule['destination_addresses']]
                 if rule.get('service'):
-                    rule_obj['service'] = rule['service']
+                    rule_obj['service'] = self.name_ref(rule['service'], SERVICE_SCOPES)
                 if rule.get('disabled'):
                     rule_obj['disabled'] = True
 
@@ -2793,8 +2833,10 @@ variable "device_group" {
                     rule_obj['nat_type'] = 'ipv4'
                     if st_type == 'dynamic_ip_and_port' and st_addr:
                         # The translation address is the egress interface
+                        # (F2.6: reference when declared in this run)
                         rule_obj['source_translation'] = {
-                            st_type: {'interface_address': {'interface': st_addr[0]}}}
+                            st_type: {'interface_address': {
+                                'interface': self.name_ref(st_addr[0], INTERFACE_SCOPES)}}}
                     elif st_type == 'dynamic_ip' and st_addr:
                         rule_obj['source_translation'] = {
                             st_type: {'translated_address': list(st_addr)}}
@@ -2982,7 +3024,8 @@ variable "device_group" {
             key = 'layer2' if ztype == 'layer2' else 'layer3'
             network: dict = {}
             if zone.get('interfaces'):
-                network[key] = list(zone['interfaces'])
+                # F2.6: interfaces declared in this run become references
+                network[key] = [self.name_ref(i, INTERFACE_SCOPES) for i in zone['interfaces']]
             if zone.get('zone_protection_profile'):
                 network['zone_protection_profile'] = zone['zone_protection_profile']
             if network:
@@ -3027,7 +3070,10 @@ variable "device_group" {
 
             # v2 interfaces is a flat string list
             if router.get('interfaces'):
-                ifaces_str = ', '.join([self.escape_string(i) for i in router['interfaces']])
+                # F2.6: interfaces declared in this run become references
+                ifaces_str = ', '.join([
+                    self.hcl_value(self.name_ref(i, INTERFACE_SCOPES), '') for i in router['interfaces']
+                ])
                 content += f'  interfaces = [{ifaces_str}]\n'
 
             content += '}\n\n'
@@ -3104,7 +3150,9 @@ variable "device_group" {
                 content += f'resource "panos_ethernet_layer3_subinterface" "{resource_name}" {{\n'
                 content += self.location_block('panos_ethernet_layer3_subinterface', template=iface.get('template'))
                 content += f'  name = {self.escape_string(name)}\n'
-                content += f'  parent = {self.escape_string(parent)}\n'
+                # F2.6: the parent is an interface declared in this run
+                # (or a brown-field interface outside the export)
+                content += f"  parent = {self.hcl_value(self.name_ref(parent, ETH_IFACE_SCOPES), '')}\n"
                 if tag_str.isdigit():
                     content += f'  tag = {int(tag_str)}\n'
                 if iface.get('management_profile'):
@@ -3151,7 +3199,8 @@ variable "device_group" {
                 content += f'resource "panos_ethernet_layer3_subinterface" "{sub_resource}" {{\n'
                 content += self.location_block('panos_ethernet_layer3_subinterface', template=iface.get('template'))
                 content += f'  name = {self.escape_string(sub_name)}\n'
-                content += f'  parent = {self.escape_string(name)}\n'
+                # F2.6: the parent is the physical interface declared above
+                content += f"  parent = {self.hcl_value(self.name_ref(name, ETH_IFACE_SCOPES), '')}\n"
                 content += '  tag = 0\n'
                 self._emit_subinterface_ip(content, iface)
                 content += '}\n\n'
@@ -3554,9 +3603,9 @@ variable "device_group" {
                     ver_obj: dict = {}
                     if gw.get('ike_crypto_profile'):
                         ike_key = f"ike_profile_{gw['ike_crypto_profile']}"
-                        profile_ref = self.unique_resource_name(ike_key, 'panos_ike_crypto_profile')
-                        # Raw HCL reference: must stay unquoted
-                        ver_obj['ike_crypto_profile'] = HclRef(f'panos_ike_crypto_profile.{profile_ref}.name')
+                        # F2.6: reference when declared in this run, else plain name
+                        ver_obj['ike_crypto_profile'] = self.name_ref(
+                            gw['ike_crypto_profile'], IKE_CRYPTO_SCOPES, key=ike_key)
                     if ver_obj:
                         proto_obj[version] = ver_obj
                     content += f'  protocol = {self.hcl_value(proto_obj)}\n'
@@ -3567,12 +3616,15 @@ variable "device_group" {
                     content += f'  peer_address = {self.hcl_value({key: gw["peer_address"]})}\n'
 
                 if gw.get('local_address_interface'):
-                    content += f'  local_address = {self.hcl_value({"interface": gw["local_address_interface"]})}\n'
+                    # F2.6: reference when the interface is in this run
+                    iface_ref = self.name_ref(gw['local_address_interface'], INTERFACE_SCOPES)
+                    content += f'  local_address = {self.hcl_value({"interface": iface_ref})}\n'
                 elif gw.get('local_address'):
                     # Heuristic: dotted-quad values are IPs, otherwise interfaces
                     local = gw['local_address']
                     key = 'ip' if self._looks_like_ip(local) else 'interface'
-                    content += f'  local_address = {self.hcl_value({key: local})}\n'
+                    value = self.name_ref(local, INTERFACE_SCOPES) if key == 'interface' else local
+                    content += f'  local_address = {self.hcl_value({key: value})}\n'
 
                 # v2 authentication object; pre-shared key only (cert auth is manual)
                 auth_type = gw.get('auth_type', 'pre-shared-key')
@@ -3609,13 +3661,16 @@ variable "device_group" {
                 # v2 auto_key object; ike_gateway and proxy_id are lists of objects
                 auto_key: dict = {}
                 if tunnel.get('ike_gateway'):
-                    gw_ref = self.unique_resource_name(f"ike_gw_{tunnel['ike_gateway']}", 'panos_ike_gateway')
-                    # Raw HCL reference: must stay unquoted
-                    auto_key['ike_gateway'] = [{'name': HclRef(f'panos_ike_gateway.{gw_ref}.name')}]
+                    # F2.6: reference when the gateway is in this run,
+                    # else a plain brown-field name (never a phantom resource)
+                    auto_key['ike_gateway'] = [{'name': self.name_ref(
+                        tunnel['ike_gateway'], IKE_GATEWAY_SCOPES,
+                        key=f"ike_gw_{tunnel['ike_gateway']}")}]
                 if tunnel.get('ipsec_crypto_profile'):
                     ipsec_key = f"ipsec_profile_{tunnel['ipsec_crypto_profile']}"
-                    profile_ref = self.unique_resource_name(ipsec_key, 'panos_ipsec_crypto_profile')
-                    auto_key['ipsec_crypto_profile'] = HclRef(f'panos_ipsec_crypto_profile.{profile_ref}.name')
+                    # F2.6: reference when declared in this run, else plain name
+                    auto_key['ipsec_crypto_profile'] = self.name_ref(
+                        tunnel['ipsec_crypto_profile'], IPSEC_CRYPTO_SCOPES, key=ipsec_key)
 
                 # v2 merges proxy IDs into the tunnel as auto_key proxy_id entries
                 proxy_list = []
@@ -3987,9 +4042,11 @@ def main():
         tf_gen.generate_service_groups(service_groups)
 
         # Network
+        # F2.6: interfaces emit first so zone/VR/interface .name lookups
+        # resolve to declared resources
+        tf_gen.generate_ethernet_interfaces(interfaces)
         tf_gen.generate_zones(zones)
         tf_gen.generate_virtual_routers(all_routers)  # Handles both virtual & logical routers
-        tf_gen.generate_ethernet_interfaces(interfaces)
 
         # Security Profiles
         tf_gen.generate_security_profiles(security_profiles)

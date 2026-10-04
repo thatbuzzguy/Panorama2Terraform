@@ -15,9 +15,9 @@ resource "panos_security_policy_rules" "allow_web_traffic" {
       name = "Allow-Web-Traffic"
       description = "Allow internal users to access web servers"
       source_zones = [ "Trust" ]
-      source_addresses = [ "Internal-Network" ]
+      source_addresses = [ panos_address.internal_network.name ]
       destination_zones = [ "DMZ" ]
-      destination_addresses = [ "Web-Servers" ]
+      destination_addresses = [ panos_address_group.web_servers.name ]
       applications = [ "web-browsing", "ssl" ]
       services = [ "application-default" ]
       action = "allow"
@@ -44,11 +44,11 @@ resource "panos_security_policy_rules" "allow_db_access" {
       name = "Allow-DB-Access"
       description = "Allow web servers to access database"
       source_zones = [ "DMZ" ]
-      source_addresses = [ "Web-Servers" ]
+      source_addresses = [ panos_address_group.web_servers.name ]
       destination_zones = [ "Trust" ]
-      destination_addresses = [ "Database-Servers" ]
+      destination_addresses = [ panos_address_group.database_servers.name ]
       applications = [ "mysql" ]
-      services = [ "TCP-3306" ]
+      services = [ panos_service.tcp_3306.name ]
       action = "allow"
       log_end = true
     }

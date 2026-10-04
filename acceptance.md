@@ -1,58 +1,90 @@
-# Acceptance Criteria — F2.5: Order-preserving policy
+# Acceptance Criteria — F2.6: Dependency wiring
 
-## Scope
-Replace the blanket `position = { where = "last" }` on every policy rule
-with order-preserving `position` values. Rules emit in XML order per
-(device group, rulebase). Terraform applies each chain in a defined order.
-Covers `panos_security_policy_rules` and `panos_nat_policy_rules`.
+## Goal
+Terraform must apply objects in an order that satisfies PAN-OS
+references. Every name attribute that points at an object exported by
+this generator must be a Terraform reference (`<resource>.name`) when
+the target is declared in the same output. Names that point at objects
+outside the export (built-ins such as `any` or `service-ftp`, or
+objects not in the export) must stay plain name strings (brown-field).
+The old `unique_resource_name` fallback declared phantom resources and
+emitted references to resources that `terraform validate` rejects; it
+must be gone.
 
-## Provider v2.0.14 semantics (verified from provider source)
-- `position.where` must be one of `first`, `last`, `before`, `after`
-  (provider `ValidateConfig` rejects anything else).
-- `where = "after"` or `"before"` requires BOTH `pivot` (an existing rule
-  name) and `directly` (bool). `directly = true` places the rule
-  immediately after the pivot.
-- If the pivot does not exist on the server, the move fails
-  (`ErrPivotNotInExisting`). So a rule that pivots on a rule created in
-  the same apply must declare a `depends_on` on that rule.
-
-## Design
-- Keep the F2.4 one-resource-per-rule structure.
-- Group rules into chains by the parser-recorded `device_group`,
-  preserving XML document order within each chain. Chains emit in
-  first-seen order.
-- First rule of a chain: `position = { where = "last" }`. This anchors
-  the managed block at the end of the rulebase, the least disruptive
-  choice for a brown-field rulebase (existing rules keep their relative
-  order and evaluation priority).
-- Rule i (i > 1): `position = { where = "after", directly = true,
-  pivot = "<XML name of rule i-1>" }` plus
-  `depends_on = [<type>.<local name of rule i-1 resource>]`.
-- `pivot` uses the Panorama (XML) rule name; `depends_on` uses the
-  generated Terraform local name.
-
-## Tests (new `tests/test_policy_order.py` + fixture `policy_order.xml`)
-- Fixture: three device groups (3 + 2 + 1 security rules, 2 NAT rules in
-  the first group), known XML order.
-- Per-chain rule order in the .tf equals the XML order.
-- First rule of each chain: `where = "last"`, no `pivot`, no
-  `depends_on`.
-- Rule i > 1: `where = "after"`, `directly = true`, `pivot` = previous
-  rule's XML name, `depends_on` = exactly the previous rule's resource.
-- Chains are independent: no `depends_on` crosses device groups.
-- NAT rules follow the same semantics.
-- Single-rule chain (Gamma-DG) has only the anchor position.
-- The same position assertions hold on the committed goldens.
-
-## Goldens and docs
-- Regenerate sample + kitchen-sink goldens (rule files change; other
-  files byte-identical).
-- README policy line corrected to the actual per-rule chain design.
-- `to-do.md`, `PLAN.md`, `agent-status.md` updated; `backlog.md` notes
-  the pre/post/shared rulebase tracking gap.
+## Definition of Done
+1. **Single safe reference resolver.**
+   `TerraformGenerator.name_ref(name, scopes, key=None)` returns an
+   `HclRef` of `scope.<local>.name` when `(scope, key)` was declared in
+   this run, else the plain `name`. Scope order sets precedence
+   (object before group). `key` is the registry key when it differs
+   from the PAN-OS name (VPN composite keys).
+2. **Unsafe fallback removed.**
+   `unique_resource_name` is removed. VPN reference sites use the safe
+   resolver; an undeclared VPN object emits a plain name (brown-field),
+   never a reference to an undeclared resource.
+3. **Wired reference sites** (every name list and name attribute):
+   - Address group `static` -> address, then address group
+   - Address `tags` -> administrative tag
+   - Service group `members` -> service, then service group
+   - Security rule `source_zones` / `destination_zones` -> zone
+   - Security rule `source_addresses` / `destination_addresses` ->
+     address, then address group
+   - Security rule `services` -> service, then service group
+   - NAT rule `source_zones`, `destination_zone`, `source_addresses`,
+     `destination_addresses` -> zone / address scopes
+   - NAT rule `service` -> service, then service group
+   - NAT `interface_address.interface` -> ethernet interface, then
+     layer-3 subinterface
+   - Zone `network` members -> ethernet interface, then layer-3
+     subinterface
+   - Virtual router `interfaces` -> ethernet interface, then layer-3
+     subinterface
+   - Layer-3 subinterface `parent` -> ethernet interface
+   - IKE gateway `local_address.interface` -> ethernet interface, then
+     layer-3 subinterface
+   - IKE gateway `ike_crypto_profile` -> IKE crypto profile
+   - Tunnel `auto_key.ike_gateway` -> IKE gateway
+   - Tunnel `auto_key.ipsec_crypto_profile` -> IPsec crypto profile
+4. **Not wired (intentional).**
+   Rule `applications` (built-in PAN-OS app names, no managed scope),
+   zone protection and interface management profiles (F3 scope, and the
+   profile bodies are comment-only so a reference would dangle),
+   security profile group members (profiles are not emitted as
+   resources), `tunnel_interface`, PBF / decryption / app-override
+   rules (comment-only emitters).
+5. **Emit order.**
+   `main()` emits ethernet interfaces before zones and virtual routers
+   so their `.name` lookups resolve at emission time.
+6. **Tests.**
+   - New `tests/test_dependency_wiring.py` (CLI run + structural
+     regexes, matching the existing suite style) with fixture
+     `tests/fixtures/dependency_wiring.xml`:
+     - mixed managed / unmanaged member lists emit a reference plus a
+       plain string in one list
+     - address / address-group name collision resolves to the address;
+       service / service-group collision resolves to the service
+     - zone membership, virtual router interfaces, subinterface parent,
+       and NAT translation interface are wired
+     - an undeclared tunnel gateway emits a plain name (regression: the
+       old code emitted a reference to an undeclared resource)
+     - invariant: every `<type>.<local>.name` reference emitted
+       anywhere in the generated output resolves to a resource
+       declared in that same output
+   - `tests/test_robustness.py` migrates the two
+     `unique_resource_name` tests to `declare_resource_name` +
+     `name_ref`.
+7. **Goldens.**
+   `sample` and `kitchen_sink` regenerate. Changed files are limited to
+   the wired emitters (group lists, rule lists, zone/VR interface
+   lists, subinterface parent, VPN unchanged). `terraform validate`
+   passes on both.
+8. **Docs.**
+   README "Dependency wiring" note; to-do.md, PLAN.md,
+   agent-status.md updated; backlog notes that mention
+   `unique_resource_name` updated; commit.
 
 ## Gate
-- ruff clean.
-- Full pytest suite green; no new xfails.
-- `terraform validate` green on both generated corpora.
-- Commit with a detailed ASD-STE100 message.
+- `ruff check .` clean
+- `pytest` green (terraform validate gates run when terraform exists)
+- `terraform validate` green on the sample, kitchen-sink, and
+  dependency-wiring generated outputs

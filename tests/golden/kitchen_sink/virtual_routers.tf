@@ -10,7 +10,7 @@ resource "panos_virtual_router" "default" {
     }
   }
   name = "default"
-  interfaces = ["ethernet1/1", "ethernet1/2"]
+  interfaces = [panos_ethernet_interface.ethernet1_1.name, panos_ethernet_interface.ethernet1_2.name]
 }
 
 resource "panos_virtual_router_static_route_ipv4" "default_default_gw" {
@@ -85,7 +85,7 @@ resource "panos_virtual_router" "lr_main" {
     }
   }
   name = "lr-main"
-  interfaces = ["ethernet1/1"]
+  interfaces = [panos_ethernet_interface.ethernet1_1.name]
 }
 
 resource "panos_virtual_router_static_route_ipv4" "lr_main_lr_default" {

@@ -50,6 +50,18 @@ The mapping and rationale are in
 [`resource_mapping.py`](resource_mapping.py) and
 [`docs/RESOURCE_MAPPING.md`](docs/RESOURCE_MAPPING.md).
 
+## Dependency wiring
+
+Name attributes that reference an object exported by the same run are
+emitted as Terraform `.name` references (for example
+`source_addresses = [ panos_address_group.web_servers.name ]`), so
+`terraform apply` orders the resources deterministically. Names that
+point outside the export — built-in PAN-OS names such as `any`,
+`application-default`, or `service-ftp`, or objects in other tenants —
+stay plain strings. The converter never declares a resource just to
+make a reference work, so the output always passes
+`terraform validate`.
+
 ## Report-only configuration
 
 The following have no v2 provider resource. The converter keeps their

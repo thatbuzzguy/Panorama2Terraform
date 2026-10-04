@@ -141,16 +141,30 @@ def test_escape_string_strips_illegal_control_chars(generator):
     assert generator.escape_string('a\x7fb') == '"ab"'
 
 
-def test_unique_resource_name_avoids_collisions(generator):
+def test_declare_resource_name_avoids_collisions(generator):
+    import panorama_to_terraform
     scope = 'panos_address'
-    first = generator.unique_resource_name('a-b', scope)
-    second = generator.unique_resource_name('a_b', scope)
-    third = generator.unique_resource_name('A-B', scope)
+    first = generator.declare_resource_name('a-b', scope)
+    second = generator.declare_resource_name('a_b', scope)
+    third = generator.declare_resource_name('A-B', scope)
     assert (first, second, third) == ('a_b', 'a_b_2', 'a_b_3')
-    # A reference site recomputes the same input and gets the same name.
-    assert generator.unique_resource_name('a_b', scope) == second
+    # A reference site recomputes the same input and resolves to the declared name.
+    ref = generator.name_ref('a_b', (scope,))
+    assert isinstance(ref, panorama_to_terraform.HclRef)
+    assert ref.expr == f'{scope}.{second}.name'
+    # An undeclared name stays a plain brown-field string (never a ref).
+    assert generator.name_ref('ghost', (scope,)) == 'ghost'
     # Collision domains are separate per resource type.
-    assert generator.unique_resource_name('a_b', 'panos_service') == 'a_b'
+    assert generator.declare_resource_name('a_b', 'panos_service') == 'a_b'
+
+
+def test_name_ref_never_dangles(generator):
+    """A name declared in one scope is unreachable through another scope."""
+    generator.declare_resource_name('svc-x', 'panos_service')
+    # The service scope resolves to a reference...
+    assert generator.name_ref('svc-x', ('panos_service',)).expr == 'panos_service.svc_x.name'
+    # ...the address scopes do not (no phantom resource reference).
+    assert generator.name_ref('svc-x', ('panos_address', 'panos_address_group')) == 'svc-x'
 
 
 def test_declare_same_name_in_two_contexts_gets_unique_names(generator):
@@ -158,5 +172,6 @@ def test_declare_same_name_in_two_contexts_gets_unique_names(generator):
     first = generator.declare_resource_name('default', 'panos_virtual_router', context='DG-A')
     second = generator.declare_resource_name('default', 'panos_virtual_router', context='DG-B')
     assert first != second
-    # A reference to the name resolves to a declared name (first declaration wins).
-    assert generator.unique_resource_name('default', 'panos_virtual_router') == first
+    # A reference to the name resolves to the first declared name.
+    assert generator.name_ref('default', ('panos_virtual_router',)).expr == (
+        f'panos_virtual_router.{first}.name')

@@ -16,7 +16,7 @@ resource "panos_nat_policy_rules" "outbound_nat" {
       description = "Outbound NAT for internal users"
       source_zones = [ "Trust" ]
       destination_zone = [ "Untrust" ]
-      source_addresses = [ "Internal-Network" ]
+      source_addresses = [ panos_address.internal_network.name ]
       destination_addresses = [ "any" ]
       service = "any"
       nat_type = "ipv4"
