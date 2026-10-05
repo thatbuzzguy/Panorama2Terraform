@@ -6,10 +6,10 @@
 📦 PACKAGE CONTENTS
 ├─ panorama_to_terraform.py ......... Main conversion script
 ├─ sample_panorama_config.xml ....... Example Panorama configuration
-├─ USAGE_GUIDE.md ................... Comprehensive documentation
 ├─ README.md ........................ Project overview
 ├─ quick_start.sh ................... Demo script
-└─ example_terraform_output.txt ..... Sample output reference
+├─ docs/ ............................ Comprehensive documentation (USAGE_GUIDE.md, etc.)
+└─ examples/ ....................... Sample output reference (example_terraform_output.txt)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -106,9 +106,9 @@ Fix:   Verify device group permissions
 
 📚 DOCUMENTATION
 
-README.md ............... Project overview & quick start
-USAGE_GUIDE.md .......... Complete documentation
-example_terraform_output.txt ... Sample output format
+README.md ........................... Project overview & quick start
+docs/USAGE_GUIDE.md ............... Complete documentation
+examples/example_terraform_output.txt ... Sample output format
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

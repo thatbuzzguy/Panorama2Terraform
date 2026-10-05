@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!-- Hostile input: external entity reference (XXE). ElementTree does not -->
+<!-- resolve external entities; the reference must fail and the file must -->
+<!-- never be read. The converter must fail cleanly (no data leak). -->
+<!DOCTYPE config [
+  <!ENTITY xxe SYSTEM "file:///tmp/panos2tf_secret">
+]>
+<config>
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <address>
+            <entry name="x">
+              <ip-netmask>&xxe;</ip-netmask>
+            </entry>
+          </address>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

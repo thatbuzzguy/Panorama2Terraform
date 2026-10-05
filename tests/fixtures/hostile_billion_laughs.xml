@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<!-- Hostile input: internal entity expansion ("billion laughs"). -->
+<!-- ElementTree must reject the undefined entity references. The -->
+<!-- converter must fail cleanly (non-zero exit, no traceback). -->
+<!DOCTYPE config [
+  <!ENTITY lol "lol">
+  <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+  <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
+]>
+<config>
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <address>
+            <entry name="x">
+              <ip-netmask>&lol3;</ip-netmask>
+            </entry>
+          </address>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

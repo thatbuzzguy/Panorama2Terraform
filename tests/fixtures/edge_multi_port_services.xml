@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<!-- Edge case: multi-port and dual-protocol service objects. -->
+<!-- svc-multi-port: one tcp port list "80,443". -->
+<!-- svc-dual: tcp and udp defined on the same service. The parser keeps -->
+<!-- tcp only (udp is dropped; recorded in backlog.md). -->
+<config version="10.0.0" urldb="paloaltonetworks">
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <service>
+            <entry name="svc-multi-port">
+              <protocol>
+                <tcp>
+                  <port>80,443</port>
+                </tcp>
+              </protocol>
+            </entry>
+            <entry name="svc-dual">
+              <protocol>
+                <tcp>
+                  <port>8080</port>
+                </tcp>
+                <udp>
+                  <port>8080</port>
+                </udp>
+              </protocol>
+            </entry>
+          </service>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

@@ -1,0 +1,253 @@
+<?xml version="1.0"?>
+<!--
+  F2.6 dependency wiring fixture.
+
+  Layout:
+  - Wire-DG holds address, address-group, service, service-group, tag,
+    one security rule, and one NAT rule.
+  - vsys1 holds zones, interfaces (physical + subinterface), a virtual
+    router, and the VPN object group.
+  - Name collisions: "both" (address + address group) and "svc-both"
+    (service + service group). Reference resolution must prefer the
+    object scope over the group scope.
+  - "ghost-*" names and "gw-undeclared" appear only as references:
+    they must stay plain brown-field strings and must never be declared.
+-->
+<config>
+  <devices>
+    <entry name="device1">
+      <vsys>
+        <entry name="vsys1">
+          <zone>
+            <entry name="zone-in">
+              <network>
+                <layer3>
+                  <member>ethernet1/1</member>
+                  <member>ethernet1/2.10</member>
+                  <member>ghost-iface</member>
+                </layer3>
+              </network>
+            </entry>
+            <entry name="zone-out">
+              <network>
+                <layer3>
+                  <member>ethernet1/1</member>
+                </layer3>
+              </network>
+            </entry>
+          </zone>
+          <network>
+            <interface>
+              <ethernet>
+                <entry name="ethernet1/1">
+                  <layer3>
+                    <ip>
+                      <entry name="10.0.1.1/24"/>
+                    </ip>
+                  </layer3>
+                </entry>
+                <entry name="ethernet1/2">
+                  <layer2/>
+                </entry>
+                <entry name="ethernet1/2.10">
+                  <layer3>
+                    <ip>
+                      <entry name="10.0.2.1/24"/>
+                    </ip>
+                  </layer3>
+                </entry>
+              </ethernet>
+            </interface>
+            <virtual-router>
+              <entry name="dw-vr">
+                <interface>
+                  <member>ethernet1/1</member>
+                  <member>ethernet1/2.10</member>
+                  <member>ghost-iface</member>
+                </interface>
+              </entry>
+            </virtual-router>
+            <ike>
+              <crypto-profiles>
+                <ike-crypto-profiles>
+                  <entry name="dw-ike">
+                    <encryption>
+                      <member>aes256</member>
+                    </encryption>
+                    <authentication>
+                      <member>sha256</member>
+                    </authentication>
+                    <dh-group>
+                      <member>group14</member>
+                    </dh-group>
+                  </entry>
+                </ike-crypto-profiles>
+                <ipsec-crypto-profiles>
+                  <entry name="dw-ipsec">
+                    <esp>
+                      <encryption>
+                        <member>aes256</member>
+                      </encryption>
+                      <authentication>
+                        <member>sha256</member>
+                      </authentication>
+                    </esp>
+                    <dh-group>group14</dh-group>
+                  </entry>
+                </ipsec-crypto-profiles>
+              </crypto-profiles>
+              <gateway>
+                <entry name="dw-gw">
+                  <protocol>
+                    <ikev2>
+                      <ike-crypto-profile>dw-ike</ike-crypto-profile>
+                    </ikev2>
+                  </protocol>
+                  <peer-address>
+                    <fqdn>dw.example.com</fqdn>
+                  </peer-address>
+                  <local-address>
+                    <interface>ethernet1/1</interface>
+                  </local-address>
+                  <authentication>
+                    <pre-shared-key/>
+                  </authentication>
+                </entry>
+              </gateway>
+            </ike>
+            <tunnel>
+              <ipsec>
+                <entry name="dw-tunnel">
+                  <auto-key>
+                    <gateway>
+                      <entry name="dw-gw"/>
+                    </gateway>
+                    <ipsec-crypto-profile>dw-ipsec</ipsec-crypto-profile>
+                  </auto-key>
+                  <tunnel-interface>tunnel.1</tunnel-interface>
+                </entry>
+                <!-- Gateway is not in the export: plain brown-field name expected -->
+                <entry name="dw-tunnel-brown">
+                  <auto-key>
+                    <gateway>
+                      <entry name="gw-undeclared"/>
+                    </gateway>
+                  </auto-key>
+                </entry>
+              </ipsec>
+            </tunnel>
+          </network>
+        </entry>
+      </vsys>
+      <device-group>
+        <entry name="Wire-DG">
+          <address>
+            <entry name="both">
+              <ip-netmask>10.9.9.1/32</ip-netmask>
+            </entry>
+            <entry name="host-a">
+              <ip-netmask>10.9.9.2/32</ip-netmask>
+              <tag>
+                <member>tag-one</member>
+                <member>tag-ghost</member>
+              </tag>
+            </entry>
+          </address>
+          <address-group>
+            <!-- Members: colliding address, address, ghost -->
+            <entry name="both">
+              <static>
+                <member>both</member>
+                <member>host-a</member>
+                <member>ghost-addr</member>
+              </static>
+            </entry>
+          </address-group>
+          <service>
+            <entry name="svc-both">
+              <protocol>
+                <tcp>
+                  <port>443</port>
+                </tcp>
+              </protocol>
+            </entry>
+            <entry name="svc-b">
+              <protocol>
+                <udp>
+                  <port>53</port>
+                </udp>
+              </protocol>
+            </entry>
+          </service>
+          <service-group>
+            <!-- Members: colliding service, service, ghost -->
+            <entry name="svc-both">
+              <members>
+                <member>svc-both</member>
+                <member>svc-b</member>
+                <member>ghost-svc</member>
+              </members>
+            </entry>
+          </service-group>
+          <tag>
+            <entry name="tag-one">
+              <color>color1</color>
+            </entry>
+          </tag>
+          <security>
+            <rules>
+              <entry name="dw-rule">
+                <from>
+                  <member>zone-in</member>
+                  <member>zone-ghost</member>
+                </from>
+                <to>
+                  <member>zone-out</member>
+                </to>
+                <source>
+                  <member>both</member>
+                  <member>ghost-addr</member>
+                </source>
+                <destination>
+                  <member>both</member>
+                </destination>
+                <application>
+                  <member>web-browsing</member>
+                </application>
+                <service>
+                  <member>svc-both</member>
+                  <member>svc-ghost</member>
+                </service>
+                <action>allow</action>
+              </entry>
+            </rules>
+          </security>
+          <nat>
+            <rules>
+              <entry name="dw-nat">
+                <from>
+                  <member>zone-in</member>
+                </from>
+                <to-interface>zone-out</to-interface>
+                <source>
+                  <member>both</member>
+                </source>
+                <destination>
+                  <member>any</member>
+                </destination>
+                <service>svc-both</service>
+                <source-translation>
+                  <dynamic-ip-and-port>
+                    <translated-address>
+                      <member>ethernet1/1</member>
+                    </translated-address>
+                  </dynamic-ip-and-port>
+                </source-translation>
+              </entry>
+            </rules>
+          </nat>
+        </entry>
+      </device-group>
+    </entry>
+  </devices>
+</config>

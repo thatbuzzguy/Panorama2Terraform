@@ -6,10 +6,12 @@ venv/
 # Terraform
 *.tfstate
 .terraform/
+.terraform.lock.hcl
 
 # Customer data - DON'T commit actual configs!
 *.xml
-!examples/*.xml
+!examples/**/*.xml
+!tests/**/*.xml
 
 # IDE
 .vscode/
@@ -22,11 +24,12 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Test outputs
+# Generated converter output
 test_output/
 output_*/
 split_configs/
 *-tf/
+terraform_output/
 
 # Temporary files
 *.tmp

@@ -1,485 +1,192 @@
-# Palo Alto Panorama to Terraform Converter
+# Panorama to Terraform Converter
 
-A comprehensive Python utility to convert Palo Alto Panorama XML configuration exports into Terraform configuration files, **specifically designed to facilitate firewall migrations between different Palo Alto platforms**.
+Converts a Palo Alto Panorama XML configuration export into Terraform
+configuration for the **Palo Alto Networks panos provider v2** (pinned to
+`~> 2.0.14`), plus plain-text migration reports for the configuration
+that has no v2 resource.
 
-## 🎯 Purpose
+## What it does
 
-This tool is purpose-built for **migrating Palo Alto firewalls to different platforms** (e.g., PA-3000 → PA-5000, physical → VM-Series). It extracts your complete configuration and generates both:
-1. **Terraform files** for automated deployment
-2. **Interface migration report** for planning interface mapping
+1. Parses the Panorama export (device groups, shared objects, templates,
+   vsys).
+2. Emits provider-v2 Terraform resources, each carrying the required
+   `location` argument.
+3. Writes reports for configuration with no v2 resource so nothing is
+   silently dropped.
 
-## 📦 What's Included
-
-- `panorama_to_terraform.py` - Main conversion script (comprehensive parser and generator)
-- `sample_panorama_config.xml` - Example configuration with all features
-- `MIGRATION_GUIDE.md` - **Complete step-by-step migration workflow**
-- `USAGE_GUIDE.md` - Comprehensive technical documentation
-- `README.md` - This file
-- `quick_start.sh` - Quick start demonstration script
-- `example_interface_report.txt` - Sample interface inventory report
-
-## 🚀 Quick Start
+## Quick start
 
 ```bash
-# 1. Make scripts executable
-chmod +x panorama_to_terraform.py quick_start.sh
+python3 panorama_to_terraform.py your_export.xml --output-dir terraform_output
 
-# 2. Run the quick start demo
-./quick_start.sh
-
-# 3. Or convert your own Panorama config
-python3 panorama_to_terraform.py your_config.xml --output-dir terraform_output
-```
-
-## 📋 Requirements
-
-- Python 3.6+
-- Terraform 1.0+
-- Access to Palo Alto Panorama or Firewall
-
-## 🎯 Supported Features (Enhanced for Migration)
-
-### Configuration Objects
-- ✅ **Zones** - Security zones with interface assignments
-- ✅ **Interfaces** - Ethernet, VLAN, Loopback with IP addresses
-- ✅ **Virtual Routers** - Routing configuration and static routes
-- ✅ **BGP** - ⭐ NEW - BGP configuration with peers and peer groups
-- ✅ **OSPF** - ⭐ NEW - OSPF configuration with areas and interfaces
-- ✅ **IPsec VPN** - ⭐ NEW - IKE gateways, IPsec tunnels, crypto profiles
-- ✅ **Security Profiles** - Antivirus, Anti-Spyware, Vulnerability, URL Filtering, File Blocking, WildFire
-- ✅ **Security Profile Groups** - Profile group assignments
-- ✅ Address Objects (IP, FQDN, Range)
-- ✅ Address Groups (Static & Dynamic)
-- ✅ Service Objects (TCP/UDP)
-- ✅ Service Groups
-- ✅ Security Policy Rules
-- ✅ NAT Policy Rules
-- ✅ Device Groups
-
-### Migration-Specific Features
-- ✅ **Interface Migration Report** - Complete interface and IP inventory
-- ✅ **VPN Migration Report** - ⭐ NEW - VPN configuration with key management instructions
-- ✅ **Platform Guidance** - PA-200/500, PA-800, PA-3000, PA-5000, PA-7000, VM-Series
-- ✅ **Migration Checklist** - Step-by-step migration workflow
-- ✅ **Interface Mapping Planning** - Tools to plan interface changes
-
-### Generated Terraform Resources
-- `panos_bgp` - ⭐ NEW
-- `panos_bgp_peer_group` - ⭐ NEW
-- `panos_bgp_peer` - ⭐ NEW
-- `panos_ospf` - ⭐ NEW
-- `panos_ospf_area` - ⭐ NEW
-- `panos_ospf_area_interface` - ⭐ NEW
-- `panos_ike_crypto_profile` - ⭐ NEW
-- `panos_ipsec_crypto_profile` - ⭐ NEW
-- `panos_ike_gateway` - ⭐ NEW
-- `panos_ipsec_tunnel` - ⭐ NEW
-- `panos_ipsec_tunnel_proxy_id_ipv4` - ⭐ NEW
-- `panos_zone`
-- `panos_ethernet_interface`
-- `panos_virtual_router`
-- `panos_static_route_ipv4`
-- `panos_security_profile_group`
-- `panos_address_object`
-- `panos_address_group`
-- `panos_service_object`
-- `panos_service_group`
-- `panos_security_rule_group`
-- `panos_nat_rule_group`
-
-## 📖 Migration Workflow
-
-```
-Export Config → Run Converter → Review Interface Report
-                                        ↓
-                                Plan Interface Mapping
-                                        ↓
-                                Adjust Terraform Configs
-                                        ↓
-                                Test in Lab → Deploy to Production
-```
-
-**Key Output: INTERFACE_MIGRATION_REPORT.txt**
-- Lists all interfaces with IP addresses
-- Shows interface types and modes
-- Displays management profiles
-- Includes VLAN tags
-- Provides platform migration guidance
-
-**Key Output: VPN_MIGRATION_REPORT.txt** ⭐ NEW (if VPNs detected)
-- Lists all IKE gateways and IPsec tunnels
-- **Highlights placeholder pre-shared keys**
-- Provides key management best practices
-- Includes security warnings and checklist
-- **Critical: Keys must be updated before deployment**
-
-## 💡 Example Usage
-
-### Basic Conversion
-```bash
-python3 panorama_to_terraform.py panorama_export.xml
-```
-
-### Custom Output Directory
-```bash
-python3 panorama_to_terraform.py panorama_export.xml --output-dir /path/to/terraform
-```
-
-### Review Generated Configuration
-```bash
-cd terraform_output
-ls -la
-
-# You'll see:
-# - provider.tf
-# - variables.tf
-# - zones.tf ⭐ NEW
-# - interfaces.tf ⭐ NEW
-# - virtual_routers.tf ⭐ NEW
-# - security_profiles.tf ⭐ NEW
-# - security_profile_groups.tf ⭐ NEW
-# - address_objects.tf
-# - address_groups.tf
-# - service_objects.tf
-# - service_groups.tf
-# - security_rules.tf
-# - nat_rules.tf
-# - INTERFACE_MIGRATION_REPORT.txt ⭐ NEW - Critical for migration planning
-# - README.md
-```
-
-## 🔧 Exporting from Panorama
-
-### Via Web UI
-1. Device → Setup → Operations
-2. Save named Panorama configuration snapshot
-3. Download and extract XML
-
-### Via CLI
-```bash
-ssh admin@panorama
-> set cli config-output-format xml
-> configure
-# show
-> save config to export.xml
-```
-
-### Via API
-```bash
-curl -k -X GET 'https://panorama/api/?type=export&category=configuration&key=KEY' -o config.xml
-```
-
-## 🎨 Example Output - Interface Report
-
-```
-INTERFACE AND IP ADDRESS MIGRATION REPORT
-Generated for Firewall Migration Planning
-
-ETHERNET INTERFACES (4)
---------------------------------------------------------------------------------
-
-Interface: ethernet1/1
-  Type: ethernet
-  Mode: layer3
-  Comment: Trust Interface - Internal Network
-  IPv4 Addresses:
-    - 10.1.1.1/24
-  IPv6 Addresses:
-    - 2001:db8::1/64
-  Management Profile: Ping-Only
-
-Interface: ethernet1/2
-  Type: ethernet
-  Mode: layer3
-  Comment: Untrust Interface - Internet Connection
-  IPv4 Addresses:
-    - 203.0.113.1/30
-  Management Profile: Allow-All
-
-MIGRATION CHECKLIST
-1. Review interface naming differences between platforms
-2. Map source interfaces to target platform interfaces
-3. Verify IP addressing scheme is compatible
-...
-```
-
-## 🔐 Deploying with Terraform
-
-1. **Create credentials file** (`terraform.tfvars`):
-```hcl
-panos_hostname = "panorama.example.com"
-panos_username = "admin"
-panos_password = "your-password"
-device_group   = "Production-DG"
-```
-
-2. **Initialize Terraform**:
-```bash
 cd terraform_output
 terraform init
+terraform validate
 ```
 
-3. **Review changes**:
+Split a Panorama export into one XML file per device group:
+
 ```bash
-terraform plan
+python3 split_device_groups.py your_export.xml --output-dir split_output
 ```
 
-4. **Apply configuration**:
-```bash
-terraform apply
+## Requirements
+
+- Python 3.9+ (standard library only)
+- Terraform 1.0+ for the validate gate
+- A Panorama XML export
+
+## Generated resources (provider v2)
+
+| Area | Resources |
+|---|---|
+| Objects | `panos_address`, `panos_address_group`, `panos_administrative_tag`, `panos_application_group`, `panos_custom_url_category`, `panos_external_dynamic_list`, `panos_service`, `panos_service_group` |
+| Policy | `panos_security_policy_rules`, `panos_nat_policy_rules`, `panos_decryption_policy_rules`, `panos_pbf_policy_rules` (one resource per rule; per-device-group chains in XML order — the first rule anchors at the end of the rulebase, each later rule is placed directly after the previous one and depends on it) |
+| Profiles | `panos_security_profile_group` |
+| Network | `panos_ethernet_interface`, `panos_ethernet_layer3_subinterface`, `panos_virtual_router`, `panos_virtual_router_static_route_ipv4`, `panos_zone`, `panos_monitor_profile` (PBF path monitoring profiles; referenced by PBF rule path monitoring) |
+| VPN | `panos_ike_crypto_profile`, `panos_ike_gateway`, `panos_ipsec_crypto_profile`, `panos_ipsec_tunnel` (proxy-ids merged into the tunnel) |
+
+The mapping and rationale are in
+[`resource_mapping.py`](resource_mapping.py) and
+[`docs/RESOURCE_MAPPING.md`](docs/RESOURCE_MAPPING.md).
+
+The provider-resource <-> Panorama-XML-element coverage matrix — one
+row per emitted type with the XML element, fixture, and expected name,
+enforced by `tests/test_coverage_matrix.py` — is in
+[`COVERAGE_MATRIX`](resource_mapping.py) (machine-readable) and
+[`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md) (table + method).
+
+## Dependency wiring
+
+Name attributes that reference an object exported by the same run are
+emitted as Terraform `.name` references (for example
+`source_addresses = [ panos_address_group.web_servers.name ]`), so
+`terraform apply` orders the resources deterministically. Names that
+point outside the export — built-in PAN-OS names such as `any`,
+`application-default`, or `service-ftp`, or objects in other tenants —
+stay plain strings. The converter never declares a resource just to
+make a reference work, so the output always passes
+`terraform validate`.
+
+## Resource naming
+
+A local resource name is the sanitized PAN-OS name plus an 8-hex digest
+of the object's source identity (resource type, defining device group or
+template, and name). The name is deterministic: the same object always
+gets the same local name, and same-named objects in different device
+groups stay distinct. For example:
+
+```hcl
+resource "panos_address" "web_server_1_a9a88aa6" {
+  name = "web-server-1"
+  ...
+}
 ```
 
-## ⚠️ Important Migration Notes
+## Report-only configuration
 
-### What's Included
-- Complete zone configurations
-- Interface definitions with IP addresses
-- Virtual router and static routes
-- Security profile references
-- All policy rules
-- Address and service objects
+The following have no v2 provider resource. The converter keeps their
+data visible in `MANUAL_SETUP_REPORT.txt` instead of emitting it:
 
-### Manual Configuration Required
-- **Interface adjustments** - Adapt to target platform hardware
-- **Security profile details** - Full rule definitions
-- VPN configurations
-- GlobalProtect settings
-- HA configurations
-- Management interface specifics
+- BGP (router, peer groups, peers)
+- OSPF (router, areas, interfaces)
+- Application filters
+- Application override rules
+- QoS profiles
+- IPsec tunnel monitor profiles (note: `panos_monitor_profile` is the
+  PBF path monitoring profile, a different PAN-OS object)
 
-### Migration Best Practices
-1. ✅ **Always test in lab first** - Critical for successful migration
-2. ✅ Review `INTERFACE_MIGRATION_REPORT.txt` before starting
-3. ✅ Create interface mapping table for source → target
-4. ✅ Backup existing configuration
-5. ✅ Verify interface naming for target platform
-6. ✅ Use version control (Git)
-7. ✅ Apply changes incrementally
-8. ✅ See `MIGRATION_GUIDE.md` for detailed procedures
+The following have a v2 provider resource, but the converter captures
+only names and entry names — emitting an empty object would create a
+misconfigured resource — so they stay in the report until the body
+parsing lands (Epic 3):
 
-## 🐛 Troubleshooting
+- Security profile bodies (antivirus, anti-spyware, vulnerability, URL
+  filtering, file blocking, WildFire, zone protection)
+- Log forwarding profiles
+- Schedules
 
-### XML Parse Errors
-- Ensure XML is valid and complete
-- Re-export from Panorama if corrupted
+Reports written to the output directory:
 
-### Interface Naming Issues
-- Review target platform interface naming conventions
-- Update `interfaces.tf` accordingly
-- See platform-specific notes in interface report
+- `MANUAL_SETUP_REPORT.txt` - everything above that must be configured
+  manually
+- `INTERFACE_MIGRATION_REPORT.txt` - interface and IP inventory
+- `VPN_MIGRATION_REPORT.txt` - VPN inventory; **pre-shared keys are
+  placeholders and must be set before apply**
 
-### Missing Resources
-- Check device group permissions
-- Verify shared resource access
+## Typical outputs
 
-### Zone Assignment Failures
-- Ensure interfaces exist before zones
-- Use Terraform `depends_on` if needed
+```
+provider.tf  variables.tf  README.md
+address_objects.tf  address_groups.tf
+service_objects.tf  service_groups.tf
+tags.tf  custom_url_categories.tf  application_groups.tf  external_lists.tf
+security_rules.tf  nat_rules.tf
+security_profiles.tf  security_profile_groups.tf
+zones.tf  interfaces.tf  virtual_routers.tf
+vpn.tf
+MANUAL_SETUP_REPORT.txt  INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.txt
+```
 
-## 📚 Documentation
+(Only files with content are written; the list above is the union across
+all supported inputs.)
 
-- **MIGRATION_GUIDE.md** - Complete migration workflow and procedures
-- **USAGE_GUIDE.md** - Technical documentation and API details  
-- **example_interface_report.txt** - Sample interface inventory
-- **README.md** - This overview
+## Exporting from Panorama
 
-## 🤝 Use Cases
+- **Web UI:** Device -> Setup -> Operations -> save a configuration
+  snapshot and extract the XML.
+- **CLI:** `show` with `set cli config-output-format xml`.
+- **API:** `curl -k -X GET 'https://panorama/api/?type=export&category=configuration&key=KEY' -o config.xml`
 
-### Ideal For:
-- ✅ Migrating between Palo Alto hardware platforms
-- ✅ Physical to VM-Series migrations
-- ✅ VM-Series to physical migrations
-- ✅ Platform upgrades (e.g., PA-3000 → PA-5000)
-- ✅ Configuration standardization across devices
-- ✅ Disaster recovery planning
-- ✅ Configuration version control
+## Deploying with Terraform
 
-### Not Suitable For:
-- ❌ Multi-vendor migrations (Palo Alto only)
-- ❌ Complex VPN configurations (manual setup needed)
-- ❌ GlobalProtect (not in export)
+1. Create `terraform.tfvars` with credentials:
 
-## 🎯 Version
+   ```hcl
+   panos_hostname = "panorama.example.com"
+   panos_username = "admin"
+   panos_password = "your-password"
+   device_group   = "Production-DG"
+   ```
 
-Current Version: **4.0.0** - **Production-Ready Edition**
+2. `terraform init`
+3. `terraform plan` - review every change
+4. `terraform apply`
 
-### What's New in v4.0
-- ✨ **Production-tested** on 133,000-line config with 10,000+ objects
-- ✨ **16 new object types**: Tags, Custom URLs, App Groups/Filters, PBF, Decryption, etc.
-- ✨ **Terraform Provider 2.0.7** support
-- ✨ **36 total object types** (was 20 in v3.0)
-- ✨ **Enhanced interfaces**: Tunnel, Aggregate, Subinterfaces
-- ✨ **Complete coverage**: 95%+ of common Palo Alto objects
-- ✨ **31 Terraform files** generated (was ~15)
-- ✨ See `VERSION_4.0_COMPLETE_COVERAGE.md` for full details
+Before deploying: replace placeholder VPN pre-shared keys, review
+`MANUAL_SETUP_REPORT.txt`, and adapt interface names to the target
+platform (see `INTERFACE_MIGRATION_REPORT.txt`).
 
-### Features in v3.0
-- BGP and OSPF routing protocol support
-- IPsec VPN with IKE gateway/tunnel configuration
-- VPN key management reporting
-- Multi-virtual-router migrations
-- Automatic device group splitting
+## Testing
 
-### Features in v2.0
-- Zone configuration parsing and generation
-- Interface configuration with IP addresses
-- Virtual router and static route support
-- Security profile and profile group support
-- **INTERFACE_MIGRATION_REPORT.txt** generation
-- Platform-specific migration guidance
+- `python3 -m pytest` - the full suite: parser and generator unit tests,
+  golden byte-for-byte gates, resource-mapping and schema conformance,
+  policy order and dependency wiring, robustness, and the F2.8 coverage
+  matrix row tests. XML fixtures drive the converter; provider schema
+  conformance runs `terraform providers schema -json` against the
+  pinned version (skipped when the `terraform` binary or registry
+  access is unavailable).
+- `tests/test_terraform_validate.py` - `terraform init` + `terraform
+  validate` on the sample, kitchen-sink, and crypto-profile-only
+  outputs (skipped when the `terraform` binary is absent)
+- `ruff check .` - lint
 
-### Features in v1.0
-- Core configuration parsing
-- Address/service object support
-- Security/NAT rule conversion
-- Basic Terraform generation
+## Documentation
 
-## 📄 License
+- [`docs/MIGRATION_GUIDE.md`](docs/MIGRATION_GUIDE.md) - migration workflow
+- [`docs/USAGE_GUIDE.md`](docs/USAGE_GUIDE.md) - technical reference
+- [`docs/RESOURCE_MAPPING.md`](docs/RESOURCE_MAPPING.md) - v2 mapping rationale
+- [`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md) - coverage matrix, row schema, and test methodology
+- [`docs/DEVICE_GROUP_SPLITTING.md`](docs/DEVICE_GROUP_SPLITTING.md) - splitter notes
+
+## License
 
 This project is **dual-licensed**:
 
-### Option 1: AGPL v3 (Free & Open Source)
-**GNU Affero General Public License v3** - Free for open source use
-- ✅ Free to use, modify, and distribute
-- ⚠️ Must release source code if distributed or deployed as service
-- ⚠️ Modifications must be AGPL v3
-- See [LICENSE-AGPL](LICENSE-AGPL) for full terms
+- **AGPL v3** - free for open source use (see [LICENSE-AGPL](LICENSE-AGPL))
+- **Commercial** - for proprietary use (see [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL))
 
-### Option 2: Commercial License (Proprietary)
-**Proprietary License** - For commercial/proprietary use
-- ✅ Use in closed-source products
-- ✅ No source code release required
-- ✅ Deploy as SaaS without sharing code
-- ✅ Commercial support included
-- See [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL) for details
-
-### Which License Do I Need?
-
-**Use AGPL v3 (Free) if:**
-- Building open source projects
-- Willing to share your source code
-- Using internally and can share modifications
-- Learning or experimenting
-
-**Buy Commercial License if:**
-- Building commercial/proprietary products
-- Running as SaaS for clients
-- Cannot release your source code
-- Need commercial support and warranty
-- Embedding in proprietary software
-
-**📖 Detailed comparison:** See [DUAL-LICENSING-EXPLAINED.md](DUAL-LICENSING-EXPLAINED.md)
-
-**💼 Purchase commercial license:** Contact [Your Email]
-
-### Quick Summary
-
-| Feature | AGPL v3 | Commercial |
-|---------|---------|------------|
-| Cost | FREE | Paid |
-| Proprietary use | ❌ | ✅ |
-| SaaS deployment | ⚠️ Must share code | ✅ |
-| Support | Community | ✅ Professional |
-| Must release code | ✅ | ❌ |
-
-## 🆘 Support
-
-### For Migration Assistance
-1. Review `MIGRATION_GUIDE.md` for detailed procedures
-2. Check `INTERFACE_MIGRATION_REPORT.txt` for interface planning
-3. Test in lab environment first
-4. Consult Palo Alto platform compatibility matrix
-
-### For Script Issues
-1. Review generated files
-2. Check Terraform validation output
-3. Consult provider documentation
-4. Validate XML export
-
-## 📖 Additional Resources
+## Additional resources
 
 - [Palo Alto Terraform Provider](https://registry.terraform.io/providers/PaloAltoNetworks/panos/latest/docs)
-- [PAN-OS API Documentation](https://docs.paloaltonetworks.com/pan-os/9-1/pan-os-panorama-api)
-- [Terraform Best Practices](https://www.terraform.io/docs/cloud/guides/recommended-practices/)
-
-## 📊 Version History
-
-### v4.0.3 (December 2025) - Advanced Routing Engine Support ⭐
-**🎯 New Feature: Logical Routers (PAN-OS 10.2+)**
-- Added support for **Advanced Routing Engine** logical routers
-- Automatically detects and parses both virtual routers (legacy) and logical routers
-- Generates Terraform for mixed VR/LR configurations
-- Properly identifies router types in generated files
-- **Impact:** Full support for PAN-OS 10.2+ Advanced Routing Engine migrations
-- See [ADVANCED-ROUTING-ENGINE-SUPPORT.md](ADVANCED-ROUTING-ENGINE-SUPPORT.md) for details
-
-### v4.0.2 (December 2025) - Multi-VR & Split Script Fixes ⭐
-**🐛 Fixed: Multiple Critical Issues**
-
-**1. Virtual Router Multi-VR Support:**
-- **Critical Fix:** Virtual routers missing when names duplicated across templates
-- Added template-aware parsing with interface signature deduplication
-- Now captures ALL VRs including multi-VR templates and duplicate names
-- **Impact:** Configs with multiple templates now get all VRs (e.g., found 7 instead of 6)
-- See [MULTI-VR-FIX.md](MULTI-VR-FIX.md) for technical details
-
-**2. Split Device Groups Script:**
-- **Critical Fix:** split_device_groups.py missing 99% of objects in split files
-- Fixed: Only copied first `<shared>` section (Panorama has 11+ sections)
-- Fixed: Duplicate device group detection
-- Now merges ALL shared sections into split files
-- **Impact:** Split files now include all 3,699 addresses, 430 services, etc. (was 0)
-- See [SPLIT-SCRIPT-FIX.md](SPLIT-SCRIPT-FIX.md) for technical details
-
-**Action Required:**
-- ⚠️ If you have multiple templates with VRs: Regenerate your files
-- ⚠️ If you used split_device_groups.py: Re-split to get all objects
-
-### v4.0.1 (December 2025) - CRITICAL FIX ⭐
-**🐛 Fixed: Shared Object References**
-- **Critical Fix:** Objects with empty values/members in Terraform output
-- Added detection and filtering of reference-only entries (entries with only `<id>` tags)
-- Changed parse order to prioritize device-group definitions over shared references  
-- Fixed 4 parsing methods: address objects, address groups, service objects, service groups
-- **Impact:** All objects now have correct values populated
-- See [SHARED-OBJECT-REFERENCE-FIX.md](SHARED-OBJECT-REFERENCE-FIX.md) for technical details
-- ⚠️ **If you used v4.0.0, regenerate your Terraform files**
-
-### v4.0.0 (December 2025) - Production Enhancement
-**🚀 Major Release**
-- Added 16 new object types (tags, custom URLs, app groups/filters, external lists, decryption, PBF, etc.)
-- Expanded from 20 to 36 object types (80% increase)
-- Updated to Terraform Provider 2.0.7
-- Tested on 133,411-line production config with 10,299 objects
-- Achieved 95%+ coverage of Palo Alto objects
-- 100% success rate on production data
-- Applied AGPL v3 + Commercial dual licensing
-
-### v3.0 (November 2025) - VPN & Routing
-**🔐 Advanced Networking**
-- Added BGP support with peer configuration
-- Added OSPF support with area configuration  
-- Added VPN support (IKE gateways, IPsec tunnels, crypto profiles)
-- Added device group splitting utility
-- Added multi-VR migration workflows
-
-### v2.0 (October 2025) - Network Objects
-**🌐 Network Infrastructure**
-- Added zone support
-- Added interface support (ethernet, VLAN, loopback, tunnel, aggregate)
-- Added virtual router support
-- Added static route support
-- Comprehensive documentation
-
-### v1.0 (September 2025) - Initial Release
-**🎯 Foundation**
-- Basic object support (addresses, services, rules)
-- Security policy conversion
-- NAT policy conversion  
-- Address and service object/group support
-
----
-
-**Made with ❤️ for Network Engineers migrating Palo Alto firewalls to different platforms**
-
-**🔥 Perfect for platform upgrades, physical-to-VM migrations, and infrastructure modernization projects**
+- [PAN-OS API documentation](https://docs.paloaltonetworks.com/pan-os/9-1/pan-os-panorama-api)

@@ -1,0 +1,146 @@
+<?xml version="1.0"?>
+<!-- F2.5 order-preserving policy fixture: three device groups with rules in a
+     known XML order. Alpha-DG has three security rules and two NAT rules,
+     Beta-DG has two security rules, Gamma-DG has a single security rule
+     (anchor-only chain). The converter must emit each device group's rules as
+     an independent chain in XML order. -->
+<config version="10.0.0" urldb="paloaltonetworks">
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <address>
+            <entry name="alpha-src">
+              <ip-netmask>10.10.1.0/24</ip-netmask>
+            </entry>
+            <entry name="alpha-dst">
+              <ip-netmask>10.10.2.0/24</ip-netmask>
+            </entry>
+          </address>
+          <service>
+            <entry name="alpha-svc">
+              <protocol>
+                <tcp>
+                  <port>8080</port>
+                </tcp>
+              </protocol>
+            </entry>
+          </service>
+        </entry>
+      </vsys>
+      <device-group>
+        <entry name="Alpha-DG">
+          <pre-rulebase>
+            <security>
+              <rules>
+                <entry name="alpha-rule-1">
+                  <from><member>Trust</member></from>
+                  <to><member>Untrust</member></to>
+                  <source><member>alpha-src</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>any</member></application>
+                  <service><member>alpha-svc</member></service>
+                  <action>allow</action>
+                  <log-end>yes</log-end>
+                </entry>
+                <entry name="alpha-rule-2">
+                  <from><member>Trust</member></from>
+                  <to><member>Untrust</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>alpha-dst</member></destination>
+                  <application><member>any</member></application>
+                  <service><member>application-default</member></service>
+                  <action>allow</action>
+                </entry>
+                <entry name="alpha-rule-3">
+                  <from><member>any</member></from>
+                  <to><member>any</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>any</member></application>
+                  <service><member>application-default</member></service>
+                  <action>deny</action>
+                </entry>
+              </rules>
+            </security>
+            <nat>
+              <rules>
+                <entry name="alpha-nat-1">
+                  <from><member>Trust</member></from>
+                  <to-interface>Untrust</to-interface>
+                  <source><member>alpha-src</member></source>
+                  <destination><member>any</member></destination>
+                  <service><member>alpha-svc</member></service>
+                  <source-translation>
+                    <dynamic-ip-and-port>
+                      <translated-address>
+                        <member>ethernet1/2</member>
+                      </translated-address>
+                    </dynamic-ip-and-port>
+                  </source-translation>
+                </entry>
+                <entry name="alpha-nat-2">
+                  <from><member>Trust</member></from>
+                  <to-interface>Untrust</to-interface>
+                  <source><member>alpha-dst</member></source>
+                  <destination><member>any</member></destination>
+                  <service><member>application-default</member></service>
+                  <source-translation>
+                    <dynamic-ip-and-port>
+                      <translated-address>
+                        <member>ethernet1/2</member>
+                      </translated-address>
+                    </dynamic-ip-and-port>
+                  </source-translation>
+                </entry>
+              </rules>
+            </nat>
+          </pre-rulebase>
+        </entry>
+        <entry name="Beta-DG">
+          <pre-rulebase>
+            <security>
+              <rules>
+                <entry name="beta-rule-1">
+                  <from><member>Trust</member></from>
+                  <to><member>Untrust</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>web</member></application>
+                  <service><member>application-default</member></service>
+                  <action>allow</action>
+                </entry>
+                <entry name="beta-rule-2">
+                  <from><member>any</member></from>
+                  <to><member>any</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>any</member></application>
+                  <service><member>application-default</member></service>
+                  <action>deny</action>
+                </entry>
+              </rules>
+            </security>
+          </pre-rulebase>
+        </entry>
+        <entry name="Gamma-DG">
+          <pre-rulebase>
+            <security>
+              <rules>
+                <entry name="gamma-rule-1">
+                  <from><member>Trust</member></from>
+                  <to><member>Untrust</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>any</member></application>
+                  <service><member>application-default</member></service>
+                  <action>allow</action>
+                </entry>
+              </rules>
+            </security>
+          </pre-rulebase>
+        </entry>
+      </device-group>
+    </entry>
+  </devices>
+</config>

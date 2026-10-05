@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<config version="10.0.0" urldb="paloaltonetworks">
+  <shared>
+    <address-group>
+      <entry name="Web-Servers">
+        <static>
+          <member>Web-Server-1</member>
+          <member>Web-Server-2</member>
+        </static>
+        <description>All web servers</description>
+      </entry>
+      <entry name="Dynamic-Web">
+        <dynamic>
+          <filter>
+            <address>
+              <tag>web</tag>
+            </address>
+          </filter>
+        </dynamic>
+      </entry>
+      <entry name="Reference-Only">
+        <id>99</id>
+      </entry>
+    </address-group>
+  </shared>
+</config>

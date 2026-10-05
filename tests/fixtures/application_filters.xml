@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<config version="10.0.0" urldb="paloaltonetworks">
+  <shared>
+    <application-filter>
+      <entry name="high-risk-web">
+        <category>
+          <member>web-proxy</member>
+          <member>file-transfer</member>
+        </category>
+        <risk>
+          <member>high</member>
+        </risk>
+        <evasive>yes</evasive>
+        <description>Filter high risk web applications</description>
+      </entry>
+    </application-filter>
+  </shared>
+</config>

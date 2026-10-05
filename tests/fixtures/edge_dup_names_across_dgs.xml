@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!-- Edge case: the same object name defined in two different device groups. -->
+<!-- The parser currently dedups by name (last-wins). Epic 3 F3.1 should -->
+<!-- keep both, keyed by (device group, vsys, type, name). -->
+<config version="10.0.0" urldb="paloaltonetworks">
+  <devices>
+    <entry name="localhost.localdomain">
+      <device-group>
+        <entry name="DG-A">
+          <address>
+            <entry name="web">
+              <ip-netmask>10.0.0.1/32</ip-netmask>
+            </entry>
+          </address>
+        </entry>
+        <entry name="DG-B">
+          <address>
+            <entry name="web">
+              <ip-netmask>10.0.0.2/32</ip-netmask>
+            </entry>
+          </address>
+        </entry>
+      </device-group>
+    </entry>
+  </devices>
+</config>

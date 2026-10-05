@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<config version="10.0.0" urldb="paloaltonetworks">
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <network>
+            <interface>
+              <vlan>
+                <units>
+                  <entry name="10">
+                    <tag>10</tag>
+                    <description>VLAN 10</description>
+                    <ip>
+                      <entry name="10.10.10.1/24"/>
+                    </ip>
+                  </entry>
+                </units>
+              </vlan>
+              <loopback>
+                <units>
+                  <entry name="1">
+                    <ip>
+                      <entry name="169.254.0.1/32"/>
+                    </ip>
+                  </entry>
+                </units>
+              </loopback>
+              <tunnel>
+                <units>
+                  <entry name="1">
+                    <ip>
+                      <entry name="10.255.0.1/32"/>
+                    </ip>
+                  </entry>
+                </units>
+              </tunnel>
+              <aggregate-ethernet>
+                <entry name="ae1.101">
+                  <layer3>
+                    <ip>
+                      <entry name="172.16.1.1/24"/>
+                    </ip>
+                    <units>
+                      <entry name="ae1.101.20">
+                        <tag>20</tag>
+                        <ip>
+                          <entry name="172.16.20.1/24"/>
+                        </ip>
+                      </entry>
+                    </units>
+                  </layer3>
+                </entry>
+              </aggregate-ethernet>
+            </interface>
+          </network>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

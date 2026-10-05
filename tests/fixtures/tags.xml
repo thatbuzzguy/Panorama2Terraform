@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<config version="10.0.0" urldb="paloaltonetworks">
+  <shared>
+    <tag>
+      <entry name="env-prod">
+        <color>green</color>
+        <comments>Production environment</comments>
+      </entry>
+      <entry name="web">
+        <color>blue</color>
+      </entry>
+    </tag>
+  </shared>
+</config>

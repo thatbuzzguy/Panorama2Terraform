@@ -29,21 +29,23 @@ Useful for multi-HA-pair to multi-virtual-router migrations.
 """
 
 import argparse
+import re
+import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
-import sys
+
 
 def parse_device_groups(root: ET.Element) -> list:
     """Get list of device groups from Panorama config"""
     device_groups = []
     seen = set()
-    
+
     for dg in root.findall(".//device-group/entry"):
         name = dg.get('name')
         if name and name not in seen:
             device_groups.append(name)
             seen.add(name)
-    
+
     return device_groups
 
 def extract_device_group_config(root: ET.Element, device_group_name: str) -> ET.Element:
@@ -51,23 +53,28 @@ def extract_device_group_config(root: ET.Element, device_group_name: str) -> ET.
     # Create new root config element
     new_config = ET.Element('config')
     new_config.set('version', root.get('version', '10.0.0'))
-    
+
     # Create devices structure
     devices = ET.SubElement(new_config, 'devices')
     localhost = ET.SubElement(devices, 'entry')
     localhost.set('name', 'localhost.localdomain')
-    
-    # Find the specific device group
-    dg_xpath = f".//device-group/entry[@name='{device_group_name}']"
-    source_dg = root.find(dg_xpath)
-    
+
+    # Find the specific device group. Match the name attribute in Python
+    # rather than interpolating it into an XPath string: names may contain
+    # quote characters, which would break (or silently mismatch) the XPath.
+    source_dg = None
+    for dg in root.findall(".//device-group/entry"):
+        if dg.get("name") == device_group_name:
+            source_dg = dg
+            break
+
     if source_dg is None:
         return None
-    
+
     # Copy device-group
     device_group_container = ET.SubElement(localhost, 'device-group')
     device_group_container.append(source_dg)
-    
+
     # Copy shared objects (they're referenced by device groups)
     # Note: Panorama configs can have MULTIPLE <shared> sections
     # We need to merge them all to capture all objects
@@ -75,14 +82,14 @@ def extract_device_group_config(root: ET.Element, device_group_name: str) -> ET.
     if shared_sections:
         # Create a merged shared section
         merged_shared = ET.Element('shared')
-        
+
         # Track what we've added to avoid duplicates
         seen_children = {}
-        
+
         for shared in shared_sections:
             for child in shared:
                 child_tag = child.tag
-                
+
                 # If we haven't seen this tag yet, add it
                 if child_tag not in seen_children:
                     merged_shared.append(child)
@@ -97,15 +104,18 @@ def extract_device_group_config(root: ET.Element, device_group_name: str) -> ET.
                             existing_names = [e.get('name') for e in existing.findall('.//entry')]
                             if entry_name not in existing_names:
                                 existing.append(entry)
-        
+
         new_config.append(merged_shared)
-    
+
     # Copy template if it exists (network config)
     # Try to find template with matching name or reference
     template_name = device_group_name.replace('DG-', '').replace('dg-', '')
-    template_xpath = f".//template/entry[@name='{template_name}']"
-    source_template = root.find(template_xpath)
-    
+    source_template = None
+    for template in root.findall(".//template/entry"):
+        if template.get("name") == template_name:
+            source_template = template
+            break
+
     if source_template is None:
         # Try without prefix
         for template in root.findall(".//template/entry"):
@@ -113,11 +123,11 @@ def extract_device_group_config(root: ET.Element, device_group_name: str) -> ET.
             if device_group_name.lower() in t_name.lower():
                 source_template = template
                 break
-    
+
     if source_template is not None:
         template_container = ET.SubElement(localhost, 'template')
         template_container.append(source_template)
-    
+
     # Copy template stack if exists
     for ts in root.findall(".//template-stack/entry"):
         # Check if this stack references our device group
@@ -127,67 +137,72 @@ def extract_device_group_config(root: ET.Element, device_group_name: str) -> ET.
                 ts_container = ET.SubElement(localhost, 'template-stack')
                 ts_container.append(ts)
                 break
-    
+
     return new_config
 
 def split_panorama_config(input_file: str, output_dir: str = None):
     """Split Panorama configuration by device group"""
+    # Panorama exports never contain a DTD. Reject one before parsing:
+    # ElementTree resolves internal entities ("billion laughs" memory DoS),
+    # and external entity declarations are an XXE vector.
+    raw = Path(input_file).read_text(encoding='utf-8', errors='replace')
+    if re.search(r'<!DOCTYPE', raw, re.IGNORECASE):
+        print("Error: input contains a DTD, which Panorama exports never include")
+        return False
+
     try:
         tree = ET.parse(input_file)
         root = tree.getroot()
     except ET.ParseError as e:
         print(f"Error: Failed to parse XML file: {e}")
         return False
-    
+
     # Get list of device groups
     device_groups = parse_device_groups(root)
-    
+
     if not device_groups:
         print("No device groups found in Panorama configuration.")
         print("This may be a single firewall export, not a Panorama export.")
         return False
-    
+
     print(f"\nFound {len(device_groups)} device groups:")
     for dg in device_groups:
         print(f"  - {dg}")
-    
+
     # Create output directory
-    if output_dir is None:
-        output_dir = Path(input_file).parent / "split_configs"
-    else:
-        output_dir = Path(output_dir)
-    
+    output_dir = Path(input_file).parent / "split_configs" if output_dir is None else Path(output_dir)
+
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     print(f"\nSplitting configurations into: {output_dir}")
-    
+
     # Extract and save each device group
     for dg_name in device_groups:
         print(f"\nProcessing device group: {dg_name}")
-        
+
         dg_config = extract_device_group_config(root, dg_name)
-        
+
         if dg_config is None:
             print(f"  ⚠ Warning: Could not extract config for {dg_name}")
             continue
-        
+
         # Sanitize filename
         safe_name = dg_name.replace('/', '_').replace(' ', '_')
         output_file = output_dir / f"{safe_name}.xml"
-        
+
         # Write to file
         tree = ET.ElementTree(dg_config)
         ET.indent(tree, space="  ")
         tree.write(output_file, encoding='utf-8', xml_declaration=True)
-        
+
         print(f"  ✓ Saved to: {output_file}")
-    
+
     print(f"\n✓ Successfully split {len(device_groups)} device groups")
-    print(f"\nNext steps:")
+    print("\nNext steps:")
     print(f"  1. cd {output_dir}")
-    print(f"  2. Run panorama_to_terraform.py on each XML file:")
-    print(f"     python3 panorama_to_terraform.py <device-group>.xml --output-dir <device-group>-tf")
-    
+    print("  2. Run panorama_to_terraform.py on each XML file:")
+    print("     python3 panorama_to_terraform.py <device-group>.xml --output-dir <device-group>-tf")
+
     return True
 
 def main():
@@ -198,10 +213,10 @@ def main():
 Examples:
   # Split Panorama export into separate device group configs
   python3 split_device_groups.py panorama_export.xml
-  
+
   # Specify custom output directory
   python3 split_device_groups.py panorama_export.xml --output-dir ./device-groups
-  
+
   # Then convert each device group separately
   python3 panorama_to_terraform.py device-groups/DG-Internet.xml --output-dir internet-tf
   python3 panorama_to_terraform.py device-groups/DG-DMZ.xml --output-dir dmz-tf
@@ -213,18 +228,18 @@ Use Case:
   each HA pair to a separate virtual router on your target firewall.
         '''
     )
-    
+
     parser.add_argument('input_file', help='Panorama XML export file')
     parser.add_argument('--output-dir', '-o', help='Output directory for split configs')
-    
+
     args = parser.parse_args()
-    
+
     if not Path(args.input_file).exists():
         print(f"Error: Input file not found: {args.input_file}")
         return 1
-    
+
     success = split_panorama_config(args.input_file, args.output_dir)
-    
+
     return 0 if success else 1
 
 if __name__ == '__main__':

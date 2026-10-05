@@ -1,0 +1,777 @@
+<?xml version="1.0"?>
+<config version="10.0.0" urldb="paloaltonetworks">
+  <shared>
+    <address-group>
+      <entry name="Web-Servers">
+        <static>
+          <member>Web-Server-1</member>
+          <member>Web-Server-2</member>
+        </static>
+        <description>All web servers</description>
+      </entry>
+      <entry name="Dynamic-Web">
+        <dynamic>
+          <filter>
+            <address>
+              <tag>web</tag>
+            </address>
+          </filter>
+        </dynamic>
+      </entry>
+      <entry name="Reference-Only">
+        <id>99</id>
+      </entry>
+    </address-group>
+    <address>
+      <entry name="Web-Server-1">
+        <ip-netmask>10.1.1.10/32</ip-netmask>
+        <description>Web server</description>
+        <tag>
+          <member>Production</member>
+          <member>Web</member>
+        </tag>
+      </entry>
+      <entry name="Web-Range">
+        <ip-range>10.1.2.0-10.1.2.255</ip-range>
+      </entry>
+      <entry name="External-API">
+        <fqdn>api.example.com</fqdn>
+        <description>External API</description>
+      </entry>
+      <entry name="Reference-Only">
+        <id>4815</id>
+      </entry>
+    </address>
+    <application-filter>
+      <entry name="high-risk-web">
+        <category>
+          <member>web-proxy</member>
+          <member>file-transfer</member>
+        </category>
+        <risk>
+          <member>high</member>
+        </risk>
+        <evasive>yes</evasive>
+        <description>Filter high risk web applications</description>
+      </entry>
+    </application-filter>
+    <application-group>
+      <entry name="web-apps">
+        <members>
+          <member>http</member>
+          <member>https</member>
+        </members>
+      </entry>
+    </application-group>
+    <custom-url-category>
+      <entry name="blocked-sites">
+        <type>block</type>
+        <list>
+          <member>example.com</member>
+          <member>bad.example.org</member>
+        </list>
+        <description>Blocked websites</description>
+      </entry>
+    </custom-url-category>
+    <external-list>
+      <entry name="threat-ips">
+        <type>
+          <ip>
+            <url>https://threat.example.com/list.txt</url>
+            <recurring>
+              <hourly>
+                <entry name="hourly">
+                  <hour>
+                    <member>0</member>
+                  </hour>
+                </entry>
+              </hourly>
+            </recurring>
+          </ip>
+        </type>
+        <description>Threat IP list</description>
+      </entry>
+    </external-list>
+    <log-settings>
+      <profiles>
+        <entry name="Log-To-SIEM">
+          <description>Forward logs to SIEM</description>
+        </entry>
+      </profiles>
+    </log-settings>
+    <region>
+      <entry name="North-America">
+        <address>
+          <member>US</member>
+          <member>CA</member>
+          <member>MX</member>
+        </address>
+      </entry>
+    </region>
+    <schedule>
+      <entry name="Business-Hours">
+        <schedule-type>
+          <recurring>
+            <entry name="Weekdays">
+              <day>
+                <member>Monday</member>
+                <member>Wednesday</member>
+              </day>
+              <time>
+                <entry name="9to5">
+                  <start-time>09:00</start-time>
+                  <end-time>17:00</end-time>
+                </entry>
+              </time>
+            </entry>
+          </recurring>
+        </schedule-type>
+        <description>Business hours</description>
+      </entry>
+      <entry name="One-Time">
+        <schedule-type>
+          <non-recurring>
+            <start-date>
+              <year>2026</year>
+              <month>10</month>
+              <day>1</day>
+            </start-date>
+          </non-recurring>
+        </schedule-type>
+      </entry>
+    </schedule>
+    <profile-group>
+      <entry name="Strict-Profile">
+        <virus>
+          <member>AV-Default</member>
+        </virus>
+        <spyware>
+          <member>SPY-Default</member>
+        </spyware>
+        <vulnerability>
+          <member>VULN-Default</member>
+        </vulnerability>
+        <url-filtering>
+          <member>URL-Default</member>
+        </url-filtering>
+      </entry>
+    </profile-group>
+    <profiles>
+      <virus>
+        <entry name="AV-Default">
+          <description>Default antivirus</description>
+        </entry>
+      </virus>
+      <vulnerability>
+        <entry name="VULN-Default">
+          <description>Default vulnerability</description>
+        </entry>
+      </vulnerability>
+      <spyware>
+        <entry name="SPY-Default">
+          <description>Default spyware</description>
+        </entry>
+      </spyware>
+      <url-filtering>
+        <entry name="URL-Default">
+          <description>Default URL filtering</description>
+        </entry>
+      </url-filtering>
+      <file-blocking>
+        <entry name="FB-Default">
+          <description>Default file blocking</description>
+        </entry>
+      </file-blocking>
+      <wildfire-analysis>
+        <entry name="WF-Default">
+          <description>Default WildFire</description>
+        </entry>
+      </wildfire-analysis>
+    </profiles>
+    <service-group>
+      <entry name="Web-Services">
+        <members>
+          <member>service-http</member>
+          <member>TCP-8080</member>
+        </members>
+        <description>Web services</description>
+      </entry>
+    </service-group>
+    <service>
+      <entry name="TCP-8080">
+        <protocol>
+          <tcp>
+            <port>8080</port>
+          </tcp>
+        </protocol>
+        <description>Custom HTTP port</description>
+        <tag>
+          <member>web</member>
+        </tag>
+      </entry>
+      <entry name="UDP-514">
+        <protocol>
+          <udp>
+            <port>514</port>
+          </udp>
+        </protocol>
+      </entry>
+    </service>
+    <tag>
+      <entry name="env-prod">
+        <color>green</color>
+        <comments>Production environment</comments>
+      </entry>
+      <entry name="web">
+        <color>blue</color>
+      </entry>
+    </tag>
+    <zone-protection-profile>
+      <entry name="ZPP-Default">
+        <description>Default zone protection</description>
+      </entry>
+    </zone-protection-profile>
+  </shared>
+  <devices>
+    <entry name="localhost.localdomain">
+      <device-group>
+        <entry name="Production-DG">
+          <pre-rulebase>
+            <application-override>
+              <rules>
+                <entry name="Override-443">
+                  <from>
+                    <member>Trust</member>
+                  </from>
+                  <to>
+                    <member>Untrust</member>
+                  </to>
+                  <source>
+                    <member>Internal-Network</member>
+                  </source>
+                  <destination>
+                    <member>any</member>
+                  </destination>
+                  <port>8443</port>
+                  <protocol>tcp</protocol>
+                  <application>https</application>
+                  <description>Override 8443 as HTTPS</description>
+                </entry>
+              </rules>
+            </application-override>
+            <decryption>
+              <rules>
+                <entry name="Decrypt-HTTPS" uuid="abc-123">
+                  <from>
+                    <member>Trust</member>
+                  </from>
+                  <to>
+                    <member>Untrust</member>
+                  </to>
+                  <source>
+                    <member>Internal-Network</member>
+                  </source>
+                  <destination>
+                    <member>any</member>
+                  </destination>
+                  <service>
+                    <member>service-https</member>
+                  </service>
+                  <action>ssl-forward-proxy</action>
+                  <type>
+                    <ssl-forward-proxy />
+                  </type>
+                  <profile>ssl-decrypt-policy</profile>
+                  <log-setting>default</log-setting>
+                  <description>Decrypt HTTPS</description>
+                </entry>
+              </rules>
+            </decryption>
+            <nat>
+              <rules>
+                <entry name="Outbound-NAT">
+                  <from>
+                    <member>Trust</member>
+                  </from>
+                  <to-interface>Untrust</to-interface>
+                  <source>
+                    <member>Internal-Network</member>
+                  </source>
+                  <destination>
+                    <member>any</member>
+                  </destination>
+                  <service>any</service>
+                  <source-translation>
+                    <dynamic-ip-and-port>
+                      <translated-address>
+                        <member>Untrust-Interface</member>
+                      </translated-address>
+                    </dynamic-ip-and-port>
+                  </source-translation>
+                  <description>Outbound NAT</description>
+                </entry>
+                <entry name="Inbound-Web-NAT">
+                  <from>
+                    <member>Untrust</member>
+                  </from>
+                  <to-interface>DMZ</to-interface>
+                  <source>
+                    <member>any</member>
+                  </source>
+                  <destination>
+                    <member>Public-IP</member>
+                  </destination>
+                  <service>service-http</service>
+                  <destination-translation>
+                    <translated-address>10.1.1.10</translated-address>
+                    <translated-port>80</translated-port>
+                  </destination-translation>
+                  <description>Inbound NAT for web</description>
+                </entry>
+              </rules>
+            </nat>
+            <pbf>
+              <rules>
+                <entry name="PBF-Forward" uuid="pbf-1">
+                  <from>
+                    <zone>
+                      <member>vsys1</member>
+                    </zone>
+                  </from>
+                  <source>
+                    <member>Internal-Network</member>
+                  </source>
+                  <destination>
+                    <member>any</member>
+                  </destination>
+                  <application>
+                    <member>any</member>
+                  </application>
+                  <service>
+                    <member>any</member>
+                  </service>
+                  <action>
+                    <forward>
+                      <nexthop>
+                        <ip-address>10.0.0.1</ip-address>
+                      </nexthop>
+                      <egress-interface>ethernet1/1</egress-interface>
+                      <!-- F2.9: path monitoring references the
+                           panos_monitor_profile (PM-Branch) in this config -->
+                      <monitor>
+                        <ip-address>10.1.1.1</ip-address>
+                        <profile>PM-Branch</profile>
+                        <disable-if-unreachable>yes</disable-if-unreachable>
+                      </monitor>
+                    </forward>
+                  </action>
+                  <enforce-symmetric-return>
+                    <enabled>yes</enabled>
+                  </enforce-symmetric-return>
+                  <description>Forward to next hop</description>
+                </entry>
+                <entry name="PBF-Discard" uuid="pbf-2">
+                  <from>
+                    <zone>
+                      <member>vsys1</member>
+                    </zone>
+                  </from>
+                  <action>
+                    <discard />
+                  </action>
+                </entry>
+              </rules>
+            </pbf>
+            <security>
+              <rules>
+                <entry name="Allow-Web-Traffic">
+                  <from>
+                    <member>Trust</member>
+                  </from>
+                  <to>
+                    <member>DMZ</member>
+                  </to>
+                  <source>
+                    <member>Internal-Network</member>
+                  </source>
+                  <destination>
+                    <member>Web-Servers</member>
+                  </destination>
+                  <application>
+                    <member>web-browsing</member>
+                    <member>ssl</member>
+                  </application>
+                  <service>
+                    <member>application-default</member>
+                  </service>
+                  <action>allow</action>
+                  <log-start>yes</log-start>
+                  <log-end>no</log-end>
+                  <description>Allow web traffic</description>
+                </entry>
+                <entry name="Block-Risky-Apps">
+                  <from>
+                    <member>any</member>
+                  </from>
+                  <to>
+                    <member>any</member>
+                  </to>
+                  <source>
+                    <member>any</member>
+                  </source>
+                  <destination>
+                    <member>any</member>
+                  </destination>
+                  <application>
+                    <member>torrent</member>
+                  </application>
+                  <service>
+                    <member>application-default</member>
+                  </service>
+                  <action>deny</action>
+                  <disabled>yes</disabled>
+                  <log-end>yes</log-end>
+                  <profile>
+                    <group>
+                      <member>Strict-Profile</member>
+                    </group>
+                  </profile>
+                </entry>
+              </rules>
+            </security>
+          </pre-rulebase>
+          <description>Production device group</description>
+        </entry>
+        <entry name="Dev-DG">
+        </entry>
+      </device-group>
+      <vsys>
+        <entry name="vsys1">
+          <network>
+            <virtual-router>
+              <entry name="default">
+                <protocol>
+                  <bgp>
+                    <enable>yes</enable>
+                    <router-id>10.0.0.1</router-id>
+                    <local-as>65001</local-as>
+                    <peer-group>
+                      <entry name="PG-Branch">
+                        <type>external</type>
+                        <export-nexthop>self</export-nexthop>
+                        <import-nexthop>self</import-nexthop>
+                      </entry>
+                    </peer-group>
+                    <peer>
+                      <entry name="10.55.0.2">
+                        <peer-as>65002</peer-as>
+                        <local-address>
+                          <ip>10.55.0.1</ip>
+                        </local-address>
+                        <peer-address>
+                          <ip>10.55.0.2</ip>
+                        </peer-address>
+                        <enable>yes</enable>
+                        <peer-group>PG-Branch</peer-group>
+                      </entry>
+                    </peer>
+                    <redist-rules>
+                      <entry name="redist-static">
+                        <enable>yes</enable>
+                        <address-family-identifier>ipv4-unicast</address-family-identifier>
+                      </entry>
+                    </redist-rules>
+                  </bgp>
+                  <ospf>
+                    <enable>yes</enable>
+                    <router-id>10.0.0.1</router-id>
+                    <area>
+                      <entry name="0.0.0.0">
+                        <type>
+                          <stub />
+                        </type>
+                        <range>
+                          <entry name="10.0.0.0/8">
+                            <name>10.0.0.0/8</name>
+                          </entry>
+                        </range>
+                      </entry>
+                    </area>
+                    <interface>
+                      <entry name="ethernet1/1">
+                        <enable>yes</enable>
+                        <passive>yes</passive>
+                        <link-type>point-to-point</link-type>
+                        <metric>10</metric>
+                      </entry>
+                    </interface>
+                  </ospf>
+                </protocol>
+              </entry>
+              <entry name="vr-nobgp">
+                <protocol>
+                  <bgp>
+                    <enable>no</enable>
+                  </bgp>
+                </protocol>
+              </entry>
+              <entry name="vr-dmz">
+                <interface>
+                  <member>ethernet1/3</member>
+                </interface>
+              </entry>
+            </virtual-router>
+            <ike>
+              <crypto-profiles>
+                <ike-crypto-profiles>
+                  <entry name="IKE-DEFAULT">
+                    <dh-group>
+                      <member>group14</member>
+                    </dh-group>
+                    <authentication>
+                      <member>sha256</member>
+                    </authentication>
+                    <encryption>
+                      <member>aes256</member>
+                    </encryption>
+                    <lifetime>
+                      <hours>24</hours>
+                    </lifetime>
+                  </entry>
+                </ike-crypto-profiles>
+                <ipsec-crypto-profiles>
+                  <entry name="IPSEC-DEFAULT">
+                    <esp>
+                      <encryption>
+                        <member>aes256</member>
+                      </encryption>
+                      <authentication>
+                        <member>sha256</member>
+                      </authentication>
+                    </esp>
+                    <dh-group>group14</dh-group>
+                    <lifetime>
+                      <hours>1</hours>
+                      <kilobytes>4608000</kilobytes>
+                    </lifetime>
+                  </entry>
+                </ipsec-crypto-profiles>
+              </crypto-profiles>
+              <gateway>
+                <entry name="IKE-GW-Branch">
+                  <protocol>
+                    <ikev2>
+                      <ike-crypto-profile>IKE-DEFAULT</ike-crypto-profile>
+                    </ikev2>
+                  </protocol>
+                  <peer-address>
+                    <fqdn>branch.example.com</fqdn>
+                  </peer-address>
+                  <authentication>
+                    <pre-shared-key>
+                      <profile>psk-profile</profile>
+                    </pre-shared-key>
+                  </authentication>
+                  <local-id>
+                    <id>local.example.com</id>
+                  </local-id>
+                  <peer-id>
+                    <id>peer.example.com</id>
+                  </peer-id>
+                </entry>
+              </gateway>
+            </ike>
+            <interface>
+              <ethernet>
+                <entry name="ethernet1/1">
+                  <mode>layer3</mode>
+                  <layer3>
+                    <interface-management-profile>Management1</interface-management-profile>
+                    <ip>
+                      <entry name="192.168.1.1/24" />
+                    </ip>
+                  </layer3>
+                  <comment>Trust uplink</comment>
+                </entry>
+                <entry name="ethernet1/2">
+                  <mode>layer2</mode>
+                  <layer2 />
+                </entry>
+              </ethernet>
+              <vlan>
+                <units>
+                  <entry name="10">
+                    <tag>10</tag>
+                    <description>VLAN 10</description>
+                    <ip>
+                      <entry name="10.10.10.1/24" />
+                    </ip>
+                  </entry>
+                </units>
+              </vlan>
+              <loopback>
+                <units>
+                  <entry name="1">
+                    <ip>
+                      <entry name="169.254.0.1/32" />
+                    </ip>
+                  </entry>
+                </units>
+              </loopback>
+              <tunnel>
+                <units>
+                  <entry name="1">
+                    <ip>
+                      <entry name="10.255.0.1/32" />
+                    </ip>
+                  </entry>
+                </units>
+              </tunnel>
+              <aggregate-ethernet>
+                <entry name="ae1.101">
+                  <layer3>
+                    <ip>
+                      <entry name="172.16.1.1/24" />
+                    </ip>
+                    <units>
+                      <entry name="ae1.101.20">
+                        <tag>20</tag>
+                        <ip>
+                          <entry name="172.16.20.1/24" />
+                        </ip>
+                      </entry>
+                    </units>
+                  </layer3>
+                </entry>
+              </aggregate-ethernet>
+            </interface>
+            <tunnel>
+              <ipsec>
+                <entry name="TUN-Branch">
+                  <tunnel-interface>tunnel.1</tunnel-interface>
+                  <auto-key>
+                    <gateway>
+                      <entry name="IKE-GW-Branch" />
+                    </gateway>
+                    <ipsec-crypto-profile>IPSEC-DEFAULT</ipsec-crypto-profile>
+                    <proxy-id>
+                      <entry name="proxy-1">
+                        <local>10.0.0.0/8</local>
+                        <remote>192.168.0.0/16</remote>
+                        <protocol>
+                          <number>17</number>
+                        </protocol>
+                      </entry>
+                    </proxy-id>
+                  </auto-key>
+                </entry>
+              </ipsec>
+            </tunnel>
+            <profiles>
+              <monitor-profile>
+                <entry name="PM-Branch" uuid="pm-ks-1">
+                  <action>wait-recover</action>
+                  <interval>10</interval>
+                  <threshold>5</threshold>
+                </entry>
+              </monitor-profile>
+            </profiles>
+            <qos>
+              <profile>
+                <entry name="QOS-Default">
+                  <class>
+                    <entry name="Class-1">
+                      <priority>high</priority>
+                    </entry>
+                    <entry name="Class-2">
+                      <priority>low</priority>
+                    </entry>
+                  </class>
+                </entry>
+              </profile>
+            </qos>
+            <tunnel-monitor>
+              <monitor-profile>
+                <entry name="TM-Default">
+                  <interval>30</interval>
+                  <threshold>3</threshold>
+                  <action>reset</action>
+                </entry>
+              </monitor-profile>
+            </tunnel-monitor>
+          </network>
+          <zone>
+            <entry name="trust">
+              <network>
+                <layer3>
+                  <member>ethernet1/1</member>
+                  <member>ethernet1/2</member>
+                </layer3>
+              </network>
+              <zone-protection-profile>ZPP-Default</zone-protection-profile>
+            </entry>
+            <entry name="lan2">
+              <network>
+                <layer2>
+                  <member>ethernet1/3</member>
+                </layer2>
+              </network>
+            </entry>
+          </zone>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+  <templates>
+    <entry name="FW-Template">
+      <network>
+        <logical-router>
+          <entry name="lr-main">
+            <interface>
+              <member>ethernet1/1</member>
+            </interface>
+            <routing-table>
+              <ip>
+                <static-route>
+                  <entry name="lr-default">
+                    <destination>default</destination>
+                    <nexthop>
+                      <next-lr>lr-peer</next-lr>
+                    </nexthop>
+                  </entry>
+                </static-route>
+              </ip>
+            </routing-table>
+          </entry>
+        </logical-router>
+        <virtual-router>
+          <entry name="default">
+            <interface>
+              <member>ethernet1/1</member>
+              <member>ethernet1/2</member>
+            </interface>
+            <routing-table>
+              <ip>
+                <static-route>
+                  <entry name="default-gw">
+                    <destination>default</destination>
+                    <nexthop>
+                      <ip-address>192.168.1.254</ip-address>
+                    </nexthop>
+                    <metric>10</metric>
+                  </entry>
+                  <entry name="dmz-route">
+                    <destination>172.16.0.0/16</destination>
+                    <nexthop>
+                      <ip-address>192.168.1.5</ip-address>
+                    </nexthop>
+                  </entry>
+                </static-route>
+              </ip>
+            </routing-table>
+          </entry>
+        </virtual-router>
+      </network>
+    </entry>
+  </templates>
+</config>

@@ -1,0 +1,4 @@
+# Development and test tools.
+# Pinned for reproducible CI runs.
+pytest==9.1.1
+ruff==0.16.10

@@ -1,0 +1,11 @@
+# Pre-commit hooks. Keep in sync with the CI gate (.github/workflows/python-tests.yml).
+# Install: uv tool install pre-commit  (or pipx install pre-commit)
+# Enable: pre-commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+      # Note: ruff-format is not part of the gate yet. The legacy code needs a
+      # one-time format pass first. See backlog.md.

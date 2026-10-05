@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!-- Edge case: device-group names containing quote characters. -->
+<config version="10.0.0" urldb="paloaltonetworks">
+  <devices>
+    <entry name="localhost.localdomain">
+      <device-group>
+        <!-- Single quote in the name: breaks f-string XPath lookups. -->
+        <entry name="DG-It's Here">
+          <address>
+            <entry name="dg-single-quote-host">
+              <ip-netmask>10.1.1.1/32</ip-netmask>
+            </entry>
+          </address>
+        </entry>
+        <!-- Double quote in the name: needs quoted attribute in XML. -->
+        <entry name='DG-"East" Prod'>
+          <address>
+            <entry name="dg-double-quote-host">
+              <ip-netmask>10.2.2.1/32</ip-netmask>
+            </entry>
+          </address>
+        </entry>
+      </device-group>
+    </entry>
+  </devices>
+</config>

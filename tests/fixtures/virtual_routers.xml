@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<config version="10.0.0" urldb="paloaltonetworks">
+  <templates>
+    <entry name="FW-Template">
+      <network>
+        <virtual-router>
+          <entry name="default">
+            <interface>
+              <member>ethernet1/1</member>
+              <member>ethernet1/2</member>
+            </interface>
+            <routing-table>
+              <ip>
+                <static-route>
+                  <entry name="default-gw">
+                    <destination>default</destination>
+                    <nexthop>
+                      <ip-address>192.168.1.254</ip-address>
+                    </nexthop>
+                    <metric>10</metric>
+                  </entry>
+                  <entry name="dmz-route">
+                    <destination>172.16.0.0/16</destination>
+                    <nexthop>
+                      <ip-address>192.168.1.5</ip-address>
+                    </nexthop>
+                  </entry>
+                </static-route>
+              </ip>
+            </routing-table>
+          </entry>
+        </virtual-router>
+      </network>
+    </entry>
+  </templates>
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <network>
+            <virtual-router>
+              <entry name="vr-dmz">
+                <interface>
+                  <member>ethernet1/3</member>
+                </interface>
+              </entry>
+            </virtual-router>
+          </network>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

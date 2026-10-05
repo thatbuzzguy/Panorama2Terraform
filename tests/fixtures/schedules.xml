@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<config version="10.0.0" urldb="paloaltonetworks">
+  <shared>
+    <schedule>
+      <entry name="Business-Hours">
+        <schedule-type>
+          <recurring>
+            <entry name="Weekdays">
+              <day>
+                <member>Monday</member>
+                <member>Wednesday</member>
+              </day>
+              <time>
+                <entry name="9to5">
+                  <start-time>09:00</start-time>
+                  <end-time>17:00</end-time>
+                </entry>
+              </time>
+            </entry>
+          </recurring>
+        </schedule-type>
+        <description>Business hours</description>
+      </entry>
+      <entry name="One-Time">
+        <schedule-type>
+          <non-recurring>
+            <start-date>
+              <year>2026</year>
+              <month>10</month>
+              <day>1</day>
+            </start-date>
+          </non-recurring>
+        </schedule-type>
+      </entry>
+    </schedule>
+  </shared>
+</config>
