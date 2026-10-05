@@ -4,7 +4,11 @@ Goal 4: the conversion is fully traceable and verified. F4.1 makes the
 output side true: every run verifies the `.tf` files it wrote, instead of
 leaving verification to the test suite alone.
 
-Acceptance criteria are in `acceptance.md`.
+F2.9 (real resources or explicit reports) landed 2026-10-04, worked
+before F4.1 per direction; its detail is in `agent-status.md`.
+
+Acceptance criteria for the current task go in `acceptance.md` before
+code.
 
 ## Task
 
@@ -23,12 +27,17 @@ Acceptance criteria are in `acceptance.md`.
 
 ## Deferred (tracked in PLAN.md)
 
-- **Epic 2:** F2.9 (real resources or explicit reports), F2.10 (one-time dead-variable cleanup; its permanent check lands in F4.1), F2.11 (verified claims).
+- **Epic 2:** F2.10 (one-time dead-variable cleanup; its permanent check lands in F4.1), F2.11 (verified claims).
 - **Epic 3:** F3.1 (keyed data model) first, then F3.2–F3.10.
 - **Epic 4:** F4.2 (container table + line tracking; may land during Epic 3), F4.3 (per-entry `CONVERSION_REPORT.txt`; after F3.1), F4.4 (property-level matrix extending the landed F2.8 type-level matrix; after F3.1, last in Epic 4).
 
 ## Notes
 
+- **F2.9 (real resources or explicit reports) landed 2026-10-04** —
+  decryption, PBF, and PBF path monitoring profiles now emit as real v2
+  resources; app override, QoS, IPsec tunnel monitor, schedules, log
+  forwarding, and zone protection go to `MANUAL_SETUP_REPORT.txt` with
+  their data and the reason. All comment-only `.tf` generators are gone.
 - **F2.8 (type-level coverage matrix) landed 2026-07-13** — finished
   per direction to continue the previously active task: `COVERAGE_MATRIX`
   in `resource_mapping.py`, `tests/test_coverage_matrix.py` (61 tests:

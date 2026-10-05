@@ -41,9 +41,9 @@ python3 split_device_groups.py your_export.xml --output-dir split_output
 | Area | Resources |
 |---|---|
 | Objects | `panos_address`, `panos_address_group`, `panos_administrative_tag`, `panos_application_group`, `panos_custom_url_category`, `panos_external_dynamic_list`, `panos_service`, `panos_service_group` |
-| Policy | `panos_security_policy_rules`, `panos_nat_policy_rules` (one resource per rule; per-device-group chains in XML order — the first rule anchors at the end of the rulebase, each later rule is placed directly after the previous one and depends on it) |
+| Policy | `panos_security_policy_rules`, `panos_nat_policy_rules`, `panos_decryption_policy_rules`, `panos_pbf_policy_rules` (one resource per rule; per-device-group chains in XML order — the first rule anchors at the end of the rulebase, each later rule is placed directly after the previous one and depends on it) |
 | Profiles | `panos_security_profile_group` |
-| Network | `panos_ethernet_interface`, `panos_ethernet_layer3_subinterface`, `panos_virtual_router`, `panos_virtual_router_static_route_ipv4`, `panos_zone` |
+| Network | `panos_ethernet_interface`, `panos_ethernet_layer3_subinterface`, `panos_virtual_router`, `panos_virtual_router_static_route_ipv4`, `panos_zone`, `panos_monitor_profile` (PBF path monitoring profiles; referenced by PBF rule path monitoring) |
 | VPN | `panos_ike_crypto_profile`, `panos_ike_gateway`, `panos_ipsec_crypto_profile`, `panos_ipsec_tunnel` (proxy-ids merged into the tunnel) |
 
 The mapping and rationale are in
@@ -86,16 +86,25 @@ resource "panos_address" "web_server_1_a9a88aa6" {
 ## Report-only configuration
 
 The following have no v2 provider resource. The converter keeps their
-data visible in the reports instead of emitting it:
+data visible in `MANUAL_SETUP_REPORT.txt` instead of emitting it:
 
 - BGP (router, peer groups, peers)
 - OSPF (router, areas, interfaces)
 - Application filters
+- Application override rules
+- QoS profiles
+- IPsec tunnel monitor profiles (note: `panos_monitor_profile` is the
+  PBF path monitoring profile, a different PAN-OS object)
+
+The following have a v2 provider resource, but the converter captures
+only names and entry names — emitting an empty object would create a
+misconfigured resource — so they stay in the report until the body
+parsing lands (Epic 3):
+
 - Security profile bodies (antivirus, anti-spyware, vulnerability, URL
-  filtering, file blocking, WildFire, zone protection) - names and
-  descriptions are captured; detailed rules are not parsed
-- Decryption, PBF, application-override, QoS, schedules, log settings,
-  non-ethernet interfaces (tunnel, aggregate, loopback, VLAN)
+  filtering, file blocking, WildFire, zone protection)
+- Log forwarding profiles
+- Schedules
 
 Reports written to the output directory:
 

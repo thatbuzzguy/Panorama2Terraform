@@ -1,19 +1,82 @@
 # Agent Status
 
 ## Current position
-**F2.8 Coverage matrix landed 2026-07-13** (per direction to continue the
-previously active task): `COVERAGE_MATRIX` in `resource_mapping.py`
-(20 rows, one per emitted type), `tests/test_coverage_matrix.py`
-(61 tests: row set, element grounding, per-row pipeline),
-`docs/COVERAGE_MATRIX.md` (matrix, row schema, testing methodology).
-Also fixed the VPN emission gate it exposed (standalone crypto profiles
-were silently dropped) and added the third `terraform validate` case.
-Roadmap still carries Epic 4; `to-do.md` points at **F4.1 Post-run sanity
-gate** as the next task. F4.4 builds on the landed type-level matrix.
+**F2.9 Real resources or explicit reports landed 2026-10-04** (worked
+before F4.1 per direction). Decryption, PBF, and PBF path monitoring
+profiles now emit as real v2.0.14 resources with the full parsed body;
+app override, QoS, IPsec tunnel monitor, log forwarding, zone
+protection, and schedules go to `MANUAL_SETUP_REPORT.txt` with their
+captured data and the reason. Every comment-only `.tf` generator is
+gone; `resource_mapping.py` carries `NOT_EMITTED_TYPES` (v2 exists, body
+not parsed) with an existence guard. `to-do.md` points at **F4.1
+Post-run sanity gate** as the next task; Epic 2 keeps F2.10 and F2.11.
 
 ## Session log
 
-### F2.8 — Coverage matrix (this session)
+### F2.9 — Real resources or explicit reports (this session)
+- Direction: work F2.9 now, not the F4.1 tracked in `to-do.md`.
+  `acceptance.md` rewritten for it first.
+- Emit-vs-report decision (verified against the v2.0.14 schema and
+  provider/pango source):
+  - EMIT: decryption rules (`panos_decryption_policy_rules`), PBF rules
+    (`panos_pbf_policy_rules`), PBF path monitoring profiles
+    (`panos_monitor_profile` — `network/profiles/monitor-profile`; the
+    v2 resource is template-scoped and has no `description` attribute).
+  - REPORT: app override rules, QoS profiles, IPsec tunnel monitor
+    profiles (all three: no v2 resource — `panos_monitor_profile` is a
+    different PAN-OS object, verified in
+    `internal/provider/monitor_profile.go` and pango), log forwarding +
+    zone protection (v2 exists, only name/description parsed), schedules
+    (v2 exists, only entry names parsed; v2.0.14 has no monthly
+    schedule support).
+- Parser: `parse_decryption_rules` gains `device_group`, `log_start`,
+  `log_end`; `parse_pbf_rules` gains `device_group`, `schedule`,
+  `forward_to_vsys`, and the forward-action `monitor` block;
+  new `parse_pbf_monitor_profiles()`.
+- Generators: `generate_decryption_rules` and `generate_pbf_rules` reuse
+  the F2.5 per-rule chain model (first rule `where = "last"`, later rules
+  `where = "after"` + `directly = true` + pivot + `depends_on`). New
+  `generate_pbf_monitor_profiles` writes `monitor_profiles.tf`.
+  Deleted comment-only generators: app override, QoS, log settings, zone
+  protection, tunnel monitor, schedules — all six areas now have report
+  sections in `generate_manual_setup_report` (data + reason).
+- **Decryption action mapping (caught by `terraform validate`):** the v2
+  `action` is an enum (`no-decrypt`/`decrypt`/`decrypt-and-forward`) and
+  the inspection mode is a `type { <key> = {} }` block. Modern exports
+  pass through; legacy PAN-OS 9 exports put the mode in `action`
+  (`ssl-forward-proxy`, `ssh-proxy`, `ssl-inbound-inspection`) and map
+  to `action = "decrypt"` plus the matching `type` block; unknown values
+  pass through so `terraform validate` fails loudly instead of
+  misconfiguring silently.
+- `resource_mapping.py`: +3 `EMITTED_TYPES`; +3 `REPORT_ONLY_TYPES`
+  (`panos_application_override`, `panos_qos_profile`,
+  `panos_tunnel_monitor_profile` — the name is deliberate: it must not
+  exist in the schema, and it doesn't); new `NOT_EMITTED_TYPES` dict
+  (type -> reason): `panos_log_forwarding_profile`,
+  `panos_zone_protection_profile`, `panos_schedule`. `COVERAGE_MATRIX`
+  +3 rows.
+- Tests: new `tests/test_real_or_report.py` (emission chains + bodies,
+  both monitor-profile action values, report sections, six removed
+  `.tf` files, no-report early return); `test_resource_mapping.py`
+  gains the `NOT_EMITTED_TYPES` existence guard (inverse of the
+  report-only absence guard); parser tests updated.
+- Fixtures: `decryption_rules.xml` gains a legacy-shape rule
+  (action=ssh-proxy); `pbf_rules.xml` gains the full action set and a
+  path-monitoring block; new `pbf_monitor_profiles.xml` (both action
+  enum values); `kitchen_sink.xml` gains a monitor profile and a PBF
+  monitor block.
+- Goldens (kitchen sink): +`monitor_profiles.tf`, updated
+  `decryption_rules.tf`/`pbf_rules.tf`, removed the six comment-only
+  `.tf` files.
+- Docs: `docs/RESOURCE_MAPPING.md` (status counts 23/10/2, per-rule
+  policy section, monitor-profile row, +3 report-only rows, inverse
+  guard), `README.md` (resource table, report-only section split into
+  no-v2-resource and v2-exists-but-not-emitted).
+- Gate: ruff clean. pytest 285 passed, 1 xfailed. `terraform validate`
+  green on sample, kitchen sink, crypto-profile-only, decryption,
+  PBF, and monitor-profile outputs.
+
+### F2.8 — Coverage matrix (previous session)
 - Direction: ignore the Epic 4 re-planning and finish the previously
   active task, F2.8. `acceptance.md` rewritten for it first.
 - `COVERAGE_MATRIX` in `resource_mapping.py`: one row per

@@ -77,3 +77,25 @@ def test_parse_tunnel_monitor_profiles(make_parser):
     assert profiles[0]["interval"] == "30"
     assert profiles[0]["threshold"] == "3"
     assert profiles[0]["action"] == "reset"
+
+
+def test_parse_pbf_monitor_profiles(make_parser):
+    """PBF path monitoring profiles (F2.9): the panos_monitor_profile source.
+
+    A different PAN-OS object from the IPsec tunnel monitor profile; the v2
+    action is an enum (wait-recover | fail-over).
+    """
+    p = _parser(make_parser, "pbf_monitor_profiles.xml")
+    profiles = p.parse_pbf_monitor_profiles()
+    by_name = {prof["name"]: prof for prof in profiles}
+    assert list(by_name) == ["PM-Branch", "PM-HQ"]
+
+    branch = by_name["PM-Branch"]
+    assert branch["action"] == "wait-recover"
+    assert branch["interval"] == "10"
+    assert branch["threshold"] == "5"
+
+    hq = by_name["PM-HQ"]
+    assert hq["action"] == "fail-over"
+    assert hq["interval"] == "30"
+    assert hq["threshold"] == "3"

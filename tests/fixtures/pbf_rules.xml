@@ -31,12 +31,29 @@
                         <ip-address>10.0.0.1</ip-address>
                       </nexthop>
                       <egress-interface>ethernet1/1</egress-interface>
+                      <monitor>
+                        <ip-address>10.1.1.1</ip-address>
+                        <profile>PM-Branch</profile>
+                        <disable-if-unreachable>yes</disable-if-unreachable>
+                      </monitor>
                     </forward>
                   </action>
                   <enforce-symmetric-return>
                     <enabled>yes</enabled>
                   </enforce-symmetric-return>
+                  <schedule>Business-Hours</schedule>
                   <description>Forward to next hop</description>
+                </entry>
+                <entry name="PBF-ForwardVsys" uuid="pbf-3">
+                  <from>
+                    <zone>
+                      <member>vsys1</member>
+                    </zone>
+                  </from>
+                  <action>
+                    <forward-to-vsys>vsys2</forward-to-vsys>
+                  </action>
+                  <description>Forward to another vsys</description>
                 </entry>
                 <entry name="PBF-Discard" uuid="pbf-2">
                   <from>
@@ -46,6 +63,16 @@
                   </from>
                   <action>
                     <discard/>
+                  </action>
+                </entry>
+                <entry name="PBF-NoPBF" uuid="pbf-4">
+                  <from>
+                    <zone>
+                      <member>vsys1</member>
+                    </zone>
+                  </from>
+                  <action>
+                    <no-pbf/>
                   </action>
                 </entry>
               </rules>

@@ -765,6 +765,9 @@ class PanoramaParser:
                 rule_obj = {
                     'name': name,
                     'uuid': rule.get('uuid'),
+                    # F2.9: the device group scopes the v2 resource and its
+                    # rule chain (location + position pivot semantics, F2.5)
+                    'device_group': self.device_group_of(rule),
                     'source_zones': self._get_members(rule, 'from'),
                     'destination_zones': self._get_members(rule, 'to'),
                     'source_addresses': self._get_members(rule, 'source'),
@@ -777,7 +780,11 @@ class PanoramaParser:
                     'profile': self._get_text(rule, 'profile'),
                     'description': self._get_text(rule, 'description'),
                     'disabled': self._get_text(rule, 'disabled') == 'yes',
-                    'log_setting': self._get_text(rule, 'log-setting')
+                    'log_setting': self._get_text(rule, 'log-setting'),
+                    # F2.9: log-start/log-end map to the v2 log_success and
+                    # log_fail attributes
+                    'log_start': self._get_text(rule, 'log-start') == 'yes',
+                    'log_end': self._get_text(rule, 'log-end') == 'yes',
                 }
 
                 # Determine type
@@ -816,6 +823,9 @@ class PanoramaParser:
                 rule_obj = {
                     'name': name,
                     'uuid': rule.get('uuid'),
+                    # F2.9: the device group scopes the v2 resource and its
+                    # rule chain (location + position pivot semantics, F2.5)
+                    'device_group': self.device_group_of(rule),
                     'description': self._get_text(rule, 'description'),
                     'disabled': self._get_text(rule, 'disabled') == 'yes',
                     'source_zones': [],
@@ -824,6 +834,8 @@ class PanoramaParser:
                     'destination_addresses': self._get_members(rule, 'destination'),
                     'applications': self._get_members(rule, 'application'),
                     'services': self._get_members(rule, 'service'),
+                    # F2.9: optional rule schedule name
+                    'schedule': self._get_text(rule, 'schedule'),
                     'action': None
                 }
 
@@ -841,11 +853,24 @@ class PanoramaParser:
                     if forward is not None:
                         nexthop_ip = self._get_text(forward, 'nexthop/ip-address')
                         egress_iface = self._get_text(forward, 'egress-interface')
-                        rule_obj['action'] = {
+                        action_obj = {
                             'type': 'forward',
                             'nexthop_ip': nexthop_ip,
                             'egress_interface': egress_iface
                         }
+                        # F2.9: optional path monitoring on the forward action.
+                        # The profile name references a panos_monitor_profile
+                        # (network/profiles/monitor-profile), a different
+                        # object from the IPsec tunnel monitor profile.
+                        monitor = forward.find('monitor')
+                        if monitor is not None:
+                            action_obj['monitor'] = {
+                                'ip_address': self._get_text(monitor, 'ip-address'),
+                                'profile': self._get_text(monitor, 'profile'),
+                                'disable_if_unreachable':
+                                    self._get_text(monitor, 'disable-if-unreachable') == 'yes'
+                            }
+                        rule_obj['action'] = action_obj
 
                     discard = action_elem.find('discard')
                     if discard is not None:
@@ -857,6 +882,15 @@ class PanoramaParser:
                     if no_pbf is not None:
                         rule_obj['action'] = {
                             'type': 'no-pbf'
+                        }
+
+                    # F2.9: forward-to-vsys is a plain vsys name in both the
+                    # export and the v2 schema
+                    fwd_vsys = action_elem.find('forward-to-vsys')
+                    if fwd_vsys is not None and fwd_vsys.text:
+                        rule_obj['action'] = {
+                            'type': 'forward_to_vsys',
+                            'vsys': fwd_vsys.text
                         }
 
                 # Enforce symmetric return
@@ -1730,6 +1764,44 @@ class PanoramaParser:
 
         return profiles
 
+    def parse_pbf_monitor_profiles(self) -> list[dict]:
+        """Parse PBF path monitoring profiles (F2.9)
+
+        These live at network/profiles/monitor-profile and are referenced by
+        PBF rule path monitoring. The provider manages them as
+        panos_monitor_profile resources (v2.0.14).
+
+        Note: this is NOT the IPsec tunnel monitor profile
+        (network/tunnel-monitor/monitor-profile). That object has no v2
+        resource and goes to the manual setup report instead. The v2 schema
+        has no description attribute, so none is captured.
+        """
+        profiles = []
+        seen_names = set()
+
+        paths = [
+            ".//network/profiles/monitor-profile/entry",
+            ".//device-group/entry/network/profiles/monitor-profile/entry"
+        ]
+
+        for path in paths:
+            for prof in self.root.findall(path):
+                name = prof.get('name')
+                if not name or name in seen_names:
+                    continue
+
+                seen_names.add(name)
+
+                profiles.append({
+                    'name': name,
+                    # v2 action is an enum: wait-recover | fail-over
+                    'action': self._get_text(prof, 'action'),
+                    'interval': self._get_text(prof, 'interval'),
+                    'threshold': self._get_text(prof, 'threshold')
+                })
+
+        return profiles
+
     def parse_bgp(self) -> dict[str, Any]:
         """Parse BGP configuration"""
         bgp_config = {
@@ -2137,6 +2209,17 @@ IKE_GATEWAY_SCOPES = ('panos_ike_gateway',)
 class TerraformGenerator:
     """Generate Terraform configuration files from Panorama data"""
 
+    # F2.9: the v2 panos_decryption_policy_rules action is an enum, and the
+    # inspection mode is a separate type block. Legacy PAN-OS 9 exports put
+    # the mode in <action> instead of <type>; both shapes map to the same
+    # v2 output.
+    _V2_DECRYPTION_ACTIONS = ('no-decrypt', 'decrypt', 'decrypt-and-forward')
+    _DECRYPTION_TYPE_KEYS = {
+        'ssl-forward-proxy': 'ssl_forward_proxy',
+        'ssl-inbound-inspection': 'ssl_inbound_inspection',
+        'ssh-proxy': 'ssh_proxy',
+    }
+
     def __init__(self, output_dir: str):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -2235,6 +2318,8 @@ class TerraformGenerator:
         'panos_ipsec_crypto_profile',
         'panos_ike_gateway',
         'panos_ipsec_tunnel',
+        # F2.9: tunnel monitor profiles are template-scoped in v2
+        'panos_monitor_profile',
     }
 
     def location_block(self, resource_type: str, device_group: Optional[str] = None,
@@ -2669,23 +2754,6 @@ variable "device_group" {
         with open(self.output_dir / 'external_lists.tf', 'w') as f:
             f.write(content)
 
-    def generate_schedules(self, schedules: list[dict]):
-        """Generate schedules Terraform configuration"""
-        if not schedules:
-            return
-
-        content = '# Schedules\n'
-        content += '# Note: Schedules require detailed recurring/non-recurring configuration\n'
-        content += '# Manual configuration may be needed for complex schedules\n\n'
-
-        for sched in schedules:
-            content += f'# Schedule: {sched["name"]}\n'
-            content += f'# Type: {sched.get("schedule_type", "unknown")}\n'
-            content += '# Manual Terraform configuration required\n\n'
-
-        with open(self.output_dir / 'schedules.tf', 'w') as f:
-            f.write(content)
-
     def _policy_rule_chains(self, rules: list[dict]) -> list[list[dict]]:
         """Group policy rules into per-device-group chains (F2.5).
 
@@ -2872,141 +2940,232 @@ variable "device_group" {
             f.write(content)
 
     def generate_decryption_rules(self, rules: list[dict]):
-        """Generate decryption rules - placeholder for manual configuration"""
+        """Generate decryption policy rules (F2.9: real v2 resources).
+
+        v2.0.14 has no decryption rule container: each rule is its own
+        `panos_decryption_policy_rules` resource with a position argument.
+        Rules chain per device group exactly like security and NAT rules
+        (F2.5): the first rule anchors at the end of the rulebase and each
+        later rule is placed directly after the previous one with a
+        depends_on on it, so Terraform applies the chain in XML order.
+        The parser captures the full rule, so real emission is safe.
+        """
         if not rules:
             return
 
-        content = '# Decryption Rules\n'
-        content += '# Note: Decryption rules require detailed SSL/TLS configuration\n'
-        content += '# Manual Terraform configuration is required\n\n'
+        content = '# Decryption Policy Rules (F2.9: real v2 resources)\n'
+        content += '# One panos_decryption_policy_rules resource per rule; per-device-group\n'
+        content += '# chains preserve XML order (F2.5).\n\n'
 
-        for rule in rules:
-            content += f'# Rule: {rule["name"]}\n'
-            content += f'#   Type: {rule.get("type", "unknown")}\n'
-            content += f'#   Action: {rule.get("action", "unknown")}\n'
-            content += f'#   Profile: {rule.get("profile", "none")}\n'
-            if rule.get('description'):
-                content += f'#   Description: {rule["description"]}\n'
-            content += '\n'
+        for chain in self._policy_rule_chains(rules):
+            prev_rule_name: Optional[str] = None
+            prev_resource_name: Optional[str] = None
+            for rule in chain:
+                device_group = rule.get('device_group') or 'Shared'
+                resource_name = self.declare_resource_name(
+                    rule['name'], 'panos_decryption_policy_rules', context=device_group
+                )
+
+                content += f'resource "panos_decryption_policy_rules" "{resource_name}" {{\n'
+                content += self.location_block('panos_decryption_policy_rules', device_group)
+                content += self._policy_position_block(
+                    'panos_decryption_policy_rules', prev_rule_name, prev_resource_name
+                )
+
+                rule_obj: dict = {'name': rule['name']}
+                if rule.get('description'):
+                    rule_obj['description'] = rule['description']
+                # F2.6: zones, addresses and services declared in this run
+                # become references; the rest stay brown-field strings
+                if rule.get('source_zones'):
+                    rule_obj['source_zones'] = [
+                        self.name_ref(z, ZONE_SCOPES) for z in rule['source_zones']]
+                if rule.get('destination_zones'):
+                    rule_obj['destination_zones'] = [
+                        self.name_ref(z, ZONE_SCOPES) for z in rule['destination_zones']]
+                if rule.get('source_addresses'):
+                    rule_obj['source_addresses'] = [
+                        self.name_ref(a, ADDR_SCOPES) for a in rule['source_addresses']]
+                if rule.get('destination_addresses'):
+                    rule_obj['destination_addresses'] = [
+                        self.name_ref(a, ADDR_SCOPES) for a in rule['destination_addresses']]
+                if rule.get('source_users'):
+                    rule_obj['source_user'] = list(rule['source_users'])
+                if rule.get('categories'):
+                    rule_obj['category'] = list(rule['categories'])
+                if rule.get('services'):
+                    rule_obj['services'] = [
+                        self.name_ref(s, SERVICE_SCOPES) for s in rule['services']]
+                # F2.9: the v2 action is an enum (no-decrypt | decrypt |
+                # decrypt-and-forward) and the inspection mode is a separate
+                # type block. Modern PAN-OS exports carry both; legacy PAN-OS
+                # 9 exports put the mode in <action> instead, so map it.
+                # Unknown actions pass through and fail terraform validate
+                # explicitly rather than being silently reinterpreted.
+                action = rule.get('action')
+                type_key = self._DECRYPTION_TYPE_KEYS.get(rule.get('type'))
+                if action in self._V2_DECRYPTION_ACTIONS:
+                    rule_obj['action'] = action
+                elif action in self._DECRYPTION_TYPE_KEYS:
+                    rule_obj['action'] = 'decrypt'
+                    type_key = type_key or self._DECRYPTION_TYPE_KEYS[action]
+                elif action:
+                    rule_obj['action'] = action
+                if type_key:
+                    rule_obj['type'] = {type_key: {}}
+                if rule.get('profile'):
+                    rule_obj['profile'] = rule['profile']
+                if rule.get('log_setting'):
+                    rule_obj['log_setting'] = rule['log_setting']
+                if rule.get('log_start'):
+                    rule_obj['log_success'] = True
+                if rule.get('log_end'):
+                    rule_obj['log_fail'] = True
+                if rule.get('disabled'):
+                    rule_obj['disabled'] = True
+
+                content += f'  rules = {self.hcl_value([rule_obj])}\n'
+                content += '}\n\n'
+
+                prev_rule_name = rule['name']
+                prev_resource_name = resource_name
 
         with open(self.output_dir / 'decryption_rules.tf', 'w') as f:
             f.write(content)
 
     def generate_pbf_rules(self, rules: list[dict]):
-        """Generate Policy-Based Forwarding rules - placeholder"""
+        """Generate Policy-Based Forwarding rules (F2.9: real v2 resources).
+
+        v2.0.14 has no PBF rule container: each rule is its own
+        `panos_pbf_policy_rules` resource. The chain semantics match the
+        other policy rulebases (F2.5). The action is a single-choice
+        object: forward, discard, no_pbf, or forward_to_vsys.
+        """
         if not rules:
             return
 
-        content = '# Policy-Based Forwarding Rules\n'
-        content += '# Note: PBF rules require careful configuration with virtual routers\n'
-        content += '# Manual Terraform configuration is required\n\n'
+        content = '# Policy-Based Forwarding Rules (F2.9: real v2 resources)\n'
+        content += '# One panos_pbf_policy_rules resource per rule; per-device-group\n'
+        content += '# chains preserve XML order (F2.5).\n\n'
 
-        for rule in rules:
-            content += f'# Rule: {rule["name"]}\n'
-            if rule.get('action'):
-                action = rule['action']
-                if action.get('type') == 'forward':
-                    nexthop = action.get('nexthop_ip')
-                    egress = action.get('egress_interface')
-                    content += f'#   Action: Forward to {nexthop} via {egress}\n'
-                else:
-                    content += f'#   Action: {action.get("type")}\n'
-            if rule.get('description'):
-                content += f'#   Description: {rule["description"]}\n'
-            content += '\n'
+        for chain in self._policy_rule_chains(rules):
+            prev_rule_name: Optional[str] = None
+            prev_resource_name: Optional[str] = None
+            for rule in chain:
+                device_group = rule.get('device_group') or 'Shared'
+                resource_name = self.declare_resource_name(
+                    rule['name'], 'panos_pbf_policy_rules', context=device_group
+                )
+
+                content += f'resource "panos_pbf_policy_rules" "{resource_name}" {{\n'
+                content += self.location_block('panos_pbf_policy_rules', device_group)
+                content += self._policy_position_block(
+                    'panos_pbf_policy_rules', prev_rule_name, prev_resource_name
+                )
+
+                rule_obj: dict = {'name': rule['name']}
+                if rule.get('description'):
+                    rule_obj['description'] = rule['description']
+                # v2 models the PBF source as from { zone = [...] }
+                if rule.get('source_zones'):
+                    rule_obj['from'] = {
+                        'zone': [self.name_ref(z, ZONE_SCOPES) for z in rule['source_zones']]}
+                if rule.get('source_addresses'):
+                    rule_obj['source_addresses'] = [
+                        self.name_ref(a, ADDR_SCOPES) for a in rule['source_addresses']]
+                if rule.get('source_users'):
+                    rule_obj['source_users'] = list(rule['source_users'])
+                if rule.get('destination_addresses'):
+                    rule_obj['destination_addresses'] = [
+                        self.name_ref(a, ADDR_SCOPES) for a in rule['destination_addresses']]
+                if rule.get('applications'):
+                    rule_obj['applications'] = list(rule['applications'])
+                if rule.get('services'):
+                    rule_obj['services'] = [
+                        self.name_ref(s, SERVICE_SCOPES) for s in rule['services']]
+                # Single-choice action object (v2 names use underscores)
+                action = rule.get('action')
+                if action:
+                    kind = action.get('type')
+                    if kind == 'forward':
+                        forward: dict = {}
+                        if action.get('nexthop_ip'):
+                            forward['nexthop'] = {'ip_address': action['nexthop_ip']}
+                        if action.get('egress_interface'):
+                            forward['egress_interface'] = action['egress_interface']
+                        # F2.9: optional path monitoring; the profile name
+                        # references a panos_monitor_profile resource
+                        monitor = action.get('monitor')
+                        if monitor:
+                            monitor_out: dict = {}
+                            if monitor.get('ip_address'):
+                                monitor_out['ip_address'] = monitor['ip_address']
+                            if monitor.get('profile'):
+                                monitor_out['profile'] = monitor['profile']
+                            if monitor.get('disable_if_unreachable'):
+                                monitor_out['disable_if_unreachable'] = True
+                            if monitor_out:
+                                forward['monitor'] = monitor_out
+                        rule_obj['action'] = {'forward': forward}
+                    elif kind == 'discard':
+                        rule_obj['action'] = {'discard': {}}
+                    elif kind == 'no-pbf':
+                        rule_obj['action'] = {'no_pbf': {}}
+                    elif kind == 'forward_to_vsys' and action.get('vsys'):
+                        rule_obj['action'] = {'forward_to_vsys': action['vsys']}
+                if rule.get('enforce_symmetric_return'):
+                    rule_obj['enforce_symmetric_return'] = {'enabled': True}
+                if rule.get('schedule'):
+                    rule_obj['schedule'] = rule['schedule']
+                if rule.get('disabled'):
+                    rule_obj['disabled'] = True
+
+                content += f'  rules = {self.hcl_value([rule_obj])}\n'
+                content += '}\n\n'
+
+                prev_rule_name = rule['name']
+                prev_resource_name = resource_name
 
         with open(self.output_dir / 'pbf_rules.tf', 'w') as f:
             f.write(content)
 
-    def generate_application_override_rules(self, rules: list[dict]):
-        """Generate application override rules - placeholder"""
-        if not rules:
-            return
+    def generate_pbf_monitor_profiles(self, profiles: list[dict]):
+        """Generate PBF path monitoring profiles (F2.9: real v2 resources).
 
-        content = '# Application Override Rules\n'
-        content += '# Note: Application override rules require manual configuration\n\n'
-
-        for rule in rules:
-            content += f'# Rule: {rule["name"]}\n'
-            content += f'#   Protocol: {rule.get("protocol", "unknown")}\n'
-            content += f'#   Port: {rule.get("port", "any")}\n'
-            content += f'#   Application: {rule.get("application", "unknown")}\n'
-            content += '\n'
-
-        with open(self.output_dir / 'application_override_rules.tf', 'w') as f:
-            f.write(content)
-
-    def generate_zone_protection_profiles(self, profiles: list[dict]):
-        """Generate zone protection profiles - placeholder"""
+        v2.0.14 exposes these as `panos_monitor_profile`, template-scoped.
+        The parser captures the complete profile (action, interval,
+        threshold), so real emission is safe. The v2 schema has no
+        description attribute, so none is emitted. The v2 action is an enum
+        (wait-recover | fail-over); values outside the enum will fail
+        `terraform validate`, which is the intended behavior for a
+        malformed source export.
+        """
         if not profiles:
             return
 
-        content = '# Zone Protection Profiles\n'
-        content += '# Note: Zone protection profiles require detailed configuration\n'
-        content += '# Manual Terraform configuration is required\n\n'
+        content = '# PBF Path Monitoring Profiles (F2.9: real v2 resources)\n\n'
 
         for prof in profiles:
-            content += f'# Profile: {prof["name"]}\n'
-            if prof.get('description'):
-                content += f'#   Description: {prof["description"]}\n'
-            content += '\n'
+            resource_name = self.declare_resource_name(
+                prof['name'], 'panos_monitor_profile'
+            )
+            content += f'resource "panos_monitor_profile" "{resource_name}" {{\n'
+            # Template-scoped; the tracked template name is unknown at
+            # parse time, so the default "Shared" template is used (same
+            # convention as the other template-scoped types, F2.3/F2.4)
+            content += self.location_block('panos_monitor_profile')
+            content += f'  name = {self.escape_string(prof["name"])}\n'
+            for attr in ('interval', 'threshold'):
+                raw = prof.get(attr)
+                # The v2 schema takes numbers; skip values that are not
+                # plain integers so the output always validates
+                if raw is not None and str(raw).isdigit():
+                    content += f'  {attr} = {int(raw)}\n'
+            if prof.get('action'):
+                content += f'  action = {self.escape_string(prof["action"])}\n'
+            content += '}\n\n'
 
-        with open(self.output_dir / 'zone_protection_profiles.tf', 'w') as f:
-            f.write(content)
-
-    def generate_log_settings(self, profiles: list[dict]):
-        """Generate log forwarding profiles - placeholder"""
-        if not profiles:
-            return
-
-        content = '# Log Forwarding Profiles\n'
-        content += '# Note: Log forwarding profiles require syslog/email configuration\n'
-        content += '# Manual Terraform configuration is required\n\n'
-
-        for prof in profiles:
-            content += f'# Profile: {prof["name"]}\n'
-            if prof.get('description'):
-                content += f'#   Description: {prof["description"]}\n'
-            content += '\n'
-
-        with open(self.output_dir / 'log_settings.tf', 'w') as f:
-            f.write(content)
-
-    def generate_qos_profiles(self, profiles: list[dict]):
-        """Generate QoS profiles - placeholder"""
-        if not profiles:
-            return
-
-        content = '# QoS Profiles\n'
-        content += '# Note: QoS profiles require bandwidth and class configuration\n'
-        content += '# Manual Terraform configuration is required\n\n'
-
-        for prof in profiles:
-            content += f'# Profile: {prof["name"]}\n'
-            if prof.get('class_bandwidth_type'):
-                content += f'#   Classes: {", ".join(prof["class_bandwidth_type"].keys())}\n'
-            content += '\n'
-
-        with open(self.output_dir / 'qos_profiles.tf', 'w') as f:
-            f.write(content)
-
-    def generate_tunnel_monitor_profiles(self, profiles: list[dict]):
-        """Generate tunnel monitor profiles - placeholder"""
-        if not profiles:
-            return
-
-        content = '# Tunnel Monitor Profiles\n'
-        content += '# Note: Tunnel monitor profiles require destination IP configuration\n'
-        content += '# Manual Terraform configuration is required\n\n'
-
-        for prof in profiles:
-            content += f'# Profile: {prof["name"]}\n'
-            content += f'#   Interval: {prof.get("interval", "unknown")}\n'
-            content += f'#   Threshold: {prof.get("threshold", "unknown")}\n'
-            content += f'#   Action: {prof.get("action", "unknown")}\n'
-            content += '\n'
-
-        with open(self.output_dir / 'tunnel_monitor_profiles.tf', 'w') as f:
+        with open(self.output_dir / 'monitor_profiles.tf', 'w') as f:
             f.write(content)
 
 
@@ -3433,19 +3592,37 @@ variable "device_group" {
     def generate_manual_setup_report(self, bgp_config: dict[str, Any],
                                      ospf_config: dict[str, Any],
                                      application_filters: list[dict],
-                                     manual_key_tunnels: list[dict]):
-        """Write MANUAL_SETUP_REPORT.txt for items with no v2 resource
+                                     manual_key_tunnels: list[dict],
+                                     application_override_rules: Optional[list[dict]] = None,
+                                     qos_profiles: Optional[list[dict]] = None,
+                                     tunnel_monitor_profiles: Optional[list[dict]] = None,
+                                     schedules: Optional[list[dict]] = None,
+                                     log_settings: Optional[list[dict]] = None,
+                                     zone_protection_profiles: Optional[list[dict]] = None):
+        """Write MANUAL_SETUP_REPORT.txt for items that are not emitted (F2.9)
 
-        BGP, OSPF, application filters, and manual-key IPsec tunnels have no
-        panos provider v2 resource (see resource_mapping.py). Their parsed
-        data is preserved here instead of being emitted as .tf resources.
+        Two buckets, one report:
+        - no v2 resource exists (BGP, OSPF, application filters, manual-key
+          IPsec tunnels, application override rules, QoS profiles);
+        - a v2 resource exists but the converter intentionally does not emit
+          it, because only the name and description were parsed and an empty
+          object would be a misconfiguration (log forwarding and zone
+          protection profiles).
+
+        The parsed data is preserved here instead of being emitted as .tf
+        resources, so nothing is silently dropped (see resource_mapping.py).
         """
-        if not (bgp_config or ospf_config or application_filters or manual_key_tunnels):
+        if not (bgp_config or ospf_config or application_filters or manual_key_tunnels
+                or application_override_rules or qos_profiles
+                or tunnel_monitor_profiles or schedules or log_settings
+                or zone_protection_profiles):
             return
 
         lines = ['MANUAL SETUP REPORT', '=' * 60, '']
-        lines.append('The following configuration items have no panos provider v2 resource.')
-        lines.append('Configure them manually (GUI or CLI) and verify against this report.')
+        lines.append('The items below have no panos provider v2 resource, or the')
+        lines.append('converter intentionally does not emit them (the reason is stated')
+        lines.append('per section). Configure them manually (GUI or CLI) and verify')
+        lines.append('against this report.')
         lines.append('')
 
         if bgp_config:
@@ -3488,6 +3665,86 @@ variable "device_group" {
                              f"local={tunnel.get('local_address')}, "
                              f"interface={tunnel.get('tunnel_interface')}")
             lines.append('  See VPN_MIGRATION_REPORT.txt for key management instructions.')
+            lines.append('')
+
+        if application_override_rules:
+            lines.append('--- Application Override Rules (no v2 resource) ---')
+            for rule in application_override_rules:
+                lines.append(
+                    f"  {rule.get('name')}: from={rule.get('source_zones')} "
+                    f"to={rule.get('destination_zones')} "
+                    f"source={rule.get('source_addresses')} "
+                    f"port={rule.get('port') or 'any'} "
+                    f"protocol={rule.get('protocol') or 'any'} "
+                    f"application={rule.get('application')} "
+                    f"disabled={rule.get('disabled')}")
+            lines.append('  Configure via the Panorama GUI or CLI.')
+            lines.append('')
+
+        if qos_profiles:
+            lines.append('--- QoS Profiles (no v2 resource) ---')
+            for prof in qos_profiles:
+                classes = prof.get('class_bandwidth_type') or {}
+                class_list = ', '.join(
+                    f"{name}({cfg.get('priority')})" if cfg.get('priority') else name
+                    for name, cfg in classes.items()) or 'none'
+                lines.append(
+                    f"  {prof.get('name')}: classes=[{class_list}]"
+                    + (f" ({prof['description']})" if prof.get('description') else ''))
+            lines.append('  Configure via the Panorama GUI or CLI.')
+            lines.append('')
+
+        if tunnel_monitor_profiles:
+            lines.append('--- IPsec Tunnel Monitor Profiles (no v2 resource) ---')
+            for prof in tunnel_monitor_profiles:
+                lines.append(
+                    f"  {prof.get('name')}: interval={prof.get('interval')}, "
+                    f"threshold={prof.get('threshold')}, action={prof.get('action')}")
+            lines.append('  No v2 resource exists for IPsec tunnel monitor profiles.')
+            lines.append('  panos_monitor_profile manages PBF path monitoring')
+            lines.append('  profiles, a different PAN-OS object')
+            lines.append('  (network/profiles/monitor-profile). Configure via the')
+            lines.append('  Panorama GUI or CLI.')
+            lines.append('')
+
+        if schedules:
+            lines.append('--- Schedules (v2 resource exists, not emitted) ---')
+            for sched in schedules:
+                entries = ','.join(e['name'] for e in sched.get('recurring', [])) or '-'
+                lines.append(
+                    f"  {sched['name']}: type={sched.get('schedule_type')}, "
+                    f"entries={entries}")
+            lines.append('  The v2 resource panos_schedule exists, but only the')
+            lines.append('  entry names are parsed (day and time ranges are not')
+            lines.append('  captured), and v2.0.14 does not model monthly')
+            lines.append('  schedules. Configure via the Panorama GUI or CLI.')
+            lines.append('')
+
+        if log_settings:
+            lines.append('--- Log Forwarding Profiles (v2 resource exists, not emitted) ---')
+            for prof in log_settings:
+                lines.append(
+                    f"  {prof.get('name')}"
+                    + (f" ({prof['description']})" if prof.get('description') else ''))
+            lines.append('  v2 resource: panos_log_forwarding_profile')
+            lines.append('  Reason: only the name and description are parsed. The')
+            lines.append('  match_list body is not captured, and an empty profile')
+            lines.append('  would be a misconfigured object. Configure the profile')
+            lines.append('  manually (GUI or CLI).')
+            lines.append('')
+
+        if zone_protection_profiles:
+            lines.append('--- Zone Protection Profiles (v2 resource exists, not emitted) ---')
+            for prof in zone_protection_profiles:
+                lines.append(
+                    f"  {prof.get('name')}"
+                    + (f" ({prof['description']})" if prof.get('description') else ''))
+            lines.append('  v2 resource: panos_zone_protection_profile')
+            lines.append('  Reason: only the name and description are parsed. The')
+            lines.append('  SIP/UDP/TCP/ICMP/DNS options body is not captured, and an')
+            lines.append('  empty profile would be a misconfigured object. Real')
+            lines.append('  emission needs profile parsing (Epic 3). Configure the')
+            lines.append('  profile manually (GUI or CLI).')
             lines.append('')
 
         lines.append('End of report.')
@@ -3975,6 +4232,9 @@ def main():
         log_settings = panorama.parse_log_settings()
         qos_profiles = panorama.parse_qos_profiles()
         tunnel_monitor_profiles = panorama.parse_tunnel_monitor_profiles()
+        # F2.9: PBF path monitoring profiles (a different PAN-OS object; the
+        # provider manages them as panos_monitor_profile)
+        pbf_monitor_profiles = panorama.parse_pbf_monitor_profiles()
 
         # Dynamic routing
         bgp_config = panorama.parse_bgp()
@@ -4020,7 +4280,8 @@ def main():
         print(f"  - {len(zone_protection_profiles)} zone protection profiles")
         print(f"  - {len(log_settings)} log forwarding profiles")
         print(f"  - {len(qos_profiles)} QoS profiles")
-        print(f"  - {len(tunnel_monitor_profiles)} tunnel monitor profiles")
+        print(f"  - {len(tunnel_monitor_profiles)} IPsec tunnel monitor profiles")
+        print(f"  - {len(pbf_monitor_profiles)} PBF path monitoring profiles")
 
         # Dynamic routing
         if bgp_config:
@@ -4047,7 +4308,9 @@ def main():
         tf_gen.generate_application_groups(application_groups)
         # Application filters have no v2 resource: they go to the manual setup report
         tf_gen.generate_external_lists(external_lists)
-        tf_gen.generate_schedules(schedules)
+        # F2.9: schedules go to the manual setup report (v2 resource
+        # exists, but only entry names are parsed and v2.0.14 has no
+        # monthly schedule support)
 
         # Address and Service objects
         tf_gen.generate_address_objects(addresses)
@@ -4063,19 +4326,21 @@ def main():
         tf_gen.generate_virtual_routers(all_routers)  # Handles both virtual & logical routers
 
         # Security Profiles
+        # F2.9: zone protection, log forwarding, and IPsec tunnel monitor
+        # profiles go to the manual setup report (no v2 resource, or the
+        # v2 resource exists but the profile body is not parsed)
         tf_gen.generate_security_profiles(security_profiles)
         tf_gen.generate_security_profile_groups(security_profile_groups)
-        tf_gen.generate_zone_protection_profiles(zone_protection_profiles)
-        tf_gen.generate_log_settings(log_settings)
-        tf_gen.generate_qos_profiles(qos_profiles)
-        tf_gen.generate_tunnel_monitor_profiles(tunnel_monitor_profiles)
+        # F2.9: PBF path monitoring profiles emit as real v2 resources
+        tf_gen.generate_pbf_monitor_profiles(pbf_monitor_profiles)
 
         # Rules
+        # F2.9: application override rules go to the manual setup report
+        # (no v2 resource)
         tf_gen.generate_security_rules(security_rules)
         tf_gen.generate_nat_rules(nat_rules)
         tf_gen.generate_decryption_rules(decryption_rules)
         tf_gen.generate_pbf_rules(pbf_rules)
-        tf_gen.generate_application_override_rules(app_override_rules)
 
         # VPN: any non-empty section emits vpn.tf (F2.8); the key
         # management report still needs a gateway or tunnel to mention.
@@ -4084,10 +4349,20 @@ def main():
         if ike_gateways or ipsec_tunnels:
             tf_gen.generate_vpn_report(ike_gateways, ipsec_tunnels)
 
-        # Items with no v2 resource: BGP, OSPF, app filters, manual-key tunnels
+        # Items that are not emitted (F2.9): BGP, OSPF, app filters, manual-key
+        # tunnels, app override, QoS, IPsec tunnel monitor (no v2 resource),
+        # and log forwarding + zone protection + schedules (v2 resource
+        # exists, profile body not parsed). See resource_mapping.py.
         manual_key_tunnels = [t for t in ipsec_tunnels if t.get('type') != 'auto-key']
-        tf_gen.generate_manual_setup_report(bgp_config, ospf_config,
-                                           application_filters, manual_key_tunnels)
+        tf_gen.generate_manual_setup_report(
+            bgp_config, ospf_config, application_filters, manual_key_tunnels,
+            application_override_rules=app_override_rules,
+            qos_profiles=qos_profiles,
+            tunnel_monitor_profiles=tunnel_monitor_profiles,
+            schedules=schedules,
+            log_settings=log_settings,
+            zone_protection_profiles=zone_protection_profiles,
+        )
 
         # Reports
         tf_gen.generate_interface_report(interfaces)

@@ -7,6 +7,10 @@ panos provider v2:
     REPORT_ONLY_TYPES  - PAN-OS config types with no v2 resource; the
                          captured data goes to MANUAL_SETUP_REPORT.txt
                          (and the VPN/interface migration reports) instead.
+    NOT_EMITTED_TYPES  - v2 resource types that exist but the converter
+                         intentionally does not emit (the configuration
+                         body is not parsed); the captured data goes to
+                         MANUAL_SETUP_REPORT.txt with the reason (F2.9).
     COVERAGE_MATRIX    - one row per emitted type: the Panorama XML
                          element that feeds the resource, the fixture
                          that exercises it, and the expected emitted
@@ -32,12 +36,20 @@ EMITTED_TYPES = frozenset({
     'panos_external_dynamic_list',
     'panos_service',
     'panos_service_group',
-    # Policy containers (one resource per device group; ordered rules list)
+    # Policy containers (one resource per rule; per-device-group chains in
+    # XML order, F2.5)
     'panos_security_policy_rules',
     'panos_nat_policy_rules',
+    # F2.9: decryption and PBF rules emit as real v2 resources, one resource
+    # per rule, chained per device group (F2.5 position semantics)
+    'panos_decryption_policy_rules',
+    'panos_pbf_policy_rules',
     # Profiles (device-group scoped)
     'panos_security_profile_group',
     # Network (template scoped)
+    # F2.9: PBF path monitoring profiles (network/profiles/monitor-profile);
+    # template-scoped in v2. NOT the IPsec tunnel monitor profile.
+    'panos_monitor_profile',
     'panos_ethernet_interface',
     'panos_ethernet_layer3_subinterface',
     'panos_virtual_router',
@@ -69,7 +81,39 @@ REPORT_ONLY_TYPES = frozenset({
     'panos_ospf',
     'panos_ospf_area',
     'panos_ospf_area_interface',
+    # F2.9: no v2 resource for application override rules or QoS profiles;
+    # the captured rule/profile data goes to MANUAL_SETUP_REPORT.txt.
+    'panos_application_override',
+    'panos_qos_profile',
+    # F2.9: no v2 resource for IPsec tunnel monitor profiles
+    # (network/tunnel-monitor/monitor-profile). panos_monitor_profile is a
+    # different PAN-OS object (PBF path monitoring), verified against the
+    # provider source (pango: network/profiles/monitor-profile).
+    'panos_tunnel_monitor_profile',
 })
+
+# v2 resource types that exist but the converter intentionally does not emit
+# (F2.9). The parser captures only the name and description of these objects;
+# the bodies that make them functional (match lists, SIP/UDP/TCP/ICMP/DNS
+# options) are not parsed. Emitting an empty profile would silently create a
+# misconfigured object, so the data goes to MANUAL_SETUP_REPORT.txt with the
+# reason instead. Each entry MUST exist in the v2 schema (guarded by
+# tests/test_resource_mapping.py) - the inverse of the report-only absence
+# test.
+NOT_EMITTED_TYPES = {
+    'panos_log_forwarding_profile': (
+        'only name/description are parsed; the match_list body is not '
+        'captured, and an empty profile would be a misconfigured object'
+    ),
+    'panos_zone_protection_profile': (
+        'only name/description are parsed; the SIP/UDP/TCP/ICMP/DNS options '
+        'body is not captured; real emission needs profile parsing (Epic 3)'
+    ),
+    'panos_schedule': (
+        'only the entry names are parsed; the day/time ranges are not '
+        'captured, and v2.0.14 has no monthly schedule support'
+    ),
+}
 
 # Coverage matrix (F2.8): provider resource <-> Panorama XML element.
 #
@@ -163,12 +207,37 @@ COVERAGE_MATRIX = (
         'fixture': 'nat_rules.xml',
         'output_file': 'nat_rules.tf',
     }, {
+        # F2.9: decryption rules emit as real v2 resources (one per rule)
+        'resource': 'panos_decryption_policy_rules',
+        'xml_element': 'decryption/rules/entry',
+        'xml_name': 'Decrypt-HTTPS',
+        'emitted_name': 'Decrypt-HTTPS',
+        'fixture': 'decryption_rules.xml',
+        'output_file': 'decryption_rules.tf',
+    }, {
+        # F2.9: PBF rules emit as real v2 resources (one per rule)
+        'resource': 'panos_pbf_policy_rules',
+        'xml_element': 'pbf/rules/entry',
+        'xml_name': 'PBF-Forward',
+        'emitted_name': 'PBF-Forward',
+        'fixture': 'pbf_rules.xml',
+        'output_file': 'pbf_rules.tf',
+    }, {
         'resource': 'panos_security_profile_group',
         'xml_element': 'profile-group/entry',
         'xml_name': 'Strict-Profile',
         'emitted_name': 'Strict-Profile',
         'fixture': 'security_profile_groups.xml',
         'output_file': 'security_profile_groups.tf',
+    }, {
+        # F2.9: PBF path monitoring profiles are template-scoped in v2;
+        # a different PAN-OS object from the IPsec tunnel monitor profile
+        'resource': 'panos_monitor_profile',
+        'xml_element': 'profiles/monitor-profile/entry',
+        'xml_name': 'PM-Branch',
+        'emitted_name': 'PM-Branch',
+        'fixture': 'pbf_monitor_profiles.xml',
+        'output_file': 'monitor_profiles.tf',
     }, {
         'resource': 'panos_ethernet_interface',
         'xml_element': 'ethernet/entry',

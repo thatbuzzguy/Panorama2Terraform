@@ -15,8 +15,9 @@ version.
 
 | Bucket | Count |
 |---|---|
-| Emitted as real v2 resources | 20 |
-| No v2 equivalent (report only) | 7 |
+| Emitted as real v2 resources | 23 |
+| No v2 equivalent (report only) | 10 |
+| v2 resource exists, intentionally not emitted | 2 |
 
 The old v1 names (`panos_address_object`, `panos_security_rule_group`,
 ...) no longer exist in the code base. The v1 -> v2 rename rationale is
@@ -40,12 +41,14 @@ the v2 attribute shapes that differ from the v1 output.
 | `panos_service` | `panos_service_object` | flat `protocol`+`destination_port` becomes `protocol = { tcp = { destination_port = "80" } }` |
 | `panos_service_group` | identity | `static` member list |
 
-### Policy containers (one resource per device group)
+### Policy rules (one resource per rule, chained per device group)
 
 | v2 type | Renamed from | v2 attribute notes |
 |---|---|---|
-| `panos_security_policy_rules` | `panos_security_rule_group` | container: `position { where, pivot, directly }` plus an ordered `rules = [...]` list (order preservation is a follow-up task) |
-| `panos_nat_policy_rules` | `panos_nat_rule_group` | same container pattern; `nat_type` is the protocol family (`ipv4`/`nat64`/`nptv6`), not the translation direction |
+| `panos_security_policy_rules` | `panos_security_rule_group` | `position { where, pivot, directly }` places one rule per resource; chains preserve XML order (F2.5) |
+| `panos_nat_policy_rules` | `panos_nat_rule_group` | same per-rule chain model; `nat_type` is the protocol family (`ipv4`/`nat64`/`nptv6`), not the translation direction |
+| `panos_decryption_policy_rules` | identity (no v1 equivalent) | same per-rule chain model. The `action` is an enum (`no-decrypt`/`decrypt`/`decrypt-and-forward`); the inspection mode is a separate `type { <key> = {} }` block. Legacy PAN-OS 9 exports put the mode in the `action` field; the converter maps that to `action = "decrypt"` plus the matching `type` block (F2.9) |
+| `panos_pbf_policy_rules` | identity (no v1 equivalent) | same per-rule chain model. Single-choice action: `forward` (with optional `monitor { ip_address, profile, disable_if_unreachable }`), `forward_to_vsys`, `discard`, `no_pbf` (F2.9) |
 
 ### Profiles (device-group scoped)
 
@@ -62,6 +65,7 @@ the v2 attribute shapes that differ from the v1 output.
 | `panos_virtual_router` | identity | required: `location`, `name` |
 | `panos_virtual_router_static_route_ipv4` | `panos_static_route_ipv4` | static routes belong to the virtual router; `nexthop = { ip_address = "..." }` |
 | `panos_zone` | identity | `network = { layer3 = [...] }` |
+| `panos_monitor_profile` | identity (no v1 equivalent) | PBF path monitoring profiles (`network/profiles/monitor-profile`), referenced by PBF rule path monitoring. `action` is an enum (`wait-recover`/`fail-over`); no `description` attribute (F2.9) |
 
 ### VPN (template scoped)
 
@@ -86,6 +90,9 @@ migration reports) so nothing is silently dropped.
 | `panos_ospf` | v2 exposes only four specialized OSPF routing profiles (auth, interface timer, SPF timer, redistribution). No router-ID resource |
 | `panos_ospf_area` | no v2 area resource |
 | `panos_ospf_area_interface` | no v2 area-interface resource |
+| `panos_application_override` | no v1 equivalent | no v2 resource for application override rules (F2.9) |
+| `panos_qos_profile` | no v1 equivalent | no v2 resource for QoS profiles (F2.9) |
+| `panos_tunnel_monitor_profile` | no v1 equivalent | no v2 resource for IPsec tunnel monitor profiles. `panos_monitor_profile` is a different PAN-OS object (PBF path monitoring) — verified in the provider/pango source (F2.9) |
 
 Security profile bodies (antivirus, anti-spyware, vulnerability, URL
 filtering, file blocking, WildFire, zone protection) follow the same
@@ -97,10 +104,22 @@ in the reports until profile parsing lands.
 
 ## Verification
 
+Two further buckets in `resource_mapping.py`:
+
+- `NOT_EMITTED_TYPES`: v2 resources that exist but are intentionally not
+  emitted (`panos_log_forwarding_profile`, `panos_zone_protection_profile`)
+  because only name/description is captured; an empty profile would be a
+  misconfigured object.
+- The `COVERAGE_MATRIX` maps every emitted type to the Panorama XML
+  element that feeds it and the fixture that proves it
+  ([`COVERAGE_MATRIX.md`](./COVERAGE_MATRIX.md)).
+
 `tests/test_resource_mapping.py` asserts, against the live v2.0.14
 schema:
 
 1. the emitted-type set is exactly the types the committed goldens emit;
 2. every emitted type exists in the provider schema;
 3. every report-only type is genuinely absent from the schema (guards
-   against a report-only decision masking a real resource).
+   against a report-only decision masking a real resource);
+4. every not-emitted type genuinely exists in the schema (the inverse
+guard, so a future rename cannot silently move a type between buckets).

@@ -356,6 +356,13 @@
                         <ip-address>10.0.0.1</ip-address>
                       </nexthop>
                       <egress-interface>ethernet1/1</egress-interface>
+                      <!-- F2.9: path monitoring references the
+                           panos_monitor_profile (PM-Branch) in this config -->
+                      <monitor>
+                        <ip-address>10.1.1.1</ip-address>
+                        <profile>PM-Branch</profile>
+                        <disable-if-unreachable>yes</disable-if-unreachable>
+                      </monitor>
                     </forward>
                   </action>
                   <enforce-symmetric-return>
@@ -660,6 +667,15 @@
                 </entry>
               </ipsec>
             </tunnel>
+            <profiles>
+              <monitor-profile>
+                <entry name="PM-Branch" uuid="pm-ks-1">
+                  <action>wait-recover</action>
+                  <interval>10</interval>
+                  <threshold>5</threshold>
+                </entry>
+              </monitor-profile>
+            </profiles>
             <qos>
               <profile>
                 <entry name="QOS-Default">
