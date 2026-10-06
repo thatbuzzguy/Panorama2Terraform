@@ -1,15 +1,54 @@
 # Agent Status
 
 ## Current position
-**Epic 2 is complete** (F2.1–F2.11, all committed; the last two are
-F2.10 `27ee1b9` and F2.11, 2026-10-05). `PLAN.md` marks Epic 2
-COMPLETE; `to-do.md` points at the next task. **Next task: F3.1 Keyed
-data model** (Epic 3, the lowest-numbered unfinished epic): replace
-name-keyed dictionaries with keys of (device group, vsys, type, name)
-and remove first-wins/last-wins deduplication. Write `acceptance.md`
-for F3.1 before any code.
+**F3.1 (keyed data model) is implemented** — working tree ready to
+commit; `acceptance.md` holds the F3.1 criteria (overwrite before the
+next task). **Next task: F3.2 Preserve device-group association**
+(Epic 3): carry the source device group from parse to emit so
+same-named objects in different device groups both survive in the
+generated output (the parser half of F3.2 landed with F3.1; the emit
+half remains).
 
 ## Session log
+
+### F3.1 — Keyed data model (this session)
+- Direction: Epic 3, lowest-numbered unfinished epic. `acceptance.md`
+  rewritten for F3.1 first (10 done criteria).
+- Parser: every parse method now visits each XML entry exactly once
+  (single broad path per element kind; the only multi-path methods use
+  disjoint element kinds: 6 interface kinds, 6 profile categories, the
+  template vs device VR/LR passes, GlobalProtect vs plain tunnel
+  monitors). All `seen_names` first-wins sets and name-keyed last-wins
+  dicts are gone; each method returns a flat `list[dict]`.
+- Identity fields: every parsed object and rule carries
+  `device_group` (defining DG, or `Shared`) and `vsys` (new
+  `vsys_of()` walks `_parent_map` to the nearest `<vsys><entry>`,
+  default `vsys1`; `template_of()` added for F3.6). id-only entries
+  (reference pointers) are still skipped via `_is_reference_pointer()`.
+- Generator: `declare_resource_name` registers under
+  `(scope, context, name)` (first wins per identity) plus a flat
+  `(scope, name)` index (first wins, for contextless resolution); the
+  taken-name counter stays as the HCL-validity guard. `name_ref` gains
+  `context`: chain is referrer context, then `Shared`, then the
+  contextless bucket, then the flat index. 23 reference sites now pass
+  the referrer's device group; template-scoped and contextless sites
+  resolve through the fallbacks.
+- Legacy context convention (keeps the pre-F3.1 digests and both
+  golden sets byte-identical): shared objects keep the `'Shared'`
+  context, and the six security profile categories are declared
+  contextless (their true DG/template identity lands with F3.6; note
+  recorded in `backlog.md`).
+- Tests: the pinned xfail `test_dup_names_across_dgs_both_survive`
+  now passes with the marker removed and the old last-wins test
+  deleted; new `test_dup_names_across_vsys_both_survive` + fixture
+  `edge_dup_names_across_vsys.xml` (same name in vsys1 and vsys2 both
+  survive, tagged with their vsys); `test_multi_vsys_objects_both_parse`
+  now asserts the vsys fields; `tests/test_robustness.py` gains
+  `test_name_ref_prefers_referrers_own_context` and
+  `test_name_ref_falls_back_to_shared_then_contextless`.
+- Gate: ruff clean. pytest 296 passed (no xfails). Goldens
+  byte-identical (git status clean under `tests/golden/`). terraform
+  init + validate green (dependency_wiring gate).
 
 ### F2.11 — Verified claims (this session) — Epic 2 complete
 - Direction: finish Epic 2. `acceptance.md` rewritten for F2.11 first

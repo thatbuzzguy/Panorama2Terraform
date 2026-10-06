@@ -1,18 +1,15 @@
 """Edge-case fixture tests (F1.6 corpus).
 
-Pins current parser behavior for edge cases and marks the known gaps as
-xfail with references to the epic that must change behavior:
+Pins parser behavior for edge cases:
 
-- duplicate names across device groups: last-wins today; Epic 3 F3.1
-  keys objects by (device group, vsys, type, name).
+- duplicate names across device groups or vsys: F3.1 keys objects by
+  (device group, vsys, type, name), so all definitions survive.
 - IPv6 address objects: parsed from the <ipv6> element (F2.4).
 - multi-port / dual-protocol services: current behavior pinned; the udp
   drop is recorded in backlog.md.
 """
 
 import xml.etree.ElementTree as ET
-
-import pytest
 
 from conftest import FIXTURES_DIR
 
@@ -47,30 +44,44 @@ def test_quoted_dg_objects_parse(make_parser):
 
 # --- 2. Duplicate names across device groups --------------------------------
 
-def test_dup_names_across_dgs_current_last_wins(make_parser):
-    """Current behavior: one entry per name, last definition wins."""
+def test_dup_names_across_dgs_both_survive(make_parser):
+    """Same-named objects in different DGs both survive (F3.1 keyed identity).
+
+    Each object carries its identity fields: the defining device group and
+    the vsys. The key is (device group, vsys, type, name).
+    """
     parser = make_parser("edge_dup_names_across_dgs.xml")
     objects = parser.parse_address_objects()
-    assert len(objects) == 1
-    assert objects[0]["name"] == "web"
-    assert objects[0]["value"] == "10.0.0.2/32"
+    assert len(objects) == 2
+    by_group = {a["device_group"]: a for a in objects}
+    assert set(by_group) == {"DG-A", "DG-B"}
+    assert by_group["DG-A"]["value"] == "10.0.0.1/32"
+    assert by_group["DG-B"]["value"] == "10.0.0.2/32"
+    assert all(a["vsys"] == "vsys1" for a in objects)
+    assert all(a["name"] == "web" for a in objects)
 
 
-@pytest.mark.xfail(reason="same-named objects in different DGs must both survive; Epic 3 F3.1", strict=False)
-def test_dup_names_across_dgs_both_survive(make_parser):
-    """Desired behavior: per-DG objects are not merged away."""
-    parser = make_parser("edge_dup_names_across_dgs.xml")
-    values = sorted(a["value"] for a in parser.parse_address_objects())
-    assert values == ["10.0.0.1/32", "10.0.0.2/32"]
+def test_dup_names_across_vsys_both_survive(make_parser):
+    """Same-named objects in different vsys both survive (F3.1 keyed identity)."""
+    parser = make_parser("edge_dup_names_across_vsys.xml")
+    objects = parser.parse_address_objects()
+    assert len(objects) == 2
+    by_vsys = {a["vsys"]: a for a in objects}
+    assert set(by_vsys) == {"vsys1", "vsys2"}
+    assert by_vsys["vsys1"]["value"] == "10.1.0.1/32"
+    assert by_vsys["vsys2"]["value"] == "10.2.0.1/32"
 
 
 # --- 3. Multi-vsys -----------------------------------------------------------
 
 def test_multi_vsys_objects_both_parse(make_parser):
-    """Objects under different vsys must all be parsed."""
+    """Objects under different vsys must all be parsed, tagged with their vsys."""
     parser = make_parser("edge_multi_vsys.xml")
-    objects = {a["name"]: a["value"] for a in parser.parse_address_objects()}
-    assert objects == {"host-vs1": "10.9.1.10/32", "host-vs2": "10.9.2.10/32"}
+    objects = {a["name"]: a for a in parser.parse_address_objects()}
+    assert objects["host-vs1"]["value"] == "10.9.1.10/32"
+    assert objects["host-vs2"]["value"] == "10.9.2.10/32"
+    assert objects["host-vs1"]["vsys"] == "vsys1"
+    assert objects["host-vs2"]["vsys"] == "vsys2"
 
 
 # --- 4. Mixed virtual and logical routers ------------------------------------

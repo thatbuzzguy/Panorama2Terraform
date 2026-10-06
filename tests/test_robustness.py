@@ -212,3 +212,26 @@ def test_declare_same_name_in_two_contexts_gets_unique_names(generator):
     # A reference to the name resolves to the first declared name.
     assert generator.name_ref('default', ('panos_virtual_router',)).expr == (
         f'panos_virtual_router.{first}.name')
+
+
+def test_name_ref_prefers_referrers_own_context(generator):
+    """F3.1: a referrer resolves same-named objects in its own device group."""
+    scope = 'panos_address'
+    dg_a = generator.declare_resource_name('web', scope, context='DG-A')
+    dg_b = generator.declare_resource_name('web', scope, context='DG-B')
+    # A rule in DG-B references DG-B's 'web', not DG-A's.
+    assert generator.name_ref('web', (scope,), context='DG-B').expr == f'{scope}.{dg_b}.name'
+    assert generator.name_ref('web', (scope,), context='DG-A').expr == f'{scope}.{dg_a}.name'
+
+
+def test_name_ref_falls_back_to_shared_then_contextless(generator):
+    """F3.1: context order is referrer context, Shared, then contextless."""
+    scope = 'panos_address'
+    shared = generator.declare_resource_name('sh-web', scope, context='Shared')
+    # A DG referrer inherits the shared object when it has no local one.
+    assert generator.name_ref('sh-web', (scope,), context='DG-A').expr == f'{scope}.{shared}.name'
+    # Template-scoped objects are declared contextless (F3.6 adds templates);
+    # the contextless bucket is the last keyed stop before the flat fallback.
+    zone = generator.declare_resource_name('zone-x', 'panos_zone')
+    assert generator.name_ref('zone-x', ('panos_zone',), context='DG-A').expr == (
+        f'panos_zone.{zone}.name')

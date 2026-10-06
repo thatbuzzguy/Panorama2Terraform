@@ -103,377 +103,357 @@ class PanoramaParser:
             node = parent
         return 'Shared'
 
+    def vsys_of(self, elem: ET.Element) -> str:
+        """Return the vsys that owns elem (F3.1 identity key).
+
+        Walks up to the nearest <vsys><entry name="..."> ancestor. PAN-OS
+        defaults to vsys1, so an absent vsys wrapper means the default vsys.
+        """
+        node = elem
+        while node is not None:
+            parent = self._parent_map.get(node)
+            if parent is not None and parent.tag == 'vsys' and node.tag == 'entry':
+                return node.get('name') or 'vsys1'
+            node = parent
+        return 'vsys1'
+
+    def template_of(self, elem: ET.Element) -> str:
+        """Return the template that owns elem (F3.1 identity key).
+
+        Walks up to the nearest <templates><entry name="..."> ancestor.
+        Outside a template the owning context is device-specific.
+        """
+        node = elem
+        while node is not None:
+            parent = self._parent_map.get(node)
+            if parent is not None and parent.tag == 'templates' and node.tag == 'entry':
+                return node.get('name') or 'default'
+            node = parent
+        return 'device-specific'
+
     def parse_tags(self) -> list[dict]:
-        """Parse tags"""
+        """Parse tags (administrative tags).
+
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name). The broad path visits each entry
+        exactly once, so no name dedup is needed.
+        """
         tags = []
-        seen_names = set()
 
-        paths = [
-            ".//tag/entry",
-            ".//device-group/entry/tag/entry"
-        ]
+        for tag in self.root.findall(".//tag/entry"):
+            name = tag.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for tag in self.root.findall(path):
-                name = tag.get('name')
-                if not name or name in seen_names:
-                    continue
-
-                seen_names.add(name)
-
-                tag_obj = {
-                    'name': name,
-                    'device_group': self.device_group_of(tag),
-                    'color': self._get_text(tag, 'color'),
-                    'comments': self._get_text(tag, 'comments')
-                }
-
-                tags.append(tag_obj)
+            tags.append({
+                'name': name,
+                'device_group': self.device_group_of(tag),
+                'vsys': self.vsys_of(tag),
+                'color': self._get_text(tag, 'color'),
+                'comments': self._get_text(tag, 'comments')
+            })
 
         return tags
 
     def parse_regions(self) -> list[dict]:
-        """Parse regions (geographic locations)"""
+        """Parse regions (geographic locations).
+
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name); no name dedup.
+        """
         regions = []
-        seen_names = set()
 
-        paths = [
-            ".//region/entry",
-            ".//device-group/entry/region/entry"
-        ]
+        for region in self.root.findall(".//region/entry"):
+            name = region.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for region in self.root.findall(path):
-                name = region.get('name')
-                if not name or name in seen_names:
-                    continue
+            addresses = []
+            for addr in region.findall('.//address/member'):
+                if addr.text:
+                    addresses.append(addr.text)
 
-                seen_names.add(name)
-
-                addresses = []
-                for addr in region.findall('.//address/member'):
-                    if addr.text:
-                        addresses.append(addr.text)
-
-                region_obj = {
-                    'name': name,
-                    'addresses': addresses
-                }
-
-                regions.append(region_obj)
+            regions.append({
+                'name': name,
+                'device_group': self.device_group_of(region),
+                'vsys': self.vsys_of(region),
+                'addresses': addresses
+            })
 
         return regions
 
     def parse_custom_url_categories(self) -> list[dict]:
-        """Parse custom URL categories"""
+        """Parse custom URL categories.
+
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name); no name dedup.
+        """
         categories = []
-        seen_names = set()
 
-        paths = [
-            ".//custom-url-category/entry",
-            ".//device-group/entry/custom-url-category/entry"
-        ]
+        for cat in self.root.findall(".//custom-url-category/entry"):
+            name = cat.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for cat in self.root.findall(path):
-                name = cat.get('name')
-                if not name or name in seen_names:
-                    continue
+            url_list = []
+            for url in cat.findall('.//list/member'):
+                if url.text:
+                    url_list.append(url.text)
 
-                seen_names.add(name)
-
-                url_list = []
-                for url in cat.findall('.//list/member'):
-                    if url.text:
-                        url_list.append(url.text)
-
-                cat_obj = {
-                    'name': name,
-                    'device_group': self.device_group_of(cat),
-                    'type': self._get_text(cat, 'type'),
-                    'list': url_list,
-                    'description': self._get_text(cat, 'description')
-                }
-
-                categories.append(cat_obj)
+            categories.append({
+                'name': name,
+                'device_group': self.device_group_of(cat),
+                'vsys': self.vsys_of(cat),
+                'type': self._get_text(cat, 'type'),
+                'list': url_list,
+                'description': self._get_text(cat, 'description')
+            })
 
         return categories
 
     def parse_application_groups(self) -> list[dict]:
-        """Parse application groups"""
+        """Parse application groups.
+
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name); no name dedup.
+        """
         app_groups = []
-        seen_names = set()
 
-        paths = [
-            ".//application-group/entry",
-            ".//device-group/entry/application-group/entry"
-        ]
+        for ag in self.root.findall(".//application-group/entry"):
+            name = ag.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for ag in self.root.findall(path):
-                name = ag.get('name')
-                if not name or name in seen_names:
-                    continue
+            members = []
+            for member in ag.findall('.//members/member'):
+                if member.text:
+                    members.append(member.text)
 
-                seen_names.add(name)
-
-                members = []
-                for member in ag.findall('.//members/member'):
-                    if member.text:
-                        members.append(member.text)
-
-                ag_obj = {
-                    'name': name,
-                    'device_group': self.device_group_of(ag),
-                    'members': members
-                }
-
-                app_groups.append(ag_obj)
+            app_groups.append({
+                'name': name,
+                'device_group': self.device_group_of(ag),
+                'vsys': self.vsys_of(ag),
+                'members': members
+            })
 
         return app_groups
 
     def parse_application_filters(self) -> list[dict]:
-        """Parse application filters"""
+        """Parse application filters.
+
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name); no name dedup.
+        """
         app_filters = []
-        seen_names = set()
 
-        paths = [
-            ".//application-filter/entry",
-            ".//device-group/entry/application-filter/entry"
-        ]
+        for af in self.root.findall(".//application-filter/entry"):
+            name = af.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for af in self.root.findall(path):
-                name = af.get('name')
-                if not name or name in seen_names:
-                    continue
-
-                seen_names.add(name)
-
-                af_obj = {
-                    'name': name,
-                    'device_group': self.device_group_of(af),
-                    'category': self._get_members(af, 'category'),
-                    'subcategory': self._get_members(af, 'subcategory'),
-                    'technology': self._get_members(af, 'technology'),
-                    'risk': self._get_members(af, 'risk'),
-                    'evasive': self._get_text(af, 'evasive'),
-                    'excessive_bandwidth_use': self._get_text(af, 'excessive-bandwidth-use'),
-                    'prone_to_misuse': self._get_text(af, 'prone-to-misuse'),
-                    'is_saas': self._get_text(af, 'is-saas'),
-                    'transfers_files': self._get_text(af, 'transfers-files'),
-                    'tunnels_other_apps': self._get_text(af, 'tunnels-other-apps'),
-                    'used_by_malware': self._get_text(af, 'used-by-malware'),
-                }
-
-                app_filters.append(af_obj)
+            app_filters.append({
+                'name': name,
+                'device_group': self.device_group_of(af),
+                'vsys': self.vsys_of(af),
+                'category': self._get_members(af, 'category'),
+                'subcategory': self._get_members(af, 'subcategory'),
+                'technology': self._get_members(af, 'technology'),
+                'risk': self._get_members(af, 'risk'),
+                'evasive': self._get_text(af, 'evasive'),
+                'excessive_bandwidth_use': self._get_text(af, 'excessive-bandwidth-use'),
+                'prone_to_misuse': self._get_text(af, 'prone-to-misuse'),
+                'is_saas': self._get_text(af, 'is-saas'),
+                'transfers_files': self._get_text(af, 'transfers-files'),
+                'tunnels_other_apps': self._get_text(af, 'tunnels-other-apps'),
+                'used_by_malware': self._get_text(af, 'used-by-malware'),
+            })
 
         return app_filters
 
     def parse_external_lists(self) -> list[dict]:
-        """Parse external dynamic lists"""
+        """Parse external dynamic lists.
+
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name); no name dedup.
+        """
         ext_lists = []
-        seen_names = set()
 
-        paths = [
-            ".//external-list/entry",
-            ".//device-group/entry/external-list/entry"
-        ]
+        for ext_list in self.root.findall(".//external-list/entry"):
+            name = ext_list.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for ext_list in self.root.findall(path):
-                name = ext_list.get('name')
-                if not name or name in seen_names:
-                    continue
+            # Determine type
+            list_type = None
+            url = None
+            recurring = None
 
-                seen_names.add(name)
+            type_elem = ext_list.find('type')
+            if type_elem is not None:
+                if type_elem.find('ip') is not None:
+                    list_type = 'ip'
+                    url = self._get_text(type_elem, 'ip/url')
+                    # Check for recurring schedule
+                    if type_elem.find('.//recurring/hourly') is not None:
+                        recurring = 'hourly'
+                    elif type_elem.find('.//recurring/five-minute') is not None:
+                        recurring = 'five-minute'
+                    elif type_elem.find('.//recurring/daily') is not None:
+                        recurring = 'daily'
+                elif type_elem.find('domain') is not None:
+                    list_type = 'domain'
+                    url = self._get_text(type_elem, 'domain/url')
+                    if type_elem.find('.//recurring/hourly') is not None:
+                        recurring = 'hourly'
+                    elif type_elem.find('.//recurring/five-minute') is not None:
+                        recurring = 'five-minute'
+                    elif type_elem.find('.//recurring/daily') is not None:
+                        recurring = 'daily'
+                elif type_elem.find('url') is not None:
+                    list_type = 'url'
+                    url = self._get_text(type_elem, 'url/url')
+                    if type_elem.find('.//recurring/hourly') is not None:
+                        recurring = 'hourly'
+                    elif type_elem.find('.//recurring/five-minute') is not None:
+                        recurring = 'five-minute'
+                    elif type_elem.find('.//recurring/daily') is not None:
+                        recurring = 'daily'
 
-                # Determine type
-                list_type = None
-                url = None
-                recurring = None
-
-                type_elem = ext_list.find('type')
-                if type_elem is not None:
-                    if type_elem.find('ip') is not None:
-                        list_type = 'ip'
-                        url = self._get_text(type_elem, 'ip/url')
-                        # Check for recurring schedule
-                        if type_elem.find('.//recurring/hourly') is not None:
-                            recurring = 'hourly'
-                        elif type_elem.find('.//recurring/five-minute') is not None:
-                            recurring = 'five-minute'
-                        elif type_elem.find('.//recurring/daily') is not None:
-                            recurring = 'daily'
-                    elif type_elem.find('domain') is not None:
-                        list_type = 'domain'
-                        url = self._get_text(type_elem, 'domain/url')
-                        if type_elem.find('.//recurring/hourly') is not None:
-                            recurring = 'hourly'
-                        elif type_elem.find('.//recurring/five-minute') is not None:
-                            recurring = 'five-minute'
-                        elif type_elem.find('.//recurring/daily') is not None:
-                            recurring = 'daily'
-                    elif type_elem.find('url') is not None:
-                        list_type = 'url'
-                        url = self._get_text(type_elem, 'url/url')
-                        if type_elem.find('.//recurring/hourly') is not None:
-                            recurring = 'hourly'
-                        elif type_elem.find('.//recurring/five-minute') is not None:
-                            recurring = 'five-minute'
-                        elif type_elem.find('.//recurring/daily') is not None:
-                            recurring = 'daily'
-
-                ext_list_obj = {
-                    'name': name,
-                    'device_group': self.device_group_of(ext_list),
-                    'type': list_type,
-                    'url': url,
-                    'recurring': recurring,
-                    'description': self._get_text(ext_list, 'description')
-                }
-
-                ext_lists.append(ext_list_obj)
+            ext_lists.append({
+                'name': name,
+                'device_group': self.device_group_of(ext_list),
+                'vsys': self.vsys_of(ext_list),
+                'type': list_type,
+                'url': url,
+                'recurring': recurring,
+                'description': self._get_text(ext_list, 'description')
+            })
 
         return ext_lists
 
     def parse_address_objects(self) -> list[dict]:
-        """Parse address objects"""
-        # Use dictionary to track objects by name, allowing overrides
-        addresses_dict = {}
+        """Parse address objects.
 
-        # Parse in order: device groups first, then shared
-        # This allows device-group definitions to override shared references
-        paths = [
-            ".//device-group/entry/address/entry",
-            ".//shared/address/entry",
-            ".//address/entry"
-        ]
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name). The broad path visits each entry
+        exactly once in document order, so no name dedup is needed.
 
-        for path in paths:
-            for addr in self.root.findall(path):
-                name = addr.get('name')
-                if not name:
-                    continue
+        An entry that carries only <id> is a reference pointer to a shared
+        definition and has no content of its own, so it is skipped.
+        """
+        addresses = []
 
-                # Check if this is just a reference (only has <id> tag, no actual content)
-                has_id_only = (addr.find('id') is not None and
-                              addr.find('ip-netmask') is None and
-                              addr.find('ip-range') is None and
-                              addr.find('fqdn') is None and
-                              addr.find('description') is None)
+        for addr in self.root.findall(".//address/entry"):
+            name = addr.get('name')
+            if not name:
+                continue
 
-                if has_id_only:
-                    # Skip reference-only entries
-                    continue
+            # A reference pointer has no content: skip it.
+            if self._is_reference_pointer(addr):
+                continue
 
-                addr_obj = {'name': name, 'device_group': self.device_group_of(addr)}
+            addr_obj = {
+                'name': name,
+                'device_group': self.device_group_of(addr),
+                'vsys': self.vsys_of(addr),
+            }
 
-                # Check for IP netmask
-                ip_netmask = addr.find('ip-netmask')
-                if ip_netmask is not None:
-                    addr_obj['type'] = 'ip-netmask'
-                    addr_obj['value'] = ip_netmask.text
+            # Check for IP netmask
+            ip_netmask = addr.find('ip-netmask')
+            if ip_netmask is not None:
+                addr_obj['type'] = 'ip-netmask'
+                addr_obj['value'] = ip_netmask.text
 
-                # Check for IP range
-                ip_range = addr.find('ip-range')
-                if ip_range is not None:
-                    addr_obj['type'] = 'ip-range'
-                    addr_obj['value'] = ip_range.text
+            # Check for IP range
+            ip_range = addr.find('ip-range')
+            if ip_range is not None:
+                addr_obj['type'] = 'ip-range'
+                addr_obj['value'] = ip_range.text
 
-                # IPv6 objects carry their prefix in a dedicated element
-                # (the v2 provider stores any prefix in ip_netmask)
-                ipv6 = addr.find('ipv6')
-                if ipv6 is not None:
-                    addr_obj['type'] = 'ipv6'
-                    addr_obj['value'] = ipv6.text
+            # IPv6 objects carry their prefix in a dedicated element
+            # (the v2 provider stores any prefix in ip_netmask)
+            ipv6 = addr.find('ipv6')
+            if ipv6 is not None:
+                addr_obj['type'] = 'ipv6'
+                addr_obj['value'] = ipv6.text
 
-                ipv6_range = addr.find('ipv6-range')
-                if ipv6_range is not None:
-                    addr_obj['type'] = 'ipv6-range'
-                    addr_obj['value'] = ipv6_range.text
+            ipv6_range = addr.find('ipv6-range')
+            if ipv6_range is not None:
+                addr_obj['type'] = 'ipv6-range'
+                addr_obj['value'] = ipv6_range.text
 
-                # Check for FQDN
-                fqdn = addr.find('fqdn')
-                if fqdn is not None:
-                    addr_obj['type'] = 'fqdn'
-                    addr_obj['value'] = fqdn.text
+            # Check for FQDN
+            fqdn = addr.find('fqdn')
+            if fqdn is not None:
+                addr_obj['type'] = 'fqdn'
+                addr_obj['value'] = fqdn.text
 
-                # Description
-                desc = addr.find('description')
-                if desc is not None:
-                    addr_obj['description'] = desc.text
+            # Description
+            desc = addr.find('description')
+            if desc is not None:
+                addr_obj['description'] = desc.text
 
-                # Tags
-                tags = []
-                tag_member = addr.findall('.//tag/member')
-                for tag in tag_member:
-                    if tag.text:
-                        tags.append(tag.text)
-                addr_obj['tags'] = tags
+            # Tags
+            tags = []
+            tag_member = addr.findall('.//tag/member')
+            for tag in tag_member:
+                if tag.text:
+                    tags.append(tag.text)
+            addr_obj['tags'] = tags
 
-                # Only add/override if this entry has content (value defined)
-                # OR if we haven't seen this name yet
-                if ('value' in addr_obj or name not in addresses_dict):
-                    addresses_dict[name] = addr_obj
+            addresses.append(addr_obj)
 
-        return list(addresses_dict.values())
+        return addresses
+
+    def _is_reference_pointer(self, elem: ET.Element) -> bool:
+        """True if elem is an entry that only carries an <id> pointer.
+
+        Panorama emits such entries to reference a shared definition; they
+        have no content of their own (F3.1 keeps them out of the model).
+        """
+        if elem.find('id') is None:
+            return False
+        return all(child.tag == 'id' for child in elem)
 
     def parse_address_groups(self) -> list[dict]:
-        """Parse address groups"""
-        # Use dictionary to track groups by name, allowing overrides
-        groups_dict = {}
+        """Parse address groups.
 
-        # Parse in order: device groups first, then shared
-        # This allows device-group definitions to override shared references
-        paths = [
-            ".//device-group/entry/address-group/entry",
-            ".//shared/address-group/entry",
-            ".//address-group/entry"
-        ]
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name). The broad path visits each entry
+        exactly once, so no name dedup is needed. Entries that carry only
+        <id> are reference pointers and are skipped.
+        """
+        groups = []
 
-        for path in paths:
-            for grp in self.root.findall(path):
-                name = grp.get('name')
-                if not name:
-                    continue
+        for grp in self.root.findall(".//address-group/entry"):
+            name = grp.get('name')
+            if not name:
+                continue
 
-                # Check if this is just a reference (only has <id> tag, no actual content)
-                # References are used in Panorama to inherit shared objects
-                has_id_only = (grp.find('id') is not None and
-                              grp.find('.//static') is None and
-                              grp.find('.//dynamic') is None and
-                              grp.find('description') is None)
+            if self._is_reference_pointer(grp):
+                continue
 
-                if has_id_only:
-                    # Skip reference-only entries (they're just pointers to shared objects)
-                    continue
+            # Parse members
+            members = []
+            static_members = grp.findall('.//static/member')
+            for member in static_members:
+                if member.text:
+                    members.append(member.text)
 
-                # Parse members
-                members = []
-                static_members = grp.findall('.//static/member')
-                for member in static_members:
-                    if member.text:
-                        members.append(member.text)
+            # v2 models the tag-based filter as a single expression string
+            dynamic_filter = grp.find('.//dynamic/filter')
+            filter_expr = self._dynamic_filter_expr(dynamic_filter) if dynamic_filter is not None else None
 
-                # v2 models the tag-based filter as a single expression string
-                dynamic_filter = grp.find('.//dynamic/filter')
-                filter_expr = self._dynamic_filter_expr(dynamic_filter) if dynamic_filter is not None else None
+            groups.append({
+                'name': name,
+                'device_group': self.device_group_of(grp),
+                'vsys': self.vsys_of(grp),
+                'static_members': members,
+                'dynamic_filter': filter_expr,
+                'description': self._get_text(grp, 'description')
+            })
 
-                group_obj = {
-                    'name': name,
-                    'device_group': self.device_group_of(grp),
-                    'static_members': members,
-                    'dynamic_filter': filter_expr,
-                    'description': self._get_text(grp, 'description')
-                }
-
-                # Only add/override if this entry has content (members or dynamic filter)
-                # OR if we haven't seen this name yet
-                if (members or filter_expr or name not in groups_dict):
-                    groups_dict[name] = group_obj
-
-        return list(groups_dict.values())
+        return groups
 
     def _dynamic_filter_expr(self, filter_elem) -> str:
         """Serialize a PAN-OS dynamic address filter element to an expression.
@@ -492,794 +472,712 @@ class PanoramaParser:
         return ' and '.join(parts)
 
     def parse_service_objects(self) -> list[dict]:
-        """Parse service objects"""
-        # Use dictionary to track objects by name, allowing overrides
-        services_dict = {}
+        """Parse service objects.
 
-        # Parse in order: device groups first, then shared
-        paths = [
-            ".//device-group/entry/service/entry",
-            ".//shared/service/entry",
-            ".//service/entry"
-        ]
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name); no name dedup. Entries that
+        carry only <id> are reference pointers and are skipped.
+        """
+        services = []
 
-        for path in paths:
-            for svc in self.root.findall(path):
-                name = svc.get('name')
-                if not name:
-                    continue
+        for svc in self.root.findall(".//service/entry"):
+            name = svc.get('name')
+            if not name:
+                continue
 
-                # Check if this is just a reference (only has <id> tag, no actual content)
-                has_id_only = (svc.find('id') is not None and
-                              svc.find('protocol') is None and
-                              svc.find('description') is None)
+            if self._is_reference_pointer(svc):
+                continue
 
-                if has_id_only:
-                    # Skip reference-only entries
-                    continue
+            service_obj = {
+                'name': name,
+                'device_group': self.device_group_of(svc),
+                'vsys': self.vsys_of(svc),
+            }
 
-                service_obj = {'name': name, 'device_group': self.device_group_of(svc)}
+            # Protocol and port (tcp wins over udp; the udp drop is pinned
+            # in tests/test_edge_cases.py and tracked in backlog.md)
+            protocol = svc.find('protocol')
+            if protocol is not None:
+                tcp = protocol.find('tcp')
+                udp = protocol.find('udp')
 
-                # Protocol and port
-                protocol = svc.find('protocol')
-                if protocol is not None:
-                    tcp = protocol.find('tcp')
-                    udp = protocol.find('udp')
+                if tcp is not None:
+                    service_obj['protocol'] = 'tcp'
+                    port = tcp.find('port')
+                    if port is not None:
+                        service_obj['port'] = port.text
+                elif udp is not None:
+                    service_obj['protocol'] = 'udp'
+                    port = udp.find('port')
+                    if port is not None:
+                        service_obj['port'] = port.text
 
-                    if tcp is not None:
-                        service_obj['protocol'] = 'tcp'
-                        port = tcp.find('port')
-                        if port is not None:
-                            service_obj['port'] = port.text
-                    elif udp is not None:
-                        service_obj['protocol'] = 'udp'
-                        port = udp.find('port')
-                        if port is not None:
-                            service_obj['port'] = port.text
+            service_obj['description'] = self._get_text(svc, 'description')
 
-                service_obj['description'] = self._get_text(svc, 'description')
+            services.append(service_obj)
 
-                # Only add/override if this entry has content (protocol defined)
-                # OR if we haven't seen this name yet
-                if ('protocol' in service_obj or name not in services_dict):
-                    services_dict[name] = service_obj
-
-        return list(services_dict.values())
+        return services
 
     def parse_service_groups(self) -> list[dict]:
-        """Parse service groups"""
-        # Use dictionary to track groups by name, allowing overrides
-        groups_dict = {}
+        """Parse service groups.
 
-        # Parse in order: device groups first, then shared
-        paths = [
-            ".//device-group/entry/service-group/entry",
-            ".//shared/service-group/entry",
-            ".//service-group/entry"
-        ]
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name); no name dedup. Entries that
+        carry only <id> are reference pointers and are skipped.
+        """
+        groups = []
 
-        for path in paths:
-            for grp in self.root.findall(path):
-                name = grp.get('name')
-                if not name:
-                    continue
+        for grp in self.root.findall(".//service-group/entry"):
+            name = grp.get('name')
+            if not name:
+                continue
 
-                # Check if this is just a reference (only has <id> tag, no actual content)
-                has_id_only = (grp.find('id') is not None and
-                              grp.find('.//members') is None and
-                              grp.find('description') is None)
+            if self._is_reference_pointer(grp):
+                continue
 
-                if has_id_only:
-                    # Skip reference-only entries
-                    continue
+            members = []
+            for member in grp.findall('.//members/member'):
+                if member.text:
+                    members.append(member.text)
 
-                members = []
-                for member in grp.findall('.//members/member'):
-                    if member.text:
-                        members.append(member.text)
+            groups.append({
+                'name': name,
+                'device_group': self.device_group_of(grp),
+                'vsys': self.vsys_of(grp),
+                'members': members,
+                'description': self._get_text(grp, 'description')
+            })
 
-                group_obj = {
-                    'name': name,
-                    'device_group': self.device_group_of(grp),
-                    'members': members,
-                    'description': self._get_text(grp, 'description')
-                }
-
-                # Only add/override if this entry has content (members defined)
-                # OR if we haven't seen this name yet
-                if (members or name not in groups_dict):
-                    groups_dict[name] = group_obj
-
-        return list(groups_dict.values())
+        return groups
 
     def parse_security_rules(self) -> list[dict]:
-        """Parse security policy rules"""
+        """Parse security policy rules.
+
+        F3.1: one rule per XML entry, keyed by
+        (device group, vsys, type, name). The broad path visits each entry
+        exactly once in document order, so no name dedup is needed.
+        """
         rules = []
-        seen_names = set()
 
-        paths = [
-            ".//security/rules/entry",
-            ".//device-group/entry/pre-rulebase/security/rules/entry",
-            ".//device-group/entry/post-rulebase/security/rules/entry"
-        ]
+        for rule in self.root.findall(".//security/rules/entry"):
+            name = rule.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for rule in self.root.findall(path):
-                name = rule.get('name')
-                if not name or name in seen_names:
-                    continue
+            rule_obj = {
+                'name': name,
+                'device_group': self.device_group_of(rule),
+                'vsys': self.vsys_of(rule),
+                'source_zones': self._get_members(rule, 'from'),
+                'source_addresses': self._get_members(rule, 'source'),
+                'destination_zones': self._get_members(rule, 'to'),
+                'destination_addresses': self._get_members(rule, 'destination'),
+                'applications': self._get_members(rule, 'application'),
+                'services': self._get_members(rule, 'service'),
+                'action': self._get_text(rule, 'action'),
+                'description': self._get_text(rule, 'description')
+            }
 
-                seen_names.add(name)
-                rule_obj = {
-                    'name': name,
-                    'device_group': self.device_group_of(rule),
-                    'source_zones': self._get_members(rule, 'from'),
-                    'source_addresses': self._get_members(rule, 'source'),
-                    'destination_zones': self._get_members(rule, 'to'),
-                    'destination_addresses': self._get_members(rule, 'destination'),
-                    'applications': self._get_members(rule, 'application'),
-                    'services': self._get_members(rule, 'service'),
-                    'action': self._get_text(rule, 'action'),
-                    'description': self._get_text(rule, 'description')
-                }
+            # Log settings
+            log_start = rule.find('log-start')
+            log_end = rule.find('log-end')
+            rule_obj['log_start'] = log_start.text == 'yes' if log_start is not None else False
+            rule_obj['log_end'] = log_end.text == 'yes' if log_end is not None else False
 
-                # Log settings
-                log_start = rule.find('log-start')
-                log_end = rule.find('log-end')
-                rule_obj['log_start'] = log_start.text == 'yes' if log_start is not None else False
-                rule_obj['log_end'] = log_end.text == 'yes' if log_end is not None else False
+            # Disabled status
+            disabled = rule.find('disabled')
+            rule_obj['disabled'] = disabled.text == 'yes' if disabled is not None else False
 
-                # Disabled status
-                disabled = rule.find('disabled')
-                rule_obj['disabled'] = disabled.text == 'yes' if disabled is not None else False
-
-                rules.append(rule_obj)
+            rules.append(rule_obj)
 
         return rules
 
     def parse_nat_rules(self) -> list[dict]:
-        """Parse NAT policy rules"""
+        """Parse NAT policy rules.
+
+        F3.1: one rule per XML entry, keyed by
+        (device group, vsys, type, name); single pass, no name dedup.
+        """
         rules = []
-        seen_names = set()
 
-        paths = [
-            ".//nat/rules/entry",
-            ".//device-group/entry/pre-rulebase/nat/rules/entry",
-            ".//device-group/entry/post-rulebase/nat/rules/entry"
-        ]
+        for rule in self.root.findall(".//nat/rules/entry"):
+            name = rule.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for rule in self.root.findall(path):
-                name = rule.get('name')
-                if not name or name in seen_names:
-                    continue
+            rule_obj = {
+                'name': name,
+                'device_group': self.device_group_of(rule),
+                'vsys': self.vsys_of(rule),
+                'source_zones': self._get_members(rule, 'from'),
+                'destination_zone': self._get_text(rule, 'to-interface'),
+                'source_addresses': self._get_members(rule, 'source'),
+                'destination_addresses': self._get_members(rule, 'destination'),
+                'service': self._get_text(rule, 'service'),
+                'description': self._get_text(rule, 'description')
+            }
 
-                seen_names.add(name)
-                rule_obj = {
-                    'name': name,
-                    'device_group': self.device_group_of(rule),
-                    'source_zones': self._get_members(rule, 'from'),
-                    'destination_zone': self._get_text(rule, 'to-interface'),
-                    'source_addresses': self._get_members(rule, 'source'),
-                    'destination_addresses': self._get_members(rule, 'destination'),
-                    'service': self._get_text(rule, 'service'),
-                    'description': self._get_text(rule, 'description')
-                }
-
-                # Source translation
-                source_translation = rule.find('.//source-translation')
-                if source_translation is not None:
-                    dynamic_ip_and_port = source_translation.find('dynamic-ip-and-port')
-                    if dynamic_ip_and_port is not None:
-                        translated_address = dynamic_ip_and_port.find('.//translated-address')
-                        if translated_address is not None:
-                            members = []
-                            for member in translated_address.findall('member'):
-                                if member.text:
-                                    members.append(member.text)
-                            rule_obj['source_translation_type'] = 'dynamic-ip-and-port'
-                            rule_obj['source_translation_address'] = members
-
-                # Destination translation
-                destination_translation = rule.find('.//destination-translation')
-                if destination_translation is not None:
-                    translated_address = destination_translation.find('translated-address')
-                    translated_port = destination_translation.find('translated-port')
-
+            # Source translation
+            source_translation = rule.find('.//source-translation')
+            if source_translation is not None:
+                dynamic_ip_and_port = source_translation.find('dynamic-ip-and-port')
+                if dynamic_ip_and_port is not None:
+                    translated_address = dynamic_ip_and_port.find('.//translated-address')
                     if translated_address is not None:
-                        rule_obj['destination_translation_address'] = translated_address.text
-                    if translated_port is not None:
-                        rule_obj['destination_translation_port'] = translated_port.text
+                        members = []
+                        for member in translated_address.findall('member'):
+                            if member.text:
+                                members.append(member.text)
+                        rule_obj['source_translation_type'] = 'dynamic-ip-and-port'
+                        rule_obj['source_translation_address'] = members
 
-                # Disabled status
-                disabled = rule.find('disabled')
-                rule_obj['disabled'] = disabled.text == 'yes' if disabled is not None else False
+            # Destination translation
+            destination_translation = rule.find('.//destination-translation')
+            if destination_translation is not None:
+                translated_address = destination_translation.find('translated-address')
+                translated_port = destination_translation.find('translated-port')
 
-                rules.append(rule_obj)
+                if translated_address is not None:
+                    rule_obj['destination_translation_address'] = translated_address.text
+                if translated_port is not None:
+                    rule_obj['destination_translation_port'] = translated_port.text
+
+            # Disabled status
+            disabled = rule.find('disabled')
+            rule_obj['disabled'] = disabled.text == 'yes' if disabled is not None else False
+
+            rules.append(rule_obj)
 
         return rules
 
     def parse_schedules(self) -> list[dict]:
-        """Parse schedules"""
+        """Parse schedules.
+
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name); single pass, no name dedup.
+        """
         schedules = []
-        seen_names = set()
 
-        paths = [
-            ".//schedule/entry",
-            ".//device-group/entry/schedule/entry"
-        ]
+        for sched in self.root.findall(".//schedule/entry"):
+            name = sched.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for sched in self.root.findall(path):
-                name = sched.get('name')
-                if not name or name in seen_names:
-                    continue
+            sched_obj = {
+                'name': name,
+                'device_group': self.device_group_of(sched),
+                'vsys': self.vsys_of(sched),
+                'schedule_type': None,
+                'recurring': []
+            }
 
-                seen_names.add(name)
+            # Check for recurring schedule
+            recurring = sched.find('schedule-type/recurring')
+            if recurring is not None:
+                sched_obj['schedule_type'] = 'recurring'
+                for entry in recurring.findall('entry'):
+                    rec_name = entry.get('name')
+                    rec_obj = {
+                        'name': rec_name
+                    }
+                    sched_obj['recurring'].append(rec_obj)
 
-                sched_obj = {
-                    'name': name,
-                    'schedule_type': None,
-                    'recurring': []
-                }
+            # Check for non-recurring schedule
+            non_recurring = sched.find('schedule-type/non-recurring')
+            if non_recurring is not None:
+                sched_obj['schedule_type'] = 'non-recurring'
 
-                # Check for recurring schedule
-                recurring = sched.find('schedule-type/recurring')
-                if recurring is not None:
-                    sched_obj['schedule_type'] = 'recurring'
-                    for entry in recurring.findall('entry'):
-                        rec_name = entry.get('name')
-                        rec_obj = {
-                            'name': rec_name
-                        }
-                        sched_obj['recurring'].append(rec_obj)
-
-                # Check for non-recurring schedule
-                non_recurring = sched.find('schedule-type/non-recurring')
-                if non_recurring is not None:
-                    sched_obj['schedule_type'] = 'non-recurring'
-
-                schedules.append(sched_obj)
+            schedules.append(sched_obj)
 
         return schedules
 
     def parse_decryption_rules(self) -> list[dict]:
-        """Parse decryption policy rules"""
+        """Parse decryption policy rules.
+
+        F3.1: one rule per XML entry, keyed by
+        (device group, vsys, type, name); single pass, no name dedup.
+        """
         rules = []
-        seen_names = set()
 
-        paths = [
-            ".//decryption/rules/entry",
-            ".//device-group/entry/pre-rulebase/decryption/rules/entry",
-            ".//device-group/entry/post-rulebase/decryption/rules/entry"
-        ]
+        for rule in self.root.findall(".//decryption/rules/entry"):
+            name = rule.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for rule in self.root.findall(path):
-                name = rule.get('name')
-                if not name or name in seen_names:
-                    continue
+            rule_obj = {
+                'name': name,
+                'uuid': rule.get('uuid'),
+                # F2.9: the device group scopes the v2 resource and its
+                # rule chain (location + position pivot semantics, F2.5)
+                'device_group': self.device_group_of(rule),
+                'vsys': self.vsys_of(rule),
+                'source_zones': self._get_members(rule, 'from'),
+                'destination_zones': self._get_members(rule, 'to'),
+                'source_addresses': self._get_members(rule, 'source'),
+                'destination_addresses': self._get_members(rule, 'destination'),
+                'source_users': self._get_members(rule, 'source-user'),
+                'categories': self._get_members(rule, 'category'),
+                'services': self._get_members(rule, 'service'),
+                'action': self._get_text(rule, 'action'),
+                'type': None,
+                'profile': self._get_text(rule, 'profile'),
+                'description': self._get_text(rule, 'description'),
+                'disabled': self._get_text(rule, 'disabled') == 'yes',
+                'log_setting': self._get_text(rule, 'log-setting'),
+                # F2.9: log-start/log-end map to the v2 log_success and
+                # log_fail attributes
+                'log_start': self._get_text(rule, 'log-start') == 'yes',
+                'log_end': self._get_text(rule, 'log-end') == 'yes',
+            }
 
-                seen_names.add(name)
+            # Determine type
+            type_elem = rule.find('type')
+            if type_elem is not None:
+                if type_elem.find('ssl-forward-proxy') is not None:
+                    rule_obj['type'] = 'ssl-forward-proxy'
+                elif type_elem.find('ssl-inbound-inspection') is not None:
+                    rule_obj['type'] = 'ssl-inbound-inspection'
+                elif type_elem.find('ssh-proxy') is not None:
+                    rule_obj['type'] = 'ssh-proxy'
 
-                rule_obj = {
-                    'name': name,
-                    'uuid': rule.get('uuid'),
-                    # F2.9: the device group scopes the v2 resource and its
-                    # rule chain (location + position pivot semantics, F2.5)
-                    'device_group': self.device_group_of(rule),
-                    'source_zones': self._get_members(rule, 'from'),
-                    'destination_zones': self._get_members(rule, 'to'),
-                    'source_addresses': self._get_members(rule, 'source'),
-                    'destination_addresses': self._get_members(rule, 'destination'),
-                    'source_users': self._get_members(rule, 'source-user'),
-                    'categories': self._get_members(rule, 'category'),
-                    'services': self._get_members(rule, 'service'),
-                    'action': self._get_text(rule, 'action'),
-                    'type': None,
-                    'profile': self._get_text(rule, 'profile'),
-                    'description': self._get_text(rule, 'description'),
-                    'disabled': self._get_text(rule, 'disabled') == 'yes',
-                    'log_setting': self._get_text(rule, 'log-setting'),
-                    # F2.9: log-start/log-end map to the v2 log_success and
-                    # log_fail attributes
-                    'log_start': self._get_text(rule, 'log-start') == 'yes',
-                    'log_end': self._get_text(rule, 'log-end') == 'yes',
-                }
-
-                # Determine type
-                type_elem = rule.find('type')
-                if type_elem is not None:
-                    if type_elem.find('ssl-forward-proxy') is not None:
-                        rule_obj['type'] = 'ssl-forward-proxy'
-                    elif type_elem.find('ssl-inbound-inspection') is not None:
-                        rule_obj['type'] = 'ssl-inbound-inspection'
-                    elif type_elem.find('ssh-proxy') is not None:
-                        rule_obj['type'] = 'ssh-proxy'
-
-                rules.append(rule_obj)
+            rules.append(rule_obj)
 
         return rules
 
     def parse_pbf_rules(self) -> list[dict]:
-        """Parse Policy-Based Forwarding rules"""
+        """Parse Policy-Based Forwarding rules.
+
+        F3.1: one rule per XML entry, keyed by
+        (device group, vsys, type, name); single pass, no name dedup.
+        """
         rules = []
-        seen_names = set()
 
-        paths = [
-            ".//pbf/rules/entry",
-            ".//device-group/entry/pre-rulebase/pbf/rules/entry",
-            ".//device-group/entry/post-rulebase/pbf/rules/entry"
-        ]
+        for rule in self.root.findall(".//pbf/rules/entry"):
+            name = rule.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for rule in self.root.findall(path):
-                name = rule.get('name')
-                if not name or name in seen_names:
-                    continue
+            rule_obj = {
+                'name': name,
+                'uuid': rule.get('uuid'),
+                # F2.9: the device group scopes the v2 resource and its
+                # rule chain (location + position pivot semantics, F2.5)
+                'device_group': self.device_group_of(rule),
+                'vsys': self.vsys_of(rule),
+                'description': self._get_text(rule, 'description'),
+                'disabled': self._get_text(rule, 'disabled') == 'yes',
+                'source_zones': [],
+                'source_addresses': self._get_members(rule, 'source'),
+                'source_users': self._get_members(rule, 'source-user'),
+                'destination_addresses': self._get_members(rule, 'destination'),
+                'applications': self._get_members(rule, 'application'),
+                'services': self._get_members(rule, 'service'),
+                # F2.9: optional rule schedule name
+                'schedule': self._get_text(rule, 'schedule'),
+                'action': None
+            }
 
-                seen_names.add(name)
+            # Get source zones
+            from_elem = rule.find('from')
+            if from_elem is not None:
+                for zone in from_elem.findall('.//zone/member'):
+                    if zone.text:
+                        rule_obj['source_zones'].append(zone.text)
 
-                rule_obj = {
-                    'name': name,
-                    'uuid': rule.get('uuid'),
-                    # F2.9: the device group scopes the v2 resource and its
-                    # rule chain (location + position pivot semantics, F2.5)
-                    'device_group': self.device_group_of(rule),
-                    'description': self._get_text(rule, 'description'),
-                    'disabled': self._get_text(rule, 'disabled') == 'yes',
-                    'source_zones': [],
-                    'source_addresses': self._get_members(rule, 'source'),
-                    'source_users': self._get_members(rule, 'source-user'),
-                    'destination_addresses': self._get_members(rule, 'destination'),
-                    'applications': self._get_members(rule, 'application'),
-                    'services': self._get_members(rule, 'service'),
-                    # F2.9: optional rule schedule name
-                    'schedule': self._get_text(rule, 'schedule'),
-                    'action': None
-                }
-
-                # Get source zones
-                from_elem = rule.find('from')
-                if from_elem is not None:
-                    for zone in from_elem.findall('.//zone/member'):
-                        if zone.text:
-                            rule_obj['source_zones'].append(zone.text)
-
-                # Get action
-                action_elem = rule.find('action')
-                if action_elem is not None:
-                    forward = action_elem.find('forward')
-                    if forward is not None:
-                        nexthop_ip = self._get_text(forward, 'nexthop/ip-address')
-                        egress_iface = self._get_text(forward, 'egress-interface')
-                        action_obj = {
-                            'type': 'forward',
-                            'nexthop_ip': nexthop_ip,
-                            'egress_interface': egress_iface
+            # Get action
+            action_elem = rule.find('action')
+            if action_elem is not None:
+                forward = action_elem.find('forward')
+                if forward is not None:
+                    nexthop_ip = self._get_text(forward, 'nexthop/ip-address')
+                    egress_iface = self._get_text(forward, 'egress-interface')
+                    action_obj = {
+                        'type': 'forward',
+                        'nexthop_ip': nexthop_ip,
+                        'egress_interface': egress_iface
+                    }
+                    # F2.9: optional path monitoring on the forward action.
+                    # The profile name references a panos_monitor_profile
+                    # (network/profiles/monitor-profile), a different
+                    # object from the IPsec tunnel monitor profile.
+                    monitor = forward.find('monitor')
+                    if monitor is not None:
+                        action_obj['monitor'] = {
+                            'ip_address': self._get_text(monitor, 'ip-address'),
+                            'profile': self._get_text(monitor, 'profile'),
+                            'disable_if_unreachable':
+                                self._get_text(monitor, 'disable-if-unreachable') == 'yes'
                         }
-                        # F2.9: optional path monitoring on the forward action.
-                        # The profile name references a panos_monitor_profile
-                        # (network/profiles/monitor-profile), a different
-                        # object from the IPsec tunnel monitor profile.
-                        monitor = forward.find('monitor')
-                        if monitor is not None:
-                            action_obj['monitor'] = {
-                                'ip_address': self._get_text(monitor, 'ip-address'),
-                                'profile': self._get_text(monitor, 'profile'),
-                                'disable_if_unreachable':
-                                    self._get_text(monitor, 'disable-if-unreachable') == 'yes'
-                            }
-                        rule_obj['action'] = action_obj
+                    rule_obj['action'] = action_obj
 
-                    discard = action_elem.find('discard')
-                    if discard is not None:
-                        rule_obj['action'] = {
-                            'type': 'discard'
-                        }
+                discard = action_elem.find('discard')
+                if discard is not None:
+                    rule_obj['action'] = {
+                        'type': 'discard'
+                    }
 
-                    no_pbf = action_elem.find('no-pbf')
-                    if no_pbf is not None:
-                        rule_obj['action'] = {
-                            'type': 'no-pbf'
-                        }
+                no_pbf = action_elem.find('no-pbf')
+                if no_pbf is not None:
+                    rule_obj['action'] = {
+                        'type': 'no-pbf'
+                    }
 
-                    # F2.9: forward-to-vsys is a plain vsys name in both the
-                    # export and the v2 schema
-                    fwd_vsys = action_elem.find('forward-to-vsys')
-                    if fwd_vsys is not None and fwd_vsys.text:
-                        rule_obj['action'] = {
-                            'type': 'forward_to_vsys',
-                            'vsys': fwd_vsys.text
-                        }
+                # F2.9: forward-to-vsys is a plain vsys name in both the
+                # export and the v2 schema
+                fwd_vsys = action_elem.find('forward-to-vsys')
+                if fwd_vsys is not None and fwd_vsys.text:
+                    rule_obj['action'] = {
+                        'type': 'forward_to_vsys',
+                        'vsys': fwd_vsys.text
+                    }
 
-                # Enforce symmetric return
-                enforce_sym = rule.find('.//enforce-symmetric-return/enabled')
-                if enforce_sym is not None:
-                    rule_obj['enforce_symmetric_return'] = enforce_sym.text == 'yes'
+            # Enforce symmetric return
+            enforce_sym = rule.find('.//enforce-symmetric-return/enabled')
+            if enforce_sym is not None:
+                rule_obj['enforce_symmetric_return'] = enforce_sym.text == 'yes'
 
-                rules.append(rule_obj)
+            rules.append(rule_obj)
 
         return rules
 
     def parse_application_override_rules(self) -> list[dict]:
-        """Parse Application Override rules"""
+        """Parse Application Override rules.
+
+        F3.1: one rule per XML entry, keyed by
+        (device group, vsys, type, name); single pass, no name dedup.
+        """
         rules = []
-        seen_names = set()
 
-        paths = [
-            ".//application-override/rules/entry",
-            ".//device-group/entry/pre-rulebase/application-override/rules/entry",
-            ".//device-group/entry/post-rulebase/application-override/rules/entry"
-        ]
+        for rule in self.root.findall(".//application-override/rules/entry"):
+            name = rule.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for rule in self.root.findall(path):
-                name = rule.get('name')
-                if not name or name in seen_names:
-                    continue
+            rule_obj = {
+                'name': name,
+                'device_group': self.device_group_of(rule),
+                'vsys': self.vsys_of(rule),
+                'description': self._get_text(rule, 'description'),
+                'disabled': self._get_text(rule, 'disabled') == 'yes',
+                'source_zones': self._get_members(rule, 'from'),
+                'destination_zones': self._get_members(rule, 'to'),
+                'source_addresses': self._get_members(rule, 'source'),
+                'destination_addresses': self._get_members(rule, 'destination'),
+                'port': self._get_text(rule, 'port'),
+                'protocol': self._get_text(rule, 'protocol'),
+                'application': self._get_text(rule, 'application')
+            }
 
-                seen_names.add(name)
-
-                rule_obj = {
-                    'name': name,
-                    'description': self._get_text(rule, 'description'),
-                    'disabled': self._get_text(rule, 'disabled') == 'yes',
-                    'source_zones': self._get_members(rule, 'from'),
-                    'destination_zones': self._get_members(rule, 'to'),
-                    'source_addresses': self._get_members(rule, 'source'),
-                    'destination_addresses': self._get_members(rule, 'destination'),
-                    'port': self._get_text(rule, 'port'),
-                    'protocol': self._get_text(rule, 'protocol'),
-                    'application': self._get_text(rule, 'application')
-                }
-
-                rules.append(rule_obj)
+            rules.append(rule_obj)
 
         return rules
 
     def parse_zones(self) -> list[dict]:
-        """Parse zone configurations"""
+        """Parse zone configurations.
+
+        F3.1: one zone per XML entry, keyed by
+        (device group, vsys, type, name); single pass, no name dedup.
+        Template association stays in F3.6, so the owning template is not
+        tracked here.
+        """
         zones = []
-        seen_names = set()
 
-        paths = [
-            ".//zone/entry",
-            ".//vsys/entry/zone/entry",
-            ".//devices/entry/vsys/entry/zone/entry"
-        ]
+        for zone in self.root.findall(".//zone/entry"):
+            name = zone.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for zone in self.root.findall(path):
-                name = zone.get('name')
-                if not name or name in seen_names:
-                    continue
+            # Determine zone type
+            zone_type = 'layer3'
+            if zone.find('network/layer2') is not None:
+                zone_type = 'layer2'
+            elif zone.find('network/tap') is not None:
+                zone_type = 'tap'
+            elif zone.find('network/virtual-wire') is not None:
+                zone_type = 'virtual-wire'
+            elif zone.find('network/tunnel') is not None:
+                zone_type = 'tunnel'
 
-                seen_names.add(name)
+            # Get interfaces
+            interfaces = []
+            for iface in zone.findall('.//network/*/member'):
+                if iface.text:
+                    interfaces.append(iface.text)
 
-                # Determine zone type
-                zone_type = 'layer3'
-                if zone.find('network/layer2') is not None:
-                    zone_type = 'layer2'
-                elif zone.find('network/tap') is not None:
-                    zone_type = 'tap'
-                elif zone.find('network/virtual-wire') is not None:
-                    zone_type = 'virtual-wire'
-                elif zone.find('network/tunnel') is not None:
-                    zone_type = 'tunnel'
+            # Get zone protection profile
+            zone_profile = zone.find('.//zone-protection-profile')
 
-                # Get interfaces
-                interfaces = []
-                for iface in zone.findall('.//network/*/member'):
-                    if iface.text:
-                        interfaces.append(iface.text)
-
-                # Get zone protection profile
-                zone_profile = zone.find('.//zone-protection-profile')
-
-                zone_obj = {
-                    'name': name,
-                    'type': zone_type,
-                    'interfaces': interfaces,
-                    'zone_protection_profile': zone_profile.text if zone_profile is not None else None
-                }
-
-                zones.append(zone_obj)
+            zones.append({
+                'name': name,
+                'vsys': self.vsys_of(zone),
+                'type': zone_type,
+                'interfaces': interfaces,
+                'zone_protection_profile': zone_profile.text if zone_profile is not None else None
+            })
 
         return zones
 
     def parse_interfaces(self) -> list[dict]:
         """Parse interface configurations"""
         interfaces = []
-        seen_names = set()
-
         # Ethernet interfaces
-        eth_paths = [
-            ".//network/interface/ethernet/entry",
-            ".//devices/entry/network/interface/ethernet/entry"
-        ]
+        for iface in self.root.findall(".//network/interface/ethernet/entry"):
+            name = iface.get('name')
+            if not name:
+                continue
 
-        for path in eth_paths:
-            for iface in self.root.findall(path):
-                name = iface.get('name')
-                if not name or name in seen_names:
-                    continue
+            iface_obj = {
+                'name': name,
+                'type': 'ethernet',
+                'vsys': self.vsys_of(iface),
+                'mode': None,
+                'ip_addresses': [],
+                'ipv6_addresses': [],
+                'zone': None,
+                'virtual_router': None,
+                'management_profile': None,
+                'comment': self._get_text(iface, 'comment')
+            }
 
-                seen_names.add(name)
+            # Determine mode (layer3, layer2, virtual-wire, tap, ha, aggregate-group)
+            if iface.find('layer3') is not None:
+                iface_obj['mode'] = 'layer3'
+                l3 = iface.find('layer3')
 
-                iface_obj = {
-                    'name': name,
-                    'type': 'ethernet',
-                    'mode': None,
-                    'ip_addresses': [],
-                    'ipv6_addresses': [],
-                    'zone': None,
-                    'virtual_router': None,
-                    'management_profile': None,
-                    'comment': self._get_text(iface, 'comment')
-                }
+                # Get IP addresses
+                for ip in l3.findall('.//ip/entry'):
+                    ip_name = ip.get('name')
+                    if ip_name:
+                        iface_obj['ip_addresses'].append(ip_name)
 
-                # Determine mode (layer3, layer2, virtual-wire, tap, ha, aggregate-group)
-                if iface.find('layer3') is not None:
-                    iface_obj['mode'] = 'layer3'
-                    l3 = iface.find('layer3')
+                # Get IPv6 addresses
+                for ip in l3.findall('.//ipv6/address/entry'):
+                    ip_name = ip.get('name')
+                    if ip_name:
+                        iface_obj['ipv6_addresses'].append(ip_name)
 
-                    # Get IP addresses
-                    for ip in l3.findall('.//ip/entry'):
-                        ip_name = ip.get('name')
-                        if ip_name:
-                            iface_obj['ip_addresses'].append(ip_name)
+                # Management profile
+                mgmt_profile = l3.find('interface-management-profile')
+                if mgmt_profile is not None:
+                    iface_obj['management_profile'] = mgmt_profile.text
 
-                    # Get IPv6 addresses
-                    for ip in l3.findall('.//ipv6/address/entry'):
-                        ip_name = ip.get('name')
-                        if ip_name:
-                            iface_obj['ipv6_addresses'].append(ip_name)
+            elif iface.find('layer2') is not None:
+                iface_obj['mode'] = 'layer2'
+            elif iface.find('virtual-wire') is not None:
+                iface_obj['mode'] = 'virtual-wire'
+            elif iface.find('tap') is not None:
+                iface_obj['mode'] = 'tap'
+            elif iface.find('ha') is not None:
+                iface_obj['mode'] = 'ha'
+            elif iface.find('aggregate-group') is not None:
+                iface_obj['mode'] = 'aggregate-group'
 
-                    # Management profile
-                    mgmt_profile = l3.find('interface-management-profile')
-                    if mgmt_profile is not None:
-                        iface_obj['management_profile'] = mgmt_profile.text
-
-                elif iface.find('layer2') is not None:
-                    iface_obj['mode'] = 'layer2'
-                elif iface.find('virtual-wire') is not None:
-                    iface_obj['mode'] = 'virtual-wire'
-                elif iface.find('tap') is not None:
-                    iface_obj['mode'] = 'tap'
-                elif iface.find('ha') is not None:
-                    iface_obj['mode'] = 'ha'
-                elif iface.find('aggregate-group') is not None:
-                    iface_obj['mode'] = 'aggregate-group'
-
-                interfaces.append(iface_obj)
+            interfaces.append(iface_obj)
 
         # VLAN interfaces
-        vlan_paths = [
-            ".//network/interface/vlan/units/entry",
-            ".//devices/entry/network/interface/vlan/units/entry"
-        ]
+        for iface in self.root.findall(".//network/interface/vlan/units/entry"):
+            name = iface.get('name')
+            # Dedupe on the namespaced name so a vlan unit number does
+            # not collide with a loopback/tunnel unit of the same number.
+            full_name = f'vlan.{name}'
+            if not name:
+                continue
 
-        for path in vlan_paths:
-            for iface in self.root.findall(path):
-                name = iface.get('name')
-                # Dedupe on the namespaced name so a vlan unit number does
-                # not collide with a loopback/tunnel unit of the same number.
-                full_name = f'vlan.{name}'
-                if not name or full_name in seen_names:
-                    continue
+            iface_obj = {
+                'name': full_name,
+                'type': 'vlan',
+                'vsys': self.vsys_of(iface),
+                'mode': 'layer3',
+                'ip_addresses': [],
+                'ipv6_addresses': [],
+                'zone': None,
+                'virtual_router': None,
+                'management_profile': None,
+                'comment': self._get_text(iface, 'comment'),
+                'tag': self._get_text(iface, 'tag')
+            }
 
-                seen_names.add(full_name)
+            # Get IP addresses
+            for ip in iface.findall('.//ip/entry'):
+                ip_name = ip.get('name')
+                if ip_name:
+                    iface_obj['ip_addresses'].append(ip_name)
 
-                iface_obj = {
-                    'name': full_name,
-                    'type': 'vlan',
-                    'mode': 'layer3',
-                    'ip_addresses': [],
-                    'ipv6_addresses': [],
-                    'zone': None,
-                    'virtual_router': None,
-                    'management_profile': None,
-                    'comment': self._get_text(iface, 'comment'),
-                    'tag': self._get_text(iface, 'tag')
-                }
+            # Get IPv6 addresses
+            for ip in iface.findall('.//ipv6/address/entry'):
+                ip_name = ip.get('name')
+                if ip_name:
+                    iface_obj['ipv6_addresses'].append(ip_name)
 
-                # Get IP addresses
-                for ip in iface.findall('.//ip/entry'):
-                    ip_name = ip.get('name')
-                    if ip_name:
-                        iface_obj['ip_addresses'].append(ip_name)
+            # Management profile
+            mgmt_profile = iface.find('interface-management-profile')
+            if mgmt_profile is not None:
+                iface_obj['management_profile'] = mgmt_profile.text
 
-                # Get IPv6 addresses
-                for ip in iface.findall('.//ipv6/address/entry'):
-                    ip_name = ip.get('name')
-                    if ip_name:
-                        iface_obj['ipv6_addresses'].append(ip_name)
-
-                # Management profile
-                mgmt_profile = iface.find('interface-management-profile')
-                if mgmt_profile is not None:
-                    iface_obj['management_profile'] = mgmt_profile.text
-
-                interfaces.append(iface_obj)
+            interfaces.append(iface_obj)
 
         # Loopback interfaces
-        loopback_paths = [
-            ".//network/interface/loopback/units/entry",
-            ".//devices/entry/network/interface/loopback/units/entry"
-        ]
+        for iface in self.root.findall(".//network/interface/loopback/units/entry"):
+            name = iface.get('name')
+            # Dedupe on the namespaced name so a loopback unit number
+            # does not collide with a vlan/tunnel unit of the same number.
+            full_name = f'loopback.{name}'
+            if not name:
+                continue
 
-        for path in loopback_paths:
-            for iface in self.root.findall(path):
-                name = iface.get('name')
-                # Dedupe on the namespaced name so a loopback unit number
-                # does not collide with a vlan/tunnel unit of the same number.
-                full_name = f'loopback.{name}'
-                if not name or full_name in seen_names:
-                    continue
+            iface_obj = {
+                'name': full_name,
+                'type': 'loopback',
+                'vsys': self.vsys_of(iface),
+                'mode': 'layer3',
+                'ip_addresses': [],
+                'ipv6_addresses': [],
+                'zone': None,
+                'virtual_router': None,
+                'management_profile': None,
+                'comment': self._get_text(iface, 'comment')
+            }
 
-                seen_names.add(full_name)
+            # Get IP addresses
+            for ip in iface.findall('.//ip/entry'):
+                ip_name = ip.get('name')
+                if ip_name:
+                    iface_obj['ip_addresses'].append(ip_name)
 
-                iface_obj = {
-                    'name': full_name,
-                    'type': 'loopback',
-                    'mode': 'layer3',
-                    'ip_addresses': [],
-                    'ipv6_addresses': [],
-                    'zone': None,
-                    'virtual_router': None,
-                    'management_profile': None,
-                    'comment': self._get_text(iface, 'comment')
-                }
+            # Get IPv6 addresses
+            for ip in iface.findall('.//ipv6/address/entry'):
+                ip_name = ip.get('name')
+                if ip_name:
+                    iface_obj['ipv6_addresses'].append(ip_name)
 
-                # Get IP addresses
-                for ip in iface.findall('.//ip/entry'):
-                    ip_name = ip.get('name')
-                    if ip_name:
-                        iface_obj['ip_addresses'].append(ip_name)
-
-                # Get IPv6 addresses
-                for ip in iface.findall('.//ipv6/address/entry'):
-                    ip_name = ip.get('name')
-                    if ip_name:
-                        iface_obj['ipv6_addresses'].append(ip_name)
-
-                interfaces.append(iface_obj)
+            interfaces.append(iface_obj)
 
         # Tunnel interfaces
-        tunnel_paths = [
-            ".//network/interface/tunnel/units/entry",
-            ".//devices/entry/network/interface/tunnel/units/entry"
-        ]
+        for iface in self.root.findall(".//network/interface/tunnel/units/entry"):
+            name = iface.get('name')
+            # Dedupe on the namespaced name so a tunnel unit number
+            # does not collide with a vlan/loopback unit of the same number.
+            full_name = f'tunnel.{name}'
+            if not name:
+                continue
 
-        for path in tunnel_paths:
-            for iface in self.root.findall(path):
-                name = iface.get('name')
-                # Dedupe on the namespaced name so a tunnel unit number
-                # does not collide with a vlan/loopback unit of the same number.
-                full_name = f'tunnel.{name}'
-                if not name or full_name in seen_names:
-                    continue
+            iface_obj = {
+                'name': full_name,
+                'type': 'tunnel',
+                'vsys': self.vsys_of(iface),
+                'mode': 'layer3',
+                'ip_addresses': [],
+                'ipv6_addresses': [],
+                'zone': None,
+                'virtual_router': None,
+                'management_profile': None,
+                'comment': self._get_text(iface, 'comment')
+            }
 
-                seen_names.add(full_name)
+            # Get IP addresses
+            for ip in iface.findall('.//ip/entry'):
+                ip_name = ip.get('name')
+                if ip_name:
+                    iface_obj['ip_addresses'].append(ip_name)
 
-                iface_obj = {
-                    'name': full_name,
-                    'type': 'tunnel',
-                    'mode': 'layer3',
-                    'ip_addresses': [],
-                    'ipv6_addresses': [],
-                    'zone': None,
-                    'virtual_router': None,
-                    'management_profile': None,
-                    'comment': self._get_text(iface, 'comment')
-                }
+            # Get IPv6 addresses
+            for ip in iface.findall('.//ipv6/address/entry'):
+                ip_name = ip.get('name')
+                if ip_name:
+                    iface_obj['ipv6_addresses'].append(ip_name)
 
-                # Get IP addresses
-                for ip in iface.findall('.//ip/entry'):
+            # Management profile
+            mgmt_profile = iface.find('interface-management-profile')
+            if mgmt_profile is not None:
+                iface_obj['management_profile'] = mgmt_profile.text
+
+            interfaces.append(iface_obj)
+
+        # Aggregate interfaces (ae)
+        for iface in self.root.findall(".//network/interface/aggregate-ethernet/entry"):
+            name = iface.get('name')
+            if not name:
+                continue
+
+            iface_obj = {
+                'name': name,
+                'type': 'aggregate',
+                'vsys': self.vsys_of(iface),
+                'mode': None,
+                'ip_addresses': [],
+                'ipv6_addresses': [],
+                'zone': None,
+                'virtual_router': None,
+                'management_profile': None,
+                'comment': self._get_text(iface, 'comment')
+            }
+
+            # Determine mode
+            if iface.find('layer3') is not None:
+                iface_obj['mode'] = 'layer3'
+                l3 = iface.find('layer3')
+
+                # Get IP addresses from the main interface only. Use a
+                # direct-child lookup so subinterface IPs (nested under
+                # <units>) do not leak into the parent's address list.
+                for ip in l3.findall('ip/entry'):
                     ip_name = ip.get('name')
                     if ip_name:
                         iface_obj['ip_addresses'].append(ip_name)
 
-                # Get IPv6 addresses
-                for ip in iface.findall('.//ipv6/address/entry'):
-                    ip_name = ip.get('name')
-                    if ip_name:
-                        iface_obj['ipv6_addresses'].append(ip_name)
-
                 # Management profile
-                mgmt_profile = iface.find('interface-management-profile')
+                mgmt_profile = l3.find('interface-management-profile')
                 if mgmt_profile is not None:
                     iface_obj['management_profile'] = mgmt_profile.text
 
-                interfaces.append(iface_obj)
+                # Get subinterfaces (units)
+                for unit in l3.findall('.//units/entry'):
+                    unit_name = unit.get('name')
+                    if unit_name:
 
-        # Aggregate interfaces (ae)
-        aggregate_paths = [
-            ".//network/interface/aggregate-ethernet/entry",
-            ".//devices/entry/network/interface/aggregate-ethernet/entry"
-        ]
+                        unit_obj = {
+                            'name': unit_name,
+                            'type': 'aggregate-subinterface',
+                            'vsys': self.vsys_of(unit),
+                            'mode': 'layer3',
+                            'ip_addresses': [],
+                            'ipv6_addresses': [],
+                            'zone': None,
+                            'virtual_router': None,
+                            'management_profile': None,
+                            'comment': self._get_text(unit, 'comment'),
+                            'tag': self._get_text(unit, 'tag')
+                        }
 
-        for path in aggregate_paths:
-            for iface in self.root.findall(path):
-                name = iface.get('name')
-                if not name or name in seen_names:
-                    continue
+                        # Get IP addresses
+                        for ip in unit.findall('.//ip/entry'):
+                            ip_name = ip.get('name')
+                            if ip_name:
+                                unit_obj['ip_addresses'].append(ip_name)
 
-                seen_names.add(name)
+                        # Management profile
+                        unit_mgmt = unit.find('interface-management-profile')
+                        if unit_mgmt is not None:
+                            unit_obj['management_profile'] = unit_mgmt.text
 
-                iface_obj = {
-                    'name': name,
-                    'type': 'aggregate',
-                    'mode': None,
-                    'ip_addresses': [],
-                    'ipv6_addresses': [],
-                    'zone': None,
-                    'virtual_router': None,
-                    'management_profile': None,
-                    'comment': self._get_text(iface, 'comment')
-                }
+                        interfaces.append(unit_obj)
 
-                # Determine mode
-                if iface.find('layer3') is not None:
-                    iface_obj['mode'] = 'layer3'
-                    l3 = iface.find('layer3')
+            elif iface.find('layer2') is not None:
+                iface_obj['mode'] = 'layer2'
 
-                    # Get IP addresses from the main interface only. Use a
-                    # direct-child lookup so subinterface IPs (nested under
-                    # <units>) do not leak into the parent's address list.
-                    for ip in l3.findall('ip/entry'):
-                        ip_name = ip.get('name')
-                        if ip_name:
-                            iface_obj['ip_addresses'].append(ip_name)
-
-                    # Management profile
-                    mgmt_profile = l3.find('interface-management-profile')
-                    if mgmt_profile is not None:
-                        iface_obj['management_profile'] = mgmt_profile.text
-
-                    # Get subinterfaces (units)
-                    for unit in l3.findall('.//units/entry'):
-                        unit_name = unit.get('name')
-                        if unit_name and unit_name not in seen_names:
-                            seen_names.add(unit_name)
-
-                            unit_obj = {
-                                'name': unit_name,
-                                'type': 'aggregate-subinterface',
-                                'mode': 'layer3',
-                                'ip_addresses': [],
-                                'ipv6_addresses': [],
-                                'zone': None,
-                                'virtual_router': None,
-                                'management_profile': None,
-                                'comment': self._get_text(unit, 'comment'),
-                                'tag': self._get_text(unit, 'tag')
-                            }
-
-                            # Get IP addresses
-                            for ip in unit.findall('.//ip/entry'):
-                                ip_name = ip.get('name')
-                                if ip_name:
-                                    unit_obj['ip_addresses'].append(ip_name)
-
-                            # Management profile
-                            unit_mgmt = unit.find('interface-management-profile')
-                            if unit_mgmt is not None:
-                                unit_obj['management_profile'] = unit_mgmt.text
-
-                            interfaces.append(unit_obj)
-
-                elif iface.find('layer2') is not None:
-                    iface_obj['mode'] = 'layer2'
-
-                interfaces.append(iface_obj)
+            interfaces.append(iface_obj)
 
         return interfaces
 
     def parse_virtual_routers(self) -> list[dict]:
-        """Parse virtual router configurations"""
-        vrouters_dict = {}
+        """Parse virtual router configurations.
+
+        F3.1: each (template, name) entry survives as its own object, keyed
+        by (template, vsys, type, name). The template pass and the
+        device pass visit disjoint element sets, so the two passes are
+        kept and no name-based dedup is needed.
+        """
+        vrouters = []
 
         # Parse from templates first (most authoritative source).
         # Panorama exports use a top-level <templates> element containing
@@ -1316,22 +1214,13 @@ class PanoramaParser:
                             'metric': metric
                         })
 
-                vr_obj = {
+                vrouters.append({
                     'name': name,
                     'template': template_name,
+                    'vsys': self.vsys_of(vr),
                     'interfaces': interfaces,
                     'static_routes': static_routes
-                }
-
-                # Create a unique key based on name + interface signature
-                # This handles cases where multiple templates have VRs with same name
-                interface_signature = ','.join(sorted(interfaces[:5]))  # First 5 interfaces as signature
-                unique_key = f"{name}_{interface_signature}"
-
-                # Only add if we haven't seen this exact configuration
-                # Or if this has more interfaces (more complete definition)
-                if unique_key not in vrouters_dict or len(interfaces) > len(vrouters_dict[unique_key]['interfaces']):
-                    vrouters_dict[unique_key] = vr_obj
+                })
 
         # Also check per-vsys device-level VRs (real exports nest the network
         # config under devices/entry/vsys/entry, not directly under devices/entry)
@@ -1362,28 +1251,28 @@ class PanoramaParser:
                         'metric': metric
                     })
 
-            vr_obj = {
+            vrouters.append({
                 'name': name,
                 'template': 'device-specific',
+                'vsys': self.vsys_of(vr),
                 'interfaces': interfaces,
                 'static_routes': static_routes
-            }
+            })
 
-            interface_signature = ','.join(sorted(interfaces[:5]))
-            unique_key = f"{name}_{interface_signature}"
-
-            if unique_key not in vrouters_dict or len(interfaces) > len(vrouters_dict[unique_key]['interfaces']):
-                vrouters_dict[unique_key] = vr_obj
-
-        return list(vrouters_dict.values())
+        return vrouters
 
     def parse_logical_routers(self) -> list[dict]:
         """Parse logical router configurations (Advanced Routing Engine)
 
         Logical routers are part of PAN-OS 10.2+ Advanced Routing Engine.
         They replace virtual routers with industry-standard configuration.
+
+        F3.1: each (template, name) entry survives as its own object, keyed
+        by (template, vsys, type, name). The template pass and the
+        device pass visit disjoint element sets, so the two passes are
+        kept and no name-based dedup is needed.
         """
-        lrouters_dict = {}
+        lrouters = []
 
         # Parse from templates first (most authoritative source).
         # Panorama exports use <templates><entry>, not <template><entry>.
@@ -1419,20 +1308,14 @@ class PanoramaParser:
                             'metric': metric
                         })
 
-                lr_obj = {
+                lrouters.append({
                     'name': name,
                     'template': template_name,
+                    'vsys': self.vsys_of(lr),
                     'router_type': 'logical',  # Mark as logical router
                     'interfaces': interfaces,
                     'static_routes': static_routes
-                }
-
-                # Create a unique key based on name + interface signature
-                interface_signature = ','.join(sorted(interfaces[:5]))
-                unique_key = f"{name}_{interface_signature}"
-
-                if unique_key not in lrouters_dict or len(interfaces) > len(lrouters_dict[unique_key]['interfaces']):
-                    lrouters_dict[unique_key] = lr_obj
+                })
 
         # Also check per-vsys device-level logical routers (network config is
         # nested under devices/entry/vsys/entry in real exports)
@@ -1463,21 +1346,16 @@ class PanoramaParser:
                         'metric': metric
                     })
 
-            lr_obj = {
+            lrouters.append({
                 'name': name,
                 'template': 'device-specific',
+                'vsys': self.vsys_of(lr),
                 'router_type': 'logical',
                 'interfaces': interfaces,
                 'static_routes': static_routes
-            }
+            })
 
-            interface_signature = ','.join(sorted(interfaces[:5]))
-            unique_key = f"{name}_{interface_signature}"
-
-            if unique_key not in lrouters_dict or len(interfaces) > len(lrouters_dict[unique_key]['interfaces']):
-                lrouters_dict[unique_key] = lr_obj
-
-        return list(lrouters_dict.values())
+        return lrouters
 
     def parse_security_profiles(self) -> dict[str, list[dict]]:
         """Parse security profiles (antivirus, vulnerability, spyware, url-filtering, file-blocking, wildfire)"""
@@ -1490,277 +1368,218 @@ class PanoramaParser:
             'wildfire_analysis': []
         }
 
-        seen_names = {key: set() for key in profiles}
-
         # Antivirus profiles
-        av_paths = [
-            ".//profiles/virus/entry",
-            ".//device-group/entry/profiles/virus/entry",
-            ".//shared/profiles/virus/entry"
-        ]
+        for prof in self.root.findall(".//profiles/virus/entry"):
+            name = prof.get('name')
+            if not name:
+                continue
 
-        for path in av_paths:
-            for prof in self.root.findall(path):
-                name = prof.get('name')
-                if not name or name in seen_names['antivirus']:
-                    continue
-
-                seen_names['antivirus'].add(name)
-                profiles['antivirus'].append({
-                    'name': name,
-                    'description': self._get_text(prof, 'description')
-                })
+            profiles['antivirus'].append({
+                'name': name,
+                'device_group': self.device_group_of(prof),
+                'vsys': self.vsys_of(prof),
+                'description': self._get_text(prof, 'description')
+            })
 
         # Vulnerability profiles
-        vuln_paths = [
-            ".//profiles/vulnerability/entry",
-            ".//device-group/entry/profiles/vulnerability/entry",
-            ".//shared/profiles/vulnerability/entry"
-        ]
+        for prof in self.root.findall(".//profiles/vulnerability/entry"):
+            name = prof.get('name')
+            if not name:
+                continue
 
-        for path in vuln_paths:
-            for prof in self.root.findall(path):
-                name = prof.get('name')
-                if not name or name in seen_names['vulnerability']:
-                    continue
-
-                seen_names['vulnerability'].add(name)
-                profiles['vulnerability'].append({
-                    'name': name,
-                    'description': self._get_text(prof, 'description')
-                })
+            profiles['vulnerability'].append({
+                'name': name,
+                'device_group': self.device_group_of(prof),
+                'vsys': self.vsys_of(prof),
+                'description': self._get_text(prof, 'description')
+            })
 
         # Anti-spyware profiles
-        spy_paths = [
-            ".//profiles/spyware/entry",
-            ".//device-group/entry/profiles/spyware/entry",
-            ".//shared/profiles/spyware/entry"
-        ]
+        for prof in self.root.findall(".//profiles/spyware/entry"):
+            name = prof.get('name')
+            if not name:
+                continue
 
-        for path in spy_paths:
-            for prof in self.root.findall(path):
-                name = prof.get('name')
-                if not name or name in seen_names['anti_spyware']:
-                    continue
-
-                seen_names['anti_spyware'].add(name)
-                profiles['anti_spyware'].append({
-                    'name': name,
-                    'description': self._get_text(prof, 'description')
-                })
+            profiles['anti_spyware'].append({
+                'name': name,
+                'device_group': self.device_group_of(prof),
+                'vsys': self.vsys_of(prof),
+                'description': self._get_text(prof, 'description')
+            })
 
         # URL filtering profiles
-        url_paths = [
-            ".//profiles/url-filtering/entry",
-            ".//device-group/entry/profiles/url-filtering/entry",
-            ".//shared/profiles/url-filtering/entry"
-        ]
+        for prof in self.root.findall(".//profiles/url-filtering/entry"):
+            name = prof.get('name')
+            if not name:
+                continue
 
-        for path in url_paths:
-            for prof in self.root.findall(path):
-                name = prof.get('name')
-                if not name or name in seen_names['url_filtering']:
-                    continue
-
-                seen_names['url_filtering'].add(name)
-                profiles['url_filtering'].append({
-                    'name': name,
-                    'description': self._get_text(prof, 'description')
-                })
+            profiles['url_filtering'].append({
+                'name': name,
+                'device_group': self.device_group_of(prof),
+                'vsys': self.vsys_of(prof),
+                'description': self._get_text(prof, 'description')
+            })
 
         # File blocking profiles
-        fb_paths = [
-            ".//profiles/file-blocking/entry",
-            ".//device-group/entry/profiles/file-blocking/entry",
-            ".//shared/profiles/file-blocking/entry"
-        ]
+        for prof in self.root.findall(".//profiles/file-blocking/entry"):
+            name = prof.get('name')
+            if not name:
+                continue
 
-        for path in fb_paths:
-            for prof in self.root.findall(path):
-                name = prof.get('name')
-                if not name or name in seen_names['file_blocking']:
-                    continue
-
-                seen_names['file_blocking'].add(name)
-                profiles['file_blocking'].append({
-                    'name': name,
-                    'description': self._get_text(prof, 'description')
-                })
+            profiles['file_blocking'].append({
+                'name': name,
+                'device_group': self.device_group_of(prof),
+                'vsys': self.vsys_of(prof),
+                'description': self._get_text(prof, 'description')
+            })
 
         # WildFire analysis profiles
-        wf_paths = [
-            ".//profiles/wildfire-analysis/entry",
-            ".//device-group/entry/profiles/wildfire-analysis/entry",
-            ".//shared/profiles/wildfire-analysis/entry"
-        ]
+        for prof in self.root.findall(".//profiles/wildfire-analysis/entry"):
+            name = prof.get('name')
+            if not name:
+                continue
 
-        for path in wf_paths:
-            for prof in self.root.findall(path):
-                name = prof.get('name')
-                if not name or name in seen_names['wildfire_analysis']:
-                    continue
-
-                seen_names['wildfire_analysis'].add(name)
-                profiles['wildfire_analysis'].append({
-                    'name': name,
-                    'description': self._get_text(prof, 'description')
-                })
+            profiles['wildfire_analysis'].append({
+                'name': name,
+                'device_group': self.device_group_of(prof),
+                'vsys': self.vsys_of(prof),
+                'description': self._get_text(prof, 'description')
+            })
 
         return profiles
 
     def parse_security_profile_groups(self) -> list[dict]:
-        """Parse security profile groups"""
+        """Parse security profile groups.
+
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name); single pass, no name dedup.
+        """
         groups = []
-        seen_names = set()
 
-        paths = [
-            ".//profile-group/entry",
-            ".//device-group/entry/profile-group/entry",
-            ".//shared/profile-group/entry"
-        ]
+        for grp in self.root.findall(".//profile-group/entry"):
+            name = grp.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for grp in self.root.findall(path):
-                name = grp.get('name')
-                if not name or name in seen_names:
-                    continue
-
-                seen_names.add(name)
-
-                group_obj = {
-                    'name': name,
-                    'device_group': self.device_group_of(grp),
-                    'virus': self._get_members(grp, 'virus'),
-                    'spyware': self._get_members(grp, 'spyware'),
-                    'vulnerability': self._get_members(grp, 'vulnerability'),
-                    'url_filtering': self._get_members(grp, 'url-filtering'),
-                    'file_blocking': self._get_members(grp, 'file-blocking'),
-                    'wildfire_analysis': self._get_members(grp, 'wildfire-analysis')
-                }
-
-                groups.append(group_obj)
+            groups.append({
+                'name': name,
+                'device_group': self.device_group_of(grp),
+                'vsys': self.vsys_of(grp),
+                'virus': self._get_members(grp, 'virus'),
+                'spyware': self._get_members(grp, 'spyware'),
+                'vulnerability': self._get_members(grp, 'vulnerability'),
+                'url_filtering': self._get_members(grp, 'url-filtering'),
+                'file_blocking': self._get_members(grp, 'file-blocking'),
+                'wildfire_analysis': self._get_members(grp, 'wildfire-analysis')
+            })
 
         return groups
 
     def parse_zone_protection_profiles(self) -> list[dict]:
-        """Parse zone protection profiles"""
+        """Parse zone protection profiles.
+
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name); single pass, no name dedup.
+        """
         profiles = []
-        seen_names = set()
 
-        paths = [
-            ".//zone-protection-profile/entry",
-            ".//device-group/entry/zone-protection-profile/entry",
-            ".//network/profiles/zone-protection-profile/entry"
-        ]
+        for prof in self.root.findall(".//zone-protection-profile/entry"):
+            name = prof.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for prof in self.root.findall(path):
-                name = prof.get('name')
-                if not name or name in seen_names:
-                    continue
-
-                seen_names.add(name)
-
-                prof_obj = {
-                    'name': name,
-                    'description': self._get_text(prof, 'description')
-                }
-
-                profiles.append(prof_obj)
+            profiles.append({
+                'name': name,
+                'device_group': self.device_group_of(prof),
+                'vsys': self.vsys_of(prof),
+                'description': self._get_text(prof, 'description')
+            })
 
         return profiles
 
     def parse_log_settings(self) -> list[dict]:
-        """Parse log forwarding profiles"""
+        """Parse log forwarding profiles.
+
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name); single pass, no name dedup.
+        """
         profiles = []
-        seen_names = set()
 
-        paths = [
-            ".//log-settings/profiles/entry",
-            ".//device-group/entry/log-settings/profiles/entry",
-            ".//shared/log-settings/profiles/entry"
-        ]
+        for prof in self.root.findall(".//log-settings/profiles/entry"):
+            name = prof.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for prof in self.root.findall(path):
-                name = prof.get('name')
-                if not name or name in seen_names:
-                    continue
-
-                seen_names.add(name)
-
-                prof_obj = {
-                    'name': name,
-                    'description': self._get_text(prof, 'description')
-                }
-
-                profiles.append(prof_obj)
+            profiles.append({
+                'name': name,
+                'device_group': self.device_group_of(prof),
+                'vsys': self.vsys_of(prof),
+                'description': self._get_text(prof, 'description')
+            })
 
         return profiles
 
     def parse_qos_profiles(self) -> list[dict]:
-        """Parse QoS profiles"""
+        """Parse QoS profiles.
+
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name); single pass, no name dedup.
+        """
         profiles = []
-        seen_names = set()
 
-        paths = [
-            ".//qos/profile/entry",
-            ".//device-group/entry/qos/profile/entry",
-            ".//network/qos/profile/entry"
-        ]
+        for prof in self.root.findall(".//qos/profile/entry"):
+            name = prof.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for prof in self.root.findall(path):
-                name = prof.get('name')
-                if not name or name in seen_names:
-                    continue
+            prof_obj = {
+                'name': name,
+                'device_group': self.device_group_of(prof),
+                'vsys': self.vsys_of(prof),
+                'class_bandwidth_type': {}
+            }
 
-                seen_names.add(name)
+            # Parse class bandwidth settings
+            for cls in prof.findall('.//class/entry'):
+                cls_name = cls.get('name')
+                if cls_name:
+                    prof_obj['class_bandwidth_type'][cls_name] = {
+                        'priority': self._get_text(cls, 'priority')
+                    }
 
-                prof_obj = {
-                    'name': name,
-                    'class_bandwidth_type': {}
-                }
-
-                # Parse class bandwidth settings
-                for cls in prof.findall('.//class/entry'):
-                    cls_name = cls.get('name')
-                    if cls_name:
-                        prof_obj['class_bandwidth_type'][cls_name] = {
-                            'priority': self._get_text(cls, 'priority')
-                        }
-
-                profiles.append(prof_obj)
+            profiles.append(prof_obj)
 
         return profiles
 
     def parse_tunnel_monitor_profiles(self) -> list[dict]:
-        """Parse tunnel monitor profiles"""
+        """Parse tunnel monitor profiles.
+
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name). The two paths are disjoint XML
+        locations (GlobalProtect gateway vs plain tunnel-monitor), so both
+        are kept and each entry is visited exactly once.
+        """
         profiles = []
-        seen_names = set()
 
         paths = [
             ".//network/tunnel/global-protect-gateway/Default/tunnel-monitor/monitor-profile/entry",
-            ".//network/tunnel-monitor/monitor-profile/entry",
-            ".//devices/entry/network/tunnel-monitor/monitor-profile/entry"
+            ".//network/tunnel-monitor/monitor-profile/entry"
         ]
 
         for path in paths:
             for prof in self.root.findall(path):
                 name = prof.get('name')
-                if not name or name in seen_names:
+                if not name:
                     continue
 
-                seen_names.add(name)
-
-                prof_obj = {
+                profiles.append({
                     'name': name,
+                    'device_group': self.device_group_of(prof),
+                    'vsys': self.vsys_of(prof),
                     'interval': self._get_text(prof, 'interval'),
                     'threshold': self._get_text(prof, 'threshold'),
                     'action': self._get_text(prof, 'action')
-                }
-
-                profiles.append(prof_obj)
+                })
 
         return profiles
 
@@ -1775,30 +1594,26 @@ class PanoramaParser:
         (network/tunnel-monitor/monitor-profile). That object has no v2
         resource and goes to the manual setup report instead. The v2 schema
         has no description attribute, so none is captured.
+
+        F3.1: one object per XML entry, keyed by
+        (device group, vsys, type, name); single pass, no name dedup.
         """
         profiles = []
-        seen_names = set()
 
-        paths = [
-            ".//network/profiles/monitor-profile/entry",
-            ".//device-group/entry/network/profiles/monitor-profile/entry"
-        ]
+        for prof in self.root.findall(".//network/profiles/monitor-profile/entry"):
+            name = prof.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for prof in self.root.findall(path):
-                name = prof.get('name')
-                if not name or name in seen_names:
-                    continue
-
-                seen_names.add(name)
-
-                profiles.append({
-                    'name': name,
-                    # v2 action is an enum: wait-recover | fail-over
-                    'action': self._get_text(prof, 'action'),
-                    'interval': self._get_text(prof, 'interval'),
-                    'threshold': self._get_text(prof, 'threshold')
-                })
+            profiles.append({
+                'name': name,
+                'device_group': self.device_group_of(prof),
+                'vsys': self.vsys_of(prof),
+                # v2 action is an enum: wait-recover | fail-over
+                'action': self._get_text(prof, 'action'),
+                'interval': self._get_text(prof, 'interval'),
+                'threshold': self._get_text(prof, 'threshold')
+            })
 
         return profiles
 
@@ -1940,225 +1755,197 @@ class PanoramaParser:
     def parse_ipsec_tunnels(self) -> list[dict]:
         """Parse IPsec VPN tunnel configurations"""
         tunnels = []
-        seen_names = set()
 
-        paths = [
-            ".//network/tunnel/ipsec/entry",
-            ".//devices/entry/network/tunnel/ipsec/entry"
-        ]
+        for tunnel in self.root.findall(".//network/tunnel/ipsec/entry"):
+            name = tunnel.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for tunnel in self.root.findall(path):
-                name = tunnel.get('name')
-                if not name or name in seen_names:
-                    continue
+            tunnel_config = {
+                'name': name,
+                'device_group': self.device_group_of(tunnel),
+                'vsys': self.vsys_of(tunnel),
+                'tunnel_interface': self._get_text(tunnel, 'tunnel-interface'),
+                'type': 'auto-key',  # Default
+                'peer_address': None,
+                'local_address': None,
+                'auth_type': None,
+                'preshared_key': None,
+                'ike_gateway': None,
+                'ipsec_crypto_profile': None
+            }
 
-                seen_names.add(name)
+            # Check for auto-key (most common)
+            auto_key = tunnel.find('auto-key')
+            if auto_key is not None:
+                tunnel_config['type'] = 'auto-key'
 
-                tunnel_config = {
-                    'name': name,
-                    'tunnel_interface': self._get_text(tunnel, 'tunnel-interface'),
-                    'type': 'auto-key',  # Default
-                    'peer_address': None,
-                    'local_address': None,
-                    'auth_type': None,
-                    'preshared_key': None,
-                    'ike_gateway': None,
-                    'ipsec_crypto_profile': None
-                }
+                # IKE Gateway. Real Panorama exports use <gateway><entry
+                # name="..."/> under <auto-key>; accept the alternate
+                # <ike-gateway> tag some tools emit as well.
+                ike_gw = auto_key.find('gateway/entry')
+                if ike_gw is None:
+                    ike_gw = auto_key.find('ike-gateway/entry')
+                if ike_gw is not None:
+                    tunnel_config['ike_gateway'] = ike_gw.get('name')
 
-                # Check for auto-key (most common)
-                auto_key = tunnel.find('auto-key')
-                if auto_key is not None:
-                    tunnel_config['type'] = 'auto-key'
+                # IPsec Crypto Profile
+                ipsec_profile = auto_key.find('ipsec-crypto-profile')
+                if ipsec_profile is not None:
+                    tunnel_config['ipsec_crypto_profile'] = ipsec_profile.text
 
-                    # IKE Gateway. Real Panorama exports use <gateway><entry
-                    # name="..."/> under <auto-key>; accept the alternate
-                    # <ike-gateway> tag some tools emit as well.
-                    ike_gw = auto_key.find('gateway/entry')
-                    if ike_gw is None:
-                        ike_gw = auto_key.find('ike-gateway/entry')
-                    if ike_gw is not None:
-                        tunnel_config['ike_gateway'] = ike_gw.get('name')
+                # Proxy IDs
+                proxy_ids = []
+                for proxy in auto_key.findall('.//proxy-id/entry'):
+                    proxy_name = proxy.get('name')
+                    if proxy_name:
+                        proxy_config = {
+                            'name': proxy_name,
+                            'local': self._get_text(proxy, 'local'),
+                            'remote': self._get_text(proxy, 'remote'),
+                            'protocol': self._get_text(proxy, 'protocol/number')
+                        }
+                        proxy_ids.append(proxy_config)
+                tunnel_config['proxy_ids'] = proxy_ids
 
-                    # IPsec Crypto Profile
-                    ipsec_profile = auto_key.find('ipsec-crypto-profile')
-                    if ipsec_profile is not None:
-                        tunnel_config['ipsec_crypto_profile'] = ipsec_profile.text
+            # Check for manual key
+            manual_key = tunnel.find('manual-key')
+            if manual_key is not None:
+                tunnel_config['type'] = 'manual-key'
 
-                    # Proxy IDs
-                    proxy_ids = []
-                    for proxy in auto_key.findall('.//proxy-id/entry'):
-                        proxy_name = proxy.get('name')
-                        if proxy_name:
-                            proxy_config = {
-                                'name': proxy_name,
-                                'local': self._get_text(proxy, 'local'),
-                                'remote': self._get_text(proxy, 'remote'),
-                                'protocol': self._get_text(proxy, 'protocol/number')
-                            }
-                            proxy_ids.append(proxy_config)
-                    tunnel_config['proxy_ids'] = proxy_ids
-
-                # Check for manual key
-                manual_key = tunnel.find('manual-key')
-                if manual_key is not None:
-                    tunnel_config['type'] = 'manual-key'
-
-                tunnels.append(tunnel_config)
+            tunnels.append(tunnel_config)
 
         return tunnels
 
     def parse_ike_gateways(self) -> list[dict]:
         """Parse IKE gateway configurations"""
         gateways = []
-        seen_names = set()
 
-        paths = [
-            ".//network/ike/gateway/entry",
-            ".//devices/entry/network/ike/gateway/entry"
-        ]
+        for gw in self.root.findall(".//network/ike/gateway/entry"):
+            name = gw.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for gw in self.root.findall(path):
-                name = gw.get('name')
-                if not name or name in seen_names:
-                    continue
+            gateway_config = {
+                'name': name,
+                'device_group': self.device_group_of(gw),
+                'vsys': self.vsys_of(gw),
+                'version': 'ikev1',  # Default
+                'peer_address': None,
+                'local_address': None,
+                'pre_shared_key': '***CHANGE_ME***',  # Generic placeholder
+                'auth_type': 'pre-shared-key',
+                'ike_crypto_profile': None,
+                'local_id': None,
+                'peer_id': None
+            }
 
-                seen_names.add(name)
+            # Version
+            protocol = gw.find('protocol')
+            if protocol is not None:
+                if protocol.find('ikev1') is not None:
+                    gateway_config['version'] = 'ikev1'
+                elif protocol.find('ikev2') is not None:
+                    gateway_config['version'] = 'ikev2'
 
-                gateway_config = {
-                    'name': name,
-                    'version': 'ikev1',  # Default
-                    'peer_address': None,
-                    'local_address': None,
-                    'pre_shared_key': '***CHANGE_ME***',  # Generic placeholder
-                    'auth_type': 'pre-shared-key',
-                    'ike_crypto_profile': None,
-                    'local_id': None,
-                    'peer_id': None
-                }
+                # IKE Crypto Profile
+                version_node = protocol.find(gateway_config['version'])
+                if version_node is not None:
+                    ike_profile = version_node.find('ike-crypto-profile')
+                    if ike_profile is not None:
+                        gateway_config['ike_crypto_profile'] = ike_profile.text
 
-                # Version
-                protocol = gw.find('protocol')
-                if protocol is not None:
-                    if protocol.find('ikev1') is not None:
-                        gateway_config['version'] = 'ikev1'
-                    elif protocol.find('ikev2') is not None:
-                        gateway_config['version'] = 'ikev2'
+            # Peer address
+            peer_addr = gw.find('.//peer-address/ip')
+            if peer_addr is not None:
+                gateway_config['peer_address'] = peer_addr.text
 
-                    # IKE Crypto Profile
-                    version_node = protocol.find(gateway_config['version'])
-                    if version_node is not None:
-                        ike_profile = version_node.find('ike-crypto-profile')
-                        if ike_profile is not None:
-                            gateway_config['ike_crypto_profile'] = ike_profile.text
+            peer_fqdn = gw.find('.//peer-address/fqdn')
+            if peer_fqdn is not None:
+                gateway_config['peer_address'] = peer_fqdn.text
+                gateway_config['peer_address_type'] = 'fqdn'
 
-                # Peer address
-                peer_addr = gw.find('.//peer-address/ip')
-                if peer_addr is not None:
-                    gateway_config['peer_address'] = peer_addr.text
+            # Local address
+            local_addr = gw.find('.//local-address/ip')
+            if local_addr is not None:
+                gateway_config['local_address'] = local_addr.text
 
-                peer_fqdn = gw.find('.//peer-address/fqdn')
-                if peer_fqdn is not None:
-                    gateway_config['peer_address'] = peer_fqdn.text
-                    gateway_config['peer_address_type'] = 'fqdn'
+            local_iface = gw.find('.//local-address/interface')
+            if local_iface is not None:
+                gateway_config['local_address_interface'] = local_iface.text
 
-                # Local address
-                local_addr = gw.find('.//local-address/ip')
-                if local_addr is not None:
-                    gateway_config['local_address'] = local_addr.text
+            # Authentication
+            auth = gw.find('authentication')
+            if auth is not None:
+                # Check for pre-shared key (won't have actual value in export for security)
+                if auth.find('pre-shared-key') is not None:
+                    gateway_config['auth_type'] = 'pre-shared-key'
+                    # Note: Actual key not in export for security reasons
+                    gateway_config['pre_shared_key'] = '***CHANGE_ME***'
+                elif auth.find('certificate') is not None:
+                    gateway_config['auth_type'] = 'certificate'
+                    cert = auth.find('certificate')
+                    if cert is not None:
+                        gateway_config['certificate_profile'] = self._get_text(cert, 'profile')
 
-                local_iface = gw.find('.//local-address/interface')
-                if local_iface is not None:
-                    gateway_config['local_address_interface'] = local_iface.text
+            # Local/Peer IDs
+            gateway_config['local_id'] = self._get_text(gw, 'local-id/id')
+            gateway_config['peer_id'] = self._get_text(gw, 'peer-id/id')
 
-                # Authentication
-                auth = gw.find('authentication')
-                if auth is not None:
-                    # Check for pre-shared key (won't have actual value in export for security)
-                    if auth.find('pre-shared-key') is not None:
-                        gateway_config['auth_type'] = 'pre-shared-key'
-                        # Note: Actual key not in export for security reasons
-                        gateway_config['pre_shared_key'] = '***CHANGE_ME***'
-                    elif auth.find('certificate') is not None:
-                        gateway_config['auth_type'] = 'certificate'
-                        cert = auth.find('certificate')
-                        if cert is not None:
-                            gateway_config['certificate_profile'] = self._get_text(cert, 'profile')
-
-                # Local/Peer IDs
-                gateway_config['local_id'] = self._get_text(gw, 'local-id/id')
-                gateway_config['peer_id'] = self._get_text(gw, 'peer-id/id')
-
-                gateways.append(gateway_config)
+            gateways.append(gateway_config)
 
         return gateways
 
     def parse_ike_crypto_profiles(self) -> list[dict]:
         """Parse IKE crypto profiles"""
         profiles = []
-        seen_names = set()
 
-        paths = [
-            ".//network/ike/crypto-profiles/ike-crypto-profiles/entry",
-            ".//devices/entry/network/ike/crypto-profiles/ike-crypto-profiles/entry"
-        ]
+        for profile in self.root.findall(".//network/ike/crypto-profiles/ike-crypto-profiles/entry"):
+            name = profile.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for profile in self.root.findall(path):
-                name = profile.get('name')
-                if not name or name in seen_names:
-                    continue
+            profile_config = {
+                'name': name,
+                'device_group': self.device_group_of(profile),
+                'vsys': self.vsys_of(profile),
+                'dh_groups': self._get_members(profile, 'dh-group'),
+                'authentications': self._get_members(profile, 'authentication'),
+                'encryptions': self._get_members(profile, 'encryption'),
+                'lifetime_hours': self._get_text(profile, 'lifetime/hours')
+            }
 
-                seen_names.add(name)
-
-                profile_config = {
-                    'name': name,
-                    'dh_groups': self._get_members(profile, 'dh-group'),
-                    'authentications': self._get_members(profile, 'authentication'),
-                    'encryptions': self._get_members(profile, 'encryption'),
-                    'lifetime_hours': self._get_text(profile, 'lifetime/hours')
-                }
-
-                profiles.append(profile_config)
+            profiles.append(profile_config)
 
         return profiles
 
     def parse_ipsec_crypto_profiles(self) -> list[dict]:
         """Parse IPsec crypto profiles"""
         profiles = []
-        seen_names = set()
 
-        paths = [
-            ".//network/ike/crypto-profiles/ipsec-crypto-profiles/entry",
-            ".//devices/entry/network/ike/crypto-profiles/ipsec-crypto-profiles/entry"
-        ]
+        for profile in self.root.findall(".//network/ike/crypto-profiles/ipsec-crypto-profiles/entry"):
+            name = profile.get('name')
+            if not name:
+                continue
 
-        for path in paths:
-            for profile in self.root.findall(path):
-                name = profile.get('name')
-                if not name or name in seen_names:
-                    continue
+            profile_config = {
+                'name': name,
+                'device_group': self.device_group_of(profile),
+                'vsys': self.vsys_of(profile),
+                'protocol': 'esp',  # Default
+                'encryptions': self._get_members(profile, 'esp/encryption'),
+                'authentications': self._get_members(profile, 'esp/authentication'),
+                'dh_group': self._get_text(profile, 'dh-group'),
+                'lifetime_hours': self._get_text(profile, 'lifetime/hours'),
+                'lifetime_kb': self._get_text(profile, 'lifetime/kilobytes')
+            }
 
-                seen_names.add(name)
+            # Check if AH is used instead of ESP
+            if profile.find('ah') is not None:
+                profile_config['protocol'] = 'ah'
+                profile_config['authentications'] = self._get_members(profile, 'ah/authentication')
 
-                profile_config = {
-                    'name': name,
-                    'protocol': 'esp',  # Default
-                    'encryptions': self._get_members(profile, 'esp/encryption'),
-                    'authentications': self._get_members(profile, 'esp/authentication'),
-                    'dh_group': self._get_text(profile, 'dh-group'),
-                    'lifetime_hours': self._get_text(profile, 'lifetime/hours'),
-                    'lifetime_kb': self._get_text(profile, 'lifetime/kilobytes')
-                }
-
-                # Check if AH is used instead of ESP
-                if profile.find('ah') is not None:
-                    profile_config['protocol'] = 'ah'
-                    profile_config['authentications'] = self._get_members(profile, 'ah/authentication')
-
-                profiles.append(profile_config)
+            profiles.append(profile_config)
 
         return profiles
 
@@ -2225,9 +2012,12 @@ class TerraformGenerator:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         # Collision handling for resource names. Two different PAN-OS names
         # can sanitize to the same Terraform name (for example 'a-b' and
-        # 'a_b'). The registry maps (scope, input) -> assigned name so a
-        # reference site that recomputes the same input gets the same name.
-        self._name_registry: dict[tuple[str, str], str] = {}
+        # 'a_b'). The registry maps (scope, context, input) -> assigned name
+        # so a reference site that recomputes the same identity gets the same
+        # name (F3.1 keyed identity). The flat (scope, input) index keeps
+        # contextless reference sites resolving to the first declaration.
+        self._name_registry: dict[tuple[str, str, str], str] = {}
+        self._flat_registry: dict[tuple[str, str], str] = {}
         self._taken_names: dict[str, set[str]] = {}
 
     def sanitize_name(self, name: str) -> str:
@@ -2257,6 +2047,10 @@ class TerraformGenerator:
         If the address is already taken in the scope (a duplicate declaration
         or a digest collision), a numeric suffix follows, so the output is
         always valid HCL.
+
+        F3.1: `context` is the defining device group ('Shared' for shared
+        objects) or template. It is part of the identity: same-named objects
+        in different device groups get different digests and both survive.
         """
         base = self.sanitize_name(name) or 'unnamed'
         digest = hashlib.sha256(f'{scope}|{context}|{name}'.encode()).hexdigest()[:8]
@@ -2267,12 +2061,17 @@ class TerraformGenerator:
             candidate = f'{base}_{digest}_{n}'
             n += 1
         taken.add(candidate)
-        # Reference sites resolve by (scope, name); the first declaration wins
-        self._name_registry.setdefault((scope, name), candidate)
+        # Reference sites resolve by (scope, context, name); the first
+        # declaration of the same identity wins.
+        self._name_registry.setdefault((scope, context, name), candidate)
+        # Contextless reference sites resolve by (scope, name); the first
+        # declaration wins regardless of context (F2.6 robustness).
+        self._flat_registry.setdefault((scope, name), candidate)
         return candidate
 
-    def name_ref(self, name: str, scopes, key: Optional[str] = None):
-        """Resolve a PAN-OS name to a Terraform reference (F2.6).
+    def name_ref(self, name: str, scopes, key: Optional[str] = None,
+                 context: Optional[str] = None):
+        """Resolve a PAN-OS name to a Terraform reference (F2.6, F3.1).
 
         Returns an HclRef of '<scope>.<local>.name' when the object is
         declared in this run, else the plain name. Names that point at
@@ -2282,10 +2081,33 @@ class TerraformGenerator:
         over a group when both carry the same name. `key` is the registry
         key when it differs from the PAN-OS name (VPN composite keys such
         as 'ike_gw_<name>').
+
+        F3.1: when `context` is given (the referrer's device group),
+        resolution tries the referrer's own context first, then the shared
+        context, then contextless declarations (template-scoped objects),
+        and only then falls back to the flat (scope, name) first-declaration
+        index. This makes same-named objects in different device groups
+        resolvable to their own resources instead of one name shadowing the
+        other.
         """
         lookup = key if key is not None else name
+        # Context chain for the referrer: its own context first (a rule in a
+        # device group references that group's objects), then the shared
+        # objects the group inherits, then contextless declarations (zones,
+        # interfaces, virtual routers, VPN objects).
+        chain: list[str] = []
+        for ctx in ([context] if context else []) + ['Shared', '']:
+            if ctx not in chain:
+                chain.append(ctx)
         for scope in scopes:
-            local = self._name_registry.get((scope, lookup))
+            for ctx in chain:
+                local = self._name_registry.get((scope, ctx, lookup))
+                if local is not None:
+                    return HclRef(f'{scope}.{local}.name')
+        # Flat fallback for contextless call sites: the first declaration of
+        # the (scope, name) pair wins (F2.6 robustness).
+        for scope in scopes:
+            local = self._flat_registry.get((scope, lookup))
             if local is not None:
                 return HclRef(f'{scope}.{local}.name')
         return name
@@ -2472,8 +2294,10 @@ variable "panos_password" {
 
             if addr.get('tags'):
                 # F2.6: tags declared in this run become references
+                ctx = addr.get('device_group')
                 tags_str = ', '.join([
-                    self.hcl_value(self.name_ref(t, TAG_SCOPES), '') for t in addr['tags']
+                    self.hcl_value(self.name_ref(t, TAG_SCOPES, context=ctx), '')
+                    for t in addr['tags']
                 ])
                 content += f'  tags = [{tags_str}]\n'
 
@@ -2524,8 +2348,10 @@ variable "panos_password" {
 
             if static_members:
                 # F2.6: members declared in this run become references
+                ctx = grp.get('device_group')
                 members_str = ', '.join([
-                    self.hcl_value(self.name_ref(m, ADDR_SCOPES), '') for m in static_members
+                    self.hcl_value(self.name_ref(m, ADDR_SCOPES, context=ctx), '')
+                    for m in static_members
                 ])
                 content += f'  static = [{members_str}]\n'
 
@@ -2598,8 +2424,10 @@ variable "panos_password" {
 
             if grp.get('members'):
                 # F2.6: members declared in this run become references
+                ctx = grp.get('device_group')
                 members_str = ', '.join([
-                    self.hcl_value(self.name_ref(m, SERVICE_SCOPES), '') for m in grp['members']
+                    self.hcl_value(self.name_ref(m, SERVICE_SCOPES, context=ctx), '')
+                    for m in grp['members']
                 ])
                 content += f'  members = [{members_str}]\n'
 
@@ -2821,20 +2649,26 @@ variable "panos_password" {
                     rule_obj['description'] = rule['description']
                 # F2.6: zones, addresses and services declared in this run
                 # become references; the rest stay brown-field strings
+                # F3.1: resolve in the referrer's device-group context
+                ctx = rule.get('device_group')
                 if rule.get('source_zones'):
-                    rule_obj['source_zones'] = [self.name_ref(z, ZONE_SCOPES) for z in rule['source_zones']]
+                    rule_obj['source_zones'] = [
+                        self.name_ref(z, ZONE_SCOPES, context=ctx) for z in rule['source_zones']]
                 if rule.get('source_addresses'):
-                    rule_obj['source_addresses'] = [self.name_ref(a, ADDR_SCOPES) for a in rule['source_addresses']]
+                    rule_obj['source_addresses'] = [
+                        self.name_ref(a, ADDR_SCOPES, context=ctx) for a in rule['source_addresses']]
                 if rule.get('destination_zones'):
-                    rule_obj['destination_zones'] = [self.name_ref(z, ZONE_SCOPES) for z in rule['destination_zones']]
+                    rule_obj['destination_zones'] = [
+                        self.name_ref(z, ZONE_SCOPES, context=ctx) for z in rule['destination_zones']]
                 if rule.get('destination_addresses'):
                     rule_obj['destination_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES) for a in rule['destination_addresses']]
+                        self.name_ref(a, ADDR_SCOPES, context=ctx) for a in rule['destination_addresses']]
                 if rule.get('applications'):
                     # Built-in PAN-OS app names: no managed scope, never wired
                     rule_obj['applications'] = list(rule['applications'])
                 if rule.get('services'):
-                    rule_obj['services'] = [self.name_ref(s, SERVICE_SCOPES) for s in rule['services']]
+                    rule_obj['services'] = [
+                        self.name_ref(s, SERVICE_SCOPES, context=ctx) for s in rule['services']]
                 rule_obj['action'] = rule.get('action', 'allow')
                 if rule.get('log_start'):
                     rule_obj['log_start'] = True
@@ -2886,18 +2720,24 @@ variable "panos_password" {
                     rule_obj['description'] = rule['description']
                 # F2.6: zones, addresses and services declared in this run
                 # become references; the rest stay brown-field strings
+                # F3.1: resolve in the referrer's device-group context
+                ctx = rule.get('device_group')
                 if rule.get('source_zones'):
-                    rule_obj['source_zones'] = [self.name_ref(z, ZONE_SCOPES) for z in rule['source_zones']]
+                    rule_obj['source_zones'] = [
+                        self.name_ref(z, ZONE_SCOPES, context=ctx) for z in rule['source_zones']]
                 # v2 destination_zone is a list
                 if rule.get('destination_zone'):
-                    rule_obj['destination_zone'] = [self.name_ref(rule['destination_zone'], ZONE_SCOPES)]
+                    rule_obj['destination_zone'] = [
+                        self.name_ref(rule['destination_zone'], ZONE_SCOPES, context=ctx)]
                 if rule.get('source_addresses'):
-                    rule_obj['source_addresses'] = [self.name_ref(a, ADDR_SCOPES) for a in rule['source_addresses']]
+                    rule_obj['source_addresses'] = [
+                        self.name_ref(a, ADDR_SCOPES, context=ctx) for a in rule['source_addresses']]
                 if rule.get('destination_addresses'):
                     rule_obj['destination_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES) for a in rule['destination_addresses']]
+                        self.name_ref(a, ADDR_SCOPES, context=ctx) for a in rule['destination_addresses']]
                 if rule.get('service'):
-                    rule_obj['service'] = self.name_ref(rule['service'], SERVICE_SCOPES)
+                    rule_obj['service'] = self.name_ref(
+                        rule['service'], SERVICE_SCOPES, context=ctx)
                 if rule.get('disabled'):
                     rule_obj['disabled'] = True
 
@@ -2913,7 +2753,8 @@ variable "panos_password" {
                         # (F2.6: reference when declared in this run)
                         rule_obj['source_translation'] = {
                             st_type: {'interface_address': {
-                                'interface': self.name_ref(st_addr[0], INTERFACE_SCOPES)}}}
+                                'interface': self.name_ref(
+                                    st_addr[0], INTERFACE_SCOPES, context=ctx)}}}
                     elif st_type == 'dynamic_ip' and st_addr:
                         rule_obj['source_translation'] = {
                             st_type: {'translated_address': list(st_addr)}}
@@ -2977,25 +2818,27 @@ variable "panos_password" {
                     rule_obj['description'] = rule['description']
                 # F2.6: zones, addresses and services declared in this run
                 # become references; the rest stay brown-field strings
+                # F3.1: resolve in the referrer's device-group context
+                ctx = rule.get('device_group')
                 if rule.get('source_zones'):
                     rule_obj['source_zones'] = [
-                        self.name_ref(z, ZONE_SCOPES) for z in rule['source_zones']]
+                        self.name_ref(z, ZONE_SCOPES, context=ctx) for z in rule['source_zones']]
                 if rule.get('destination_zones'):
                     rule_obj['destination_zones'] = [
-                        self.name_ref(z, ZONE_SCOPES) for z in rule['destination_zones']]
+                        self.name_ref(z, ZONE_SCOPES, context=ctx) for z in rule['destination_zones']]
                 if rule.get('source_addresses'):
                     rule_obj['source_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES) for a in rule['source_addresses']]
+                        self.name_ref(a, ADDR_SCOPES, context=ctx) for a in rule['source_addresses']]
                 if rule.get('destination_addresses'):
                     rule_obj['destination_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES) for a in rule['destination_addresses']]
+                        self.name_ref(a, ADDR_SCOPES, context=ctx) for a in rule['destination_addresses']]
                 if rule.get('source_users'):
                     rule_obj['source_user'] = list(rule['source_users'])
                 if rule.get('categories'):
                     rule_obj['category'] = list(rule['categories'])
                 if rule.get('services'):
                     rule_obj['services'] = [
-                        self.name_ref(s, SERVICE_SCOPES) for s in rule['services']]
+                        self.name_ref(s, SERVICE_SCOPES, context=ctx) for s in rule['services']]
                 # F2.9: the v2 action is an enum (no-decrypt | decrypt |
                 # decrypt-and-forward) and the inspection mode is a separate
                 # type block. Modern PAN-OS exports carry both; legacy PAN-OS
@@ -3067,22 +2910,26 @@ variable "panos_password" {
                 if rule.get('description'):
                     rule_obj['description'] = rule['description']
                 # v2 models the PBF source as from { zone = [...] }
+                # F3.1: resolve in the referrer's device-group context
+                ctx = rule.get('device_group')
                 if rule.get('source_zones'):
                     rule_obj['from'] = {
-                        'zone': [self.name_ref(z, ZONE_SCOPES) for z in rule['source_zones']]}
+                        'zone': [
+                            self.name_ref(z, ZONE_SCOPES, context=ctx)
+                            for z in rule['source_zones']]}
                 if rule.get('source_addresses'):
                     rule_obj['source_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES) for a in rule['source_addresses']]
+                        self.name_ref(a, ADDR_SCOPES, context=ctx) for a in rule['source_addresses']]
                 if rule.get('source_users'):
                     rule_obj['source_users'] = list(rule['source_users'])
                 if rule.get('destination_addresses'):
                     rule_obj['destination_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES) for a in rule['destination_addresses']]
+                        self.name_ref(a, ADDR_SCOPES, context=ctx) for a in rule['destination_addresses']]
                 if rule.get('applications'):
                     rule_obj['applications'] = list(rule['applications'])
                 if rule.get('services'):
                     rule_obj['services'] = [
-                        self.name_ref(s, SERVICE_SCOPES) for s in rule['services']]
+                        self.name_ref(s, SERVICE_SCOPES, context=ctx) for s in rule['services']]
                 # Single-choice action object (v2 names use underscores)
                 action = rule.get('action')
                 if action:
@@ -3484,8 +3331,10 @@ variable "panos_password" {
             content += '# Antivirus Profiles\n'
             for prof in profiles['antivirus']:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_antivirus_security_profile', context=prof.get('device_group') or ''
-                )
+                    prof['name'], 'panos_antivirus_security_profile',
+                    # F3.1: contextless legacy convention keeps pre-F3.1
+                    # digests stable (DG/template identity lands in F3.6)
+                    context='')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -3496,8 +3345,10 @@ variable "panos_password" {
             content += '# Vulnerability Protection Profiles\n'
             for prof in profiles['vulnerability']:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_vulnerability_security_profile', context=prof.get('device_group') or ''
-                )
+                    prof['name'], 'panos_vulnerability_security_profile',
+                    # F3.1: contextless legacy convention keeps pre-F3.1
+                    # digests stable (DG/template identity lands in F3.6)
+                    context='')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -3508,8 +3359,10 @@ variable "panos_password" {
             content += '# Anti-Spyware Profiles\n'
             for prof in profiles['anti_spyware']:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_anti_spyware_security_profile', context=prof.get('device_group') or ''
-                )
+                    prof['name'], 'panos_anti_spyware_security_profile',
+                    # F3.1: contextless legacy convention keeps pre-F3.1
+                    # digests stable (DG/template identity lands in F3.6)
+                    context='')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -3520,8 +3373,10 @@ variable "panos_password" {
             content += '# URL Filtering Profiles\n'
             for prof in profiles['url_filtering']:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_url_filtering_security_profile', context=prof.get('device_group') or ''
-                )
+                    prof['name'], 'panos_url_filtering_security_profile',
+                    # F3.1: contextless legacy convention keeps pre-F3.1
+                    # digests stable (DG/template identity lands in F3.6)
+                    context='')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -3532,8 +3387,10 @@ variable "panos_password" {
             content += '# File Blocking Profiles\n'
             for prof in profiles['file_blocking']:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_file_blocking_security_profile', context=prof.get('device_group') or ''
-                )
+                    prof['name'], 'panos_file_blocking_security_profile',
+                    # F3.1: contextless legacy convention keeps pre-F3.1
+                    # digests stable (DG/template identity lands in F3.6)
+                    context='')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'
@@ -3544,8 +3401,10 @@ variable "panos_password" {
             content += '# WildFire Analysis Profiles\n'
             for prof in profiles['wildfire_analysis']:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_wildfire_analysis_security_profile', context=prof.get('device_group') or ''
-                )
+                    prof['name'], 'panos_wildfire_analysis_security_profile',
+                    # F3.1: contextless legacy convention keeps pre-F3.1
+                    # digests stable (DG/template identity lands in F3.6)
+                    context='')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
                     content += f'# Description: {prof["description"]}\n'

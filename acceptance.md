@@ -1,47 +1,56 @@
-# F2.11 Acceptance Criteria
+# Acceptance Criteria: F3.1 Keyed data model
 
 ## Goal
 
-Every user-facing claim about what the converter does must be verifiable
-against the repository: the README describes the real output and points
-at the tests that prove it, and the unverified success narratives are
-gone. The stale v1-era output examples no longer show resource types
-the converter does not emit.
+Replace name-keyed storage and name deduplication in the parser with a keyed
+data model. Each parsed object and rule is identified by
+(device group, vsys, type, name). Objects that share a name but differ in
+device group or vsys are distinct objects and all survive parsing.
 
-## Verifiable checks
+## Context
 
-1. `docs/VERSION_4.0_COMPLETE_COVERAGE.md` is deleted. Its claims
-   ("100% success rate", "95%+ coverage", "133,000-line production
-   tested", "Production Ready") have no test evidence in the
-   repository.
-2. `README.md` "Typical outputs" matches the real converter output
-   (verify against `tests/golden/kitchen_sink/`: `decryption_rules.tf`,
-   `pbf_rules.tf`, and `monitor_profiles.tf` are present).
-3. `README.md` coverage and validity claims reference the tests that
-   prove them: the coverage matrix row (`tests/test_coverage_matrix.py`),
-   the validate gate (`tests/test_terraform_validate.py`), and the
-   no-dangling-reference rule (`tests/test_dependency_wiring.py`).
-4. No user-facing doc presents a resource type the panos provider does
-   not have as converter output: `panos_bgp`, `panos_bgp_peer`,
-   `panos_ospf`, `panos_static_route_ipv4`, and
-   `panos_security_rule_group` are absent from `docs/` and `examples/`
-   (except the report-only table in RESOURCE_MAPPING.md, where they are
-   named as captured data with no v2 target), and v1
-   `panos_address_object` / `panos_service_object` appear only in the
-   "Renamed from" column of that table.
-5. `examples/example_terraform_output.txt` points at the canonical
-   sample output (`tests/golden/sample/`, byte-gated by
-   `tests/test_golden_files.py`) instead of showing a fabricated v1
-   output.
-6. `docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md` states the real behavior:
-   both virtual and logical routers parse and emit as
-   `panos_virtual_router`, static routes as
-   `panos_virtual_router_static_route_ipv4`, BGP/OSPF are report-only.
-   No "Production Ready" status, no invented version numbers.
-7. `docs/QUICK_REFERENCE.txt` is deleted. It claims zones, VPN,
-   interfaces, and virtual routers are unsupported, which contradicts
-   the converter, and only the docs removed or rewritten by this task
-   reference it.
-8. No dead doc references remain (grep for the removed file names).
-9. `backlog.md` drops the stale-narrative-docs item (completed here).
-10. Gate: `ruff check .` clean; `pytest` green.
+- Epic 2 is complete. F3.1 is the first Epic 3 feature.
+- Today the parser visits many elements twice (a broad XPath plus narrower
+  XPaths in the same method) and hides the double visits behind two dedup
+  patterns: first-wins `seen_names` sets and name-keyed dicts (last-wins).
+- The pinned xfail `tests/test_edge_cases.py::test_dup_names_across_dgs_both_survive`
+  states the desired behavior: same-named objects in different device groups
+  must both survive.
+- The F2.7 naming contract (sanitized name + 8-hex digest of source identity,
+  order-independent, collision-safe, per-type domains) must stay intact.
+  Same-named objects in different device groups already get distinct local
+  names because the digest includes the defining device group.
+
+## Done criteria
+
+1. Every parse method visits each XML element exactly once (single broad path
+   per element kind, document order). No `seen_names` first-wins sets and no
+   name-keyed last-wins dicts remain in the parser.
+2. Every parsed object and rule carries its identity fields: `device_group`
+   (defining device group, or `Shared` for shared/template-scope) and `vsys`
+   (nearest `<vsys><entry>` ancestor, or `vsys1` when the export omits the
+   vsys wrapper). The key is (device group, vsys, type, name).
+3. Same name across device groups: both objects parse (pinned xfail now
+   passes; the old last-wins test is replaced).
+4. Same name across vsys: both objects parse (new fixture + test).
+5. Entry references (an entry with only `<id>`) are still skipped: they are
+   pointers to a shared definition and carry no content.
+6. References resolve to the defining object: `name_ref` accepts the
+   referrer's context and resolves in the order (referrer context, Shared,
+   template scope), with a flat fallback so context-less call sites and
+   brown-field references keep working. Undeclared names stay plain strings.
+7. The F2.7 naming contract tests pass unchanged: sanitized name + digest,
+   order-independence, collision safety, per-type domains, no dangling refs.
+8. Golden files for `sample` and `kitchen_sink` stay byte-identical or are
+   regenerated deliberately with a reviewed diff (no accidental churn).
+9. The full test suite passes (pytest -q), including the now-passing
+   both-survive test with the xfail marker removed.
+10. `terraform init` + `terraform validate` still pass for the wired fixture
+    (dependency_wiring) when the terraform binary is present.
+
+## Out of scope (Epic 3 follow-ups)
+
+- vsys in `location` blocks (F3.5).
+- Template-stack association and template-name contexts (F3.6).
+- Splitting large rule resources (F3.3); template-variables (F3.4).
+- The `split_device_groups.py` splitter (separate tool, unchanged).

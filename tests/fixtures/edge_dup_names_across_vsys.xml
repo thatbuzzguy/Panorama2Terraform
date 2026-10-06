@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!-- Edge case: the same object name defined under two different vsys of
+     the same device group. F3.1 keys objects by (device group, vsys,
+     type, name), so both must survive parsing. -->
+<config version="10.0.0" urldb="paloaltonetworks">
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <address>
+            <entry name="web">
+              <ip-netmask>10.1.0.1/32</ip-netmask>
+            </entry>
+          </address>
+        </entry>
+        <entry name="vsys2">
+          <address>
+            <entry name="web">
+              <ip-netmask>10.2.0.1/32</ip-netmask>
+            </entry>
+          </address>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>
