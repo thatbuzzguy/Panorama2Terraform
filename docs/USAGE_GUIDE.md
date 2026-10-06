@@ -28,9 +28,9 @@ This tool converts Palo Alto Panorama XML configuration exports into Terraform c
 
 ## Requirements
 
-- Python 3.6 or higher
-- Terraform 1.0 or higher
-- Access to Palo Alto Panorama or firewall
+- Python 3.9+ (standard library only)
+- Terraform 1.0+ for the validate gate
+- A Panorama XML export
 
 ## Installation
 
@@ -98,19 +98,37 @@ python3 panorama_to_terraform.py panorama_config.xml --output-dir ./terraform/pa
 
 ## Output Structure
 
-The script generates the following Terraform files:
+Every emitted file exists only when the input contains data for it.
+The complete set (see `tests/golden/kitchen_sink/`, byte-gated by
+`tests/test_golden_files.py`):
 
 ```
 terraform_output/
-├── provider.tf           # Provider configuration
+├── provider.tf           # Provider configuration (credentials wired from variables)
 ├── variables.tf          # Variable definitions
 ├── address_objects.tf    # Address object resources
 ├── address_groups.tf     # Address group resources
 ├── service_objects.tf    # Service object resources
 ├── service_groups.tf     # Service group resources
-├── security_rules.tf     # Security policy rules
-├── nat_rules.tf         # NAT policy rules
-└── README.md            # Deployment instructions
+├── tags.tf               # Administrative tags
+├── application_groups.tf # Application group resources
+├── custom_url_categories.tf
+├── external_lists.tf     # External dynamic lists
+├── security_profile_groups.tf
+├── security_profiles.tf  # Security profile inventory (names/descriptions only; bodies are report-only)
+├── security_rules.tf     # Security policy rules (one resource per rule, chained per device group)
+├── nat_rules.tf          # NAT policy rules
+├── decryption_rules.tf   # Decryption policy rules
+├── pbf_rules.tf          # PBF policy rules
+├── monitor_profiles.tf   # PBF path-monitor profiles
+├── interfaces.tf         # Ethernet interfaces + layer-3 subinterfaces
+├── zones.tf              # Zones
+├── virtual_routers.tf    # Virtual routers + static routes
+├── vpn.tf                # IKE/IPsec crypto profiles, gateways, tunnels
+├── README.md             # Deployment instructions
+├── MANUAL_SETUP_REPORT.txt     # BGP, OSPF, application filters, and other report-only items
+├── INTERFACE_MIGRATION_REPORT.txt
+└── VPN_MIGRATION_REPORT.txt    # VPN key-management instructions (placeholder pre-shared keys)
 ```
 
 ## Terraform Deployment
@@ -162,7 +180,10 @@ terraform apply tfplan
 
 ### Filtering Specific Device Groups
 
-Edit the generated files to include only specific device groups by modifying the `device_group` variable or adding conditional logic.
+The converter emits one rule chain per device group, so you do not
+filter with variables: keep or delete the resource blocks for the
+device group you want, or pre-split the export with
+`split_device_groups.py` and run the converter on one file at a time.
 
 ### Customizing Resource Names
 
@@ -229,25 +250,27 @@ logging.basicConfig(level=logging.DEBUG)
 
 ## Limitations
 
-### Current Limitations
+### Report-only configuration
 
-- Does not support all Panorama features (work in progress)
-- Zone configuration must be manually created
-- Interface configuration requires manual setup
-- Virtual router configuration not included
-- Some advanced features may need manual adjustment
+The following have no v2 provider resource. The converter keeps their
+data visible in `MANUAL_SETUP_REPORT.txt` (or the VPN/interface
+migration reports) instead of emitting it — see
+[`docs/RESOURCE_MAPPING.md`](./RESOURCE_MAPPING.md) for the full list
+and rationale:
 
-### Manual Configuration Required
+- BGP (router, peer groups, peers)
+- OSPF (router, areas, interfaces)
+- Application filters
+- Application override rules
+- QoS profiles
 
-The following must be configured manually or added separately:
+Next-VR static routes have no v2 route attribute either: configure
+them on the target device after apply.
 
-- Network interfaces
-- Zones
-- Virtual routers
-- VPN configurations
-- User-ID settings
-- GlobalProtect configurations
-- High Availability settings
+### VPN key management
+
+`vpn.tf` emits placeholder pre-shared keys. Replace them with the
+real keys before apply and follow `VPN_MIGRATION_REPORT.txt`.
 
 ## Extending the Script
 

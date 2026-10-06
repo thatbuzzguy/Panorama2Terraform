@@ -60,7 +60,7 @@ the v2 attribute shapes that differ from the v1 output.
 
 | v2 type | Renamed from | v2 attribute notes |
 |---|---|---|
-| `panos_ethernet_interface` | identity | `layer3 { ipv4 = { ip_address = [...] } }`; no `static_ips`/`management_profile` |
+| `panos_ethernet_interface` | identity | `layer3` / `layer2` are mode blocks (`layer3 { interface_management_profile, ... }`); no `static_ips`/`management_profile`. The untagged interface's IPv4 address goes on the `.0` subinterface's `ip` list |
 | `panos_ethernet_layer3_subinterface` | `panos_layer2_subinterface` | PAN-OS VLAN subinterfaces (`ethernet1/1.5`) are v2 layer-3 subinterfaces; `parent`/`tag` derive from the `.unit` name |
 | `panos_virtual_router` | identity | required: `location`, `name` |
 | `panos_virtual_router_static_route_ipv4` | `panos_static_route_ipv4` | static routes belong to the virtual router; `nexthop = { ip_address = "..." }` |

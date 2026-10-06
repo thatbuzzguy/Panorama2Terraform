@@ -182,33 +182,67 @@ Create a mapping document like this:
 
 Edit `interfaces.tf` to match your target platform:
 
+In v2 the physical interface carries the mode, and the IPv4 address
+lives on the `.0` layer-3 subinterface:
+
 ```hcl
 # Before (from converter)
-resource "panos_ethernet_interface" "ethernet1_1" {
+resource "panos_ethernet_interface" "ethernet1_1_6ba52c24" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "ethernet1/1"
-  mode = "layer3"
-  static_ips = ["10.1.1.1/24"]
+  layer3 = {}
 }
 
 # After (adjusted for target)
-resource "panos_ethernet_interface" "ethernet1_1" {
+resource "panos_ethernet_interface" "ethernet1_1_6ba52c24" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "ethernet1/1"  # Verify this matches target platform
-  mode = "layer3"
-  static_ips = ["10.1.1.1/24"]
-  management_profile = "Allow-Ping"
+  layer3 = {
+    interface_management_profile = "Allow-Ping"
+  }
   comment = "Trust Interface - Internal Network"
+}
+
+resource "panos_ethernet_layer3_subinterface" "ethernet1_1_0_d8f6b026" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
+  name = "ethernet1/1.0"
+  parent = panos_ethernet_interface.ethernet1_1_6ba52c24.name
+  tag = 0
+  ip = [{ name = "10.1.1.1/24" }]
 }
 ```
 
+(Local resource names are the sanitized PAN-OS name plus an 8-hex digest
+of the object's source identity.)
+
 ### Step 3: Update Zone Assignments
 
-Ensure zones reference the correct interfaces:
+Ensure zones reference the correct interfaces. In v2 the membership
+lives under `network`:
 
 ```hcl
 resource "panos_zone" "trust" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "Trust"
-  mode = "layer3"
-  interfaces = ["ethernet1/1", "vlan.10"]  # Verify these exist on target
+  network = {
+    layer3 = ["ethernet1/1", "vlan.10"]  # Verify these exist on target
+  }
 }
 ```
 
@@ -373,11 +407,18 @@ show interface all
 2. Use Terraform depends_on if needed:
 ```hcl
 resource "panos_zone" "trust" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "Trust"
-  interfaces = ["ethernet1/1"]
-  
+  network = {
+    layer3 = ["ethernet1/1"]
+  }
+
   depends_on = [
-    panos_ethernet_interface.ethernet1_1
+    panos_ethernet_interface.ethernet1_1_6ba52c24
   ]
 }
 ```

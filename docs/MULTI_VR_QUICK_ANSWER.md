@@ -87,8 +87,9 @@ The converter provides **two tools**:
 ### Tool 2: Main Converter (`panorama_to_terraform.py`)
 ✅ Extract complete config from each device group
 ✅ Generate separate Terraform for each
-✅ Capture all routing (BGP, OSPF, static)
-✅ Document all interfaces and IPs
+✅ Emit static routes as Terraform; capture BGP/OSPF data into
+   `MANUAL_SETUP_REPORT.txt` (the v2 provider has no BGP/OSPF resources)
+✅ Document all interfaces and IPs in the migration report
 ✅ Generate VPN configurations
 
 ## Workflow
@@ -178,17 +179,30 @@ python3 panorama_to_terraform.py split_configs/DG-Guest.xml --output-dir guest-t
 
 ## VR-to-VR Communication
 
-If your VRs need to talk to each other:
+If your VRs need to talk to each other, add static routes. Normal
+next-hop routes use the v2
+`panos_virtual_router_static_route_ipv4` resource:
 
 ```hcl
 # Static route from Internet-VR to DMZ networks
-resource "panos_static_route_ipv4" "internet_to_dmz" {
-  virtual_router = "Internet-VR"
+resource "panos_virtual_router_static_route_ipv4" "internet_to_dmz" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
+  name = "To-DMZ-Networks"
+  virtual_router = panos_virtual_router.internet_vr.name
   destination = "172.16.0.0/16"
-  type = "next-vr"
-  next_vr = "DMZ-VR"
+  nexthop = {
+    ip_address = "10.255.0.1"  # DMZ uplink IP
+  }
 }
 ```
+
+PAN-OS "next-VR" routes (route via another virtual router) have no
+attribute on the v2 route resource. Configure them on the target after
+the apply.
 
 ## Complete Documentation
 

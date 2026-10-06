@@ -121,15 +121,16 @@ provider.tf  variables.tf  README.md
 address_objects.tf  address_groups.tf
 service_objects.tf  service_groups.tf
 tags.tf  custom_url_categories.tf  application_groups.tf  external_lists.tf
-security_rules.tf  nat_rules.tf
+security_rules.tf  nat_rules.tf  decryption_rules.tf  pbf_rules.tf
 security_profiles.tf  security_profile_groups.tf
-zones.tf  interfaces.tf  virtual_routers.tf
+zones.tf  interfaces.tf  virtual_routers.tf  monitor_profiles.tf
 vpn.tf
 MANUAL_SETUP_REPORT.txt  INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.txt
 ```
 
 (Only files with content are written; the list above is the union across
-all supported inputs.)
+all supported inputs. The kitchen-sink fixture exercises the full set,
+and `tests/test_golden_files.py` pins the exact file names and bytes.)
 
 ## Exporting from Panorama
 
@@ -160,8 +161,8 @@ platform (see `INTERFACE_MIGRATION_REPORT.txt`).
 
 - `python3 -m pytest` - the full suite: parser and generator unit tests,
   golden byte-for-byte gates, resource-mapping and schema conformance,
-  policy order and dependency wiring, robustness, and the F2.8 coverage
-  matrix row tests. XML fixtures drive the converter; provider schema
+  policy order and dependency wiring, robustness, the F2.8 coverage
+  matrix row tests, and the F2.10 no-dead-variable checks. XML fixtures drive the converter; provider schema
   conformance runs `terraform providers schema -json` against the
   pinned version (skipped when the `terraform` binary or registry
   access is unavailable).

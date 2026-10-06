@@ -1,15 +1,73 @@
 # Agent Status
 
 ## Current position
-**F2.10 Clean generated config landed 2026-10-05.** The generated
-`variables.tf` declares exactly the three credential variables and the
-`provider "panos"` block consumes all of them; the dead `device_group`
-variable and the commented-out wiring are gone. Epic 2 keeps only
-F2.11 (verified claims); after it lands, Epic 2 is complete.
+**Epic 2 is complete** (F2.1–F2.11, all committed; the last two are
+F2.10 `27ee1b9` and F2.11, 2026-10-05). `PLAN.md` marks Epic 2
+COMPLETE; `to-do.md` points at the next task. **Next task: F3.1 Keyed
+data model** (Epic 3, the lowest-numbered unfinished epic): replace
+name-keyed dictionaries with keys of (device group, vsys, type, name)
+and remove first-wins/last-wins deduplication. Write `acceptance.md`
+for F3.1 before any code.
 
 ## Session log
 
-### F2.10 — Clean generated config (this session)
+### F2.11 — Verified claims (this session) — Epic 2 complete
+- Direction: finish Epic 2. `acceptance.md` rewritten for F2.11 first
+  (10 verifiable checks).
+- Deleted (unreferenced, unverified, or marketing claims that
+  contradict the current v2 output):
+  `docs/VERSION_4.0_COMPLETE_COVERAGE.md` ("100% success rate",
+  "95%+ coverage"), `docs/QUICK_REFERENCE.txt` (v1-era claims: zones
+  and VPN unsupported — both are emitted now),
+  `docs/AUTOMATIC_SPLITTING_COMPLETE_ANSWER.md` (orphaned;
+  "Error-free", "Production-ready", "Tested and proven"),
+  `COVERAGE-SUMMARY.txt` ("133,411 lines", "95%+", references a
+  nonexistent release-notes file).
+- `examples/example_terraform_output.txt`: replaced the v1-era HCL dump
+  with a pointer to the byte-gated `tests/golden/sample/` (and the
+  kitchen-sink set) plus the regeneration command.
+- `docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md`: rewritten to the real v2
+  behavior — VR and LR both emit as `panos_virtual_router`, static
+  routes as `panos_virtual_router_static_route_ipv4` (example taken
+  verbatim from `tests/golden/kitchen_sink/virtual_routers.tf`),
+  BGP/OSPF report-only (MANUAL_SETUP_REPORT.txt, configure on target),
+  next-VR routes have no v2 attribute (configure on target). No
+  fabricated HCL.
+- `docs/MULTI_VR_MIGRATION_GUIDE.md`: all 8 HCL blocks moved to the
+  v2 shapes verified in the schema and the goldens — `location` on
+  every resource, `layer3 = {}`/`layer2 = {}` on interfaces (no
+  `mode`/`static_ips`), `.0` subinterface `ip = [{ name = "..." }]`,
+  zone `network = { layer3 = [...] }`, `panos_security_policy_rules`
+  with `position` + `rules` (replacing `panos_security_rule_group`),
+  BGP/OSPF and next-VR routes as manual setup.
+- `docs/MULTI_VR_QUICK_ANSWER.md`: BGP/OSPF now "captured into
+  MANUAL_SETUP_REPORT.txt"; VR-to-VR route example uses
+  `panos_virtual_router_static_route_ipv4` with the next-VR manual
+  note.
+- `docs/USAGE_GUIDE.md`: Python 3.6 -> 3.9+; output-structure list
+  replaced with the real kitchen-sink set (21 .tf files + README +
+  three reports, each emitted only when the input has data); the
+  `device_group` variable filtering advice is gone (F2.10 removed the
+  variable; per-DG chains are the mechanism); the limitations section
+  no longer claims zones/interfaces/VRs/VPN are manual (all are
+  emitted) and now lists the real report-only set.
+- `docs/MIGRATION_GUIDE.md`: the interface/zone HCL blocks moved to the
+  v2 shapes (physical interface + `.0` subinterface + zone `network`
+  block; the `depends_on` example uses the real digest-suffixed
+  resource name).
+- `docs/RESOURCE_MAPPING.md`: corrected the
+  `panos_ethernet_interface` note — v2.0.14 has no `layer3.ipv4`;
+  the untagged IPv4 address goes on the `.0` subinterface's `ip` list
+  (matches the generator and the schema).
+- Verified clean: no `panos_bgp`/`panos_ospf`/`panos_security_rule_group`/
+  standalone `panos_static_route_ipv4` HCL in docs/examples (the only
+  remaining mentions are the intentional v1->v2 rename columns in
+  RESOURCE_MAPPING.md), no references to the four deleted files outside
+  `acceptance.md` and the session log, no marketing/success-rate claims
+  left in user-facing docs.
+- Gate: ruff clean; pytest green (see commit message for the count).
+
+### F2.10 — Clean generated config (previous session)
 - Direction: finish the lowest-numbered unfinished epic (Epic 2), so
   F2.10 and F2.11 land before F4.1. `acceptance.md` rewritten for F2.10
   first.
