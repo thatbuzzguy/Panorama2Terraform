@@ -1,19 +1,47 @@
 # Agent Status
 
 ## Current position
-**F2.9 Real resources or explicit reports landed 2026-10-04** (worked
-before F4.1 per direction). Decryption, PBF, and PBF path monitoring
-profiles now emit as real v2.0.14 resources with the full parsed body;
-app override, QoS, IPsec tunnel monitor, log forwarding, zone
-protection, and schedules go to `MANUAL_SETUP_REPORT.txt` with their
-captured data and the reason. Every comment-only `.tf` generator is
-gone; `resource_mapping.py` carries `NOT_EMITTED_TYPES` (v2 exists, body
-not parsed) with an existence guard. `to-do.md` points at **F4.1
-Post-run sanity gate** as the next task; Epic 2 keeps F2.10 and F2.11.
+**F2.10 Clean generated config landed 2026-10-05.** The generated
+`variables.tf` declares exactly the three credential variables and the
+`provider "panos"` block consumes all of them; the dead `device_group`
+variable and the commented-out wiring are gone. Epic 2 keeps only
+F2.11 (verified claims); after it lands, Epic 2 is complete.
 
 ## Session log
 
-### F2.9 — Real resources or explicit reports (this session)
+### F2.10 — Clean generated config (this session)
+- Direction: finish the lowest-numbered unfinished epic (Epic 2), so
+  F2.10 and F2.11 land before F4.1. `acceptance.md` rewritten for F2.10
+  first.
+- Design (verified against the v2.0.14 provider schema): the provider
+  block takes `hostname`, `username`, and `password` string attributes
+  (each also settable via a `PANOS_*` env var). The generated config now
+  wires the three credential variables into the provider block, so
+  every emitted variable is consumed. `sensitive = true` stays on the
+  password only (the provider itself marks only password/api_key
+  sensitive). The dead `device_group` variable is removed: v2 location
+  is derived per resource from the source XML, so a global device-group
+  variable has no consumer. With the variables wired, the env-var flow
+  is `TF_VAR_panos_*` (Terraform-native), documented as such.
+- Code: `generate_provider_config` (live `var.*` references replace the
+  commented-out block) and `generate_variables` (three variables, no
+  device_group, password-only sensitive). `generate_readme` (output
+  README) drops device_group and the PANOS_* env-var flow.
+- Tests: new `tests/test_variables.py` (4 tests x 2 golden cases):
+  declaration set is exactly the credentials, every declared variable
+  has a `var.<name>` consumer, the provider block consumes all three,
+  password is the only sensitive variable. This is the check F4.1's
+  runtime gate reuses.
+- Docs: root README tfvars example, `docs/USAGE_GUIDE.md`,
+  `docs/QUICK_REFERENCE.txt`, and `quick_start.sh` drop device_group;
+  env-var examples switch to `TF_VAR_panos_*`.
+- Goldens regenerated: only `provider.tf` and `variables.tf` changed in
+  both golden sets; all other goldens byte-identical.
+- Gate: ruff clean. pytest 293 passed, 1 xfailed (the F3.1 item).
+  terraform init + validate green (the validate gate covers the new
+  wiring; validate needs no variable values).
+
+### F2.9 — Real resources or explicit reports (previous session)
 - Direction: work F2.9 now, not the F4.1 tracked in `to-do.md`.
   `acceptance.md` rewritten for it first.
 - Emit-vs-report decision (verified against the v2.0.14 schema and

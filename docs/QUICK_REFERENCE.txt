@@ -68,11 +68,10 @@ terraform_output/
 
 🔐 TERRAFORM DEPLOYMENT
 
-1. Create terraform.tfvars:
+1. Create terraform.tfvars (do not commit it):
    panos_hostname = "panorama.example.com"
    panos_username = "admin"
    panos_password = "password"
-   device_group   = "Production"
 
 2. Initialize:    terraform init
 3. Plan:          terraform plan

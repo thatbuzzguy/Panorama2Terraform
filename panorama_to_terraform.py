@@ -2400,11 +2400,12 @@ terraform {
 }
 
 provider "panos" {
-  # Configure these variables or use environment variables:
-  # PANOS_HOSTNAME, PANOS_USERNAME, PANOS_PASSWORD
-  # hostname = var.panos_hostname
-  # username = var.panos_username
-  # password = var.panos_password
+  # Credentials come from variables.tf. Set the values in
+  # terraform.tfvars (do not commit it) or via the TF_VAR_*
+  # environment variables.
+  hostname = var.panos_hostname
+  username = var.panos_username
+  password = var.panos_password
 }
 '''
 
@@ -2413,29 +2414,28 @@ provider "panos" {
 
     def generate_variables(self):
         """Generate variables.tf file"""
+        # F2.10: every emitted variable is consumed. The three credential
+        # variables are consumed by the provider block in provider.tf.
+        # The old dead `device_group` variable is gone: v2 location is
+        # derived per resource from the source XML.
         content = '''# Variables for Palo Alto Configuration
+# Set the values in terraform.tfvars (do not commit it) or via the
+# TF_VAR_panos_hostname / TF_VAR_panos_username / TF_VAR_panos_password
+# environment variables.
 variable "panos_hostname" {
-  description = "Hostname or IP of the Palo Alto firewall/Panorama"
+  description = "Hostname or IP of the Palo Alto firewall or Panorama"
   type        = string
-  sensitive   = true
 }
 
 variable "panos_username" {
   description = "Username for authentication"
   type        = string
-  sensitive   = true
 }
 
 variable "panos_password" {
   description = "Password for authentication"
   type        = string
   sensitive   = true
-}
-
-variable "device_group" {
-  description = "Device group name for Panorama"
-  type        = string
-  default     = "shared"
 }
 '''
 
@@ -4104,20 +4104,20 @@ This directory contains Terraform configuration files generated from Palo Alto P
 
 ## Configuration
 
-1. Set up authentication variables in `terraform.tfvars`:
+1. Set up the credential variables in `terraform.tfvars` (do not
+   commit the file):
 
 ```hcl
 panos_hostname = "your-panorama-hostname-or-ip"
 panos_username = "admin"
 panos_password = "your-password"
-device_group   = "your-device-group"
 ```
 
-Or use environment variables:
+Or use Terraform environment variables:
 ```bash
-export PANOS_HOSTNAME="your-panorama-hostname-or-ip"
-export PANOS_USERNAME="admin"
-export PANOS_PASSWORD="your-password"
+export TF_VAR_panos_hostname="your-panorama-hostname-or-ip"
+export TF_VAR_panos_username="admin"
+export TF_VAR_panos_password="your-password"
 ```
 
 2. Initialize Terraform:

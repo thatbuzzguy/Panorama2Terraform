@@ -11,9 +11,10 @@ terraform {
 }
 
 provider "panos" {
-  # Configure these variables or use environment variables:
-  # PANOS_HOSTNAME, PANOS_USERNAME, PANOS_PASSWORD
-  # hostname = var.panos_hostname
-  # username = var.panos_username
-  # password = var.panos_password
+  # Credentials come from variables.tf. Set the values in
+  # terraform.tfvars (do not commit it) or via the TF_VAR_*
+  # environment variables.
+  hostname = var.panos_hostname
+  username = var.panos_username
+  password = var.panos_password
 }

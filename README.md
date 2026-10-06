@@ -140,13 +140,12 @@ all supported inputs.)
 
 ## Deploying with Terraform
 
-1. Create `terraform.tfvars` with credentials:
+1. Create `terraform.tfvars` with credentials (do not commit it):
 
    ```hcl
    panos_hostname = "panorama.example.com"
    panos_username = "admin"
    panos_password = "your-password"
-   device_group   = "Production-DG"
    ```
 
 2. `terraform init`

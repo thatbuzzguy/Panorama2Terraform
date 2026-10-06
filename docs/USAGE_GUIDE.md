@@ -123,15 +123,14 @@ Create a `terraform.tfvars` file:
 panos_hostname = "panorama.example.com"
 panos_username = "admin"
 panos_password = "your-secure-password"
-device_group   = "Production-DG"
 ```
 
-Or use environment variables:
+Or use Terraform environment variables:
 
 ```bash
-export PANOS_HOSTNAME="panorama.example.com"
-export PANOS_USERNAME="admin"
-export PANOS_PASSWORD="your-secure-password"
+export TF_VAR_panos_hostname="panorama.example.com"
+export TF_VAR_panos_username="admin"
+export TF_VAR_panos_password="your-secure-password"
 ```
 
 ### Step 2: Initialize Terraform
