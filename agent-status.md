@@ -1,9 +1,9 @@
 # Agent Status
 
 ## Current position
-**F3.1 (keyed data model) is implemented** — working tree ready to
-commit; `acceptance.md` holds the F3.1 criteria (overwrite before the
-next task). **Next task: F3.2 Preserve device-group association**
+**F3.1 (keyed data model) is committed** (`074124e`, this session);
+`acceptance.md` still holds the F3.1 criteria — overwrite it before
+the next task. **Next task: F3.2 Preserve device-group association**
 (Epic 3): carry the source device group from parse to emit so
 same-named objects in different device groups both survive in the
 generated output (the parser half of F3.2 landed with F3.1; the emit
