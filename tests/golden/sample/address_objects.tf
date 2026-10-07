@@ -1,6 +1,6 @@
 # Address Objects
 
-resource "panos_address" "web_server_1_a9a88aa6" {
+resource "panos_address" "web_server_1_9ec34c7e" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -12,7 +12,7 @@ resource "panos_address" "web_server_1_a9a88aa6" {
   tags = ["Production", "Web"]
 }
 
-resource "panos_address" "db_server_1_1bca8fe6" {
+resource "panos_address" "db_server_1_f5c5dbc2" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -23,7 +23,7 @@ resource "panos_address" "db_server_1_1bca8fe6" {
   ip_netmask = "10.1.2.10/32"
 }
 
-resource "panos_address" "internal_network_a80109b4" {
+resource "panos_address" "internal_network_f1af75f3" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -34,7 +34,7 @@ resource "panos_address" "internal_network_a80109b4" {
   ip_netmask = "10.0.0.0/8"
 }
 
-resource "panos_address" "dmz_network_de152047" {
+resource "panos_address" "dmz_network_65d5bf8f" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -44,7 +44,7 @@ resource "panos_address" "dmz_network_de152047" {
   ip_netmask = "172.16.1.0/24"
 }
 
-resource "panos_address" "external_api_dfbaa99b" {
+resource "panos_address" "external_api_ab77cf66" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -55,7 +55,7 @@ resource "panos_address" "external_api_dfbaa99b" {
   fqdn = "api.example.com"
 }
 
-resource "panos_address" "google_dns_1_b1259a37" {
+resource "panos_address" "google_dns_1_25141d0f" {
   location = {
     device_group = {
       name = "Shared"
@@ -66,7 +66,7 @@ resource "panos_address" "google_dns_1_b1259a37" {
   ip_netmask = "8.8.8.8/32"
 }
 
-resource "panos_address" "google_dns_2_705c53df" {
+resource "panos_address" "google_dns_2_0550b50a" {
   location = {
     device_group = {
       name = "Shared"

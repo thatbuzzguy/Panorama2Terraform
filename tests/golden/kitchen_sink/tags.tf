@@ -1,6 +1,6 @@
 # Tags
 
-resource "panos_administrative_tag" "env_prod_0d9ceea1" {
+resource "panos_administrative_tag" "env_prod_79f15cbc" {
   location = {
     device_group = {
       name = "Shared"
@@ -11,7 +11,7 @@ resource "panos_administrative_tag" "env_prod_0d9ceea1" {
   comments = "Production environment"
 }
 
-resource "panos_administrative_tag" "web_370c996c" {
+resource "panos_administrative_tag" "web_dc16804d" {
   location = {
     device_group = {
       name = "Shared"

@@ -235,3 +235,48 @@ def test_name_ref_falls_back_to_shared_then_contextless(generator):
     zone = generator.declare_resource_name('zone-x', 'panos_zone')
     assert generator.name_ref('zone-x', ('panos_zone',), context='DG-A').expr == (
         f'panos_zone.{zone}.name')
+
+
+# --- F3.2: vsys completes the identity key -----------------------------------
+
+def test_declare_same_name_in_two_vsys_gets_unique_names(generator):
+    """F3.2: the same name in two vsys gets two digest-based names.
+
+    The digest covers (scope, context, vsys, name), so the taken-name
+    counter never decides which object keeps the base name.
+    """
+    scope = 'panos_address'
+    vs1 = generator.declare_resource_name('web', scope, context='DG-A', vsys='vsys1')
+    vs2 = generator.declare_resource_name('web', scope, context='DG-A', vsys='vsys2')
+    assert re.fullmatch(r'web_[0-9a-f]{8}', vs1)
+    assert re.fullmatch(r'web_[0-9a-f]{8}', vs2)
+    assert vs1 != vs2
+    # No counter suffix: the digest, not the guard, keeps them apart.
+    assert not vs1.endswith('_2') and not vs2.endswith('_2')
+
+
+def test_name_ref_prefers_referrers_own_vsys(generator):
+    """F3.2: a referrer resolves same-named objects in its own vsys."""
+    scope = 'panos_address'
+    vs1 = generator.declare_resource_name('web2', scope, context='DG-A', vsys='vsys1')
+    vs2 = generator.declare_resource_name('web2', scope, context='DG-A', vsys='vsys2')
+    # A rule in vsys2 references vsys2's 'web2', not vsys1's.
+    assert generator.name_ref('web2', (scope,), context='DG-A', vsys='vsys2').expr == (
+        f'{scope}.{vs2}.name')
+    assert generator.name_ref('web2', (scope,), context='DG-A', vsys='vsys1').expr == (
+        f'{scope}.{vs1}.name')
+
+
+def test_name_ref_vsys_resolution_is_declaration_order_independent(tmp_path):
+    """F3.2: which vsys wins does not depend on which vsys was declared first."""
+    import panorama_to_terraform
+    scope = 'panos_address'
+    g1 = panorama_to_terraform.TerraformGenerator(str(tmp_path / 'g1'))
+    g2 = panorama_to_terraform.TerraformGenerator(str(tmp_path / 'g2'))
+    for vs in ('vsys1', 'vsys2'):
+        g1.declare_resource_name('web', scope, context='DG-A', vsys=vs)
+    for vs in ('vsys2', 'vsys1'):
+        g2.declare_resource_name('web', scope, context='DG-A', vsys=vs)
+    for vs in ('vsys1', 'vsys2'):
+        assert g1.name_ref('web', (scope,), context='DG-A', vsys=vs).expr == \
+            g2.name_ref('web', (scope,), context='DG-A', vsys=vs).expr

@@ -1,6 +1,6 @@
 # Application Groups
 
-resource "panos_application_group" "web_apps_3ba1eab8" {
+resource "panos_application_group" "web_apps_95018688" {
   location = {
     device_group = {
       name = "Shared"

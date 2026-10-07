@@ -1,6 +1,6 @@
 # Security Policy Rules
 
-resource "panos_security_policy_rules" "allow_web_traffic_56c0cc46" {
+resource "panos_security_policy_rules" "allow_web_traffic_3fc3d1d6" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -15,9 +15,9 @@ resource "panos_security_policy_rules" "allow_web_traffic_56c0cc46" {
       name = "Allow-Web-Traffic"
       description = "Allow internal users to access web servers"
       source_zones = [ "Trust" ]
-      source_addresses = [ panos_address.internal_network_a80109b4.name ]
+      source_addresses = [ panos_address.internal_network_f1af75f3.name ]
       destination_zones = [ "DMZ" ]
-      destination_addresses = [ panos_address_group.web_servers_395727b7.name ]
+      destination_addresses = [ panos_address_group.web_servers_1e4e8364.name ]
       applications = [ "web-browsing", "ssl" ]
       services = [ "application-default" ]
       action = "allow"
@@ -26,7 +26,7 @@ resource "panos_security_policy_rules" "allow_web_traffic_56c0cc46" {
   ]
 }
 
-resource "panos_security_policy_rules" "allow_db_access_24b1942d" {
+resource "panos_security_policy_rules" "allow_db_access_4f8eea81" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -37,25 +37,25 @@ resource "panos_security_policy_rules" "allow_db_access_24b1942d" {
     directly = true
     pivot = "Allow-Web-Traffic"
   }
-  depends_on = [ panos_security_policy_rules.allow_web_traffic_56c0cc46 ]
+  depends_on = [ panos_security_policy_rules.allow_web_traffic_3fc3d1d6 ]
 
   rules = [
 {
       name = "Allow-DB-Access"
       description = "Allow web servers to access database"
       source_zones = [ "DMZ" ]
-      source_addresses = [ panos_address_group.web_servers_395727b7.name ]
+      source_addresses = [ panos_address_group.web_servers_1e4e8364.name ]
       destination_zones = [ "Trust" ]
-      destination_addresses = [ panos_address_group.database_servers_fd339f16.name ]
+      destination_addresses = [ panos_address_group.database_servers_2cd620a9.name ]
       applications = [ "mysql" ]
-      services = [ panos_service.tcp_3306_19605a6d.name ]
+      services = [ panos_service.tcp_3306_f8557142.name ]
       action = "allow"
       log_end = true
     }
   ]
 }
 
-resource "panos_security_policy_rules" "block_risky_apps_82d67173" {
+resource "panos_security_policy_rules" "block_risky_apps_a6c59d00" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -66,7 +66,7 @@ resource "panos_security_policy_rules" "block_risky_apps_82d67173" {
     directly = true
     pivot = "Allow-DB-Access"
   }
-  depends_on = [ panos_security_policy_rules.allow_db_access_24b1942d ]
+  depends_on = [ panos_security_policy_rules.allow_db_access_4f8eea81 ]
 
   rules = [
 {

@@ -39,7 +39,9 @@ Strategy: model the Panorama hierarchy before generation. Key objects by (device
 
 F3.1 (keyed data model) landed: every parse method visits each entry once and records `device_group` + `vsys` on every object; the generator resolves references by the referrer's context (referrer DG, then Shared, then contextless, then a flat first-declaration fallback); same-named objects across device groups or vsys both survive with stable names; goldens byte-identical.
 
-- [ ] **F3.2 Preserve device-group association** — Carry the source device group from parse to emit. Same-named objects in different device groups both survive.
+F3.2 (device-group + vsys identity at emit) landed: the naming digest and the registry key cover (scope, context, vsys, name), so same-named objects in different device groups or virtual systems get distinct names without the order-dependent `_2` counter; `name_ref` resolves in the referrer's (context, vsys) pair; policy chains key on (device group, vsys), so a rule never pivots on a rule in another vsys. Both goldens regenerated (digest-only diff).
+
+- [x] **F3.2 Preserve device-group association** — COMPLETE. Carry the source device group from parse to emit. Same-named objects in different device groups both survive.
 - [ ] **F3.3 Full interface types** — VLAN, loopback, subinterfaces, virtual-wire, TAP, and aggregate. Not only physical ethernet.
 - [ ] **F3.4 Full object types** — IPv6, ip-wildcard, external, and location addresses. Multi-port services. Combined tcp+udp services.
 - [ ] **F3.5 Multi-vsys** — Represent vsys in the data model and in `location`.
@@ -68,7 +70,7 @@ Strategy: the conversion proves what it did. Input side: a report classifies eve
 ## Sequencing
 
 1. **Epic 1 first.** It is the gate. No feature lands without tests.
-2. **Epic 3 is next.** It builds on the Epic 2 emitters and the shared fixture corpus. F3.1 (keyed data model) landed; the next task is F3.2 (carry the device-group association from parse to emit, now that same-named objects in different device groups both survive).
+2. **Epic 3 is next.** It builds on the Epic 2 emitters and the shared fixture corpus. F3.1 (keyed data model) and F3.2 (device-group + vsys identity at emit) landed; the next task is F3.3 (full interface types).
 3. **Epic 4 interleaves.** F4.1 (sanity gate) is independent of the parser and its dead-variable check reuses the F2.10 test, so it can land anytime after Epic 2. F4.2 (container table, line tracking) may land during Epic 3. F4.3 and F4.4 land after F3.1, so the consumed marks and the property matrix key on the keyed data model.
 
 Rationale: Epic 1 makes Epics 2 and 3 safe to iterate on. The fixture corpus (F1.6) is the shared test asset for all three epics.

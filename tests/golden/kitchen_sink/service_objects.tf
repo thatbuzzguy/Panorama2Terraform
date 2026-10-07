@@ -1,6 +1,6 @@
 # Service Objects
 
-resource "panos_service" "tcp_8080_c71b2c49" {
+resource "panos_service" "tcp_8080_5820960d" {
   location = {
     device_group = {
       name = "Shared"
@@ -15,7 +15,7 @@ resource "panos_service" "tcp_8080_c71b2c49" {
   }
 }
 
-resource "panos_service" "udp_514_dfa9165d" {
+resource "panos_service" "udp_514_a28d1460" {
   location = {
     device_group = {
       name = "Shared"

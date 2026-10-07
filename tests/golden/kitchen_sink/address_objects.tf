@@ -1,6 +1,6 @@
 # Address Objects
 
-resource "panos_address" "web_server_1_91d60c17" {
+resource "panos_address" "web_server_1_427d7cfd" {
   location = {
     device_group = {
       name = "Shared"
@@ -12,7 +12,7 @@ resource "panos_address" "web_server_1_91d60c17" {
   tags = ["Production", "Web"]
 }
 
-resource "panos_address" "web_range_5c41fc5b" {
+resource "panos_address" "web_range_5ebf95eb" {
   location = {
     device_group = {
       name = "Shared"
@@ -22,7 +22,7 @@ resource "panos_address" "web_range_5c41fc5b" {
   ip_range = "10.1.2.0-10.1.2.255"
 }
 
-resource "panos_address" "external_api_f8f09c31" {
+resource "panos_address" "external_api_d1c4d1ef" {
   location = {
     device_group = {
       name = "Shared"

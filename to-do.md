@@ -1,22 +1,34 @@
-# To-Do — next: Epic 3 (F3.2 Preserve device-group association)
+# To-Do — current task: F3.3 Full interface types (Epic 3)
 
-**Epic 2 is complete** (F2.1–F2.11, 2026-10-05). Marked COMPLETE in
-`PLAN.md`; detail is in the git history.
+**F3.2 is complete** (committed this session). Detail is in the git history.
 
-Direction: work the lowest-numbered unfinished epic. F3.1 (keyed data
-model) landed: the parser visits each entry once and records
-`device_group` + `vsys` on every object; `name_ref` resolves by the
-referrer's context. The next task is **F3.2 Preserve device-group
-association** — carry the source device group from parse to emit so
-same-named objects in different device groups both survive in the
-generated output (the parser half is done; the emit half remains).
+Direction: work the lowest-numbered unfinished feature in Epic 3. F3.3 —
+full interface types: not only physical ethernet.
 
 Acceptance criteria for the current task go in `acceptance.md` before
-code.
+code (overwrite the F3.2 record when F3.3 starts).
+
+## F3.3 sub-tasks
+
+- [ ] Overwrite `acceptance.md` with F3.3 criteria.
+- [ ] Confirm the v2.0.14 resource types for vlan, loopback, tunnel,
+      aggregate-ethernet, and virtual-wire interfaces against the live
+      schema before adding them to `EMITTED_TYPES` (no type from memory).
+- [ ] Parse ethernet subinterface units (`ethernet/entry/units/entry`) as
+      individual interfaces — the F1.6 extraction gap in `backlog.md`.
+- [ ] Parse virtual-wire interface units
+      (`network/interface/virtual-wire/units/entry`).
+- [ ] Emitters for each kind: v2 nested shapes, `location`, dependency
+      wiring, and the F3.2 (context, vsys) identity key.
+- [ ] Fixtures and tests per kind; `COVERAGE_MATRIX` rows for each new
+      emitted type.
+- [ ] Regenerate both goldens; review the diff.
+- [ ] Gates: ruff clean, pytest green, terraform validate green.
+- [ ] Commit; update PLAN.md, to-do.md, agent-status.md, backlog.md.
 
 ## Deferred (tracked in PLAN.md)
 
-- **Epic 3:** F3.2 next, then F3.3–F3.10.
+- **Epic 3:** F3.4–F3.10 after F3.3.
 - **Epic 4:** F4.1 (post-run sanity gate; its dead-variable check
   reuses the F2.10 test), F4.2 (container table + line tracking; may
   land during Epic 3), F4.3 (per-entry `CONVERSION_REPORT.txt`; after
@@ -32,8 +44,7 @@ code.
   (`<entry name>` plus its properties), not physical lines; the
   reported line number is the entry's opening tag. Decision recorded
   in `backlog.md`.
-- F3.1 kept the F2.7 naming contract and the goldens byte-identical:
-  shared objects keep the legacy `'Shared'` context, template-scoped
-  objects keep the contextless convention, and the profile categories
-  keep their pre-F3.1 contextless digest (the true DG/template identity
-  for those lands with F3.6).
+- Naming contract (F2.7 + F3.2): sanitized base + 8-hex digest of
+  (scope, context, vsys, name); order-independent; per-type domains;
+  references resolve through the (context, vsys) chain then the flat
+  fallback. Interface emitters must pass the interface's own vsys.

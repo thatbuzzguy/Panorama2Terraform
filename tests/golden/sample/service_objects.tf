@@ -1,6 +1,6 @@
 # Service Objects
 
-resource "panos_service" "tcp_8080_6d614c3a" {
+resource "panos_service" "tcp_8080_6c1b4915" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -15,7 +15,7 @@ resource "panos_service" "tcp_8080_6d614c3a" {
   }
 }
 
-resource "panos_service" "tcp_3306_19605a6d" {
+resource "panos_service" "tcp_3306_f8557142" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -30,7 +30,7 @@ resource "panos_service" "tcp_3306_19605a6d" {
   }
 }
 
-resource "panos_service" "udp_514_b9e903e0" {
+resource "panos_service" "udp_514_899aa8f0" {
   location = {
     device_group = {
       name = "Production-DG"

@@ -1,0 +1,75 @@
+<?xml version="1.0"?>
+<!-- Same content as edge_dup_names_across_vsys.xml with the vsys entries
+     swapped (vsys2 first). F2.7/F3.2 naming is identity-based, so the
+     identity-to-name assignment must be identical for both files: the
+     taken-name counter must not decide which object gets the base name. -->
+<config version="10.0.0" urldb="paloaltonetworks">
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys2">
+          <address>
+            <entry name="web">
+              <ip-netmask>10.2.0.1/32</ip-netmask>
+            </entry>
+          </address>
+          <rulebase>
+            <security>
+              <rules>
+                <entry name="rule-vs2-a">
+                  <from><member>Trust</member></from>
+                  <to><member>Untrust</member></to>
+                  <source><member>web</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>any</member></application>
+                  <service><member>application-default</member></service>
+                  <action>allow</action>
+                </entry>
+                <entry name="rule-vs2-b">
+                  <from><member>Trust</member></from>
+                  <to><member>Untrust</member></to>
+                  <source><member>web</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>any</member></application>
+                  <service><member>application-default</member></service>
+                  <action>allow</action>
+                </entry>
+              </rules>
+            </security>
+          </rulebase>
+        </entry>
+        <entry name="vsys1">
+          <address>
+            <entry name="web">
+              <ip-netmask>10.1.0.1/32</ip-netmask>
+            </entry>
+          </address>
+          <rulebase>
+            <security>
+              <rules>
+                <entry name="rule-vs1-a">
+                  <from><member>Trust</member></from>
+                  <to><member>Untrust</member></to>
+                  <source><member>web</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>any</member></application>
+                  <service><member>application-default</member></service>
+                  <action>allow</action>
+                </entry>
+                <entry name="rule-vs1-b">
+                  <from><member>Trust</member></from>
+                  <to><member>Untrust</member></to>
+                  <source><member>web</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>any</member></application>
+                  <service><member>application-default</member></service>
+                  <action>allow</action>
+                </entry>
+              </rules>
+            </security>
+          </rulebase>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

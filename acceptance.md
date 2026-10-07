@@ -1,56 +1,69 @@
-# Acceptance Criteria: F3.1 Keyed data model
+# Acceptance Criteria: F3.2 Preserve device-group association
 
 ## Goal
 
-Replace name-keyed storage and name deduplication in the parser with a keyed
-data model. Each parsed object and rule is identified by
-(device group, vsys, type, name). Objects that share a name but differ in
-device group or vsys are distinct objects and all survive parsing.
+Carry the full source identity — (device group, vsys, type, name) — from
+parse to emit. Same-named objects in different device groups or virtual
+systems both survive, get distinct order-independent local names, and
+every reference resolves by the referrer's own identity.
 
 ## Context
 
-- Epic 2 is complete. F3.1 is the first Epic 3 feature.
-- Today the parser visits many elements twice (a broad XPath plus narrower
-  XPaths in the same method) and hides the double visits behind two dedup
-  patterns: first-wins `seen_names` sets and name-keyed dicts (last-wins).
-- The pinned xfail `tests/test_edge_cases.py::test_dup_names_across_dgs_both_survive`
-  states the desired behavior: same-named objects in different device groups
-  must both survive.
-- The F2.7 naming contract (sanitized name + 8-hex digest of source identity,
-  order-independent, collision-safe, per-type domains) must stay intact.
-  Same-named objects in different device groups already get distinct local
-  names because the digest includes the defining device group.
+- F3.1 landed the keyed data model: the parser visits each entry once
+  and records `device_group` + `vsys` on every object and rule.
+- The device-group axis already carries to emit (verified this
+  session): same-named objects in two device groups emit as distinct
+  resources, references wire to each group's own objects, and
+  `terraform validate` is green.
+- Verified gap (reproduced with the committed fixtures):
+  - same-named objects in two vsys share one digest
+    (`web_6cc15ec0` vs `web_6cc15ec0_2`); the taken-name counter
+    decides which one gets the base name, so the assignment flips when
+    the XML order flips (violates the F2.7 order-independence
+    contract);
+  - a rule in vsys1 that references the shared name resolves to the
+    vsys2 object when vsys2 is declared first (the reference chain
+    ignores the referrer's vsys).
+- F3.5 will add vsys to `location` blocks; F3.2 covers the naming
+  digest and reference resolution only.
 
 ## Done criteria
 
-1. Every parse method visits each XML element exactly once (single broad path
-   per element kind, document order). No `seen_names` first-wins sets and no
-   name-keyed last-wins dicts remain in the parser.
-2. Every parsed object and rule carries its identity fields: `device_group`
-   (defining device group, or `Shared` for shared/template-scope) and `vsys`
-   (nearest `<vsys><entry>` ancestor, or `vsys1` when the export omits the
-   vsys wrapper). The key is (device group, vsys, type, name).
-3. Same name across device groups: both objects parse (pinned xfail now
-   passes; the old last-wins test is replaced).
-4. Same name across vsys: both objects parse (new fixture + test).
-5. Entry references (an entry with only `<id>`) are still skipped: they are
-   pointers to a shared definition and carry no content.
-6. References resolve to the defining object: `name_ref` accepts the
-   referrer's context and resolves in the order (referrer context, Shared,
-   template scope), with a flat fallback so context-less call sites and
-   brown-field references keep working. Undeclared names stay plain strings.
-7. The F2.7 naming contract tests pass unchanged: sanitized name + digest,
-   order-independence, collision safety, per-type domains, no dangling refs.
-8. Golden files for `sample` and `kitchen_sink` stay byte-identical or are
-   regenerated deliberately with a reviewed diff (no accidental churn).
-9. The full test suite passes (pytest -q), including the now-passing
-   both-survive test with the xfail marker removed.
-10. `terraform init` + `terraform validate` still pass for the wired fixture
-    (dependency_wiring) when the terraform binary is present.
+1. `declare_resource_name` computes the digest from (scope, context,
+   vsys, name) — the F3.1 identity key — and registers the local name
+   under (scope, context, vsys, name); the flat (scope, name) index and
+   the taken-name guard stay as before.
+2. Every declare site (all 30) passes the object's `vsys`.
+3. `name_ref` resolves in the order (referrer context, referrer vsys),
+   then (Shared, referrer vsys), then (contextless, referrer vsys),
+   then the flat first-declaration fallback. Undeclared names stay
+   plain brown-field strings.
+4. Every reference site passes the referrer's `vsys`.
+5. Same name across vsys: both objects emit as distinct resources with
+   distinct digests (no `_2` counter), and the identity-to-name
+   assignment is unchanged when the XML entry order flips (two-order
+   test).
+6. A rule in one vsys that references a name defined in two vsys
+   resolves to the same-vsys object regardless of declaration order
+   (extended fixture + test).
+7. Policy chains key on (device group, vsys): one vsys's rules never
+   pivot on another vsys's rule (chain-boundary test).
+8. The F2.7 naming contract tests pass unchanged: sanitized base +
+   8-hex digest, order-independence, collision safety, per-type
+   domains, no dangling references.
+9. The F3.1 context tests pass: the referrer's device group wins, then
+   Shared, then the contextless bucket, then the flat fallback.
+10. Goldens for `sample` and `kitchen_sink` regenerate with a reviewed
+    diff limited to local names (resource addresses, references,
+    depends_on) — no attribute or value changes.
+11. Gates: ruff clean; pytest -q green; `terraform init` +
+    `terraform validate` green on the golden and fixture outputs.
+12. Docs: the README "Resource naming" section states the digest input
+    (scope, context, vsys, name); agent-status records the session.
 
-## Out of scope (Epic 3 follow-ups)
+## Out of scope
 
 - vsys in `location` blocks (F3.5).
-- Template-stack association and template-name contexts (F3.6).
-- Splitting large rule resources (F3.3); template-variables (F3.4).
-- The `split_device_groups.py` splitter (separate tool, unchanged).
+- Template-name contexts (F3.6).
+- Per-device-group report keying (F3.9).
+- Rulebase (pre/post/shared) tracking (backlog; lands after F3.1).

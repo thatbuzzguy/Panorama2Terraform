@@ -1,6 +1,6 @@
 # Custom URL Categories
 
-resource "panos_custom_url_category" "blocked_sites_589e0493" {
+resource "panos_custom_url_category" "blocked_sites_aa7fc2d9" {
   location = {
     device_group = {
       name = "Shared"

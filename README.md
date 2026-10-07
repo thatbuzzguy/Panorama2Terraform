@@ -71,13 +71,14 @@ make a reference work, so the output always passes
 ## Resource naming
 
 A local resource name is the sanitized PAN-OS name plus an 8-hex digest
-of the object's source identity (resource type, defining device group or
-template, and name). The name is deterministic: the same object always
-gets the same local name, and same-named objects in different device
-groups stay distinct. For example:
+of the object's source identity: resource type, defining device group or
+template, virtual system (vsys), and raw name. The name is deterministic:
+the same object always gets the same local name, the name does not depend
+on emission order, and same-named objects in different device groups or
+virtual systems stay distinct. For example:
 
 ```hcl
-resource "panos_address" "web_server_1_a9a88aa6" {
+resource "panos_address" "web_server_1_9ec34c7e" {
   name = "web-server-1"
   ...
 }

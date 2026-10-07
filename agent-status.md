@@ -1,15 +1,48 @@
 # Agent Status
 
 ## Current position
-**F3.1 (keyed data model) is committed** (`074124e`, this session);
-`acceptance.md` still holds the F3.1 criteria — overwrite it before
-the next task. **Next task: F3.2 Preserve device-group association**
-(Epic 3): carry the source device group from parse to emit so
-same-named objects in different device groups both survive in the
-generated output (the parser half of F3.2 landed with F3.1; the emit
-half remains).
+**F3.2 (device-group + vsys identity at emit) is committed** (this
+session). `acceptance.md` holds the F3.2 criteria — overwrite it before
+the next task. **Next task: F3.3 Full interface types** (Epic 3): vlan,
+loopback, subinterfaces, virtual-wire, TAP, and aggregate interfaces,
+not only physical ethernet.
 
 ## Session log
+
+### F3.2 — Device-group + vsys identity at emit (this session)
+- Direction: Epic 3, lowest-numbered unfinished feature. `acceptance.md`
+  rewritten for F3.2 first (12 done criteria).
+- Reproduced the two gaps first: same-named objects in two vsys shared
+  one digest and split by the order-dependent `_2` counter; a vsys1 rule
+  referencing `web` wired to the vsys2 object.
+- `declare_resource_name(name, scope, context, vsys='')`: digest input is
+  `scope|context|vsys|name`; the registry key is `(scope, context, vsys,
+  name)`. The flat `(scope, name)` index and the taken-name guard are
+  unchanged (guard now only fires for a true identity duplicate).
+- `name_ref(name, scopes, context=None, vsys=None)`: chain is
+  (referrer context, referrer vsys), then (Shared, referrer vsys), then
+  (contextless, referrer vsys), then the flat first-declaration index;
+  undeclared names stay plain brown-field strings. Audit: all 30 declare
+  sites and all reference sites pass the object's or the referrer's own
+  vsys.
+- `_policy_rule_chains` keys on `(device_group, vsys)`, so each vsys keeps
+  its own chain and each chain anchors at `where = "last"`.
+- Tests: `edge_dup_names_across_vsys.xml` extended with two rules per
+  vsys referencing `web`; new `edge_dup_names_across_vsys_swapped.xml`
+  (same content, vsys entry order flipped). `tests/test_edge_cases.py`
+  gains four end-to-end emit tests (distinct digests with no `_2`, stable
+  identity-to-name assignment under the order flip, per-vsys reference
+  wiring, chain boundary). `tests/test_robustness.py` gains
+  `test_declare_same_name_in_two_vsys_gets_unique_names`,
+  `test_name_ref_prefers_referrers_own_vsys`, and
+  `test_name_ref_vsys_resolution_is_declaration_order_independent`; the
+  F3.1 context tests still pass unchanged.
+- Goldens regenerated for both sets: the diff is limited to local names
+  and their references (vsys enters the hash input), as required.
+- Docs: README "Resource naming" now states the digest input includes
+  vsys; the example digest matches the regenerated golden.
+- Gate: ruff clean. pytest 151 passed. terraform validate green on both
+  goldens and the extended vsys fixture output.
 
 ### F3.1 — Keyed data model (this session)
 - Direction: Epic 3, lowest-numbered unfinished epic. `acceptance.md`

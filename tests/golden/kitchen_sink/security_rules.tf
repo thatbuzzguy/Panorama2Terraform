@@ -1,6 +1,6 @@
 # Security Policy Rules
 
-resource "panos_security_policy_rules" "allow_web_traffic_56c0cc46" {
+resource "panos_security_policy_rules" "allow_web_traffic_3fc3d1d6" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -17,7 +17,7 @@ resource "panos_security_policy_rules" "allow_web_traffic_56c0cc46" {
       source_zones = [ "Trust" ]
       source_addresses = [ "Internal-Network" ]
       destination_zones = [ "DMZ" ]
-      destination_addresses = [ panos_address_group.web_servers_18d3eea0.name ]
+      destination_addresses = [ panos_address_group.web_servers_1d0d5e7d.name ]
       applications = [ "web-browsing", "ssl" ]
       services = [ "application-default" ]
       action = "allow"
@@ -26,7 +26,7 @@ resource "panos_security_policy_rules" "allow_web_traffic_56c0cc46" {
   ]
 }
 
-resource "panos_security_policy_rules" "block_risky_apps_82d67173" {
+resource "panos_security_policy_rules" "block_risky_apps_a6c59d00" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -37,7 +37,7 @@ resource "panos_security_policy_rules" "block_risky_apps_82d67173" {
     directly = true
     pivot = "Allow-Web-Traffic"
   }
-  depends_on = [ panos_security_policy_rules.allow_web_traffic_56c0cc46 ]
+  depends_on = [ panos_security_policy_rules.allow_web_traffic_3fc3d1d6 ]
 
   rules = [
 {
