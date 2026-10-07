@@ -1,11 +1,11 @@
 # Agent Status
 
 ## Current position
-**F3.2 (device-group + vsys identity at emit) is committed** (this
-session). `acceptance.md` holds the F3.2 criteria — overwrite it before
-the next task. **Next task: F3.3 Full interface types** (Epic 3): vlan,
-loopback, subinterfaces, virtual-wire, TAP, and aggregate interfaces,
-not only physical ethernet.
+**F3.2 (device-group + vsys identity at emit) is committed** (`155ae19`,
+this session). `acceptance.md` holds the F3.2 criteria — overwrite it
+before the next task. **Next task: F3.3 Full interface types** (Epic 3):
+vlan, loopback, subinterfaces, virtual-wire, TAP, and aggregate
+interfaces, not only physical ethernet.
 
 ## Session log
 
