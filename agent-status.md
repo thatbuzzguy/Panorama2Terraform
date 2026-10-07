@@ -1,7 +1,7 @@
 # Agent Status
 
 ## Current position
-**F3.3 (full interface types) is committed** (this session). `acceptance.md`
+**F3.3 (full interface types) is committed** (`5599605`, this session). `acceptance.md`
 holds the F3.3 criteria — overwrite it before the next task. **Next task:
 F3.4 Full object types** (Epic 3): IPv6, ip-wildcard, external, and
 location address types; multi-port services; combined tcp+udp services.
