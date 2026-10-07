@@ -67,6 +67,42 @@ def test_parse_interfaces_other_types(make_parser):
     assert sub["type"] == "aggregate-subinterface"
     assert sub["ip_addresses"] == ["172.16.20.1/24"]
     assert sub["tag"] == "20"
+    assert sub["parent"] == "ae1.101"
+
+
+def test_parse_ethernet_subinterface_units(make_parser):
+    """F3.3: ethernet subinterface units are individual entries."""
+    p = _parser(make_parser, "interfaces_ethernet.xml")
+    ifaces = p.parse_interfaces()
+    by_name = {i["name"]: i for i in ifaces}
+
+    sub = by_name["ethernet1/1.10"]
+    assert sub["type"] == "ethernet-subinterface"
+    assert sub["parent"] == "ethernet1/1"
+    assert sub["tag"] == "10"
+    assert sub["ip_addresses"] == ["192.168.1.10/24"]
+    # The physical entry keeps only its own address.
+    assert by_name["ethernet1/1"]["ip_addresses"] == ["192.168.1.1/24"]
+    # F3.3 criterion 3: every entry carries kind, mode, parent, vsys.
+    assert all(i["parent"] is not None or i["type"] in ("ethernet", "vlan",
+                                                         "loopback", "tunnel")
+               for i in ifaces)
+
+
+def test_parse_virtual_wire_units(make_parser):
+    """F3.3: the virtual-wire container is parsed as individual entries."""
+    p = _parser(make_parser, "interfaces_ethernet.xml")
+    by_name = {i["name"]: i for i in p.parse_interfaces()}
+
+    vw = by_name["ethernet1/4.1"]
+    assert vw["type"] == "ethernet"
+    assert vw["mode"] == "virtual-wire"
+    assert vw["parent"] == "ethernet1/4"
+
+    # An ethernet entry that is itself in virtual-wire or tap mode keeps
+    # that mode; the provider has no separate resource type for them.
+    assert by_name["ethernet1/3"]["mode"] == "virtual-wire"
+    assert by_name["ethernet1/5"]["mode"] == "tap"
 
 
 def test_parse_virtual_routers_from_template(make_parser):

@@ -11,7 +11,7 @@ resource "panos_nat_policy_rules" "outbound_nat_ee85cf07" {
   }
 
   rules = [
-{
+    {
       name = "Outbound-NAT"
       description = "Outbound NAT"
       source_zones = [ "Trust" ]
@@ -45,7 +45,7 @@ resource "panos_nat_policy_rules" "inbound_web_nat_fd53537d" {
   depends_on = [ panos_nat_policy_rules.outbound_nat_ee85cf07 ]
 
   rules = [
-{
+    {
       name = "Inbound-Web-NAT"
       description = "Inbound NAT for web"
       source_zones = [ "Untrust" ]

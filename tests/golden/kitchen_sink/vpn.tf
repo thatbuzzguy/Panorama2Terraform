@@ -87,13 +87,13 @@ resource "panos_ipsec_tunnel" "tunnel_tun_branch_522e38ae" {
   tunnel_interface = "tunnel.1"
   auto_key = {
     ike_gateway = [
-{
+      {
         name = panos_ike_gateway.ike_gw_ike_gw_branch_999c1303.name
       }
     ]
     ipsec_crypto_profile = panos_ipsec_crypto_profile.ipsec_profile_ipsec_default_979d7792.name
     proxy_id = [
-{
+      {
         name = "proxy-1"
         local = "10.0.0.0/8"
         remote = "192.168.0.0/16"

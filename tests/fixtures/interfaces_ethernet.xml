@@ -1,4 +1,8 @@
 <?xml version="1.0"?>
+<!-- F3.3: ethernet kinds. The physical L3 entry, a subinterface unit
+     (units/entry), and the virtual-wire container. The provider has no
+     virtual-wire resource type, so the virtual-wire entry emits as
+     panos_ethernet_interface with a virtual_wire block. -->
 <config version="10.0.0" urldb="paloaltonetworks">
   <devices>
     <entry name="localhost.localdomain">
@@ -15,13 +19,42 @@
                       <entry name="192.168.1.1/24"/>
                     </ip>
                   </layer3>
+                  <units>
+                    <entry name="10">
+                      <tag>10</tag>
+                      <ip>
+                        <entry name="192.168.1.10/24"/>
+                      </ip>
+                    </entry>
+                  </units>
                   <comment>Trust uplink</comment>
                 </entry>
                 <entry name="ethernet1/2">
                   <mode>layer2</mode>
                   <layer2/>
                 </entry>
+                <entry name="ethernet1/3">
+                  <mode>virtual-wire</mode>
+                  <virtual-wire>
+                    <tag>100</tag>
+                  </virtual-wire>
+                </entry>
+                <entry name="ethernet1/5">
+                  <mode>tap</mode>
+                  <tap>
+                    <tag>300</tag>
+                  </tap>
+                </entry>
               </ethernet>
+              <virtual-wire>
+                <units>
+                  <entry name="ethernet1/4.1">
+                    <virtual-wire>
+                      <tag>200</tag>
+                    </virtual-wire>
+                  </entry>
+                </units>
+              </virtual-wire>
             </interface>
           </network>
         </entry>

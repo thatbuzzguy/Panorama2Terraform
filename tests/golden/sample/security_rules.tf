@@ -11,7 +11,7 @@ resource "panos_security_policy_rules" "allow_web_traffic_3fc3d1d6" {
   }
 
   rules = [
-{
+    {
       name = "Allow-Web-Traffic"
       description = "Allow internal users to access web servers"
       source_zones = [ "Trust" ]
@@ -40,7 +40,7 @@ resource "panos_security_policy_rules" "allow_db_access_4f8eea81" {
   depends_on = [ panos_security_policy_rules.allow_web_traffic_3fc3d1d6 ]
 
   rules = [
-{
+    {
       name = "Allow-DB-Access"
       description = "Allow web servers to access database"
       source_zones = [ "DMZ" ]
@@ -69,7 +69,7 @@ resource "panos_security_policy_rules" "block_risky_apps_a6c59d00" {
   depends_on = [ panos_security_policy_rules.allow_db_access_4f8eea81 ]
 
   rules = [
-{
+    {
       name = "Block-Risky-Apps"
       description = "Block risky applications"
       source_zones = [ "any" ]

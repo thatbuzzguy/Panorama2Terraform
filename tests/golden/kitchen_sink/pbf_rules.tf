@@ -13,7 +13,7 @@ resource "panos_pbf_policy_rules" "pbf_forward_1315ecb7" {
   }
 
   rules = [
-{
+    {
       name = "PBF-Forward"
       description = "Forward to next hop"
       from = {
@@ -57,7 +57,7 @@ resource "panos_pbf_policy_rules" "pbf_discard_81c58f18" {
   depends_on = [ panos_pbf_policy_rules.pbf_forward_1315ecb7 ]
 
   rules = [
-{
+    {
       name = "PBF-Discard"
       from = {
         zone = [ "vsys1" ]

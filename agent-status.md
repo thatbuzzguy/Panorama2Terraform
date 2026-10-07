@@ -1,13 +1,63 @@
 # Agent Status
 
 ## Current position
-**F3.2 (device-group + vsys identity at emit) is committed** (`155ae19`,
-this session). `acceptance.md` holds the F3.2 criteria — overwrite it
-before the next task. **Next task: F3.3 Full interface types** (Epic 3):
-vlan, loopback, subinterfaces, virtual-wire, TAP, and aggregate
-interfaces, not only physical ethernet.
+**F3.3 (full interface types) is committed** (this session). `acceptance.md`
+holds the F3.3 criteria — overwrite it before the next task. **Next task:
+F3.4 Full object types** (Epic 3): IPv6, ip-wildcard, external, and
+location address types; multi-port services; combined tcp+udp services.
+
+F3.3 state: `generate_interfaces` dispatches by parser kind through
+`INTERFACE_RESOURCE_TYPES`; `IFACE_SCOPES` covers every interface scope so
+subinterface parents resolve; every interface kind is template-scoped in
+`_TEMPLATE_SCOPED_TYPES`. Gate: ruff clean, pytest 198 passed, terraform
+validate green on both golden sets.
 
 ## Session log
+
+### F3.3 — Full interface types (this session)
+- Schema facts (v2.0.14, verified against `/tmp/schema_2014.json`, no type
+  from memory): the interface resource types are `panos_ethernet_interface`,
+  `panos_ethernet_layer3_subinterface`, `panos_vlan_interface`,
+  `panos_loopback_interface`, `panos_tunnel_interface`,
+  `panos_aggregate_interface`, `panos_aggregate_layer3_subinterface`. There
+  is no `panos_virtual_wire_interface`: virtual-wire and TAP are nested
+  blocks on `panos_ethernet_interface`. `panos_aggregate_interface` has no
+  `ip`, `parent`, or `tag`; only the layer-3 subinterface types carry `tag`
+  and `parent`. `ip` is a list of objects (`{ name = "..." }`), `ipv6` is a
+  single nested block with `address`.
+- Parser: `ethernet/entry/units/entry` and
+  `network/interface/virtual-wire/units/entry` now parse as individual
+  entries; every interface entry records kind, mode, `parent`, `tag`, device
+  group, and vsys. Aggregate entries whose name already carries a unit
+  (`ae1.101`) derive parent and tag from the name. The aggregate parent
+  entry is appended before its units so the unit's parent reference resolves
+  to a declared resource (F2.6 rule).
+- Generator: `generate_ethernet_interfaces` became `generate_interfaces`,
+  which dispatches by kind through `INTERFACE_RESOURCE_TYPES` in
+  `resource_mapping.py`. Ethernet entries emit the physical resource or the
+  tagged L3 subinterface; `virtual_wire = {}` and `tap = {}` blocks replace
+  the old "requires manual review" note. Interface kinds are added to
+  `_TEMPLATE_SCOPED_TYPES` (the provider rejects `device_group` for them).
+- **Bug fixed:** `_emit_subinterface_ip` mutated a local string, so `ip` was
+  silently dropped from every generated subinterface. Replaced by
+  `_ip_list_line`, which returns the line. `hcl_value` nested lists now
+  indent each element, which is why the rule and VPN goldens changed.
+- Tests: `tests/test_interfaces.py` (7 tests) covers kind-to-type mapping,
+  subinterface parent wiring, aggregate group shape, virtual-wire/tap
+  blocks, the `ip` regression, and template scoping. `test_parse_network.py`
+  gains ethernet-unit and virtual-wire-unit parser tests. `COVERAGE_MATRIX`
+  gains 5 rows (13 interface rows total); `docs/COVERAGE_MATRIX.md` mirrors
+  them.
+- Fixtures: `interfaces_ethernet.xml` gains a subinterface unit, a
+  virtual-wire entry, a TAP entry, and a virtual-wire units container;
+  `interfaces_other.xml` and `kitchen_sink.xml` gain a plain aggregate group
+  entry (`ae1`) so the aggregate-group row is exercised.
+- Goldens regenerated for both sets: kitchen-sink `interfaces.tf` gains the
+  five new kinds; the other golden diffs are the nested-list indentation and
+  the restored `ip` lines only.
+- Docs: README resource table now lists all seven interface types.
+- Gate: ruff clean. pytest 198 passed. terraform validate green on both
+  golden sets and the interface fixture outputs.
 
 ### F3.2 — Device-group + vsys identity at emit (this session)
 - Direction: Epic 3, lowest-numbered unfinished feature. `acceptance.md`

@@ -13,7 +13,7 @@ resource "panos_decryption_policy_rules" "decrypt_https_41e0f278" {
   }
 
   rules = [
-{
+    {
       name = "Decrypt-HTTPS"
       description = "Decrypt HTTPS"
       source_zones = [ "Trust" ]

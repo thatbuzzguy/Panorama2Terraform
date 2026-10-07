@@ -11,7 +11,7 @@ resource "panos_security_policy_rules" "allow_web_traffic_3fc3d1d6" {
   }
 
   rules = [
-{
+    {
       name = "Allow-Web-Traffic"
       description = "Allow web traffic"
       source_zones = [ "Trust" ]
@@ -40,7 +40,7 @@ resource "panos_security_policy_rules" "block_risky_apps_a6c59d00" {
   depends_on = [ panos_security_policy_rules.allow_web_traffic_3fc3d1d6 ]
 
   rules = [
-{
+    {
       name = "Block-Risky-Apps"
       source_zones = [ "any" ]
       source_addresses = [ "any" ]

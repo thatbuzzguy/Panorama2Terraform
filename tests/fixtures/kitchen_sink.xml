@@ -628,6 +628,11 @@
                 </units>
               </tunnel>
               <aggregate-ethernet>
+                <!-- F3.3: the aggregate group itself (no ip, parent, or tag
+                     in the provider schema). -->
+                <entry name="ae1">
+                  <layer2 />
+                </entry>
                 <entry name="ae1.101">
                   <layer3>
                     <ip>

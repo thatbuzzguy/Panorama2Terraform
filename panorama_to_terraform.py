@@ -52,6 +52,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Optional
 
+from resource_mapping import INTERFACE_RESOURCE_TYPES
+
 
 class PanoramaParser:
     """Parse Palo Alto Panorama XML configuration"""
@@ -936,7 +938,8 @@ class PanoramaParser:
                 'zone': None,
                 'virtual_router': None,
                 'management_profile': None,
-                'comment': self._get_text(iface, 'comment')
+                'comment': self._get_text(iface, 'comment'),
+                'parent': None
             }
 
             # Determine mode (layer3, layer2, virtual-wire, tap, ha, aggregate-group)
@@ -974,6 +977,52 @@ class PanoramaParser:
 
             interfaces.append(iface_obj)
 
+            # F3.3: subinterface units are individual entries. The parent is
+            # the physical entry name; the unit name is the tag.
+            for unit in iface.findall('units/entry'):
+                unit_name = unit.get('name')
+                if not unit_name:
+                    continue
+                sub = {
+                    'name': f'{name}.{unit_name}',
+                    'type': 'ethernet-subinterface',
+                    'vsys': self.vsys_of(unit),
+                    'mode': 'layer3',
+                    'ip_addresses': [ip.get('name') for ip in unit.findall('.//ip/entry')
+                                     if ip.get('name')],
+                    'ipv6_addresses': [ip.get('name') for ip in unit.findall('.//ipv6/address/entry')
+                                       if ip.get('name')],
+                    'zone': None,
+                    'virtual_router': None,
+                    'management_profile': None,
+                    'comment': self._get_text(unit, 'comment'),
+                    'tag': unit_name,
+                    'parent': name,
+                }
+                interfaces.append(sub)
+
+        # Virtual-wire interface units. PAN-OS keeps them in a separate
+        # container; the provider models them as panos_ethernet_interface
+        # with a virtual_wire block (there is no virtual-wire resource type).
+        for iface in self.root.findall(".//network/interface/virtual-wire/units/entry"):
+            name = iface.get('name')
+            if not name:
+                continue
+            iface_obj = {
+                'name': name,
+                'type': 'ethernet',
+                'vsys': self.vsys_of(iface),
+                'mode': 'virtual-wire',
+                'ip_addresses': [],
+                'ipv6_addresses': [],
+                'zone': None,
+                'virtual_router': None,
+                'management_profile': None,
+                'comment': self._get_text(iface, 'comment'),
+                'parent': name.split('.')[0] if '.' in name else None,
+            }
+            interfaces.append(iface_obj)
+
         # VLAN interfaces
         for iface in self.root.findall(".//network/interface/vlan/units/entry"):
             name = iface.get('name')
@@ -994,7 +1043,8 @@ class PanoramaParser:
                 'virtual_router': None,
                 'management_profile': None,
                 'comment': self._get_text(iface, 'comment'),
-                'tag': self._get_text(iface, 'tag')
+                'tag': self._get_text(iface, 'tag'),
+                'parent': None
             }
 
             # Get IP addresses
@@ -1035,7 +1085,8 @@ class PanoramaParser:
                 'zone': None,
                 'virtual_router': None,
                 'management_profile': None,
-                'comment': self._get_text(iface, 'comment')
+                'comment': self._get_text(iface, 'comment'),
+                'parent': None
             }
 
             # Get IP addresses
@@ -1071,7 +1122,8 @@ class PanoramaParser:
                 'zone': None,
                 'virtual_router': None,
                 'management_profile': None,
-                'comment': self._get_text(iface, 'comment')
+                'comment': self._get_text(iface, 'comment'),
+                'parent': None
             }
 
             # Get IP addresses
@@ -1109,8 +1161,14 @@ class PanoramaParser:
                 'zone': None,
                 'virtual_router': None,
                 'management_profile': None,
-                'comment': self._get_text(iface, 'comment')
+                'comment': self._get_text(iface, 'comment'),
+                # An aggregate entry name can already be a subinterface
+                # (ae1.101); the parent is the aggregate group name and the
+                # unit number is the tag.
+                'parent': name.split('.')[0] if '.' in name else None,
+                'tag': name.split('.')[1] if '.' in name else None
             }
+            units = []
 
             # Determine mode
             if iface.find('layer3') is not None:
@@ -1146,7 +1204,8 @@ class PanoramaParser:
                             'virtual_router': None,
                             'management_profile': None,
                             'comment': self._get_text(unit, 'comment'),
-                            'tag': self._get_text(unit, 'tag')
+                            'tag': self._get_text(unit, 'tag'),
+                            'parent': name
                         }
 
                         # Get IP addresses
@@ -1160,12 +1219,15 @@ class PanoramaParser:
                         if unit_mgmt is not None:
                             unit_obj['management_profile'] = unit_mgmt.text
 
-                        interfaces.append(unit_obj)
+                        units.append(unit_obj)
 
             elif iface.find('layer2') is not None:
                 iface_obj['mode'] = 'layer2'
 
+            # Append the parent entry before its units so the unit's parent
+            # reference resolves to a declared resource (F2.6 rule).
             interfaces.append(iface_obj)
+            interfaces.extend(units)
 
         return interfaces
 
@@ -1986,7 +2048,15 @@ ADDR_SCOPES = ('panos_address', 'panos_address_group')
 SERVICE_SCOPES = ('panos_service', 'panos_service_group')
 ZONE_SCOPES = ('panos_zone',)
 INTERFACE_SCOPES = ('panos_ethernet_interface', 'panos_ethernet_layer3_subinterface')
-ETH_IFACE_SCOPES = ('panos_ethernet_interface',)
+# F3.3: a subinterface parent can be a physical interface, an aggregate
+# group, or an aggregate layer-3 subinterface (ae1.101.20 has parent
+# ae1.101), so parent resolution covers every interface scope.
+IFACE_SCOPES = (
+    'panos_ethernet_interface',
+    'panos_ethernet_layer3_subinterface',
+    'panos_aggregate_interface',
+    'panos_aggregate_layer3_subinterface',
+)
 TAG_SCOPES = ('panos_administrative_tag',)
 IKE_CRYPTO_SCOPES = ('panos_ike_crypto_profile',)
 IPSEC_CRYPTO_SCOPES = ('panos_ipsec_crypto_profile',)
@@ -2148,6 +2218,12 @@ class TerraformGenerator:
         'panos_virtual_router_static_route_ipv4',
         'panos_ethernet_interface',
         'panos_ethernet_layer3_subinterface',
+        # F3.3: the provider scopes every interface kind to a template.
+        'panos_vlan_interface',
+        'panos_loopback_interface',
+        'panos_tunnel_interface',
+        'panos_aggregate_interface',
+        'panos_aggregate_layer3_subinterface',
         'panos_ike_crypto_profile',
         'panos_ipsec_crypto_profile',
         'panos_ike_gateway',
@@ -2215,7 +2291,8 @@ class TerraformGenerator:
             if all(not isinstance(item, (dict, list)) for item in value):
                 # Primitive lists stay inline
                 return '[ ' + ', '.join(self.hcl_value(item, '') for item in value) + ' ]'
-            parts = [self.hcl_value(item, indent + '  ') for item in value]
+            # Nested lists put each element on its own line at indent + 2.
+            parts = [f'{indent}  {self.hcl_value(item, indent + "  ")}' for item in value]
             return '[\n' + ',\n'.join(parts) + f'\n{indent}]'
         raise TypeError(f'Cannot render {type(value)} as HCL')
 
@@ -3187,8 +3264,8 @@ variable "panos_password" {
         with open(self.output_dir / 'virtual_routers.tf', 'w') as f:
             f.write(content)
 
-    def generate_ethernet_interfaces(self, interfaces: list[dict]):
-        """Generate ethernet interface Terraform configuration (v2: panos_ethernet_interface)
+    def generate_interfaces(self, interfaces: list[dict]):
+        """Generate interface Terraform configuration (v2, one resource per kind).
 
         The v2 panos_ethernet_interface has no ipv4 attribute: IPv4
         addresses on a physical L3 interface are modeled on its .0 layer-3
@@ -3197,97 +3274,148 @@ variable "panos_password" {
         if not interfaces:
             return
 
-        content = '# Ethernet Interface Configurations\n'
+        content = '# Interface Configurations\n'
         content += '# Note: These are reference configurations. Adjust for your hardware platform.\n\n'
 
         for iface in interfaces:
-            if iface['type'] != 'ethernet':
+            kind = iface['type']
+            if kind == 'ethernet':
+                content += self._emit_ethernet_interface(iface)
                 continue
-
-            name = iface['name']
-            mode = iface.get('mode')
-            parent, dot, tag_str = name.partition('.')
-
-            # Tagged L3 subinterface (ethernet1/2.10): v2 subinterface resource
-            if dot and mode == 'layer3':
-                resource_name = self.declare_resource_name(
-                    name, 'panos_ethernet_layer3_subinterface',
-                    context=iface.get('template') or '', vsys=iface.get('vsys') or ''
-                )
-                content += f'resource "panos_ethernet_layer3_subinterface" "{resource_name}" {{\n'
-                content += self.location_block('panos_ethernet_layer3_subinterface', template=iface.get('template'))
-                content += f'  name = {self.escape_string(name)}\n'
-                # F2.6: the parent is an interface declared in this run
-                # (or a brown-field interface outside the export);
-                # F3.2: resolve in the subinterface's vsys key
-                parent_ref = self.name_ref(parent, ETH_IFACE_SCOPES,
-                                           vsys=iface.get('vsys') or '')
-                content += f"  parent = {self.hcl_value(parent_ref, '')}\n"
-                if tag_str.isdigit():
-                    content += f'  tag = {int(tag_str)}\n'
-                if iface.get('management_profile'):
-                    content += f'  interface_management_profile = {self.escape_string(iface["management_profile"])}\n'
-                self._emit_subinterface_ip(content, iface)
-                content += '}\n\n'
-                continue
-
-            # Physical interface
-            resource_name = self.declare_resource_name(
-                name, 'panos_ethernet_interface',
-                context=iface.get('template') or '', vsys=iface.get('vsys') or ''
-            )
-            content += f'resource "panos_ethernet_interface" "{resource_name}" {{\n'
-            content += self.location_block('panos_ethernet_interface', template=iface.get('template'))
-            content += f'  name = {self.escape_string(name)}\n'
-
-            if iface.get('comment'):
-                content += f'  comment = {self.escape_string(iface["comment"])}\n'
-
-            # The v2 layer3/layer2 object signals the interface mode
-            if mode == 'layer3':
-                l3: dict = {}
-                if iface.get('management_profile'):
-                    l3['interface_management_profile'] = iface['management_profile']
-                content += f'  layer3 = {self.hcl_value(l3)}\n'
-            elif mode == 'layer2':
-                content += '  layer2 = {}\n'
-            elif mode:
-                # tap, virtual-wire, ha, aggregate-group: note for manual review
-                content += f'  # NOTE: mode {mode} requires manual review (v2 block shape not modeled)\n'
-
-            if iface.get('ipv6_addresses'):
-                v6_str = ', '.join(iface['ipv6_addresses'])
-                content += f'  # NOTE: IPv6 addresses ({v6_str}) require manual configuration on the .0 subinterface\n'
-
-            content += '}\n\n'
-
-            # v2 has no ipv4 attribute on the interface: IPv4 lives on the .0 subinterface
-            if mode == 'layer3' and iface.get('ip_addresses'):
-                sub_name = f'{name}.0'
-                sub_resource = self.declare_resource_name(
-                    sub_name, 'panos_ethernet_layer3_subinterface',
-                    context=iface.get('template') or '', vsys=iface.get('vsys') or ''
-                )
-                content += f'resource "panos_ethernet_layer3_subinterface" "{sub_resource}" {{\n'
-                content += self.location_block('panos_ethernet_layer3_subinterface', template=iface.get('template'))
-                content += f'  name = {self.escape_string(sub_name)}\n'
-                # F2.6: the parent is the physical interface declared above;
-                # F3.2: resolve in the subinterface's vsys key
-                parent_ref = self.name_ref(name, ETH_IFACE_SCOPES,
-                                           vsys=iface.get('vsys') or '')
-                content += f"  parent = {self.hcl_value(parent_ref, '')}\n"
-                content += '  tag = 0\n'
-                self._emit_subinterface_ip(content, iface)
-                content += '}\n\n'
+            scope = INTERFACE_RESOURCE_TYPES.get(kind)
+            if scope:
+                content += self._emit_interface_resource(iface, scope)
 
         with open(self.output_dir / 'interfaces.tf', 'w') as f:
             f.write(content)
 
-    def _emit_subinterface_ip(self, content: str, iface: dict) -> None:
-        """Emit the ip list object for a subinterface resource (v2: list of objects)."""
+    def _emit_ethernet_interface(self, iface: dict) -> str:
+        """Emit one ethernet entry: the physical interface, or a tagged subinterface."""
+        name = iface['name']
+        mode = iface.get('mode')
+        context = iface.get('template') or ''
+        vsys = iface.get('vsys') or ''
+        scope_sub = 'panos_ethernet_layer3_subinterface'
+        parent, dot, tag_str = name.partition('.')
+
+        # Tagged L3 subinterface (ethernet1/2.10): v2 subinterface resource
+        if dot and mode == 'layer3':
+            scope = scope_sub
+            resource_name = self.declare_resource_name(name, scope,
+                                                       context=context, vsys=vsys)
+            out = f'resource "{scope}" "{resource_name}" {{\n'
+            out += self.location_block(scope, template=iface.get('template'))
+            out += f'  name = {self.escape_string(name)}\n'
+            # F2.6: the parent is an interface declared in this run
+            # (or a brown-field interface outside the export);
+            # F3.2: resolve in the subinterface's vsys key
+            parent_ref = self.name_ref(parent, IFACE_SCOPES, context=context, vsys=vsys)
+            out += f"  parent = {self.hcl_value(parent_ref, '')}\n"
+            if tag_str.isdigit():
+                out += f'  tag = {int(tag_str)}\n'
+            if iface.get('management_profile'):
+                out += f'  interface_management_profile = {self.escape_string(iface["management_profile"])}\n'
+            out += self._ip_list_line(iface)
+            out += '}\n\n'
+            return out
+
+        # Physical interface
+        scope = 'panos_ethernet_interface'
+        resource_name = self.declare_resource_name(name, scope,
+                                                   context=context, vsys=vsys)
+        out = f'resource "{scope}" "{resource_name}" {{\n'
+        out += self.location_block(scope, template=iface.get('template'))
+        out += f'  name = {self.escape_string(name)}\n'
+
+        if iface.get('comment'):
+            out += f'  comment = {self.escape_string(iface["comment"])}\n'
+
+        # The v2 mode object signals the interface mode. F3.3: virtual-wire
+        # and tap are nested blocks on panos_ethernet_interface; the provider
+        # has no separate resource type for them.
+        if mode == 'layer3':
+            l3: dict = {}
+            if iface.get('management_profile'):
+                l3['interface_management_profile'] = iface['management_profile']
+            out += f'  layer3 = {self.hcl_value(l3)}\n'
+        elif mode == 'layer2':
+            out += '  layer2 = {}\n'
+        elif mode in ('virtual-wire', 'tap'):
+            out += f'  {mode.replace("-", "_")} = {{}}\n'
+        elif mode:
+            # ha, aggregate-group: note for manual review
+            out += f'  # NOTE: mode {mode} requires manual review (v2 block shape not modeled)\n'
+
+        if iface.get('ipv6_addresses'):
+            v6_str = ', '.join(iface['ipv6_addresses'])
+            out += f'  # NOTE: IPv6 addresses ({v6_str}) require manual configuration on the .0 subinterface\n'
+
+        out += '}\n\n'
+
+        # v2 has no ipv4 attribute on the interface: IPv4 lives on the .0 subinterface
+        if mode == 'layer3' and iface.get('ip_addresses'):
+            sub_name = f'{name}.0'
+            sub_resource = self.declare_resource_name(sub_name, scope_sub, context=context, vsys=vsys)
+            out += f'resource "{scope_sub}" "{sub_resource}" {{\n'
+            out += self.location_block(scope_sub, template=iface.get('template'))
+            out += f'  name = {self.escape_string(sub_name)}\n'
+            # F2.6: the parent is the physical interface declared above;
+            # F3.2: resolve in the subinterface's vsys key
+            parent_ref = self.name_ref(name, IFACE_SCOPES, context=context, vsys=vsys)
+            out += f"  parent = {self.hcl_value(parent_ref, '')}\n"
+            out += '  tag = 0\n'
+            out += self._ip_list_line(iface)
+            out += '}\n\n'
+
+        return out
+
+    def _emit_interface_resource(self, iface: dict, scope: str) -> str:
+        """Emit one interface resource for a non-ethernet kind (v2 nested shapes)."""
+        name = iface['name']
+        context = iface.get('template') or ''
+        vsys = iface.get('vsys') or ''
+        # An aggregate entry whose name already carries a unit (ae1.101) is a
+        # layer-3 subinterface of the aggregate group; the group entry itself
+        # has no ip, parent, or tag in the schema.
+        if iface['type'] == 'aggregate' and '.' in name:
+            scope = 'panos_aggregate_layer3_subinterface'
+        resource_name = self.declare_resource_name(name, scope,
+                                                   context=context, vsys=vsys)
+        out = f'resource "{scope}" "{resource_name}" {{\n'
+        out += self.location_block(scope, template=iface.get('template'))
+        out += f'  name = {self.escape_string(name)}\n'
+        if iface.get('comment'):
+            out += f'  comment = {self.escape_string(iface["comment"])}\n'
+        if scope == 'panos_aggregate_interface':
+            mode = iface.get('mode')
+            if mode:
+                out += f'  {mode} = {{}}\n'
+            out += '}\n\n'
+            return out
+        parent = iface.get('parent')
+        if parent:
+            parent_ref = self.name_ref(parent, IFACE_SCOPES, context=context, vsys=vsys)
+            out += f"  parent = {self.hcl_value(parent_ref, '')}\n"
+        # Only the layer-3 subinterface types carry a tag in the schema.
+        tag = iface.get('tag')
+        if tag and str(tag).isdigit() and scope.endswith('subinterface'):
+            out += f'  tag = {int(tag)}\n'
+        out += self._ip_list_line(iface)
+        # The schema shape for these kinds: ip is a list of objects, ipv6 is
+        # a single nested block with an address list.
+        if iface.get('ipv6_addresses'):
+            out += f'  ipv6 = {{ address = {self.hcl_value(iface["ipv6_addresses"])} }}\n'
+        if iface.get('management_profile'):
+            out += f'  interface_management_profile = {self.escape_string(iface["management_profile"])}\n'
+        out += '}\n\n'
+        return out
+
+    def _ip_list_line(self, iface: dict) -> str:
+        """The ip attribute line for an interface resource (v2: list of objects)."""
         ips = iface.get('ip_addresses') or []
-        if ips:
-            content += f'  ip = {self.hcl_value([{"name": ip} for ip in ips])}\n'
+        if not ips:
+            return ''
+        return f'  ip = {self.hcl_value([{"name": ip} for ip in ips])}\n'
 
     def generate_interface_report(self, interfaces: list[dict]):
         """Generate a text report of interfaces and their IP addresses"""
@@ -4263,7 +4391,7 @@ def main():
         # Network
         # F2.6: interfaces emit first so zone/VR/interface .name lookups
         # resolve to declared resources
-        tf_gen.generate_ethernet_interfaces(interfaces)
+        tf_gen.generate_interfaces(interfaces)
         tf_gen.generate_zones(zones)
         tf_gen.generate_virtual_routers(all_routers)  # Handles both virtual & logical routers
 

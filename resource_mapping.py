@@ -25,6 +25,18 @@ Verified against provider v2.0.14 (128 resource types) with
 `terraform providers schema -json`.
 """
 
+# F3.3: parsed interface kind -> provider resource type. The generator uses
+# this table to pick the resource type for each interface entry.
+INTERFACE_RESOURCE_TYPES = {
+    'ethernet': 'panos_ethernet_interface',
+    'ethernet-subinterface': 'panos_ethernet_layer3_subinterface',
+    'vlan': 'panos_vlan_interface',
+    'loopback': 'panos_loopback_interface',
+    'tunnel': 'panos_tunnel_interface',
+    'aggregate': 'panos_aggregate_interface',
+    'aggregate-subinterface': 'panos_aggregate_layer3_subinterface',
+}
+
 # Provider v2 resource types emitted by the generator.
 EMITTED_TYPES = frozenset({
     # Objects (device-group scoped)
@@ -52,6 +64,13 @@ EMITTED_TYPES = frozenset({
     'panos_monitor_profile',
     'panos_ethernet_interface',
     'panos_ethernet_layer3_subinterface',
+    # F3.3: the other interface kinds. The provider has no virtual-wire or
+    # tap resource type; those are nested blocks on panos_ethernet_interface.
+    'panos_vlan_interface',
+    'panos_loopback_interface',
+    'panos_tunnel_interface',
+    'panos_aggregate_interface',
+    'panos_aggregate_layer3_subinterface',
     'panos_virtual_router',
     'panos_virtual_router_static_route_ipv4',
     'panos_zone',
@@ -253,6 +272,41 @@ COVERAGE_MATRIX = (
         'xml_name': 'ethernet1/1',
         'emitted_name': 'ethernet1/1.0',
         'fixture': 'interfaces_ethernet.xml',
+        'output_file': 'interfaces.tf',
+    }, {
+        'resource': 'panos_vlan_interface',
+        'xml_element': 'vlan/units/entry',
+        'xml_name': '10',
+        'emitted_name': 'vlan.10',
+        'fixture': 'interfaces_other.xml',
+        'output_file': 'interfaces.tf',
+    }, {
+        'resource': 'panos_loopback_interface',
+        'xml_element': 'loopback/units/entry',
+        'xml_name': '1',
+        'emitted_name': 'loopback.1',
+        'fixture': 'interfaces_other.xml',
+        'output_file': 'interfaces.tf',
+    }, {
+        'resource': 'panos_tunnel_interface',
+        'xml_element': 'tunnel/units/entry',
+        'xml_name': '1',
+        'emitted_name': 'tunnel.1',
+        'fixture': 'interfaces_other.xml',
+        'output_file': 'interfaces.tf',
+    }, {
+        'resource': 'panos_aggregate_interface',
+        'xml_element': 'aggregate-ethernet/entry',
+        'xml_name': 'ae1',
+        'emitted_name': 'ae1',
+        'fixture': 'interfaces_other.xml',
+        'output_file': 'interfaces.tf',
+    }, {
+        'resource': 'panos_aggregate_layer3_subinterface',
+        'xml_element': 'aggregate-ethernet/entry',
+        'xml_name': 'ae1.101',
+        'emitted_name': 'ae1.101',
+        'fixture': 'interfaces_other.xml',
         'output_file': 'interfaces.tf',
     }, {
         'resource': 'panos_virtual_router',

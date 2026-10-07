@@ -42,7 +42,9 @@ F3.1 (keyed data model) landed: every parse method visits each entry once and re
 F3.2 (device-group + vsys identity at emit) landed: the naming digest and the registry key cover (scope, context, vsys, name), so same-named objects in different device groups or virtual systems get distinct names without the order-dependent `_2` counter; `name_ref` resolves in the referrer's (context, vsys) pair; policy chains key on (device group, vsys), so a rule never pivots on a rule in another vsys. Both goldens regenerated (digest-only diff).
 
 - [x] **F3.2 Preserve device-group association** — COMPLETE. Carry the source device group from parse to emit. Same-named objects in different device groups both survive.
-- [ ] **F3.3 Full interface types** — VLAN, loopback, subinterfaces, virtual-wire, TAP, and aggregate. Not only physical ethernet.
+F3.3 (full interface types) landed: every interface kind the parser finds now emits its schema-verified v2 resource (`panos_vlan_interface`, `panos_loopback_interface`, `panos_tunnel_interface`, `panos_aggregate_interface`, `panos_aggregate_layer3_subinterface`); ethernet subinterface units and virtual-wire units parse as individual entries; virtual-wire and TAP emit as nested blocks on `panos_ethernet_interface` (the provider has no resource type for them); subinterface `parent` resolves to the declared parent resource; the `ip` list bug in the subinterface emitter is fixed.
+
+- [x] **F3.3 Full interface types** — COMPLETE. VLAN, loopback, subinterfaces, virtual-wire, TAP, and aggregate. Not only physical ethernet.
 - [ ] **F3.4 Full object types** — IPv6, ip-wildcard, external, and location addresses. Multi-port services. Combined tcp+udp services.
 - [ ] **F3.5 Multi-vsys** — Represent vsys in the data model and in `location`.
 - [ ] **F3.6 Multi-device, template-aware parsing** — Use explicit device-group → template association. Replace substring matching.
@@ -70,7 +72,7 @@ Strategy: the conversion proves what it did. Input side: a report classifies eve
 ## Sequencing
 
 1. **Epic 1 first.** It is the gate. No feature lands without tests.
-2. **Epic 3 is next.** It builds on the Epic 2 emitters and the shared fixture corpus. F3.1 (keyed data model) and F3.2 (device-group + vsys identity at emit) landed; the next task is F3.3 (full interface types).
+2. **Epic 3 is next.** It builds on the Epic 2 emitters and the shared fixture corpus. F3.1 (keyed data model), F3.2 (device-group + vsys identity at emit), and F3.3 (full interface types) landed; the next task is F3.4 (full object types).
 3. **Epic 4 interleaves.** F4.1 (sanity gate) is independent of the parser and its dead-variable check reuses the F2.10 test, so it can land anytime after Epic 2. F4.2 (container table, line tracking) may land during Epic 3. F4.3 and F4.4 land after F3.1, so the consumed marks and the property matrix key on the keyed data model.
 
 Rationale: Epic 1 makes Epics 2 and 3 safe to iterate on. The fixture corpus (F1.6) is the shared test asset for all three epics.
