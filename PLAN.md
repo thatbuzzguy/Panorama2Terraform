@@ -45,7 +45,8 @@ F3.2 (device-group + vsys identity at emit) landed: the naming digest and the re
 F3.3 (full interface types) landed: every interface kind the parser finds now emits its schema-verified v2 resource (`panos_vlan_interface`, `panos_loopback_interface`, `panos_tunnel_interface`, `panos_aggregate_interface`, `panos_aggregate_layer3_subinterface`); ethernet subinterface units and virtual-wire units parse as individual entries; virtual-wire and TAP emit as nested blocks on `panos_ethernet_interface` (the provider has no resource type for them); subinterface `parent` resolves to the declared parent resource; the `ip` list bug in the subinterface emitter is fixed.
 
 - [x] **F3.3 Full interface types** — COMPLETE. VLAN, loopback, subinterfaces, virtual-wire, TAP, and aggregate. Not only physical ethernet.
-- [ ] **F3.4 Full object types** — IPv6, ip-wildcard, external, and location addresses. Multi-port services. Combined tcp+udp services.
+- [x] **F3.4 Full object types** — COMPLETE. IPv6, ip-wildcard, multi-port and dual-protocol services.
+F3.4 (full object types) landed: the address parser reads every value element the v2.0.14 schema models (`ip-netmask`, `ip-range`, `ip-wildcard`, `fqdn`, `ipv6`, `ipv6-range`) plus `tag`, `description` and `disable-override`; an entry with no v2 attribute (location type, external type) is captured generically and reported instead of emitted as an empty resource. The EDL parser and emitter cover all seven v2 sub-shapes and the fields each one models (`exception_list`, `expand_domain` on domain only, `certificate_profile`, the five recurring keys), and never capture `auth` credentials. Services keep both protocol legs in the parse model with `source_port`, the `override` timeouts and tags; `panos_service` accepts one protocol leg (verified with `terraform validate`), so the tcp leg emits and the dropped leg is a NOTE plus a report entry.
 - [ ] **F3.5 Multi-vsys** — Represent vsys in the data model and in `location`.
 - [ ] **F3.6 Multi-device, template-aware parsing** — Use explicit device-group → template association. Replace substring matching.
 - [ ] **F3.7 Rewrite `split_device_groups.py`** — Iterate entries and compare `get('name')`. No f-string XPath. Safe shared-section merge. Covered by F1.2 tests.
@@ -72,7 +73,7 @@ Strategy: the conversion proves what it did. Input side: a report classifies eve
 ## Sequencing
 
 1. **Epic 1 first.** It is the gate. No feature lands without tests.
-2. **Epic 3 is next.** It builds on the Epic 2 emitters and the shared fixture corpus. F3.1 (keyed data model), F3.2 (device-group + vsys identity at emit), and F3.3 (full interface types) landed; the next task is F3.4 (full object types).
+2. **Epic 3 is next.** It builds on the Epic 2 emitters and the shared fixture corpus. F3.1 (keyed data model), F3.2 (device-group + vsys identity at emit), and F3.3 (full interface types) landed; the next task is F3.5 (multi-vsys).
 3. **Epic 4 interleaves.** F4.1 (sanity gate) is independent of the parser and its dead-variable check reuses the F2.10 test, so it can land anytime after Epic 2. F4.2 (container table, line tracking) may land during Epic 3. F4.3 and F4.4 land after F3.1, so the consumed marks and the property matrix key on the keyed data model.
 
 Rationale: Epic 1 makes Epics 2 and 3 safe to iterate on. The fixture corpus (F1.6) is the shared test asset for all three epics.

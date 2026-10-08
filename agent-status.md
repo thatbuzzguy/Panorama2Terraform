@@ -1,20 +1,86 @@
 # Agent Status
 
 ## Current position
-**F3.3 (full interface types) is committed** (`5599605`, this session). `acceptance.md`
-holds the F3.3 criteria — overwrite it before the next task. **Next task:
-F3.4 Full object types** (Epic 3): IPv6, ip-wildcard, external, and
-location address types; multi-port services; combined tcp+udp services.
+**F3.4 (full object types) is committed** (this session). `acceptance.md`
+holds the F3.4 criteria — overwrite it before the next task. **Next task:
+F3.5 Multi-vsys** (Epic 3): represent vsys in the data model and in
+`location`.
 
-F3.3 state: `generate_interfaces` dispatches by parser kind through
-`INTERFACE_RESOURCE_TYPES`; `IFACE_SCOPES` covers every interface scope so
-subinterface parents resolve; every interface kind is template-scoped in
-`_TEMPLATE_SCOPED_TYPES`. Gate: ruff clean, pytest 198 passed, terraform
-validate green on both golden sets.
+F3.4 state: `ADDRESS_VALUE_ELEMENTS`, `EDL_TYPE_ELEMENTS`,
+`EDL_RECURRING_ELEMENTS` and `EDL_FIELD_ELEMENTS` (parser) plus
+`EDL_SUBSHAPE_FIELDS` and `SERVICE_PROTOCOL_ORDER` (generator) hold the
+schema-verified shapes. An address entry with no v2 attribute carries
+`report_only` and lands in `MANUAL_SETUP_REPORT.txt`; a dual-protocol
+service emits its tcp leg and reports the dropped leg. Gate: ruff clean,
+pytest 345 passed, terraform validate green on both golden sets.
 
 ## Session log
 
-### F3.3 — Full interface types (this session)
+### F3.4 — Full object types (this session)
+- Direction: Epic 3, lowest-numbered unfinished feature. `acceptance.md`
+  rewritten for F3.4 first (11 criteria, each schema fact verified against
+  `terraform providers schema -json` for 2.0.14).
+- Schema facts that changed the design (all confirmed by
+  `terraform validate`, not by reading the schema alone):
+  - `panos_service.protocol` *declares* `tcp` and `udp` but accepts **one
+    leg only**: a config with both fails with "Invalid Attribute
+    Combination … one (and only one) of". Dual-protocol objects therefore
+    cannot be emitted whole.
+  - `disable_override` is a **string** taking `"yes"`/`"no"` on
+    `panos_address`, `panos_service` and `panos_external_dynamic_list`;
+    `disable_override = true` is rejected. `expand_domain` is a bool.
+  - The EDL sub-shape field sets differ in three tiers: `predefined_ip`/
+    `predefined_url` take `url`/`description`/`exception_list` only;
+    `imei`/`imsi`/`ip`/`url` add `certificate_profile` and `recurring`;
+    `domain` alone adds `expand_domain`.
+  - `panos_address` has no attribute for a location-type or external-type
+    entry (no country/region/continent/container/external).
+- Parser: `parse_address_objects` walks entry children once and maps every
+  value element the schema models (`ip-netmask`, `ip-range`,
+  `ip-wildcard`, `fqdn`, `ipv6`, `ipv6-range`) plus `tag`, `description`
+  and `disable-override`; anything else is captured in `other` and marks
+  the entry `report_only`. `parse_service_objects` returns a `protocols`
+  dict (both legs), each with `destination_port`, `source_port` and the
+  `override/yes/<timeout>` numbers, plus `tags`. `parse_external_lists`
+  returns `type` + a `fields` dict for all seven sub-shapes; `recurring`
+  keeps its per-key block (`weekly = { at, day_of_week }`), `expand_domain`
+  becomes a bool, and `auth` is never captured (credentials).
+- Generator: `generate_address_objects` skips `report_only` entries and
+  emits `disable_override` as the `"yes"`/`"no"` string.
+  `primary_service_protocol` / `dropped_service_protocols` /
+  `protocol_summary` pick the emitted leg (tcp wins), leave the dropped leg
+  as a `# NOTE:` comment, and describe it in the report.
+  `generate_external_lists` emits only the fields the chosen sub-shape
+  models (`EDL_SUBSHAPE_FIELDS`); a field it cannot model stays a NOTE, so
+  the HCL stays valid. Two new report sections: "Address Objects With No v2
+  Attribute" and "Dual-Protocol Service Objects".
+- Tests: `test_parse_objects.py` (address types, disable_override,
+  report-only classification for location and external, EDL sub-shapes and
+  fields, service protocols/tags); `test_edge_cases.py` gains three
+  emit-side tests (address emit coverage + report, one protocol leg with
+  source_port/override/tags, EDL fields a sub-shape lacks) and the two
+  service parse tests are rewritten to the new contract; the
+  `test_real_or_report.py` kitchen-sink report test asserts both new
+  sections.
+- Fixtures: `address_objects.xml` gains ip-wildcard, disable-override,
+  location and external entries; `edge_multi_port_services.xml` gains
+  source-port, override timeouts and tags; `external_lists.xml` gains a
+  domain entry (exception list, expand-domain, certificate profile,
+  weekly), an ip entry carrying domain-only expand-domain, and a
+  predefined-url entry; `kitchen_sink.xml` gains the address, service and
+  EDL shapes so the goldens and the validate gate cover them.
+- Goldens: kitchen-sink `address_objects.tf` (+ip_wildcard,
+  +disable_override), `service_objects.tf` (+tags, +dual-protocol with one
+  leg), `external_lists.tf` (+domain, +predefined_url). Sample goldens
+  unchanged.
+- Docs: `backlog.md` records the one-leg provider constraint, the EDL
+  `auth` decision, and the remaining service `disable-override` gap; the
+  two closed F1.2 extraction gaps are removed.
+- Gate: ruff clean. pytest 345 passed. terraform validate green on both
+  golden sets (the gate caught the dual-protocol and `disable_override`
+  bool mistakes during this task).
+
+### F3.3 — Full interface types (previous session)
 - Schema facts (v2.0.14, verified against `/tmp/schema_2014.json`, no type
   from memory): the interface resource types are `panos_ethernet_interface`,
   `panos_ethernet_layer3_subinterface`, `panos_vlan_interface`,

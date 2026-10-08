@@ -33,3 +33,25 @@ resource "panos_address" "external_api_d1c4d1ef" {
   fqdn = "api.example.com"
 }
 
+resource "panos_address" "web_wildcard_8892df2b" {
+  location = {
+    device_group = {
+      name = "Shared"
+    }
+  }
+  name = "Web-Wildcard"
+  description = "Wildcard subnet"
+  ip_wildcard = "10.1.3.*"
+}
+
+resource "panos_address" "masked_host_c44ef4c5" {
+  location = {
+    device_group = {
+      name = "Shared"
+    }
+  }
+  name = "Masked-Host"
+  disable_override = "yes"
+  ip_netmask = "10.1.4.5/32"
+}
+

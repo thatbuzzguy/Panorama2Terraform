@@ -8,11 +8,23 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 - No input size limit on XML files. DTD rejection (F1.7) removes the entity-expansion DoS, but a multi-GB well-formed file still allocates memory. A size limit is a product decision (pair with F3.8).
 - Parser extraction gaps found by F1.2 unit tests (each silently drops data; fix lands with the Epic 2/3 rewrites):
   - Application filter `description` is not extracted.
-  - Service object tags are not extracted.
   - Schedule `description` is not extracted.
   - Security rule profile group references are not extracted.
   - NAT rule `service` in member-list form is captured as whitespace text; only text form works.
-  - Dual-protocol (tcp+udp) service objects keep tcp only; the udp definition is dropped (pinned by F1.6 edge fixture).
+  - Service object `disable-override` is not extracted (the address parser
+    extracts it since F3.4; the service parser does not).
+- Service objects with both tcp and udp legs cannot be emitted whole. The v2
+  `panos_service` schema declares `protocol.tcp` and `protocol.udp`, but the
+  provider accepts one leg only: a config with both fails `terraform
+  validate` with "Invalid Attribute Combination" (verified against 2.0.14,
+  F3.4). F3.4 decision: emit the tcp leg (udp when tcp is absent), keep the
+  dropped leg as a `# NOTE:` comment and a `MANUAL_SETUP_REPORT.txt` entry.
+  A future release could offer a two-object split as an opt-in.
+- External dynamic list `auth` (username/password) is not parsed. Writing
+  credential material into generated HCL is not acceptable (F3.4). An EDL
+  that authenticates to its fetch URL needs the credentials configured by
+  hand; the converter cannot express them safely. Revisit only with an
+  explicit secret-manager design (e.g. a `var.` reference, never a literal).
 - Policy rules do not record which rulebase (pre, post, or shared) they came from. F2.5 chains are ordered per device group across all rulebases, which matches PAN-OS evaluation order for a single rulebase but mixes rulebases when a device group has both pre- and post-rules. Tracking the rulebase per rule (and chaining within one rulebase) lands after F3.1.
 - Security profile bodies are not parsed (antivirus, anti-spyware, vulnerability, URL filtering, file blocking, WildFire, zone protection). The v2 provider has resources for them, but emitting empty profile objects would silently create misconfigured resources. F2.9 decision (2026-10-04): the names and descriptions go to `MANUAL_SETUP_REPORT.txt` with the reason; real emission waits for the Epic 3 profile parsing.
 - Schedules: `panos_schedule` exists in v2, but only entry names are parsed (day/time ranges not captured) and v2.0.14 has no monthly schedule support. F2.9 decision (2026-10-04): report entry; revisit when schedule parsing lands.
@@ -33,6 +45,13 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 
 ## Notes on Already-Completed Work
 
+- F3.4 (full object types) closed two F1.2 extraction gaps: service object
+  tags are extracted and emitted, and dual-protocol services keep both legs
+  in the parse model (the emit limit is a provider constraint, recorded
+  above). Address `ip-wildcard`, `disable-override`, EDL `exception_list`,
+  `expand_domain`, `certificate_profile` and the recurring schedules are
+  parsed and emitted; address types with no v2 attribute (location, external)
+  are report-only.
 - F3.8 (safe XML input) is implemented: both scripts reject DTDs before parsing (F1.7). If F3.8 is promoted, only `defusedxml` or the size limit remains.
 - F2.4 (emitter rewrite) also fixed two F1.6 extraction gaps: dynamic address group filters are serialized from the structured `<filter>` XML, and IPv6 address objects (`<ipv6>`, `<ipv6-range>`) are parsed and emitted.
 

@@ -37,8 +37,8 @@ the v2 attribute shapes that differ from the v1 output.
 | `panos_administrative_tag` | identity | colors are numeric: `color1`..`colorN` (PAN-OS color words map in GUI order: red, orange, yellow, green, blue, purple, gray) |
 | `panos_application_group` | identity | `static` member list |
 | `panos_custom_url_category` | identity | `static` member list |
-| `panos_external_dynamic_list` | `panos_external_list` | `type = { <type> = { url, recurring = { <freq> = {} }, description } }` |
-| `panos_service` | `panos_service_object` | flat `protocol`+`destination_port` becomes `protocol = { tcp = { destination_port = "80" } }` |
+| `panos_external_dynamic_list` | `panos_external_list` | `type = { <type> = { url, exception_list, certificate_profile, recurring = { <freq> = { ... } }, description } }`; `expand_domain` exists on the `domain` sub-shape only, and the `predefined_*` sub-shapes take `url`/`exception_list`/`description` only |
+| `panos_service` | `panos_service_object` | flat `protocol`+`destination_port` becomes `protocol = { tcp = { destination_port, source_port, override = { ... } } }`; the provider accepts **one** protocol leg, so a tcp+udp object emits tcp and reports udp |
 | `panos_service_group` | identity | `static` member list |
 
 ### Policy rules (one resource per rule, chained per device group)

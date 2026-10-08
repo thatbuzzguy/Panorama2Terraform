@@ -19,7 +19,11 @@ is not emitted:
 - schedules -> report (panos_schedule exists, but only entry names are
   parsed and v2.0.14 has no monthly schedule support);
 - log forwarding profiles -> report (v2 resource exists, body not parsed);
-- zone protection profiles -> report (v2 resource exists, body not parsed).
+- zone protection profiles -> report (v2 resource exists, body not parsed);
+- location-type address objects -> report (F3.4: panos_address has no
+  attribute for country/region/continent/container content);
+- the dropped leg of a dual-protocol service -> report (F3.4: panos_service
+  accepts one protocol leg, a config with both fails terraform validate).
 """
 
 from pathlib import Path
@@ -181,6 +185,19 @@ def test_report_only_areas_go_to_manual_setup_report(tmp_path):
     assert '--- Zone Protection Profiles (v2 resource exists, not emitted) ---' in report
     assert 'ZPP-Default' in report
     assert 'panos_zone_protection_profile' in report
+
+    # F3.4: location-type address object, no v2 attribute exists for it
+    assert '--- Address Objects With No v2 Attribute (v2 resource exists, not emitted) ---' in report
+    assert 'Country-US' in report
+    assert 'country=US' in report
+    assert 'panos_address' in report
+
+    # F3.4: dual-protocol service, the second leg cannot be emitted
+    assert '--- Dual-Protocol Service Objects (v2 resource exists, one leg emitted) ---' in report
+    assert 'Dual-Protocol' in report
+    assert 'udp leg dropped, tcp emitted' in report
+    assert 'destination_port=53' in report
+    assert 'panos_service' in report
 
     # The comment-only .tf files are no longer written
     for name in REMOVED_TF_FILES:

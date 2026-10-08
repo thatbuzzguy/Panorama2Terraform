@@ -17,6 +17,25 @@
         <fqdn>api.example.com</fqdn>
         <description>External API</description>
       </entry>
+      <!-- F3.4: ip-wildcard is a v2-modeled address type -->
+      <entry name="Wildcard-Net" type="ip-wildcard">
+        <ip-wildcard>10.2.3.*</ip-wildcard>
+      </entry>
+      <!-- F3.4: disable-override is a v2 bool attribute -->
+      <entry name="Masked-Host">
+        <ip-netmask>10.2.4.5/32</ip-netmask>
+        <disable-override>yes</disable-override>
+      </entry>
+      <!-- F3.4: external (dynamic) type has no v2 attribute; report-only -->
+      <entry name="Ext-Dynamic" type="external">
+        <external>dynamic</external>
+      </entry>
+      <!-- F3.4: location type has no v2 attribute; report-only -->
+      <entry name="Country-US" type="location">
+        <country>US</country>
+        <region>North America</region>
+        <description>Country address object</description>
+      </entry>
       <entry name="Reference-Only">
         <id>4815</id>
       </entry>

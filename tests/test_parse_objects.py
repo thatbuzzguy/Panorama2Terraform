@@ -64,14 +64,26 @@ def test_parse_application_filters(make_parser):
 
 
 def test_parse_external_lists(make_parser):
+    """F3.4: full v2 sub-shape set and fields are captured."""
     p = _parser(make_parser, "external_lists.xml")
-    lists = p.parse_external_lists()
-    assert len(lists) == 1
-    assert lists[0]["name"] == "threat-ips"
-    assert lists[0]["type"] == "ip"
-    assert lists[0]["url"] == "https://threat.example.com/list.txt"
-    assert lists[0]["recurring"] == "hourly"
-    assert lists[0]["description"] == "Threat IP list"
+    by_name = {entry["name"]: entry for entry in p.parse_external_lists()}
+
+    ip = by_name["threat-ips"]
+    assert ip["type"] == "ip"
+    assert ip["fields"]["url"] == "https://threat.example.com/list.txt"
+    assert ip["fields"]["recurring"] == {"hourly": {}}
+    assert ip["fields"]["description"] == "Threat IP list"
+
+    domain = by_name["bad-domains"]
+    assert domain["type"] == "domain"
+    assert domain["fields"]["exception_list"] == ["example.com"]
+    assert domain["fields"]["expand_domain"] is True
+    assert domain["fields"]["certificate_profile"] == "default"
+    assert domain["fields"]["recurring"] == {"weekly": {"at": "6", "day_of_week": "monday"}}
+
+    predefined = by_name["panw-url-list"]
+    assert predefined["type"] == "predefined_url"
+    assert predefined["fields"]["recurring"] == {"five_minute": {}}
 
 
 def test_parse_address_objects(make_parser):
@@ -81,7 +93,7 @@ def test_parse_address_objects(make_parser):
 
     # Reference-only entries (id only, no address content) are skipped.
     assert "Reference-Only" not in by_name
-    assert len(addrs) == 3
+    assert len(addrs) == 7
 
     web = by_name["Web-Server-1"]
     assert web["type"] == "ip-netmask"
@@ -94,6 +106,23 @@ def test_parse_address_objects(make_parser):
 
     assert by_name["External-API"]["type"] == "fqdn"
     assert by_name["External-API"]["value"] == "api.example.com"
+
+    # F3.4: ip-wildcard is a v2-modeled address type
+    assert by_name["Wildcard-Net"]["type"] == "ip-wildcard"
+    assert by_name["Wildcard-Net"]["value"] == "10.2.3.*"
+
+    # F3.4: disable-override is captured (v2 models it as a bool)
+    assert by_name["Masked-Host"]["disable_override"] == "yes"
+
+    # F3.4: external (dynamic) type has no v2 attribute, so it is report-only
+    ext = by_name["Ext-Dynamic"]
+    assert ext["report_only"] is True
+    assert ext["other"] == {"external": "dynamic"}
+
+    # F3.4: location type has no v2 attribute, so it is report-only
+    loc = by_name["Country-US"]
+    assert loc["report_only"] is True
+    assert loc["other"] == {"country": "US", "region": "North America"}
 
 
 def test_parse_address_objects_device_group_override(make_parser):
@@ -135,12 +164,11 @@ def test_parse_service_objects(make_parser):
     services = p.parse_service_objects()
     by_name = {s["name"]: s for s in services}
 
-    assert by_name["TCP-8080"]["protocol"] == "tcp"
-    assert by_name["TCP-8080"]["port"] == "8080"
+    assert by_name["TCP-8080"]["protocols"]["tcp"]["destination_port"] == "8080"
     assert by_name["TCP-8080"]["description"] == "Custom HTTP port"
+    assert by_name["TCP-8080"]["tags"] == ["web"]
 
-    assert by_name["UDP-514"]["protocol"] == "udp"
-    assert by_name["UDP-514"]["port"] == "514"
+    assert by_name["UDP-514"]["protocols"]["udp"]["destination_port"] == "514"
 
 
 def test_parse_service_groups(make_parser):

@@ -58,6 +58,49 @@ from resource_mapping import INTERFACE_RESOURCE_TYPES
 class PanoramaParser:
     """Parse Palo Alto Panorama XML configuration"""
 
+    # Address entry elements that the v2.0.14 panos_address schema models as a
+    # value attribute (XML element -> parser type). Verified against the live
+    # schema. The provider stores IPv6 values in ip_netmask.
+    ADDRESS_VALUE_ELEMENTS = {
+        'ip-netmask': 'ip-netmask',
+        'ip-range': 'ip-range',
+        'ip-wildcard': 'ip-wildcard',
+        'fqdn': 'fqdn',
+        'ipv6': 'ipv6',
+        'ipv6-range': 'ipv6-range',
+    }
+
+    # External dynamic list type sub-shapes (XML element -> v2 attribute).
+    # Verified against the v2.0.14 schema for panos_external_dynamic_list.
+    EDL_TYPE_ELEMENTS = {
+        'domain': 'domain',
+        'imei': 'imei',
+        'imsi': 'imsi',
+        'ip': 'ip',
+        'predefined-ip': 'predefined_ip',
+        'predefined-url': 'predefined_url',
+        'url': 'url',
+    }
+
+    # Recurring schedule keys inside an EDL sub-shape (XML element -> v2 name).
+    EDL_RECURRING_ELEMENTS = {
+        'daily': 'daily',
+        'five-minute': 'five_minute',
+        'hourly': 'hourly',
+        'monthly': 'monthly',
+        'weekly': 'weekly',
+    }
+
+    # Fields inside an EDL sub-shape that the v2 schema models. The auth block
+    # is deliberately absent: it carries credential material and the converter
+    # does not write secrets into generated HCL.
+    EDL_FIELD_ELEMENTS = {
+        'url': 'url',
+        'description': 'description',
+        'expand-domain': 'expand_domain',
+        'certificate-profile': 'certificate_profile',
+    }
+
     def __init__(self, xml_file: str):
         self.xml_file = xml_file
         # Panorama exports never contain a DTD. Reject one before parsing:
@@ -277,6 +320,12 @@ class PanoramaParser:
 
         F3.1: one object per XML entry, keyed by
         (device group, vsys, type, name); no name dedup.
+
+        F3.4: the full v2.0.14 sub-shape set (domain, imei, imsi, ip,
+        predefined_ip, predefined_url, url) and every field the schema
+        models inside the sub-shape. The auth block is not captured: it
+        carries credential material, and the converter does not write
+        secrets into generated HCL (recorded in backlog.md).
         """
         ext_lists = []
 
@@ -285,51 +334,60 @@ class PanoramaParser:
             if not name:
                 continue
 
-            # Determine type
-            list_type = None
-            url = None
-            recurring = None
-
-            type_elem = ext_list.find('type')
-            if type_elem is not None:
-                if type_elem.find('ip') is not None:
-                    list_type = 'ip'
-                    url = self._get_text(type_elem, 'ip/url')
-                    # Check for recurring schedule
-                    if type_elem.find('.//recurring/hourly') is not None:
-                        recurring = 'hourly'
-                    elif type_elem.find('.//recurring/five-minute') is not None:
-                        recurring = 'five-minute'
-                    elif type_elem.find('.//recurring/daily') is not None:
-                        recurring = 'daily'
-                elif type_elem.find('domain') is not None:
-                    list_type = 'domain'
-                    url = self._get_text(type_elem, 'domain/url')
-                    if type_elem.find('.//recurring/hourly') is not None:
-                        recurring = 'hourly'
-                    elif type_elem.find('.//recurring/five-minute') is not None:
-                        recurring = 'five-minute'
-                    elif type_elem.find('.//recurring/daily') is not None:
-                        recurring = 'daily'
-                elif type_elem.find('url') is not None:
-                    list_type = 'url'
-                    url = self._get_text(type_elem, 'url/url')
-                    if type_elem.find('.//recurring/hourly') is not None:
-                        recurring = 'hourly'
-                    elif type_elem.find('.//recurring/five-minute') is not None:
-                        recurring = 'five-minute'
-                    elif type_elem.find('.//recurring/daily') is not None:
-                        recurring = 'daily'
-
-            ext_lists.append({
+            entry = {
                 'name': name,
                 'device_group': self.device_group_of(ext_list),
                 'vsys': self.vsys_of(ext_list),
-                'type': list_type,
-                'url': url,
-                'recurring': recurring,
-                'description': self._get_text(ext_list, 'description')
-            })
+                'type': '',
+                # Fields captured inside the type sub-shape, keyed by the v2
+                # attribute name (url, description, exception_list, recurring,
+                # expand_domain, certificate_profile)
+                'fields': {},
+            }
+
+            type_elem = ext_list.find('type')
+            if type_elem is not None:
+                for sub in type_elem:
+                    if sub.tag not in self.EDL_TYPE_ELEMENTS:
+                        continue
+                    entry['type'] = self.EDL_TYPE_ELEMENTS[sub.tag]
+                    for field in sub:
+                        if field.tag == 'exception-list':
+                            values = [m.text.strip() for m in field.findall('member')
+                                      if m.text and m.text.strip()]
+                            if values:
+                                entry['fields']['exception_list'] = values
+                        elif field.tag == 'recurring':
+                            for sched in field:
+                                if sched.tag not in self.EDL_RECURRING_ELEMENTS:
+                                    continue
+                                # A recurring key may be a bare flag (hourly,
+                                # five-minute) or carry values (at, day_of_week)
+                                block = {}
+                                for value in sched:
+                                    if value.text and value.text.strip():
+                                        block[value.tag.replace('-', '_')] = value.text.strip()
+                                entry['fields']['recurring'] = {
+                                    self.EDL_RECURRING_ELEMENTS[sched.tag]: block
+                                }
+                        elif field.tag in self.EDL_FIELD_ELEMENTS:
+                            text = (field.text or '').strip()
+                            if text:
+                                key = self.EDL_FIELD_ELEMENTS[field.tag]
+                                if key == 'expand_domain':
+                                    # v2 models expand_domain as a bool
+                                    entry['fields'][key] = text.lower() == 'yes'
+                                else:
+                                    entry['fields'][key] = text
+
+            # The entry-level description is the fallback for the sub-shape
+            # description attribute (the schema exposes only the sub-shape one).
+            if 'description' not in entry['fields']:
+                desc = self._get_text(ext_list, 'description')
+                if desc:
+                    entry['fields']['description'] = desc.strip()
+
+            ext_lists.append(entry)
 
         return ext_lists
 
@@ -342,6 +400,12 @@ class PanoramaParser:
 
         An entry that carries only <id> is a reference pointer to a shared
         definition and has no content of its own, so it is skipped.
+
+        F3.4: every value element the v2 schema models is read, including
+        ip-wildcard. An entry with content but no modeled value element (a
+        location-type address: country/region/continent/container) cannot be
+        emitted as a valid panos_address, so its fields are captured
+        generically and the entry is marked report_only.
         """
         addresses = []
 
@@ -358,50 +422,37 @@ class PanoramaParser:
                 'name': name,
                 'device_group': self.device_group_of(addr),
                 'vsys': self.vsys_of(addr),
+                # PAN-OS records the object type as an entry attribute
+                'declared_type': addr.get('type') or '',
+                'other': {},
             }
 
-            # Check for IP netmask
-            ip_netmask = addr.find('ip-netmask')
-            if ip_netmask is not None:
-                addr_obj['type'] = 'ip-netmask'
-                addr_obj['value'] = ip_netmask.text
+            for child in addr:
+                tag = child.tag
+                if tag in self.ADDRESS_VALUE_ELEMENTS:
+                    # PAN-OS stores exactly one value element per entry; the
+                    # first one wins so the result is order-stable.
+                    if 'type' not in addr_obj:
+                        addr_obj['type'] = self.ADDRESS_VALUE_ELEMENTS[tag]
+                        addr_obj['value'] = (child.text or '').strip()
+                elif tag == 'description':
+                    addr_obj['description'] = (child.text or '').strip()
+                elif tag == 'disable-override':
+                    addr_obj['disable_override'] = (child.text or '').strip()
+                elif tag == 'tag':
+                    addr_obj['tags'] = [m.text.strip() for m in child.findall('member')
+                                        if m.text and m.text.strip()]
+                else:
+                    # Not modeled by panos_address (location-type fields).
+                    # Keep the value so the report can show it.
+                    if child.text and child.text.strip():
+                        addr_obj['other'][tag] = child.text.strip()
 
-            # Check for IP range
-            ip_range = addr.find('ip-range')
-            if ip_range is not None:
-                addr_obj['type'] = 'ip-range'
-                addr_obj['value'] = ip_range.text
-
-            # IPv6 objects carry their prefix in a dedicated element
-            # (the v2 provider stores any prefix in ip_netmask)
-            ipv6 = addr.find('ipv6')
-            if ipv6 is not None:
-                addr_obj['type'] = 'ipv6'
-                addr_obj['value'] = ipv6.text
-
-            ipv6_range = addr.find('ipv6-range')
-            if ipv6_range is not None:
-                addr_obj['type'] = 'ipv6-range'
-                addr_obj['value'] = ipv6_range.text
-
-            # Check for FQDN
-            fqdn = addr.find('fqdn')
-            if fqdn is not None:
-                addr_obj['type'] = 'fqdn'
-                addr_obj['value'] = fqdn.text
-
-            # Description
-            desc = addr.find('description')
-            if desc is not None:
-                addr_obj['description'] = desc.text
-
-            # Tags
-            tags = []
-            tag_member = addr.findall('.//tag/member')
-            for tag in tag_member:
-                if tag.text:
-                    tags.append(tag.text)
-            addr_obj['tags'] = tags
+            addr_obj.setdefault('tags', [])
+            # No v2 attribute exists for this entry's content: it cannot be
+            # emitted as a valid resource, so it is reported instead.
+            if 'type' not in addr_obj and addr_obj['other']:
+                addr_obj['report_only'] = True
 
             addresses.append(addr_obj)
 
@@ -476,9 +527,14 @@ class PanoramaParser:
     def parse_service_objects(self) -> list[dict]:
         """Parse service objects.
 
-        F3.1: one object per XML entry, keyed by
-        (device group, vsys, type, name); no name dedup. Entries that
-        carry only <id> are reference pointers and are skipped.
+        F3.1: one object per XML entry, keyed by (device group, vsys, type,
+        name); no name dedup. Entries that carry only <id> are reference
+        pointers and are skipped.
+
+        F3.4: both protocol sub-blocks are captured, so a dual-protocol
+        object keeps tcp AND udp. Multi-port values ("80,443") stay one
+        string, which is the v2 destination_port shape. source-port, the
+        override timeouts, and tag members are captured (the F1.2 gaps).
         """
         services = []
 
@@ -494,28 +550,47 @@ class PanoramaParser:
                 'name': name,
                 'device_group': self.device_group_of(svc),
                 'vsys': self.vsys_of(svc),
+                # Protocol sub-blocks, keyed by 'tcp' / 'udp'. The parse model
+                # keeps both legs; the emitter can only write one (v2 limit).
+                # Each leg holds destination_port, source_port, and override.
+                'protocols': {},
+                'tags': [],
             }
 
-            # Protocol and port (tcp wins over udp; the udp drop is pinned
-            # in tests/test_edge_cases.py and tracked in backlog.md)
             protocol = svc.find('protocol')
             if protocol is not None:
-                tcp = protocol.find('tcp')
-                udp = protocol.find('udp')
+                for sub in protocol:
+                    if sub.tag not in ('tcp', 'udp'):
+                        # v2 models only tcp and udp; keep the rest visible
+                        service_obj.setdefault('other_protocol', {})[sub.tag] = \
+                            (sub.text or '').strip()
+                        continue
+                    block = {}
+                    for field in sub:
+                        text = (field.text or '').strip()
+                        if field.tag in ('port', 'source-port'):
+                            if text:
+                                block['destination_port' if field.tag == 'port'
+                                       else 'source_port'] = text
+                        elif field.tag == 'override':
+                            # Export shape: override/yes/<timeout>. The bare
+                            # override/<timeout> shape is accepted as well.
+                            body = field.find('yes')
+                            nums = {}
+                            for t in (body if body is not None else field):
+                                value = (t.text or '').strip()
+                                if value:
+                                    nums[t.tag.replace('-', '_')] = int(value) if value.isdigit() else value
+                            if nums:
+                                block['override'] = nums
+                    if block:
+                        service_obj['protocols'][sub.tag] = block
 
-                if tcp is not None:
-                    service_obj['protocol'] = 'tcp'
-                    port = tcp.find('port')
-                    if port is not None:
-                        service_obj['port'] = port.text
-                elif udp is not None:
-                    service_obj['protocol'] = 'udp'
-                    port = udp.find('port')
-                    if port is not None:
-                        service_obj['port'] = port.text
+            for tag_elem in svc.findall('.//tag/member'):
+                if tag_elem.text and tag_elem.text.strip():
+                    service_obj['tags'].append(tag_elem.text.strip())
 
-            service_obj['description'] = self._get_text(svc, 'description')
-
+            service_obj['description'] = (self._get_text(svc, 'description') or '').strip()
             services.append(service_obj)
 
         return services
@@ -2365,6 +2440,11 @@ variable "panos_password" {
         content = '# Address Objects\n\n'
 
         for addr in addresses:
+            if addr.get('report_only'):
+                # No v2 attribute exists for this entry type; the entry is
+                # reported instead of emitted as an empty resource (F3.4).
+                continue
+
             resource_name = self.declare_resource_name(
                 addr['name'], 'panos_address',
                 context=addr.get('device_group') or '', vsys=addr.get('vsys') or ''
@@ -2376,6 +2456,11 @@ variable "panos_password" {
 
             if addr.get('description'):
                 content += f'  description = {self.escape_string(addr["description"])}\n'
+
+            disable = (addr.get('disable_override') or '').strip().lower()
+            if disable in ('yes', 'no'):
+                # v2 takes the "yes"/"no" string, not a bool (verified 2.0.14)
+                content += f'  disable_override = "{disable}"\n'
 
             value = (addr.get('value') or '').strip()
             if value:
@@ -2462,8 +2547,15 @@ variable "panos_password" {
     def generate_service_objects(self, services: list[dict]):
         """Generate service object Terraform configuration (v2: panos_service)
 
-        The v2 schema nests the port inside a protocol block:
-        protocol { tcp { destination_port = "..." } }
+        The v2 schema nests the port inside a protocol object, but accepts
+        only ONE protocol leg per resource: a config that sets both tcp and
+        udp fails `terraform validate` with "Invalid Attribute Combination"
+        (verified against 2.0.14). A dual-protocol Panorama object therefore
+        emits its tcp leg (udp when tcp is absent) and the dropped leg is
+        reported in MANUAL_SETUP_REPORT.txt instead of being lost (F3.4).
+
+        A multi-port value stays one string, which is the destination_port
+        shape the provider takes.
         """
         if not services:
             return
@@ -2483,21 +2575,65 @@ variable "panos_password" {
             if svc.get('description'):
                 content += f'  description = {self.escape_string(svc["description"])}\n'
 
-            # v2 protocol is a nested object: protocol = { tcp = { destination_port = "..." } }
-            protocol = svc.get('protocol', 'tcp')
-            if protocol in ('tcp', 'udp'):
-                inner: dict = {}
-                if svc.get('port'):
-                    inner['destination_port'] = str(svc['port'])
-                content += f'  protocol = {self.hcl_value({protocol: inner})}\n'
-            else:
-                # v2 only models tcp/udp; note the protocol for manual review
-                content += f'  # NOTE: protocol {protocol} is not modeled by the v2 schema; review manually\n'
+            # v2 protocol is a nested object: protocol = { tcp = { ... } }
+            protocols = svc.get('protocols') or {}
+            emitted = self.primary_service_protocol(protocols)
+            if emitted:
+                content += f'  protocol = {self.hcl_value({emitted: protocols[emitted]})}\n'
+
+            for proto in self.dropped_service_protocols(protocols):
+                summary = self.protocol_summary(protocols[proto])
+                content += f'  # NOTE: {proto} leg not emitted, v2 takes one protocol only: '
+                content += f'{summary}\n'
+
+            other = svc.get('other_protocol') or {}
+            if other:
+                # v2 models only tcp and udp; keep the rest visible for review
+                names = ', '.join(sorted(other))
+                content += f'  # NOTE: protocol {names} is not modeled by the v2 schema; review manually\n'
+
+            if svc.get('tags'):
+                # F2.6: tags declared in this run become references;
+                # F3.2: resolve in the referrer's (device group, vsys) key
+                ctx = svc.get('device_group')
+                vs = svc.get('vsys') or ''
+                tags_str = ', '.join([
+                    self.hcl_value(self.name_ref(t, TAG_SCOPES, context=ctx, vsys=vs), '')
+                    for t in svc['tags']
+                ])
+                content += f'  tags = [{tags_str}]\n'
 
             content += '}\n\n'
 
         with open(self.output_dir / 'service_objects.tf', 'w') as f:
             f.write(content)
+
+    # v2.0.14 panos_service accepts exactly one protocol leg (verified with
+    # terraform validate). tcp is emitted first so the choice is stable.
+    SERVICE_PROTOCOL_ORDER = ('tcp', 'udp')
+
+    @classmethod
+    def primary_service_protocol(cls, protocols: dict) -> Optional[str]:
+        """The one protocol leg a service can emit: tcp wins, then udp."""
+        for proto in cls.SERVICE_PROTOCOL_ORDER:
+            if proto in protocols:
+                return proto
+        # An unmodeled leg (kept in other_protocol) never reaches here.
+        return sorted(protocols)[0] if protocols else None
+
+    @classmethod
+    def dropped_service_protocols(cls, protocols: dict) -> list[str]:
+        """Protocol legs the v2 schema forces the converter to leave out."""
+        primary = cls.primary_service_protocol(protocols)
+        return [p for p in sorted(protocols) if p != primary]
+
+    @staticmethod
+    def protocol_summary(block: dict) -> str:
+        """One-line description of a protocol leg for reports and comments."""
+        parts = [f'{key}={block[key]}' for key in ('destination_port', 'source_port')
+                 if block.get(key)]
+        parts += [f'{key}={value}' for key, value in sorted((block.get('override') or {}).items())]
+        return ', '.join(parts) or 'no ports captured'
 
     def generate_service_groups(self, groups: list[dict]):
         """Generate service group Terraform configuration (v2: panos_service_group)
@@ -2637,11 +2773,31 @@ variable "panos_password" {
     # NOTE: application filters have no v2 resource (see resource_mapping.py).
     # Their parsed data goes to MANUAL_SETUP_REPORT.txt instead.
 
+    # Fields the v2.0.14 panos_external_dynamic_list models inside each type
+    # sub-shape, verified against the live schema. The predefined_* sub-shapes
+    # mirror vendor-supplied lists and model fewer fields; expand_domain is a
+    # domain-only field. auth is never listed: it carries credentials, and the
+    # converter does not write secrets into generated HCL.
+    EDL_EXTENDED_FIELDS = ('url', 'description', 'exception_list',
+                           'certificate_profile', 'recurring')
+    EDL_SUBSHAPE_FIELDS = {
+        'domain': ('url', 'description', 'exception_list', 'expand_domain',
+                   'certificate_profile', 'recurring'),
+        'imei': EDL_EXTENDED_FIELDS,
+        'imsi': EDL_EXTENDED_FIELDS,
+        'ip': EDL_EXTENDED_FIELDS,
+        'url': EDL_EXTENDED_FIELDS,
+        'predefined_ip': ('url', 'description', 'exception_list'),
+        'predefined_url': ('url', 'description', 'exception_list'),
+    }
+
     def generate_external_lists(self, ext_lists: list[dict]):
         """Generate external dynamic list Terraform configuration
 
         v2: panos_external_dynamic_list. The v2 schema nests the fetch details
-        inside a type block keyed by the list type (ip, domain, url, ...).
+        inside a type object keyed by the list type (ip, domain, url, ...).
+        Only the fields the chosen sub-shape models are emitted; anything else
+        is left as a NOTE comment for manual review (F3.4).
         """
         if not ext_lists:
             return
@@ -2650,7 +2806,6 @@ variable "panos_password" {
 
         # List types the v2 schema models inside the type block
         v2_types = ('domain', 'imei', 'imsi', 'ip', 'predefined_ip', 'predefined_url', 'url')
-        recurring_keys = ('daily', 'five_minute', 'hourly', 'monthly', 'weekly')
 
         for ext_list in ext_lists:
             resource_name = self.declare_resource_name(
@@ -2664,21 +2819,19 @@ variable "panos_password" {
 
             # v2 type is a nested object keyed by list type
             lt = ext_list.get('type') or 'ip'
+            fields = ext_list.get('fields') or {}
             if lt in v2_types:
-                type_obj: dict = {}
-                if ext_list.get('url'):
-                    type_obj['url'] = ext_list['url']
-                recurring = ext_list.get('recurring')
-                if recurring in recurring_keys:
-                    type_obj['recurring'] = {recurring: {}}
-                if ext_list.get('description'):
-                    type_obj['description'] = ext_list['description']
-                content += f'  type = {self.hcl_value({lt: type_obj})}\n'
+                allowed = self.EDL_SUBSHAPE_FIELDS[lt]
+                emit = {k: v for k, v in fields.items() if k in allowed}
+                content += f'  type = {self.hcl_value({lt: emit})}\n'
+                for key in (k for k in fields if k not in allowed):
+                    content += f'  # NOTE: {key} is not modeled by the v2 {lt} '
+                    content += 'sub-shape; review manually\n'
             else:
                 # Unknown list type: keep the data visible for manual review
                 content += f'  # NOTE: list type {lt} is not modeled by the v2 schema; review manually\n'
-                if ext_list.get('url'):
-                    content += f'  # url = {ext_list["url"]}\n'
+                if fields.get('url'):
+                    content += f'  # url = {fields["url"]}\n'
 
             content += '}\n\n'
 
@@ -3652,7 +3805,9 @@ variable "panos_password" {
                                      tunnel_monitor_profiles: Optional[list[dict]] = None,
                                      schedules: Optional[list[dict]] = None,
                                      log_settings: Optional[list[dict]] = None,
-                                     zone_protection_profiles: Optional[list[dict]] = None):
+                                     zone_protection_profiles: Optional[list[dict]] = None,
+                                     report_only_addresses: Optional[list[dict]] = None,
+                                     dual_protocol_services: Optional[list[dict]] = None):
         """Write MANUAL_SETUP_REPORT.txt for items that are not emitted (F2.9)
 
         Two buckets, one report:
@@ -3669,7 +3824,8 @@ variable "panos_password" {
         if not (bgp_config or ospf_config or application_filters or manual_key_tunnels
                 or application_override_rules or qos_profiles
                 or tunnel_monitor_profiles or schedules or log_settings
-                or zone_protection_profiles):
+                or zone_protection_profiles or report_only_addresses
+                or dual_protocol_services):
             return
 
         lines = ['MANUAL SETUP REPORT', '=' * 60, '']
@@ -3799,6 +3955,42 @@ variable "panos_password" {
             lines.append('  empty profile would be a misconfigured object. Real')
             lines.append('  emission needs profile parsing (Epic 3). Configure the')
             lines.append('  profile manually (GUI or CLI).')
+            lines.append('')
+
+        if report_only_addresses:
+            lines.append('--- Address Objects With No v2 Attribute (v2 resource exists, not emitted) ---')
+            for addr in report_only_addresses:
+                fields = ', '.join(
+                    f"{key}={value}"
+                    for key, value in sorted((addr.get('other') or {}).items())) or 'no fields captured'
+                lines.append(
+                    f"  {addr.get('name')} (dg: {addr.get('device_group')}, "
+                    f"vsys: {addr.get('vsys')}, type: {addr.get('declared_type') or 'unknown'}): "
+                    f"{fields}")
+            lines.append('  v2 resource: panos_address')
+            lines.append('  Reason: panos_address models one attribute per address')
+            lines.append('  type (ip_netmask, ip_range, ip_wildcard, fqdn). A')
+            lines.append('  location-type entry (country/region/continent/container)')
+            lines.append('  has no attribute, so it cannot be emitted. Configure the')
+            lines.append('  object manually (GUI or CLI).')
+            lines.append('')
+
+        if dual_protocol_services:
+            lines.append('--- Dual-Protocol Service Objects (v2 resource exists, one leg emitted) ---')
+            for svc in dual_protocol_services:
+                protocols = svc.get('protocols') or {}
+                primary = TerraformGenerator.primary_service_protocol(protocols)
+                for proto in TerraformGenerator.dropped_service_protocols(protocols):
+                    lines.append(
+                        f"  {svc.get('name')} (dg: {svc.get('device_group')}, "
+                        f"vsys: {svc.get('vsys')}): {proto} leg dropped, "
+                        f"{primary} emitted -> "
+                        f"{TerraformGenerator.protocol_summary(protocols[proto])}")
+            lines.append('  v2 resource: panos_service')
+            lines.append('  Reason: panos_service accepts one protocol leg only; a')
+            lines.append('  config with both tcp and udp fails terraform validate')
+            lines.append('  (verified against 2.0.14). Add the dropped leg manually')
+            lines.append('  (GUI or CLI), or define a second service object.')
             lines.append('')
 
         lines.append('End of report.')
@@ -4432,6 +4624,11 @@ def main():
             schedules=schedules,
             log_settings=log_settings,
             zone_protection_profiles=zone_protection_profiles,
+            report_only_addresses=[a for a in addresses if a.get('report_only')],
+            dual_protocol_services=[
+                s for s in services
+                if len(TerraformGenerator.dropped_service_protocols(s.get('protocols') or {})) > 0
+            ],
         )
 
         # Reports

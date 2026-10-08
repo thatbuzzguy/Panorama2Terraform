@@ -5,8 +5,8 @@ Pins parser behavior for edge cases:
 - duplicate names across device groups or vsys: F3.1 keys objects by
   (device group, vsys, type, name), so all definitions survive.
 - IPv6 address objects: parsed from the <ipv6> element (F2.4).
-- multi-port / dual-protocol services: current behavior pinned; the udp
-  drop is recorded in backlog.md.
+- multi-port / dual-protocol services: F3.4 keeps both protocol
+  sub-blocks plus source port, override timeouts and tags.
 - F3.2 emit-side vsys identity: same-named objects in two vsys emit as
   distinct digest-named resources, the identity-to-name assignment is
   stable under entry-order flips, references resolve in the referrer's
@@ -135,19 +135,29 @@ def test_ipv6_object_keeps_value(make_parser):
 
 # --- 6. Multi-port and dual-protocol services ---------------------------------
 
-def test_multi_port_service_port_list_passes_through(make_parser):
-    """Current behavior: a tcp port list is kept as-is."""
+def test_multi_port_service_keeps_full_protocol_block(make_parser):
+    """F3.4: port list, source port and override timeouts all survive."""
     parser = make_parser("edge_multi_port_services.xml")
     services = {s["name"]: s for s in parser.parse_service_objects()}
-    assert services["svc-multi-port"]["port"] == "80,443"
+    tcp = services["svc-multi-port"]["protocols"]["tcp"]
+    assert tcp["destination_port"] == "80,443"
+    assert tcp["source_port"] == "1024-65535"
+    assert tcp["override"] == {
+        "halfclose_timeout": 120,
+        "timeout": 1800,
+        "timewait_timeout": 120,
+    }
+    assert services["svc-multi-port"]["tags"] == ["web"]
 
 
-def test_dual_protocol_service_keeps_tcp(make_parser):
-    """Current behavior: tcp wins; the udp definition is dropped (backlog)."""
+def test_dual_protocol_service_keeps_both_protocols(make_parser):
+    """F3.4: tcp and udp on one object are both kept (the F1.2 gap is closed)."""
     parser = make_parser("edge_multi_port_services.xml")
     services = {s["name"]: s for s in parser.parse_service_objects()}
-    assert services["svc-dual"]["protocol"] == "tcp"
-    assert services["svc-dual"]["port"] == "8080"
+    protocols = services["svc-dual"]["protocols"]
+    assert protocols["tcp"]["destination_port"] == "8080"
+    assert protocols["udp"]["destination_port"] == "8080"
+    assert protocols["udp"]["override"] == {"timeout": 120}
 
 
 # --- 7. F3.2: vsys identity on the emit side --------------------------------
@@ -291,3 +301,68 @@ def test_rule_chains_do_not_cross_vsys(emitted_vsys):
     assert by_name['rule-vs2-b']['pivot'] == 'rule-vs2-a'
     assert by_name['rule-vs2-b']['depends_on'] == (
         f"panos_security_policy_rules.{by_name['rule-vs2-a']['local']}")
+
+
+# --- 8. F3.4: full object types on the emit side -----------------------------
+
+def test_address_emit_covers_v2_types_and_reports_the_rest(tmp_path):
+    """ip-wildcard emits; entries with no v2 attribute emit nothing, and report."""
+    files = _generate('address_objects.xml', tmp_path)
+    text = files['address_objects.tf']
+    assert 'ip_wildcard = "10.2.3.*"' in text
+    assert 'disable_override = "yes"' in text
+    # A location entry has no v2 attribute: it must not become a resource.
+    assert 'Country-US' not in text
+    assert 'Ext-Dynamic' not in text
+    report = (tmp_path / 'MANUAL_SETUP_REPORT.txt').read_text(encoding='utf-8')
+    assert 'Country-US' in report
+    assert 'country=US' in report
+    assert 'Ext-Dynamic' in report
+    assert 'external=dynamic' in report
+
+
+def test_service_emit_keeps_one_protocol_leg(tmp_path):
+    """v2 takes one protocol leg: tcp emits, udp becomes a NOTE + report."""
+    files = _generate('edge_multi_port_services.xml', tmp_path)
+    blocks = {b['local']: b['body'] for b in
+              _resource_blocks(files['service_objects.tf'], 'panos_service')}
+
+    dual = next(b for local, b in blocks.items() if local.startswith('svc_dual'))
+    assert 'tcp = {' in dual
+    assert 'udp = {' not in dual
+    assert '# NOTE: udp leg not emitted' in dual
+    report = (tmp_path / 'MANUAL_SETUP_REPORT.txt').read_text(encoding='utf-8')
+    assert 'svc-dual' in report
+
+    multi = next(b for local, b in blocks.items() if local.startswith('svc_multi_port'))
+    assert 'destination_port = "80,443"' in multi
+    assert 'source_port = "1024-65535"' in multi
+    assert 'halfclose_timeout = 120' in multi
+    assert 'timewait_timeout = 120' in multi
+    # F2.6: this fixture declares no "web" tag, so the reference falls back
+    # to the literal name (the declared case is covered by the kitchen-sink
+    # golden and tests/test_dependency_wiring.py).
+    assert 'tags = ["web"]' in multi
+
+
+def test_edl_emit_skips_fields_the_subshape_lacks(tmp_path):
+    """expand_domain is domain-only: an ip list must not emit it (F3.4)."""
+    files = _generate('external_lists.xml', tmp_path)
+    blocks = {b['local']: b['body'] for b in
+              _resource_blocks(files['external_lists.tf'], 'panos_external_dynamic_list')}
+
+    ip_expand = next(b for local, b in blocks.items() if local.startswith('ip_with_expand'))
+    assert 'expand_domain =' not in ip_expand
+    assert '# NOTE: expand_domain is not modeled by the v2 ip sub-shape' in ip_expand
+
+    domain = next(b for local, b in blocks.items() if local.startswith('bad_domains'))
+    assert 'expand_domain = true' in domain
+    assert 'exception_list = [ "example.com" ]' in domain
+    assert 'certificate_profile = "default"' in domain
+    assert 'day_of_week = "monday"' in domain
+
+    predefined = next(b for local, b in blocks.items() if local.startswith('panw_url_list'))
+    # The export carries a fetch schedule, but the predefined_url sub-shape
+    # has no recurring field: it stays a NOTE instead of invalid HCL.
+    assert 'recurring =' not in predefined
+    assert '# NOTE: recurring is not modeled by the v2 predefined_url' in predefined

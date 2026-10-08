@@ -97,15 +97,20 @@ data visible in `MANUAL_SETUP_REPORT.txt` instead of emitting it:
 - IPsec tunnel monitor profiles (note: `panos_monitor_profile` is the
   PBF path monitoring profile, a different PAN-OS object)
 
-The following have a v2 provider resource, but the converter captures
-only names and entry names — emitting an empty object would create a
-misconfigured resource — so they stay in the report until the body
-parsing lands (Epic 3):
+The following have a v2 provider resource, but the converter cannot emit
+the whole object — emitting a partial one would create a misconfigured
+resource — so the missing part stays in the report:
 
 - Security profile bodies (antivirus, anti-spyware, vulnerability, URL
   filtering, file blocking, WildFire, zone protection)
 - Log forwarding profiles
 - Schedules
+- Address objects whose type has no `panos_address` attribute (location
+  type: country, region, continent, container; external type). Every
+  other address type emits, including `ip-wildcard` and IPv6.
+- The second protocol leg of a service that defines both tcp and udp:
+  `panos_service` accepts one leg, so the tcp leg emits and the udp leg is
+  listed with its ports
 
 Reports written to the output directory:
 
