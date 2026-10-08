@@ -1,7 +1,7 @@
 # Agent Status
 
 ## Current position
-**F3.5 (multi-vsys) is committed** (this session). `acceptance.md` holds
+**F3.5 (multi-vsys) is committed** as 732d44c (this session). `acceptance.md` holds
 the F3.5 criteria and result — overwrite it before the next task. **Next
 task: F3.6 Multi-device, template-aware parsing** (Epic 3): use the
 explicit device-group → template association, replace substring matching,
