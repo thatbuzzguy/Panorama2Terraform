@@ -1,12 +1,12 @@
 # Agent Status
 
 ## Current position
-**F3.6 (multi-device, template-aware parsing) is committed**, and it landed
-F3.7 (the splitter rewrite) with it. `acceptance.md` holds the F3.6 criteria
-and result — overwrite it before the next task. **Next task: F3.8 Safe XML
-input** (Epic 3): DTD rejection already landed in F1.7, so what remains is
-the input size limit or `defusedxml`, applied to both entry points, with a
-clear refusal and no partial output.
+**F3.6 (multi-device, template-aware parsing) is committed** as d183f66, and
+it landed F3.7 (the splitter rewrite) with it. `acceptance.md` holds the F3.6
+criteria and result — overwrite it before the next task. **Next task: F3.8
+Safe XML input** (Epic 3): DTD rejection already landed in F1.7, so what
+remains is the input size limit or `defusedxml`, applied to both entry
+points, with a clear refusal and no partial output.
 
 F3.6 state: `PanoramaParser.parse_associations()` is the only source of the
 multi-device relationship (device → device groups / templates / stacks, stack
@@ -19,7 +19,7 @@ ngfw_device }`; `reference_device(obj)` resolves a reference inside its own
 device or its template's single device, and keeps a plain name when the
 choice is ambiguous. `split_device_groups.device_associations(root)` is the
 splitter's copy of the same join, and every element it takes out of the
-export is a `copy.deepcopy`. Gate: ruff clean, pytest 394 passed, terraform
+export is a `copy.deepcopy`. Gate: ruff clean, pytest 395 passed, terraform
 validate green on the sample, kitchen-sink, crypto-profile and two-device
 outputs.
 
@@ -85,7 +85,7 @@ outputs.
   (the device enters the context) plus one location change —
   `vr-device-level` moves from the `Shared` placeholder to
   `ngfw { ngfw_device = "fw-2.example.com" }` — and every reference survived.
-- Tests: `tests/test_multi_device_template.py` (20 tests) and two new
+- Tests: `tests/test_multi_device_template.py` (21 tests) and two new
   validate-gate cases (`tests/test_terraform_validate.py` now runs four
   outputs, the two-device one being the only `location.ngfw` output).
 - Docs: README naming and location sections (the `ngfw` row, the reported
@@ -94,7 +94,7 @@ outputs.
   notes and the new troubleshooting cause; the digests in
   `docs/MIGRATION_GUIDE.md` and `docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md`
   re-derived from the regenerated goldens.
-- Gate: ruff clean. pytest 394 passed. terraform validate green on four
+- Gate: ruff clean. pytest 395 passed. terraform validate green on four
   outputs.
 
 ### F3.5 — Multi-vsys (previous session)

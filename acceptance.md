@@ -113,11 +113,11 @@ placeholder for those entries, which names a template that does not exist.
 
 ## Result (2026-10-08)
 
-All twelve criteria hold. `ruff check .` clean, 394 tests pass, and
+All twelve criteria hold. `ruff check .` clean, 395 tests pass, and
 `terraform validate` passes for the sample, kitchen-sink, crypto-profile
 and two-device outputs.
 
-Evidence per criterion is `tests/test_multi_device_template.py` (20 tests)
+Evidence per criterion is `tests/test_multi_device_template.py` (21 tests)
 plus the F3.5 suite, which keeps the scope rules it already pinned:
 
 - 1-2: `test_parser_reads_the_declared_membership`,
