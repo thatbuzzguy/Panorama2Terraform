@@ -1,44 +1,35 @@
-# To-Do — current task: F3.6 Multi-device, template-aware parsing (Epic 3)
+# To-Do — current task: F3.8 Safe XML input (Epic 3)
 
-**F3.5 is complete** (multi-vsys identity and `location`; evidence in the
-commit log and in `acceptance.md`). Direction: work the lowest-numbered
-unfinished feature in Epic 3. F3.6 — use the explicit device-group →
-template association instead of substring matching, and give
-template-scoped objects their real template name.
+**F3.6 and F3.7 are complete** (multi-device, template-aware parsing; the
+splitter rewrite landed inside it). Evidence is in the commit log and in
+`acceptance.md`. Direction: work the lowest-numbered unfinished feature in
+Epic 3. F3.8 — the converter must refuse input it cannot parse safely.
 
-**Before writing code: overwrite `acceptance.md` with the F3.6 criteria.**
+**Before writing code: overwrite `acceptance.md` with the F3.8 criteria.**
 
-## F3.6 sub-tasks
+## F3.8 sub-tasks
 
-- [ ] Overwrite `acceptance.md` with F3.6 criteria.
-- [ ] Audit the current template handling: `template_of()` (parser),
-      `context=router.get('template')` and the `template` pass sites
-      (generator), and the `_TEMPLATE_PLACEHOLDER = 'Shared'` fallback in
-      `location_block`.
-- [ ] Record the real association the export declares: which template a
-      device group attaches (`device-group/entry/*/templates` or the
-      template's `devices/entry`), and which device a template targets.
-      Replace the substring matching that infers a template from a name.
-- [ ] Use the recorded template as the naming digest context for
-      template-scoped objects (zones, interfaces, routers, VPN objects,
-      monitor profiles), replacing the `''` context those types carry
-      today, and regenerate the affected goldens with a reviewed diff.
-- [ ] Emit `template { name = <real name> }` instead of the `Shared`
-      placeholder wherever the association is known; keep the placeholder
-      plus a report entry where the export declares no template.
-- [ ] Extend the report: a template-scoped object whose template cannot be
-      resolved is listed with the reason (the placeholder is a guess).
-- [ ] Tests: association parsing, context-at-emit, placeholder report,
-      template-aware reference resolution (a name that exists in two
-      templates resolves inside its own template).
-- [ ] Fixtures: a two-template export, a device group that attaches two
-      templates, a template that nests a vsys.
+- [ ] Audit what both entry points accept today: `panorama_to_terraform.py`
+      and `split_device_groups.py` read the whole file into memory as text,
+      reject a `<!DOCTYPE`, then hand the path to ElementTree.
+- [ ] Decide the two remaining risks and write the criteria for them:
+      input size (a huge file exhausts memory before the parse starts) and
+      entity/billion-laughs expansion (DTD rejection covers the declared
+      case; confirm nothing else expands).
+- [ ] Pick one mechanism and use it in both scripts: a size limit, or
+      `defusedxml` (a new dependency — check it is acceptable, and note that
+      `xml.etree` and `defusedxml` must not be mixed in one code path).
+- [ ] Report the refusal clearly: name the file, the limit, and the measured
+      value; exit non-zero; write no output files.
+- [ ] Tests: over-limit input refused, at-limit input accepted, the refusal
+      message, no partial output written, and both scripts behave the same.
 - [ ] Gates: ruff clean, pytest green, terraform validate green.
 - [ ] Commit; update PLAN.md, to-do.md, agent-status.md, backlog.md.
 
 ## Deferred (tracked in PLAN.md and backlog.md)
 
-- **Epic 3:** F3.7–F3.10 after F3.6.
+- **Epic 3:** F3.9 (per-device-group reports), F3.10
+  (`docs/ARCHITECTURE.md`).
 - **Epic 4:** F4.1 (post-run sanity gate; its dead-variable check reuses
   the F2.10 test), F4.2 (container table + line tracking; may land during
   Epic 3), F4.3 (per-entry `CONVERSION_REPORT.txt`), F4.4 (property-level
@@ -46,20 +37,20 @@ template-scoped objects their real template name.
 
 ## Notes
 
-- Naming contract (F2.7 + F3.2): sanitized base + 8-hex digest of
-  (scope, context, vsys, name); order-independent; per-type domains;
+- Naming contract (F2.7, F3.2, F3.6): sanitized base + 8-hex digest of
+  (scope, context, vsys, name), where context is the device group, the
+  template, or the owning device. Order-independent; per-type domains;
   references resolve through the (context, vsys) chain then the flat
-  fallback. F3.6 changes the context for template-scoped types, so those
-  digests change and their goldens regenerate.
+  fallback.
 - `location` is chosen from `LOCATION_SCHEMA`, never from the resource
   name. `terraform validate` accepts an unknown `location` sub-block and
   drops it silently, so a wrong sub-block is an apply-time failure, not a
   validate failure.
-- Reference resolution order (F3.5): a name a device declared (an
-  interface) resolves inside that device or not at all; every other name
-  goes through the (context, vsys) chain, then `Shared`, then contextless,
-  then the flat first-declaration index. F3.6 gives template-scoped objects
-  a real context, so the flat fallback stops being their primary route.
+- Reference resolution order (F3.6): a name a device declared resolves
+  inside that device, and for a deviceless referrer only when exactly one
+  device declares it; every other name goes through the (context, vsys)
+  chain, then `Shared`, then contextless, then the flat first-declaration
+  index.
 - Policy rules do not record their rulebase (pre/post/shared), and
   `location.*.rulebase` stays unemitted until the provider's accepted value
   string is verified. Recorded in `backlog.md`.
@@ -74,6 +65,9 @@ template-scoped objects their real template name.
 - Interface name convention (F3.3): the emitted `name` is the PAN-OS
   display name (`vlan.10`, `ethernet1/1.0`, `ae1.101`), with `parent` as a
   separate attribute.
+- ElementTree `append` does not reparent: it makes one element object a
+  child of two trees. Copy with `copy.deepcopy` when taking an element out
+  of a tree another tree still uses (the splitter does).
 - The static no-dangling-reference rule already exists as a test in
   `tests/test_dependency_wiring.py`; F4.1 shares that rule with the
   runtime check instead of copying it.

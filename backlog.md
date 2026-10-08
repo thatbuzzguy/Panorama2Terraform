@@ -29,10 +29,49 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 - Security profile bodies are not parsed (antivirus, anti-spyware, vulnerability, URL filtering, file blocking, WildFire, zone protection). The v2 provider has resources for them, but emitting empty profile objects would silently create misconfigured resources. F2.9 decision (2026-10-04): the names and descriptions go to `MANUAL_SETUP_REPORT.txt` with the reason; real emission waits for the Epic 3 profile parsing.
 - Schedules: `panos_schedule` exists in v2, but only entry names are parsed (day/time ranges not captured) and v2.0.14 has no monthly schedule support. F2.9 decision (2026-10-04): report entry; revisit when schedule parsing lands.
 - IPsec tunnel monitor profiles have no v2 resource: `panos_monitor_profile` is the PBF path monitoring profile (`network/profiles/monitor-profile`), a different PAN-OS object — verified in the provider/pango source. F2.9 decision (2026-10-04): report entry.
-- F3.1 legacy context conventions (kept so the pre-F3.1 name digests stay stable): the six security profile categories are declared with an empty context (their objects carry `device_group` + `vsys` identity, but the digest context is '' until F3.6), and template-scoped objects (zones, interfaces, VRs, LR, VPN) use `template` (absent until F3.6) as context. F3.2 put `vsys` in the digest for every type, so these categories now hash (scope, '', vsys, name); F3.6 (template-aware parsing) should unify these to the true defining DG/template and regenerate the affected goldens with a reviewed diff.
-- Reference resolution order (F3.2, acceptance-recorded): the keyed chain is (referrer context, referrer vsys), then (Shared, referrer vsys), then (contextless, referrer vsys), then the flat first-declaration index. The flat index is not vsys-aware, so a name that exists only in another vsys still resolves through it. This keeps the F2.6 behavior for call sites that pass no vsys (template-scoped types). A strict per-vsys rule would break those sites; it stays as recorded until F3.6 gives them a real context.
-- Device-aware resolution (F3.5) is limited to names a device declared. Only the interface generators pass `device` at declaration, so only interface references are device-restricted; a zone, address or profile name that repeats on two firewalls still resolves first-wins through the context chain. Extend the rule when a generator declares per-device objects other than interfaces.
-- An entry under `devices/entry/<device>` (not inside a device group) records `device_group = 'Shared'`, because `device_group_of` has no other fallback. It is honest for the location choice (such an object is in no device group, and the emitted location is `vsys` or the template placeholder), but the naming digest then uses `'Shared'` for a device-level object and for a true shared object alike. F3.6 owns the device/template association; give device-level entries their own context there and regenerate the affected digests.
+- The six security profile categories are declared with an empty naming
+  context (F3.1) because their emitter is a stub that writes no `location`
+  at all: the objects carry `device_group` and `vsys`, but putting either in
+  the digest would promise a scope the emitted resource does not have.
+  F3.6 left them alone for that reason. When real profile bodies land, give
+  them their device group or template context and regenerate the digests.
+- Reference resolution order (F3.2, acceptance-recorded): the keyed chain is
+  (referrer context, referrer vsys), then (Shared, referrer vsys), then
+  (contextless, referrer vsys), then the flat first-declaration index. The
+  flat index is not vsys-aware, so a name that exists only in another vsys
+  still resolves through it. F3.6 gave the template-scoped types a real
+  context (their template, else their device), so the flat index is no
+  longer their primary route; it stays for call sites that pass no vsys.
+- Device-aware resolution (F3.5, F3.6) covers only names a device declared,
+  and only the interface generators declare a device. A name a device
+  declared resolves inside that device; a deviceless referrer resolves it
+  only when exactly one device declares it, and keeps the plain name when
+  several do. A zone, address or profile name that repeats on two firewalls
+  still resolves first-wins through the context chain. Extend the rule when
+  a generator declares per-device objects other than interfaces.
+- A template that targets two or more devices cannot say which device an
+  unqualified interface name means, so a virtual router or logical router in
+  such a template keeps `interfaces = ["ethernet1/1"]` as strings instead of
+  referencing one firewall's resource (F3.6). The fix is per-target-device
+  emission of the template's config, not a guess; it needs a fixture that
+  shows how a real export distinguishes the two.
+- `location.template_stack` is never emitted (F3.6). A stack holds device and
+  template members, not config, so nothing in an export is placed in one. If
+  an export ever nests config under a stack, report it rather than placing it
+  there.
+- The splitter copies a template only when the export lists a device in both
+  the device group and the template (F3.6). An export whose device groups
+  list devices and whose templates list none therefore copies no template and
+  prints that fact; the operator fixes the export or the split file. Do not
+  restore a name-based fallback for this case.
+- An entry under `devices/entry/<device>` (not inside a device group) records
+  `device_group = 'Shared'`, because `device_group_of` has no other fallback.
+  F3.6 removed the naming consequence for template-scoped types (an interface
+  or router there takes its device as digest context and is placed with
+  `location.ngfw`), but an *object* entry under a device (an address, a
+  service) still hashes `'Shared'` as its context, because object types take
+  the device group as context and no device group is declared. Give
+  device-level objects their own context when a fixture shows the collision.
 
 ## Out of Scope
 
@@ -47,6 +86,12 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 
 ## Notes on Already-Completed Work
 
+- F3.6 (multi-device) found a wrong claim about ElementTree worth keeping:
+  `ElementTree.append` does **not** reparent. It keeps no parent bookkeeping,
+  so appending an element that already has a parent makes one element object
+  a child of two trees, and a later mutation of either shows in both. The
+  splitter therefore copies with `copy.deepcopy` for every element it takes
+  out of the source export.
 - F3.5 (multi-vsys) corrected a wrong assumption held since F2.3: v2
   `location` **does** have a `vsys { name, ngfw_device }` sub-block for the
   object types and the four policy-rule types. `panos_security_profile_group`
@@ -69,12 +114,20 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 - Policy chains key on (device group, vsys) since F3.2. Each chain anchors
   at `where = "last"`, so a vsys boundary restarts the chain; a rule never
   pivots on, or depends on, a rule in another vsys.
-- `location` carries the source scope since F3.5: `vsys { name, ngfw_device }`
-  for a declared vsys on a type that accepts it, `template { name }` (plus
-  `vsys` where the schema declares the field) for a declared template,
-  otherwise the device group, `shared = {}`, or the `Shared` template
-  placeholder. A declared scope the type cannot carry is reported, never
-  dropped silently.
+- `location` carries the source scope since F3.5 and F3.6: `vsys { name,
+  ngfw_device }` for a declared vsys on a type that accepts it, `template {
+  name }` (plus `vsys`, and `ngfw_device` when the export nests the entry
+  under a device inside the template) for a declared template, `ngfw {
+  ngfw_device }` for config an export places under one device, otherwise the
+  device group, `shared = {}`, or the `Shared` template placeholder — which
+  is emitted only when nothing in the export places the entry, and is listed
+  in `MANUAL_SETUP_REPORT.txt` with the templates that device does take. A
+  declared scope the type cannot carry is reported, never dropped silently.
+- The multi-device association is data, never a name (F3.6). A device group,
+  a template and a template stack belong together when the export lists the
+  same device under each. `localhost.localdomain` is the PAN-OS placeholder
+  for "this device", so it is never an `ngfw_device` and never joins two
+  things.
 
 ## Design Decisions (Epic 4 planning)
 

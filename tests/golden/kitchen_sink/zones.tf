@@ -1,6 +1,6 @@
 # Zone Configurations
 
-resource "panos_zone" "trust_cf2b6e16" {
+resource "panos_zone" "trust_c2dcfb60" {
   location = {
     vsys = {
       name = "vsys1"
@@ -8,12 +8,12 @@ resource "panos_zone" "trust_cf2b6e16" {
   }
   name = "trust"
   network = {
-    layer3 = [ panos_ethernet_interface.ethernet1_1_5dadf948.name, panos_ethernet_interface.ethernet1_2_e93e63ea.name ]
+    layer3 = [ panos_ethernet_interface.ethernet1_1_d74b05bd.name, panos_ethernet_interface.ethernet1_2_ff1cc5a5.name ]
     zone_protection_profile = "ZPP-Default"
   }
 }
 
-resource "panos_zone" "lan2_5911aadd" {
+resource "panos_zone" "lan2_e91e6402" {
   location = {
     vsys = {
       name = "vsys1"
@@ -25,7 +25,7 @@ resource "panos_zone" "lan2_5911aadd" {
   }
 }
 
-resource "panos_zone" "vsys_zone1_ac659874" {
+resource "panos_zone" "vsys_zone1_9fb942fb" {
   location = {
     vsys = {
       name = "vsys1"
@@ -38,7 +38,7 @@ resource "panos_zone" "vsys_zone1_ac659874" {
   }
 }
 
-resource "panos_zone" "vsys_zone2_00aed559" {
+resource "panos_zone" "vsys_zone2_f258359b" {
   location = {
     vsys = {
       name = "vsys2"

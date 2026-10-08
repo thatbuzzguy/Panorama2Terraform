@@ -33,7 +33,7 @@ resource "panos_virtual_router" "lr_main_2258b30f" {
     }
   }
   name = "lr-main"
-  interfaces = [panos_ethernet_interface.ethernet1_1_5dadf948.name]
+  interfaces = [panos_ethernet_interface.ethernet1_1_d74b05bd.name]
 }
 
 resource "panos_virtual_router_static_route_ipv4" "lr_main_2258b30f_lr_default_2029ebbd" {

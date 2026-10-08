@@ -6,8 +6,9 @@ The gate has two checks:
    the provider declared in the output must be resolvable.
 2. ``terraform validate`` succeeds against the v2 provider, for the
    sample config, the kitchen-sink fixture (which exercises every
-   resource type), and the crypto-profile-only fixture (which exercises
-   the F2.8 standalone-profile emission path in vpn.tf).
+   resource type), the crypto-profile-only fixture (which exercises the
+   F2.8 standalone-profile emission path in vpn.tf), and the two-device
+   fixture (which exercises the F3.6 ``location.ngfw`` placement).
 
 The test skips when the ``terraform`` binary is absent so the Python
 matrix jobs are unaffected; the CI ``terraform-gate`` job provides it.
@@ -24,6 +25,7 @@ from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_script
 TERRAFORM = shutil.which("terraform")
 FIXTURES_KITCHEN = FIXTURES_DIR / "kitchen_sink.xml"
 FIXTURES_VPN_PROFILES = FIXTURES_DIR / "ike_crypto_profiles.xml"
+FIXTURES_MULTI_DEVICE = FIXTURES_DIR / "multi_device_templates.xml"
 
 
 def _generate_sample_output(out_dir: Path) -> None:
@@ -138,6 +140,54 @@ def tf_workspace_vpn_profiles(tmp_path_factory) -> dict:
 def test_terraform_validate_vpn_profiles_succeeds(tf_workspace_vpn_profiles):
     """A standalone crypto profile must pass terraform validate."""
     ws = tf_workspace_vpn_profiles
+    assert ws["init"].returncode == 0, (
+        f"terraform init failed:\n{ws['init'].stdout[-2000:]}\n{ws['init'].stderr[-2000:]}"
+    )
+    result = subprocess.run(
+        [TERRAFORM, "validate"],
+        cwd=ws["dir"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, (
+        f"terraform validate failed:\n{result.stdout[-4000:]}\n{result.stderr[-2000:]}"
+    )
+
+
+@pytest.fixture(scope="session")
+def tf_workspace_multi_device(tmp_path_factory) -> dict:
+    """Same gate for the two-device fixture (F3.6).
+
+    This is the only fixture that emits `location.ngfw`, the placement for
+    config a firewall owns.
+    """
+    if TERRAFORM is None:
+        pytest.skip("terraform binary not found (the CI terraform-gate job provides it)")
+    out_dir = tmp_path_factory.mktemp("tf_validate_multi_device")
+    result = run_script(
+        "panorama_to_terraform.py", str(FIXTURES_MULTI_DEVICE),
+        "--output-dir", str(out_dir)
+    )
+    assert result.returncode == 0, f"converter failed: {result.stderr}\n{result.stdout}"
+    init = subprocess.run(
+        [TERRAFORM, "init", "-backend=false", "-input=false"],
+        cwd=out_dir,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    return {"dir": out_dir, "init": init}
+
+
+def test_terraform_validate_multi_device_succeeds(tf_workspace_multi_device):
+    """A device-placed interface and a template-placed router must validate.
+
+    `terraform validate` accepts an unknown location sub-block and drops it,
+    so this gate proves the HCL parses and the sub-block shape is well formed;
+    tests/test_multi_device_template.py checks the sub-block name itself.
+    """
+    ws = tf_workspace_multi_device
     assert ws["init"].returncode == 0, (
         f"terraform init failed:\n{ws['init'].stdout[-2000:]}\n{ws['init'].stderr[-2000:]}"
     )

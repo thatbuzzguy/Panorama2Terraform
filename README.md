@@ -71,11 +71,13 @@ make a reference work, so the output always passes
 ## Resource naming
 
 A local resource name is the sanitized PAN-OS name plus an 8-hex digest
-of the object's source identity: resource type, defining device group or
-template, virtual system (vsys), and raw name. The name is deterministic:
-the same object always gets the same local name, the name does not depend
-on emission order, and same-named objects in different device groups or
-virtual systems stay distinct. For example:
+of the object's source identity: resource type, defining device group,
+template or owning device, virtual system (vsys), and raw name. The name
+is deterministic: the same object always gets the same local name, the
+name does not depend on emission order, and same-named objects in
+different device groups, virtual systems, templates, or firewalls stay
+distinct. Two firewalls that both declare `ethernet1/1` are two resources
+with two locations, not one resource and a numeric suffix. For example:
 
 ```hcl
 resource "panos_address" "web_server_1_11f477f4" {
@@ -98,14 +100,18 @@ emitted type:
 | Inside `<shared>` | `shared = {}` |
 | Inside a virtual system | `vsys = { name = "<vsys>", ngfw_device = "<firewall>" }` |
 | Inside a template | `template = { name = "<template>" }`, plus `vsys` where that type declares the field |
-| Template-scoped type, no declared template | `template = { name = "Shared" }` placeholder (the real name lands with F3.6) |
+| Inside a device, on a type with no virtual system (an interface, a virtual router, a VPN object) | `ngfw = { ngfw_device = "<firewall>" }` |
+| Nothing in the export places it | `template = { name = "Shared" }` placeholder, reported |
 
-Two limits are reported in `MANUAL_SETUP_REPORT.txt` instead of being
+`localhost.localdomain` is the PAN-OS placeholder for "this device", so it
+is never written as `ngfw_device`.
+
+Three limits are reported in `MANUAL_SETUP_REPORT.txt` instead of being
 dropped silently: a declared vsys, template, or device group the resource
 type cannot carry (for example `panos_security_profile_group` has no `vsys`
-sub-block), and a vsys location whose export names no target firewall
-(`ngfw_device` is omitted; `localhost.localdomain` is the PAN-OS
-placeholder for "this device", not a device name).
+sub-block), a vsys location whose export names no target firewall
+(`ngfw_device` is omitted), and a template location the converter had to
+guess, which is listed with the templates the entry's own device takes.
 
 ## Report-only configuration
 

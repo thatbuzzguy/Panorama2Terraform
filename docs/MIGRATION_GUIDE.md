@@ -187,7 +187,7 @@ lives on the `.0` layer-3 subinterface:
 
 ```hcl
 # Before (from converter)
-resource "panos_ethernet_interface" "ethernet1_1_5dadf948" {
+resource "panos_ethernet_interface" "ethernet1_1_d74b05bd" {
   location = {
     template = {
       name = "Shared"
@@ -198,7 +198,7 @@ resource "panos_ethernet_interface" "ethernet1_1_5dadf948" {
 }
 
 # After (adjusted for target)
-resource "panos_ethernet_interface" "ethernet1_1_5dadf948" {
+resource "panos_ethernet_interface" "ethernet1_1_d74b05bd" {
   location = {
     template = {
       name = "Shared"
@@ -211,14 +211,14 @@ resource "panos_ethernet_interface" "ethernet1_1_5dadf948" {
   comment = "Trust Interface - Internal Network"
 }
 
-resource "panos_ethernet_layer3_subinterface" "ethernet1_1_0_8f45cb53" {
+resource "panos_ethernet_layer3_subinterface" "ethernet1_1_0_279a35e7" {
   location = {
     template = {
       name = "Shared"
     }
   }
   name = "ethernet1/1.0"
-  parent = panos_ethernet_interface.ethernet1_1_5dadf948.name
+  parent = panos_ethernet_interface.ethernet1_1_d74b05bd.name
   tag = 0
   ip = [{ name = "10.1.1.1/24" }]
 }
@@ -423,7 +423,7 @@ resource "panos_zone" "trust" {
   }
 
   depends_on = [
-    panos_ethernet_interface.ethernet1_1_5dadf948
+    panos_ethernet_interface.ethernet1_1_d74b05bd
   ]
 }
 ```

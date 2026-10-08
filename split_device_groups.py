@@ -29,6 +29,7 @@ Useful for multi-HA-pair to multi-virtual-router migrations.
 """
 
 import argparse
+import copy
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -48,7 +49,86 @@ def parse_device_groups(root: ET.Element) -> list:
 
     return device_groups
 
-def extract_device_group_config(root: ET.Element, device_group_name: str) -> ET.Element:
+
+def _device_names(entry: ET.Element) -> list:
+    """Return the device names one entry lists.
+
+    A Panorama export lists members two ways: the long form
+    `<devices><entry name="fw-1.example.com">` and the short form
+    `<devices><member>fw-1.example.com</member>`.
+    """
+    names = []
+    listing = entry.find('devices')
+    if listing is None:
+        return names
+    for node in list(listing):
+        if node.tag == 'entry':
+            name = node.get('name')
+        elif node.tag == 'member':
+            name = (node.text or '').strip()
+        else:
+            continue
+        if name:
+            names.append(name)
+    return names
+
+
+def _entries_by_device(root: ET.Element, container_tags: tuple) -> dict:
+    """Map entry name to its elements and the device names it lists.
+
+    `container_tags` holds the spellings one kind appears under: a real
+    export writes `<templates>`, and the split files this script writes are
+    read back the same way, so both are accepted.
+    """
+    table = {}
+    for tag in container_tags:
+        for entry in root.findall(f'.//{tag}/entry'):
+            name = entry.get('name')
+            if not name:
+                continue
+            row = table.setdefault(name, {'devices': set(), 'elements': []})
+            row['devices'].update(_device_names(entry))
+            row['elements'].append(entry)
+    return table
+
+
+def device_associations(root: ET.Element) -> dict:
+    """Return the device membership the export declares (F3.6).
+
+    A Panorama export states the multi-device relationships in data:
+
+        device-group/entry/<DG>/devices/entry/<device>
+        templates/entry/<template>/devices/entry/<device>
+        template-stack/entry/<stack>/devices/entry/<device>
+
+    A device group and a template belong together when they list the same
+    device. That join replaces the old `DG-` prefix convention and the
+    substring test, both of which matched names rather than facts.
+
+    Returns {'device_groups': table, 'templates': table,
+    'template_stacks': table}; each table maps a name to
+    {'devices': set, 'elements': [entry, ...]}. An export that lists no
+    device returns tables that associate nothing, which is the honest
+    answer: no copy, and a printed note saying so.
+    """
+    return {
+        'device_groups': _entries_by_device(root, ('device-group',)),
+        'templates': _entries_by_device(root, ('templates', 'template')),
+        'template_stacks': _entries_by_device(
+            root, ('template-stack', 'template-stacks')),
+    }
+
+
+def _associated_names(associations: dict, kind: str, devices: set) -> list:
+    """Return the entries of one kind that list at least one of `devices`."""
+    if not devices:
+        return []
+    return sorted(name for name, row in associations[kind].items()
+                  if row['devices'] & devices)
+
+
+def extract_device_group_config(root: ET.Element, device_group_name: str,
+                                associations: dict = None) -> ET.Element:
     """Extract configuration for a specific device group"""
     # Create new root config element
     new_config = ET.Element('config')
@@ -71,9 +151,13 @@ def extract_device_group_config(root: ET.Element, device_group_name: str) -> ET.
     if source_dg is None:
         return None
 
-    # Copy device-group
+    # Copy device-group. deepcopy, not append: ElementTree keeps no parent
+    # bookkeeping, so append makes the same element object a child of two
+    # trees. The split file and the source tree then alias one object, and a
+    # later step that mutates either changes the other. A copy keeps each
+    # split file independent of the source and of the other split files.
     device_group_container = ET.SubElement(localhost, 'device-group')
-    device_group_container.append(source_dg)
+    device_group_container.append(copy.deepcopy(source_dg))
 
     # Copy shared objects (they're referenced by device groups)
     # Note: Panorama configs can have MULTIPLE <shared> sections
@@ -90,53 +174,52 @@ def extract_device_group_config(root: ET.Element, device_group_name: str) -> ET.
             for child in shared:
                 child_tag = child.tag
 
-                # If we haven't seen this tag yet, add it
+                # If we haven't seen this tag yet, add a copy of it
                 if child_tag not in seen_children:
-                    merged_shared.append(child)
-                    seen_children[child_tag] = child
+                    merged_shared.append(copy.deepcopy(child))
+                    seen_children[child_tag] = merged_shared[-1]
                 else:
-                    # If the tag exists, merge the entries
+                    # If the tag exists, merge in copies of the new entries
                     existing = seen_children[child_tag]
+                    existing_names = [e.get('name') for e in existing.findall('.//entry')]
                     for entry in child.findall('.//entry'):
                         entry_name = entry.get('name')
                         # Only add if not already present
-                        if entry_name:
-                            existing_names = [e.get('name') for e in existing.findall('.//entry')]
-                            if entry_name not in existing_names:
-                                existing.append(entry)
+                        if entry_name and entry_name not in existing_names:
+                            existing.append(copy.deepcopy(entry))
+                            existing_names.append(entry_name)
 
         new_config.append(merged_shared)
 
-    # Copy template if it exists (network config)
-    # Try to find template with matching name or reference
-    template_name = device_group_name.replace('DG-', '').replace('dg-', '')
-    source_template = None
-    for template in root.findall(".//template/entry"):
-        if template.get("name") == template_name:
-            source_template = template
-            break
+    # Copy the network config the export associates with this device group
+    # (F3.6): the templates and template stacks that target one of the
+    # device group's own devices. The relationship comes from the device
+    # lists, never from a name.
+    assoc = associations if associations is not None else device_associations(root)
+    dg_devices = assoc['device_groups'].get(device_group_name, {}).get('devices', set())
+    labels = {'templates': 'template', 'template_stacks': 'template stack'}
 
-    if source_template is None:
-        # Try without prefix
-        for template in root.findall(".//template/entry"):
-            t_name = template.get('name', '')
-            if device_group_name.lower() in t_name.lower():
-                source_template = template
-                break
+    if not dg_devices:
+        print("  - device group lists no devices: no template or "
+              "template-stack copied")
 
-    if source_template is not None:
-        template_container = ET.SubElement(localhost, 'template')
-        template_container.append(source_template)
+    copied = []
+    for kind, container_tag in (('templates', 'templates'),
+                                ('template_stacks', 'template-stack')):
+        names = _associated_names(assoc, kind, dg_devices)
+        if not names:
+            continue
+        container = ET.SubElement(localhost, container_tag)
+        for name in names:
+            for element in assoc[kind][name]['elements']:
+                container.append(copy.deepcopy(element))
+            copied.append(f"{labels[kind]}: {name}")
 
-    # Copy template stack if exists
-    for ts in root.findall(".//template-stack/entry"):
-        # Check if this stack references our device group
-        members = ts.findall('.//devices/entry')
-        for member in members:
-            if member.get('name') == device_group_name:
-                ts_container = ET.SubElement(localhost, 'template-stack')
-                ts_container.append(ts)
-                break
+    if dg_devices and not copied:
+        print("  - no template or template-stack targets this device group's "
+              "devices: none copied")
+    for note in copied:
+        print(f"  - copied {note}")
 
     return new_config
 

@@ -1,139 +1,158 @@
-# Acceptance criteria — F3.5 Multi-vsys (Epic 3)
+# Acceptance criteria — F3.6 Multi-device, template-aware parsing (Epic 3)
 
-F3.5 puts the virtual system (vsys) in the data model and in the emitted
-`location` block. An object that the export defines under
-`devices/entry/<device>/vsys/entry/<vsys>` must land in that virtual system
-in the generated Terraform, or be reported when the provider cannot place it
-there. No location sub-block comes from memory: every sub-block and field
-below is read from `terraform providers schema -json` for 2.0.14.
+F3.6 replaces name guessing with what the export declares. A Panorama
+export states the device relationships in data — a device group lists its
+devices, a template lists the devices it targets, a template stack lists
+its devices and its templates — and the converter must use those lists
+instead of a naming convention or a substring match.
 
-## What F3.1 and F3.2 already cover (not repeated here)
-
-- Every parse method records `vsys` on every object (F3.1).
-- The naming digest and the reference registry key on
-  (scope, context, vsys, name) (F3.2).
-- Policy chains key on (device group, vsys), so a rule never pivots on a
-  rule in another vsys (F3.2).
-
-Remaining gap: `location` never carried vsys, and `vsys_of` reported the
-default `vsys1` for entries the export does not place in a vsys, so the
-emitter could not tell "shared" from "vsys1".
+It also fixes the placement of device-specific config. An entry under
+`devices/entry/<device>/network/...` is that firewall's own config, not a
+template's. Provider v2 has a sub-block for exactly that:
+`location.ngfw { ngfw_device }` ("Located in a specific NGFW device",
+v2.0.14 schema; the provider rejects it unset with "NgfwDevice is
+unspecified"). Today the converter emits the `template { name = "Shared" }`
+placeholder for those entries, which names a template that does not exist.
 
 ## Schema facts verified for this task (v2.0.14)
 
-- `location` is a required object. Its sub-blocks differ per resource type.
-  The four the converter can use: `device_group { name, panorama_device }`,
-  `shared` (empty, or `rulebase` on the four policy-rule types),
-  `vsys { name, ngfw_device }`, `template { name, ngfw_device,
-  panorama_device, vsys }`.
-- Object types (`panos_address`, `panos_address_group`,
-  `panos_administrative_tag`, `panos_application_group`,
-  `panos_custom_url_category`, `panos_external_dynamic_list`,
-  `panos_service`, `panos_service_group`) and the four policy-rule types
-  accept `device_group`, `shared`, and `vsys`.
-- `panos_security_profile_group` accepts `device_group` and `shared` only.
-  A config that sets `location.vsys` fails `terraform validate` with
-  "Invalid Attribute Combination" (verified against 2.0.14).
-- `panos_zone` and `panos_virtual_router` accept `vsys` and
-  `template { …, vsys }`; they have no `device_group` and no `shared`.
-- `template` carries `vsys` on `panos_ethernet_interface`,
-  `panos_ethernet_layer3_subinterface`, `panos_aggregate_interface`,
-  `panos_aggregate_layer3_subinterface`, `panos_loopback_interface`,
-  `panos_tunnel_interface`. It does NOT on `panos_vlan_interface`,
-  `panos_virtual_router_static_route_ipv4`, `panos_monitor_profile`,
-  `panos_ike_gateway`, `panos_ike_crypto_profile`,
-  `panos_ipsec_crypto_profile`, `panos_ipsec_tunnel`.
-- Terraform does not reject an unknown attribute inside the `location`
-  object (verified: `location = { shared = {} }` on `panos_zone`, and
-  `template { bogus = "x" }`, both pass `terraform validate`). The schema,
-  not `terraform validate`, is the authority on which sub-block a type
-  accepts, so the emitter must read the table below.
-- `location = { device_group = { name = "Shared" } }` (what the converter
-  emits today for shared objects) is schema-valid but names a device group
-  called "Shared". The schema's own description of `shared` is "Panorama
-  shared object", so `location = { shared = {} }` is the correct output for
-  an entry the export defines under `<shared>`.
+- All 14 template-scoped emitted types declare `location.ngfw` with exactly
+  one field, `ngfw_device`: `panos_aggregate_interface`,
+  `panos_aggregate_layer3_subinterface`, `panos_ethernet_interface`,
+  `panos_ethernet_layer3_subinterface`, `panos_ike_crypto_profile`,
+  `panos_ike_gateway`, `panos_ipsec_crypto_profile`, `panos_ipsec_tunnel`,
+  `panos_loopback_interface`, `panos_monitor_profile`,
+  `panos_tunnel_interface`, `panos_virtual_router`,
+  `panos_virtual_router_static_route_ipv4`, `panos_vlan_interface`.
+  No object type and no policy-rule type declares it.
+- `location.template` declares `name`, `ngfw_device`, `panorama_device`
+  and (for zones, virtual routers and most interfaces) `vsys`.
+  `template.ngfw_device` is the device-specific override inside a template,
+  which is what `templates/entry/<T>/devices/entry/<D>/...` means.
+- `location.template_stack` and the composite `template_vsys` /
+  `template_stack_vsys` sub-blocks exist. The converter never places an
+  entry in a stack: a stack holds device and template members, not config.
+- `localhost.localdomain` is the PAN-OS placeholder for "this device"
+  (F3.5). It is never a usable `ngfw_device`.
+
+## Current state (the gaps F3.6 closes)
+
+- `split_device_groups.py` associates a template with a device group by
+  stripping a `DG-` prefix from the device group name and, failing that, by
+  a case-insensitive substring test
+  (`if device_group_name.lower() in t_name.lower()`). It also matches a
+  template stack's `devices/entry` names against the *device group name*.
+  Nothing reads the device lists the export provides.
+- `location_block` has no `ngfw` branch, so every device-specific network
+  object gets the `Shared` template placeholder, silently.
+- Two firewalls that both declare `ethernet1/1` produce three resources
+  that differ only by the taken-name counter (`ethernet1_1_5dadf948`,
+  `..._2`, `..._3`) and carry identical locations, because the digest
+  context for a template-scoped object is `''` when it declares no
+  template. Verified on 2026-10-08 with a three-device generator run.
 
 ## Criteria
 
-1. **Honest vsys in the model.** `vsys_of` returns the declared vsys name,
-   and `''` when no `<vsys><entry>` ancestor exists. No default `vsys1`.
-2. **Source identity in the model.** One parser helper returns the four
-   scope facts of an entry: `device_group`, `vsys`, `template` (declared
-   template name or `''`), `vsys_device` (the enclosing `devices/entry`
-   name or `''`). Every parse method records them, replacing the repeated
-   `device_group`/`vsys` pairs.
-3. **Identity is unchanged.** The F2.7 + F3.2 digest input stays
-   (scope, context, vsys, name) and the reference chain keeps working;
-   `''` is a value like any other, so a shared object and a `vsys1` object
-   of the same name stay distinct.
-4. **Location schema table.** `LOCATION_SCHEMA` in `resource_mapping.py`
-   holds, per emitted type, the `location` sub-blocks and their fields that
-   the converter may emit (from `device_group`, `shared`, `vsys`,
-   `template`). The table is a deliberate subset: the schema also declares
-   `ngfw`, `template_stack`, `template_stack_vsys` and `template_vsys` for
-   some types, which the converter never uses. A test compares the table
-   with the live provider schema: every listed sub-block and every listed
-   field must exist in the schema for that type.
-5. **Location choice.** `location_block(resource_type, obj)` picks the
-   sub-block from the source identity and the table:
-   - declared vsys, no declared template, type accepts `vsys` →
-     `vsys { name, ngfw_device }`;
-   - declared template, type accepts `template` → `template { name }` plus
-     `vsys` when the type's `template` declares it and a vsys is declared;
-   - otherwise `device_group { name }` for a real device group, `shared`
-     for the shared section, and the `template { name = "Shared" }`
-     placeholder for template-scoped types with no declared template
-     (unchanged; the real template name is F3.6).
-   A type that accepts neither `device_group` nor `shared` never receives
-   one (criterion 7).
-6. **Target device.** `ngfw_device` is emitted when the export names the
-   device. `localhost.localdomain` is the PAN-OS placeholder for "this
-   device", so it is not a device name: the field is then omitted and the
-   resource is listed in the report (criterion 7).
-7. **Report what cannot be placed.** Every resource whose declared vsys or
-   declared template the emitted location cannot carry is listed in
-   `MANUAL_SETUP_REPORT.txt` with the resource type, name, source device
-   group/vsys/template, the location that was emitted, and the reason.
-   Three cases: the type has no `vsys` sub-block (for example
-   `panos_security_profile_group`, `panos_vlan_interface`), the type has no
-   `template` sub-block, and the vsys has no target device name.
-8. **No invalid location.** No emitted `location` sub-block, and no field
-   inside it, is absent from `LOCATION_SCHEMA` for that type. A test checks
-   every committed golden block against the table.
-9. **Parse paths.** A two-vsys export parses with the right identity on
-   every path: sibling vsys entries, objects under a device group, objects
-   under `<shared>`, a template that nests a vsys, and the device-level
-   network/zone paths. Member lists stay plain names resolved through the
-   F3.2 chain.
-10. **Tests.** Parser tests for criteria 1-2; emitter tests for criteria
-    5-7 (one per branch, plus the report); the schema table test for
-    criterion 4; the golden location-shape test for criterion 8; the
-    two-vsys fixture test for criterion 9.
-11. **Fixtures and goldens.** A fixture covers a named device with two
-    vsys, a template that nests a vsys, and the two report cases. The
-    kitchen-sink fixture gains the same shapes. Both golden sets are
-    regenerated with a reviewed diff, and every changed block is explained
-    by criteria 5-7.
-12. **Gates:** ruff clean, pytest green, terraform validate green on both
-    golden sets.
+1. **Association parsing.** `PanoramaParser.parse_associations()` returns,
+   from the export only: device → device groups, device → templates,
+   device → template stacks, and template stack → templates. Sources are
+   `device-group/entry/*/devices/entry`, `templates/entry/*/devices/entry`,
+   `template-stack/entry/*/devices/entry` and
+   `template-stack/entry/*/templates/member`; accept `<devices><member>`
+   where an export uses the short form. An export with no device lists
+   returns empty tables — no invented association.
+2. **Effective templates.** `templates_for_device(device)` returns the
+   device's direct templates plus the templates of the stacks it attaches
+   to, de-duplicated and sorted; `''` or an unknown device returns `[]`.
+3. **Device-specific placement.** An entry the export places under
+   `devices/entry/<device>/` with no template ancestor, on a type that
+   declares `location.ngfw`, emits `ngfw = { ngfw_device = "<device>" }`.
+   Never for `localhost.localdomain`.
+4. **Template placement keeps its name, and gains the device.** A declared
+   template still emits `template = { name = "<template>" }`; when the
+   entry sits under `templates/entry/<T>/devices/entry/<D>` and that type's
+   `template` declares `ngfw_device`, the block also carries
+   `ngfw_device = "<D>"`.
+5. **Schema table.** `LOCATION_SCHEMA` gains `ngfw: ('ngfw_device',)` for
+   the 14 types above and for no other emitted type. The existing live
+   provider-schema test keeps every entry honest.
+6. **Multi-device naming.** The digest context of a template-scoped object
+   is its declared template, else its declared device, else `''`. Two
+   devices that declare the same interface name produce two resources with
+   two digests and two different locations, and a device-aware reference
+   resolves to its own device's resource.
+7. **Placeholder is reported, not silent.** A template-scoped entry with no
+   declared template and no usable device keeps
+   `template = { name = "Shared" }` and is listed in
+   `MANUAL_SETUP_REPORT.txt` naming the templates the export associates
+   with its device, or stating that the export associates none.
+8. **Splitter uses the association.** A template is copied into a device
+   group's split config when the template and the device group name the
+   same device. The `DG-` prefix convention and the substring test are
+   gone. A device group with no associated template copies no template and
+   prints that fact. A template stack is copied when one of its devices is
+   one of the device group's devices.
+9. **No name guessing left.** No test or fixture relies on a device group
+   and a template sharing a name; the association fixture gives them
+   unrelated names (`Office-FW` device group, `HQ-Networks` template,
+   shared device `fw-1.example.com`) and the splitter test proves the join.
+10. **Fixtures and goldens.** A fixture covers two templates, two devices,
+    a template stack, and the same interface name on two devices, with
+    device group, template and device names that do not resemble each
+    other. The kitchen-sink fixture keeps its single-device shape, so its
+    diff shows the placement and digest changes only. Both golden sets
+    regenerate with a reviewed diff, and every change traces to criteria
+    3-7.
+11. **Tests.** Association parsing and effective templates (1-2); location
+    choice for the new branches (3-4); the schema table (5); two-device
+    naming and reference resolution (6); the placeholder report (7); the
+    splitter join and the no-template case (8-9).
+12. **Gates:** ruff clean, pytest green, terraform validate green on the
+    sample output, the kitchen-sink output and the two-device fixture (the
+    only output that carries `location.ngfw`).
 
 ## Result (2026-10-08)
 
-Criteria 1-3, 5-12 met. Criterion 4 met with the subset direction above.
+All twelve criteria hold. `ruff check .` clean, 394 tests pass, and
+`terraform validate` passes for the sample, kitchen-sink, crypto-profile
+and two-device outputs.
 
-- Gate: ruff clean; pytest 372 passed; `terraform validate` green on both
-  golden sets (4 cases).
-- `tests/test_multi_vsys_location.py` (27 tests) covers criteria 1-2, 4-10.
-- Two scope decisions, both recorded in `backlog.md`:
-  - **`rulebase` is not emitted.** The four policy-rule types declare
-    `location.device_group.rulebase` and `location.shared.rulebase`, so a
-    pre-rulebase rule *could* name its rulebase. The parser does not yet
-    record which rulebase an entry sits in, and the accepted value string
-    is unverified (the provider binary carries `pre-rulebase`; it carries
-    no `post-rulebase` literal). Emitting a guessed value would move rules.
-    The rulebase stays unrecorded and unemitted until that value is
-    verified.
-  - **Device-aware reference resolution covers device-declared names only**
-    (interfaces today). A name no device declared still resolves through
-    the F3.2 context chain, which is device-blind by design.
+Evidence per criterion is `tests/test_multi_device_template.py` (20 tests)
+plus the F3.5 suite, which keeps the scope rules it already pinned:
+
+- 1-2: `test_parser_reads_the_declared_membership`,
+  `test_templates_for_device_follows_the_stack`,
+  `test_association_is_empty_when_the_export_lists_no_devices`,
+  `test_association_names_are_sorted`.
+- 3-4: `test_device_specific_config_uses_ngfw`,
+  `test_object_types_never_emit_ngfw`,
+  `test_placeholder_device_never_becomes_ngfw`,
+  `test_template_override_inside_a_template_names_the_device`.
+- 5: `test_only_template_scoped_types_declare_ngfw`, and the live
+  provider-schema test that compares `LOCATION_SCHEMA` with the v2.0.14
+  schema.
+- 6: `test_same_interface_name_on_two_devices`,
+  `test_reference_resolves_inside_the_template_target_device`,
+  `test_ambiguous_template_keeps_a_plain_interface_name`,
+  `test_single_device_declaration_still_resolves_without_a_device`.
+- 7: `test_zone_with_a_device_and_no_vsys_is_reported`,
+  `test_placeholder_report_without_a_device`.
+- 8-9: `test_splitter_joins_template_and_device_group_by_device`,
+  `test_splitter_copies_the_template_stack_by_device`,
+  `test_splitter_copies_no_template_without_a_shared_device`.
+
+Two decisions came out of the work:
+
+- **A deviceless reference to a name two devices declare stays a plain
+  string.** A virtual router in a template that targets two firewalls
+  cannot say which `ethernet1/1` it means, so the converter emits the name
+  and no cross-reference. Guessing the first declaration would build a
+  reference to one specific firewall.
+- **The splitter copies with `copy.deepcopy`.** ElementTree keeps no parent
+  bookkeeping, so `append` makes one element object a child of two trees.
+  The shared-section merge then appends into an element that is still in the
+  export, so the export gained an entry per device group. Reproduced before
+  the fix (two `<shared>` sections, two device groups: the source ended with
+  `a1, a2, a2`), fixed, and pinned by
+  `test_splitter_merges_shared_sections_without_touching_the_source` and
+  `test_splitter_leaves_the_source_tree_intact`.

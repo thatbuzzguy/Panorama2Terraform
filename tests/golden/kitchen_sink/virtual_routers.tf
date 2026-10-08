@@ -3,7 +3,7 @@
 
 # Source: device-specific
 # Type: Virtual Router (Legacy)
-resource "panos_virtual_router" "default_73798532" {
+resource "panos_virtual_router" "default_71ddcf75" {
   location = {
     template = {
       name = "Shared"
@@ -14,7 +14,7 @@ resource "panos_virtual_router" "default_73798532" {
 
 # Source: device-specific
 # Type: Virtual Router (Legacy)
-resource "panos_virtual_router" "vr_nobgp_96d57824" {
+resource "panos_virtual_router" "vr_nobgp_45339c20" {
   location = {
     template = {
       name = "Shared"
@@ -25,7 +25,7 @@ resource "panos_virtual_router" "vr_nobgp_96d57824" {
 
 # Source: device-specific
 # Type: Virtual Router (Legacy)
-resource "panos_virtual_router" "vr_dmz_7626169b" {
+resource "panos_virtual_router" "vr_dmz_abd4195a" {
   location = {
     template = {
       name = "Shared"
@@ -37,10 +37,10 @@ resource "panos_virtual_router" "vr_dmz_7626169b" {
 
 # Source: device-specific
 # Type: Virtual Router (Legacy)
-resource "panos_virtual_router" "vr_device_level_14036781" {
+resource "panos_virtual_router" "vr_device_level_7cfc3546" {
   location = {
-    template = {
-      name = "Shared"
+    ngfw = {
+      ngfw_device = "fw-2.example.com"
     }
   }
   name = "vr-device-level"
@@ -56,7 +56,7 @@ resource "panos_virtual_router" "default_c03bed95" {
     }
   }
   name = "default"
-  interfaces = [panos_ethernet_interface.ethernet1_1_5dadf948.name, panos_ethernet_interface.ethernet1_2_e93e63ea.name]
+  interfaces = [panos_ethernet_interface.ethernet1_1_d74b05bd.name, panos_ethernet_interface.ethernet1_2_ff1cc5a5.name]
 }
 
 resource "panos_virtual_router_static_route_ipv4" "default_c03bed95_default_gw_96fe6d2d" {
@@ -97,7 +97,7 @@ resource "panos_virtual_router" "lr_main_2258b30f" {
     }
   }
   name = "lr-main"
-  interfaces = [panos_ethernet_interface.ethernet1_1_5dadf948.name]
+  interfaces = [panos_ethernet_interface.ethernet1_1_d74b05bd.name]
 }
 
 resource "panos_virtual_router_static_route_ipv4" "lr_main_2258b30f_lr_default_2029ebbd" {

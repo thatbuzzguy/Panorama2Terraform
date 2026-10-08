@@ -93,16 +93,31 @@ def test_schema_table_matches_provider_shape():
         'vsys': ('name', 'ngfw_device')}
     # A VLAN interface template block declares no vsys field.
     assert LOCATION_SCHEMA['panos_vlan_interface'] == {
+        'ngfw': ('ngfw_device',),
         'shared': (), 'template': ('name', 'ngfw_device', 'panorama_device')}
+
+
+def test_only_template_scoped_types_declare_ngfw():
+    """`ngfw` belongs to the template-scoped types, and to every one of them.
+
+    Config a firewall owns is a template-scoped object placed on one device
+    (F3.6). Objects and rules live in a virtual system or a device group, so
+    they have no ngfw sub-block to emit.
+    """
+    ngfw_types = {t for t, scopes in LOCATION_SCHEMA.items() if 'ngfw' in scopes}
+    assert ngfw_types == TerraformGenerator._TEMPLATE_SCOPED_TYPES - {'panos_zone'}
+    assert 'panos_address' not in ngfw_types
+    assert 'panos_security_policy_rules' not in ngfw_types
 
 
 def test_schema_table_exists_in_the_provider_schema(provider_schema):
     """Every sub-block and field the table lists really exists.
 
-    The table is a subset by design: the provider also declares `ngfw`,
+    The table is a subset by design: the provider also declares
     `template_stack`, `template_stack_vsys` and `template_vsys` for some
-    types, and the converter never needs them. A table entry the provider
-    does not declare is an invalid location.
+    types, and the converter never needs them (a template stack holds device
+    and template members, never config). A table entry the provider does not
+    declare is an invalid location.
     """
     for resource_type, scopes in LOCATION_SCHEMA.items():
         assert resource_type in provider_schema, resource_type
@@ -252,7 +267,9 @@ def test_placeholder_template_for_unscoped_template_type(gen):
     """A template-scoped resource with no declared template keeps the marker.
 
     'Shared' is a placeholder name, not a template the export named. F3.6
-    (template-aware parsing) replaces it with the real template name.
+    resolves the template where the export states one (a declared template,
+    else location.ngfw for a named device); what is left over is reported,
+    because the placeholder is not a template an operator can apply to.
     """
     text = gen.location_block('panos_monitor_profile',
                               {'name': 'PM', 'device_group': 'Shared'})

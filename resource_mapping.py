@@ -71,10 +71,12 @@ LOCATION_SCHEMA = {
         'vsys': ('name', 'ngfw_device'),
     },
     'panos_aggregate_interface': {
+        'ngfw': ('ngfw_device',),
         'shared': (),
         'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
     },
     'panos_aggregate_layer3_subinterface': {
+        'ngfw': ('ngfw_device',),
         'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
     },
     'panos_application_group': {
@@ -93,10 +95,12 @@ LOCATION_SCHEMA = {
         'vsys': ('name', 'ngfw_device'),
     },
     'panos_ethernet_interface': {
+        'ngfw': ('ngfw_device',),
         'shared': (),
         'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
     },
     'panos_ethernet_layer3_subinterface': {
+        'ngfw': ('ngfw_device',),
         'shared': (),
         'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
     },
@@ -106,21 +110,27 @@ LOCATION_SCHEMA = {
         'vsys': ('name', 'ngfw_device'),
     },
     'panos_ike_crypto_profile': {
+        'ngfw': ('ngfw_device',),
         'template': ('name', 'ngfw_device', 'panorama_device'),
     },
     'panos_ike_gateway': {
+        'ngfw': ('ngfw_device',),
         'template': ('name', 'ngfw_device', 'panorama_device'),
     },
     'panos_ipsec_crypto_profile': {
+        'ngfw': ('ngfw_device',),
         'template': ('name', 'ngfw_device', 'panorama_device'),
     },
     'panos_ipsec_tunnel': {
+        'ngfw': ('ngfw_device',),
         'template': ('name', 'ngfw_device', 'panorama_device'),
     },
     'panos_loopback_interface': {
+        'ngfw': ('ngfw_device',),
         'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
     },
     'panos_monitor_profile': {
+        'ngfw': ('ngfw_device',),
         'template': ('name', 'ngfw_device', 'panorama_device'),
     },
     'panos_nat_policy_rules': {
@@ -153,17 +163,21 @@ LOCATION_SCHEMA = {
         'vsys': ('name', 'ngfw_device'),
     },
     'panos_tunnel_interface': {
+        'ngfw': ('ngfw_device',),
         'shared': (),
         'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
     },
     'panos_virtual_router': {
+        'ngfw': ('ngfw_device',),
         'vsys': ('name', 'ngfw_device'),
         'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
     },
     'panos_virtual_router_static_route_ipv4': {
+        'ngfw': ('ngfw_device',),
         'template': ('name', 'ngfw_device', 'panorama_device'),
     },
     'panos_vlan_interface': {
+        'ngfw': ('ngfw_device',),
         'shared': (),
         'template': ('name', 'ngfw_device', 'panorama_device'),
     },

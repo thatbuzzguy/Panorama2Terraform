@@ -1,26 +1,103 @@
 # Agent Status
 
 ## Current position
-**F3.5 (multi-vsys) is committed** as 732d44c (this session). `acceptance.md` holds
-the F3.5 criteria and result — overwrite it before the next task. **Next
-task: F3.6 Multi-device, template-aware parsing** (Epic 3): use the
-explicit device-group → template association, replace substring matching,
-and give template-scoped objects their real template name instead of the
-`Shared` placeholder.
+**F3.6 (multi-device, template-aware parsing) is committed**, and it landed
+F3.7 (the splitter rewrite) with it. `acceptance.md` holds the F3.6 criteria
+and result — overwrite it before the next task. **Next task: F3.8 Safe XML
+input** (Epic 3): DTD rejection already landed in F1.7, so what remains is
+the input size limit or `defusedxml`, applied to both entry points, with a
+clear refusal and no partial output.
 
-F3.5 state: `identity_of(elem)` (parser) is the single source of the four
-scope facts (`device_group`, `vsys`, `template`, `vsys_device`), with no
-invented defaults. `LOCATION_SCHEMA` (resource_mapping.py) is the verified
-v2.0.14 `location` contract per emitted type and the only source for the
-sub-block choice; `location_block(resource_type, obj)` reads it plus the
-identity. `MANUAL_SETUP_REPORT.txt` carries two new sections ("Locations
-The Provider Cannot Carry", "Virtual System Locations Without A Target
-Device"). Gate: ruff clean, pytest 372 passed, terraform validate green on
-both golden sets.
+F3.6 state: `PanoramaParser.parse_associations()` is the only source of the
+multi-device relationship (device → device groups / templates / stacks, stack
+→ templates; empty tables when the export lists no device) and
+`templates_for_device(device)` resolves a device's effective templates.
+`TerraformGenerator(output_dir, associations)` takes the tables; the naming
+context of a template-scoped object is `scope_context(obj)` (template, else
+device); `location_block` places device-owned config with `ngfw {
+ngfw_device }`; `reference_device(obj)` resolves a reference inside its own
+device or its template's single device, and keeps a plain name when the
+choice is ambiguous. `split_device_groups.device_associations(root)` is the
+splitter's copy of the same join, and every element it takes out of the
+export is a `copy.deepcopy`. Gate: ruff clean, pytest 394 passed, terraform
+validate green on the sample, kitchen-sink, crypto-profile and two-device
+outputs.
 
 ## Session log
 
-### F3.5 — Multi-vsys (this session)
+### F3.6 — Multi-device, template-aware parsing (this session)
+- Direction: Epic 3, lowest-numbered unfinished feature. `acceptance.md`
+  rewritten for F3.6 first (12 criteria + the v2.0.14 `location.ngfw` schema
+  facts verified for it: 14 template-scoped emitted types declare
+  `ngfw { ngfw_device }`; `panos_zone` is template-scoped and declares none).
+- Reproduced the defect first: three `ethernet1/1` entries on three devices
+  produced three resources that differed only by the taken-name counter and
+  carried identical `template { name = "Shared" }` locations.
+- Parser: `_list_names()` accepts `<entry name>` and `<member>`; new
+  `parse_associations()` (cached) returns device_groups / templates /
+  template_stacks / stack_templates tables of sorted names, and
+  `templates_for_device()` adds a device's stack templates to its direct
+  ones. Nothing infers a relationship from a name.
+- Generator: `TerraformGenerator(output_dir, associations=None)`; `main()`
+  passes `panorama.parse_associations()`. `location_block` gained two
+  branches — a device inside a template adds `ngfw_device` to the `template`
+  block, and config under `devices/entry/<device>` on a type that declares
+  `ngfw` emits `ngfw = { ngfw_device = "<device>" }` — and the `Shared`
+  placeholder is now reported with the templates the entry's device does
+  take (`_device_template_text`). `LOCATION_SCHEMA` gained
+  `ngfw: ('ngfw_device',)` for exactly the 14 types, and
+  `test_only_template_scoped_types_declare_ngfw` keeps the set honest against
+  the live schema.
+- Naming: `scope_context(obj)` (template, else device, else `''`) replaced
+  ten `context=X.get('template') or ''` sites, so two firewalls that both
+  declare `ethernet1/1` are two resources with two digests and two
+  locations. The monitor-profile declaration site, which had been left
+  contextless, now uses it too.
+- References: `_device_scoped_names` became `_device_index`, a
+  `(scope, name) → {devices}` map. A deviceless referrer resolves a
+  device-declared name only when exactly one device declares it; two devices
+  means the export does not say which one, so the name stays a plain string.
+  `reference_device(obj)` (own device, else the single device a template
+  targets) replaced four `device=` reference sites.
+- Report: `_report_location` now has three kinds (`scope`, `device`,
+  `placeholder`) and a new section, "Template Locations The Export Does Not
+  Name (placeholder template emitted)".
+- Splitter (this closed F3.7 too): `device_associations()` +
+  `_entries_by_device()` join a device group, a template and a template stack
+  on the devices they list, so the `DG-` prefix convention and the substring
+  test are gone; a device group with no device, or with no template targeting
+  its devices, prints that fact. **Bug found and fixed:** ElementTree
+  `append` does not reparent — it makes one element object a child of two
+  trees — so the shared-section merge appended into an element that was still
+  in the export and grew the export by one entry per device group (reproduced
+  with two `<shared>` sections: the source ended with `a1, a2, a2`). Every
+  copy is now `copy.deepcopy`. Note: an earlier comment in this file and in
+  the splitter claimed `append` *moves* the element; that is wrong, and the
+  corrected mechanism is what `backlog.md` records.
+- Fixtures: `tests/fixtures/multi_device_templates.xml` — two device groups,
+  two templates, one stack, `Unassigned-DG` with no device, and
+  `ethernet1/1` on two devices, with names that do not resemble each other
+  (`Office-FW` / `HQ-Networks` / `fw-1.example.com`). The kitchen-sink fixture
+  keeps its single-device shape: giving `FW-Template` a device list made the
+  fixture model a layout no export produces (its interfaces stay on
+  `localhost.localdomain`), which turned real references into plain names.
+- Goldens: the sample set is unchanged. The kitchen-sink diff is digest-only
+  (the device enters the context) plus one location change —
+  `vr-device-level` moves from the `Shared` placeholder to
+  `ngfw { ngfw_device = "fw-2.example.com" }` — and every reference survived.
+- Tests: `tests/test_multi_device_template.py` (20 tests) and two new
+  validate-gate cases (`tests/test_terraform_validate.py` now runs four
+  outputs, the two-device one being the only `location.ngfw` output).
+- Docs: README naming and location sections (the `ngfw` row, the reported
+  placeholder, two firewalls keeping two resources);
+  `docs/DEVICE_GROUP_SPLITTING.md` documents the device join, the printed
+  notes and the new troubleshooting cause; the digests in
+  `docs/MIGRATION_GUIDE.md` and `docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md`
+  re-derived from the regenerated goldens.
+- Gate: ruff clean. pytest 394 passed. terraform validate green on four
+  outputs.
+
+### F3.5 — Multi-vsys (previous session)
 - Direction: Epic 3, lowest-numbered unfinished feature. `acceptance.md`
   rewritten for F3.5 first (12 criteria + the v2.0.14 `location` schema
   facts verified for it).

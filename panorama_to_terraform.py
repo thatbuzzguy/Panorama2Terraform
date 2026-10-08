@@ -225,6 +225,95 @@ class PanoramaParser:
             'vsys_device': self.device_of(elem),
         }
 
+    @staticmethod
+    def _list_names(container: ET.Element, child_tag: str) -> list:
+        """Return the names a container lists, in document order.
+
+        A Panorama export lists members two ways: the long form
+        `<devices><entry name="fw-1.example.com">` and the short form
+        `<templates><member>T1</member>`. Both mean the same thing.
+        """
+        names = []
+        listing = container.find(child_tag)
+        if listing is None:
+            return names
+        for node in list(listing):
+            if node.tag == 'entry':
+                name = node.get('name')
+            elif node.tag == 'member':
+                name = (node.text or '').strip()
+            else:
+                continue
+            if name:
+                names.append(name)
+        return names
+
+    def parse_associations(self) -> dict:
+        """Return the device membership the export declares (F3.6).
+
+        A Panorama export states the multi-device relationships in data, so
+        the converter never infers one from a name:
+
+            device-group/entry/<DG>/devices/entry/<device>
+                the devices the device group contains
+            templates/entry/<T>/devices/entry/<device>
+                the devices the template targets
+            template-stack/entry/<S>/devices/entry/<device>
+                the devices the stack targets
+            template-stack/entry/<S>/templates/member/<T>
+                the templates the stack applies
+
+        Returns four name-keyed tables (device_groups, templates,
+        template_stacks, stack_templates), each value sorted so the result
+        does not depend on document order. An export that lists no device
+        returns empty tables: no association is better than a guessed one.
+        """
+        cached = getattr(self, '_associations', None)
+        if cached is not None:
+            return cached
+
+        tables = {'device_groups': {}, 'templates': {}, 'template_stacks': {},
+                  'stack_templates': {}}
+        for entry in self.root.findall('.//device-group/entry'):
+            name = entry.get('name')
+            if name:
+                for device in self._list_names(entry, 'devices'):
+                    tables['device_groups'].setdefault(device, []).append(name)
+        for entry in self.root.findall('.//templates/entry'):
+            name = entry.get('name')
+            if name:
+                for device in self._list_names(entry, 'devices'):
+                    tables['templates'].setdefault(device, []).append(name)
+        for entry in self.root.findall('.//template-stack/entry'):
+            name = entry.get('name')
+            if not name:
+                continue
+            for device in self._list_names(entry, 'devices'):
+                tables['template_stacks'].setdefault(device, []).append(name)
+            for template in self._list_names(entry, 'templates'):
+                tables['stack_templates'].setdefault(name, []).append(template)
+        for table in tables.values():
+            for names in table.values():
+                names.sort()
+
+        self._associations = tables
+        return tables
+
+    def templates_for_device(self, device: str) -> list:
+        """Return the templates that apply to a device (F3.6).
+
+        A device takes a template directly or through a template stack, so
+        the effective set is the union. Sorted and de-duplicated; an empty
+        or unknown device name returns [].
+        """
+        if not device:
+            return []
+        tables = self.parse_associations()
+        names = list(tables['templates'].get(device, []))
+        for stack in tables['template_stacks'].get(device, []):
+            names.extend(tables['stack_templates'].get(stack, []))
+        return sorted(set(names))
+
     def parse_tags(self) -> list[dict]:
         """Parse tags (administrative tags).
 
@@ -987,8 +1076,8 @@ class PanoramaParser:
 
         F3.1: one zone per XML entry, keyed by
         (device group, vsys, type, name); single pass, no name dedup.
-        Template association stays in F3.6, so the owning template is not
-        tracked here.
+        F3.5: identity_of records the declaring template and the owning
+        device, which is what the v2 location needs.
         """
         zones = []
 
@@ -2053,7 +2142,7 @@ class TerraformGenerator:
         'ssh-proxy': 'ssh_proxy',
     }
 
-    def __init__(self, output_dir: str):
+    def __init__(self, output_dir: str, associations: Optional[dict] = None):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         # Collision handling for resource names. Two different PAN-OS names
@@ -2071,11 +2160,19 @@ class TerraformGenerator:
         # device-scoped referrer resolves against this index instead of the
         # flat (scope, name) index.
         self._device_registry: dict[tuple[str, str, str], str] = {}
-        self._device_scoped_names: set[tuple[str, str]] = set()
+        # F3.6: (scope, name) -> the devices that declared it. A name two
+        # devices declare cannot be resolved by a referrer that names no
+        # device, so name_ref keeps it a plain string.
+        self._device_index: dict[tuple[str, str], set] = {}
         # F3.5: (kind, line) pairs for a source scope the emitted location
         # cannot carry ('scope') and for a vsys location with no target
         # device name ('device'). generate_manual_setup_report writes them.
         self._location_reports: list[tuple[str, str]] = []
+        # F3.6: the device membership the export declares
+        # (PanoramaParser.parse_associations). A template-scoped entry the
+        # export leaves unplaced is reported with the templates its device
+        # takes, so the operator sets the real name.
+        self._associations: dict = associations or {}
 
     def sanitize_name(self, name: str) -> str:
         """Sanitize names for Terraform resource names"""
@@ -2101,7 +2198,7 @@ class TerraformGenerator:
         different digests. The hash makes the name deterministic. The same
         object always gets the same local name. The name does not depend on
         emission order or run count. Same-named objects in different device
-        groups, virtual systems, or templates stay distinct.
+        groups, virtual systems, devices, or templates stay distinct.
 
         If the address is already taken in the scope (a duplicate declaration
         or a digest collision), a numeric suffix follows, so the output is
@@ -2116,6 +2213,11 @@ class TerraformGenerator:
         F3.5: `device` (the target device an entry names) is not part of the
         digest. It indexes a declaration so a reference from one device
         cannot resolve to another device's resource of the same name.
+
+        F3.6: a template-scoped object passes its template, else the device
+        the export placed it under (TerraformGenerator.scope_context), so
+        the same interface name on two firewalls stays two resources instead
+        of one resource plus a taken-name counter.
         """
         base = self.sanitize_name(name) or 'unnamed'
         digest = hashlib.sha256(f'{scope}|{context}|{vsys}|{name}'.encode()).hexdigest()[:8]
@@ -2134,7 +2236,7 @@ class TerraformGenerator:
         self._flat_registry.setdefault((scope, name), candidate)
         if device:
             self._device_registry.setdefault((scope, device, name), candidate)
-            self._device_scoped_names.add((scope, name))
+            self._device_index.setdefault((scope, name), set()).add(device)
         return candidate
 
     def name_ref(self, name: str, scopes, key: Optional[str] = None,
@@ -2167,21 +2269,34 @@ class TerraformGenerator:
         F3.5: `device` is the target device the referrer names. A name that
         a device declared (an interface, which is device-level config) then
         resolves only inside that device, so a zone on one firewall never
-        points at another firewall's interface resource. A name no device
-        declared (a template-supplied interface) still resolves through the
-        normal chain.
+        points at another firewall's interface resource. When the referrer
+        names no device, such a name resolves only when exactly one device
+        declares it (F3.6). A name no device declared (a template-supplied
+        interface) still resolves through the normal chain.
         """
         lookup = key if key is not None else name
         vs = vsys or ''
-        # A device-declared name resolves inside its own device or not at
-        # all: check this before the context chain, which is device-blind.
-        if device and any((scope, lookup) in self._device_scoped_names
-                          for scope in scopes):
+        # A device-declared name (an interface) resolves inside a device or
+        # not at all: check this before the context chain, which is
+        # device-blind (F3.5).
+        declared_by_a_device = any((scope, lookup) in self._device_index
+                                   for scope in scopes)
+        if declared_by_a_device:
+            if device:
+                for scope in scopes:
+                    local = self._device_registry.get((scope, device, lookup))
+                    if local is not None:
+                        return HclRef(f'{scope}.{local}.name')
+                return name
+            # The referrer names no device of its own, so it reached here
+            # through a template that targets one device or several (F3.6).
+            # One device declaring the name is a fact; two is a guess, so the
+            # reference stays a plain name.
+            devices: set = set()
             for scope in scopes:
-                local = self._device_registry.get((scope, device, lookup))
-                if local is not None:
-                    return HclRef(f'{scope}.{local}.name')
-            return name
+                devices |= self._device_index.get((scope, lookup), set())
+            if len(devices) > 1:
+                return name
         # Context chain for the referrer: its own context first (a rule in a
         # device group references that group's objects), then the shared
         # objects the group inherits, then contextless declarations (zones,
@@ -2226,9 +2341,10 @@ class TerraformGenerator:
     _TEMPLATE_SCOPED_TYPES = frozenset(
         t for t, scopes in LOCATION_SCHEMA.items() if 'device_group' not in scopes)
 
-    # Template-scoped resource the export does not place in a template. The
-    # name is a placeholder until F3.6 (template-aware parsing) finds the
-    # real one.
+    # Template-scoped resource the export places in no template and on no
+    # named device (F3.6). The name is a guess, so location_block reports
+    # every resource that uses it, with the templates the entry's device
+    # does take.
     _TEMPLATE_PLACEHOLDER = 'Shared'
 
     # PAN-OS writes this device entry name for "this device" (Panorama
@@ -2237,11 +2353,13 @@ class TerraformGenerator:
     _LOCAL_DEVICE_PLACEHOLDER = 'localhost.localdomain'
 
     def _report_location(self, kind: str, line: str) -> None:
-        """Record a location the emitted resource cannot carry (F3.5).
+        """Record a location the emitted resource cannot carry (F3.5, F3.6).
 
-        Two kinds: 'scope' (a declared virtual system, template, or device
-        group the resource type cannot place the object in) and 'device' (a
-        vsys location with no usable target device name). Both land in
+        Three kinds: 'scope' (a declared virtual system, template, or device
+        group the resource type cannot place the object in), 'device' (a
+        vsys location with no usable target device name), and 'placeholder'
+        (a template-scoped entry the export leaves unplaced, so the emitted
+        template name is a placeholder). All land in
         MANUAL_SETUP_REPORT.txt.
         """
         self._location_reports.append((kind, line))
@@ -2258,6 +2376,73 @@ class TerraformGenerator:
             parts.append(f"device: {obj['vsys_device']}")
         return ', '.join(parts)
 
+    def _template_device(self, template: str) -> str:
+        """Return the one device a template targets, or '' when ambiguous (F3.6).
+
+        Reads the association tables backwards: `templates/entry/<T>/devices`
+        says which devices a template targets, and a device can take a
+        template through a template stack. A template that targets two
+        firewalls names no single device.
+        """
+        if not template:
+            return ''
+        devices = {device for device, names
+                   in self._associations.get('templates', {}).items()
+                   if template in names}
+        for device, stacks in self._associations.get('template_stacks', {}).items():
+            for stack in stacks:
+                if template in self._associations.get('stack_templates', {}).get(stack, []):
+                    devices.add(device)
+        return sorted(devices)[0] if len(devices) == 1 else ''
+
+    def reference_device(self, obj: dict) -> str:
+        """Return the device a reference from `obj` resolves inside (F3.6).
+
+        A device-scoped name (an interface) belongs to one firewall. When the
+        referrer names its own device, that device decides. When it names only
+        a template, the export still decides when that template targets
+        exactly one device; a template that targets two firewalls is
+        ambiguous, so the reference stays a plain name instead of guessing.
+        """
+        device = (obj.get('vsys_device') or '').strip()
+        if device:
+            return device
+        return self._template_device((obj.get('template') or '').strip())
+
+    @staticmethod
+    def scope_context(obj: dict) -> str:
+        """Return the naming context of a template-scoped object (F3.6).
+
+        The digest context separates same-named objects that live in
+        different scopes. A template-scoped object names its template when
+        the export declares one; otherwise the export placed the entry under
+        devices/entry/<device>, so the device is the scope. Without it, two
+        firewalls that both declare ethernet1/1 collapse to one digest and
+        the second resource only differs by the taken-name counter.
+        """
+        return (obj.get('template') or obj.get('vsys_device') or '').strip()
+
+    def _device_template_text(self, device: str) -> str:
+        """Describe the templates the export associates with a device (F3.6).
+
+        Reads the tables PanoramaParser.parse_associations built from
+        `templates/entry/*/devices/entry` and
+        `template-stack/entry/*/{devices,templates}`. The placeholder report
+        uses it, so the operator learns which template name to write.
+        """
+        if not device:
+            return 'the export names no device for this entry'
+        if device == self._LOCAL_DEVICE_PLACEHOLDER:
+            return ('the entry sits on the PAN-OS "this device" placeholder, '
+                    'so the export names no firewall that takes a template')
+        names = list(self._associations.get('templates', {}).get(device, []))
+        for stack in self._associations.get('template_stacks', {}).get(device, []):
+            names.extend(self._associations.get('stack_templates', {}).get(stack, []))
+        names = sorted(set(names))
+        if names:
+            return f'device {device} takes template(s): {", ".join(names)}'
+        return f'the export associates no template with device {device}'
+
     def location_block(self, resource_type: str, obj: dict) -> str:
         """Required location object for a generated resource (F2.3, F3.5).
 
@@ -2271,10 +2456,16 @@ class TerraformGenerator:
            virtual system the export put it in.
         2. A declared template, on a type that accepts `template` ->
            `template { name }`, plus `vsys` when that type's `template`
-           declares the field.
-        3. Otherwise the defining device group, the shared section, or the
+           declares the field, plus `ngfw_device` when the export nests the
+           entry under a device inside the template (F3.6).
+        3. Otherwise, a device the export names, on a type that accepts
+           `ngfw` -> `ngfw { ngfw_device }`: config the export puts under
+           devices/entry/<device> belongs to that firewall, not to a
+           template (F3.6).
+        4. Otherwise the defining device group, the shared section, or the
            `template { name = "Shared" }` placeholder for a template-scoped
-           type with no declared template (the real name is F3.6).
+           type with no declared template, reported with the templates the
+           entry's device does take (F3.6).
 
         A declared scope the type cannot carry goes to
         MANUAL_SETUP_REPORT.txt instead of being dropped silently, and no
@@ -2311,9 +2502,14 @@ class TerraformGenerator:
                     f'names no target device')
             return render('vsys', fields)
 
-        # 2. Template placement.
+        # 2. Template placement. An entry the export nests under
+        #    templates/entry/<T>/devices/entry/<D> is that device's own
+        #    config inside the template; the schema carries it as
+        #    template.ngfw_device (F3.6).
         if template and 'template' in scopes:
             fields = {'name': template}
+            if device and device != self._LOCAL_DEVICE_PLACEHOLDER:
+                fields['ngfw_device'] = device
             if vsys:
                 if 'vsys' in scopes['template']:
                     fields['vsys'] = vsys
@@ -2325,7 +2521,16 @@ class TerraformGenerator:
                         f'declares no vsys field')
             return render('template', fields)
 
-        # 3. Report every declared scope the type cannot carry, then fall
+        # 3. Device-specific placement (F3.6). The export put the entry under
+        #    devices/entry/<device>/network, so it is that firewall's own
+        #    config and not a template's. Provider v2 places it with
+        #    location.ngfw ("Located in a specific NGFW device"). Only the
+        #    template-scoped types declare it: objects live in a virtual
+        #    system and take branch 1.
+        if device and device != self._LOCAL_DEVICE_PLACEHOLDER and 'ngfw' in scopes:
+            return render('ngfw', {'ngfw_device': device})
+
+        # 4. Report every declared scope the type cannot carry, then fall
         #    back to the location the type does accept.
         if vsys and 'vsys' not in scopes:
             self._report_location(
@@ -2355,6 +2560,27 @@ class TerraformGenerator:
                 # "Shared" is a different object that does not exist
                 # (F3.5).
                 return render('shared', {})
+        if 'template' not in scopes:
+            # Defensive: every emitted type declares `device_group`,
+            # `shared`, or `template`, so no branch above returned. Emit no
+            # location (the resource then fails `terraform validate` loudly)
+            # and say why, rather than emitting a sub-block the type lacks.
+            self._report_location(
+                'scope',
+                f'  {resource_type} "{obj.get("name")}" ({where}): no location '
+                f'emitted because {resource_type} declares no sub-block this '
+                f'entry can use; place the object by hand')
+            return ''
+        # Nothing in the export places this entry and the type only lives in
+        # a template. Emit the placeholder and report it with the templates
+        # the entry's device does take, so the operator replaces the guess
+        # rather than applying it (F3.6).
+        self._report_location(
+            'placeholder',
+            f'  {resource_type} "{obj.get("name")}" ({where}): '
+            f'location.template.name is the "{self._TEMPLATE_PLACEHOLDER}" '
+            f'placeholder because the export places this entry in no '
+            f'template; {self._device_template_text(device)}')
         return render('template', {'name': self._TEMPLATE_PLACEHOLDER})
 
     def hcl_value(self, value: Any, indent: str = '  ') -> str:
@@ -3285,16 +3511,14 @@ variable "panos_password" {
         content = '# PBF Path Monitoring Profiles (F2.9: real v2 resources)\n\n'
 
         for prof in profiles:
-            # Template-scoped; the tracked template name is unknown at
-            # parse time (context lands in F3.6); the vsys is part of the
-            # F3.2 identity key.
+            # F3.6: a monitor profile lives in a template or in one device's
+            # own config, so the naming context is the declared template, else
+            # the declared device (scope_context).
             resource_name = self.declare_resource_name(
-                prof['name'], 'panos_monitor_profile', vsys=prof.get('vsys') or ''
+                prof['name'], 'panos_monitor_profile',
+                context=self.scope_context(prof), vsys=prof.get('vsys') or ''
             )
             content += f'resource "panos_monitor_profile" "{resource_name}" {{\n'
-            # Template-scoped; the tracked template name is unknown at
-            # parse time, so the default "Shared" template is used (same
-            # convention as the other template-scoped types, F2.3/F2.4)
             content += self.location_block('panos_monitor_profile', prof)
             content += f'  name = {self.escape_string(prof["name"])}\n'
             for attr in ('interval', 'threshold'):
@@ -3325,7 +3549,7 @@ variable "panos_password" {
         for zone in zones:
             resource_name = self.declare_resource_name(
                 zone['name'], 'panos_zone',
-                context=zone.get('template') or '', vsys=zone.get('vsys') or ''
+                context=self.scope_context(zone), vsys=zone.get('vsys') or ''
             )
 
             content += f'resource "panos_zone" "{resource_name}" {{\n'
@@ -3341,7 +3565,7 @@ variable "panos_password" {
                 # F3.2: resolve in the zone's vsys key
                 network[key] = [
                     self.name_ref(i, INTERFACE_SCOPES, vsys=zone.get('vsys') or '',
-                                  device=zone.get('vsys_device') or '')
+                                  device=self.reference_device(zone))
                     for i in zone['interfaces']]
             if zone.get('zone_protection_profile'):
                 network['zone_protection_profile'] = zone['zone_protection_profile']
@@ -3369,7 +3593,7 @@ variable "panos_password" {
         for router in vrouters:
             resource_name = self.declare_resource_name(
                 router['name'], 'panos_virtual_router',
-                context=router.get('template') or '', vsys=router.get('vsys') or ''
+                context=self.scope_context(router), vsys=router.get('vsys') or ''
             )
 
             # Add comment showing source and type. A router the export does
@@ -3395,7 +3619,7 @@ variable "panos_password" {
                 ifaces_str = ', '.join([
                     self.hcl_value(self.name_ref(
                         i, INTERFACE_SCOPES, vsys=router.get('vsys') or '',
-                        device=router.get('vsys_device') or ''), '')
+                        device=self.reference_device(router)), '')
                     for i in router['interfaces']
                 ])
                 content += f'  interfaces = [{ifaces_str}]\n'
@@ -3408,7 +3632,7 @@ variable "panos_password" {
                     route_key = f"{resource_name}_{route['name']}"
                     route_resource = self.declare_resource_name(
                         route_key, 'panos_virtual_router_static_route_ipv4',
-                        context=router.get('template') or '', vsys=router.get('vsys') or ''
+                        context=self.scope_context(router), vsys=router.get('vsys') or ''
                     )
 
                     content += f'resource "panos_virtual_router_static_route_ipv4" "{route_resource}" {{\n'
@@ -3477,7 +3701,7 @@ variable "panos_password" {
         """Emit one ethernet entry: the physical interface, or a tagged subinterface."""
         name = iface['name']
         mode = iface.get('mode')
-        context = iface.get('template') or ''
+        context = self.scope_context(iface)
         vsys = iface.get('vsys') or ''
         device = iface.get('vsys_device') or ''
         scope_sub = 'panos_ethernet_layer3_subinterface'
@@ -3544,7 +3768,9 @@ variable "panos_password" {
             sub_resource = self.declare_resource_name(
                 sub_name, scope_sub, context=context, vsys=vsys, device=device)
             out += f'resource "{scope_sub}" "{sub_resource}" {{\n'
-            out += self.location_block(scope_sub, iface)
+            # The subinterface is its own object, so reports name it by its
+            # own name (the location itself comes from the same source entry).
+            out += self.location_block(scope_sub, {**iface, 'name': sub_name})
             out += f'  name = {self.escape_string(sub_name)}\n'
             # F2.6: the parent is the physical interface declared above;
             # F3.2: resolve in the subinterface's vsys key
@@ -3560,7 +3786,7 @@ variable "panos_password" {
     def _emit_interface_resource(self, iface: dict, scope: str) -> str:
         """Emit one interface resource for a non-ethernet kind (v2 nested shapes)."""
         name = iface['name']
-        context = iface.get('template') or ''
+        context = self.scope_context(iface)
         vsys = iface.get('vsys') or ''
         device = iface.get('vsys_device') or ''
         # An aggregate entry whose name already carries a unit (ae1.101) is a
@@ -3710,9 +3936,9 @@ variable "panos_password" {
             for prof in profiles['antivirus']:
                 resource_name = self.declare_resource_name(
                     prof['name'], 'panos_antivirus_security_profile',
-                    # F3.1: contextless legacy convention (DG/template
-                    # identity lands in F3.6); F3.2: vsys is part of the
-                    # identity key
+                    # F3.1: contextless. This stub emits no location, so
+                    # the device group and template stay out of its name;
+                    # F3.2: vsys is part of the identity key
                     context='', vsys=prof.get('vsys') or '')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
@@ -3725,9 +3951,9 @@ variable "panos_password" {
             for prof in profiles['vulnerability']:
                 resource_name = self.declare_resource_name(
                     prof['name'], 'panos_vulnerability_security_profile',
-                    # F3.1: contextless legacy convention (DG/template
-                    # identity lands in F3.6); F3.2: vsys is part of the
-                    # identity key
+                    # F3.1: contextless. This stub emits no location, so
+                    # the device group and template stay out of its name;
+                    # F3.2: vsys is part of the identity key
                     context='', vsys=prof.get('vsys') or '')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
@@ -3740,9 +3966,9 @@ variable "panos_password" {
             for prof in profiles['anti_spyware']:
                 resource_name = self.declare_resource_name(
                     prof['name'], 'panos_anti_spyware_security_profile',
-                    # F3.1: contextless legacy convention (DG/template
-                    # identity lands in F3.6); F3.2: vsys is part of the
-                    # identity key
+                    # F3.1: contextless. This stub emits no location, so
+                    # the device group and template stay out of its name;
+                    # F3.2: vsys is part of the identity key
                     context='', vsys=prof.get('vsys') or '')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
@@ -3755,9 +3981,9 @@ variable "panos_password" {
             for prof in profiles['url_filtering']:
                 resource_name = self.declare_resource_name(
                     prof['name'], 'panos_url_filtering_security_profile',
-                    # F3.1: contextless legacy convention (DG/template
-                    # identity lands in F3.6); F3.2: vsys is part of the
-                    # identity key
+                    # F3.1: contextless. This stub emits no location, so
+                    # the device group and template stay out of its name;
+                    # F3.2: vsys is part of the identity key
                     context='', vsys=prof.get('vsys') or '')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
@@ -3770,9 +3996,9 @@ variable "panos_password" {
             for prof in profiles['file_blocking']:
                 resource_name = self.declare_resource_name(
                     prof['name'], 'panos_file_blocking_security_profile',
-                    # F3.1: contextless legacy convention (DG/template
-                    # identity lands in F3.6); F3.2: vsys is part of the
-                    # identity key
+                    # F3.1: contextless. This stub emits no location, so
+                    # the device group and template stay out of its name;
+                    # F3.2: vsys is part of the identity key
                     context='', vsys=prof.get('vsys') or '')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
@@ -3785,9 +4011,9 @@ variable "panos_password" {
             for prof in profiles['wildfire_analysis']:
                 resource_name = self.declare_resource_name(
                     prof['name'], 'panos_wildfire_analysis_security_profile',
-                    # F3.1: contextless legacy convention (DG/template
-                    # identity lands in F3.6); F3.2: vsys is part of the
-                    # identity key
+                    # F3.1: contextless. This stub emits no location, so
+                    # the device group and template stay out of its name;
+                    # F3.2: vsys is part of the identity key
                     context='', vsys=prof.get('vsys') or '')
                 content += f'# Profile: {prof["name"]}\n'
                 if prof.get('description'):
@@ -4057,6 +4283,22 @@ variable "panos_password" {
             lines.append('  virtual system, or point the provider at that firewall.')
             lines.append('')
 
+        placeholder_reports = [
+            line for kind, line in self._location_reports if kind == 'placeholder']
+        if placeholder_reports:
+            lines.append('--- Template Locations The Export Does Not Name '
+                         '(placeholder template emitted) ---')
+            lines.extend(placeholder_reports)
+            lines.append('  v2 resource: as listed per line')
+            lines.append('  Reason: this resource type only lives in a template,')
+            lines.append('  and the export places the entry in no template and on')
+            lines.append('  no named device, so the converter cannot name the')
+            lines.append('  template. It emits the placeholder name "Shared",')
+            lines.append('  which is not a real template. Replace it with the')
+            lines.append('  template that targets the firewall, or import the')
+            lines.append('  entry from that firewall with location.ngfw.')
+            lines.append('')
+
         lines.append('End of report.')
 
         with open(self.output_dir / 'MANUAL_SETUP_REPORT.txt', 'w') as f:
@@ -4092,7 +4334,7 @@ variable "panos_password" {
             for profile in ike_profiles:
                 resource_name = self.declare_resource_name(
                     f"ike_profile_{profile['name']}", 'panos_ike_crypto_profile',
-                    context=profile.get('template') or '', vsys=profile.get('vsys') or ''
+                    context=self.scope_context(profile), vsys=profile.get('vsys') or ''
                 )
                 content += f'resource "panos_ike_crypto_profile" "{resource_name}" {{\n'
                 content += self.location_block('panos_ike_crypto_profile', profile)
@@ -4128,7 +4370,7 @@ variable "panos_password" {
                 profile_key = f"ipsec_profile_{profile['name']}"
                 resource_name = self.declare_resource_name(
                     profile_key, 'panos_ipsec_crypto_profile',
-                    context=profile.get('template') or '', vsys=profile.get('vsys') or ''
+                    context=self.scope_context(profile), vsys=profile.get('vsys') or ''
                 )
                 content += f'resource "panos_ipsec_crypto_profile" "{resource_name}" {{\n'
                 content += self.location_block('panos_ipsec_crypto_profile', profile)
@@ -4174,7 +4416,7 @@ variable "panos_password" {
             for gw in ike_gateways:
                 resource_name = self.declare_resource_name(
                     f"ike_gw_{gw['name']}", 'panos_ike_gateway',
-                    context=gw.get('template') or '', vsys=gw.get('vsys') or ''
+                    context=self.scope_context(gw), vsys=gw.get('vsys') or ''
                 )
                 content += f'resource "panos_ike_gateway" "{resource_name}" {{\n'
                 content += self.location_block('panos_ike_gateway', gw)
@@ -4207,7 +4449,7 @@ variable "panos_password" {
                     iface_ref = self.name_ref(
                         gw['local_address_interface'], INTERFACE_SCOPES,
                         vsys=gw.get('vsys') or '',
-                        device=gw.get('vsys_device') or '')
+                        device=self.reference_device(gw))
                     content += f'  local_address = {self.hcl_value({"interface": iface_ref})}\n'
                 elif gw.get('local_address'):
                     # Heuristic: dotted-quad values are IPs, otherwise
@@ -4216,7 +4458,7 @@ variable "panos_password" {
                     key = 'ip' if self._looks_like_ip(local) else 'interface'
                     value = (self.name_ref(local, INTERFACE_SCOPES,
                                            vsys=gw.get('vsys') or '',
-                                           device=gw.get('vsys_device') or '')
+                                           device=self.reference_device(gw))
                              if key == 'interface' else local)
                     content += f'  local_address = {self.hcl_value({key: value})}\n'
 
@@ -4244,7 +4486,7 @@ variable "panos_password" {
 
                 resource_name = self.declare_resource_name(
                     f"tunnel_{tunnel['name']}", 'panos_ipsec_tunnel',
-                    context=tunnel.get('template') or '', vsys=tunnel.get('vsys') or ''
+                    context=self.scope_context(tunnel), vsys=tunnel.get('vsys') or ''
                 )
                 content += f'resource "panos_ipsec_tunnel" "{resource_name}" {{\n'
                 content += self.location_block('panos_ipsec_tunnel', tunnel)
@@ -4624,7 +4866,7 @@ def main():
         print(f"  - {len(ipsec_tunnels)} IPsec tunnels")
 
         print(f"\nGenerating Terraform configuration in {args.output_dir}...")
-        tf_gen = TerraformGenerator(args.output_dir)
+        tf_gen = TerraformGenerator(args.output_dir, panorama.parse_associations())
 
         # Core configuration
         tf_gen.generate_provider_config()
