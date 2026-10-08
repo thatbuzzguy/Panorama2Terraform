@@ -25,12 +25,14 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   that authenticates to its fetch URL needs the credentials configured by
   hand; the converter cannot express them safely. Revisit only with an
   explicit secret-manager design (e.g. a `var.` reference, never a literal).
-- Policy rules do not record which rulebase (pre, post, or shared) they came from. F2.5 chains are ordered per device group across all rulebases, which matches PAN-OS evaluation order for a single rulebase but mixes rulebases when a device group has both pre- and post-rules. Tracking the rulebase per rule (and chaining within one rulebase) lands after F3.1.
+- Policy rules do not record which rulebase (pre, post, or shared) they came from. F2.5 chains are ordered per device group across all rulebases, which matches PAN-OS evaluation order for a single rulebase but mixes rulebases when a device group has both pre- and post-rules. F3.5 confirmed the provider can express it: `panos_security_policy_rules`, `panos_nat_policy_rules`, `panos_decryption_policy_rules` and `panos_pbf_policy_rules` all declare `location.device_group.rulebase` and `location.shared.rulebase` (v2.0.14 schema). F3.5 decision (2026-10-08): do not emit it. The parser does not record the rulebase, and the accepted value string is unverified — the provider binary carries the literal `pre-rulebase` and no `post-rulebase` literal, so the omitted-attribute default is the only safe output. Verify the value against a live target, then record the rulebase per rule, chain within one rulebase, and emit `rulebase` for the four rule types. Note that `location.vsys` declares no `rulebase` field, so a vsys-scoped rule cannot carry it at all and must be reported instead.
 - Security profile bodies are not parsed (antivirus, anti-spyware, vulnerability, URL filtering, file blocking, WildFire, zone protection). The v2 provider has resources for them, but emitting empty profile objects would silently create misconfigured resources. F2.9 decision (2026-10-04): the names and descriptions go to `MANUAL_SETUP_REPORT.txt` with the reason; real emission waits for the Epic 3 profile parsing.
 - Schedules: `panos_schedule` exists in v2, but only entry names are parsed (day/time ranges not captured) and v2.0.14 has no monthly schedule support. F2.9 decision (2026-10-04): report entry; revisit when schedule parsing lands.
 - IPsec tunnel monitor profiles have no v2 resource: `panos_monitor_profile` is the PBF path monitoring profile (`network/profiles/monitor-profile`), a different PAN-OS object — verified in the provider/pango source. F2.9 decision (2026-10-04): report entry.
 - F3.1 legacy context conventions (kept so the pre-F3.1 name digests stay stable): the six security profile categories are declared with an empty context (their objects carry `device_group` + `vsys` identity, but the digest context is '' until F3.6), and template-scoped objects (zones, interfaces, VRs, LR, VPN) use `template` (absent until F3.6) as context. F3.2 put `vsys` in the digest for every type, so these categories now hash (scope, '', vsys, name); F3.6 (template-aware parsing) should unify these to the true defining DG/template and regenerate the affected goldens with a reviewed diff.
 - Reference resolution order (F3.2, acceptance-recorded): the keyed chain is (referrer context, referrer vsys), then (Shared, referrer vsys), then (contextless, referrer vsys), then the flat first-declaration index. The flat index is not vsys-aware, so a name that exists only in another vsys still resolves through it. This keeps the F2.6 behavior for call sites that pass no vsys (template-scoped types). A strict per-vsys rule would break those sites; it stays as recorded until F3.6 gives them a real context.
+- Device-aware resolution (F3.5) is limited to names a device declared. Only the interface generators pass `device` at declaration, so only interface references are device-restricted; a zone, address or profile name that repeats on two firewalls still resolves first-wins through the context chain. Extend the rule when a generator declares per-device objects other than interfaces.
+- An entry under `devices/entry/<device>` (not inside a device group) records `device_group = 'Shared'`, because `device_group_of` has no other fallback. It is honest for the location choice (such an object is in no device group, and the emitted location is `vsys` or the template placeholder), but the naming digest then uses `'Shared'` for a device-level object and for a true shared object alike. F3.6 owns the device/template association; give device-level entries their own context there and regenerate the affected digests.
 
 ## Out of Scope
 
@@ -45,6 +47,13 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 
 ## Notes on Already-Completed Work
 
+- F3.5 (multi-vsys) corrected a wrong assumption held since F2.3: v2
+  `location` **does** have a `vsys { name, ngfw_device }` sub-block for the
+  object types and the four policy-rule types. `panos_security_profile_group`
+  is the emitted type that lacks it. `localhost.localdomain` is the PAN-OS
+  placeholder for "this device", so it is never emitted as `ngfw_device`;
+  the resource is reported instead. Shared entries emit `shared = {}`, not
+  `device_group = { name = "Shared" }`.
 - F3.4 (full object types) closed two F1.2 extraction gaps: service object
   tags are extracted and emitted, and dual-protocol services keep both legs
   in the parse model (the emit limit is a provider constraint, recorded
@@ -60,8 +69,12 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 - Policy chains key on (device group, vsys) since F3.2. Each chain anchors
   at `where = "last"`, so a vsys boundary restarts the chain; a rule never
   pivots on, or depends on, a rule in another vsys.
-- The `location` block does not carry vsys yet (v2 `location` has no vsys
-  sub-block for object types). vsys in `location` is F3.5 work.
+- `location` carries the source scope since F3.5: `vsys { name, ngfw_device }`
+  for a declared vsys on a type that accepts it, `template { name }` (plus
+  `vsys` where the schema declares the field) for a declared template,
+  otherwise the device group, `shared = {}`, or the `Shared` template
+  placeholder. A declared scope the type cannot carry is reported, never
+  dropped silently.
 
 ## Design Decisions (Epic 4 planning)
 

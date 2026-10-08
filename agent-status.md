@@ -1,22 +1,101 @@
 # Agent Status
 
 ## Current position
-**F3.4 (full object types) is committed** (this session). `acceptance.md`
-holds the F3.4 criteria — overwrite it before the next task. **Next task:
-F3.5 Multi-vsys** (Epic 3): represent vsys in the data model and in
-`location`.
+**F3.5 (multi-vsys) is committed** (this session). `acceptance.md` holds
+the F3.5 criteria and result — overwrite it before the next task. **Next
+task: F3.6 Multi-device, template-aware parsing** (Epic 3): use the
+explicit device-group → template association, replace substring matching,
+and give template-scoped objects their real template name instead of the
+`Shared` placeholder.
 
-F3.4 state: `ADDRESS_VALUE_ELEMENTS`, `EDL_TYPE_ELEMENTS`,
-`EDL_RECURRING_ELEMENTS` and `EDL_FIELD_ELEMENTS` (parser) plus
-`EDL_SUBSHAPE_FIELDS` and `SERVICE_PROTOCOL_ORDER` (generator) hold the
-schema-verified shapes. An address entry with no v2 attribute carries
-`report_only` and lands in `MANUAL_SETUP_REPORT.txt`; a dual-protocol
-service emits its tcp leg and reports the dropped leg. Gate: ruff clean,
-pytest 345 passed, terraform validate green on both golden sets.
+F3.5 state: `identity_of(elem)` (parser) is the single source of the four
+scope facts (`device_group`, `vsys`, `template`, `vsys_device`), with no
+invented defaults. `LOCATION_SCHEMA` (resource_mapping.py) is the verified
+v2.0.14 `location` contract per emitted type and the only source for the
+sub-block choice; `location_block(resource_type, obj)` reads it plus the
+identity. `MANUAL_SETUP_REPORT.txt` carries two new sections ("Locations
+The Provider Cannot Carry", "Virtual System Locations Without A Target
+Device"). Gate: ruff clean, pytest 372 passed, terraform validate green on
+both golden sets.
 
 ## Session log
 
-### F3.4 — Full object types (this session)
+### F3.5 — Multi-vsys (this session)
+- Direction: Epic 3, lowest-numbered unfinished feature. `acceptance.md`
+  rewritten for F3.5 first (12 criteria + the v2.0.14 `location` schema
+  facts verified for it).
+- Schema facts that changed the design (all from
+  `terraform providers schema -json`, provider key
+  `registry.terraform.io/paloaltonetworks/panos`):
+  - v2 `location` **does** have `vsys { name, ngfw_device }` for the object
+    types and the four policy-rule types — the F2.3 note in `backlog.md`
+    that said otherwise was wrong, which is why `location` never carried
+    vsys until now.
+  - `panos_security_profile_group` has `device_group` and `shared` only;
+    `location.vsys` on it fails `terraform validate`.
+  - `location.template` declares `vsys` on every interface type except
+    `panos_vlan_interface`, and not on static routes, monitor profiles, or
+    the VPN types.
+  - `panos_zone` and `panos_virtual_router` accept `template`/`vsys` and
+    have no `device_group`/`shared`.
+  - `terraform validate` accepts an unknown `location` sub-block and drops
+    it silently, so the schema table, not validate, is the authority; the
+    tests assert the emitted text.
+- Parser: `vsys_of` returns `''` when no `<vsys><entry>` ancestor exists
+  (the old default `vsys1` made "shared" and "vsys1" indistinguishable);
+  `template_of` returns `''` outside a template; new `device_of`; new
+  `identity_of(elem)` returns all four facts and every parse method splats
+  it, which also removed the template-pass/device-pass duplication in the
+  VR and LR parsers.
+- Router parsing bug fixed: routers under
+  `devices/entry/<device>/network/...` were never found. VR and LR parsing
+  now walks `.//network/<container>/entry` once, so template, template
+  device, device-level and vsys-level routers all parse, and identity comes
+  from the ancestors instead of from the pass that found the entry.
+- Generator: `LOCATION_SCHEMA` (per emitted type: the sub-blocks and fields
+  the schema declares; a deliberate subset — `ngfw`, `template_stack`,
+  `template_stack_vsys`, `template_vsys` are never used) and
+  `_TEMPLATE_SCOPED_TYPES` derived from it. `location_block(resource_type,
+  obj)` chooses vsys → template → device group/shared/placeholder and
+  reports a declared scope the type cannot carry. Shared entries emit
+  `shared = {}`, not `device_group = { name = "Shared" }`.
+  `localhost.localdomain` is the PAN-OS "this device" placeholder, so it is
+  never emitted as `ngfw_device`; the resource is reported instead.
+- Reference resolution: `declare_resource_name(..., device=...)` indexes a
+  device-declared name (interfaces only today) and `name_ref(..., device=)`
+  resolves such a name inside that device **before** the context chain, so a
+  router or zone on one firewall cannot borrow another firewall's interface
+  resource and keeps a plain interface name instead. `device` is not in the
+  digest, so no other digest changed.
+  - Caught by the kitchen-sink diff, not by a test: the first version put
+    the device check after the chain, and a contextless referrer (a
+    virtual router) still landed on another device's interface.
+    `test_virtual_router_reference_stays_inside_its_device` pins it.
+- Fixtures: `kitchen_sink.xml` moves network config to device level (real
+  PAN-OS shape), keeps zones under vsys, and adds `fw-2.example.com` with
+  two vsys, duplicate object names in both, and its own zones; a second
+  device-level router joins `virtual_routers.xml`.
+- Tests: `tests/test_multi_vsys_location.py` (27 tests) — schema table vs
+  the live provider schema (all emitted types), table coverage of
+  `EMITTED_TYPES`, `_TEMPLATE_SCOPED_TYPES` derivation, parser identity for
+  declared and undeclared scope, device-level routers, parametrized
+  location choice, `shared = {}`, no sub-block or field outside the schema
+  in any golden, the placeholder template, the three report cases, two vsys
+  → two resources, per-vsys and per-device reference resolution.
+- Goldens regenerated for both sets: the diff is digest-only (vsys `''`
+  replaces `vsys1` in the hash input), `shared = {}` for shared objects,
+  `vsys { name, ngfw_device }` for vsys objects, real template names where
+  declared, the new fw-2 resources, and the two cross-device interface
+  references that became plain names.
+- Docs: `backlog.md` records the rulebase decision (the schema declares
+  `location.*.rulebase` on the four rule types, but the parser does not
+  record the rulebase and the provider's value string is unverified, so
+  nothing is emitted), the device-name limit on device-aware resolution,
+  and the `device_group = 'Shared'` fallback for device-level entries.
+- Gate: ruff clean. pytest 372 passed. terraform validate green on both
+  golden sets.
+
+### F3.4 — Full object types (previous session)
 - Direction: Epic 3, lowest-numbered unfinished feature. `acceptance.md`
   rewritten for F3.4 first (11 criteria, each schema fact verified against
   `terraform providers schema -json` for 2.0.14).

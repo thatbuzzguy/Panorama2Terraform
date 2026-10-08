@@ -56,7 +56,9 @@ def test_dup_names_across_dgs_both_survive(make_parser):
     """Same-named objects in different DGs both survive (F3.1 keyed identity).
 
     Each object carries its identity fields: the defining device group and
-    the vsys. The key is (device group, vsys, type, name).
+    the vsys. The key is (device group, vsys, type, name). A device group
+    entry declares no virtual system, so the vsys stays empty instead of
+    defaulting to vsys1 (F3.5).
     """
     parser = make_parser("edge_dup_names_across_dgs.xml")
     objects = parser.parse_address_objects()
@@ -65,7 +67,7 @@ def test_dup_names_across_dgs_both_survive(make_parser):
     assert set(by_group) == {"DG-A", "DG-B"}
     assert by_group["DG-A"]["value"] == "10.0.0.1/32"
     assert by_group["DG-B"]["value"] == "10.0.0.2/32"
-    assert all(a["vsys"] == "vsys1" for a in objects)
+    assert all(a["vsys"] == "" for a in objects)
     assert all(a["name"] == "web" for a in objects)
 
 

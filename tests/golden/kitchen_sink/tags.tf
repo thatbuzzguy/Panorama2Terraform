@@ -1,21 +1,17 @@
 # Tags
 
-resource "panos_administrative_tag" "env_prod_79f15cbc" {
+resource "panos_administrative_tag" "env_prod_5301b734" {
   location = {
-    device_group = {
-      name = "Shared"
-    }
+    shared = {}
   }
   name = "env-prod"
   color = "color4"
   comments = "Production environment"
 }
 
-resource "panos_administrative_tag" "web_dc16804d" {
+resource "panos_administrative_tag" "web_4d6aa528" {
   location = {
-    device_group = {
-      name = "Shared"
-    }
+    shared = {}
   }
   name = "web"
   color = "color5"

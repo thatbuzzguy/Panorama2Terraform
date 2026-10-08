@@ -134,9 +134,29 @@ def test_parse_virtual_routers_from_vsys(make_parser):
     by_name = {v["name"]: v for v in vrouters}
 
     dmz = by_name["vr-dmz"]
-    assert dmz["template"] == "device-specific"
+    # A router outside a template declares no template (F3.5); the emitter
+    # decides the location, the parser does not guess one.
+    assert dmz["template"] == ""
+    assert dmz["vsys"] == "vsys1"
+    assert dmz["vsys_device"] == "localhost.localdomain"
     assert dmz["interfaces"] == ["ethernet1/3"]
     assert dmz["static_routes"] == []
+
+
+def test_parse_virtual_routers_device_level(make_parser):
+    """A router under devices/entry/<device>/network is parsed (F3.5).
+
+    A firewall's own config export declares network config at device level,
+    which the old template-plus-vsys walk missed.
+    """
+    p = _parser(make_parser, "virtual_routers.xml")
+    by_name = {v["name"]: v for v in p.parse_virtual_routers()}
+
+    device = by_name["vr-device"]
+    assert device["template"] == ""
+    assert device["vsys"] == ""
+    assert device["vsys_device"] == "fw-1.example.com"
+    assert device["interfaces"] == ["ethernet1/4"]
 
 
 def test_parse_logical_routers(make_parser):

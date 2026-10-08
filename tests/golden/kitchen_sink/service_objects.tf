@@ -1,10 +1,8 @@
 # Service Objects
 
-resource "panos_service" "tcp_8080_5820960d" {
+resource "panos_service" "tcp_8080_2a1f3529" {
   location = {
-    device_group = {
-      name = "Shared"
-    }
+    shared = {}
   }
   name = "TCP-8080"
   description = "Custom HTTP port"
@@ -13,14 +11,12 @@ resource "panos_service" "tcp_8080_5820960d" {
       destination_port = "8080"
     }
   }
-  tags = [panos_administrative_tag.web_dc16804d.name]
+  tags = [panos_administrative_tag.web_4d6aa528.name]
 }
 
-resource "panos_service" "udp_514_a28d1460" {
+resource "panos_service" "udp_514_9f438708" {
   location = {
-    device_group = {
-      name = "Shared"
-    }
+    shared = {}
   }
   name = "UDP-514"
   protocol = {
@@ -30,11 +26,9 @@ resource "panos_service" "udp_514_a28d1460" {
   }
 }
 
-resource "panos_service" "dual_protocol_bea0744b" {
+resource "panos_service" "dual_protocol_80d74303" {
   location = {
-    device_group = {
-      name = "Shared"
-    }
+    shared = {}
   }
   name = "Dual-Protocol"
   description = "Dual protocol service"
@@ -50,6 +44,36 @@ resource "panos_service" "dual_protocol_bea0744b" {
     }
   }
   # NOTE: udp leg not emitted, v2 takes one protocol only: destination_port=53, timeout=120
-  tags = [panos_administrative_tag.web_dc16804d.name]
+  tags = [panos_administrative_tag.web_4d6aa528.name]
+}
+
+resource "panos_service" "vsys_service_b90169ce" {
+  location = {
+    vsys = {
+      name = "vsys1"
+      ngfw_device = "fw-2.example.com"
+    }
+  }
+  name = "Vsys-Service"
+  protocol = {
+    tcp = {
+      destination_port = "7001"
+    }
+  }
+}
+
+resource "panos_service" "vsys_service_b8cc0680" {
+  location = {
+    vsys = {
+      name = "vsys2"
+      ngfw_device = "fw-2.example.com"
+    }
+  }
+  name = "Vsys-Service"
+  protocol = {
+    tcp = {
+      destination_port = "7002"
+    }
+  }
 }
 

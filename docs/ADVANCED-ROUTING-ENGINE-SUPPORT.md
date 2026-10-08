@@ -26,24 +26,24 @@ byte-for-byte in `tests/golden/kitchen_sink/virtual_routers.tf`:
 ```hcl
 # Source: FW-Template
 # Type: Logical Router (Advanced Routing Engine)
-resource "panos_virtual_router" "lr_main_c0d74e3d" {
+resource "panos_virtual_router" "lr_main_2258b30f" {
   location = {
     template = {
       name = "FW-Template"
     }
   }
   name = "lr-main"
-  interfaces = [panos_ethernet_interface.ethernet1_1_6ba52c24.name]
+  interfaces = [panos_ethernet_interface.ethernet1_1_5dadf948.name]
 }
 
-resource "panos_virtual_router_static_route_ipv4" "lr_main_c0d74e3d_lr_default_664e95ca" {
+resource "panos_virtual_router_static_route_ipv4" "lr_main_2258b30f_lr_default_2029ebbd" {
   location = {
     template = {
       name = "FW-Template"
     }
   }
   name = "lr-default"
-  virtual_router = panos_virtual_router.lr_main_c0d74e3d.name
+  virtual_router = panos_virtual_router.lr_main_2258b30f.name
   destination = "0.0.0.0/0"
   interface = "lr-peer"
 }

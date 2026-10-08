@@ -52,7 +52,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Optional
 
-from resource_mapping import INTERFACE_RESOURCE_TYPES
+from resource_mapping import INTERFACE_RESOURCE_TYPES, LOCATION_SCHEMA
 
 
 class PanoramaParser:
@@ -149,10 +149,15 @@ class PanoramaParser:
         return 'Shared'
 
     def vsys_of(self, elem: ET.Element) -> str:
-        """Return the vsys that owns elem (F3.1 identity key).
+        """Return the vsys that owns elem, or '' when the export declares none.
 
-        Walks up to the nearest <vsys><entry name="..."> ancestor. PAN-OS
-        defaults to vsys1, so an absent vsys wrapper means the default vsys.
+        Walks up to the nearest <vsys><entry name="..."> ancestor (F3.1
+        identity key, F3.5 honest scope). The value is the declared name and
+        never a default: an entry under <shared>, a device group, or a
+        template network section has no vsys, and the emitter must be able
+        to tell that case from an entry the export places in vsys1. A
+        <vsys><entry> with no name attribute is the default vsys, which
+        PAN-OS names vsys1.
         """
         node = elem
         while node is not None:
@@ -160,21 +165,65 @@ class PanoramaParser:
             if parent is not None and parent.tag == 'vsys' and node.tag == 'entry':
                 return node.get('name') or 'vsys1'
             node = parent
-        return 'vsys1'
+        return ''
 
     def template_of(self, elem: ET.Element) -> str:
-        """Return the template that owns elem (F3.1 identity key).
+        """Return the template that owns elem, or '' when the export names none.
 
-        Walks up to the nearest <templates><entry name="..."> ancestor.
-        Outside a template the owning context is device-specific.
+        Walks up to the nearest <templates><entry name="..."> ancestor
+        (F3.1 identity key). Panorama nests a template's own device config
+        under <templates><entry><devices><entry>, so a template-defined
+        object reports its template here and its placeholder device name
+        from device_of.
         """
         node = elem
         while node is not None:
             parent = self._parent_map.get(node)
             if parent is not None and parent.tag == 'templates' and node.tag == 'entry':
-                return node.get('name') or 'default'
+                return node.get('name') or ''
             node = parent
-        return 'device-specific'
+        return ''
+
+    def device_of(self, elem: ET.Element) -> str:
+        """Return the device that owns elem, or '' when the export names none.
+
+        Walks up to the nearest <devices><entry name="..."> ancestor. A
+        vsys-scoped object lives under a device entry, and the v2 location
+        needs that name as `ngfw_device` to place the object in the right
+        virtual system of the right firewall. A template's device entry and
+        a firewall's own config use the placeholder name
+        'localhost.localdomain', which means "this device"; the emitter
+        treats it as no device name (F3.5).
+        """
+        node = elem
+        while node is not None:
+            parent = self._parent_map.get(node)
+            if parent is not None and parent.tag == 'devices' and node.tag == 'entry':
+                return node.get('name') or ''
+            node = parent
+        return ''
+
+    def identity_of(self, elem: ET.Element) -> dict:
+        """Return the four source scope facts of an entry (F3.5).
+
+        Every parse method records these on every object, so the emitter can
+        place a resource without looking at the XML again:
+
+            device_group  - the defining device group, 'Shared' for the
+                            shared section (F2.3)
+            vsys          - the declared virtual system, '' when the export
+                            declares none
+            template      - the declared template, '' when the export
+                            declares none
+            vsys_device   - the device that owns a vsys-scoped entry, used
+                            as the location `ngfw_device`
+        """
+        return {
+            'device_group': self.device_group_of(elem),
+            'vsys': self.vsys_of(elem),
+            'template': self.template_of(elem),
+            'vsys_device': self.device_of(elem),
+        }
 
     def parse_tags(self) -> list[dict]:
         """Parse tags (administrative tags).
@@ -192,8 +241,7 @@ class PanoramaParser:
 
             tags.append({
                 'name': name,
-                'device_group': self.device_group_of(tag),
-                'vsys': self.vsys_of(tag),
+                **self.identity_of(tag),
                 'color': self._get_text(tag, 'color'),
                 'comments': self._get_text(tag, 'comments')
             })
@@ -220,8 +268,7 @@ class PanoramaParser:
 
             regions.append({
                 'name': name,
-                'device_group': self.device_group_of(region),
-                'vsys': self.vsys_of(region),
+                **self.identity_of(region),
                 'addresses': addresses
             })
 
@@ -247,8 +294,7 @@ class PanoramaParser:
 
             categories.append({
                 'name': name,
-                'device_group': self.device_group_of(cat),
-                'vsys': self.vsys_of(cat),
+                **self.identity_of(cat),
                 'type': self._get_text(cat, 'type'),
                 'list': url_list,
                 'description': self._get_text(cat, 'description')
@@ -276,8 +322,7 @@ class PanoramaParser:
 
             app_groups.append({
                 'name': name,
-                'device_group': self.device_group_of(ag),
-                'vsys': self.vsys_of(ag),
+                **self.identity_of(ag),
                 'members': members
             })
 
@@ -298,8 +343,7 @@ class PanoramaParser:
 
             app_filters.append({
                 'name': name,
-                'device_group': self.device_group_of(af),
-                'vsys': self.vsys_of(af),
+                **self.identity_of(af),
                 'category': self._get_members(af, 'category'),
                 'subcategory': self._get_members(af, 'subcategory'),
                 'technology': self._get_members(af, 'technology'),
@@ -336,8 +380,7 @@ class PanoramaParser:
 
             entry = {
                 'name': name,
-                'device_group': self.device_group_of(ext_list),
-                'vsys': self.vsys_of(ext_list),
+                **self.identity_of(ext_list),
                 'type': '',
                 # Fields captured inside the type sub-shape, keyed by the v2
                 # attribute name (url, description, exception_list, recurring,
@@ -420,8 +463,7 @@ class PanoramaParser:
 
             addr_obj = {
                 'name': name,
-                'device_group': self.device_group_of(addr),
-                'vsys': self.vsys_of(addr),
+                **self.identity_of(addr),
                 # PAN-OS records the object type as an entry attribute
                 'declared_type': addr.get('type') or '',
                 'other': {},
@@ -499,8 +541,7 @@ class PanoramaParser:
 
             groups.append({
                 'name': name,
-                'device_group': self.device_group_of(grp),
-                'vsys': self.vsys_of(grp),
+                **self.identity_of(grp),
                 'static_members': members,
                 'dynamic_filter': filter_expr,
                 'description': self._get_text(grp, 'description')
@@ -548,8 +589,7 @@ class PanoramaParser:
 
             service_obj = {
                 'name': name,
-                'device_group': self.device_group_of(svc),
-                'vsys': self.vsys_of(svc),
+                **self.identity_of(svc),
                 # Protocol sub-blocks, keyed by 'tcp' / 'udp'. The parse model
                 # keeps both legs; the emitter can only write one (v2 limit).
                 # Each leg holds destination_port, source_port, and override.
@@ -619,8 +659,7 @@ class PanoramaParser:
 
             groups.append({
                 'name': name,
-                'device_group': self.device_group_of(grp),
-                'vsys': self.vsys_of(grp),
+                **self.identity_of(grp),
                 'members': members,
                 'description': self._get_text(grp, 'description')
             })
@@ -643,8 +682,7 @@ class PanoramaParser:
 
             rule_obj = {
                 'name': name,
-                'device_group': self.device_group_of(rule),
-                'vsys': self.vsys_of(rule),
+                **self.identity_of(rule),
                 'source_zones': self._get_members(rule, 'from'),
                 'source_addresses': self._get_members(rule, 'source'),
                 'destination_zones': self._get_members(rule, 'to'),
@@ -684,8 +722,7 @@ class PanoramaParser:
 
             rule_obj = {
                 'name': name,
-                'device_group': self.device_group_of(rule),
-                'vsys': self.vsys_of(rule),
+                **self.identity_of(rule),
                 'source_zones': self._get_members(rule, 'from'),
                 'destination_zone': self._get_text(rule, 'to-interface'),
                 'source_addresses': self._get_members(rule, 'source'),
@@ -742,8 +779,7 @@ class PanoramaParser:
 
             sched_obj = {
                 'name': name,
-                'device_group': self.device_group_of(sched),
-                'vsys': self.vsys_of(sched),
+                **self.identity_of(sched),
                 'schedule_type': None,
                 'recurring': []
             }
@@ -786,8 +822,7 @@ class PanoramaParser:
                 'uuid': rule.get('uuid'),
                 # F2.9: the device group scopes the v2 resource and its
                 # rule chain (location + position pivot semantics, F2.5)
-                'device_group': self.device_group_of(rule),
-                'vsys': self.vsys_of(rule),
+                **self.identity_of(rule),
                 'source_zones': self._get_members(rule, 'from'),
                 'destination_zones': self._get_members(rule, 'to'),
                 'source_addresses': self._get_members(rule, 'source'),
@@ -839,8 +874,7 @@ class PanoramaParser:
                 'uuid': rule.get('uuid'),
                 # F2.9: the device group scopes the v2 resource and its
                 # rule chain (location + position pivot semantics, F2.5)
-                'device_group': self.device_group_of(rule),
-                'vsys': self.vsys_of(rule),
+                **self.identity_of(rule),
                 'description': self._get_text(rule, 'description'),
                 'disabled': self._get_text(rule, 'disabled') == 'yes',
                 'source_zones': [],
@@ -932,8 +966,7 @@ class PanoramaParser:
 
             rule_obj = {
                 'name': name,
-                'device_group': self.device_group_of(rule),
-                'vsys': self.vsys_of(rule),
+                **self.identity_of(rule),
                 'description': self._get_text(rule, 'description'),
                 'disabled': self._get_text(rule, 'disabled') == 'yes',
                 'source_zones': self._get_members(rule, 'from'),
@@ -986,7 +1019,7 @@ class PanoramaParser:
 
             zones.append({
                 'name': name,
-                'vsys': self.vsys_of(zone),
+                **self.identity_of(zone),
                 'type': zone_type,
                 'interfaces': interfaces,
                 'zone_protection_profile': zone_profile.text if zone_profile is not None else None
@@ -1006,7 +1039,7 @@ class PanoramaParser:
             iface_obj = {
                 'name': name,
                 'type': 'ethernet',
-                'vsys': self.vsys_of(iface),
+                **self.identity_of(iface),
                 'mode': None,
                 'ip_addresses': [],
                 'ipv6_addresses': [],
@@ -1061,7 +1094,7 @@ class PanoramaParser:
                 sub = {
                     'name': f'{name}.{unit_name}',
                     'type': 'ethernet-subinterface',
-                    'vsys': self.vsys_of(unit),
+                    **self.identity_of(unit),
                     'mode': 'layer3',
                     'ip_addresses': [ip.get('name') for ip in unit.findall('.//ip/entry')
                                      if ip.get('name')],
@@ -1086,7 +1119,7 @@ class PanoramaParser:
             iface_obj = {
                 'name': name,
                 'type': 'ethernet',
-                'vsys': self.vsys_of(iface),
+                **self.identity_of(iface),
                 'mode': 'virtual-wire',
                 'ip_addresses': [],
                 'ipv6_addresses': [],
@@ -1110,7 +1143,7 @@ class PanoramaParser:
             iface_obj = {
                 'name': full_name,
                 'type': 'vlan',
-                'vsys': self.vsys_of(iface),
+                **self.identity_of(iface),
                 'mode': 'layer3',
                 'ip_addresses': [],
                 'ipv6_addresses': [],
@@ -1153,7 +1186,7 @@ class PanoramaParser:
             iface_obj = {
                 'name': full_name,
                 'type': 'loopback',
-                'vsys': self.vsys_of(iface),
+                **self.identity_of(iface),
                 'mode': 'layer3',
                 'ip_addresses': [],
                 'ipv6_addresses': [],
@@ -1190,7 +1223,7 @@ class PanoramaParser:
             iface_obj = {
                 'name': full_name,
                 'type': 'tunnel',
-                'vsys': self.vsys_of(iface),
+                **self.identity_of(iface),
                 'mode': 'layer3',
                 'ip_addresses': [],
                 'ipv6_addresses': [],
@@ -1229,7 +1262,7 @@ class PanoramaParser:
             iface_obj = {
                 'name': name,
                 'type': 'aggregate',
-                'vsys': self.vsys_of(iface),
+                **self.identity_of(iface),
                 'mode': None,
                 'ip_addresses': [],
                 'ipv6_addresses': [],
@@ -1271,7 +1304,7 @@ class PanoramaParser:
                         unit_obj = {
                             'name': unit_name,
                             'type': 'aggregate-subinterface',
-                            'vsys': self.vsys_of(unit),
+                            **self.identity_of(unit),
                             'mode': 'layer3',
                             'ip_addresses': [],
                             'ipv6_addresses': [],
@@ -1306,193 +1339,77 @@ class PanoramaParser:
 
         return interfaces
 
-    def parse_virtual_routers(self) -> list[dict]:
-        """Parse virtual router configurations.
+    def _parse_router(self, router: ET.Element, next_hop_tag: str) -> dict:
+        """Parse one <virtual-router> or <logical-router> entry.
 
-        F3.1: each (template, name) entry survives as its own object, keyed
-        by (template, vsys, type, name). The template pass and the
-        device pass visit disjoint element sets, so the two passes are
-        kept and no name-based dedup is needed.
+        `next_hop_tag` names the static-route next-hop element, which
+        differs by router kind: next-vr for a virtual router, next-lr for
+        a logical router.
         """
-        vrouters = []
-
-        # Parse from templates first (most authoritative source).
-        # Panorama exports use a top-level <templates> element containing
-        # <entry> children (not <template>), so match that exact structure.
-        for template in self.root.findall('.//templates/entry'):
-            template_name = template.get('name')
-
-            for vr in template.findall('.//network/virtual-router/entry'):
-                name = vr.get('name')
-                if not name:
-                    continue
-
-                # Get interfaces
-                interfaces = []
-                for iface in vr.findall('.//interface/member'):
-                    if iface.text:
-                        interfaces.append(iface.text)
-
-                # Get static routes
-                static_routes = []
-                for route in vr.findall('.//routing-table/ip/static-route/entry'):
-                    route_name = route.get('name')
-                    destination = self._get_text(route, 'destination')
-                    nexthop_ip = self._get_text(route, 'nexthop/ip-address')
-                    nexthop_iface = self._get_text(route, 'nexthop/next-vr')
-                    metric = self._get_text(route, 'metric')
-
-                    if route_name:
-                        static_routes.append({
-                            'name': route_name,
-                            'destination': destination,
-                            'nexthop_ip': nexthop_ip,
-                            'nexthop_interface': nexthop_iface,
-                            'metric': metric
-                        })
-
-                vrouters.append({
-                    'name': name,
-                    'template': template_name,
-                    'vsys': self.vsys_of(vr),
-                    'interfaces': interfaces,
-                    'static_routes': static_routes
-                })
-
-        # Also check per-vsys device-level VRs (real exports nest the network
-        # config under devices/entry/vsys/entry, not directly under devices/entry)
-        for vr in self.root.findall('.//devices/entry/vsys/entry/network/virtual-router/entry'):
-            name = vr.get('name')
-            if not name:
+        interfaces = [m.text for m in router.findall('./interface/member') if m.text]
+        static_routes = []
+        for route in router.findall('.//routing-table/ip/static-route/entry'):
+            route_name = route.get('name')
+            if not route_name:
                 continue
-
-            interfaces = []
-            for iface in vr.findall('.//interface/member'):
-                if iface.text:
-                    interfaces.append(iface.text)
-
-            static_routes = []
-            for route in vr.findall('.//routing-table/ip/static-route/entry'):
-                route_name = route.get('name')
-                destination = self._get_text(route, 'destination')
-                nexthop_ip = self._get_text(route, 'nexthop/ip-address')
-                nexthop_iface = self._get_text(route, 'nexthop/next-vr')
-                metric = self._get_text(route, 'metric')
-
-                if route_name:
-                    static_routes.append({
-                        'name': route_name,
-                        'destination': destination,
-                        'nexthop_ip': nexthop_ip,
-                        'nexthop_interface': nexthop_iface,
-                        'metric': metric
-                    })
-
-            vrouters.append({
-                'name': name,
-                'template': 'device-specific',
-                'vsys': self.vsys_of(vr),
-                'interfaces': interfaces,
-                'static_routes': static_routes
+            static_routes.append({
+                'name': route_name,
+                'destination': self._get_text(route, 'destination'),
+                'nexthop_ip': self._get_text(route, 'nexthop/ip-address'),
+                'nexthop_interface': self._get_text(route, f'nexthop/{next_hop_tag}'),
+                'metric': self._get_text(route, 'metric'),
             })
+        return {
+            'name': router.get('name'),
+            **self.identity_of(router),
+            'interfaces': interfaces,
+            'static_routes': static_routes,
+        }
 
-        return vrouters
+    def _parse_routers(self, container_tag: str, next_hop_tag: str,
+                       router_type: Optional[str] = None) -> list[dict]:
+        """Parse every router of one kind, whatever scope it lives in.
+
+        F3.5: one path, `.//network/<kind>/entry`, covers every place a
+        PAN-OS export puts a router, and each entry's identity comes from
+        its own ancestors:
+
+            templates/entry/<T>/network/...                       -> template <T>
+            templates/entry/<T>/devices/entry/<D>/network/...     -> template <T>, device <D>
+            devices/entry/<D>/network/...                         -> device <D>
+            devices/entry/<D>/vsys/entry/<V>/network/...          -> device <D>, vsys <V>
+
+        The old code walked <templates> first and then only the vsys-nested
+        device shape, so it dropped a router under
+        devices/entry/<D>/network, the shape a firewall's own config export
+        and a template's device config use. Each entry is visited once, so
+        no name-based dedup is needed and same-name routers in different
+        scopes all survive (F3.1).
+        """
+        routers = []
+        for elem in self.root.findall(f'.//network/{container_tag}/entry'):
+            if not elem.get('name'):
+                continue
+            obj = self._parse_router(elem, next_hop_tag)
+            if router_type:
+                obj['router_type'] = router_type
+            routers.append(obj)
+        return routers
+
+    def parse_virtual_routers(self) -> list[dict]:
+        """Parse virtual router configurations (see _parse_routers for paths)."""
+        return self._parse_routers('virtual-router', 'next-vr')
 
     def parse_logical_routers(self) -> list[dict]:
-        """Parse logical router configurations (Advanced Routing Engine)
+        """Parse logical routers (PAN-OS 10.2+ Advanced Routing Engine).
 
-        Logical routers are part of PAN-OS 10.2+ Advanced Routing Engine.
-        They replace virtual routers with industry-standard configuration.
-
-        F3.1: each (template, name) entry survives as its own object, keyed
-        by (template, vsys, type, name). The template pass and the
-        device pass visit disjoint element sets, so the two passes are
-        kept and no name-based dedup is needed.
+        Logical routers replace virtual routers on the advanced routing
+        engine; the export nests them at network/logical-router. They are
+        marked router_type 'logical' so the emitter can label the resource
+        (see _parse_routers for the source paths).
         """
-        lrouters = []
+        return self._parse_routers('logical-router', 'next-lr', router_type='logical')
 
-        # Parse from templates first (most authoritative source).
-        # Panorama exports use <templates><entry>, not <template><entry>.
-        for template in self.root.findall('.//templates/entry'):
-            template_name = template.get('name')
-
-            for lr in template.findall('.//network/logical-router/entry'):
-                name = lr.get('name')
-                if not name:
-                    continue
-
-                # Get interfaces
-                interfaces = []
-                for iface in lr.findall('.//interface/member'):
-                    if iface.text:
-                        interfaces.append(iface.text)
-
-                # Get static routes
-                static_routes = []
-                for route in lr.findall('.//routing-table/ip/static-route/entry'):
-                    route_name = route.get('name')
-                    destination = self._get_text(route, 'destination')
-                    nexthop_ip = self._get_text(route, 'nexthop/ip-address')
-                    nexthop_iface = self._get_text(route, 'nexthop/next-lr')  # next-lr for logical routers
-                    metric = self._get_text(route, 'metric')
-
-                    if route_name:
-                        static_routes.append({
-                            'name': route_name,
-                            'destination': destination,
-                            'nexthop_ip': nexthop_ip,
-                            'nexthop_interface': nexthop_iface,
-                            'metric': metric
-                        })
-
-                lrouters.append({
-                    'name': name,
-                    'template': template_name,
-                    'vsys': self.vsys_of(lr),
-                    'router_type': 'logical',  # Mark as logical router
-                    'interfaces': interfaces,
-                    'static_routes': static_routes
-                })
-
-        # Also check per-vsys device-level logical routers (network config is
-        # nested under devices/entry/vsys/entry in real exports)
-        for lr in self.root.findall('.//devices/entry/vsys/entry/network/logical-router/entry'):
-            name = lr.get('name')
-            if not name:
-                continue
-
-            interfaces = []
-            for iface in lr.findall('.//interface/member'):
-                if iface.text:
-                    interfaces.append(iface.text)
-
-            static_routes = []
-            for route in lr.findall('.//routing-table/ip/static-route/entry'):
-                route_name = route.get('name')
-                destination = self._get_text(route, 'destination')
-                nexthop_ip = self._get_text(route, 'nexthop/ip-address')
-                nexthop_iface = self._get_text(route, 'nexthop/next-lr')
-                metric = self._get_text(route, 'metric')
-
-                if route_name:
-                    static_routes.append({
-                        'name': route_name,
-                        'destination': destination,
-                        'nexthop_ip': nexthop_ip,
-                        'nexthop_interface': nexthop_iface,
-                        'metric': metric
-                    })
-
-            lrouters.append({
-                'name': name,
-                'template': 'device-specific',
-                'vsys': self.vsys_of(lr),
-                'router_type': 'logical',
-                'interfaces': interfaces,
-                'static_routes': static_routes
-            })
-
-        return lrouters
 
     def parse_security_profiles(self) -> dict[str, list[dict]]:
         """Parse security profiles (antivirus, vulnerability, spyware, url-filtering, file-blocking, wildfire)"""
@@ -1513,8 +1430,7 @@ class PanoramaParser:
 
             profiles['antivirus'].append({
                 'name': name,
-                'device_group': self.device_group_of(prof),
-                'vsys': self.vsys_of(prof),
+                **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
             })
 
@@ -1526,8 +1442,7 @@ class PanoramaParser:
 
             profiles['vulnerability'].append({
                 'name': name,
-                'device_group': self.device_group_of(prof),
-                'vsys': self.vsys_of(prof),
+                **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
             })
 
@@ -1539,8 +1454,7 @@ class PanoramaParser:
 
             profiles['anti_spyware'].append({
                 'name': name,
-                'device_group': self.device_group_of(prof),
-                'vsys': self.vsys_of(prof),
+                **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
             })
 
@@ -1552,8 +1466,7 @@ class PanoramaParser:
 
             profiles['url_filtering'].append({
                 'name': name,
-                'device_group': self.device_group_of(prof),
-                'vsys': self.vsys_of(prof),
+                **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
             })
 
@@ -1565,8 +1478,7 @@ class PanoramaParser:
 
             profiles['file_blocking'].append({
                 'name': name,
-                'device_group': self.device_group_of(prof),
-                'vsys': self.vsys_of(prof),
+                **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
             })
 
@@ -1578,8 +1490,7 @@ class PanoramaParser:
 
             profiles['wildfire_analysis'].append({
                 'name': name,
-                'device_group': self.device_group_of(prof),
-                'vsys': self.vsys_of(prof),
+                **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
             })
 
@@ -1600,8 +1511,7 @@ class PanoramaParser:
 
             groups.append({
                 'name': name,
-                'device_group': self.device_group_of(grp),
-                'vsys': self.vsys_of(grp),
+                **self.identity_of(grp),
                 'virus': self._get_members(grp, 'virus'),
                 'spyware': self._get_members(grp, 'spyware'),
                 'vulnerability': self._get_members(grp, 'vulnerability'),
@@ -1627,8 +1537,7 @@ class PanoramaParser:
 
             profiles.append({
                 'name': name,
-                'device_group': self.device_group_of(prof),
-                'vsys': self.vsys_of(prof),
+                **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
             })
 
@@ -1649,8 +1558,7 @@ class PanoramaParser:
 
             profiles.append({
                 'name': name,
-                'device_group': self.device_group_of(prof),
-                'vsys': self.vsys_of(prof),
+                **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
             })
 
@@ -1671,8 +1579,7 @@ class PanoramaParser:
 
             prof_obj = {
                 'name': name,
-                'device_group': self.device_group_of(prof),
-                'vsys': self.vsys_of(prof),
+                **self.identity_of(prof),
                 'class_bandwidth_type': {}
             }
 
@@ -1711,8 +1618,7 @@ class PanoramaParser:
 
                 profiles.append({
                     'name': name,
-                    'device_group': self.device_group_of(prof),
-                    'vsys': self.vsys_of(prof),
+                    **self.identity_of(prof),
                     'interval': self._get_text(prof, 'interval'),
                     'threshold': self._get_text(prof, 'threshold'),
                     'action': self._get_text(prof, 'action')
@@ -1744,8 +1650,7 @@ class PanoramaParser:
 
             profiles.append({
                 'name': name,
-                'device_group': self.device_group_of(prof),
-                'vsys': self.vsys_of(prof),
+                **self.identity_of(prof),
                 # v2 action is an enum: wait-recover | fail-over
                 'action': self._get_text(prof, 'action'),
                 'interval': self._get_text(prof, 'interval'),
@@ -1900,8 +1805,7 @@ class PanoramaParser:
 
             tunnel_config = {
                 'name': name,
-                'device_group': self.device_group_of(tunnel),
-                'vsys': self.vsys_of(tunnel),
+                **self.identity_of(tunnel),
                 'tunnel_interface': self._get_text(tunnel, 'tunnel-interface'),
                 'type': 'auto-key',  # Default
                 'peer_address': None,
@@ -1965,8 +1869,7 @@ class PanoramaParser:
 
             gateway_config = {
                 'name': name,
-                'device_group': self.device_group_of(gw),
-                'vsys': self.vsys_of(gw),
+                **self.identity_of(gw),
                 'version': 'ikev1',  # Default
                 'peer_address': None,
                 'local_address': None,
@@ -2044,8 +1947,7 @@ class PanoramaParser:
 
             profile_config = {
                 'name': name,
-                'device_group': self.device_group_of(profile),
-                'vsys': self.vsys_of(profile),
+                **self.identity_of(profile),
                 'dh_groups': self._get_members(profile, 'dh-group'),
                 'authentications': self._get_members(profile, 'authentication'),
                 'encryptions': self._get_members(profile, 'encryption'),
@@ -2067,8 +1969,7 @@ class PanoramaParser:
 
             profile_config = {
                 'name': name,
-                'device_group': self.device_group_of(profile),
-                'vsys': self.vsys_of(profile),
+                **self.identity_of(profile),
                 'protocol': 'esp',  # Default
                 'encryptions': self._get_members(profile, 'esp/encryption'),
                 'authentications': self._get_members(profile, 'esp/authentication'),
@@ -2164,6 +2065,17 @@ class TerraformGenerator:
         self._name_registry: dict[tuple[str, str, str], str] = {}
         self._flat_registry: dict[tuple[str, str], str] = {}
         self._taken_names: dict[str, set[str]] = {}
+        # F3.5: declarations that name a target device, keyed
+        # (scope, device, name). An interface belongs to one device, and two
+        # devices can declare the same interface name, so a reference from a
+        # device-scoped referrer resolves against this index instead of the
+        # flat (scope, name) index.
+        self._device_registry: dict[tuple[str, str, str], str] = {}
+        self._device_scoped_names: set[tuple[str, str]] = set()
+        # F3.5: (kind, line) pairs for a source scope the emitted location
+        # cannot carry ('scope') and for a vsys location with no target
+        # device name ('device'). generate_manual_setup_report writes them.
+        self._location_reports: list[tuple[str, str]] = []
 
     def sanitize_name(self, name: str) -> str:
         """Sanitize names for Terraform resource names"""
@@ -2177,7 +2089,7 @@ class TerraformGenerator:
         return sanitized.lower()
 
     def declare_resource_name(self, name: str, scope: str, context: str = '',
-                              vsys: str = '') -> str:
+                              vsys: str = '', device: str = '') -> str:
         """Assign a collision-free Terraform name for a new resource declaration.
 
         The local name is the sanitized PAN-OS name plus a short hash of the
@@ -2200,6 +2112,10 @@ class TerraformGenerator:
         (device group, vsys, type, name) recorded by the parser, so
         same-named objects in different vsys get different digests and both
         survive without the taken-name counter.
+
+        F3.5: `device` (the target device an entry names) is not part of the
+        digest. It indexes a declaration so a reference from one device
+        cannot resolve to another device's resource of the same name.
         """
         base = self.sanitize_name(name) or 'unnamed'
         digest = hashlib.sha256(f'{scope}|{context}|{vsys}|{name}'.encode()).hexdigest()[:8]
@@ -2216,10 +2132,14 @@ class TerraformGenerator:
         # Contextless reference sites resolve by (scope, name); the first
         # declaration wins regardless of context (F2.6 robustness).
         self._flat_registry.setdefault((scope, name), candidate)
+        if device:
+            self._device_registry.setdefault((scope, device, name), candidate)
+            self._device_scoped_names.add((scope, name))
         return candidate
 
     def name_ref(self, name: str, scopes, key: Optional[str] = None,
-                 context: Optional[str] = None, vsys: Optional[str] = None):
+                 context: Optional[str] = None, vsys: Optional[str] = None,
+                 device: Optional[str] = None):
         """Resolve a PAN-OS name to a Terraform reference (F2.6, F3.1).
 
         Returns an HclRef of '<scope>.<local>.name' when the object is
@@ -2243,9 +2163,25 @@ class TerraformGenerator:
         rule sees its own vsys's objects and the shared objects of the same
         vsys, never the other vsys's copies. Each stop of the context chain
         is therefore paired with the referrer's vsys.
+
+        F3.5: `device` is the target device the referrer names. A name that
+        a device declared (an interface, which is device-level config) then
+        resolves only inside that device, so a zone on one firewall never
+        points at another firewall's interface resource. A name no device
+        declared (a template-supplied interface) still resolves through the
+        normal chain.
         """
         lookup = key if key is not None else name
         vs = vsys or ''
+        # A device-declared name resolves inside its own device or not at
+        # all: check this before the context chain, which is device-blind.
+        if device and any((scope, lookup) in self._device_scoped_names
+                          for scope in scopes):
+            for scope in scopes:
+                local = self._device_registry.get((scope, device, lookup))
+                if local is not None:
+                    return HclRef(f'{scope}.{local}.name')
+            return name
         # Context chain for the referrer: its own context first (a rule in a
         # device group references that group's objects), then the shared
         # objects the group inherits, then contextless declarations (zones,
@@ -2284,54 +2220,142 @@ class TerraformGenerator:
         value = ''.join(ch for ch in value if ch >= ' ' and ch != '\x7f')
         return f'"{value}"'
 
-    # Provider v2 requires a location block on every resource. Network and
-    # VPN resources are template-scoped; objects and rules are device-group
-    # scoped (verified against the v2.0.14 schema, F2.2/F2.3).
-    _TEMPLATE_SCOPED_TYPES = {
-        'panos_zone',
-        'panos_virtual_router',
-        'panos_virtual_router_static_route_ipv4',
-        'panos_ethernet_interface',
-        'panos_ethernet_layer3_subinterface',
-        # F3.3: the provider scopes every interface kind to a template.
-        'panos_vlan_interface',
-        'panos_loopback_interface',
-        'panos_tunnel_interface',
-        'panos_aggregate_interface',
-        'panos_aggregate_layer3_subinterface',
-        'panos_ike_crypto_profile',
-        'panos_ipsec_crypto_profile',
-        'panos_ike_gateway',
-        'panos_ipsec_tunnel',
-        # F2.9: tunnel monitor profiles are template-scoped in v2
-        'panos_monitor_profile',
-    }
+    # Provider v2 requires a location block on every resource. A type is
+    # template-scoped when its schema location declares no device_group
+    # sub-block (F3.5: derived from LOCATION_SCHEMA, not a hand-kept list).
+    _TEMPLATE_SCOPED_TYPES = frozenset(
+        t for t, scopes in LOCATION_SCHEMA.items() if 'device_group' not in scopes)
 
-    def location_block(self, resource_type: str, device_group: Optional[str] = None,
-                       template: Optional[str] = None) -> str:
-        """Required location object for a generated resource (F2.3/F2.4).
+    # Template-scoped resource the export does not place in a template. The
+    # name is a placeholder until F3.6 (template-aware parsing) finds the
+    # real one.
+    _TEMPLATE_PLACEHOLDER = 'Shared'
 
-        Provider v2 requires `location` on every resource. Objects and
-        rules are scoped to the device group that defined them (default
-        "Shared"). Network and VPN resources are template-scoped; the
-        tracked template name is used when known, otherwise the default
-        "Shared" template.
+    # PAN-OS writes this device entry name for "this device" (Panorama
+    # itself, or a firewall's own config export). It names no firewall, so
+    # it cannot go into `ngfw_device` (F3.5).
+    _LOCAL_DEVICE_PLACEHOLDER = 'localhost.localdomain'
+
+    def _report_location(self, kind: str, line: str) -> None:
+        """Record a location the emitted resource cannot carry (F3.5).
+
+        Two kinds: 'scope' (a declared virtual system, template, or device
+        group the resource type cannot place the object in) and 'device' (a
+        vsys location with no usable target device name). Both land in
+        MANUAL_SETUP_REPORT.txt.
         """
-        if resource_type in self._TEMPLATE_SCOPED_TYPES:
-            return (
-                '  location = {\n'
-                '    template = {\n'
-                f'      name = {self.escape_string(template or "Shared")}\n'
-                '    }\n'
-                '  }\n'
-            )
-        return (
-            '  location = {\n'
-            '    device_group = {\n'
-            f'      name = {self.escape_string(device_group or "Shared")}\n'
-            '    }\n'
-            '  }\n'
-        )
+        self._location_reports.append((kind, line))
+
+    @staticmethod
+    def _location_source_text(obj: dict) -> str:
+        """Describe where the export defined an object, for the report."""
+        parts = [f"dg: {obj.get('device_group') or 'Shared'}"]
+        if obj.get('vsys'):
+            parts.append(f"vsys: {obj['vsys']}")
+        if obj.get('template'):
+            parts.append(f"template: {obj['template']}")
+        if obj.get('vsys_device'):
+            parts.append(f"device: {obj['vsys_device']}")
+        return ', '.join(parts)
+
+    def location_block(self, resource_type: str, obj: dict) -> str:
+        """Required location object for a generated resource (F2.3, F3.5).
+
+        Provider v2 requires `location` on every resource, and the sub-blocks
+        one type accepts differ from the next, so the choice comes from
+        LOCATION_SCHEMA (the verified v2.0.14 shapes) and the source identity
+        the parser recorded:
+
+        1. A declared vsys, with no declared template, on a type that accepts
+           `vsys` -> `vsys { name, ngfw_device }`, so the object lands in the
+           virtual system the export put it in.
+        2. A declared template, on a type that accepts `template` ->
+           `template { name }`, plus `vsys` when that type's `template`
+           declares the field.
+        3. Otherwise the defining device group, the shared section, or the
+           `template { name = "Shared" }` placeholder for a template-scoped
+           type with no declared template (the real name is F3.6).
+
+        A declared scope the type cannot carry goes to
+        MANUAL_SETUP_REPORT.txt instead of being dropped silently, and no
+        sub-block or field is emitted that the schema does not declare:
+        `terraform validate` accepts an unknown `location` sub-block and
+        drops it, so a wrong sub-block fails at apply, not at validate.
+        """
+        scopes = LOCATION_SCHEMA[resource_type]
+        vsys = (obj.get('vsys') or '').strip()
+        template = (obj.get('template') or '').strip()
+        device = (obj.get('vsys_device') or '').strip()
+        group = (obj.get('device_group') or '').strip()
+        where = self._location_source_text(obj)
+
+        def render(scope: str, fields: dict) -> str:
+            """Emit one location sub-block with only the fields it declares."""
+            kept = [(k, v) for k, v in fields.items() if k in scopes[scope]]
+            if not kept:
+                # An empty sub-block is the `shared = {}` shape.
+                return f'  location = {{\n    {scope} = {{}}\n  }}\n'
+            body = ''.join(f'      {k} = {self.escape_string(v)}\n' for k, v in kept)
+            return f'  location = {{\n    {scope} = {{\n{body}    }}\n  }}\n'
+
+        # 1. Virtual-system placement (F3.5).
+        if vsys and not template and 'vsys' in scopes:
+            fields = {'name': vsys}
+            if device and device != self._LOCAL_DEVICE_PLACEHOLDER:
+                fields['ngfw_device'] = device
+            else:
+                self._report_location(
+                    'device',
+                    f'  {resource_type} "{obj.get("name")}" ({where}): '
+                    f'location.vsys.ngfw_device is empty because the export '
+                    f'names no target device')
+            return render('vsys', fields)
+
+        # 2. Template placement.
+        if template and 'template' in scopes:
+            fields = {'name': template}
+            if vsys:
+                if 'vsys' in scopes['template']:
+                    fields['vsys'] = vsys
+                else:
+                    self._report_location(
+                        'scope',
+                        f'  {resource_type} "{obj.get("name")}" ({where}): vsys '
+                        f'dropped because {resource_type} location.template '
+                        f'declares no vsys field')
+            return render('template', fields)
+
+        # 3. Report every declared scope the type cannot carry, then fall
+        #    back to the location the type does accept.
+        if vsys and 'vsys' not in scopes:
+            self._report_location(
+                'scope',
+                f'  {resource_type} "{obj.get("name")}" ({where}): vsys dropped '
+                f'because {resource_type} has no location.vsys sub-block; place '
+                f'the object in the virtual system by hand')
+        if template and 'template' not in scopes:
+            self._report_location(
+                'scope',
+                f'  {resource_type} "{obj.get("name")}" ({where}): template '
+                f'dropped because {resource_type} has no location.template '
+                f'sub-block; place the object in the template by hand')
+        if group and group != 'Shared' and 'device_group' not in scopes:
+            self._report_location(
+                'scope',
+                f'  {resource_type} "{obj.get("name")}" ({where}): device group '
+                f'dropped because {resource_type} has no location.device_group '
+                f'sub-block; place the object in the device group by hand')
+
+        if 'device_group' in scopes:
+            if group and group != 'Shared':
+                return render('device_group', {'name': group})
+            if 'shared' in scopes:
+                # The export defines the entry under <shared>. The schema
+                # calls that location `shared`; a device group named
+                # "Shared" is a different object that does not exist
+                # (F3.5).
+                return render('shared', {})
+        return render('template', {'name': self._TEMPLATE_PLACEHOLDER})
 
     def hcl_value(self, value: Any, indent: str = '  ') -> str:
         """Render a Python value as an HCL expression.
@@ -2451,7 +2475,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_address" "{resource_name}" {{\n'
-            content += self.location_block('panos_address', addr.get('device_group'))
+            content += self.location_block('panos_address', addr)
             content += f'  name = {self.escape_string(addr["name"])}\n'
 
             if addr.get('description'):
@@ -2518,7 +2542,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_address_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_address_group', grp.get('device_group'))
+            content += self.location_block('panos_address_group', grp)
             content += f'  name = {self.escape_string(grp["name"])}\n'
 
             if grp.get('description'):
@@ -2569,7 +2593,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_service" "{resource_name}" {{\n'
-            content += self.location_block('panos_service', svc.get('device_group'))
+            content += self.location_block('panos_service', svc)
             content += f'  name = {self.escape_string(svc["name"])}\n'
 
             if svc.get('description'):
@@ -2652,7 +2676,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_service_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_service_group', grp.get('device_group'))
+            content += self.location_block('panos_service_group', grp)
             content += f'  name = {self.escape_string(grp["name"])}\n'
 
             if grp.get('members'):
@@ -2688,7 +2712,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_administrative_tag" "{resource_name}" {{\n'
-            content += self.location_block('panos_administrative_tag', tag.get('device_group'))
+            content += self.location_block('panos_administrative_tag', tag)
             content += f'  name = {self.escape_string(tag["name"])}\n'
 
             # v2 uses numeric color names (color1..colorN); PAN-OS exports use
@@ -2726,7 +2750,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_custom_url_category" "{resource_name}" {{\n'
-            content += self.location_block('panos_custom_url_category', cat.get('device_group'))
+            content += self.location_block('panos_custom_url_category', cat)
             content += f'  name = {self.escape_string(cat["name"])}\n'
 
             if cat.get('type'):
@@ -2758,7 +2782,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_application_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_application_group', ag.get('device_group'))
+            content += self.location_block('panos_application_group', ag)
             content += f'  name = {self.escape_string(ag["name"])}\n'
 
             if ag.get('members'):
@@ -2814,7 +2838,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_external_dynamic_list" "{resource_name}" {{\n'
-            content += self.location_block('panos_external_dynamic_list', ext_list.get('device_group'))
+            content += self.location_block('panos_external_dynamic_list', ext_list)
             content += f'  name = {self.escape_string(ext_list["name"])}\n'
 
             # v2 type is a nested object keyed by list type
@@ -2897,7 +2921,7 @@ variable "panos_password" {
                 )
 
                 content += f'resource "panos_security_policy_rules" "{resource_name}" {{\n'
-                content += self.location_block('panos_security_policy_rules', rule.get('device_group'))
+                content += self.location_block('panos_security_policy_rules', rule)
                 content += self._policy_position_block(
                     'panos_security_policy_rules', prev_rule_name, prev_resource_name
                 )
@@ -2970,7 +2994,7 @@ variable "panos_password" {
                 )
 
                 content += f'resource "panos_nat_policy_rules" "{resource_name}" {{\n'
-                content += self.location_block('panos_nat_policy_rules', rule.get('device_group'))
+                content += self.location_block('panos_nat_policy_rules', rule)
                 content += self._policy_position_block(
                     'panos_nat_policy_rules', prev_rule_name, prev_resource_name
                 )
@@ -3073,7 +3097,7 @@ variable "panos_password" {
                 )
 
                 content += f'resource "panos_decryption_policy_rules" "{resource_name}" {{\n'
-                content += self.location_block('panos_decryption_policy_rules', device_group)
+                content += self.location_block('panos_decryption_policy_rules', rule)
                 content += self._policy_position_block(
                     'panos_decryption_policy_rules', prev_rule_name, prev_resource_name
                 )
@@ -3168,7 +3192,7 @@ variable "panos_password" {
                 )
 
                 content += f'resource "panos_pbf_policy_rules" "{resource_name}" {{\n'
-                content += self.location_block('panos_pbf_policy_rules', device_group)
+                content += self.location_block('panos_pbf_policy_rules', rule)
                 content += self._policy_position_block(
                     'panos_pbf_policy_rules', prev_rule_name, prev_resource_name
                 )
@@ -3271,7 +3295,7 @@ variable "panos_password" {
             # Template-scoped; the tracked template name is unknown at
             # parse time, so the default "Shared" template is used (same
             # convention as the other template-scoped types, F2.3/F2.4)
-            content += self.location_block('panos_monitor_profile')
+            content += self.location_block('panos_monitor_profile', prof)
             content += f'  name = {self.escape_string(prof["name"])}\n'
             for attr in ('interval', 'threshold'):
                 raw = prof.get(attr)
@@ -3305,7 +3329,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_zone" "{resource_name}" {{\n'
-            content += self.location_block('panos_zone', template=zone.get('template'))
+            content += self.location_block('panos_zone', zone)
             content += f'  name = {self.escape_string(zone["name"])}\n'
 
             # v2 network object: membership list is keyed by layer type
@@ -3316,7 +3340,8 @@ variable "panos_password" {
                 # F2.6: interfaces declared in this run become references;
                 # F3.2: resolve in the zone's vsys key
                 network[key] = [
-                    self.name_ref(i, INTERFACE_SCOPES, vsys=zone.get('vsys') or '')
+                    self.name_ref(i, INTERFACE_SCOPES, vsys=zone.get('vsys') or '',
+                                  device=zone.get('vsys_device') or '')
                     for i in zone['interfaces']]
             if zone.get('zone_protection_profile'):
                 network['zone_protection_profile'] = zone['zone_protection_profile']
@@ -3347,8 +3372,10 @@ variable "panos_password" {
                 context=router.get('template') or '', vsys=router.get('vsys') or ''
             )
 
-            # Add comment showing source and type
-            template = router.get('template', 'unknown')
+            # Add comment showing source and type. A router the export does
+            # not place in a template is device-specific (F3.5 records the
+            # template as '' there).
+            template = router.get('template') or 'device-specific'
             content += f'# Source: {template}\n'
             router_type = router.get('router_type', 'virtual')
             if router_type == 'logical':
@@ -3358,7 +3385,7 @@ variable "panos_password" {
             content += f'# Type: {rtype}\n'
 
             content += f'resource "panos_virtual_router" "{resource_name}" {{\n'
-            content += self.location_block('panos_virtual_router', template=router.get('template'))
+            content += self.location_block('panos_virtual_router', router)
             content += f'  name = {self.escape_string(router["name"])}\n'
 
             # v2 interfaces is a flat string list
@@ -3366,7 +3393,9 @@ variable "panos_password" {
                 # F2.6: interfaces declared in this run become references;
                 # F3.2: resolve in the router's vsys key
                 ifaces_str = ', '.join([
-                    self.hcl_value(self.name_ref(i, INTERFACE_SCOPES, vsys=router.get('vsys') or ''), '')
+                    self.hcl_value(self.name_ref(
+                        i, INTERFACE_SCOPES, vsys=router.get('vsys') or '',
+                        device=router.get('vsys_device') or ''), '')
                     for i in router['interfaces']
                 ])
                 content += f'  interfaces = [{ifaces_str}]\n'
@@ -3383,9 +3412,11 @@ variable "panos_password" {
                     )
 
                     content += f'resource "panos_virtual_router_static_route_ipv4" "{route_resource}" {{\n'
+                    # The route carries the owning router's source
+                    # identity; only the report name is the route's own
                     content += self.location_block(
                         'panos_virtual_router_static_route_ipv4',
-                        template=router.get('template'))
+                        {**router, 'name': route['name']})
                     content += f'  name = {self.escape_string(route["name"])}\n'
                     # Reference the owning virtual router resource
                     content += f'  virtual_router = panos_virtual_router.{resource_name}.name\n'
@@ -3448,21 +3479,23 @@ variable "panos_password" {
         mode = iface.get('mode')
         context = iface.get('template') or ''
         vsys = iface.get('vsys') or ''
+        device = iface.get('vsys_device') or ''
         scope_sub = 'panos_ethernet_layer3_subinterface'
         parent, dot, tag_str = name.partition('.')
 
         # Tagged L3 subinterface (ethernet1/2.10): v2 subinterface resource
         if dot and mode == 'layer3':
             scope = scope_sub
-            resource_name = self.declare_resource_name(name, scope,
-                                                       context=context, vsys=vsys)
+            resource_name = self.declare_resource_name(
+                name, scope, context=context, vsys=vsys, device=device)
             out = f'resource "{scope}" "{resource_name}" {{\n'
-            out += self.location_block(scope, template=iface.get('template'))
+            out += self.location_block(scope, iface)
             out += f'  name = {self.escape_string(name)}\n'
             # F2.6: the parent is an interface declared in this run
             # (or a brown-field interface outside the export);
             # F3.2: resolve in the subinterface's vsys key
-            parent_ref = self.name_ref(parent, IFACE_SCOPES, context=context, vsys=vsys)
+            parent_ref = self.name_ref(parent, IFACE_SCOPES, context=context,
+                                       vsys=vsys, device=device)
             out += f"  parent = {self.hcl_value(parent_ref, '')}\n"
             if tag_str.isdigit():
                 out += f'  tag = {int(tag_str)}\n'
@@ -3474,10 +3507,10 @@ variable "panos_password" {
 
         # Physical interface
         scope = 'panos_ethernet_interface'
-        resource_name = self.declare_resource_name(name, scope,
-                                                   context=context, vsys=vsys)
+        resource_name = self.declare_resource_name(
+            name, scope, context=context, vsys=vsys, device=device)
         out = f'resource "{scope}" "{resource_name}" {{\n'
-        out += self.location_block(scope, template=iface.get('template'))
+        out += self.location_block(scope, iface)
         out += f'  name = {self.escape_string(name)}\n'
 
         if iface.get('comment'):
@@ -3508,13 +3541,15 @@ variable "panos_password" {
         # v2 has no ipv4 attribute on the interface: IPv4 lives on the .0 subinterface
         if mode == 'layer3' and iface.get('ip_addresses'):
             sub_name = f'{name}.0'
-            sub_resource = self.declare_resource_name(sub_name, scope_sub, context=context, vsys=vsys)
+            sub_resource = self.declare_resource_name(
+                sub_name, scope_sub, context=context, vsys=vsys, device=device)
             out += f'resource "{scope_sub}" "{sub_resource}" {{\n'
-            out += self.location_block(scope_sub, template=iface.get('template'))
+            out += self.location_block(scope_sub, iface)
             out += f'  name = {self.escape_string(sub_name)}\n'
             # F2.6: the parent is the physical interface declared above;
             # F3.2: resolve in the subinterface's vsys key
-            parent_ref = self.name_ref(name, IFACE_SCOPES, context=context, vsys=vsys)
+            parent_ref = self.name_ref(name, IFACE_SCOPES, context=context,
+                                       vsys=vsys, device=device)
             out += f"  parent = {self.hcl_value(parent_ref, '')}\n"
             out += '  tag = 0\n'
             out += self._ip_list_line(iface)
@@ -3527,15 +3562,16 @@ variable "panos_password" {
         name = iface['name']
         context = iface.get('template') or ''
         vsys = iface.get('vsys') or ''
+        device = iface.get('vsys_device') or ''
         # An aggregate entry whose name already carries a unit (ae1.101) is a
         # layer-3 subinterface of the aggregate group; the group entry itself
         # has no ip, parent, or tag in the schema.
         if iface['type'] == 'aggregate' and '.' in name:
             scope = 'panos_aggregate_layer3_subinterface'
-        resource_name = self.declare_resource_name(name, scope,
-                                                   context=context, vsys=vsys)
+        resource_name = self.declare_resource_name(
+            name, scope, context=context, vsys=vsys, device=device)
         out = f'resource "{scope}" "{resource_name}" {{\n'
-        out += self.location_block(scope, template=iface.get('template'))
+        out += self.location_block(scope, iface)
         out += f'  name = {self.escape_string(name)}\n'
         if iface.get('comment'):
             out += f'  comment = {self.escape_string(iface["comment"])}\n'
@@ -3547,7 +3583,8 @@ variable "panos_password" {
             return out
         parent = iface.get('parent')
         if parent:
-            parent_ref = self.name_ref(parent, IFACE_SCOPES, context=context, vsys=vsys)
+            parent_ref = self.name_ref(parent, IFACE_SCOPES, context=context,
+                                       vsys=vsys, device=device)
             out += f"  parent = {self.hcl_value(parent_ref, '')}\n"
         # Only the layer-3 subinterface types carry a tag in the schema.
         tag = iface.get('tag')
@@ -3781,7 +3818,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_security_profile_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_security_profile_group', grp.get('device_group'))
+            content += self.location_block('panos_security_profile_group', grp)
             content += f'  name = {self.escape_string(grp["name"])}\n'
 
             for category in categories:
@@ -3825,7 +3862,7 @@ variable "panos_password" {
                 or application_override_rules or qos_profiles
                 or tunnel_monitor_profiles or schedules or log_settings
                 or zone_protection_profiles or report_only_addresses
-                or dual_protocol_services):
+                or dual_protocol_services or self._location_reports):
             return
 
         lines = ['MANUAL SETUP REPORT', '=' * 60, '']
@@ -3993,6 +4030,33 @@ variable "panos_password" {
             lines.append('  (GUI or CLI), or define a second service object.')
             lines.append('')
 
+        scope_reports = [line for kind, line in self._location_reports if kind == 'scope']
+        if scope_reports:
+            lines.append('--- Locations The Provider Cannot Carry (location emitted without the source scope) ---')
+            lines.extend(scope_reports)
+            lines.append('  v2 resource: as listed per line')
+            lines.append('  Reason: the export defines the entry in a virtual')
+            lines.append('  system, template, or device group that this resource')
+            lines.append('  type has no location sub-block for, so the emitted')
+            lines.append('  location cannot name it. terraform validate accepts an')
+            lines.append('  unknown location sub-block and drops it silently, so')
+            lines.append('  the converter omits it instead. Place the object in the')
+            lines.append('  source scope manually (GUI or CLI) and verify against')
+            lines.append('  this report.')
+            lines.append('')
+
+        device_reports = [line for kind, line in self._location_reports if kind == 'device']
+        if device_reports:
+            lines.append('--- Virtual System Locations Without A Target Device ---')
+            lines.extend(device_reports)
+            lines.append('  v2 resource: as listed per line')
+            lines.append('  Reason: the export names the owning device')
+            lines.append('  "localhost.localdomain", the PAN-OS placeholder for')
+            lines.append('  "this device", so location.vsys.ngfw_device stays')
+            lines.append('  empty. Set ngfw_device to the firewall that owns the')
+            lines.append('  virtual system, or point the provider at that firewall.')
+            lines.append('')
+
         lines.append('End of report.')
 
         with open(self.output_dir / 'MANUAL_SETUP_REPORT.txt', 'w') as f:
@@ -4031,7 +4095,7 @@ variable "panos_password" {
                     context=profile.get('template') or '', vsys=profile.get('vsys') or ''
                 )
                 content += f'resource "panos_ike_crypto_profile" "{resource_name}" {{\n'
-                content += self.location_block('panos_ike_crypto_profile', template=profile.get('template'))
+                content += self.location_block('panos_ike_crypto_profile', profile)
                 content += f'  name = {self.escape_string(profile["name"])}\n'
 
                 if profile.get('encryptions'):
@@ -4067,7 +4131,7 @@ variable "panos_password" {
                     context=profile.get('template') or '', vsys=profile.get('vsys') or ''
                 )
                 content += f'resource "panos_ipsec_crypto_profile" "{resource_name}" {{\n'
-                content += self.location_block('panos_ipsec_crypto_profile', template=profile.get('template'))
+                content += self.location_block('panos_ipsec_crypto_profile', profile)
                 content += f'  name = {self.escape_string(profile["name"])}\n'
 
                 # v2 dh_group is a single string (not a list)
@@ -4113,7 +4177,7 @@ variable "panos_password" {
                     context=gw.get('template') or '', vsys=gw.get('vsys') or ''
                 )
                 content += f'resource "panos_ike_gateway" "{resource_name}" {{\n'
-                content += self.location_block('panos_ike_gateway', template=gw.get('template'))
+                content += self.location_block('panos_ike_gateway', gw)
                 content += f'  name = {self.escape_string(gw["name"])}\n'
 
                 # v2 protocol object: version + ikev1/ikev2 sub-object
@@ -4142,7 +4206,8 @@ variable "panos_password" {
                     # F3.2: resolve in the gateway's vsys key
                     iface_ref = self.name_ref(
                         gw['local_address_interface'], INTERFACE_SCOPES,
-                        vsys=gw.get('vsys') or '')
+                        vsys=gw.get('vsys') or '',
+                        device=gw.get('vsys_device') or '')
                     content += f'  local_address = {self.hcl_value({"interface": iface_ref})}\n'
                 elif gw.get('local_address'):
                     # Heuristic: dotted-quad values are IPs, otherwise
@@ -4150,7 +4215,8 @@ variable "panos_password" {
                     local = gw['local_address']
                     key = 'ip' if self._looks_like_ip(local) else 'interface'
                     value = (self.name_ref(local, INTERFACE_SCOPES,
-                                           vsys=gw.get('vsys') or '')
+                                           vsys=gw.get('vsys') or '',
+                                           device=gw.get('vsys_device') or '')
                              if key == 'interface' else local)
                     content += f'  local_address = {self.hcl_value({key: value})}\n'
 
@@ -4181,7 +4247,7 @@ variable "panos_password" {
                     context=tunnel.get('template') or '', vsys=tunnel.get('vsys') or ''
                 )
                 content += f'resource "panos_ipsec_tunnel" "{resource_name}" {{\n'
-                content += self.location_block('panos_ipsec_tunnel', template=tunnel.get('template'))
+                content += self.location_block('panos_ipsec_tunnel', tunnel)
                 content += f'  name = {self.escape_string(tunnel["name"])}\n'
 
                 if tunnel.get('tunnel_interface'):

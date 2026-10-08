@@ -5,30 +5,30 @@
 # Antivirus Profiles
 # Profile: AV-Default
 # Description: Default antivirus
-# Resource: panos_antivirus_security_profile.av_default_c0ca2a0d
+# Resource: panos_antivirus_security_profile.av_default_e8ddb582
 
 # Vulnerability Protection Profiles
 # Profile: VULN-Default
 # Description: Default vulnerability
-# Resource: panos_vulnerability_security_profile.vuln_default_d47f836d
+# Resource: panos_vulnerability_security_profile.vuln_default_ed8d8a10
 
 # Anti-Spyware Profiles
 # Profile: SPY-Default
 # Description: Default spyware
-# Resource: panos_anti_spyware_security_profile.spy_default_39973876
+# Resource: panos_anti_spyware_security_profile.spy_default_6a3d0c49
 
 # URL Filtering Profiles
 # Profile: URL-Default
 # Description: Default URL filtering
-# Resource: panos_url_filtering_security_profile.url_default_9246ca1a
+# Resource: panos_url_filtering_security_profile.url_default_6786c5ce
 
 # File Blocking Profiles
 # Profile: FB-Default
 # Description: Default file blocking
-# Resource: panos_file_blocking_security_profile.fb_default_6c15864e
+# Resource: panos_file_blocking_security_profile.fb_default_288ee410
 
 # WildFire Analysis Profiles
 # Profile: WF-Default
 # Description: Default WildFire
-# Resource: panos_wildfire_analysis_security_profile.wf_default_f2037687
+# Resource: panos_wildfire_analysis_security_profile.wf_default_b561d090
 

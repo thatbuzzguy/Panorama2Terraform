@@ -37,6 +37,142 @@ INTERFACE_RESOURCE_TYPES = {
     'aggregate-subinterface': 'panos_aggregate_layer3_subinterface',
 }
 
+# F3.5: the `location` sub-blocks the v2.0.14 schema declares for each
+# emitted type, with the fields of every sub-block. The generator picks the
+# sub-block from this table; it never emits a sub-block or a field the table
+# omits.
+#
+# Per type the table lists only the sub-blocks the converter can use
+# (device_group, shared, vsys, template). The schema declares more for some
+# types — `ngfw`, `template_stack`, `template_stack_vsys`, `template_vsys`
+# — for direct-firewall and template-stack placement; the converter targets
+# Panorama device groups and templates, so it never uses them and the table
+# is a deliberate subset. tests/test_multi_vsys_location.py checks every
+# listed sub-block and field against the live provider schema. That check
+# matters because `terraform validate` accepts an unknown `location`
+# sub-block and drops it silently, so a wrong sub-block fails at apply,
+# not at validate.
+#
+# Verified against provider v2.0.14 with `terraform providers schema -json`.
+LOCATION_SCHEMA = {
+    'panos_address': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_address_group': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_administrative_tag': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_aggregate_interface': {
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_aggregate_layer3_subinterface': {
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_application_group': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_custom_url_category': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_decryption_policy_rules': {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_ethernet_interface': {
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_ethernet_layer3_subinterface': {
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_external_dynamic_list': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_ike_crypto_profile': {
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_ike_gateway': {
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_ipsec_crypto_profile': {
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_ipsec_tunnel': {
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_loopback_interface': {
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_monitor_profile': {
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_nat_policy_rules': {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_pbf_policy_rules': {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_security_policy_rules': {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_security_profile_group': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+    },
+    'panos_service': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_service_group': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_tunnel_interface': {
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_virtual_router': {
+        'vsys': ('name', 'ngfw_device'),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_virtual_router_static_route_ipv4': {
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_vlan_interface': {
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_zone': {
+        'vsys': ('name', 'ngfw_device'),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+}
+
 # Provider v2 resource types emitted by the generator.
 EMITTED_TYPES = frozenset({
     # Objects (device-group scoped)

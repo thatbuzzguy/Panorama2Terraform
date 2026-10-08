@@ -78,11 +78,34 @@ on emission order, and same-named objects in different device groups or
 virtual systems stay distinct. For example:
 
 ```hcl
-resource "panos_address" "web_server_1_9ec34c7e" {
-  name = "web-server-1"
+resource "panos_address" "web_server_1_11f477f4" {
+  name = "Web-Server-1"
   ...
 }
 ```
+
+## Location blocks
+
+Provider v2 places every resource with the required `location` argument,
+and the sub-blocks one type accepts differ from the next. The converter
+takes the choice from the source scope the export declares and from
+[`LOCATION_SCHEMA`](resource_mapping.py), the verified v2.0.14 shape per
+emitted type:
+
+| Source of the entry | Emitted location |
+|---|---|
+| Inside a device group | `device_group = { name = "<device group>" }` |
+| Inside `<shared>` | `shared = {}` |
+| Inside a virtual system | `vsys = { name = "<vsys>", ngfw_device = "<firewall>" }` |
+| Inside a template | `template = { name = "<template>" }`, plus `vsys` where that type declares the field |
+| Template-scoped type, no declared template | `template = { name = "Shared" }` placeholder (the real name lands with F3.6) |
+
+Two limits are reported in `MANUAL_SETUP_REPORT.txt` instead of being
+dropped silently: a declared vsys, template, or device group the resource
+type cannot carry (for example `panos_security_profile_group` has no `vsys`
+sub-block), and a vsys location whose export names no target firewall
+(`ngfw_device` is omitted; `localhost.localdomain` is the PAN-OS
+placeholder for "this device", not a device name).
 
 ## Report-only configuration
 

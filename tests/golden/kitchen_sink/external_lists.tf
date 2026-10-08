@@ -1,10 +1,8 @@
 # External Dynamic Lists
 
-resource "panos_external_dynamic_list" "threat_ips_855a18a5" {
+resource "panos_external_dynamic_list" "threat_ips_25ccec46" {
   location = {
-    device_group = {
-      name = "Shared"
-    }
+    shared = {}
   }
   name = "threat-ips"
   type = {
@@ -18,11 +16,9 @@ resource "panos_external_dynamic_list" "threat_ips_855a18a5" {
   }
 }
 
-resource "panos_external_dynamic_list" "bad_domains_d5b53f99" {
+resource "panos_external_dynamic_list" "bad_domains_73b2b3b4" {
   location = {
-    device_group = {
-      name = "Shared"
-    }
+    shared = {}
   }
   name = "bad-domains"
   type = {
@@ -42,11 +38,9 @@ resource "panos_external_dynamic_list" "bad_domains_d5b53f99" {
   }
 }
 
-resource "panos_external_dynamic_list" "panw_url_list_e9e358af" {
+resource "panos_external_dynamic_list" "panw_url_list_2015fbf3" {
   location = {
-    device_group = {
-      name = "Shared"
-    }
+    shared = {}
   }
   name = "panw-url-list"
   type = {

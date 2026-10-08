@@ -2,7 +2,7 @@
 # One panos_pbf_policy_rules resource per rule; per-device-group
 # chains preserve XML order (F2.5).
 
-resource "panos_pbf_policy_rules" "pbf_forward_1315ecb7" {
+resource "panos_pbf_policy_rules" "pbf_forward_9430b7c3" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -43,7 +43,7 @@ resource "panos_pbf_policy_rules" "pbf_forward_1315ecb7" {
   ]
 }
 
-resource "panos_pbf_policy_rules" "pbf_discard_81c58f18" {
+resource "panos_pbf_policy_rules" "pbf_discard_5a45ec06" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -54,7 +54,7 @@ resource "panos_pbf_policy_rules" "pbf_discard_81c58f18" {
     directly = true
     pivot = "PBF-Forward"
   }
-  depends_on = [ panos_pbf_policy_rules.pbf_forward_1315ecb7 ]
+  depends_on = [ panos_pbf_policy_rules.pbf_forward_9430b7c3 ]
 
   rules = [
     {

@@ -187,7 +187,7 @@ lives on the `.0` layer-3 subinterface:
 
 ```hcl
 # Before (from converter)
-resource "panos_ethernet_interface" "ethernet1_1_6ba52c24" {
+resource "panos_ethernet_interface" "ethernet1_1_5dadf948" {
   location = {
     template = {
       name = "Shared"
@@ -198,7 +198,7 @@ resource "panos_ethernet_interface" "ethernet1_1_6ba52c24" {
 }
 
 # After (adjusted for target)
-resource "panos_ethernet_interface" "ethernet1_1_6ba52c24" {
+resource "panos_ethernet_interface" "ethernet1_1_5dadf948" {
   location = {
     template = {
       name = "Shared"
@@ -211,14 +211,14 @@ resource "panos_ethernet_interface" "ethernet1_1_6ba52c24" {
   comment = "Trust Interface - Internal Network"
 }
 
-resource "panos_ethernet_layer3_subinterface" "ethernet1_1_0_d8f6b026" {
+resource "panos_ethernet_layer3_subinterface" "ethernet1_1_0_8f45cb53" {
   location = {
     template = {
       name = "Shared"
     }
   }
   name = "ethernet1/1.0"
-  parent = panos_ethernet_interface.ethernet1_1_6ba52c24.name
+  parent = panos_ethernet_interface.ethernet1_1_5dadf948.name
   tag = 0
   ip = [{ name = "10.1.1.1/24" }]
 }
@@ -230,13 +230,14 @@ of the object's source identity.)
 ### Step 3: Update Zone Assignments
 
 Ensure zones reference the correct interfaces. In v2 the membership
-lives under `network`:
+lives under `network`. A zone the export defines inside a virtual system
+is placed with `vsys`:
 
 ```hcl
 resource "panos_zone" "trust" {
   location = {
-    template = {
-      name = "Shared"
+    vsys = {
+      name = "vsys1"
     }
   }
   name = "Trust"
@@ -245,6 +246,10 @@ resource "panos_zone" "trust" {
   }
 }
 ```
+
+A zone a template defines instead gets
+`template = { name = "<template>" }`, and `ngfw_device = "<firewall>"` is
+added to the `vsys` block when the export names the owning firewall.
 
 ## Detailed Migration Steps
 
@@ -408,8 +413,8 @@ show interface all
 ```hcl
 resource "panos_zone" "trust" {
   location = {
-    template = {
-      name = "Shared"
+    vsys = {
+      name = "vsys1"
     }
   }
   name = "Trust"
@@ -418,7 +423,7 @@ resource "panos_zone" "trust" {
   }
 
   depends_on = [
-    panos_ethernet_interface.ethernet1_1_6ba52c24
+    panos_ethernet_interface.ethernet1_1_5dadf948
   ]
 }
 ```

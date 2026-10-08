@@ -1,6 +1,6 @@
 # PBF Path Monitoring Profiles (F2.9: real v2 resources)
 
-resource "panos_monitor_profile" "pm_branch_070d8f1d" {
+resource "panos_monitor_profile" "pm_branch_f7126407" {
   location = {
     template = {
       name = "Shared"

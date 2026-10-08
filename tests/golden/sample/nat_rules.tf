@@ -1,6 +1,6 @@
 # NAT Policy Rules
 
-resource "panos_nat_policy_rules" "outbound_nat_ee85cf07" {
+resource "panos_nat_policy_rules" "outbound_nat_c2f57405" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -16,7 +16,7 @@ resource "panos_nat_policy_rules" "outbound_nat_ee85cf07" {
       description = "Outbound NAT for internal users"
       source_zones = [ "Trust" ]
       destination_zone = [ "Untrust" ]
-      source_addresses = [ panos_address.internal_network_f1af75f3.name ]
+      source_addresses = [ panos_address.internal_network_8d9b5271.name ]
       destination_addresses = [ "any" ]
       service = "any"
       nat_type = "ipv4"
@@ -31,7 +31,7 @@ resource "panos_nat_policy_rules" "outbound_nat_ee85cf07" {
   ]
 }
 
-resource "panos_nat_policy_rules" "inbound_web_nat_fd53537d" {
+resource "panos_nat_policy_rules" "inbound_web_nat_78d3e7e9" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -42,7 +42,7 @@ resource "panos_nat_policy_rules" "inbound_web_nat_fd53537d" {
     directly = true
     pivot = "Outbound-NAT"
   }
-  depends_on = [ panos_nat_policy_rules.outbound_nat_ee85cf07 ]
+  depends_on = [ panos_nat_policy_rules.outbound_nat_c2f57405 ]
 
   rules = [
     {

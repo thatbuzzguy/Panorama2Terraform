@@ -1,7 +1,7 @@
 # Interface Configurations
 # Note: These are reference configurations. Adjust for your hardware platform.
 
-resource "panos_ethernet_interface" "ethernet1_1_c0c4e030" {
+resource "panos_ethernet_interface" "ethernet1_1_5dadf948" {
   location = {
     template = {
       name = "Shared"
@@ -14,14 +14,14 @@ resource "panos_ethernet_interface" "ethernet1_1_c0c4e030" {
   }
 }
 
-resource "panos_ethernet_layer3_subinterface" "ethernet1_1_0_18e97c24" {
+resource "panos_ethernet_layer3_subinterface" "ethernet1_1_0_8f45cb53" {
   location = {
     template = {
       name = "Shared"
     }
   }
   name = "ethernet1/1.0"
-  parent = panos_ethernet_interface.ethernet1_1_c0c4e030.name
+  parent = panos_ethernet_interface.ethernet1_1_5dadf948.name
   tag = 0
   ip = [
     {
@@ -30,7 +30,7 @@ resource "panos_ethernet_layer3_subinterface" "ethernet1_1_0_18e97c24" {
   ]
 }
 
-resource "panos_ethernet_interface" "ethernet1_2_d9d5f535" {
+resource "panos_ethernet_interface" "ethernet1_2_e93e63ea" {
   location = {
     template = {
       name = "Shared"
@@ -40,7 +40,7 @@ resource "panos_ethernet_interface" "ethernet1_2_d9d5f535" {
   layer2 = {}
 }
 
-resource "panos_vlan_interface" "vlan_10_c0a7bc93" {
+resource "panos_vlan_interface" "vlan_10_c5e6dfef" {
   location = {
     template = {
       name = "Shared"
@@ -54,7 +54,7 @@ resource "panos_vlan_interface" "vlan_10_c0a7bc93" {
   ]
 }
 
-resource "panos_loopback_interface" "loopback_1_410dbf16" {
+resource "panos_loopback_interface" "loopback_1_94234b6d" {
   location = {
     template = {
       name = "Shared"
@@ -68,7 +68,7 @@ resource "panos_loopback_interface" "loopback_1_410dbf16" {
   ]
 }
 
-resource "panos_tunnel_interface" "tunnel_1_efa265d0" {
+resource "panos_tunnel_interface" "tunnel_1_91f4f2d4" {
   location = {
     template = {
       name = "Shared"
@@ -82,7 +82,7 @@ resource "panos_tunnel_interface" "tunnel_1_efa265d0" {
   ]
 }
 
-resource "panos_aggregate_interface" "ae1_dfd607ea" {
+resource "panos_aggregate_interface" "ae1_a0d7d5aa" {
   location = {
     template = {
       name = "Shared"
@@ -92,14 +92,14 @@ resource "panos_aggregate_interface" "ae1_dfd607ea" {
   layer2 = {}
 }
 
-resource "panos_aggregate_layer3_subinterface" "ae1_101_277c257e" {
+resource "panos_aggregate_layer3_subinterface" "ae1_101_2050090e" {
   location = {
     template = {
       name = "Shared"
     }
   }
   name = "ae1.101"
-  parent = panos_aggregate_interface.ae1_dfd607ea.name
+  parent = panos_aggregate_interface.ae1_a0d7d5aa.name
   tag = 101
   ip = [
     {
@@ -108,14 +108,14 @@ resource "panos_aggregate_layer3_subinterface" "ae1_101_277c257e" {
   ]
 }
 
-resource "panos_aggregate_layer3_subinterface" "ae1_101_20_5fdf6533" {
+resource "panos_aggregate_layer3_subinterface" "ae1_101_20_9531d73b" {
   location = {
     template = {
       name = "Shared"
     }
   }
   name = "ae1.101.20"
-  parent = panos_aggregate_layer3_subinterface.ae1_101_277c257e.name
+  parent = panos_aggregate_layer3_subinterface.ae1_101_2050090e.name
   tag = 20
   ip = [
     {

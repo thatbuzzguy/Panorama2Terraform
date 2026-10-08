@@ -1,53 +1,12 @@
 # Router Configurations
 # Supports both Virtual Routers (legacy) and Logical Routers (Advanced Routing Engine)
 
-# Source: FW-Template
-# Type: Virtual Router (Legacy)
-resource "panos_virtual_router" "default_9e05ceea" {
-  location = {
-    template = {
-      name = "FW-Template"
-    }
-  }
-  name = "default"
-  interfaces = [panos_ethernet_interface.ethernet1_1_c0c4e030.name, panos_ethernet_interface.ethernet1_2_d9d5f535.name]
-}
-
-resource "panos_virtual_router_static_route_ipv4" "default_9e05ceea_default_gw_ba29e75f" {
-  location = {
-    template = {
-      name = "FW-Template"
-    }
-  }
-  name = "default-gw"
-  virtual_router = panos_virtual_router.default_9e05ceea.name
-  destination = "0.0.0.0/0"
-  nexthop = {
-    ip_address = "192.168.1.254"
-  }
-  metric = 10
-}
-
-resource "panos_virtual_router_static_route_ipv4" "default_9e05ceea_dmz_route_88b86d34" {
-  location = {
-    template = {
-      name = "FW-Template"
-    }
-  }
-  name = "dmz-route"
-  virtual_router = panos_virtual_router.default_9e05ceea.name
-  destination = "172.16.0.0/16"
-  nexthop = {
-    ip_address = "192.168.1.5"
-  }
-}
-
 # Source: device-specific
 # Type: Virtual Router (Legacy)
-resource "panos_virtual_router" "default_4e0da682" {
+resource "panos_virtual_router" "default_73798532" {
   location = {
     template = {
-      name = "device-specific"
+      name = "Shared"
     }
   }
   name = "default"
@@ -55,10 +14,10 @@ resource "panos_virtual_router" "default_4e0da682" {
 
 # Source: device-specific
 # Type: Virtual Router (Legacy)
-resource "panos_virtual_router" "vr_nobgp_6974e750" {
+resource "panos_virtual_router" "vr_nobgp_96d57824" {
   location = {
     template = {
-      name = "device-specific"
+      name = "Shared"
     }
   }
   name = "vr-nobgp"
@@ -66,36 +25,89 @@ resource "panos_virtual_router" "vr_nobgp_6974e750" {
 
 # Source: device-specific
 # Type: Virtual Router (Legacy)
-resource "panos_virtual_router" "vr_dmz_d54df80a" {
+resource "panos_virtual_router" "vr_dmz_7626169b" {
   location = {
     template = {
-      name = "device-specific"
+      name = "Shared"
     }
   }
   name = "vr-dmz"
   interfaces = ["ethernet1/3"]
 }
 
+# Source: device-specific
+# Type: Virtual Router (Legacy)
+resource "panos_virtual_router" "vr_device_level_14036781" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
+  name = "vr-device-level"
+  interfaces = ["ethernet1/1"]
+}
+
+# Source: FW-Template
+# Type: Virtual Router (Legacy)
+resource "panos_virtual_router" "default_c03bed95" {
+  location = {
+    template = {
+      name = "FW-Template"
+    }
+  }
+  name = "default"
+  interfaces = [panos_ethernet_interface.ethernet1_1_5dadf948.name, panos_ethernet_interface.ethernet1_2_e93e63ea.name]
+}
+
+resource "panos_virtual_router_static_route_ipv4" "default_c03bed95_default_gw_96fe6d2d" {
+  location = {
+    template = {
+      name = "FW-Template"
+    }
+  }
+  name = "default-gw"
+  virtual_router = panos_virtual_router.default_c03bed95.name
+  destination = "0.0.0.0/0"
+  nexthop = {
+    ip_address = "192.168.1.254"
+  }
+  metric = 10
+}
+
+resource "panos_virtual_router_static_route_ipv4" "default_c03bed95_dmz_route_9f887ae9" {
+  location = {
+    template = {
+      name = "FW-Template"
+    }
+  }
+  name = "dmz-route"
+  virtual_router = panos_virtual_router.default_c03bed95.name
+  destination = "172.16.0.0/16"
+  nexthop = {
+    ip_address = "192.168.1.5"
+  }
+}
+
 # Source: FW-Template
 # Type: Logical Router (Advanced Routing Engine)
-resource "panos_virtual_router" "lr_main_cb9aa879" {
+resource "panos_virtual_router" "lr_main_2258b30f" {
   location = {
     template = {
       name = "FW-Template"
     }
   }
   name = "lr-main"
-  interfaces = [panos_ethernet_interface.ethernet1_1_c0c4e030.name]
+  interfaces = [panos_ethernet_interface.ethernet1_1_5dadf948.name]
 }
 
-resource "panos_virtual_router_static_route_ipv4" "lr_main_cb9aa879_lr_default_81cdac78" {
+resource "panos_virtual_router_static_route_ipv4" "lr_main_2258b30f_lr_default_2029ebbd" {
   location = {
     template = {
       name = "FW-Template"
     }
   }
   name = "lr-default"
-  virtual_router = panos_virtual_router.lr_main_cb9aa879.name
+  virtual_router = panos_virtual_router.lr_main_2258b30f.name
   destination = "0.0.0.0/0"
   interface = "lr-peer"
 }
