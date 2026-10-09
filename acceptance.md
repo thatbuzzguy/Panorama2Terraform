@@ -83,7 +83,7 @@ before they spend memory on it and before they write any file.
 
 ## Result (2026-10-08)
 
-All eleven criteria hold. `ruff check .` clean, 419 tests pass (24 of them
+All eleven criteria hold. `ruff check .` clean, 420 tests pass (25 of them
 new in `tests/test_safe_input.py`), `terraform validate` still green, and
 both golden sets are byte-identical.
 
@@ -101,6 +101,7 @@ Evidence per criterion:
   `test_external_id_dtd_is_refused`.
 - 4: `test_entity_reference_without_a_dtd_is_a_parse_error`.
 - 5: `test_refusal_names_the_file_the_limit_and_the_measured_size`,
+  `test_a_directory_is_a_clean_refusal`,
   `_assert_clean_failure` in every refusal test.
 - 6: `test_refusal_writes_no_output_files`,
   `test_refusal_leaves_an_existing_output_directory_untouched`.

@@ -1,7 +1,7 @@
 # Agent Status
 
 ## Current position
-**F3.8 (safe XML input) is committed.** `acceptance.md` holds the F3.8
+**F3.8 (safe XML input) is committed** as a35ab20. `acceptance.md` holds the F3.8
 criteria and result — overwrite it before the next task. **Next task: F3.9
 Per-device-group reports** (Epic 3): key `INTERFACE_MIGRATION_REPORT.txt`
 and `VPN_MIGRATION_REPORT.txt` by device group, and keep the pre-shared-key
@@ -31,7 +31,7 @@ ngfw_device }`; `reference_device(obj)` resolves a reference inside its own
 device or its template's single device, and keeps a plain name when the
 choice is ambiguous. `split_device_groups.device_associations(root)` is the
 splitter's copy of the same join, and every element it takes out of the
-export is a `copy.deepcopy`. Gate: ruff clean, pytest 419 passed, terraform
+export is a `copy.deepcopy`. Gate: ruff clean, pytest 420 passed, terraform
 validate green on the sample, kitchen-sink, crypto-profile and two-device
 outputs.
 
@@ -74,20 +74,21 @@ outputs.
   `StartDoctypeDeclHandler` with `(name, systemId, publicId, standalone)`
   — **not** the order the Python documentation states — so the refusal
   never labels the two ids, it only says "with an external id".
-- Tests: `tests/test_safe_input.py` (24). Over-limit refused, at-limit
+- Tests: `tests/test_safe_input.py` (25). Over-limit refused, at-limit
   accepted, limit − 1 refused, the message names file/limit/measured size,
   both scripts print the identical refusal and share the exit code, no
   output directory created, a reused output directory keeps its contents,
   the UTF-16 DTD bypass closed, clean UTF-16 input still accepted, a
   comment `<!DOCTYPE` accepted, an external-id DTD refused, the F1.7 hostile
   fixtures still refused by both scripts, an entity without a DTD is a
-  parse error, the default accepts every committed fixture, and the input
-  is opened exactly once. New `xml_input_module` fixture in conftest.py.
+  parse error, a directory input is a clean refusal, the default accepts
+  every committed fixture, and the input is opened exactly once. New
+  `xml_input_module` fixture in conftest.py.
 - No generated-output change: both golden sets are byte-identical.
 - Docs: README "Safe input"; `docs/USAGE_GUIDE.md` and
   `docs/DEVICE_GROUP_SPLITTING.md` "Input Limit"; the size-limit tech-debt
   item removed from backlog.md.
-- Gate: ruff clean, pytest 419 passed, terraform validate green (5 tests).
+- Gate: ruff clean, pytest 420 passed, terraform validate green (5 tests).
 
 ### F3.6 — Multi-device, template-aware parsing (previous session)
 - Direction: Epic 3, lowest-numbered unfinished feature. `acceptance.md`
