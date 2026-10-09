@@ -316,6 +316,16 @@ project/
 python3 split_device_groups.py panorama_export.xml --output-dir /tmp/my-splits
 ```
 
+### Input Limit
+
+The splitter applies the same input checks as the converter: it refuses an
+export larger than 64 MiB before reading it, and an export that declares a
+DTD. A refusal writes nothing. Raise the size limit for a trusted file:
+
+```bash
+python3 split_device_groups.py big_export.xml --max-input-bytes 268435456
+```
+
 ### Process Specific Device Group Only
 
 If you only want one device group:

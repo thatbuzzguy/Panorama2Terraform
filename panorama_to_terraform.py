@@ -53,6 +53,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 from resource_mapping import INTERFACE_RESOURCE_TYPES, LOCATION_SCHEMA
+from xml_input import (
+    DEFAULT_MAX_INPUT_BYTES,
+    UnsafeInputError,
+    add_max_input_argument,
+    parse_xml,
+)
 
 
 class PanoramaParser:
@@ -101,17 +107,13 @@ class PanoramaParser:
         'certificate-profile': 'certificate_profile',
     }
 
-    def __init__(self, xml_file: str):
+    def __init__(self, xml_file: str, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES):
         self.xml_file = xml_file
-        # Panorama exports never contain a DTD. Reject one before parsing:
-        # ElementTree resolves internal entities, so a deep entity chain
-        # ("billion laughs") is a memory DoS, and external entities are an
-        # XXE vector. A DTD is the only way either reaches the parser.
-        raw = Path(xml_file).read_text(encoding='utf-8', errors='replace')
-        if re.search(r'<!DOCTYPE', raw, re.IGNORECASE):
-            raise ValueError('input contains a DTD, which Panorama exports never include')
-        self.tree = ET.parse(xml_file)
-        self.root = self.tree.getroot()
+        # F3.8: one safe read for both entry points. It caps the input size
+        # and refuses a DTD at parser level (a DTD is the only way an entity
+        # expansion or an external entity reaches the parser), so nothing here
+        # expands an entity and nothing here reads an unbounded file.
+        self.root = parse_xml(xml_file, max_input_bytes)
         # ElementTree has no parent pointers; build a child -> parent map so
         # parse methods can find the enclosing device group of an entry (F2.3).
         self._parent_map = {child: parent for parent in self.root.iter() for child in parent}
@@ -4747,6 +4749,8 @@ def main():
         default='terraform_output',
         help='Output directory for Terraform files (default: terraform_output)'
     )
+    # F3.8: the same input limit on both entry points.
+    add_max_input_argument(parser)
 
     args = parser.parse_args()
 
@@ -4757,7 +4761,7 @@ def main():
 
     try:
         print(f"Parsing Panorama configuration from {args.input_file}...")
-        panorama = PanoramaParser(args.input_file)
+        panorama = PanoramaParser(args.input_file, args.max_input_bytes)
 
         print("Extracting configuration elements...")
         device_groups = panorama.parse_device_groups()
@@ -4966,8 +4970,12 @@ def main():
     except ET.ParseError as e:
         print(f"Error: Failed to parse XML file: {e}")
         return 1
+    except UnsafeInputError as e:
+        # F3.8: an input size or DTD refusal. The message already names the
+        # file, the limit and the measured value, so print it unchanged.
+        print(f"Error: {e}")
+        return 1
     except ValueError as e:
-        # DTD rejection in PanoramaParser raises ValueError.
         print(f"Error: rejected '{args.input_file}': {e}")
         return 1
     except Exception as e:

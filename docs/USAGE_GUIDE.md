@@ -90,6 +90,18 @@ This will create a `terraform_output` directory with all Terraform files.
 python3 panorama_to_terraform.py <input_file.xml> --output-dir /path/to/output
 ```
 
+### Input Limit
+
+Both scripts refuse an input larger than 64 MiB before reading it, and an
+input that declares a DTD (a Panorama export carries none). A refusal
+names the file, the limit and the measured size, exits non-zero, and
+writes no output file.
+
+```bash
+# Raise the limit for a trusted file (both scripts take the same flag)
+python3 panorama_to_terraform.py big_export.xml --max-input-bytes 268435456
+```
+
 ### Example
 
 ```bash

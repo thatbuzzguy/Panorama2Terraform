@@ -4,8 +4,13 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 
 ## Tech Debt
 
+- `tools/build_kitchen_sink.py` still calls `ET.parse` directly. Accepted
+  (F3.8): it is a developer tool that assembles the kitchen-sink fixture
+  from files already committed to this repository, not an entry point that
+  reads an operator's export. Leave it alone unless it ever takes a
+  command-line path.
+
 - `.gitignore` consistency: `*.xml` is ignored, yet `sample_panorama_config.xml` is committed (audit §4.9).
-- No input size limit on XML files. DTD rejection (F1.7) removes the entity-expansion DoS, but a multi-GB well-formed file still allocates memory. A size limit is a product decision (pair with F3.8).
 - Parser extraction gaps found by F1.2 unit tests (each silently drops data; fix lands with the Epic 2/3 rewrites):
   - Application filter `description` is not extracted.
   - Schedule `description` is not extracted.
@@ -106,7 +111,16 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   `expand_domain`, `certificate_profile` and the recurring schedules are
   parsed and emitted; address types with no v2 attribute (location, external)
   are report-only.
-- F3.8 (safe XML input) is implemented: both scripts reject DTDs before parsing (F1.7). If F3.8 is promoted, only `defusedxml` or the size limit remains.
+- F3.8 (safe XML input) closed the input risks and corrected two wrong
+  claims held since F1.7: the `<!DOCTYPE` text search was **not** encoding
+  safe (a UTF-16 export hid the DTD from it while expat parsed and expanded
+  it — reproduced), and it refused legal input that only mentioned
+  `<!DOCTYPE` in a prolog comment. The check now asks the parser. Also
+  verified and relied on: with no DTD, expat expands no entity (`&a;` is a
+  hard parse error) and fetches no external entity, because `xml.etree`
+  installs no `ExternalEntityRefHandler`. `defusedxml` was considered and
+  rejected — it would not cover the size risk, and the scripts stay
+  standard-library only.
 - F2.4 (emitter rewrite) also fixed two F1.6 extraction gaps: dynamic address group filters are serialized from the structured `<filter>` XML, and IPv6 address objects (`<ipv6>`, `<ipv6-range>`) are parsed and emitted.
 
 ## Design Decisions (Epic 3 planning)

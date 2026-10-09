@@ -30,10 +30,16 @@ Useful for multi-HA-pair to multi-virtual-router migrations.
 
 import argparse
 import copy
-import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+from xml_input import (
+    DEFAULT_MAX_INPUT_BYTES,
+    UnsafeInputError,
+    add_max_input_argument,
+    parse_xml,
+)
 
 
 def parse_device_groups(root: ET.Element) -> list:
@@ -223,19 +229,16 @@ def extract_device_group_config(root: ET.Element, device_group_name: str,
 
     return new_config
 
-def split_panorama_config(input_file: str, output_dir: str = None):
+def split_panorama_config(input_file: str, output_dir: str = None,
+                          max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES):
     """Split Panorama configuration by device group"""
-    # Panorama exports never contain a DTD. Reject one before parsing:
-    # ElementTree resolves internal entities ("billion laughs" memory DoS),
-    # and external entity declarations are an XXE vector.
-    raw = Path(input_file).read_text(encoding='utf-8', errors='replace')
-    if re.search(r'<!DOCTYPE', raw, re.IGNORECASE):
-        print("Error: input contains a DTD, which Panorama exports never include")
-        return False
-
+    # F3.8: the same safe read as the converter — a capped input size and a
+    # parser-level DTD refusal. Nothing is written before it succeeds.
     try:
-        tree = ET.parse(input_file)
-        root = tree.getroot()
+        root = parse_xml(input_file, max_input_bytes)
+    except UnsafeInputError as e:
+        print(f"Error: {e}")
+        return False
     except ET.ParseError as e:
         print(f"Error: Failed to parse XML file: {e}")
         return False
@@ -314,6 +317,8 @@ Use Case:
 
     parser.add_argument('input_file', help='Panorama XML export file')
     parser.add_argument('--output-dir', '-o', help='Output directory for split configs')
+    # F3.8: the same input limit on both entry points.
+    add_max_input_argument(parser)
 
     args = parser.parse_args()
 
@@ -321,7 +326,7 @@ Use Case:
         print(f"Error: Input file not found: {args.input_file}")
         return 1
 
-    success = split_panorama_config(args.input_file, args.output_dir)
+    success = split_panorama_config(args.input_file, args.output_dir, args.max_input_bytes)
 
     return 0 if success else 1
 

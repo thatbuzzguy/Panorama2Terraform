@@ -1,35 +1,54 @@
-# To-Do — current task: F3.8 Safe XML input (Epic 3)
+# To-Do — current task: F3.9 Per-device-group reports (Epic 3)
 
-**F3.6 and F3.7 are complete** (multi-device, template-aware parsing; the
-splitter rewrite landed inside it). Evidence is in the commit log and in
-`acceptance.md`. Direction: work the lowest-numbered unfinished feature in
-Epic 3. F3.8 — the converter must refuse input it cannot parse safely.
+**F3.8 is complete** (safe XML input: one capped, DTD-refusing read in
+`xml_input.py`, used by both entry points). Evidence is in the commit log
+and in `acceptance.md`. Direction: work the lowest-numbered unfinished
+feature in Epic 3. F3.9 — the two operator-facing migration reports must
+say which device group (and which firewall) each line belongs to.
 
-**Before writing code: overwrite `acceptance.md` with the F3.8 criteria.**
+**Before writing code: overwrite `acceptance.md` with the F3.9 criteria.**
 
-## F3.8 sub-tasks
+## Why this task
 
-- [ ] Audit what both entry points accept today: `panorama_to_terraform.py`
-      and `split_device_groups.py` read the whole file into memory as text,
-      reject a `<!DOCTYPE`, then hand the path to ElementTree.
-- [ ] Decide the two remaining risks and write the criteria for them:
-      input size (a huge file exhausts memory before the parse starts) and
-      entity/billion-laughs expansion (DTD rejection covers the declared
-      case; confirm nothing else expands).
-- [ ] Pick one mechanism and use it in both scripts: a size limit, or
-      `defusedxml` (a new dependency — check it is acceptable, and note that
-      `xml.etree` and `defusedxml` must not be mixed in one code path).
-- [ ] Report the refusal clearly: name the file, the limit, and the measured
-      value; exit non-zero; write no output files.
-- [ ] Tests: over-limit input refused, at-limit input accepted, the refusal
-      message, no partial output written, and both scripts behave the same.
+`INTERFACE_MIGRATION_REPORT.txt` and `VPN_MIGRATION_REPORT.txt` are the
+two reports an operator reads per firewall. Both today list every entry in
+one flat list: the interface report groups by interface type, the VPN
+report by object kind. In a multi-device-group export the same interface
+name appears once per firewall and the reader cannot tell them apart —
+the same ambiguity F3.5/F3.6 removed from `location` and from resource
+naming.
+
+## F3.9 sub-tasks
+
+- [ ] Audit the two report generators (`generate_interface_report`,
+      `generate_vpn_report`) and the fields each entry already carries
+      (`device_group`, `template`, `device`, `vsys` — the F3.1/F3.5/F3.6
+      parse model).
+- [ ] Decide the grouping order and write the criteria: device group
+      first, then the scope the export declares (template or device), then
+      the existing type/kind grouping inside it.
+- [ ] Interface report: one section per device group; name the firewall
+      for an entry the export places under a device; keep the migration
+      checklist and platform notes as one shared footer, not per section.
+- [ ] VPN report: same grouping; keep the pre-shared-key placeholder
+      warning at the top of the file and repeat the per-gateway
+      `***MUST BE UPDATED***` line where it is today.
+- [ ] Shared entries: name the section `Shared` (the PAN-OS shared
+      section), and never print a device group for an entry whose scope is
+      a template or a device.
+- [ ] Tests: a fixture with two device groups and one shared entry per
+      report; assert each section lists only its own entries, that a
+      same-named interface on two device groups appears twice under
+      different sections, and that the pre-shared-key warning survives.
+- [ ] Goldens: regenerate if a report is in the golden set (check
+      `tests/golden/`); review the diff.
 - [ ] Gates: ruff clean, pytest green, terraform validate green.
 - [ ] Commit; update PLAN.md, to-do.md, agent-status.md, backlog.md.
 
 ## Deferred (tracked in PLAN.md and backlog.md)
 
-- **Epic 3:** F3.9 (per-device-group reports), F3.10
-  (`docs/ARCHITECTURE.md`).
+- **Epic 3:** F3.10 (`docs/ARCHITECTURE.md`: data model, parse pipeline,
+  emit pipeline, naming rules).
 - **Epic 4:** F4.1 (post-run sanity gate; its dead-variable check reuses
   the F2.10 test), F4.2 (container table + line tracking; may land during
   Epic 3), F4.3 (per-entry `CONVERSION_REPORT.txt`), F4.4 (property-level
@@ -37,6 +56,15 @@ Epic 3. F3.8 — the converter must refuse input it cannot parse safely.
 
 ## Notes
 
+- Safe input (F3.8) lives in `xml_input.py`: `parse_xml(path,
+  max_input_bytes)` is the only way either script reads an export — a size
+  cap checked before the read (default 64 MiB, `--max-input-bytes N`), and
+  a DTD refusal made by the parser (an expat prolog scan that stops at the
+  root element), not by a text search. A new entry point must import it;
+  do not add another `ET.parse(path)`.
+- pyexpat calls `StartDoctypeDeclHandler` with `(name, systemId, publicId,
+  standalone)` — not the order the Python documentation states. Verified
+  against pyexpat; `xml_input.py` therefore never labels the two ids.
 - Naming contract (F2.7, F3.2, F3.6): sanitized base + 8-hex digest of
   (scope, context, vsys, name), where context is the device group, the
   template, or the owning device. Order-independent; per-type domains;

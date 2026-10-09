@@ -1,14 +1,26 @@
 # Agent Status
 
 ## Current position
-**F3.6 (multi-device, template-aware parsing) is committed** as d183f66, and
-it landed F3.7 (the splitter rewrite) with it. `acceptance.md` holds the F3.6
-criteria and result — overwrite it before the next task. **Next task: F3.8
-Safe XML input** (Epic 3): DTD rejection already landed in F1.7, so what
-remains is the input size limit or `defusedxml`, applied to both entry
-points, with a clear refusal and no partial output.
+**F3.8 (safe XML input) is committed.** `acceptance.md` holds the F3.8
+criteria and result — overwrite it before the next task. **Next task: F3.9
+Per-device-group reports** (Epic 3): key `INTERFACE_MIGRATION_REPORT.txt`
+and `VPN_MIGRATION_REPORT.txt` by device group, and keep the pre-shared-key
+placeholder warning in the VPN report.
 
-F3.6 state: `PanoramaParser.parse_associations()` is the only source of the
+F3.8 state: `xml_input.py` is the one safe read both entry points import.
+`parse_xml(path, max_input_bytes)` checks the size before the read (default
+`DEFAULT_MAX_INPUT_BYTES` = 64 MiB, `--max-input-bytes N` on both CLIs),
+refuses a DTD through an expat prolog scan that stops at the root element,
+and returns the root parsed from the bytes it checked. `UnsafeInputError`
+(a ValueError subclass) carries the file, the limit and the measured size;
+both scripts print it unchanged, exit non-zero and write nothing.
+`PanoramaParser.__init__(xml_file, max_input_bytes)` and
+`split_panorama_config(input_file, output_dir, max_input_bytes)` take the
+limit; `ET.parse(path)` and the duplicated `<!DOCTYPE` text search are
+gone, and `PanoramaParser` no longer holds a `.tree` attribute.
+
+F3.6 state (unchanged by F3.8):
+`PanoramaParser.parse_associations()` is the only source of the
 multi-device relationship (device → device groups / templates / stacks, stack
 → templates; empty tables when the export lists no device) and
 `templates_for_device(device)` resolves a device's effective templates.
@@ -19,13 +31,65 @@ ngfw_device }`; `reference_device(obj)` resolves a reference inside its own
 device or its template's single device, and keeps a plain name when the
 choice is ambiguous. `split_device_groups.device_associations(root)` is the
 splitter's copy of the same join, and every element it takes out of the
-export is a `copy.deepcopy`. Gate: ruff clean, pytest 395 passed, terraform
+export is a `copy.deepcopy`. Gate: ruff clean, pytest 419 passed, terraform
 validate green on the sample, kitchen-sink, crypto-profile and two-device
 outputs.
 
 ## Session log
 
-### F3.6 — Multi-device, template-aware parsing (this session)
+### F3.8 — Safe XML input (this session)
+- Direction: Epic 3, lowest-numbered unfinished feature. `acceptance.md`
+  rewritten for F3.8 first (11 criteria, the entry-point audit, and the
+  parser facts verified for it).
+- Audit found the F1.7 DTD check bypassable, and reproduced it: the check
+  read the file as UTF-8 text and searched for `<!DOCTYPE`, so a UTF-16
+  export hid the DTD from it while expat parsed the document and expanded
+  `<!ENTITY a "&a2;&a2;">` to `xx`. The same search also refused legal
+  input that only mentioned `<!DOCTYPE` inside a prolog comment.
+- Verified the fact the design rests on: a DTD is the only entity door.
+  With no DTD, expat expands nothing (`&lol3;` is a hard `ParseError`,
+  "undefined entity") and fetches nothing, because `xml.etree` installs no
+  `ExternalEntityRefHandler`. So DTD rejection is sufficient, `defusedxml`
+  would add nothing on that axis and nothing at all on the size axis, and
+  the scripts stay standard-library only (requirements.txt is dev tools).
+- New `xml_input.py`, one implementation for both entry points:
+  `read_input` (size checked before the read; the read itself capped at
+  limit + 1, because st_size does not describe a pipe, a device or a file
+  that grows), `reject_dtd` (expat `StartDoctypeDeclHandler` scan that
+  stops at the root element start tag, so it costs a fraction of the parse
+  and holds in every encoding the parser accepts; an `ExpatError` in the
+  prolog is left to the parse, which reports the line and column),
+  `parse_xml` (returns the root parsed from the checked bytes — one read,
+  no check/parse TOCTOU gap), `UnsafeInputError(ValueError)`, and
+  `add_max_input_argument` + `positive_int` so both CLIs carry one flag with
+  one default and an argparse error (exit 2) for 0, -1 or `abc`.
+- Entry points: `PanoramaParser(xml_file, max_input_bytes)` and
+  `split_panorama_config(input_file, output_dir, max_input_bytes)`; the
+  duplicated text read, the `re` import and `ET.parse(path)` are gone. The
+  converter prints the refusal unchanged (new `except UnsafeInputError`
+  before `except ValueError`); the splitter prints it and returns False.
+  Neither creates its output directory before a successful parse, so a
+  refusal writes nothing.
+- Fact recorded for the next person: pyexpat calls
+  `StartDoctypeDeclHandler` with `(name, systemId, publicId, standalone)`
+  — **not** the order the Python documentation states — so the refusal
+  never labels the two ids, it only says "with an external id".
+- Tests: `tests/test_safe_input.py` (24). Over-limit refused, at-limit
+  accepted, limit − 1 refused, the message names file/limit/measured size,
+  both scripts print the identical refusal and share the exit code, no
+  output directory created, a reused output directory keeps its contents,
+  the UTF-16 DTD bypass closed, clean UTF-16 input still accepted, a
+  comment `<!DOCTYPE` accepted, an external-id DTD refused, the F1.7 hostile
+  fixtures still refused by both scripts, an entity without a DTD is a
+  parse error, the default accepts every committed fixture, and the input
+  is opened exactly once. New `xml_input_module` fixture in conftest.py.
+- No generated-output change: both golden sets are byte-identical.
+- Docs: README "Safe input"; `docs/USAGE_GUIDE.md` and
+  `docs/DEVICE_GROUP_SPLITTING.md` "Input Limit"; the size-limit tech-debt
+  item removed from backlog.md.
+- Gate: ruff clean, pytest 419 passed, terraform validate green (5 tests).
+
+### F3.6 — Multi-device, template-aware parsing (previous session)
 - Direction: Epic 3, lowest-numbered unfinished feature. `acceptance.md`
   rewritten for F3.6 first (12 criteria + the v2.0.14 `location.ngfw` schema
   facts verified for it: 14 template-scoped emitted types declare
@@ -828,9 +892,12 @@ outputs.
   in the golden provider.tf (conftest `provider_schema` fixture;
   skipped when terraform or the registry is unavailable).
 - terraform 1.16.1 available at /usr/bin/terraform.
-- Converter CLI: `python3 panorama_to_terraform.py <input.xml> [--output-dir DIR]`
-  (output dir is a flag, default `terraform_output`).
-- Splitter CLI: `python3 split_device_groups.py <input.xml> [--output-dir DIR]`.
+- Converter CLI: `python3 panorama_to_terraform.py <input.xml> [--output-dir DIR] [--max-input-bytes N]`
+  (output dir is a flag, default `terraform_output`; N defaults to 64 MiB).
+- Splitter CLI: `python3 split_device_groups.py <input.xml> [--output-dir DIR] [--max-input-bytes N]`.
+- Safe input: `xml_input.py` is the only place either script reads an
+  export. A new entry point imports `parse_xml`; it must not call
+  `ET.parse(path)` (that path is unchecked: no size cap, no DTD refusal).
 - Provider v2.0.14 schema (128 types) cached at /tmp/schema_2014.json;
   shape extract at /tmp/v2_shapes2.txt (the earlier /tmp/v2_shapes.txt is
   unreliable). Refetch with `terraform providers schema -json` if needed.

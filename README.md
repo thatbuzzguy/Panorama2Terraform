@@ -174,6 +174,29 @@ and `tests/test_golden_files.py` pins the exact file names and bytes.)
 - **CLI:** `show` with `set cli config-output-format xml`.
 - **API:** `curl -k -X GET 'https://panorama/api/?type=export&category=configuration&key=KEY' -o config.xml`
 
+## Safe input
+
+Both scripts read the input through one check (`xml_input.py`) and refuse
+input they cannot parse safely before they allocate for it and before they
+write any file:
+
+- **Size.** The read is capped at 64 MiB (`--max-input-bytes N`). A
+  Panorama export this project has seen is three orders of magnitude
+  smaller, and `xml.etree` builds the whole document in memory, so an
+  unbounded read is a memory denial of service.
+- **A DTD.** A DTD is the only way an entity expansion ("billion laughs")
+  or an external entity (XXE) reaches `xml.etree`, and a Panorama export
+  never carries one. The check asks the parser, not a text search, so it
+  also holds for a UTF-16 export, where a `<!DOCTYPE` text search sees
+  nothing. A `<!DOCTYPE` that only appears in a prolog comment is legal
+  input and is not a refusal.
+
+A refusal names the file, the limit and the measured size, exits
+non-zero, and writes no output. Raise the limit only for a trusted file.
+The converter is standard-library only by design: `defusedxml` would close
+the DTD class but not the size class, so it is not a reason to add a
+dependency.
+
 ## Deploying with Terraform
 
 1. Create `terraform.tfvars` with credentials (do not commit it):
