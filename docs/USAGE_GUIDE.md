@@ -128,7 +128,7 @@ terraform_output/
 ├── external_lists.tf     # External dynamic lists
 ├── security_profile_groups.tf
 ├── security_profiles.tf  # Security profile inventory (names/descriptions only; bodies are report-only)
-├── security_rules.tf     # Security policy rules (one resource per rule, chained per device group)
+├── security_rules.tf     # Security policy rules (one resource per rule, one chain per device group and vsys)
 ├── nat_rules.tf          # NAT policy rules
 ├── decryption_rules.tf   # Decryption policy rules
 ├── pbf_rules.tf          # PBF policy rules
@@ -145,7 +145,9 @@ terraform_output/
 
 Both reports list one section per scope the export declares (device group, then
 template or device), so the same object name in two device groups is two
-sections. The shared section is named `Shared`.
+sections. The shared section is named `Shared`. The rule, and the test that
+pins both reports to it, is in
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md) §4.5.
 
 ## Terraform Deployment
 

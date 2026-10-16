@@ -18,6 +18,9 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   - NAT rule `service` in member-list form is captured as whitespace text; only text form works.
   - Service object `disable-override` is not extracted (the address parser
     extracts it since F3.4; the service parser does not).
+  - Regions are parsed but reach no output: `parse_regions` returns objects
+    that only the console count uses. Recorded by F3.10 (`docs/ARCHITECTURE.md`
+    §2.4); the F4.3 per-entry report will surface each region.
 - Service objects with both tcp and udp legs cannot be emitted whole. The v2
   `panos_service` schema declares `protocol.tcp` and `protocol.udp`, but the
   provider accepts one leg only: a config with both fails `terraform

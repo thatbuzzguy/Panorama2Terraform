@@ -183,6 +183,34 @@ def test_parser_records_no_invented_scope(make_parser):
     assert routers['vr-device-level']['template'] == ''
 
 
+def test_every_parse_method_records_the_four_scope_facts(make_parser):
+    """Every parse method records the four scope facts on every object (F3.10).
+
+    The emitter places a resource from these four facts alone, so an object
+    without them cannot be placed. The rule holds for every parse method that
+    returns objects. parse_device_groups is the one exception: it returns the
+    device groups themselves, which are the scope, not an object inside a
+    scope. Tables (associations) and settings (BGP, OSPF) are not objects.
+    """
+    parser = make_parser('kitchen_sink.xml')
+    facts = {'device_group', 'vsys', 'template', 'vsys_device'}
+    checked = 0
+    for name in sorted(dir(parser)):
+        if not name.startswith('parse_') or name == 'parse_device_groups':
+            continue
+        result = getattr(parser, name)()
+        if isinstance(result, dict) and all(isinstance(v, list) for v in result.values()):
+            items = [item for values in result.values() for item in values]
+        elif isinstance(result, list):
+            items = result
+        else:
+            continue
+        for item in items:
+            assert facts <= set(item), f'{name} returned an object without the four facts: {item}'
+            checked += 1
+    assert checked > 40, f'only {checked} objects checked: the fixture does not exercise the rule'
+
+
 def test_parser_finds_device_level_routers(make_parser):
     """A router under devices/entry/<device>/network is parsed (F3.5).
 

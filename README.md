@@ -66,7 +66,8 @@ point outside the export — built-in PAN-OS names such as `any`,
 `application-default`, or `service-ftp`, or objects in other tenants —
 stay plain strings. The converter never declares a resource just to
 make a reference work, so the output always passes
-`terraform validate`.
+`terraform validate`. The resolution order is in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.3.
 
 ## Resource naming
 
@@ -77,7 +78,8 @@ is deterministic: the same object always gets the same local name, the
 name does not depend on emission order, and same-named objects in
 different device groups, virtual systems, templates, or firewalls stay
 distinct. Two firewalls that both declare `ethernet1/1` are two resources
-with two locations, not one resource and a numeric suffix. For example:
+with two locations, not one resource and a numeric suffix. The full rule
+is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5. For example:
 
 ```hcl
 resource "panos_address" "web_server_1_11f477f4" {
@@ -92,7 +94,8 @@ Provider v2 places every resource with the required `location` argument,
 and the sub-blocks one type accepts differ from the next. The converter
 takes the choice from the source scope the export declares and from
 [`LOCATION_SCHEMA`](resource_mapping.py), the verified v2.0.14 shape per
-emitted type:
+emitted type. The branch order is in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.2:
 
 | Source of the entry | Emitted location |
 |---|---|
@@ -154,7 +157,8 @@ group first, then the template or the device the entry sits in, then the
 object kind inside the section. A section names only the scope the export
 states, so the same interface or gateway name on two device groups appears
 once under each, and an entry the export places nowhere is the shared
-section, named `Shared`.
+section, named `Shared`. The rule is in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.5.
 
 ## Typical outputs
 
@@ -238,6 +242,8 @@ platform (see `INTERFACE_MIGRATION_REPORT.txt`).
 
 ## Documentation
 
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - data model, parse pipeline,
+  emit pipeline, and the naming rules
 - [`docs/MIGRATION_GUIDE.md`](docs/MIGRATION_GUIDE.md) - migration workflow
 - [`docs/USAGE_GUIDE.md`](docs/USAGE_GUIDE.md) - technical reference
 - [`docs/RESOURCE_MAPPING.md`](docs/RESOURCE_MAPPING.md) - v2 mapping rationale
