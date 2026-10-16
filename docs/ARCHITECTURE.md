@@ -6,8 +6,8 @@ reports instead of emitting.
 
 Read this page when you need to know why the output looks the way it does.
 User-facing summaries live in [README.md](../README.md). Per-type mapping lives
-in [docs/RESOURCE_MAPPING.md](RESOURCE_MAPPING.md). The coverage matrix lives in
-[docs/COVERAGE_MATRIX.md](COVERAGE_MATRIX.md).
+in [RESOURCE_MAPPING.md](RESOURCE_MAPPING.md). The coverage matrix lives in
+[COVERAGE_MATRIX.md](COVERAGE_MATRIX.md).
 
 Each rule below names the test that pins it. A rule with no test is labelled as
 a design rule enforced by construction.
