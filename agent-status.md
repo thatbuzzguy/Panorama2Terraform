@@ -1,11 +1,26 @@
 # Agent Status
 
 ## Current position
-**F3.9 (per-device-group reports) is committed** as 29a673b. `acceptance.md`
-holds the F3.9 criteria and result — overwrite it before the next task.
-**Next task: F3.10 Architecture document** (Epic 3, last feature): write
-`docs/ARCHITECTURE.md` — data model, parse pipeline, emit pipeline, naming
-rules — and cross-check every claim against the code and the tests.
+**F3.10 (architecture document) is committed** as 029f209 and closes Epic 3.
+`docs/ARCHITECTURE.md` states the data model, the parse pipeline, the emit
+pipeline and the naming rules in one place, and each rule names the test that
+pins it. `acceptance.md` holds the F3.10 criteria — overwrite it before the next
+task.
+**Next task: F4.1 Post-run sanity gate** (Epic 4, first feature): the static
+invariants exist only as tests today; make them run on every conversion, write
+`SANITY_REPORT.txt`, add `--validate`, and share the rules with
+`tests/test_dependency_wiring.py` and `tests/test_variables.py` instead of
+copying them.
+
+F3.10 state: no converter code changed, so both golden sets are byte-identical.
+One new test (`tests/test_multi_vsys_location.py::test_every_parse_method_records_the_four_scope_facts`)
+pins the data-model rule that every parse method records the four scope facts.
+The regions gap is recorded in `backlog.md`: `parse_regions` returns objects that
+only the console count uses, so a region reaches no output. README, `docs/MIGRATION_GUIDE.md`
+and `docs/USAGE_GUIDE.md` now link to the document instead of repeating the
+naming rule, the location rule or the grouping rule; the stale
+`security_rules.tf` tree line in `docs/USAGE_GUIDE.md` was corrected to the
+per-device-group-and-vsys chain.
 
 F3.9 state: the two operator-facing reports print one section per scope the
 export declares (device group, then template, then device), then the object
@@ -50,7 +65,42 @@ outputs.
 
 ## Session log
 
-### F3.9 — Per-device-group reports (this session)
+### F3.10 — Architecture document (this session)
+- Direction: Epic 3, lowest-numbered unfinished feature, and the last one.
+  `acceptance.md` rewritten for F3.10 first (10 criteria plus the audit of where
+  each rule is written down today).
+- Audit finding that shaped the document: the naming rule, the location rule and
+  the report grouping rule each live in a different place (a docstring, the
+  README, a doc, an acceptance record), and no document states the data model or
+  the parse pipeline as a whole. The container table exists only as the paths
+  inside the parse methods.
+- New `docs/ARCHITECTURE.md`: modules, data model (identity, the four scope
+  facts, parsed object shape, the four destinations), parse pipeline (safe read,
+  parent map, association tables, entry scan, splitter, container table), emit
+  pipeline (order, location, reference resolution, policy chains, report path),
+  naming rules, determinism, and a section that states what the converter does
+  not claim (F4.1–F4.4 are not implemented).
+- Cross-check method: every cited test name was verified against the test files
+  by script (no citation names a test that does not exist); every rule was read
+  back from the implementation (`identity_of`, `location_block`, `name_ref`,
+  `declare_resource_name`, `sanitize_name`, `_policy_rule_chains`,
+  `_report_scope_path`, `xml_input`), not from a previous document. Design rules
+  that no test pins are labelled as enforced by construction.
+- One gap found and recorded: `parse_regions` parses entries that reach no output
+  (count only). The document does not claim that every entry is accounted for;
+  the gap is in `backlog.md` and will surface in the F4.3 report.
+- New test: `test_every_parse_method_records_the_four_scope_facts` — every parse
+  method that returns objects records the four scope facts on every object
+  (`parse_device_groups` is the one exception; tables and settings are not
+  objects).
+- De-duplication: README (naming, location, dependency wiring, Documentation
+  list), `docs/MIGRATION_GUIDE.md` and `docs/USAGE_GUIDE.md` now point to the
+  document instead of restating the rule. The stale `security_rules.tf` tree line
+  in `docs/USAGE_GUIDE.md` was corrected (one chain per device group and vsys).
+- No generated-output change: both golden sets are byte-identical.
+- Gate: ruff clean, pytest 439 passed, terraform validate green (5 tests).
+
+### F3.9 — Per-device-group reports (previous session)
 - Direction: Epic 3, lowest-numbered unfinished feature. `acceptance.md`
   rewritten for F3.9 first (12 criteria, the audit of the two report
   generators, and the grouping rule decided before the code).
