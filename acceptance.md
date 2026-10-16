@@ -1,124 +1,113 @@
-# Acceptance criteria — F3.8 Safe XML input (Epic 3)
+# Acceptance criteria — F3.9 Per-device-group reports (Epic 3)
 
-F3.8 makes both entry points refuse input they cannot parse safely,
-before they spend memory on it and before they write any file.
+F3.9 makes the two operator-facing migration reports say which device group
+(and which firewall) each line belongs to.
 
-## Audit of what both entry points accept today (2026-10-08)
+## Audit of the two reports (2026-10-16)
 
-- `panorama_to_terraform.py` (`PanoramaParser.__init__`) and
-  `split_device_groups.py` (`split_panorama_config`) each do the same
-  three things: read the whole file into memory as UTF-8 text
-  (`errors='replace'`), search that text for `<!DOCTYPE`, then hand the
-  **path** to `ET.parse` — a second read of a file already in memory.
-- Nothing bounds the size. A multi-gigabyte file is allocated in full
-  before the parse starts, and `xml.etree` then builds a tree several
-  times the file size.
-- The two copies of the DTD check are duplicated code, and one of them is
-  bypassable.
+- `generate_interface_report` writes one flat list grouped by interface type;
+  `generate_vpn_report` writes one flat list grouped by object kind. Neither
+  names the scope an entry came from.
+- In a multi-device-group export the same interface name appears once per
+  device group, so the reader cannot tell the entries apart. This is the same
+  ambiguity F3.5/F3.6 removed from `location` and from resource naming.
+- Every parsed entry already carries the four scope facts F3.1/F3.5/F3.6
+  record: `device_group`, `template`, `vsys`, `vsys_device`. Both report
+  generators can group from the parse model without reading the XML again.
+- `device_group` is not always a declared device group. `device_group_of`
+  returns `Shared` as a fallback for an entry it cannot place, which covers
+  both the real shared section and an entry inside a template or under a
+  device. Printing that fallback as a device group would name a scope the
+  export does not state.
+- Reports are not in the golden set (`tests/golden/` holds `.tf` files only),
+  so F3.9 changes no golden.
 
-## Facts verified for this task
+## Grouping rule (decided for this task)
 
-- `xml.etree` parses with `xml.parsers.expat` (expat 2.6.1 here). expat
-  expands an entity only when a DTD declares it: `&a;` with no DTD is a
-  hard `ParseError` ("undefined entity"), and expat never fetches an
-  external entity because ElementTree installs no
-  `ExternalEntityRefHandler`. **A DTD is the only door**, so rejecting it
-  closes the whole entity-expansion and XXE class — if the rejection
-  actually sees the DTD.
-- The F1.7 text search does not see every DTD. It reads the file as
-  UTF-8, so a UTF-16 export hides the `<!DOCTYPE` bytes from the search
-  while expat still parses and expands the DTD. Reproduced 2026-10-08: a
-  UTF-16 file with `<!ENTITY a "&a2;&a2;">` parsed cleanly and expanded to
-  `xx`, and the check reported no DTD.
-- The same search also rejects a `<!DOCTYPE` that only appears in a prolog
-  comment, which is legal input that Panorama exports may contain.
-- A parser-level scan is cheap: a DTD can only appear in the prolog, so
-  the scan stops at the root element start tag. Verified against UTF-8,
-  UTF-16 with a BOM, UTF-16 with an encoding declaration and
-  ISO-8859-1 with an encoding declaration; a malformed prolog reports
-  nothing, which leaves the parse error message (with line and column) to
-  the real parse.
-- `defusedxml` would close the DTD class but not the size class, and it is
-  a new runtime dependency for two scripts that need none today
-  (requirements.txt holds dev tools only). **Decision: stay on the
-  standard library** — a parser-level DTD scan plus a size limit.
+1. Device group first — only when the export declares one.
+2. Then the scope the export declares: template, then device.
+3. Then the existing type/kind grouping inside the section.
+4. An entry the export places nowhere is the shared section, named `Shared`.
+5. A section never prints a device group for an entry whose scope is a
+   template or a device.
+6. One shared footer per report: the checklist and the platform notes
+   (interface report), the key management practices, checklist and security
+   notes (VPN report). The pre-shared-key warning stays at the top of the VPN
+   report, before the first section.
 
 ## Criteria
 
-1. **One implementation.** A new root module `xml_input.py` holds the size
-   limit, the DTD rejection, the shared `--max-input-bytes` flag and the
-   refusal exception. Both scripts call it; neither keeps its own copy.
-2. **Size limit paid before the read.** Read at most `max_input_bytes + 1`
-   bytes and refuse an input larger than the limit. Default 64 MiB
-   (67 108 864 bytes), larger than any Panorama export this project has
-   seen. `--max-input-bytes N` on both CLIs; a non-integer or non-positive
-   value is an argparse error (exit 2), not a traceback.
-3. **DTD rejection at parser level.** Scan the prolog with
-   `xml.parsers.expat`; stop at the root element start tag; refuse when
-   the parser reports a DOCTYPE declaration. It must hold for every
-   encoding the parser accepts (so the UTF-16 bypass is closed) and must
-   not refuse a `<!DOCTYPE` that appears only in a prolog comment.
-4. **Nothing else expands.** Keep the verified facts above in the module
-   docstring, and pin with a test that an entity reference without a DTD
-   is a parse error and not an expansion.
-5. **Refusal is reported.** The message names the file, the limit and the
-   measured value, and says how to raise the limit. Exit non-zero. No
-   traceback.
-6. **No output on refusal.** A refused input writes no output file, and an
-   existing output directory keeps its contents.
-7. **Parse the bytes that were checked.** The tree comes from the bytes
-   that passed both checks — one read, no second read of a path, so
-   nothing can change between the check and the parse.
-8. **Both scripts behave the same.** Same message text, same non-zero
-   exit, same "no output" behaviour, same flag name and default.
-9. **Existing hostile input still refused.** The F1.7 billion-laughs and
-   XXE fixtures still fail cleanly with "DTD" in the message, and a
-   malformed file still reports "not well-formed".
-10. **Tests.** Over-limit refused, at-limit accepted (exact boundary),
-    message content, no partial output, both scripts, the UTF-16 DTD
-    bypass closed, a comment `<!DOCTYPE` accepted, the default limit
-    documented and shared, and the F1.7 hostile fixtures still refused.
-11. **Gates:** ruff clean, pytest green, terraform validate green (no
-    generated-output change is expected from F3.8).
+1. **One grouping rule, shared by both reports.** A helper pair on
+   `TerraformGenerator` (`_report_scope_path`, `_group_by_scope`,
+   `_report_section_header`) that both generators call. Neither report keeps
+   its own copy of the rule.
+2. **Declared scope only.** A device group is printed when the export declares
+   one; a template or device scope is never printed as a device group; an
+   unplaced entry is the shared section.
+3. **Interface report:** one section per scope, the firewall named for an entry
+   the export places under a device, per-type grouping inside each section,
+   and the migration checklist plus platform notes as one shared footer.
+4. **VPN report:** same grouping; the pre-shared-key warning stays at the top
+   of the file; the per-gateway `***MUST BE UPDATED***` line stays with each
+   pre-shared-key gateway; key management best practices, the checklist and the
+   security notes are one shared footer.
+5. **Same name, two sections.** A same-named interface (and a same-named
+   gateway) in two device groups appears twice, once under each section.
+6. **Counts are per section**, not global.
+7. **vsys is printed when the export declares one**, and never invented.
+8. **Deterministic.** Sections sorted by scope path, entries sorted by name;
+   two runs on the same input produce identical bytes.
+9. **No report when there is nothing to report** (unchanged behaviour).
+10. **Tests:** a fixture with two device groups, one shared entry per report,
+    one template-scoped entry and one device-scoped entry; assert each section
+    lists only its own entries, that a same-named interface appears twice under
+    different sections, that no device group is printed for a template or
+    device scope, that the shared section is named `Shared`, that the
+    pre-shared-key warning survives at the top, and that the footers appear
+    once.
+11. **Docs:** README and `docs/MIGRATION_GUIDE.md` state the grouping.
+12. **Gates:** ruff clean, pytest green, terraform validate green. Goldens
+    unchanged.
 
-## Result (2026-10-08)
+## Result (2026-10-16)
 
-All eleven criteria hold. `ruff check .` clean, 420 tests pass (25 of them
-new in `tests/test_safe_input.py`), `terraform validate` still green, and
-both golden sets are byte-identical.
+All twelve criteria hold. `ruff check .` clean, 438 tests pass (18 of them new
+in `tests/test_reports.py`), `terraform validate` still green, and both golden
+sets are byte-identical (reports are not in the golden set).
 
 Evidence per criterion:
 
-- 1: `xml_input.py` is imported by both scripts; the duplicated text read,
-  the `re` import in the splitter and `ET.parse(path)` are gone.
-  `test_parser_and_splitter_use_the_shared_default` pins the shared
-  function object, the shared default and the shared refusal.
-- 2: `test_over_limit_input_is_refused`, `test_at_limit_input_is_accepted`,
-  `test_one_byte_over_the_limit_is_refused`,
-  `test_nonpositive_limit_is_an_argparse_error`.
-- 3: `test_utf16_dtd_is_refused`, `test_clean_utf16_input_is_accepted`,
-  `test_dtd_in_a_prolog_comment_is_not_a_refusal`,
-  `test_external_id_dtd_is_refused`.
-- 4: `test_entity_reference_without_a_dtd_is_a_parse_error`.
-- 5: `test_refusal_names_the_file_the_limit_and_the_measured_size`,
-  `test_a_directory_is_a_clean_refusal`,
-  `_assert_clean_failure` in every refusal test.
-- 6: `test_refusal_writes_no_output_files`,
-  `test_refusal_leaves_an_existing_output_directory_untouched`.
-- 7: `test_parse_reads_the_file_once`, `test_read_input_returns_the_whole_file_at_the_limit`.
-- 8: `test_both_scripts_print_the_same_refusal`,
-  `test_splitter_applies_the_same_size_limit`,
-  `test_both_scripts_document_the_shared_default`.
-- 9: `test_hostile_fixtures_are_still_refused`, and the F1.7 suite
-  (`tests/test_robustness.py`) passes unchanged.
+- 1: `_report_scope_path`, `_group_by_scope` and `_report_section_header` in
+  `TerraformGenerator`; both report generators call them.
+  `test_both_reports_use_the_same_grouping_rule` pins that the section titles
+  of each report are the headers the shared helper produces for the parsed
+  entries.
+- 2: `test_template_and_device_scopes_are_not_printed_as_a_device_group`,
+  `test_placeholder_device_is_not_named_as_a_firewall`.
+- 3: `test_interface_report_has_one_section_per_scope`,
+  `test_each_interface_section_lists_only_its_own_entries`,
+  `test_interface_footer_is_one_shared_block`.
+- 4: `test_vpn_report_has_one_section_per_scope`,
+  `test_pre_shared_key_warning_survives_at_the_top`,
+  `test_per_gateway_placeholder_line_survives`,
+  `test_vpn_footer_is_one_shared_block`.
+- 5: `test_same_named_interface_appears_under_each_device_group`,
+  `test_same_named_gateway_appears_under_each_device_group`.
+- 6: `test_interface_counts_are_per_section`.
+- 7: `test_vsys_is_printed_only_when_the_export_declares_one`.
+- 8: `test_sections_and_entries_are_in_a_stable_order`.
+- 9: `test_no_report_when_there_is_nothing_to_report`.
+- 10: `tests/fixtures/report_grouping.xml` plus the 18 tests.
+- 11: README "Reports written to the output directory",
+  `docs/MIGRATION_GUIDE.md` §4, `docs/USAGE_GUIDE.md` output tree.
 
 Two decisions came out of the work:
 
-- **No new dependency.** `defusedxml` was rejected: it does not cover the
-  size risk, the standard library covers the DTD risk at parser level, and
-  both scripts stay standard-library only.
-- **The refusal never labels the DTD ids.** pyexpat calls
-  `StartDoctypeDeclHandler` with `(name, systemId, publicId, standalone)`,
-  which is not the order the Python documentation states, so the message
-  says only "with an external id" rather than naming a value that could be
-  the wrong one.
+- **The shared `Shared` fallback is not a device group.** `device_group_of`
+  returns `Shared` for an entry it cannot place, which covers both the real
+  shared section and an entry inside a template or under a device. The report
+  prints a device group only when the export declares one, so a template or
+  device scope is named by its own scope.
+- **Sections sort by level, not by label text.** The scope path carries the
+  level number, so device group sections come before template sections and
+  template sections before device sections, whatever the names are.

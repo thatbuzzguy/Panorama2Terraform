@@ -104,6 +104,15 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   placeholder for "this device", so it is never emitted as `ngfw_device`;
   the resource is reported instead. Shared entries emit `shared = {}`, not
   `device_group = { name = "Shared" }`.
+- F3.9 (per-device-group reports) settled two facts worth keeping: `Shared` in
+  `device_group` is the parser fallback for an entry it cannot place, so it is
+  **not** a device group for an entry whose scope is a template or a device —
+  the report prints a device group only when the export declares one, and the
+  shared section is named `Shared`. And the report groups by the scope the
+  export states, never by an association the converter could infer: a template
+  section does not name the device group that device belongs to, because the
+  export states the membership for the device, not for the entry.
+
 - F3.4 (full object types) closed two F1.2 extraction gaps: service object
   tags are extracted and emitted, and dual-protocol services keep both legs
   in the parse model (the emit limit is a provider constraint, recorded

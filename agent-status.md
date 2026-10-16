@@ -1,11 +1,24 @@
 # Agent Status
 
 ## Current position
-**F3.8 (safe XML input) is committed** as a35ab20. `acceptance.md` holds the F3.8
-criteria and result — overwrite it before the next task. **Next task: F3.9
-Per-device-group reports** (Epic 3): key `INTERFACE_MIGRATION_REPORT.txt`
-and `VPN_MIGRATION_REPORT.txt` by device group, and keep the pre-shared-key
-placeholder warning in the VPN report.
+**F3.9 (per-device-group reports) is committed** as 29a673b. `acceptance.md`
+holds the F3.9 criteria and result — overwrite it before the next task.
+**Next task: F3.10 Architecture document** (Epic 3, last feature): write
+`docs/ARCHITECTURE.md` — data model, parse pipeline, emit pipeline, naming
+rules — and cross-check every claim against the code and the tests.
+
+F3.9 state: the two operator-facing reports print one section per scope the
+export declares (device group, then template, then device), then the object
+kind inside the section. One rule serves both reports:
+`TerraformGenerator._report_scope_path` (level number + label + value, so
+sections sort by level order), `_group_by_scope` and `_report_section_header`.
+A device group prints only when the export declares one; `Shared` from
+`device_group_of` is the fallback for an entry the export cannot place, so it
+names the shared section, not a device group. `localhost.localdomain` prints as
+the "this device" placeholder. The VPN pre-shared-key warning stays at the top
+of the file, the per-gateway `***MUST BE UPDATED***` line stays per gateway,
+and each report has one shared footer. A declared vsys prints per entry.
+Reports are not in the golden set, so no golden changed.
 
 F3.8 state: `xml_input.py` is the one safe read both entry points import.
 `parse_xml(path, max_input_bytes)` checks the size before the read (default
@@ -36,6 +49,45 @@ validate green on the sample, kitchen-sink, crypto-profile and two-device
 outputs.
 
 ## Session log
+
+### F3.9 — Per-device-group reports (this session)
+- Direction: Epic 3, lowest-numbered unfinished feature. `acceptance.md`
+  rewritten for F3.9 first (12 criteria, the audit of the two report
+  generators, and the grouping rule decided before the code).
+- Audit fact that shaped the design: `device_group_of` returns `Shared` as a
+  fallback for an entry it cannot place, which covers both the real shared
+  section and an entry inside a template or under a device. Printing that value
+  as a device group would name a scope the export does not state, so the report
+  prints a device group only when the export declares one.
+- One grouping rule, shared by both reports: `_report_scope_path` returns the
+  declared scope path (device group, then template, then device, else the shared
+  section) with a level number so sections sort by level order rather than by
+  label text; `_group_by_scope` groups and sorts; `_report_section_header`
+  renders the title. Both generators call them, so they cannot disagree.
+- `localhost.localdomain` prints as `DEVICE (this device placeholder)`, not as
+  a firewall (F3.5 fact).
+- VPN report: the pre-shared-key warning stays at the top of the file, before
+  the first section; the per-gateway `***MUST BE UPDATED***` line stays with
+  each gateway; key management practices, the checklist and the security notes
+  are one shared footer. Interface report: the migration checklist and the
+  platform notes are one shared footer.
+- A declared vsys prints per entry; an undeclared one prints nothing, because
+  the parser records `''` (F3.5) rather than inventing `vsys1`.
+- Tests: `tests/test_reports.py` (18) with the new fixture
+  `tests/fixtures/report_grouping.xml` — two device groups that declare the
+  same interface, gateway and tunnel names, one shared entry per report, one
+  template-scoped entry, one device-scoped entry, one entry on the "this
+  device" placeholder, and one declared vsys. Pins: each section lists only its
+  own entries, a same-named interface and gateway appear once per device group,
+  no device group printed for a template or device scope, the shared section is
+  named `Shared`, the warning survives at the top, the footers appear once,
+  counts are per section, the vsys line appears only when declared, and two
+  runs are byte-identical.
+- Docs: README, `docs/MIGRATION_GUIDE.md` §4 and `docs/USAGE_GUIDE.md` state
+  the grouping rule.
+- No generated-output change: both golden sets are byte-identical (reports are
+  not in the golden set).
+- Gate: ruff clean, pytest 438 passed, terraform validate green.
 
 ### F3.8 — Safe XML input (this session)
 - Direction: Epic 3, lowest-numbered unfinished feature. `acceptance.md`
