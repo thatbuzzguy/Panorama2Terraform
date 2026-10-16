@@ -2424,6 +2424,65 @@ class TerraformGenerator:
         """
         return (obj.get('template') or obj.get('vsys_device') or '').strip()
 
+    # --- Report grouping (F3.9) ------------------------------------------
+    # Both operator-facing reports group by the same rule: device group first,
+    # then the scope the export declares (template, then device), then the
+    # object kind inside the section. One implementation, so the two reports
+    # cannot disagree.
+
+    def _report_scope_path(self, obj: dict) -> tuple[tuple[int, str, str], ...]:
+        """Return the scope path an entry belongs to, outermost first (F3.9).
+
+        Levels, in the order the reports print them: the device group the
+        export declares (0), then the template (1), then the device (2). An
+        entry the export places nowhere is the shared section (3). Only what
+        the export declares is printed: `Shared` in `device_group` is the
+        parser fallback for an entry it cannot place, so it is not a device
+        group when the entry's scope is a template or a device.
+
+        The level number is part of the tuple so sections sort by level order,
+        not by the label text.
+        """
+        path = []
+        device_group = (obj.get('device_group') or '').strip()
+        template = (obj.get('template') or '').strip()
+        device = (obj.get('vsys_device') or '').strip()
+        if device_group and device_group != 'Shared':
+            path.append((0, 'DEVICE GROUP', device_group))
+        if template:
+            path.append((1, 'TEMPLATE', template))
+        if device:
+            # localhost.localdomain is the PAN-OS placeholder for "this device"
+            # (F3.5), so it names no firewall; the report says what it is.
+            label = ('DEVICE (this device placeholder)'
+                     if device == self._LOCAL_DEVICE_PLACEHOLDER else 'DEVICE')
+            path.append((2, label, device))
+        if not path:
+            path.append((3, 'SHARED SECTION', ''))
+        return tuple(path)
+
+    def _group_by_scope(self, entries: list[dict]) -> list[tuple[tuple, list[dict]]]:
+        """Group parsed entries by scope path, sections in a stable order (F3.9)."""
+        groups: dict[tuple, list[dict]] = {}
+        for entry in entries:
+            groups.setdefault(self._report_scope_path(entry), []).append(entry)
+        return sorted(groups.items())
+
+    @staticmethod
+    def _report_section_header(path: tuple[tuple[int, str, str], ...]) -> str:
+        """Return the section title for a scope path (F3.9)."""
+        return ' / '.join(label if not value else f'{label}: {value}'
+                          for _level, label, value in path)
+
+    @staticmethod
+    def _report_vsys_line(obj: dict) -> str:
+        """Return the vsys line for an entry, or '' when the export declares none (F3.9).
+
+        The parser records '' for an undeclared vsys (F3.5), so the report
+        never prints an invented vsys1.
+        """
+        return f'  Vsys: {obj["vsys"]}\n' if obj.get('vsys') else ''
+
     def _device_template_text(self, device: str) -> str:
         """Describe the templates the export associates with a device (F3.6).
 
@@ -3836,7 +3895,13 @@ variable "panos_password" {
         return f'  ip = {self.hcl_value([{"name": ip} for ip in ips])}\n'
 
     def generate_interface_report(self, interfaces: list[dict]):
-        """Generate a text report of interfaces and their IP addresses"""
+        """Generate a text report of interfaces and their IP addresses.
+
+        F3.9: one section per scope the export declares, so a reader can tell
+        two same-named interfaces on two device groups apart. The migration
+        checklist and the platform notes are one shared footer, not repeated
+        per section.
+        """
         if not interfaces:
             return
 
@@ -3848,45 +3913,49 @@ variable "panos_password" {
         content += 'This report lists all interfaces and their assigned IP addresses from the\n'
         content += 'source configuration. Use this to plan interface mapping for the new platform.\n\n'
 
-        content += '=' * 80 + '\n'
-        content += 'INTERFACE SUMMARY\n'
-        content += '=' * 80 + '\n\n'
+        content += 'Interfaces are grouped by the scope the export declares: device group first,\n'
+        content += 'then the template or the device the entry sits in, then the interface type.\n'
+        content += 'A section names only the scope the export states, so the same interface name\n'
+        content += 'on two device groups appears once under each.\n'
 
-        # Group by type
-        by_type = {}
-        for iface in interfaces:
-            iface_type = iface['type']
-            if iface_type not in by_type:
-                by_type[iface_type] = []
-            by_type[iface_type].append(iface)
+        for path, iface_list in self._group_by_scope(interfaces):
+            content += '\n' + '=' * 80 + '\n'
+            content += self._report_section_header(path) + '\n'
+            content += '=' * 80 + '\n'
 
-        for iface_type, iface_list in sorted(by_type.items()):
-            content += f'\n{iface_type.upper()} INTERFACES ({len(iface_list)})\n'
-            content += '-' * 80 + '\n'
+            # Kind grouping inside a section, as before F3.9.
+            by_type: dict[str, list[dict]] = {}
+            for iface in iface_list:
+                by_type.setdefault(iface['type'], []).append(iface)
 
-            for iface in sorted(iface_list, key=lambda x: x['name']):
-                content += f'\nInterface: {iface["name"]}\n'
-                content += f'  Type: {iface["type"]}\n'
-                content += f'  Mode: {iface["mode"]}\n'
+            for iface_type, type_list in sorted(by_type.items()):
+                content += f'\n{iface_type.upper()} INTERFACES ({len(type_list)})\n'
+                content += '-' * 80 + '\n'
 
-                if iface.get('comment'):
-                    content += f'  Comment: {iface["comment"]}\n'
+                for iface in sorted(type_list, key=lambda x: x['name']):
+                    content += f'\nInterface: {iface["name"]}\n'
+                    content += f'  Type: {iface["type"]}\n'
+                    content += f'  Mode: {iface["mode"]}\n'
+                    content += self._report_vsys_line(iface)
 
-                if iface.get('ip_addresses'):
-                    content += '  IPv4 Addresses:\n'
-                    for ip in iface['ip_addresses']:
-                        content += f'    - {ip}\n'
+                    if iface.get('comment'):
+                        content += f'  Comment: {iface["comment"]}\n'
 
-                if iface.get('ipv6_addresses'):
-                    content += '  IPv6 Addresses:\n'
-                    for ip in iface['ipv6_addresses']:
-                        content += f'    - {ip}\n'
+                    if iface.get('ip_addresses'):
+                        content += '  IPv4 Addresses:\n'
+                        for ip in iface['ip_addresses']:
+                            content += f'    - {ip}\n'
 
-                if iface.get('management_profile'):
-                    content += f'  Management Profile: {iface["management_profile"]}\n'
+                    if iface.get('ipv6_addresses'):
+                        content += '  IPv6 Addresses:\n'
+                        for ip in iface['ipv6_addresses']:
+                            content += f'    - {ip}\n'
 
-                if iface.get('tag'):
-                    content += f'  VLAN Tag: {iface["tag"]}\n'
+                    if iface.get('management_profile'):
+                        content += f'  Management Profile: {iface["management_profile"]}\n'
+
+                    if iface.get('tag'):
+                        content += f'  VLAN Tag: {iface["tag"]}\n'
 
         content += '\n' + '=' * 80 + '\n'
         content += 'MIGRATION CHECKLIST\n'
@@ -4549,7 +4618,13 @@ variable "panos_password" {
         return len(parts) == 4 and all(p.isdigit() for p in parts)
 
     def generate_vpn_report(self, ike_gateways: list[dict], ipsec_tunnels: list[dict]):
-        """Generate VPN migration report with key management instructions"""
+        """Generate VPN migration report with key management instructions.
+
+        F3.9: one section per scope the export declares, the same grouping rule
+        as the interface report. The pre-shared-key warning stays at the top of
+        the file, before the first section; the key management practices, the
+        checklist and the security notes are one shared footer.
+        """
         if not (ike_gateways or ipsec_tunnels):
             return
 
@@ -4566,42 +4641,63 @@ variable "panos_password" {
         content += '3. Consider using Terraform variables or secrets management\n'
         content += '4. Never commit actual keys to version control\n\n'
 
-        content += '=' * 80 + '\n'
-        content += 'IKE GATEWAYS\n'
-        content += '=' * 80 + '\n\n'
+        content += 'Gateways and tunnels are grouped by the scope the export declares: device\n'
+        content += 'group first, then the template or the device the entry sits in. A section\n'
+        content += 'names only the scope the export states, so the same object name on two\n'
+        content += 'device groups appears once under each.\n'
 
-        for gw in ike_gateways:
-            content += f'Gateway: {gw["name"]}\n'
-            content += f'  Version: {gw.get("version", "ikev1")}\n'
-            content += f'  Peer Address: {gw.get("peer_address", "N/A")}\n'
-            content += f'  Local Address: {gw.get("local_address") or gw.get("local_address_interface", "N/A")}\n'
-            content += f'  Auth Type: {gw.get("auth_type", "pre-shared-key")}\n'
+        # One section per scope, then the object kind inside it (F3.9).
+        sections: dict[tuple, dict[str, list[dict]]] = {}
+        for entry in ike_gateways:
+            sections.setdefault(self._report_scope_path(entry), {'gateways': [], 'tunnels': []})[
+                'gateways'].append(entry)
+        for entry in ipsec_tunnels:
+            sections.setdefault(self._report_scope_path(entry), {'gateways': [], 'tunnels': []})[
+                'tunnels'].append(entry)
 
-            if gw.get('auth_type') == 'pre-shared-key':
-                content += '  ⚠️  Pre-Shared Key: ***MUST BE UPDATED***\n'
-                content += '     Current placeholder: ***CHANGE_ME***\n'
-                content += '     Action: Replace with actual key in vpn.tf\n'
+        for path, kinds in sorted(sections.items()):
+            content += '\n' + '=' * 80 + '\n'
+            content += self._report_section_header(path) + '\n'
+            content += '=' * 80 + '\n'
 
-            content += f'  IKE Crypto Profile: {gw.get("ike_crypto_profile", "N/A")}\n'
-            content += '\n'
+            for kind_title, entries in (('IKE GATEWAYS', kinds['gateways']),
+                                        ('IPSEC TUNNELS', kinds['tunnels'])):
+                if not entries:
+                    continue
+                content += f'\n{kind_title} ({len(entries)})\n'
+                content += '-' * 80 + '\n'
 
-        content += '=' * 80 + '\n'
-        content += 'IPSEC TUNNELS\n'
-        content += '=' * 80 + '\n\n'
+                for entry in sorted(entries, key=lambda x: x['name']):
+                    if kind_title == 'IKE GATEWAYS':
+                        content += f'\nGateway: {entry["name"]}\n'
+                        content += self._report_vsys_line(entry)
+                        content += f'  Version: {entry.get("version", "ikev1")}\n'
+                        content += f'  Peer Address: {entry.get("peer_address", "N/A")}\n'
+                        content += (f'  Local Address: '
+                                    f'{entry.get("local_address") or entry.get("local_address_interface", "N/A")}\n')
+                        content += f'  Auth Type: {entry.get("auth_type", "pre-shared-key")}\n'
 
-        for tunnel in ipsec_tunnels:
-            content += f'Tunnel: {tunnel["name"]}\n'
-            content += f'  Type: {tunnel.get("type", "auto-key")}\n'
-            content += f'  Tunnel Interface: {tunnel.get("tunnel_interface", "N/A")}\n'
-            content += f'  IKE Gateway: {tunnel.get("ike_gateway", "N/A")}\n'
-            content += f'  IPsec Crypto Profile: {tunnel.get("ipsec_crypto_profile", "N/A")}\n'
+                        if entry.get('auth_type') == 'pre-shared-key':
+                            content += '  ⚠️  Pre-Shared Key: ***MUST BE UPDATED***\n'
+                            content += '     Current placeholder: ***CHANGE_ME***\n'
+                            content += '     Action: Replace with actual key in vpn.tf\n'
 
-            if tunnel.get('proxy_ids'):
-                content += '  Proxy IDs:\n'
-                for proxy in tunnel['proxy_ids']:
-                    content += f'    - {proxy["name"]}: {proxy.get("local", "any")} <-> {proxy.get("remote", "any")}\n'
+                        content += f'  IKE Crypto Profile: {entry.get("ike_crypto_profile", "N/A")}\n'
+                    else:
+                        content += f'\nTunnel: {entry["name"]}\n'
+                        content += self._report_vsys_line(entry)
+                        content += f'  Type: {entry.get("type", "auto-key")}\n'
+                        content += f'  Tunnel Interface: {entry.get("tunnel_interface", "N/A")}\n'
+                        content += f'  IKE Gateway: {entry.get("ike_gateway", "N/A")}\n'
+                        content += f'  IPsec Crypto Profile: {entry.get("ipsec_crypto_profile", "N/A")}\n'
 
-            content += '\n'
+                        if entry.get('proxy_ids'):
+                            content += '  Proxy IDs:\n'
+                            for proxy in entry['proxy_ids']:
+                                content += (f'    - {proxy["name"]}: '
+                                            f'{proxy.get("local", "any")} <-> {proxy.get("remote", "any")}\n')
+
+                    content += '\n'
 
         content += '=' * 80 + '\n'
         content += 'KEY MANAGEMENT BEST PRACTICES\n'

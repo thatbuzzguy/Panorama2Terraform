@@ -129,8 +129,21 @@ The script generates `INTERFACE_MIGRATION_REPORT.txt` which contains:
 - VLAN tags
 - Platform-specific guidance
 
+Entries are grouped by the scope the export declares: device group first, then
+the template or the device the entry sits in, then the interface type. A
+section names only the scope the export states, so the same interface name on
+two device groups appears once under each. `VPN_MIGRATION_REPORT.txt` uses the
+same grouping.
+
 **Example Report Structure:**
 ```
+================================================================================
+DEVICE GROUP: Office-FW
+================================================================================
+
+ETHERNET INTERFACES (1)
+--------------------------------------------------------------------------------
+
 Interface: ethernet1/1
   Type: ethernet
   Mode: layer3

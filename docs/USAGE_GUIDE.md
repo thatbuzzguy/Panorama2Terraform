@@ -139,9 +139,13 @@ terraform_output/
 ├── vpn.tf                # IKE/IPsec crypto profiles, gateways, tunnels
 ├── README.md             # Deployment instructions
 ├── MANUAL_SETUP_REPORT.txt     # BGP, OSPF, application filters, and other report-only items
-├── INTERFACE_MIGRATION_REPORT.txt
+├── INTERFACE_MIGRATION_REPORT.txt   # grouped by device group, then template/device
 └── VPN_MIGRATION_REPORT.txt    # VPN key-management instructions (placeholder pre-shared keys)
 ```
+
+Both reports list one section per scope the export declares (device group, then
+template or device), so the same object name in two device groups is two
+sections. The shared section is named `Shared`.
 
 ## Terraform Deployment
 

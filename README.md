@@ -149,6 +149,13 @@ Reports written to the output directory:
 - `VPN_MIGRATION_REPORT.txt` - VPN inventory; **pre-shared keys are
   placeholders and must be set before apply**
 
+Both migration reports are grouped by the scope the export declares: device
+group first, then the template or the device the entry sits in, then the
+object kind inside the section. A section names only the scope the export
+states, so the same interface or gateway name on two device groups appears
+once under each, and an entry the export places nowhere is the shared
+section, named `Shared`.
+
 ## Typical outputs
 
 ```
