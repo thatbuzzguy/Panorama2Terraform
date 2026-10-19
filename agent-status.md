@@ -1,26 +1,34 @@
 # Agent Status
 
 ## Current position
-**F3.10 (architecture document) is committed** as 029f209 and closes Epic 3.
-`docs/ARCHITECTURE.md` states the data model, the parse pipeline, the emit
-pipeline and the naming rules in one place, and each rule names the test that
-pins it. `acceptance.md` holds the F3.10 criteria — overwrite it before the next
-task.
-**Next task: F4.1 Post-run sanity gate** (Epic 4, first feature): the static
-invariants exist only as tests today; make them run on every conversion, write
-`SANITY_REPORT.txt`, add `--validate`, and share the rules with
-`tests/test_dependency_wiring.py` and `tests/test_variables.py` instead of
-copying them.
+**F4.1 (post-run sanity gate) is committed** as 131bc69 and closes the first Epic 4
+feature.
+`sanity_checks.py` states each static rule once; `main()` runs the gate on every
+conversion, prints a console summary, writes `SANITY_REPORT.txt`, and returns the
+gate's exit code. `--validate` adds `terraform init` + `terraform validate`. Severity
+is data: FAIL exits 1, WARN does not fail a run, SKIPPED never changes the exit code.
 
-F3.10 state: no converter code changed, so both golden sets are byte-identical.
-One new test (`tests/test_multi_vsys_location.py::test_every_parse_method_records_the_four_scope_facts`)
-pins the data-model rule that every parse method records the four scope facts.
-The regions gap is recorded in `backlog.md`: `parse_regions` returns objects that
-only the console count uses, so a region reaches no output. README, `docs/MIGRATION_GUIDE.md`
-and `docs/USAGE_GUIDE.md` now link to the document instead of repeating the
-naming rule, the location rule or the grouping rule; the stale
-`security_rules.tf` tree line in `docs/USAGE_GUIDE.md` was corrected to the
-per-device-group-and-vsys chain.
+**Next task: F4.2 Entry coverage** (Epic 4): the container table in code, and line
+tracking in the parser. `acceptance.md` holds the F4.1 result — overwrite it with the
+F4.2 criteria before code or tests. See `to-do.md`.
+
+F4.1 state: no generated `.tf` changed, so both golden sets are byte-identical (the gate
+writes a report, not a `.tf`). Four existing test files now call the module for their rule
+instead of restating it: `tests/test_dependency_wiring.py` (references),
+`tests/test_variables.py` (variables), `tests/test_schema_conformance.py` (location),
+`tests/test_robustness.py` (control characters). New test file:
+`tests/test_sanity_gate.py` (70 tests). Gate: ruff clean, pytest 509 passed, terraform
+validate green on the sample and kitchen-sink outputs.
+
+Design rules the gate keeps: the gate reads the written files, not generator state; the
+block parser reads up to the first column-0 brace, which is how the generator writes a
+block and how the tests read one; `check_variables` counts only a `var.` reference as a
+consumer, so a declaration in `variables.tf` never consumes itself; `check_control_chars` reads with
+`errors='surrogateescape'` so undecodable bytes still count as findings; the report names
+no timestamp and no absolute path, which is what makes the byte-identical claim testable.
+The gate checks that `location` is present; the sub-block and field shape stays pinned by
+`tests/test_multi_vsys_location.py`, because `terraform validate` accepts an unknown
+sub-block and drops it silently.
 
 F3.9 state: the two operator-facing reports print one section per scope the
 export declares (device group, then template, then device), then the object
@@ -65,7 +73,43 @@ outputs.
 
 ## Session log
 
-### F3.10 — Architecture document (this session)
+### F4.1 — Post-run sanity gate (this session)
+- Direction: Epic 4, lowest-numbered unfinished feature. `acceptance.md` rewritten for
+  F4.1 first (12 criteria, the audit of where each rule lives today, and the severity
+  rules decided before the code).
+- New `sanity_checks.py`: `Finding`, `CheckResult`, `Report`, seven checks
+  (`emitted_types`, `location_present`, `references`, `variables`, `control_chars`,
+  `placeholders`, `terraform`), `run_checks`, `render_report`, `console_summary`. Pure
+  standard library plus `resource_mapping`; it imports no generator module, so a rule is
+  satisfied by a file and not by a bookkeeping value. Deterministic: the report names no
+  timestamp and no absolute path.
+- Severity: FAIL exits 1, WARN does not fail a run (the VPN `***CHANGE_ME***` key is correct
+  output that needs an operator action), SKIPPED never changes the exit code (a missing
+  `terraform` binary reports the check it could not run, so the offline matrix stays green).
+- `main()` runs the gate after it writes the output, prints the console summary, writes
+  `SANITY_REPORT.txt` and returns the gate exit code. `--validate` added to the converter
+  CLI runs `terraform init` + `terraform validate`; the output is read plain, so the ANSI
+  colour codes are stripped before the report line. `split_device_groups.py` writes XML, so
+  it has no `.tf` to check — pinned by test.
+- `parse_block` is the one block reader (header, top-level arguments, reference bodies) shared
+  by the location, variable and reference checks. A `.name` reference inside a nested block
+  resolves against the whole run, as F2.6 requires.
+- Rules shared instead of copied: `tests/test_dependency_wiring.py`, `tests/test_variables.py`,
+  `tests/test_schema_conformance.py` and `tests/test_robustness.py` call the module for the
+  reference, variable, location and control-character rules. The behavior tests in those files
+  stay (collision precedence, brown-field fallback, scope choice, per-scope fact recording).
+- Tests: `tests/test_sanity_gate.py` (70 tests) — the gate runs on a conversion; the report is
+  byte-identical between two runs and names no timestamp or absolute path; one negative test per
+  rule; no FAIL finding on all 53 output fixtures; the negative tests trip only on a planted
+  violation; WARN placeholder with exit 0; exit 1 for a planted broken file; `--validate` green;
+  the SKIPPED path with no `terraform` binary; the console summary; the splitter output.
+- Docs: `docs/ARCHITECTURE.md` §1 module row, new §4.6 (the gate), §6 report determinism, §7 no
+  longer lists F4.1. README (quick start, "Post-run sanity gate", typical outputs, Testing) and
+  `docs/USAGE_GUIDE.md` (the flag, the checks, `SANITY_REPORT.txt` in the output tree).
+- Gate: ruff clean, pytest 509 passed, terraform validate green (5 tests). Both golden sets
+  byte-identical.
+
+### F3.10 — Architecture document (previous session)
 - Direction: Epic 3, lowest-numbered unfinished feature, and the last one.
   `acceptance.md` rewritten for F3.10 first (10 criteria plus the audit of where
   each rule is written down today).

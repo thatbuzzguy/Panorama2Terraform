@@ -90,7 +90,7 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 ## Nice-to-Haves
 
 - Adopt `ruff format` as a gate. A one-time format pass of both legacy scripts is required first (about 1500 changed lines in `panorama_to_terraform.py`). Do it as its own task so the diff stays reviewable.
-- Deeper post-run checks (beyond F4.1): parse the generated HCL and cross-check object counts against the input (round-trip; needs the F4.3/F4.4 coverage data); `tflint` integration.
+- Deeper post-run checks (beyond F4.1): parse the generated HCL and cross-check object counts against the input (round-trip; needs the F4.3/F4.4 coverage data); `tflint` integration. `sanity_checks.py` is the runtime home for the static rules; it now holds the F1.7 control-character rule and the placeholder rule.
 
 ## Notes on Already-Completed Work
 
@@ -160,3 +160,7 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 - The conversion report (F4.3) keys on logical entries — an `<entry name>` plus its properties — not physical lines; one entry spans many lines in the XML. The reported line number is the entry's opening tag.
 - The coverage matrix (F4.4, former F2.8) is a permanent maintenance duty: every emitter change must keep the property matrix honest, or `CONVERSION_REPORT.txt` silently lies. F4.3/F4.4 include a test that an unmarked element read fails CI for this reason.
 - The parser extraction gaps listed above will surface in the F4.2/F4.3 reports; fix each gap when the report confirms it in a fixture, rather than fixing them speculatively now.
+- The sanity gate (F4.1, landed) reads the output files, so it cannot see an entry that produced no file. F4.3 is the accounting for that case; the gate cannot replace it.
+- The gate `location` check is presence only, not shape. The sub-block and field shape stays pinned by `tests/test_multi_vsys_location.py`, because `terraform validate` accepts an unknown sub-block and drops it silently. Move the shape rule into the gate when the property matrix (F4.4) becomes a live structure.
+- The placeholder check lists the VPN pre-shared key only. When F4.3 adds per-entry accounting, the expected placeholders should come from the same table that decides the report entries.
+- Consider a `--checks` selector on the converter CLI if the gate grows; today every check runs on every conversion, and a WARN never changes the exit code.

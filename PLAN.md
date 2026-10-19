@@ -41,9 +41,17 @@ Delivered: the keyed data model (every parse method visits each entry once and r
 
 ## Epic 4 — Full Traceability and Verification (Goal 4)
 
-Strategy: the conversion proves what it did. Input side: a report classifies every config entry, so nothing is silently dropped. Output side: a gate verifies every emitted file, so nothing is silently broken. Both halves reuse one shared structure: the coverage matrix (F4.4, former F2.8).
+Strategy: the conversion proves what it did. Input side: a report classifies every config entry, so nothing is silently dropped. Output side: a gate verifies every emitted file, so nothing is silently broken (F4.1 landed). Both halves reuse one shared structure: the coverage matrix (F4.4, former F2.8).
 
-- [ ] **F4.1 Post-run sanity gate** — A `--validate` CLI flag runs `terraform init` + `terraform validate` on the output. A static check module (pure Python, runs on every conversion) enforces: no dangling references, `location` on every resource, only `EMITTED_TYPES`, every variable consumed (absorbs the F2.10 check), no raw control characters, expected placeholders (VPN pre-shared keys) as WARN not FAIL. Writes `SANITY_REPORT.txt` plus a console summary; non-zero exit on FAIL. Determinism (two runs byte-identical) is pinned by test, not paid in the CLI.
+- [x] **F4.1 Post-run sanity gate** — Landed 2026-10-19. A `--validate` CLI flag
+  runs `terraform init` + `terraform validate` on the output. A static check
+  module (`sanity_checks.py`, pure Python) runs on every conversion and enforces:
+  no dangling references, `location` on every resource, only `EMITTED_TYPES`,
+  every variable consumed (absorbs the F2.10 check), no raw control characters,
+  expected placeholders (VPN pre-shared keys) as WARN not FAIL. Writes
+  `SANITY_REPORT.txt` plus a console summary; non-zero exit on FAIL. Determinism
+  (two runs byte-identical) is pinned by test, not paid in the CLI. Each rule is
+  stated once in the module, so the tests call it instead of copying it.
 - [ ] **F4.2 Entry coverage — container table and line tracking** — A line-tracking `TreeBuilder` in the parser (ElementTree does not record lines today). A static table maps known containers to their parse methods (seed of the F4.4 matrix). Every unknown container is reported. May land during Epic 3.
 - [ ] **F4.3 Per-entry conversion report** — Parse methods mark the entries they consume; `CONVERSION_REPORT.txt` classifies every `<entry>` as converted / report-only / unaccounted with line number and XPath. A test asserts that every element a parse method reads is marked, so the report cannot drift into lying. Lands after F3.1 so the marks key on the keyed model.
 - [ ] **F4.4 Property-level coverage (extends F2.8)** — The per-type property matrix is the single source of truth for which properties each emitter reads; the report classifies properties, not just entries. Each supported row has a fixture test. Permanent duty: every emitter change keeps the matrix honest. Foundation: the F2.8 type-level matrix landed 2026-07-13 (`COVERAGE_MATRIX`). Lands after F3.1, last in Epic 4.
@@ -59,6 +67,6 @@ Strategy: the conversion proves what it did. Input side: a report classifies eve
 
 1. **Epic 1 first.** It is the gate. No feature lands without tests.
 2. **Epic 3 is next.** It builds on the Epic 2 emitters and the shared fixture corpus. F3.1 (keyed data model), F3.2 (device-group + vsys identity at emit), F3.3 (full interface types), F3.4 (full object types), F3.5 (multi-vsys), F3.6 (multi-device, template-aware parsing), F3.7 (splitter rewrite), F3.8 (safe XML input) and F3.9 (per-device-group reports) landed; the next task is F3.10 (architecture document).
-3. **Epic 4 interleaves.** F4.1 (sanity gate) is independent of the parser and its dead-variable check reuses the F2.10 test, so it can land anytime after Epic 2. F4.2 (container table, line tracking) may land during Epic 3. F4.3 and F4.4 land after F3.1, so the consumed marks and the property matrix key on the keyed data model.
+3. **Epic 4 interleaves.** F4.1 (sanity gate) is independent of the parser and its dead-variable check reuses the F2.10 test, so it can land anytime after Epic 2; it landed 2026-10-19. F4.2 (container table, line tracking) may land during Epic 3. F4.3 and F4.4 land after F3.1, so the consumed marks and the property matrix key on the keyed data model.
 
 Rationale: Epic 1 makes Epics 2 and 3 safe to iterate on. The fixture corpus (F1.6) is the shared test asset for all three epics.
