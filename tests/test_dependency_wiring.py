@@ -14,7 +14,8 @@ Pins on the dedicated fixture:
 - object scope wins over group scope on name collisions;
 - undeclared names stay plain strings;
 - invariant: every emitted ``.name`` reference resolves to a resource
-  declared in the same output;
+  declared in the same output. The rule lives in ``sanity_checks.py``, so the
+  conversion gate and this test share it (F4.1);
 - the output passes ``terraform init`` + ``terraform validate``.
 """
 
@@ -25,12 +26,12 @@ from pathlib import Path
 
 import pytest
 
+import sanity_checks
 from conftest import FIXTURES_DIR, run_script
 
 TERRAFORM = shutil.which("terraform")
 FIXTURE = FIXTURES_DIR / "dependency_wiring.xml"
 
-REF_RE = re.compile(r"\b(panos_[a-z0-9_]+)\.([a-z0-9_]+)\.name\b")
 RESOURCE_RE = re.compile(r'resource\s+"([a-z0-9_]+)"\s+"([^"]+)"')
 
 
@@ -231,16 +232,14 @@ def test_local_names_are_sanitized_name_plus_digest(out_dir):
 # --- Invariant ------------------------------------------------------------------
 
 def test_every_emitted_reference_resolves_to_a_declared_resource(out_dir):
-    """No dangling references anywhere in the generated output."""
-    declared = _declared(out_dir)
-    dangling = []
-    for path in out_dir.iterdir():
-        if path.suffix != ".tf":
-            continue
-        for rtype, local in REF_RE.findall(path.read_text(encoding="utf-8")):
-            if (rtype, local) not in declared:
-                dangling.append(f"{path.name}: {rtype}.{local}.name")
-    assert dangling == [], "dangling references: " + ", ".join(dangling)
+    """No dangling references anywhere in the generated output.
+
+    The rule is the one the conversion gate runs on every conversion, so the
+    test calls the same function the CLI calls (F4.1).
+    """
+    files = {path.name: path.read_text(encoding="utf-8") for path in out_dir.glob("*.tf")}
+    findings = sanity_checks.check_references(files)
+    assert findings == [], "dangling references: " + ", ".join(f.render() for f in findings)
 
 
 # --- Terraform gate --------------------------------------------------------------

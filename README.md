@@ -24,6 +24,11 @@ terraform init
 terraform validate
 ```
 
+Every run ends with a static gate (see [Post-run sanity gate](#post-run-sanity-gate)):
+it checks the files it wrote, writes `SANITY_REPORT.txt`, and exits non-zero
+when a check fails. Add `--validate` to run `terraform init` + `terraform
+validate` in the same run.
+
 Split a Panorama export into one XML file per device group:
 
 ```bash
@@ -172,6 +177,7 @@ security_profiles.tf  security_profile_groups.tf
 zones.tf  interfaces.tf  virtual_routers.tf  monitor_profiles.tf
 vpn.tf
 MANUAL_SETUP_REPORT.txt  INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.txt
+SANITY_REPORT.txt
 ```
 
 (Only files with content are written; the list above is the union across
@@ -226,6 +232,29 @@ Before deploying: replace placeholder VPN pre-shared keys, review
 `MANUAL_SETUP_REPORT.txt`, and adapt interface names to the target
 platform (see `INTERFACE_MIGRATION_REPORT.txt`).
 
+## Post-run sanity gate
+
+Every conversion runs a static gate on the output it wrote, then prints a
+summary and writes `SANITY_REPORT.txt`. The gate reads the files, so it reports
+what you receive, not what the generator intended.
+
+| Check | Rule | Severity |
+|---|---|---|
+| `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |
+| `location_present` | every resource block carries `location` | FAIL |
+| `references` | every `.name` reference resolves to a resource declared in the same run | FAIL |
+| `variables` | every declared variable has a `var.` consumer | FAIL |
+| `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
+| `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
+| `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
+
+A WARN does not fail the run: a placeholder is correct output that still needs
+an action before apply. A FAIL finding exits 1. A SKIPPED check never changes
+the exit code, so a run on a machine without terraform still reports the checks
+it could not run. The rules are stated once in `sanity_checks.py`; the tests
+call that module instead of restating them. The gate is described in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
+
 ## Testing
 
 - `python3 -m pytest` - the full suite: parser and generator unit tests,
@@ -238,6 +267,9 @@ platform (see `INTERFACE_MIGRATION_REPORT.txt`).
 - `tests/test_terraform_validate.py` - `terraform init` + `terraform
   validate` on the sample, kitchen-sink, and crypto-profile-only
   outputs (skipped when the `terraform` binary is absent)
+- `tests/test_sanity_gate.py` - the post-run gate: every check detects its
+  violation, no fixture trips a false positive, the report is byte-identical
+  between two runs, and the exit code follows the findings
 - `ruff check .` - lint
 
 ## Documentation

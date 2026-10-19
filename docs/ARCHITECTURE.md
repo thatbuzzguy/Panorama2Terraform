@@ -20,6 +20,7 @@ a design rule enforced by construction.
 | `xml_input.py` | The only input read, shared by both entry points | size cap checked before the read; DTD refused by the parser |
 | `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX` | the single source of truth; no resource name or attribute from memory |
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy` |
+| `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state |
 | `conftest.py`, `tests/` | The gate | each rule in this document names the test that pins it |
 
 `tools/build_kitchen_sink.py` assembles the fixture corpus from committed files.
@@ -284,6 +285,43 @@ Pinned by `tests/test_reports.py` (18 tests), including
 `::test_placeholder_device_is_not_named_as_a_firewall`,
 `::test_sections_and_entries_are_in_a_stable_order`.
 
+### 4.6 Post-run sanity gate
+
+`main()` runs `sanity_checks.run_checks` after it writes the output. The gate
+reads the files in the output directory, so a rule is satisfied by a file, not
+by a bookkeeping value that never reached one. The gate runs on every
+conversion. The splitter writes XML, so it has no `.tf` to check.
+
+| Check | Rule | Severity |
+|---|---|---|
+| `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |
+| `location_present` | every resource block carries a `location` block | FAIL |
+| `references` | every `.name` reference resolves to a resource declared in the same run | FAIL |
+| `variables` | every declared variable has a `var.` consumer | FAIL |
+| `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
+| `placeholders` | an expected placeholder, such as the VPN key `***CHANGE_ME***`, is listed | WARN |
+| `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
+
+A resource block is read up to the first column-0 brace, which is how the
+generator writes one and how the tests read one.
+
+- A WARN does not fail the gate: a placeholder is correct output that still needs
+  an operator action, so the run exits 0.
+- A FAIL finding exits 1. A SKIPPED check never changes the exit code, so an
+  offline run still reports the checks it could not run.
+- The gate writes `SANITY_REPORT.txt` and a console summary.
+- Each rule exists once, in `sanity_checks.py`. `tests/test_dependency_wiring.py`,
+  `tests/test_variables.py`, `tests/test_schema_conformance.py` and
+  `tests/test_robustness.py` call the module instead of restating a rule.
+- The gate checks that `location` is present. The sub-block and field shape stays
+  pinned by `tests/test_multi_vsys_location.py`, because `terraform validate`
+  accepts an unknown sub-block and drops it silently.
+
+Pinned by `tests/test_sanity_gate.py` (70 tests): the gate runs on a conversion,
+every check detects its own violation, the gate reports no FAIL finding on every
+fixture, the exit code follows the findings, and `--validate` runs the terraform
+check or reports it as SKIPPED.
+
 ## 5. Naming rules
 
 The local name of a resource is **the sanitized PAN-OS name plus an 8-hex
@@ -331,20 +369,25 @@ Two runs on the same input produce identical bytes.
 - The goldens pin every emitted `.tf` file byte for byte
   (`tests/test_golden_files.py`). Reports are not in the golden set, so report
   determinism is pinned by
-  `tests/test_reports.py::test_sections_and_entries_are_in_a_stable_order`.
+  `tests/test_reports.py::test_sections_and_entries_are_in_a_stable_order` and,
+  for the sanity report, by
+  `tests/test_sanity_gate.py::test_report_is_byte_identical_between_runs`. The
+  sanity report names no timestamp and no absolute path, which is what makes that
+  claim testable.
   Determinism is pinned by test, not paid in the CLI.
 
 ## 7. What this document does not claim
 
 These are planned (PLAN.md, Epic 4) and not implemented:
 
-- **F4.1** — no `--validate` flag, no `SANITY_REPORT.txt`, no runtime static
-  check. The no-dangling-reference rule exists only as a test today.
 - **F4.2** — no line tracking in the parser, and no report for an unknown
   container. The container table above is documentation, not code.
 - **F4.3** — no per-entry `CONVERSION_REPORT.txt`. Nothing proves today that
   every entry is accounted for.
 - **F4.4** — the coverage matrix is type level, not property level.
+
+F4.1 is implemented (§4.6): the static rules run on every conversion, and the
+result is `SANITY_REPORT.txt`.
 
 These are decided limits, not bugs: the rulebase is not emitted, security profile
 bodies are not parsed, EDL credentials are never written, a service emits one

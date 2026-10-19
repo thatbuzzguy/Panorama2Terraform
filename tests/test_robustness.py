@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+import sanity_checks
+
 REPO_ROOT = Path(__file__).parent.parent
 CONVERTER = REPO_ROOT / 'panorama_to_terraform.py'
 SPLITTER = REPO_ROOT / 'split_device_groups.py'
@@ -82,17 +84,23 @@ def test_splitter_rejects_dtd(tmp_path):
 # --- Degenerate input: must produce valid output ----------------------------
 
 def test_tab_cr_names_produce_valid_tf(tmp_path):
-    """Names with tabs/CRs generate .tf files free of raw control chars."""
+    """Names with tabs/CRs generate .tf files free of raw control chars.
+
+    The rule lives in `sanity_checks.py` (F4.1), so the conversion gate and this
+    test share it: LF is the only legal raw control byte, and a tab or a CR
+    means an escape was missed.
+    """
     proc = _run(CONVERTER, str(FIXTURES_DIR / 'robust_tab_cr_names.xml'),
                 '--output-dir', str(tmp_path / 'out'), workdir=tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    address_tf = (tmp_path / 'out' / 'address_objects.tf').read_bytes()
-    # HCL .tf files must not carry raw CR or C0 control characters (LF is
-    # the only legal raw control byte).
-    illegal = [b for b in address_tf if b < 0x20 and b != 0x0A]
-    assert illegal == []
-    assert b'\t' not in address_tf
-    assert b'\r' not in address_tf
+    out_dir = tmp_path / 'out'
+    files = {f.name: f.read_text(encoding='utf-8', errors='surrogateescape')
+             for f in sorted(out_dir.glob('*.tf'))}
+    findings = sanity_checks.check_control_chars(files)
+    assert findings == [], ', '.join(f.render() for f in findings)
+    # The whole output also passes the gate, so the exit code above is the
+    # gate's verdict, not only the generator's.
+    assert not sanity_checks.run_checks(out_dir).failed
 
 
 def test_entry_without_name_is_skipped(tmp_path):

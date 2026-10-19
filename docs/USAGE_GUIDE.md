@@ -102,6 +102,30 @@ writes no output file.
 python3 panorama_to_terraform.py big_export.xml --max-input-bytes 268435456
 ```
 
+### Post-run sanity gate
+
+Every run checks the `.tf` files it wrote, prints a summary, and writes
+`SANITY_REPORT.txt`. A check that finds nothing reports PASS. A FAIL finding
+exits 1. A WARN does not fail the run, and a check the run could not perform
+reports SKIPPED and does not change the exit code.
+
+```bash
+# Static checks only (the default): no terraform needed
+python3 panorama_to_terraform.py export.xml --output-dir out
+
+# Static checks plus terraform init + terraform validate
+python3 panorama_to_terraform.py export.xml --output-dir out --validate
+```
+
+The checks are: `emitted_types` (only `EMITTED_TYPES`), `location_present` (a
+`location` block on every resource), `references` (no `.name` reference to a
+resource this run did not declare), `variables` (no declared variable without a
+`var.` consumer), `control_chars` (no raw control character or DEL), and
+`placeholders` (an expected placeholder, such as the VPN key, listed for the
+operator). `--validate` adds the `terraform` check. The rules live in
+`sanity_checks.py` and are stated in
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md) §4.6.
+
 ### Example
 
 ```bash
@@ -140,7 +164,8 @@ terraform_output/
 ├── README.md             # Deployment instructions
 ├── MANUAL_SETUP_REPORT.txt     # BGP, OSPF, application filters, and other report-only items
 ├── INTERFACE_MIGRATION_REPORT.txt   # grouped by device group, then template/device
-└── VPN_MIGRATION_REPORT.txt    # VPN key-management instructions (placeholder pre-shared keys)
+├── VPN_MIGRATION_REPORT.txt    # VPN key-management instructions (placeholder pre-shared keys)
+└── SANITY_REPORT.txt           # the post-run gate: result, checks, findings
 ```
 
 Both reports list one section per scope the export declares (device group, then

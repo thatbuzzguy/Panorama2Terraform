@@ -52,6 +52,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Optional
 
+import sanity_checks
 from resource_mapping import INTERFACE_RESOURCE_TYPES, LOCATION_SCHEMA
 from xml_input import (
     DEFAULT_MAX_INPUT_BYTES,
@@ -4847,6 +4848,13 @@ def main():
     )
     # F3.8: the same input limit on both entry points.
     add_max_input_argument(parser)
+    # F4.1: the static gate runs on every conversion. --validate adds the
+    # terraform init + validate check, which needs the terraform binary.
+    parser.add_argument(
+        '--validate',
+        action='store_true',
+        help='Run terraform init and terraform validate on the output',
+    )
 
     args = parser.parse_args()
 
@@ -5048,6 +5056,16 @@ def main():
         print("  - INTERFACE_MIGRATION_REPORT.txt (Interface and IP inventory)")
         if ike_gateways or ipsec_tunnels:
             print("  - VPN_MIGRATION_REPORT.txt ⚠️  (VPN config with key management instructions)")
+
+        # F4.1: the gate reads the files that were written, so it reports what
+        # the operator receives. A WARN does not fail the gate; a FAIL does.
+        report = sanity_checks.run_checks(args.output_dir, run_terraform=args.validate)
+        report_path = Path(args.output_dir) / 'SANITY_REPORT.txt'
+        report_path.write_text(report.render(), encoding='utf-8')
+        print()
+        print(report.console_summary())
+        print(f"Sanity report: {report_path}")
+
         print("\nNext steps:")
         print(f"  1. cd {args.output_dir}")
         print("  2. Review INTERFACE_MIGRATION_REPORT.txt for interface mapping")
@@ -5061,7 +5079,9 @@ def main():
         print("  8. Run: terraform plan")
         print("  9. Run: terraform apply")
 
-        return 0
+        # F4.1: a FAIL finding is a broken output, so the conversion reports it
+        # with a non-zero exit code instead of writing files and exiting 0.
+        return 1 if report.failed else 0
 
     except ET.ParseError as e:
         print(f"Error: Failed to parse XML file: {e}")

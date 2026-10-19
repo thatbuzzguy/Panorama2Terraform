@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+import sanity_checks
 from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_script
 
 CASES = {
@@ -56,15 +57,13 @@ def test_variable_set_is_exactly_the_credentials(case):
 
 @pytest.mark.parametrize('case', list(CASES))
 def test_every_declared_variable_is_consumed(case):
-    """Every `variable "X"` has a `var.X` reference in the generated output."""
-    files = _generate(case)
-    declared = VAR_DECL_RE.findall(files['variables.tf'])
-    consumers = '\n'.join(
-        text for name, text in files.items() if name != 'variables.tf')
-    for name in declared:
-        assert re.search(rf'\bvar\.{re.escape(name)}\b', consumers), (
-            f'{case}: variable {name!r} is declared but never consumed '
-            f'as var.{name}')
+    """Every `variable "X"` has a `var.X` reference in the generated output.
+
+    The rule lives in `sanity_checks.py`, so the conversion gate and this test
+    share it (F4.1).
+    """
+    findings = sanity_checks.check_variables(_generate(case))
+    assert findings == [], f'{case}: ' + ', '.join(f.render() for f in findings)
 
 
 @pytest.mark.parametrize('case', list(CASES))
