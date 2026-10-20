@@ -1,8 +1,8 @@
 # Agent Status
 
 ## Current position
-**F4.3 (per-entry conversion report) is complete and uncommitted.** Gate: ruff
-clean, pytest 470 passed (26 new), both golden sets byte-identical, terraform
+**F4.3 (per-entry conversion report) is committed** as c9a1f6b and closes the
+third Epic 4 feature. Gate: ruff clean, pytest 566 passed (26 new), both golden sets byte-identical, terraform
 validate green on all four outputs. Next feature: F4.4 property-level matrix
 (`to-do.md`).
 
