@@ -1,30 +1,32 @@
-# To Do — F4.3 Per-entry coverage report (next feature)
+# To Do — F4.4 Property-level coverage matrix (next feature)
 
-F4.2 (Entry coverage, parse side) is complete and committed. Its pieces are
+F4.3 (per-entry conversion report) is complete and committed. Its pieces are
 recorded in `acceptance.md` (Result) and in the git history:
 
-- `xml_input.ParsedSource` records the opening line of every element.
-- `container_coverage.CONTAINER_TABLE` is the container table in code.
-- `container_coverage.scan()` reports a section no row covers; the converter
-  writes the section to `MANUAL_SETUP_REPORT.txt` and prints one console line.
-- Tests: `tests/test_container_coverage.py` (24), line tracking in
-  `tests/test_safe_input.py` (30), fixture
-  `tests/fixtures/unknown_containers.xml`.
+- `entry_coverage.py`: the mark mechanism (`mark`, `mark_skipped`), the row rules,
+  the captured-field rule, `entry_line`, the report text, the gap section and the
+  console lines.
+- `TerraformGenerator.generate_conversion_report` writes `CONVERSION_REPORT.txt`
+  and groups rows with the F3.9 rule (`_report_scope_path`).
+- `container_coverage.DESTINATION_KINDS` gained `skipped` and `unaccounted`; the
+  `parse_device_groups` row changed from `count-only` to `bookkeeping`, because a
+  device group name reaches the output through `location`.
+- Every parse method marks the entries it reads, at the point it builds the object.
+- Tests: `tests/test_entry_coverage.py` (26), fixture
+  `tests/fixtures/entry_gaps.xml`.
 
-F4.3 is not started. Its pieces, when it starts:
+F4.4 is not started. Its pieces, when it starts:
 
-- [ ] Overwrite `acceptance.md` with the F4.3 criteria before code or tests.
-- [ ] State what "accounted for" means for one entry: emitted, reported,
-  inventory, count-only, or dropped.
-- [ ] Record which fields of an entry the parser captured, per entry.
-- [ ] Write `CONVERSION_REPORT.txt`: one line per entry, with file, line
-  (`ParsedSource.line_of`), object type, and destination.
-- [ ] Report an entry whose captured fields produce no output (the `parse_regions`
-  gap and the extraction gaps in `backlog.md`).
-- [ ] Tests: a fixture where an entry is read but nothing is written, and a test
-  that every entry in the corpus appears in the report.
+- [ ] Overwrite `acceptance.md` with the F4.4 criteria before code or tests.
+- [ ] Decide what one property row states: the property path, the value, and the
+  output it produced.
+- [ ] Reconcile `COVERAGE_MATRIX` with `EMITTED_TYPES` and `resource_name_map`.
+- [ ] Report a property the parser captured but no output used (the extraction gaps
+  in `backlog.md`), per property, not per entry.
+- [ ] Tests: a fixture where an entry is read but one property is dropped, and a
+  test that every captured property appears in the matrix.
 - [ ] Keep the gate green: ruff, pytest, golden tests, `terraform validate`,
-  and the F4.1/F4.2 exit codes.
+  and the F4.1/F4.2/F4.3 exit codes.
 
-Scope guard: F4.4 (property-level coverage, `EMITTED_TYPES` reconciliation,
-`resource_name_map`) is not in this slice.
+Scope guard: F4.4 does not change the F4.3 report row rules. Property entries stay
+counted on the parent row until the matrix covers them per property.

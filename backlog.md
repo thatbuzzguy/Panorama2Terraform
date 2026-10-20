@@ -191,3 +191,30 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   fails; a row with the right segments in the wrong order does not. Narrowing
   this to full-path comparison needs the pattern list to be data, not string
   literals inside methods.
+## Design Decisions (F4.3, landed 2026-10-20)
+
+- A destination kind is a container fact in the table, so two per-entry kinds were
+  added: `skipped` (a parse method visited the entry and did not model it) and
+  `unaccounted` (no parse method read it, so no row covers its container). A
+  `report` row is not a gap: the manual report is its output. The gap kinds are the
+  three that write nothing.
+- The `parse_device_groups` row moved from `count-only` to `bookkeeping`. A device
+  group name reaches the output through `location`, so the entry does produce output;
+  only the entry itself is not a resource.
+- A report row is one entry at section level. A container inside a config-object
+  entry is a property level, so the parent row shows the property-entry count and the
+  matrix (F4.4) states the properties. F4.3 does not print property rows.
+- Captured fields are the keys of the object the parse method built, not the XML tag.
+  A field inside a type sub-shape is reported under the object key (`fields`), so the
+  report reads through the data model, not through the XML.
+- The mark stores the captured object by reference, so a field added after the mark is
+  in the report. This is deliberate: it lets a method mark where it builds the object
+  and still fill the rest.
+- The read-but-not-marked check follows the helper calls a parse method makes, but it
+  does not follow a `findall` path held in a variable. A method that reads entries
+  through a variable path is accepted only when it marks somewhere in its call chain.
+  The corpus check (every entry in a covered container is marked) is the check that
+  cannot lie; the AST check is the early warning.
+- `CONVERSION_REPORT.txt` groups rows with the F3.9 rule, so a report row and an
+  interface report row for the same entry name sit in the same section. One shared
+  grouping function, not two.

@@ -156,6 +156,9 @@ Reports written to the output directory:
 - `INTERFACE_MIGRATION_REPORT.txt` - interface and IP inventory
 - `VPN_MIGRATION_REPORT.txt` - VPN inventory; **pre-shared keys are
   placeholders and must be set before apply**
+- `CONVERSION_REPORT.txt` - one line per entry the parse read: source line,
+  object type, entry name, destination, detail, and the fields it captured;
+  the file names the input file name, not its path
 
 Both migration reports are grouped by the scope the export declares: device
 group first, then the template or the device the entry sits in, then the

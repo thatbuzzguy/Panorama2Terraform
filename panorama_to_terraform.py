@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import container_coverage
+import entry_coverage
 import sanity_checks
 from resource_mapping import INTERFACE_RESOURCE_TYPES, LOCATION_SCHEMA
 from xml_input import (
@@ -109,7 +110,8 @@ class PanoramaParser:
         'certificate-profile': 'certificate_profile',
     }
 
-    def __init__(self, xml_file: str, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES):
+    def __init__(self, xml_file: str, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES,
+                 ledger: Optional[entry_coverage.EntryLedger] = None):
         self.xml_file = xml_file
         # F3.8: one safe read for both entry points. It caps the input size
         # and refuses a DTD at parser level (a DTD is the only way an entity
@@ -124,10 +126,28 @@ class PanoramaParser:
         # and so the coverage scan can tell a section from a property level
         # (F4.2).
         self.parent_map = container_coverage.parent_map(self.root)
+        # F4.3: the per-entry record. A parse method marks the entries it reads,
+        # and the report is built from the ledger after the parse.
+        self.ledger = ledger if ledger is not None else entry_coverage.EntryLedger(
+            self.source, self.parent_map)
 
     def line_of(self, elem: ET.Element) -> Optional[int]:
         """Source line of an element's opening tag (F4.2)."""
         return self.source.line_of(elem)
+
+    def mark(self, entry: ET.Element, captured: dict, detail: str = '',
+             destination: Optional[str] = None) -> dict:
+        """Record what this method took from an entry, and return the object.
+
+        F4.3 AC-1: a parse method that reads entries marks them. The ledger keeps
+        the object by reference, so a field a method adds after the mark is still
+        in the report.
+        """
+        return self.ledger.mark(entry, captured, detail, destination)
+
+    def mark_skipped(self, entry: ET.Element, reason: str) -> None:
+        """Record an entry this method visited and did not model (F4.3 AC-1.3)."""
+        self.ledger.mark_skipped(entry, reason)
 
     def parse_device_groups(self) -> list[dict]:
         """Parse device groups from Panorama config"""
@@ -137,10 +157,10 @@ class PanoramaParser:
         for dg in self.root.findall(".//device-group/entry"):
             name = dg.get('name')
             if name:
-                device_groups.append({
+                device_groups.append(self.mark(dg, {
                     'name': name,
                     'description': self._get_text(dg, 'description')
-                })
+                }))
 
         return device_groups
 
@@ -290,20 +310,30 @@ class PanoramaParser:
         for entry in self.root.findall('.//device-group/entry'):
             name = entry.get('name')
             if name:
-                for device in self._list_names(entry, 'devices'):
+                # F4.3: the membership an association entry states is the whole
+                # fact the parser takes, so the mark records it.
+                devices = self._list_names(entry, 'devices')
+                self.mark(entry, {'devices': devices})
+                for device in devices:
                     tables['device_groups'].setdefault(device, []).append(name)
         for entry in self.root.findall('.//templates/entry'):
             name = entry.get('name')
             if name:
-                for device in self._list_names(entry, 'devices'):
+                devices = self._list_names(entry, 'devices')
+                self.mark(entry, {'devices': devices})
+                for device in devices:
                     tables['templates'].setdefault(device, []).append(name)
         for entry in self.root.findall('.//template-stack/entry'):
             name = entry.get('name')
             if not name:
+                self.mark_skipped(entry, "entry has no name attribute")
                 continue
-            for device in self._list_names(entry, 'devices'):
+            devices = self._list_names(entry, 'devices')
+            templates = self._list_names(entry, 'templates')
+            self.mark(entry, {'devices': devices, 'templates': templates})
+            for device in devices:
                 tables['template_stacks'].setdefault(device, []).append(name)
-            for template in self._list_names(entry, 'templates'):
+            for template in templates:
                 tables['stack_templates'].setdefault(name, []).append(template)
         for table in tables.values():
             for names in table.values():
@@ -339,14 +369,15 @@ class PanoramaParser:
         for tag in self.root.findall(".//tag/entry"):
             name = tag.get('name')
             if not name:
+                self.mark_skipped(tag, "entry has no name attribute")
                 continue
 
-            tags.append({
+            tags.append(self.mark(tag, {
                 'name': name,
                 **self.identity_of(tag),
                 'color': self._get_text(tag, 'color'),
                 'comments': self._get_text(tag, 'comments')
-            })
+            }))
 
         return tags
 
@@ -361,6 +392,7 @@ class PanoramaParser:
         for region in self.root.findall(".//region/entry"):
             name = region.get('name')
             if not name:
+                self.mark_skipped(region, "entry has no name attribute")
                 continue
 
             addresses = []
@@ -368,11 +400,11 @@ class PanoramaParser:
                 if addr.text:
                     addresses.append(addr.text)
 
-            regions.append({
+            regions.append(self.mark(region, {
                 'name': name,
                 **self.identity_of(region),
                 'addresses': addresses
-            })
+            }))
 
         return regions
 
@@ -387,6 +419,7 @@ class PanoramaParser:
         for cat in self.root.findall(".//custom-url-category/entry"):
             name = cat.get('name')
             if not name:
+                self.mark_skipped(cat, "entry has no name attribute")
                 continue
 
             url_list = []
@@ -394,13 +427,13 @@ class PanoramaParser:
                 if url.text:
                     url_list.append(url.text)
 
-            categories.append({
+            categories.append(self.mark(cat, {
                 'name': name,
                 **self.identity_of(cat),
                 'type': self._get_text(cat, 'type'),
                 'list': url_list,
                 'description': self._get_text(cat, 'description')
-            })
+            }))
 
         return categories
 
@@ -415,6 +448,7 @@ class PanoramaParser:
         for ag in self.root.findall(".//application-group/entry"):
             name = ag.get('name')
             if not name:
+                self.mark_skipped(ag, "entry has no name attribute")
                 continue
 
             members = []
@@ -422,11 +456,11 @@ class PanoramaParser:
                 if member.text:
                     members.append(member.text)
 
-            app_groups.append({
+            app_groups.append(self.mark(ag, {
                 'name': name,
                 **self.identity_of(ag),
                 'members': members
-            })
+            }))
 
         return app_groups
 
@@ -441,9 +475,10 @@ class PanoramaParser:
         for af in self.root.findall(".//application-filter/entry"):
             name = af.get('name')
             if not name:
+                self.mark_skipped(af, "entry has no name attribute")
                 continue
 
-            app_filters.append({
+            app_filters.append(self.mark(af, {
                 'name': name,
                 **self.identity_of(af),
                 'category': self._get_members(af, 'category'),
@@ -457,7 +492,7 @@ class PanoramaParser:
                 'transfers_files': self._get_text(af, 'transfers-files'),
                 'tunnels_other_apps': self._get_text(af, 'tunnels-other-apps'),
                 'used_by_malware': self._get_text(af, 'used-by-malware'),
-            })
+            }))
 
         return app_filters
 
@@ -478,9 +513,10 @@ class PanoramaParser:
         for ext_list in self.root.findall(".//external-list/entry"):
             name = ext_list.get('name')
             if not name:
+                self.mark_skipped(ext_list, "entry has no name attribute")
                 continue
 
-            entry = {
+            entry = self.mark(ext_list, {
                 'name': name,
                 **self.identity_of(ext_list),
                 'type': '',
@@ -488,7 +524,7 @@ class PanoramaParser:
                 # attribute name (url, description, exception_list, recurring,
                 # expand_domain, certificate_profile)
                 'fields': {},
-            }
+            })
 
             type_elem = ext_list.find('type')
             if type_elem is not None:
@@ -557,19 +593,22 @@ class PanoramaParser:
         for addr in self.root.findall(".//address/entry"):
             name = addr.get('name')
             if not name:
+                self.mark_skipped(addr, "entry has no name attribute")
                 continue
 
             # A reference pointer has no content: skip it.
             if self._is_reference_pointer(addr):
+                # F4.3: the entry is visited and skipped, so the report says why.
+                self.mark_skipped(addr, 'reference pointer (id only)')
                 continue
 
-            addr_obj = {
+            addr_obj = self.mark(addr, {
                 'name': name,
                 **self.identity_of(addr),
                 # PAN-OS records the object type as an entry attribute
                 'declared_type': addr.get('type') or '',
                 'other': {},
-            }
+            })
 
             for child in addr:
                 tag = child.tag
@@ -625,9 +664,12 @@ class PanoramaParser:
         for grp in self.root.findall(".//address-group/entry"):
             name = grp.get('name')
             if not name:
+                self.mark_skipped(grp, "entry has no name attribute")
                 continue
 
             if self._is_reference_pointer(grp):
+                # F4.3: the entry is visited and skipped, so the report says why.
+                self.mark_skipped(grp, 'reference pointer (id only)')
                 continue
 
             # Parse members
@@ -641,13 +683,13 @@ class PanoramaParser:
             dynamic_filter = grp.find('.//dynamic/filter')
             filter_expr = self._dynamic_filter_expr(dynamic_filter) if dynamic_filter is not None else None
 
-            groups.append({
+            groups.append(self.mark(grp, {
                 'name': name,
                 **self.identity_of(grp),
                 'static_members': members,
                 'dynamic_filter': filter_expr,
                 'description': self._get_text(grp, 'description')
-            })
+            }))
 
         return groups
 
@@ -684,12 +726,15 @@ class PanoramaParser:
         for svc in self.root.findall(".//service/entry"):
             name = svc.get('name')
             if not name:
+                self.mark_skipped(svc, "entry has no name attribute")
                 continue
 
             if self._is_reference_pointer(svc):
+                # F4.3: the entry is visited and skipped, so the report says why.
+                self.mark_skipped(svc, 'reference pointer (id only)')
                 continue
 
-            service_obj = {
+            service_obj = self.mark(svc, {
                 'name': name,
                 **self.identity_of(svc),
                 # Protocol sub-blocks, keyed by 'tcp' / 'udp'. The parse model
@@ -697,7 +742,7 @@ class PanoramaParser:
                 # Each leg holds destination_port, source_port, and override.
                 'protocols': {},
                 'tags': [],
-            }
+            })
 
             protocol = svc.find('protocol')
             if protocol is not None:
@@ -749,9 +794,12 @@ class PanoramaParser:
         for grp in self.root.findall(".//service-group/entry"):
             name = grp.get('name')
             if not name:
+                self.mark_skipped(grp, "entry has no name attribute")
                 continue
 
             if self._is_reference_pointer(grp):
+                # F4.3: the entry is visited and skipped, so the report says why.
+                self.mark_skipped(grp, 'reference pointer (id only)')
                 continue
 
             members = []
@@ -759,12 +807,12 @@ class PanoramaParser:
                 if member.text:
                     members.append(member.text)
 
-            groups.append({
+            groups.append(self.mark(grp, {
                 'name': name,
                 **self.identity_of(grp),
                 'members': members,
                 'description': self._get_text(grp, 'description')
-            })
+            }))
 
         return groups
 
@@ -780,9 +828,10 @@ class PanoramaParser:
         for rule in self.root.findall(".//security/rules/entry"):
             name = rule.get('name')
             if not name:
+                self.mark_skipped(rule, "entry has no name attribute")
                 continue
 
-            rule_obj = {
+            rule_obj = self.mark(rule, {
                 'name': name,
                 **self.identity_of(rule),
                 'source_zones': self._get_members(rule, 'from'),
@@ -793,7 +842,7 @@ class PanoramaParser:
                 'services': self._get_members(rule, 'service'),
                 'action': self._get_text(rule, 'action'),
                 'description': self._get_text(rule, 'description')
-            }
+            })
 
             # Log settings
             log_start = rule.find('log-start')
@@ -820,9 +869,10 @@ class PanoramaParser:
         for rule in self.root.findall(".//nat/rules/entry"):
             name = rule.get('name')
             if not name:
+                self.mark_skipped(rule, "entry has no name attribute")
                 continue
 
-            rule_obj = {
+            rule_obj = self.mark(rule, {
                 'name': name,
                 **self.identity_of(rule),
                 'source_zones': self._get_members(rule, 'from'),
@@ -831,7 +881,7 @@ class PanoramaParser:
                 'destination_addresses': self._get_members(rule, 'destination'),
                 'service': self._get_text(rule, 'service'),
                 'description': self._get_text(rule, 'description')
-            }
+            })
 
             # Source translation
             source_translation = rule.find('.//source-translation')
@@ -877,14 +927,15 @@ class PanoramaParser:
         for sched in self.root.findall(".//schedule/entry"):
             name = sched.get('name')
             if not name:
+                self.mark_skipped(sched, "entry has no name attribute")
                 continue
 
-            sched_obj = {
+            sched_obj = self.mark(sched, {
                 'name': name,
                 **self.identity_of(sched),
                 'schedule_type': None,
                 'recurring': []
-            }
+            })
 
             # Check for recurring schedule
             recurring = sched.find('schedule-type/recurring')
@@ -892,9 +943,7 @@ class PanoramaParser:
                 sched_obj['schedule_type'] = 'recurring'
                 for entry in recurring.findall('entry'):
                     rec_name = entry.get('name')
-                    rec_obj = {
-                        'name': rec_name
-                    }
+                    rec_obj = self.mark(entry, {'name': rec_name})
                     sched_obj['recurring'].append(rec_obj)
 
             # Check for non-recurring schedule
@@ -917,9 +966,10 @@ class PanoramaParser:
         for rule in self.root.findall(".//decryption/rules/entry"):
             name = rule.get('name')
             if not name:
+                self.mark_skipped(rule, "entry has no name attribute")
                 continue
 
-            rule_obj = {
+            rule_obj = self.mark(rule, {
                 'name': name,
                 'uuid': rule.get('uuid'),
                 # F2.9: the device group scopes the v2 resource and its
@@ -942,7 +992,7 @@ class PanoramaParser:
                 # log_fail attributes
                 'log_start': self._get_text(rule, 'log-start') == 'yes',
                 'log_end': self._get_text(rule, 'log-end') == 'yes',
-            }
+            })
 
             # Determine type
             type_elem = rule.find('type')
@@ -969,9 +1019,10 @@ class PanoramaParser:
         for rule in self.root.findall(".//pbf/rules/entry"):
             name = rule.get('name')
             if not name:
+                self.mark_skipped(rule, "entry has no name attribute")
                 continue
 
-            rule_obj = {
+            rule_obj = self.mark(rule, {
                 'name': name,
                 'uuid': rule.get('uuid'),
                 # F2.9: the device group scopes the v2 resource and its
@@ -988,7 +1039,7 @@ class PanoramaParser:
                 # F2.9: optional rule schedule name
                 'schedule': self._get_text(rule, 'schedule'),
                 'action': None
-            }
+            })
 
             # Get source zones
             from_elem = rule.find('from')
@@ -1064,9 +1115,10 @@ class PanoramaParser:
         for rule in self.root.findall(".//application-override/rules/entry"):
             name = rule.get('name')
             if not name:
+                self.mark_skipped(rule, "entry has no name attribute")
                 continue
 
-            rule_obj = {
+            rule_obj = self.mark(rule, {
                 'name': name,
                 **self.identity_of(rule),
                 'description': self._get_text(rule, 'description'),
@@ -1078,7 +1130,7 @@ class PanoramaParser:
                 'port': self._get_text(rule, 'port'),
                 'protocol': self._get_text(rule, 'protocol'),
                 'application': self._get_text(rule, 'application')
-            }
+            })
 
             rules.append(rule_obj)
 
@@ -1097,6 +1149,7 @@ class PanoramaParser:
         for zone in self.root.findall(".//zone/entry"):
             name = zone.get('name')
             if not name:
+                self.mark_skipped(zone, "entry has no name attribute")
                 continue
 
             # Determine zone type
@@ -1119,13 +1172,13 @@ class PanoramaParser:
             # Get zone protection profile
             zone_profile = zone.find('.//zone-protection-profile')
 
-            zones.append({
+            zones.append(self.mark(zone, {
                 'name': name,
                 **self.identity_of(zone),
                 'type': zone_type,
                 'interfaces': interfaces,
                 'zone_protection_profile': zone_profile.text if zone_profile is not None else None
-            })
+            }))
 
         return zones
 
@@ -1136,9 +1189,10 @@ class PanoramaParser:
         for iface in self.root.findall(".//network/interface/ethernet/entry"):
             name = iface.get('name')
             if not name:
+                self.mark_skipped(iface, "entry has no name attribute")
                 continue
 
-            iface_obj = {
+            iface_obj = self.mark(iface, {
                 'name': name,
                 'type': 'ethernet',
                 **self.identity_of(iface),
@@ -1150,7 +1204,7 @@ class PanoramaParser:
                 'management_profile': None,
                 'comment': self._get_text(iface, 'comment'),
                 'parent': None
-            }
+            })
 
             # Determine mode (layer3, layer2, virtual-wire, tap, ha, aggregate-group)
             if iface.find('layer3') is not None:
@@ -1192,8 +1246,9 @@ class PanoramaParser:
             for unit in iface.findall('units/entry'):
                 unit_name = unit.get('name')
                 if not unit_name:
+                    self.mark_skipped(unit, 'unit entry has no name')
                     continue
-                sub = {
+                sub = self.mark(unit, {
                     'name': f'{name}.{unit_name}',
                     'type': 'ethernet-subinterface',
                     **self.identity_of(unit),
@@ -1208,7 +1263,7 @@ class PanoramaParser:
                     'comment': self._get_text(unit, 'comment'),
                     'tag': unit_name,
                     'parent': name,
-                }
+                })
                 interfaces.append(sub)
 
         # Virtual-wire interface units. PAN-OS keeps them in a separate
@@ -1217,8 +1272,9 @@ class PanoramaParser:
         for iface in self.root.findall(".//network/interface/virtual-wire/units/entry"):
             name = iface.get('name')
             if not name:
+                self.mark_skipped(iface, "entry has no name attribute")
                 continue
-            iface_obj = {
+            iface_obj = self.mark(iface, {
                 'name': name,
                 'type': 'ethernet',
                 **self.identity_of(iface),
@@ -1230,7 +1286,7 @@ class PanoramaParser:
                 'management_profile': None,
                 'comment': self._get_text(iface, 'comment'),
                 'parent': name.split('.')[0] if '.' in name else None,
-            }
+            })
             interfaces.append(iface_obj)
 
         # VLAN interfaces
@@ -1240,9 +1296,10 @@ class PanoramaParser:
             # not collide with a loopback/tunnel unit of the same number.
             full_name = f'vlan.{name}'
             if not name:
+                self.mark_skipped(iface, "entry has no name attribute")
                 continue
 
-            iface_obj = {
+            iface_obj = self.mark(iface, {
                 'name': full_name,
                 'type': 'vlan',
                 **self.identity_of(iface),
@@ -1255,7 +1312,7 @@ class PanoramaParser:
                 'comment': self._get_text(iface, 'comment'),
                 'tag': self._get_text(iface, 'tag'),
                 'parent': None
-            }
+            })
 
             # Get IP addresses
             for ip in iface.findall('.//ip/entry'):
@@ -1283,9 +1340,10 @@ class PanoramaParser:
             # does not collide with a vlan/tunnel unit of the same number.
             full_name = f'loopback.{name}'
             if not name:
+                self.mark_skipped(iface, "entry has no name attribute")
                 continue
 
-            iface_obj = {
+            iface_obj = self.mark(iface, {
                 'name': full_name,
                 'type': 'loopback',
                 **self.identity_of(iface),
@@ -1297,7 +1355,7 @@ class PanoramaParser:
                 'management_profile': None,
                 'comment': self._get_text(iface, 'comment'),
                 'parent': None
-            }
+            })
 
             # Get IP addresses
             for ip in iface.findall('.//ip/entry'):
@@ -1320,9 +1378,10 @@ class PanoramaParser:
             # does not collide with a vlan/loopback unit of the same number.
             full_name = f'tunnel.{name}'
             if not name:
+                self.mark_skipped(iface, "entry has no name attribute")
                 continue
 
-            iface_obj = {
+            iface_obj = self.mark(iface, {
                 'name': full_name,
                 'type': 'tunnel',
                 **self.identity_of(iface),
@@ -1334,7 +1393,7 @@ class PanoramaParser:
                 'management_profile': None,
                 'comment': self._get_text(iface, 'comment'),
                 'parent': None
-            }
+            })
 
             # Get IP addresses
             for ip in iface.findall('.//ip/entry'):
@@ -1359,9 +1418,10 @@ class PanoramaParser:
         for iface in self.root.findall(".//network/interface/aggregate-ethernet/entry"):
             name = iface.get('name')
             if not name:
+                self.mark_skipped(iface, "entry has no name attribute")
                 continue
 
-            iface_obj = {
+            iface_obj = self.mark(iface, {
                 'name': name,
                 'type': 'aggregate',
                 **self.identity_of(iface),
@@ -1377,7 +1437,7 @@ class PanoramaParser:
                 # unit number is the tag.
                 'parent': name.split('.')[0] if '.' in name else None,
                 'tag': name.split('.')[1] if '.' in name else None
-            }
+            })
             units = []
 
             # Determine mode
@@ -1403,7 +1463,7 @@ class PanoramaParser:
                     unit_name = unit.get('name')
                     if unit_name:
 
-                        unit_obj = {
+                        unit_obj = self.mark(unit, {
                             'name': unit_name,
                             'type': 'aggregate-subinterface',
                             **self.identity_of(unit),
@@ -1416,7 +1476,7 @@ class PanoramaParser:
                             'comment': self._get_text(unit, 'comment'),
                             'tag': self._get_text(unit, 'tag'),
                             'parent': name
-                        }
+                        })
 
                         # Get IP addresses
                         for ip in unit.findall('.//ip/entry'):
@@ -1454,13 +1514,13 @@ class PanoramaParser:
             route_name = route.get('name')
             if not route_name:
                 continue
-            static_routes.append({
+            static_routes.append(self.mark(route, {
                 'name': route_name,
                 'destination': self._get_text(route, 'destination'),
                 'nexthop_ip': self._get_text(route, 'nexthop/ip-address'),
                 'nexthop_interface': self._get_text(route, f'nexthop/{next_hop_tag}'),
                 'metric': self._get_text(route, 'metric'),
-            })
+            }))
         return {
             'name': router.get('name'),
             **self.identity_of(router),
@@ -1492,7 +1552,7 @@ class PanoramaParser:
         for elem in self.root.findall(f'.//network/{container_tag}/entry'):
             if not elem.get('name'):
                 continue
-            obj = self._parse_router(elem, next_hop_tag)
+            obj = self.mark(elem, self._parse_router(elem, next_hop_tag))
             if router_type:
                 obj['router_type'] = router_type
             routers.append(obj)
@@ -1528,73 +1588,79 @@ class PanoramaParser:
         for prof in self.root.findall(".//profiles/virus/entry"):
             name = prof.get('name')
             if not name:
+                self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles['antivirus'].append({
+            profiles['antivirus'].append(self.mark(prof, {
                 'name': name,
                 **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
-            })
+            }))
 
         # Vulnerability profiles
         for prof in self.root.findall(".//profiles/vulnerability/entry"):
             name = prof.get('name')
             if not name:
+                self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles['vulnerability'].append({
+            profiles['vulnerability'].append(self.mark(prof, {
                 'name': name,
                 **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
-            })
+            }))
 
         # Anti-spyware profiles
         for prof in self.root.findall(".//profiles/spyware/entry"):
             name = prof.get('name')
             if not name:
+                self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles['anti_spyware'].append({
+            profiles['anti_spyware'].append(self.mark(prof, {
                 'name': name,
                 **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
-            })
+            }))
 
         # URL filtering profiles
         for prof in self.root.findall(".//profiles/url-filtering/entry"):
             name = prof.get('name')
             if not name:
+                self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles['url_filtering'].append({
+            profiles['url_filtering'].append(self.mark(prof, {
                 'name': name,
                 **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
-            })
+            }))
 
         # File blocking profiles
         for prof in self.root.findall(".//profiles/file-blocking/entry"):
             name = prof.get('name')
             if not name:
+                self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles['file_blocking'].append({
+            profiles['file_blocking'].append(self.mark(prof, {
                 'name': name,
                 **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
-            })
+            }))
 
         # WildFire analysis profiles
         for prof in self.root.findall(".//profiles/wildfire-analysis/entry"):
             name = prof.get('name')
             if not name:
+                self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles['wildfire_analysis'].append({
+            profiles['wildfire_analysis'].append(self.mark(prof, {
                 'name': name,
                 **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
-            })
+            }))
 
         return profiles
 
@@ -1609,9 +1675,10 @@ class PanoramaParser:
         for grp in self.root.findall(".//profile-group/entry"):
             name = grp.get('name')
             if not name:
+                self.mark_skipped(grp, "entry has no name attribute")
                 continue
 
-            groups.append({
+            groups.append(self.mark(grp, {
                 'name': name,
                 **self.identity_of(grp),
                 'virus': self._get_members(grp, 'virus'),
@@ -1620,7 +1687,7 @@ class PanoramaParser:
                 'url_filtering': self._get_members(grp, 'url-filtering'),
                 'file_blocking': self._get_members(grp, 'file-blocking'),
                 'wildfire_analysis': self._get_members(grp, 'wildfire-analysis')
-            })
+            }))
 
         return groups
 
@@ -1635,13 +1702,14 @@ class PanoramaParser:
         for prof in self.root.findall(".//zone-protection-profile/entry"):
             name = prof.get('name')
             if not name:
+                self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles.append({
+            profiles.append(self.mark(prof, {
                 'name': name,
                 **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
-            })
+            }))
 
         return profiles
 
@@ -1656,13 +1724,14 @@ class PanoramaParser:
         for prof in self.root.findall(".//log-settings/profiles/entry"):
             name = prof.get('name')
             if not name:
+                self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles.append({
+            profiles.append(self.mark(prof, {
                 'name': name,
                 **self.identity_of(prof),
                 'description': self._get_text(prof, 'description')
-            })
+            }))
 
         return profiles
 
@@ -1677,13 +1746,14 @@ class PanoramaParser:
         for prof in self.root.findall(".//qos/profile/entry"):
             name = prof.get('name')
             if not name:
+                self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            prof_obj = {
+            prof_obj = self.mark(prof, {
                 'name': name,
                 **self.identity_of(prof),
                 'class_bandwidth_type': {}
-            }
+            })
 
             # Parse class bandwidth settings
             for cls in prof.findall('.//class/entry'):
@@ -1718,13 +1788,13 @@ class PanoramaParser:
                 if not name:
                     continue
 
-                profiles.append({
+                profiles.append(self.mark(prof, {
                     'name': name,
                     **self.identity_of(prof),
                     'interval': self._get_text(prof, 'interval'),
                     'threshold': self._get_text(prof, 'threshold'),
                     'action': self._get_text(prof, 'action')
-                })
+                }))
 
         return profiles
 
@@ -1748,16 +1818,17 @@ class PanoramaParser:
         for prof in self.root.findall(".//network/profiles/monitor-profile/entry"):
             name = prof.get('name')
             if not name:
+                self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles.append({
+            profiles.append(self.mark(prof, {
                 'name': name,
                 **self.identity_of(prof),
                 # v2 action is an enum: wait-recover | fail-over
                 'action': self._get_text(prof, 'action'),
                 'interval': self._get_text(prof, 'interval'),
                 'threshold': self._get_text(prof, 'threshold')
-            })
+            }))
 
         return profiles
 
@@ -1796,19 +1867,19 @@ class PanoramaParser:
                     for pg in bgp.findall('.//peer-group/entry'):
                         pg_name = pg.get('name')
                         if pg_name:
-                            peer_group = {
+                            peer_group = self.mark(pg, {
                                 'name': pg_name,
                                 'type': self._get_text(pg, 'type'),
                                 'export_nexthop': self._get_text(pg, 'export-nexthop'),
                                 'import_nexthop': self._get_text(pg, 'import-nexthop')
-                            }
+                            })
                             bgp_config['peer_groups'].append(peer_group)
 
                     # BGP Peers
                     for peer in bgp.findall('.//peer/entry'):
                         peer_name = peer.get('name')
                         if peer_name:
-                            peer_config = {
+                            peer_config = self.mark(peer, {
                                 'name': peer_name,
                                 'peer_as': self._get_text(peer, 'peer-as'),
                                 'local_address_interface': self._get_text(peer, 'local-address/interface'),
@@ -1816,18 +1887,18 @@ class PanoramaParser:
                                 'peer_address_ip': self._get_text(peer, 'peer-address/ip'),
                                 'enable': self._get_text(peer, 'enable') == 'yes',
                                 'peer_group': self._get_text(peer, 'peer-group')
-                            }
+                            })
                             bgp_config['peers'].append(peer_config)
 
                     # Redistribution rules
                     for redist in bgp.findall('.//redist-rules/entry'):
                         rule_name = redist.get('name')
                         if rule_name:
-                            redist_rule = {
+                            redist_rule = self.mark(redist, {
                                 'name': rule_name,
                                 'enable': self._get_text(redist, 'enable') == 'yes',
                                 'address_family': self._get_text(redist, 'address-family-identifier')
-                            }
+                            })
                             bgp_config['redistribution_rules'].append(redist_rule)
 
         return bgp_config if bgp_config['enabled'] else None
@@ -1860,10 +1931,10 @@ class PanoramaParser:
                     for area in ospf.findall('.//area/entry'):
                         area_id = area.get('name')
                         if area_id:
-                            area_config = {
+                            area_config = self.mark(area, {
                                 'area_id': area_id,
                                 'type': 'normal'
-                            }
+                            })
 
                             # Check for stub/nssa
                             if area.find('type/stub') is not None:
@@ -1876,6 +1947,10 @@ class PanoramaParser:
                             for range_entry in area.findall('.//range/entry'):
                                 range_name = range_entry.get('name')
                                 if range_name:
+                                    # F4.3: the range entry is a name reference, so the
+                                    # parent row records it through the field it fills.
+                                    self.mark(range_entry, {'name': range_name},
+                                              'name reference in field ranges')
                                     ranges.append(range_name)
                             area_config['ranges'] = ranges
 
@@ -1903,9 +1978,10 @@ class PanoramaParser:
         for tunnel in self.root.findall(".//network/tunnel/ipsec/entry"):
             name = tunnel.get('name')
             if not name:
+                self.mark_skipped(tunnel, "entry has no name attribute")
                 continue
 
-            tunnel_config = {
+            tunnel_config = self.mark(tunnel, {
                 'name': name,
                 **self.identity_of(tunnel),
                 'tunnel_interface': self._get_text(tunnel, 'tunnel-interface'),
@@ -1916,7 +1992,7 @@ class PanoramaParser:
                 'preshared_key': None,
                 'ike_gateway': None,
                 'ipsec_crypto_profile': None
-            }
+            })
 
             # Check for auto-key (most common)
             auto_key = tunnel.find('auto-key')
@@ -1942,12 +2018,12 @@ class PanoramaParser:
                 for proxy in auto_key.findall('.//proxy-id/entry'):
                     proxy_name = proxy.get('name')
                     if proxy_name:
-                        proxy_config = {
+                        proxy_config = self.mark(proxy, {
                             'name': proxy_name,
                             'local': self._get_text(proxy, 'local'),
                             'remote': self._get_text(proxy, 'remote'),
                             'protocol': self._get_text(proxy, 'protocol/number')
-                        }
+                        })
                         proxy_ids.append(proxy_config)
                 tunnel_config['proxy_ids'] = proxy_ids
 
@@ -1967,9 +2043,10 @@ class PanoramaParser:
         for gw in self.root.findall(".//network/ike/gateway/entry"):
             name = gw.get('name')
             if not name:
+                self.mark_skipped(gw, "entry has no name attribute")
                 continue
 
-            gateway_config = {
+            gateway_config = self.mark(gw, {
                 'name': name,
                 **self.identity_of(gw),
                 'version': 'ikev1',  # Default
@@ -1980,7 +2057,7 @@ class PanoramaParser:
                 'ike_crypto_profile': None,
                 'local_id': None,
                 'peer_id': None
-            }
+            })
 
             # Version
             protocol = gw.find('protocol')
@@ -2045,16 +2122,17 @@ class PanoramaParser:
         for profile in self.root.findall(".//network/ike/crypto-profiles/ike-crypto-profiles/entry"):
             name = profile.get('name')
             if not name:
+                self.mark_skipped(profile, "entry has no name attribute")
                 continue
 
-            profile_config = {
+            profile_config = self.mark(profile, {
                 'name': name,
                 **self.identity_of(profile),
                 'dh_groups': self._get_members(profile, 'dh-group'),
                 'authentications': self._get_members(profile, 'authentication'),
                 'encryptions': self._get_members(profile, 'encryption'),
                 'lifetime_hours': self._get_text(profile, 'lifetime/hours')
-            }
+            })
 
             profiles.append(profile_config)
 
@@ -2067,9 +2145,10 @@ class PanoramaParser:
         for profile in self.root.findall(".//network/ike/crypto-profiles/ipsec-crypto-profiles/entry"):
             name = profile.get('name')
             if not name:
+                self.mark_skipped(profile, "entry has no name attribute")
                 continue
 
-            profile_config = {
+            profile_config = self.mark(profile, {
                 'name': name,
                 **self.identity_of(profile),
                 'protocol': 'esp',  # Default
@@ -2078,7 +2157,7 @@ class PanoramaParser:
                 'dh_group': self._get_text(profile, 'dh-group'),
                 'lifetime_hours': self._get_text(profile, 'lifetime/hours'),
                 'lifetime_kb': self._get_text(profile, 'lifetime/kilobytes')
-            }
+            })
 
             # Check if AH is used instead of ESP
             if profile.find('ah') is not None:
@@ -4393,6 +4472,47 @@ variable "panos_password" {
         with open(self.output_dir / 'MANUAL_SETUP_REPORT.txt', 'w') as f:
             f.write('\n'.join(lines) + '\n')
 
+    def generate_conversion_report(self, ledger) -> str:
+        """Generate CONVERSION_REPORT.txt for the entries the parse read (F4.3).
+
+        One line per report row, grouped by the F3.9 scope rule so a reader can
+        tell two same-named entries on two device groups apart. The report names
+        the input file name only, never the path (F4.2 rule 6).
+
+        Returns '' when the input has no report rows, and writes no file in that
+        case (F4.3 AC-9): a run that read no entry has nothing to report.
+        """
+        rows = ledger.rows()
+        if not rows:
+            return ''
+
+        lines = ['=' * 80, entry_coverage.REPORT_HEADING, '=' * 80, '',
+                 f'Input file: {ledger.source.name}', '', entry_coverage.RULE_PARAGRAPH, '']
+        lines.extend(entry_coverage.summary_lines(ledger))
+
+        gaps = ledger.gaps()
+        if gaps:
+            lines.extend(['', f'--- {entry_coverage.GAP_HEADING} ---', entry_coverage.GAP_RULE])
+            for path, group in self._group_by_scope(gaps):
+                lines.append(self._report_section_header(path))
+                for row in group:
+                    lines.append(entry_coverage.entry_line(row))
+
+        lines.extend(['', 'Entry lines are grouped by the scope the export declares (F3.9).',
+                      '  line <source line>  <object type>/<entry name>  <destination>  '
+                      '<detail>  captured: <fields>', ''])
+        for path, group in self._group_by_scope(rows):
+            lines.append('=' * 80)
+            lines.append(self._report_section_header(path))
+            lines.append('=' * 80)
+            for row in group:
+                lines.append(entry_coverage.entry_line(row))
+
+        content = '\n'.join(lines) + '\n'
+        with open(self.output_dir / entry_coverage.REPORT_FILE, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return content
+
     def generate_vpn_config(self, ike_gateways: list[dict], ipsec_tunnels: list[dict],
                            ike_profiles: list[dict], ipsec_profiles: list[dict]):
         """Generate VPN Terraform configuration (v2 resource shapes)
@@ -5073,9 +5193,16 @@ def main():
         tf_gen.generate_interface_report(interfaces)
         tf_gen.generate_readme()
 
+        # F4.3: one line per entry the parse pipeline read. A gap is an operator
+        # action, not a broken output, so it does not change the exit code (the
+        # F4.1 gate does).
+        tf_gen.generate_conversion_report(panorama.ledger)
+
         print("\n✓ Successfully generated Terraform configuration!")
         print("\n📄 Generated Migration Reports:")
         print("  - INTERFACE_MIGRATION_REPORT.txt (Interface and IP inventory)")
+        if panorama.ledger.rows():
+            print("  - CONVERSION_REPORT.txt (one line per entry the parser read)")
         if ike_gateways or ipsec_tunnels:
             print("  - VPN_MIGRATION_REPORT.txt ⚠️  (VPN config with key management instructions)")
 
@@ -5085,6 +5212,18 @@ def main():
             print(f"\n⚠️  Entry Coverage: {len(coverage_findings)} container(s) the parser does not read")
             for finding in coverage_findings:
                 print(container_coverage.console_line(finding))
+
+        # F4.3: entry totals, then one console line per gap entry. A gap is an
+        # operator action, not a broken output, so it does not change the exit
+        # code (the F4.1 gate does). No console line when the run has no gap.
+        gap_console = entry_coverage.console_lines(panorama.ledger, tf_gen._report_scope_path)
+        if gap_console:
+            print()
+            for line in entry_coverage.summary_lines(panorama.ledger):
+                print(line)
+            for line in gap_console:
+                print(line)
+            print(f"Per-entry report file: {Path(args.output_dir) / entry_coverage.REPORT_FILE}")
 
         # F4.1: the gate reads the files that were written, so it reports what
         # the operator receives. A WARN does not fail the gate; a FAIL does.

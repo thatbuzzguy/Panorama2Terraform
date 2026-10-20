@@ -77,8 +77,7 @@ v2 resource).
 
 ### 2.4 Where each parsed entry goes
 
-Four destinations. Every entry lands in one of them, except the one gap listed
-below.
+Eight destinations. Every entry lands in one of them.
 
 | Destination | What it means |
 |---|---|
@@ -87,7 +86,7 @@ below.
 | Inventory comment | `security_profiles.tf`: names and descriptions only, with the resource name the emitter would use |
 | Count only | `parse_regions`: the console count uses the objects, and nothing else does |
 
-The container table in §3.1 adds two kinds for what a parse method reads but
+The container table in §3.1 adds three kinds for what a parse method reads but
 does not turn into an entry of its own:
 
 | Kind | What it means |
@@ -95,9 +94,18 @@ does not turn into an entry of its own:
 | Bookkeeping | an association table or a scope fact (§2.2), and a sub-shape that only selects a shape |
 | Nested block | lines written inside a parent resource block, not a resource of its own |
 
-The first table row is a known gap. It is recorded in `backlog.md`. The F4.3
-per-entry report will surface it; the document does not claim that every entry
-is accounted for today.
+The per-entry report (§3.2) adds two kinds for a single entry, because a
+container row cannot state a per-entry fact:
+
+| Kind | What it means |
+|---|---|
+| Skipped | a parse method visited the entry and did not model it: no name, or an `id` reference pointer |
+| Unaccounted | no parse method read the entry, so no table row covers its container |
+
+The `count-only` row is the destination the converter cannot model today. It is
+recorded in `backlog.md`. The F4.3 per-entry report lists it as a gap, so the
+operator sees which entry it is instead of the document claiming every entry is
+accounted for.
 
 ## 3. Parse pipeline
 
@@ -126,7 +134,13 @@ is accounted for today.
    object per entry. Design rule enforced by construction: one path per element
    kind, so no entry is visited twice. The multi-path methods read disjoint
    element kinds (6 interface kinds, 6 profile categories, the two tunnel
-   monitor paths). F4.3 will pin this rule directly with the per-entry report.
+   monitor paths).
+   Each parse method also marks the entries it reads (F4.3): `self.mark(entry,
+   captured)` at the point it builds the object, and `self.mark_skipped(entry,
+   reason)` for an entry it visits and does not model. The mark stores the object
+   by reference, so a field added after the mark is still reported. Pinned by
+   `tests/test_entry_coverage.py::test_every_parse_method_that_reads_entries_marks_them`
+   and `::test_corpus_entries_in_a_covered_container_are_all_marked`.
 5. **Splitter (optional).** `split_device_groups.py` joins a device group, a
    template and a template stack on the devices they list, and copies each entry
    with `copy.deepcopy`, because ElementTree `append` does not reparent: it makes
@@ -160,6 +174,42 @@ The parse records the opening line of every element
 (`xml_input.ParsedSource.line_of`), so a finding names the line the container was
 defined on. A finding is an operator action, not a broken output: it does not
 change the exit code, which the F4.1 gate still decides (§4.6).
+
+### 3.2 Per-entry report
+
+§3.1 covers the container. F4.3 covers the entry: `CONVERSION_REPORT.txt` prints
+one line per config entry the parse pipeline read, in this order:
+
+```text
+  line <source line>  <object type>/<entry name>  <destination>  <detail>  captured: <fields>
+```
+
+Four rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
+
+- **One entry is one report row**, at section level only. An entry inside a
+  config-object entry is a property level (§3.1), so F4.4 covers it and the
+  parent row shows the count instead. Entries under `predefined` are not rows; the
+  header gives the count.
+- **Object type is the F4.2 `section_path`** of the entry's container. No second
+  naming rule.
+- **Destination comes from the table row that covers the container**, longest
+  matching row wins, so a sub-shape row beats the general row for its container.
+  A per-entry mark overrides the row when the method knows better: `report_only`
+  content is `report`, and a skipped entry is `skipped`. A scope entry is
+  `bookkeeping`: it defines a scope, so it is not an object inside one.
+- **Captured fields** are the keys of the object the method built, minus the entry
+  name and the four scope facts (§2.2), minus keys with no value, in sorted order.
+  An entry with nothing but its name says `captured: name only`. A field the
+  method stored inside a type sub-shape is reported under the object key, not the
+  XML tag.
+
+Rows are grouped with the F3.9 scope rule (`_report_scope_path`), the same rule
+the interface and manual reports use, so the same name in two device groups is two
+sections. The report names the input file name, never the path (§4.4), and two
+runs on the same input write the same bytes. The gap section lists every row whose
+destination writes nothing. A gap is an operator action, so it does not change the
+exit code, which the F4.1 gate still decides (§4.6). A run with no entries writes
+no report file, and a run with no gaps prints no extra console line.
 
 ## 4. Emit pipeline
 

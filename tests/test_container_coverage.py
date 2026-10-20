@@ -106,7 +106,7 @@ def test_every_row_path_is_read_by_its_method(converter_module):
 
 
 def test_destination_kinds_are_the_documented_set():
-    """A row uses one of the five destinations and one of the two read vias."""
+    """A row uses one of the eight destinations and one of the two read vias."""
     for row in container_coverage.CONTAINER_TABLE:
         assert row.destination in container_coverage.DESTINATION_KINDS, row
         assert row.read_via in container_coverage.READ_VIAS, row

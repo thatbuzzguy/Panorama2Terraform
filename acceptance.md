@@ -1,105 +1,135 @@
-# Acceptance Criteria — F4.2 Entry Coverage (Parse Side)
+# Acceptance Criteria — F4.3 Per-Entry Conversion Report
 
-Scope: F4.2 only. The parse side records each entry's source position and the
-container table moves from `docs/ARCHITECTURE.md` §3.1 into code. A container
-the parser does not read is reported instead of skipped.
+Scope: F4.3 only. The parse side records which entries each parse method read
+and what it captured from each entry. `CONVERSION_REPORT.txt` states one line
+per entry: source line, object type, entry name, destination, and captured
+fields. An entry that produced no output is reported as a gap.
 
 Out of scope for this task (tracked in PLAN.md Epic 4 and backlog.md):
-- F4.3 field coverage, `tests/COVERAGE.md`, per-object field reports.
-- F4.4 property-level coverage, `EMITTED_TYPES` reconciliation.
-- `MANUAL_SETUP_REPORT.txt` section redesign and report determinism beyond the
-  new section (F4.3).
-- `resource_name_map` and name dedup (F4.4).
-- F4.1 gate severity: a coverage gap is an operator action, so this task adds
-  no FAIL finding and changes no F4.1 exit code.
+- F4.4 property-level coverage: the property matrix per emitter, the
+  `EMITTED_TYPES` reconciliation, `resource_name_map`, `tests/COVERAGE.md`.
+- Property entries inside a config-object entry: F4.2 AC-3.2 assigns them to
+  F4.4, so this task counts them on the parent row instead of listing them.
+- Field-by-field extraction gaps (application filter `description`, schedule
+  `description`, service `disable-override`, NAT `service` member form): F4.4
+  owns the field matrix. This task reports the entry-level result only.
+- Gate severity: a coverage gap is an operator action, so this task adds no
+  FAIL finding and changes no F4.1 exit code.
+- Report redesign for the existing reports (F3.9 layout stays as it is).
 
 ---
 
-## AC-1 — The parse records the source line of every element
+## AC-1 — Every parse method marks the entries it reads
 
-1. `xml_input.parse_xml(path, max_input_bytes)` returns a `ParsedSource` with:
-   `name` (file name, no absolute path), `root`, and `line_of(element)`.
-2. `line_of(element)` returns the 1-based line of that element's **opening
-   tag** in the source text.
-3. The read still happens once, under the F3.8 size cap and the parser-level
-   DTD refusal. No bytes are read before both checks pass. The F3.8 tests in
-   `tests/test_safe_input.py` stay green and unchanged.
-4. A parse error is still raised as `xml.etree.ElementTree.ParseError`, so the
-   F3.8 error contract (the shared catch in both entry points) is unchanged.
-5. The tree is equivalent to `ET.fromstring` for the pinned shapes: tag,
-   `name` attribute, child order, comments, and namespaced tags. Namespace
-   prefixes map to the `{uri}tag` form ElementTree produces.
-6. The line map covers the tree that was parsed. An element copied out of it
-   (the device-group splitter builds new trees) is not in the map, and the
-   module states that.
-7. A line number is the line in the source file, so it matches the text the
-   operator can open. A UTF-16 input is pinned: the BOM is not a line.
+1. `entry_coverage.EntryLedger` holds one mark per entry a parse method read,
+   keyed by the element. The ledger is built on the parsed source, so it uses
+   the same line map F4.2 added.
+2. `PanoramaParser.mark(entry, captured, detail='', destination=None)` records
+   the entry and returns the captured object, so a parse method marks at the
+   point it builds the object.
+3. `PanoramaParser.mark_skipped(entry, reason)` records an entry a parse method
+   visited and chose not to model.
+4. The mark stores the object by reference. Fields a method adds after the mark
+   are recorded, because the report is built after the parse finishes.
+5. Every parse method that reads config-object entries marks each entry it
+   visits. A parse method that reads entries without marking them fails the
+   gate. Pinned by a test that reads each parse method's source (following the
+   helper calls it makes) and by a test that runs the parse methods over the
+   corpus.
 
-## AC-2 — The container table lives in code, one row per parse method
+## AC-2 — One entry is one report row
 
-1. `container_coverage.CONTAINER_TABLE` is the single source of truth for the
-   parse side. Each row holds: parse method, container path, destination kind,
-   note.
-2. Destination kinds are the five in the code: `emitted`, `report`,
-   `inventory`, `count-only`, `bookkeeping`. `docs/ARCHITECTURE.md` §2.4 and
-   §3.1 point at the code instead of restating the rows.
-3. Every parse method (`PanoramaParser.parse_*`) has at least one row.
-4. Every row names a parse method that exists in `PanoramaParser`.
-5. Every row's path is a pattern that method actually reads, checked against
-   the method's source AST (`find` / `findall` patterns). An orphan row fails.
-6. The table is pinned by tests, so a new parse method without a row fails the
-   gate.
+1. One entry is one `<entry name>` element — the logical entry, not the physical
+   lines it spans. The reported line is the entry's opening tag
+   (`ParsedSource.line_of`).
+2. Object type is the entry's container path from the config root, which is the
+   F4.2 `section_path` rule. No second naming rule.
+3. Destination is the destination kind of the container table row that covers
+   the container. The longest matching row wins, so a sub-shape row beats a
+   general row.
+4. A per-entry destination wins over the row when the parse method knows
+   better: `report_only` content is `report`, and a skipped entry is `skipped`.
+5. An entry inside a config-object entry is a property level (F4.2 AC-3.2). It
+   is not a report row; the parent row shows the count of property entries.
+6. Entries under `predefined` are not report rows (F4.2 rule). The header gives
+   the count so the report does not look incomplete.
+7. A scope entry (an entry whose container is one of `SCOPE_CONTAINERS`) is
+   `bookkeeping`: it defines a scope, so it is not an object inside one. The
+   `parse_device_groups` row is `bookkeeping` for the same reason: a device
+   group name reaches the output through `location`, not as a resource.
+8. Two destination kinds are added for an entry: `skipped` and `unaccounted`.
+   The documented set is now eight, and one test pins it.
 
-## AC-3 — The entry-container rule is stated once and pinned
+## AC-3 — Captured fields
 
-1. A container is a **section** when no config-object entry lies between it and
-   the config root or a scope entry. The scope containers are `device-group`,
-   `templates`, `template-stack`, `devices`, `vsys` — the same set the four
-   scope facts walk (F3.5).
-2. A container inside a config-object entry is a property level, not a section.
-   It is not reported here; F4.4 covers it.
-3. The rule is in `container_coverage.py`. The tests call the module functions
-   instead of restating the rule.
-4. Matching is by suffix on the tag chain from the config root, so a section
-   found through the corpus layout (`pre-rulebase/security/rules`) matches the
-   table row (`security/rules`).
+1. Captured fields are the keys of the object the parse method built from the
+   entry, minus the entry name and the four scope facts (F3.1, F3.2).
+2. A key with no value is not a captured field: the report shows what the parser
+   actually took.
+3. A field captured inside a type sub-shape is reported under the object key the
+   parser stored it in (`fields`), not under the XML tag.
+4. The report names the captured fields in sorted order. An entry with nothing
+   but its name says `captured: name only`.
+5. A captured field that reached no output is a gap. The gap rule: a destination
+   kind that writes nothing (`count-only`, `skipped`, `unaccounted`).
 
-## AC-4 — An unknown container is reported, not skipped
+## AC-4 — `CONVERSION_REPORT.txt`
 
-1. A section container with no table row produces one finding: tag chain from
-   the config root, opening line, entry count.
-2. A known container that is absent from the input is not a finding. An absent
-   section is not a gap.
-3. A known container present with no entries is not a finding, so the corpus
-   stays quiet for empty sections.
-4. Findings are sorted by tag chain, then line. Two runs on the same input
-   write the same bytes. The report section names the input file name, never an
-   absolute path.
-5. The section is written in `MANUAL_SETUP_REPORT.txt` and printed on the
-   console only when there is a finding. A run with no findings writes the same
-   bytes as before this feature.
-6. A finding does not change the conversion exit code (F4.1 sets it).
+1. One line per report row. Fields, in this order: source line, object type,
+   entry name, destination, detail, captured fields.
+2. Detail is the table row note, or the resource type for an emitted row. A mark
+   detail is appended when the parse method stated one.
+3. Rows are grouped by the F3.9 scope rule (`_report_scope_path`), so a section
+   names only the scope the export declares. Entries inside a section are in
+   file order (line, then object type, then name).
+4. The header states the rule, the input file name, the totals per destination
+   kind, and the property-entry and predefined counts.
+5. A gap section lists every row whose destination writes nothing, in the same
+   order as the entry sections.
+6. The report names the input file name, never the path.
+7. Two runs on the same input write the same bytes.
+8. The report is written on every run that has at least one report row. A run on
+   an input with no entries writes no report file.
+9. The console prints the entry totals and one line per gap when a run has gaps,
+   and prints nothing extra when it has none.
+10. A gap does not change the conversion exit code. The F4.1 gate still decides
+    the exit code.
 
 ## AC-5 — Tests pin the rules
 
-1. Line tracking: pinned line numbers on a fixture, a multi-line entry, a UTF-16
-   input, and the copied-element case.
-2. Table ↔ code parity in both directions (AC-2.3–AC-2.5).
-3. The section rule: a section and a property level on the same fixture.
-4. Unknown container: a fixture with unread sections, the finding fields, the
-   report bytes, and the console line.
-5. Corpus: every committed fixture and `sample_panorama_config.xml` produces no
-   finding, so the parse side is fully covered before F4.3 starts.
-6. The report is byte-identical between two runs of the same input.
+1. Mark mechanism: `mark` records and returns the object; a field added after
+   the mark is recorded; `mark_skipped` records the reason.
+2. Read-but-not-marked fails: a parse method that reads entries without marking
+   them fails the test; on the corpus, every config-object entry in a section
+   container is marked. A scope entry is not a config-object entry, so the rule
+   does not reach it.
+3. Destination rules: table row wins, per-entry override wins, scope entry is
+   bookkeeping, property entries are counted, `predefined` is excluded.
+4. Captured fields: sorted, value-only, scope facts excluded.
+5. The gap section: a fixture where an entry is read and nothing is written (the
+   `parse_regions` gap) plus an entry with no name.
+6. Report bytes: one line per row, header totals, file name only, byte-identical
+   between two runs.
+7. The conversion report uses the same grouping rule as the other two reports.
+8. The corpus: every committed fixture and `sample_panorama_config.xml` produces
+   no unaccounted config-object entry, except the fixture that tests a container
+   the table does not cover (`unknown_containers.xml`), where the report lists
+   those entries.
+9. No report file when the input has no entries. No console line when there is
+   no gap. Exit code 0 for a run with gaps.
 
 ## AC-6 — Gate stays green
 
 - `ruff check .` clean.
-- `pytest` passes (F3.6, F3.7, F3.8, F4.1 tests unchanged where possible).
+- `pytest` passes. The F4.2 tests change only where a criterion changed (the
+  destination-kind set and the `parse_device_groups` row).
 - Golden `.tf` output unchanged for every fixture.
 - `terraform validate` passes.
 - Exit codes unchanged: 0 for a clean run, 1 for a broken output or a refused
   input.
+- `docs/ARCHITECTURE.md` §2.4 lists the eight kinds and points at the ledger;
+  §3 states the entry-mark rule and names the test that pins it. README names
+  `CONVERSION_REPORT.txt` in its output list.
 
 ---
 
@@ -107,50 +137,72 @@ Out of scope for this task (tracked in PLAN.md Epic 4 and backlog.md):
 
 | Criterion | Current state | Action |
 |---|---|---|
-| AC-1 | `parse_xml` returns `ET.fromstring(read_input(path))`. No element has a line number; `ElementTree` does not record one. | Build the tree through expat handlers so the opening line is recorded while the same bytes are parsed once. |
-| AC-2 | The container table is prose in `docs/ARCHITECTURE.md` §3.1 (~40 rows). Nothing in code lists it, so no test can check it. | New `container_coverage.py` with `CONTAINER_TABLE` and the destination kinds. |
-| AC-3 | `findall('.//address/entry')` is the rule, stated in docs §3.1 only, with one exception (`parse_interfaces` virtual-wire). | State the rule in code; tests pin both halves. |
-| AC-4 | An unread container is skipped silently. The existing reports have no entry-container coverage. | Scan returns findings; the report gains a section; the console prints one line. |
-| AC-5 | No test covers entry-container coverage. `tests/test_coverage_matrix.py` covers `EMITTED_TYPES` only (F4.4 scope). | New `tests/test_container_coverage.py` and line-tracking tests in `tests/test_safe_input.py`. |
-| AC-6 | 170 tests pass, ruff clean, goldens and `terraform validate` green. | Must stay green. |
+| AC-1 | No per-entry record. `identity_of` is called per object by 31 parse methods, but a mark needs the entry and the object together, and skipped entries are never seen. | New `entry_coverage.py` with `EntryLedger`; `mark` / `mark_skipped` on the parser; mark at each parse method's entry read site. |
+| AC-2 | `container_coverage.CONTAINER_TABLE` has the destination per container, but nothing joins an entry to a row. | `covering_row` + `entry_destination` in the module; longest match. |
+| AC-2.7 | The `parse_device_groups` row is `count-only`, so every device group would read as a gap. | Change that row to `bookkeeping`. A device group is the scope, not an object inside one. |
+| AC-3 | Nothing records which fields a parse method took. | Captured fields come from the object the method built, at mark time. |
+| AC-4 | `MANUAL_SETUP_REPORT.txt` has a coverage section for containers (F4.2), but no per-entry report. | New `CONVERSION_REPORT.txt`, rendered by `TerraformGenerator.generate_conversion_report` so the F3.9 grouping rule is shared. |
+| AC-5 | 539 tests pass, ruff clean, goldens and `terraform validate` green. | Must stay green. |
 
-Corpus state measured before the change: every entry-container section in every
-committed fixture and `sample_panorama_config.xml` is read by a parse method, so
-the scan finds nothing on the existing corpus. The gaps recorded in
-`docs/ARCHITECTURE.md` §3.1 are property-level shapes inside a known container
-(schedule `time` ranges, EDL `recurring` values, QoS `class`, OSPF `area`
-fields), which AC-3.2 assigns to F4.4. A new fixture is needed to demonstrate a
-section the parser does not read.
+Corpus state measured before the change: every section container in every
+committed fixture is covered by a table row (F4.2 AC-5.5), so every
+config-object entry in a section container is read by a parse method. The
+corpus should therefore report no unaccounted entry after the marks land. The
+fixtures `unknown_containers.xml` (unaccounted entries), `regions.xml`
+(read, nothing written) and `robust_empty_names.xml` (entry with no name) are
+the corpus cases the report will show; `tests/fixtures/entry_gaps.xml` is the
+one fixture added to demonstrate the gap section in one file.
 
 ---
 
-## Result (2026-10-20) — F4.2 complete
+## Result (2026-10-20) — F4.3
 
-Two criteria changed during implementation, and the code states them:
+To be filled when the work is done.
 
-- AC-2.2 has **six** destination kinds. `nested-block` was added because a
-  virtual-wire, TAP, `ip` and `ipv6/address` shape writes lines inside a parent
-  resource block and has no resource type of its own. `docs/ARCHITECTURE.md` §2.4
-  lists both kinds.
-- AC-4 adds one rule the plan did not have: an entry container under `predefined`
-  is not a finding, because those entries are PAN-OS built-in definitions, not
-  operator objects. `container_coverage.is_predefined` states it.
+## Result (2026-10-20) — F4.3
 
-One F3.8 test changed, as AC-1.1 required: `test_parse_reads_the_file_once` now
-reads `parse_xml(...).root`. Every other F3.8 test is unchanged.
+- Implementation: `entry_coverage.py` (ledger, row rules, `entry_line`, report text,
+  console lines). `PanoramaParser.mark` / `mark_skipped`, the `ledger`, marks in
+  every parse method at the point it builds the object,
+  `TerraformGenerator.generate_conversion_report`, `main()` prints the entry totals
+  and one line per gap.
+- `container_coverage.DESTINATION_KINDS` gained `skipped` and `unaccounted`;
+  `SCOPE_FACT_KEYS` is now named so the captured-field rule uses it; the
+  `parse_device_groups` row is `bookkeeping` (the name reaches the output through
+  `location`).
+- Tests: `tests/test_entry_coverage.py` (26), in the five acceptance groups; new
+  fixture `tests/fixtures/entry_gaps.xml`.
+- Gate: ruff clean. pytest 470 passed. Both golden sets byte-identical. terraform
+  validate green on all four outputs. A gap does not change the exit code
+  (`test_a_gap_does_not_change_the_exit_code`).
+- Two test expectations changed for the criteria that moved: the destination-kind set
+  in `tests/test_container_coverage.py` (five to eight), and the
+  `parse_device_groups` row destination (`count-only` to `bookkeeping`).
+- Docs: `docs/ARCHITECTURE.md` §2.4 (eight destinations, the two per-entry kinds),
+  §3 step 4 (the mark rule), new §3.2 (the per-entry report rules). README output
+  list names `CONVERSION_REPORT.txt`.
+- Report line shape, verified on `tests/fixtures/kitchen_sink.xml`:
 
-Gate:
+  ```text
+  Per-entry report: 78 entries read
+    emitted        53
+    report         8
+    inventory      6
+    count-only     1  (writes nothing: gap)
+    bookkeeping    8
+    nested-block   0
+    skipped        2  (writes nothing: gap)
+    unaccounted    0  (writes nothing: gap)
+    line   21  address-group/Reference-Only  skipped  panos_address_group - reference pointer (id only)  captured: name only
+    line   26  address/Web-Server-1           emitted  panos_address                       captured: description, tags, type, value
+  ```
 
-- `ruff check .` clean.
-- `pytest` 539 passed (509 before, 24 in `tests/test_container_coverage.py`,
-  30 in `tests/test_safe_input.py`).
-- Golden `.tf` output unchanged; `terraform validate` green on all four outputs.
-- Exit codes unchanged. A run on a fixture with findings exits 0.
-- A run with no findings writes the same bytes as the committed code before this
-  feature (verified against commit 131bc69 for `sample_panorama_config.xml` and
-  `kitchen_sink.xml`: same file set, byte-identical reports).
+## Open items for F4.4
 
-The corpus scan still finds nothing, as the audit predicted. The new fixture
-`tests/fixtures/unknown_containers.xml` is the demonstration input: four sections
-(`document`, `data-entry`, `device-group/entry/certificate`,
-`devices/entry/vsys/entry/import`).
+- Property entries inside a config-object entry are counted on the parent row, not
+  listed. The matrix must state them per property.
+- `COVERAGE_MATRIX`, `EMITTED_TYPES` and `resource_name_map` are not reconciled.
+- `name_ref` first-wins resolution is unchanged, so a name declared in two device
+  groups resolves to the first.
+- The mark rule is an AST check over parse methods and the helper calls they make; it
+  does not follow a path held in a variable.

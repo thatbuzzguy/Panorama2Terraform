@@ -32,9 +32,10 @@ from typing import Optional
 
 from xml_input import ParsedSource
 
-# Where the entries of a container go. Four destinations match
-# docs/ARCHITECTURE.md §2.4, plus the two the code table needs for the facts
-# and the blocks a resource carries.
+# Where the entries of a container go. Six destinations match
+# docs/ARCHITECTURE.md §2.4. F4.3 adds two entry kinds: `skipped` is an entry a
+# parse method visited and did not model, and `unaccounted` is an entry no parse
+# method read.
 DESTINATION_KINDS = (
     'emitted',      # a resource block
     'report',       # MANUAL_SETUP_REPORT.txt
@@ -42,6 +43,8 @@ DESTINATION_KINDS = (
     'count-only',   # counted, nothing written (a gap)
     'bookkeeping',  # a table or a scope fact, no object
     'nested-block',  # lines inside a parent resource block, not a resource
+    'skipped',       # F4.3: an entry a parse method visited and did not model
+    'unaccounted',   # F4.3: an entry no parse method read
 )
 
 # How a method reaches the container: a findall/find pattern, or the parent
@@ -52,6 +55,10 @@ READ_VIAS = ('pattern', 'scope walk')
 # walk, so the section rule and the identity keys agree.
 SCOPE_CONTAINERS = frozenset({'device-group', 'templates', 'template-stack',
                               'devices', 'vsys'})
+
+# The four scope facts (F3.1, F3.2) in report order. F4.3 uses these keys for
+# the captured-field rule, so the facts are named in one place.
+SCOPE_FACT_KEYS = ('device_group', 'vsys', 'template', 'vsys_device')
 
 # Segments dropped from a section path: the config root and the two Panorama
 # scope markers are places, not part of a container name.
@@ -73,7 +80,7 @@ class ContainerRow:
 # One row per parse method. A new parse method needs a row here, and
 # tests/test_container_coverage.py fails when it does not have one.
 CONTAINER_TABLE: tuple[ContainerRow, ...] = (
-    ContainerRow('parse_device_groups', 'device-group', 'count-only',
+    ContainerRow('parse_device_groups', 'device-group', 'bookkeeping',
                  'the name reaches the output through location'),
     ContainerRow('parse_associations', 'device-group', 'bookkeeping',
                  'association table'),
