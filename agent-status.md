@@ -1,7 +1,8 @@
 # Agent Status
 
 ## Current position
-**F4.2 (entry coverage, parse side) is committed** and closes the second Epic 4 feature.
+**F4.2 (entry coverage, parse side) is committed** as 6d07d55 and closes the second
+Epic 4 feature.
 
 - `xml_input.parse_xml` returns `ParsedSource` (path, root, `name`, `line_of(element)`).
   The line is recorded by expat handlers during the same single read, because
