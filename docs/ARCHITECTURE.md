@@ -87,9 +87,17 @@ below.
 | Inventory comment | `security_profiles.tf`: names and descriptions only, with the resource name the emitter would use |
 | Count only | `parse_regions`: the console count uses the objects, and nothing else does |
 
-The last row is a known gap. It is recorded in `backlog.md`. The F4.3 per-entry
-report will surface it; the document does not claim that every entry is
-accounted for today.
+The container table in §3.1 adds two kinds for what a parse method reads but
+does not turn into an entry of its own:
+
+| Kind | What it means |
+|---|---|
+| Bookkeeping | an association table or a scope fact (§2.2), and a sub-shape that only selects a shape |
+| Nested block | lines written inside a parent resource block, not a resource of its own |
+
+The first table row is a known gap. It is recorded in `backlog.md`. The F4.3
+per-entry report will surface it; the document does not claim that every entry
+is accounted for today.
 
 ## 3. Parse pipeline
 
@@ -128,46 +136,30 @@ accounted for today.
 
 ### 3.1 Container table
 
-The container each parse method reads, and where its entries go. F4.2 will
-formalise this table and report every container the parser does not know.
+The table is code, not documentation: `container_coverage.CONTAINER_TABLE`. One
+row per parse method, with the container the method reads, the destination of its
+entries (§2.4), and how the method reaches the container — a `find`/`findall`
+pattern or the parent walk of §2.2. This document does not restate the table;
+`tests/test_container_coverage.py` keeps the table and the code in step, so a
+parse method cannot exist without a row and a row cannot name a path the method
+does not read.
 
-| Parse method | Container | Destination |
-|---|---|---|
-| `parse_device_groups` | `device-group/entry` | count only; the name reaches the output through `location` |
-| `parse_associations` | `device-group/entry`, `templates/entry`, `template-stack/entry` | association tables |
-| `parse_tags` | `tag/entry` | `panos_administrative_tag` |
-| `parse_regions` | `region/entry` | count only (gap) |
-| `parse_custom_url_categories` | `custom-url-category/entry` | `panos_custom_url_category` |
-| `parse_application_groups` | `application-group/entry` | `panos_application_group` |
-| `parse_application_filters` | `application-filter/entry` | report |
-| `parse_external_lists` | `external-list/entry` + `type` sub-shape | `panos_external_dynamic_list` |
-| `parse_schedules` | `schedule/entry` | report |
-| `parse_address_objects` | `address/entry` | `panos_address`, or report when the entry has no v2 attribute |
-| `parse_address_groups` | `address-group/entry` | `panos_address_group` |
-| `parse_service_objects` | `service/entry` | `panos_service` (one protocol leg); the dropped leg is reported |
-| `parse_service_groups` | `service-group/entry` | `panos_service_group` |
-| `parse_security_rules` | `security/rules/entry` | `panos_security_policy_rules` |
-| `parse_nat_rules` | `nat/rules/entry` | `panos_nat_policy_rules` |
-| `parse_decryption_rules` | `decryption/rules/entry` | `panos_decryption_policy_rules` |
-| `parse_pbf_rules` | `pbf/rules/entry` | `panos_pbf_policy_rules` |
-| `parse_application_override_rules` | `application-override/rules/entry` | report |
-| `parse_zones` | `zone/entry` | `panos_zone` |
-| `parse_interfaces` | `network/interface/{ethernet, virtual-wire/units, vlan/units, loopback/units, tunnel/units, aggregate-ethernet}/entry` | the seven interface types; virtual-wire and TAP emit as nested blocks |
-| `parse_virtual_routers` | `network/virtual-router/entry` | `panos_virtual_router` + `panos_virtual_router_static_route_ipv4` |
-| `parse_logical_routers` | `network/logical-router/entry` | same, labelled `router_type = logical` |
-| `parse_security_profiles` | `profiles/{virus, spyware, vulnerability, url-filtering, file-blocking, wildfire-analysis}/entry` | inventory comment |
-| `parse_security_profile_groups` | `profile-group/entry` | `panos_security_profile_group` |
-| `parse_zone_protection_profiles` | `zone-protection-profile/entry` | report |
-| `parse_log_settings` | `log-settings/profiles/entry` | report |
-| `parse_qos_profiles` | `qos/profile/entry` + `class/entry` | report |
-| `parse_tunnel_monitor_profiles` | `network/tunnel/global-protect-gateway/Default/tunnel-monitor/monitor-profile/entry`, `network/tunnel-monitor/monitor-profile/entry` | report |
-| `parse_pbf_monitor_profiles` | `network/profiles/monitor-profile/entry` | `panos_monitor_profile` |
-| `parse_bgp` | `bgp/...` (router, peer groups, peers, redistribution) | report |
-| `parse_ospf` | `ospf/...` (router, areas, ranges, interfaces) | report |
-| `parse_ipsec_tunnels` | `network/tunnel/ipsec/entry` | `panos_ipsec_tunnel`; a manual-key tunnel is reported |
-| `parse_ike_gateways` | `network/ike/gateway/entry` | `panos_ike_gateway` |
-| `parse_ike_crypto_profiles` | `network/ike/crypto-profiles/ike-crypto-profiles/entry` | `panos_ike_crypto_profile` |
-| `parse_ipsec_crypto_profiles` | `network/ike/crypto-profiles/ipsec-crypto-profiles/entry` | `panos_ipsec_crypto_profile` |
+Two rules the scan uses:
+
+- A container is a **section** when no config-object entry lies between it and a
+  config root: the `config` element, or an entry whose container is one of the
+  four scope containers in §2.2. A container inside a config-object entry is a
+  property level, so F4.4 covers it and this section does not.
+- A section no row covers is a finding. The scan reports it in
+  `MANUAL_SETUP_REPORT.txt` with its source line and entry count, and prints one
+  console line per finding. An absent section is not a finding, an empty known
+  section is not a finding, and an entry container under `predefined` is not a
+  finding: those entries are PAN-OS built-in definitions, not operator objects.
+
+The parse records the opening line of every element
+(`xml_input.ParsedSource.line_of`), so a finding names the line the container was
+defined on. A finding is an operator action, not a broken output: it does not
+change the exit code, which the F4.1 gate still decides (§4.6).
 
 ## 4. Emit pipeline
 
@@ -380,14 +372,14 @@ Two runs on the same input produce identical bytes.
 
 These are planned (PLAN.md, Epic 4) and not implemented:
 
-- **F4.2** — no line tracking in the parser, and no report for an unknown
-  container. The container table above is documentation, not code.
 - **F4.3** — no per-entry `CONVERSION_REPORT.txt`. Nothing proves today that
   every entry is accounted for.
 - **F4.4** — the coverage matrix is type level, not property level.
 
 F4.1 is implemented (§4.6): the static rules run on every conversion, and the
-result is `SANITY_REPORT.txt`.
+result is `SANITY_REPORT.txt`. F4.2 is implemented (§3.1): the container table is
+code, the parse records the source line of every element, and an uncovered section
+is reported.
 
 These are decided limits, not bugs: the rulebase is not emitted, security profile
 bodies are not parsed, EDL credentials are never written, a service emits one

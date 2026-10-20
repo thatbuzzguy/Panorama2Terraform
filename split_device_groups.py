@@ -235,7 +235,9 @@ def split_panorama_config(input_file: str, output_dir: str = None,
     # F3.8: the same safe read as the converter — a capped input size and a
     # parser-level DTD refusal. Nothing is written before it succeeds.
     try:
-        root = parse_xml(input_file, max_input_bytes)
+        # F4.2: parse_xml returns the tree plus the source line of each element.
+        # The splitter writes XML only, so it uses the tree and no line.
+        root = parse_xml(input_file, max_input_bytes).root
     except UnsafeInputError as e:
         print(f"Error: {e}")
         return False

@@ -1,79 +1,74 @@
 # Agent Status
 
 ## Current position
-**F4.1 (post-run sanity gate) is committed** as 131bc69 and closes the first Epic 4
-feature.
-`sanity_checks.py` states each static rule once; `main()` runs the gate on every
-conversion, prints a console summary, writes `SANITY_REPORT.txt`, and returns the
-gate's exit code. `--validate` adds `terraform init` + `terraform validate`. Severity
-is data: FAIL exits 1, WARN does not fail a run, SKIPPED never changes the exit code.
+**F4.2 (entry coverage, parse side) is committed** and closes the second Epic 4 feature.
 
-**Next task: F4.2 Entry coverage** (Epic 4): the container table in code, and line
-tracking in the parser. `acceptance.md` holds the F4.1 result — overwrite it with the
-F4.2 criteria before code or tests. See `to-do.md`.
+- `xml_input.parse_xml` returns `ParsedSource` (path, root, `name`, `line_of(element)`).
+  The line is recorded by expat handlers during the same single read, because
+  `ET.TreeBuilder` has no `CurrentLineNumber`. The F3.8 read order, the size cap, the
+  DTD refusal and the `ET.ParseError` type are unchanged; the tree is the tree
+  `ET.fromstring` builds (tag, attributes, text, child order, namespace form, comment
+  parity).
+- `container_coverage.py` holds the container table (`CONTAINER_TABLE`, one row per parse
+  method: method, container path, destination kind, note, level, read via), the section
+  rule (`is_section`), and the scan (`scan` → findings sorted by tag chain then line).
+  `docs/ARCHITECTURE.md` §3.1 points at the table instead of restating it.
+- `main()` runs the scan on the parsed input, appends the section to
+  `MANUAL_SETUP_REPORT.txt`, prints one console line per finding, and changes no exit
+  code: a coverage gap is an operator action, not a broken output. The F4.1 gate still
+  decides the exit code.
+- Gate: ruff clean, pytest 539 passed, both golden sets byte-identical, terraform
+  validate green on all four outputs. A no-findings run writes the same bytes as the
+  pre-F4.2 code (checked against 131bc69).
 
-F4.1 state: no generated `.tf` changed, so both golden sets are byte-identical (the gate
-writes a report, not a `.tf`). Four existing test files now call the module for their rule
-instead of restating it: `tests/test_dependency_wiring.py` (references),
-`tests/test_variables.py` (variables), `tests/test_schema_conformance.py` (location),
-`tests/test_robustness.py` (control characters). New test file:
-`tests/test_sanity_gate.py` (70 tests). Gate: ruff clean, pytest 509 passed, terraform
-validate green on the sample and kitchen-sink outputs.
+Rules worth carrying into F4.3: the line map covers the tree that was parsed, so an
+element copied out of it has no line (the splitter builds trees from copies and never
+asks for a line); a container is reported only at section level, so property-level
+entries stay with F4.4; `predefined` entries are not findings; `nested-block` is a
+destination kind for shapes that write inside a parent resource; the report names the
+file name only, never the path.
 
-Design rules the gate keeps: the gate reads the written files, not generator state; the
-block parser reads up to the first column-0 brace, which is how the generator writes a
-block and how the tests read one; `check_variables` counts only a `var.` reference as a
-consumer, so a declaration in `variables.tf` never consumes itself; `check_control_chars` reads with
-`errors='surrogateescape'` so undecodable bytes still count as findings; the report names
-no timestamp and no absolute path, which is what makes the byte-identical claim testable.
-The gate checks that `location` is present; the sub-block and field shape stays pinned by
-`tests/test_multi_vsys_location.py`, because `terraform validate` accepts an unknown
-sub-block and drops it silently.
-
-F3.9 state: the two operator-facing reports print one section per scope the
-export declares (device group, then template, then device), then the object
-kind inside the section. One rule serves both reports:
-`TerraformGenerator._report_scope_path` (level number + label + value, so
-sections sort by level order), `_group_by_scope` and `_report_section_header`.
-A device group prints only when the export declares one; `Shared` from
-`device_group_of` is the fallback for an entry the export cannot place, so it
-names the shared section, not a device group. `localhost.localdomain` prints as
-the "this device" placeholder. The VPN pre-shared-key warning stays at the top
-of the file, the per-gateway `***MUST BE UPDATED***` line stays per gateway,
-and each report has one shared footer. A declared vsys prints per entry.
-Reports are not in the golden set, so no golden changed.
-
-F3.8 state: `xml_input.py` is the one safe read both entry points import.
-`parse_xml(path, max_input_bytes)` checks the size before the read (default
-`DEFAULT_MAX_INPUT_BYTES` = 64 MiB, `--max-input-bytes N` on both CLIs),
-refuses a DTD through an expat prolog scan that stops at the root element,
-and returns the root parsed from the bytes it checked. `UnsafeInputError`
-(a ValueError subclass) carries the file, the limit and the measured size;
-both scripts print it unchanged, exit non-zero and write nothing.
-`PanoramaParser.__init__(xml_file, max_input_bytes)` and
-`split_panorama_config(input_file, output_dir, max_input_bytes)` take the
-limit; `ET.parse(path)` and the duplicated `<!DOCTYPE` text search are
-gone, and `PanoramaParser` no longer holds a `.tree` attribute.
-
-F3.6 state (unchanged by F3.8):
-`PanoramaParser.parse_associations()` is the only source of the
-multi-device relationship (device → device groups / templates / stacks, stack
-→ templates; empty tables when the export lists no device) and
-`templates_for_device(device)` resolves a device's effective templates.
-`TerraformGenerator(output_dir, associations)` takes the tables; the naming
-context of a template-scoped object is `scope_context(obj)` (template, else
-device); `location_block` places device-owned config with `ngfw {
-ngfw_device }`; `reference_device(obj)` resolves a reference inside its own
-device or its template's single device, and keeps a plain name when the
-choice is ambiguous. `split_device_groups.device_associations(root)` is the
-splitter's copy of the same join, and every element it takes out of the
-export is a `copy.deepcopy`. Gate: ruff clean, pytest 420 passed, terraform
-validate green on the sample, kitchen-sink, crypto-profile and two-device
-outputs.
+**Next task: F4.3 per-entry coverage report** (Epic 4). `acceptance.md` holds the F4.2
+result — overwrite it with the F4.3 criteria before code or tests. See `to-do.md`.
 
 ## Session log
+### F4.2 — Entry coverage, parse side (this session)
+- Direction: Epic 4, lowest-numbered unfinished feature. `acceptance.md` rewritten for
+  F4.2 first (6 criteria groups), then audited against the code before any change.
+- Line tracking: `parse_xml` builds the tree through expat handlers
+  (`StartElementHandler`, `EndElementHandler`, `CharacterDataHandler`,
+  `CommentHandler`, `ProcessingInstructionHandler`) so `CurrentLineNumber` is read at the
+  moment an opening tag is decoded. `TreeBuilder` alone cannot do this. Namespace
+  processing is enabled the way `xml.etree` enables it (`ParserCreate(None, "}")`) and
+  names are mapped from expat's `uri}local` to ElementTree's `{uri}local` (`_fixname`),
+  so the tree matches `ET.fromstring` for every committed fixture.
+- `ParsedSource` (path, root, lines keyed by `id(element)`, `name`, `line_of`).
+  `PanoramaParser.__init__` keeps `self.source`, `self.root` and `self.parent_map`;
+  `line_of(elem)` answers for the report. `split_device_groups.py` uses `.root` and never
+  asks for a line.
+- Container table: `container_coverage.py` — 68 rows: 64 for the parse methods, 4 for the scope facts, each row stating method, container path, destination kind, note, level
+  (`section` or `sub-shape`) and read via (`pattern` or `scope walk`). Six destination
+  kinds; `nested-block` was added for virtual-wire, TAP, `ip` and `ipv6/address`.
+- Section rule and scan: `is_section`, `section_path`, `covers`, `is_known`,
+  `is_predefined`, `entry_containers`, `scan`. Findings sort by tag chain then line; the
+  report names the file name only.
+- Report and console: `generate_manual_setup_report` takes the rendered section; the
+  console prints one line per finding. Both wordings come from one place
+  (`finding_phrase`, `report_line`, `console_line`).
+- Fixture: `tests/fixtures/unknown_containers.xml` — `document`, `data-entry`,
+  `device-group/entry/certificate`, `devices/entry/vsys/entry/import`, plus a covered
+  section (`tag`, `address`) and a `predefined` entry to pin the exclusion. The committed
+  corpus produced no finding before the change, so a new fixture was required.
+- Tests: `tests/test_container_coverage.py` (24 tests: table parity both directions,
+  segment match against the method AST, destination kinds, resource names against
+  `EMITTED_TYPES`, scope-walk rows, section rule, findings, report bytes, console lines,
+  exit code, doc pointer) and `tests/test_safe_input.py` gains six line-tracking tests
+  (pinned lines, a wrapped opening tag, UTF-16 BOM, tree parity, copied element).
+- Gate: ruff clean. pytest 539 passed. Goldens unchanged. terraform validate green on
+  four outputs. Exit codes unchanged (a run with findings exits 0).
 
-### F4.1 — Post-run sanity gate (this session)
+
+### F4.1 — Post-run sanity gate (previous session)
 - Direction: Epic 4, lowest-numbered unfinished feature. `acceptance.md` rewritten for
   F4.1 first (12 criteria, the audit of where each rule lives today, and the severity
   rules decided before the code).

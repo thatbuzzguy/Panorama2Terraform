@@ -33,6 +33,12 @@ Two risks, two checks:
    encoding the parser accepts: a UTF-16 export hides the ``<!DOCTYPE``
    bytes from a UTF-8 text search, but not from the parser.
 
+F4.2 adds one job: record the source line of every element. ``ElementTree``
+does not keep a line number, so ``parse_xml`` builds the tree through expat
+handlers that read ``CurrentLineNumber`` at the moment an opening tag is
+decoded. The tree is the same tree ``ET.fromstring`` returns for the pinned
+shapes (tag, ``name`` attribute, child order, comment, namespace).
+
 Facts this module depends on, verified against expat 2.6.1 (the parser
 behind ``xml.etree``):
 
@@ -45,13 +51,17 @@ behind ``xml.etree``):
 
 Usage:
     from xml_input import parse_xml
-    root = parse_xml('export.xml')
+    source = parse_xml('export.xml')
+    root = source.root
+    line = source.line_of(root.find('.//entry'))
 """
 
 import argparse
 import xml.etree.ElementTree as ET
 import xml.parsers.expat as expat
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 # Refuse an input larger than this before reading it (F3.8).
 DEFAULT_MAX_INPUT_BYTES = 64 * 1024 * 1024
@@ -168,18 +178,114 @@ def reject_dtd(data: bytes, source) -> None:
         return
 
 
-def parse_xml(path, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ET.Element:
+@dataclass(frozen=True)
+class ParsedSource:
+    """A parsed input: the tree, and the source line of each element.
+
+    ``line_of`` answers the F4.2 question a report needs: which line of the
+    input defined this entry. Only the opening tag has a position, because
+    that is the tag the parser was reading.
+
+    ``lines`` is keyed by ``id(element)``. The root holds the whole tree, so
+    every element stays alive while the source is held and an id cannot be
+    reused. An element copied out of this tree is not in the map, so the
+    device-group splitter, which builds new trees from copies, gets no line.
+    """
+
+    path: Path
+    root: ET.Element
+    lines: dict = field(default_factory=dict, compare=False, repr=False)
+
+    @property
+    def name(self) -> str:
+        """File name, no directory. A report line must not depend on the path."""
+        return self.path.name
+
+    def line_of(self, elem: ET.Element) -> Optional[int]:
+        """Line of elem's opening tag, or None when the parse did not record it."""
+        return self.lines.get(id(elem))
+
+
+def _fixname(name: str) -> str:
+    """Name a decoded element or attribute the way ElementTree names it.
+
+    With namespace processing on, expat reports a qualified name as
+    ``uri}local``. ElementTree turns that into ``{uri}local`` and leaves an
+    unqualified name alone, so this is the mapping xml.etree applies.
+    """
+    return '{' + name if '}' in name else name
+
+
+def _parse_with_lines(data: bytes, source: Path) -> ParsedSource:
+    """Parse the checked bytes once and record each element's opening line.
+
+    expat reports the line it is reading in ``CurrentLineNumber``. The handlers
+    run when an opening tag, comment or processing instruction is decoded, so
+    the recorded number is the line of that opening tag.
+
+    Namespace processing is enabled the way ``xml.etree`` enables it, so the
+    tree is the tree ``ET.fromstring`` builds from the same bytes.
+    """
+    parser = expat.ParserCreate(None, "}")
+    builder = ET.TreeBuilder()
+    lines = {}
+
+    def record(elem):
+        # A line number of 0 means the parser is reading the prolog or a byte
+        # order mark, which is not a position a report can use.
+        line = parser.CurrentLineNumber
+        if line:
+            lines[id(elem)] = line
+
+    def start(qname, atts):
+        record(builder.start(_fixname(qname), {_fixname(k): v for k, v in atts.items()}))
+
+    def end(qname):
+        builder.end(_fixname(qname))
+
+    def comment(text):
+        record(builder.comment(text))
+
+    def processing_instruction(target, text):
+        record(builder.pi(target, text))
+
+    def character_data(text):
+        # Character data is not an element, so it records no line. It is what
+        # gives an element its text, so the handler is required for the tree to
+        # match the one xml.etree builds.
+        builder.data(text)
+
+    parser.StartElementHandler = start
+    parser.EndElementHandler = end
+    parser.CharacterDataHandler = character_data
+    parser.CommentHandler = comment
+    parser.ProcessingInstructionHandler = processing_instruction
+    # No external entity is fetched. The DTD check already refused the input,
+    # so this handler only keeps the door closed if a DTD reached the parse.
+    parser.ExternalEntityRefHandler = lambda *_args: 0
+
+    try:
+        parser.Parse(data)
+    except expat.ExpatError as exc:
+        # Keep the F3.8 error type: both entry points catch ET.ParseError.
+        raise ET.ParseError(str(exc)) from exc
+
+    return ParsedSource(path=source, root=builder.close(), lines=lines)
+
+
+def parse_xml(path, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ParsedSource:
     """Read and parse an input file, refusing unsafe input.
 
-    Returns the root element. Raises UnsafeInputError for a size or DTD
-    refusal, and xml.etree.ElementTree.ParseError for malformed XML.
+    Returns a ParsedSource: the root element and the source line of each
+    element. Raises UnsafeInputError for a size or DTD refusal, and
+    xml.etree.ElementTree.ParseError for malformed XML.
     """
     source = Path(path)
     data = read_input(source, max_input_bytes)
     reject_dtd(data, source)
     # Parse the bytes that passed both checks, so nothing can change
     # between the check and the parse.
-    return ET.fromstring(data)
+    return _parse_with_lines(data, source)
 
 
 def positive_int(text: str) -> int:

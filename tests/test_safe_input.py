@@ -11,9 +11,15 @@ Two checks, one implementation (`xml_input.py`):
   reaches `xml.etree`, so the parser is asked, not a text search. A text
   search is encoding-blind: it misses the `<!DOCTYPE` bytes of a UTF-16
   export (the bypass that made this task worth finishing).
+
+F4.2 adds a third job to the same read: record the source line of every
+element, so a report can name the line an entry came from. The tests here pin
+that the extra job did not change the tree or the checks.
 """
+import copy
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -305,8 +311,8 @@ def test_parse_reads_the_file_once(xml_input_module, tmp_path, monkeypatch):
         return real_open(self, *args, **kwargs)
 
     monkeypatch.setattr(Path, 'open', counting_open)
-    root = xml_input_module.parse_xml(source)
-    assert root.tag == 'config'
+    parsed = xml_input_module.parse_xml(source)
+    assert parsed.root.tag == 'config'
     assert len(opened) == 1, f'expected one read of the input, got {len(opened)}'
 
 
@@ -324,3 +330,123 @@ def test_parser_and_splitter_use_the_shared_default(xml_input_module, converter_
     with pytest.raises(xml_input_module.UnsafeInputError):
         converter_module.PanoramaParser(str(source))
     assert splitter_module.split_panorama_config(str(source), str(tmp_path / 'split')) is False
+
+
+# --- F4.2: the same read records the source line ---------------------------
+
+def _shape(elem):
+    """Tag, attributes, text and child order, for a tree comparison."""
+    return (elem.tag, dict(elem.attrib), elem.text, tuple(_shape(c) for c in elem))
+
+
+def test_parse_records_the_opening_line_of_every_element(xml_input_module, tmp_path):
+    """line_of names the line the parser was reading when it opened an element."""
+    text = (
+        '<?xml version="1.0"?>\n'
+        '<config>\n'
+        '  <shared>\n'
+        '    <address>\n'
+        '      <entry name="host-1">\n'
+        '        <ip-netmask>10.0.0.1/32</ip-netmask>\n'
+        '      </entry>\n'
+        '    </address>\n'
+        '  </shared>\n'
+        '</config>\n'
+    )
+    source = tmp_path / 'lines.xml'
+    source.write_text(text, encoding='utf-8')
+    parsed = xml_input_module.parse_xml(source)
+
+    assert parsed.name == 'lines.xml', 'a report names the file, not the path'
+    assert parsed.line_of(parsed.root) == 2
+    container = parsed.root.find('.//address')
+    entry = parsed.root.find('.//address/entry')
+    assert parsed.line_of(container) == 4
+    assert parsed.line_of(entry) == 5
+    assert parsed.line_of(entry.find('ip-netmask')) == 6
+
+
+def test_line_of_a_multiline_element_is_the_opening_tag(xml_input_module, tmp_path):
+    """An entry whose attributes wrap over two lines still reports its opening line."""
+    text = (
+        '<?xml version="1.0"?>\n'
+        '<config>\n'
+        '  <shared>\n'
+        '    <address>\n'
+        '      <entry\n'
+        '        name="host-1">\n'
+        '        <ip-netmask>10.0.0.1/32</ip-netmask>\n'
+        '      </entry>\n'
+        '    </address>\n'
+        '  </shared>\n'
+        '</config>\n'
+    )
+    source = tmp_path / 'wrapped.xml'
+    source.write_text(text, encoding='utf-8')
+    parsed = xml_input_module.parse_xml(source)
+    entry = parsed.root.find('.//address/entry')
+    assert entry.get('name') == 'host-1'
+    assert parsed.line_of(entry) == 5, 'the opening tag starts on line 5'
+
+
+def test_byte_order_mark_is_not_a_line(xml_input_module, tmp_path):
+    """A UTF-16 input is read by the parser, and its first element is still on line 1 or 2."""
+    text = (
+        '<?xml version="1.0" encoding="UTF-16"?>\n'
+        '<config><shared><address><entry name="host-1">'
+        '<ip-netmask>10.0.0.1/32</ip-netmask></entry></address></shared></config>\n'
+    )
+    source = tmp_path / 'utf16.xml'
+    source.write_bytes(text.encode('utf-16'))
+    parsed = xml_input_module.parse_xml(source)
+    entry = parsed.root.find('.//address/entry')
+    assert entry is not None, 'the UTF-16 tree is the tree xml.etree builds'
+    assert parsed.line_of(parsed.root) == 2, 'the prolog is line 1, the root is line 2'
+    assert parsed.line_of(entry) == 2
+
+
+def test_line_tracking_does_not_change_the_tree(xml_input_module, tmp_path):
+    """For every committed input, the recorded lines did not alter the tree."""
+    for path in sorted(FIXTURES_DIR.glob('*.xml')) + [SAMPLE]:
+        try:
+            parsed = xml_input_module.parse_xml(path)
+        except xml_input_module.UnsafeInputError:
+            continue  # refused before the parse, so no tree to compare
+        except ET.ParseError:
+            # A refused control character is still an ET.ParseError, so the
+            # two paths must refuse the same input.
+            with pytest.raises(ET.ParseError):
+                ET.fromstring(path.read_bytes())
+            continue
+        assert _shape(parsed.root) == _shape(ET.fromstring(path.read_bytes())), path.name
+
+    # A comment and a namespace are part of that claim.
+    source = tmp_path / 'namespaces.xml'
+    source.write_text(
+        '<?xml version="1.0"?>\n'
+        '<config xmlns:ns="urn:x" xmlns="urn:y">\n'
+        '  <!---->\n'
+        '  <entry name="a" xml:lang="en">\n'
+        '    <ns:child x="1"/>\n'
+        '  </entry>\n'
+        '</config>\n', encoding='utf-8')
+    parsed = xml_input_module.parse_xml(source)
+    assert _shape(parsed.root) == _shape(ET.fromstring(source.read_bytes()))
+    # Both paths drop the comment and keep the namespace form ET uses.
+    assert [c.tag for c in parsed.root] == ['{urn:y}entry'], 'comment parity with ET'
+    assert parsed.line_of(parsed.root) == 2
+
+
+def test_a_copied_element_has_no_line(xml_input_module, tmp_path):
+    """The line map covers the tree that was parsed, not a copy built from it.
+
+    The device-group splitter builds new trees from copies, so it writes XML and
+    never asks for a line.
+    """
+    source = tmp_path / 'copy.xml'
+    source.write_text(f'<?xml version="1.0"?>\n{BODY}', encoding='utf-8')
+    parsed = xml_input_module.parse_xml(source)
+    original = parsed.root.find('.//entry')
+    duplicate = copy.deepcopy(original)
+    assert parsed.line_of(original), 'the parsed tree has a line'
+    assert parsed.line_of(duplicate) is None

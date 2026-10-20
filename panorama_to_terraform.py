@@ -52,6 +52,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Optional
 
+import container_coverage
 import sanity_checks
 from resource_mapping import INTERFACE_RESOURCE_TYPES, LOCATION_SCHEMA
 from xml_input import (
@@ -114,10 +115,19 @@ class PanoramaParser:
         # and refuses a DTD at parser level (a DTD is the only way an entity
         # expansion or an external entity reaches the parser), so nothing here
         # expands an entity and nothing here reads an unbounded file.
-        self.root = parse_xml(xml_file, max_input_bytes)
+        # F4.2: the same parse records the source line of every element, so a
+        # report can name the line an entry came from.
+        self.source = parse_xml(xml_file, max_input_bytes)
+        self.root = self.source.root
         # ElementTree has no parent pointers; build a child -> parent map so
-        # parse methods can find the enclosing device group of an entry (F2.3).
-        self._parent_map = {child: parent for parent in self.root.iter() for child in parent}
+        # parse methods can find the enclosing device group of an entry (F2.3)
+        # and so the coverage scan can tell a section from a property level
+        # (F4.2).
+        self.parent_map = container_coverage.parent_map(self.root)
+
+    def line_of(self, elem: ET.Element) -> Optional[int]:
+        """Source line of an element's opening tag (F4.2)."""
+        return self.source.line_of(elem)
 
     def parse_device_groups(self) -> list[dict]:
         """Parse device groups from Panorama config"""
@@ -143,7 +153,7 @@ class PanoramaParser:
         """
         node = elem
         while node is not None:
-            parent = self._parent_map.get(node)
+            parent = self.parent_map.get(node)
             if parent is not None and parent.tag == 'device-group' and node.tag == 'entry':
                 return node.get('name') or 'Shared'
             if node.tag == 'shared':
@@ -164,7 +174,7 @@ class PanoramaParser:
         """
         node = elem
         while node is not None:
-            parent = self._parent_map.get(node)
+            parent = self.parent_map.get(node)
             if parent is not None and parent.tag == 'vsys' and node.tag == 'entry':
                 return node.get('name') or 'vsys1'
             node = parent
@@ -181,7 +191,7 @@ class PanoramaParser:
         """
         node = elem
         while node is not None:
-            parent = self._parent_map.get(node)
+            parent = self.parent_map.get(node)
             if parent is not None and parent.tag == 'templates' and node.tag == 'entry':
                 return node.get('name') or ''
             node = parent
@@ -200,7 +210,7 @@ class PanoramaParser:
         """
         node = elem
         while node is not None:
-            parent = self._parent_map.get(node)
+            parent = self.parent_map.get(node)
             if parent is not None and parent.tag == 'devices' and node.tag == 'entry':
                 return node.get('name') or ''
             node = parent
@@ -4142,7 +4152,8 @@ variable "panos_password" {
                                      log_settings: Optional[list[dict]] = None,
                                      zone_protection_profiles: Optional[list[dict]] = None,
                                      report_only_addresses: Optional[list[dict]] = None,
-                                     dual_protocol_services: Optional[list[dict]] = None):
+                                     dual_protocol_services: Optional[list[dict]] = None,
+                                     entry_coverage: str = ''):
         """Write MANUAL_SETUP_REPORT.txt for items that are not emitted (F2.9)
 
         Two buckets, one report:
@@ -4160,7 +4171,7 @@ variable "panos_password" {
                 or application_override_rules or qos_profiles
                 or tunnel_monitor_profiles or schedules or log_settings
                 or zone_protection_profiles or report_only_addresses
-                or dual_protocol_services or self._location_reports):
+                or dual_protocol_services or entry_coverage or self._location_reports):
             return
 
         lines = ['MANUAL SETUP REPORT', '=' * 60, '']
@@ -4369,6 +4380,12 @@ variable "panos_password" {
             lines.append('  which is not a real template. Replace it with the')
             lines.append('  template that targets the firewall, or import the')
             lines.append('  entry from that firewall with location.ngfw.')
+            lines.append('')
+
+        # F4.2: entry coverage. A section the parse side does not read is
+        # stated here so the operator sees what the conversion cannot cover.
+        if entry_coverage:
+            lines.append(entry_coverage)
             lines.append('')
 
         lines.append('End of report.')
@@ -5032,6 +5049,10 @@ def main():
         # and log forwarding + zone protection + schedules (v2 resource
         # exists, profile body not parsed). See resource_mapping.py.
         manual_key_tunnels = [t for t in ipsec_tunnels if t.get('type') != 'auto-key']
+        # F4.2: scan the parsed input for a section container the container
+        # table does not cover. A finding is an operator action, not a broken
+        # output, so it does not change the exit code (the F4.1 gate does).
+        coverage_findings = container_coverage.scan(panorama.source, panorama.parent_map)
         tf_gen.generate_manual_setup_report(
             bgp_config, ospf_config, application_filters, manual_key_tunnels,
             application_override_rules=app_override_rules,
@@ -5045,6 +5066,7 @@ def main():
                 s for s in services
                 if len(TerraformGenerator.dropped_service_protocols(s.get('protocols') or {})) > 0
             ],
+            entry_coverage=container_coverage.render_section(coverage_findings, panorama.source.name),
         )
 
         # Reports
@@ -5056,6 +5078,13 @@ def main():
         print("  - INTERFACE_MIGRATION_REPORT.txt (Interface and IP inventory)")
         if ike_gateways or ipsec_tunnels:
             print("  - VPN_MIGRATION_REPORT.txt ⚠️  (VPN config with key management instructions)")
+
+        # F4.2: one console line per uncovered section, so a run that read an
+        # entry it cannot model is visible without opening the report.
+        if coverage_findings:
+            print(f"\n⚠️  Entry Coverage: {len(coverage_findings)} container(s) the parser does not read")
+            for finding in coverage_findings:
+                print(container_coverage.console_line(finding))
 
         # F4.1: the gate reads the files that were written, so it reports what
         # the operator receives. A WARN does not fail the gate; a FAIL does.

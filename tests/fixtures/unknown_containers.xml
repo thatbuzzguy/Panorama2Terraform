@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  F4.2 entry coverage fixture: config sections that hold entries no parse
+  method reads. A Panorama export can hold these, and the converter used to
+  skip them without saying so.
+
+  The covered sections (tag, address) are here so a test can show the contrast:
+  a covered container produces no finding, an uncovered one does.
+  `predefined` is here so a test can pin the rule that a PAN-OS built-in
+  definition is not an operator object and is not a finding.
+-->
+<config>
+  <shared>
+    <document>
+      <entry name="IP-Tag-Production">
+        <ip-tag>10.0.0.0/8</ip-tag>
+        <description>production range</description>
+      </entry>
+      <entry name="IP-Tag-Lab">
+        <ip-tag>172.16.0.0/12</ip-tag>
+      </entry>
+    </document>
+    <data-entry>
+      <entry name="asset-owner">
+        <field>
+          <member>owner</member>
+        </field>
+      </entry>
+    </data-entry>
+    <predefined>
+      <application>
+        <entry name="ssl">
+          <description>built-in, not an operator object</description>
+        </entry>
+      </application>
+    </predefined>
+    <tag>
+      <entry name="env-prod">
+        <description>covered by parse_tags</description>
+      </entry>
+    </tag>
+  </shared>
+  <panorama>
+    <device-group>
+      <entry name="Edge">
+        <certificate>
+          <entry name="edge-cert">
+            <description>no parse method reads a certificate entry</description>
+          </entry>
+        </certificate>
+        <address>
+          <entry name="edge-host">
+            <ip-netmask>10.0.0.5</ip-netmask>
+            <description>covered by parse_address_objects</description>
+          </entry>
+        </address>
+      </entry>
+    </device-group>
+  </panorama>
+  <devices>
+    <entry name="fw-1.example.com">
+      <vsys>
+        <entry name="vsys1">
+          <import>
+            <entry name="Predefined-Certificates">
+              <description>no parse method reads an import entry</description>
+            </entry>
+          </import>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

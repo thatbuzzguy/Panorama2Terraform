@@ -164,3 +164,30 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 - The gate `location` check is presence only, not shape. The sub-block and field shape stays pinned by `tests/test_multi_vsys_location.py`, because `terraform validate` accepts an unknown sub-block and drops it silently. Move the shape rule into the gate when the property matrix (F4.4) becomes a live structure.
 - The placeholder check lists the VPN pre-shared key only. When F4.3 adds per-entry accounting, the expected placeholders should come from the same table that decides the report entries.
 - Consider a `--checks` selector on the converter CLI if the gate grows; today every check runs on every conversion, and a WARN never changes the exit code.
+
+## Design Decisions (F4.2, landed 2026-10-20)
+
+- `parse_xml` returns `ParsedSource`, not an element, because a line map needs
+  the file it came from. The line is recorded by expat handlers:
+  `ET.TreeBuilder` has no `CurrentLineNumber`, so `xml.etree` cannot report one.
+  The F3.8 read order (size check, read, size check on the read bytes, DTD
+  refusal, parse the same bytes) and the `ET.ParseError` type are unchanged.
+- The line map covers the tree that was parsed. An element copied out of it has
+  no line, which is why the device-group splitter, which builds new trees from
+  copies, never asks for one.
+- A container is reported only at section level: no config-object entry between
+  it and a config root. A container inside a config-object entry is a property
+  level, so F4.4 owns it. The table marks those rows `level='sub-shape'`.
+- A `predefined` container is not a finding: those entries are PAN-OS built-in
+  definitions, not operator objects. `container_coverage.is_predefined` states
+  the rule, and the fixture keeps a `predefined` entry to pin it.
+- `nested-block` is a destination kind: virtual-wire, TAP, `ip` and
+  `ipv6/address` write lines inside a parent resource block and have no resource
+  type of their own (provider v2.0.14, verified in F3.3).
+- The table parity test matches a row path by segment presence, not by full path
+  order, because a method can reach a container through a helper (`parse_bgp`
+  reads `protocol/bgp` through a path list, `parse_interfaces` reaches `layer3`
+  through the interface kinds). A row that names a segment no code path contains
+  fails; a row with the right segments in the wrong order does not. Narrowing
+  this to full-path comparison needs the pattern list to be data, not string
+  literals inside methods.
