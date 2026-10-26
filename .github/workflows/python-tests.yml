@@ -36,8 +36,8 @@ jobs:
 
   terraform-gate:
     # Validates generated output against the real provider with
-    # terraform init + validate. The validate check is xfail until
-    # Epic 2 rewrites the generator (see tests/test_terraform_validate.py).
+    # terraform init + terraform validate. The test skips when the
+    # terraform binary is absent, so this job is the one that runs it.
     runs-on: ubuntu-latest
     needs: lint-and-test
 

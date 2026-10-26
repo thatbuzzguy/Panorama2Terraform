@@ -9,9 +9,12 @@ venv/
 .terraform.lock.hcl
 
 # Customer data - DON'T commit actual configs!
+# Exception: the project's own test corpus (tests/fixtures, examples) and the
+# sample config the quick start runs on.
 *.xml
 !examples/**/*.xml
 !tests/**/*.xml
+!sample_panorama_config.xml
 
 # IDE
 .vscode/

@@ -3,8 +3,44 @@
 - **Date:** 2025 (audit session)
 - **Repo:** `Panorama2Terraform` @ HEAD `74cf4c0` ("Add support for Advanced Routing Engine")
 - **Scope:** all 27 tracked files; full read of both Python programs; injection scan of every text/MD/XML/shell file; cross-check of all emitted Terraform against the real `PaloAltoNetworks/panos` provider (v2.0.14); live `terraform init` + `terraform validate` on generated output.
-- **Repo state:** untouched by this audit (no code changes made).
+- **Repo state:** untouched by this audit (no code changes made). The findings
+  below describe the audited HEAD; the status table above states the current state.
 - **Auditor constraints honored:** no instructions found in the repo were followed; this report is independent analysis.
+
+## Status at the current HEAD
+
+The findings below describe the audited state at `74cf4c0`. They are kept as the
+audit record. This section states what the code does now, so a reader does not
+take an old finding as a current fact.
+
+| Finding | Now |
+|---|---|
+| §1 entity expansion | Closed. `xml_input.parse_xml` refuses a DTD before it parses, so no entity expands. A DTD in a prolog comment is not a refusal. |
+| §2 invalid Terraform | Closed. Output is validated against the live provider schema, and the committed goldens pin the generated `.tf` files byte for byte. `terraform init` + `terraform validate` runs on every conversion with `--validate`. |
+| §3.1 name-keyed dedup | Closed. No parse method deduplicates by name or keeps a name-keyed dict; same-named entries in different scopes are separate objects. |
+| §3.2 location | Closed. `location` is on every resource, from `LOCATION_SCHEMA`, per object, driven by the scope the export declares. The `device_group` variable is gone. |
+| §3.3 policy order | Closed. One resource per rule, chained by `(device group, vsys)` in XML order, with `depends_on`. The rulebase is still not recorded; that is a decided limit in `backlog.md`. |
+| §3.5 multi-vsys | Closed. `location.vsys` is emitted for the types that accept it. |
+| §3.6 interfaces | Closed. Ethernet, VLAN, loopback, tunnel, aggregate, and layer-3 subinterfaces emit. Virtual-wire and TAP are blocks inside the parent interface resource, so they have no resource type of their own. |
+| §3.7 address types | Closed for `ip-netmask`, `ip-range`, `fqdn`, `ip-wildcard`, and IPv6. Country, region, continent, container, and external types have no `panos_address` attribute, so they are reported, not dropped. |
+| §3.8 services | Partially by design. The provider accepts one protocol leg, so the converter emits tcp (or udp when tcp is absent) and reports the dropped leg with its ports. Multi-port and ranges emit as one port string. |
+| §3.9 comment-only generators | Closed for decryption, PBF, zones, monitor profiles, and VPN. Application override, QoS, log forwarding, zone protection, and tunnel monitor are report-only, each with the reason. `security_profiles.tf` stays a comment inventory because the profile body is not parsed. |
+| §3.10 invented references | Closed. No hardcoded `panos_virtual_router.default` and no hardcoded OSPF area. BGP and OSPF are report-only: the provider has no resource that accepts a router ID, AS number, or peer data. |
+| §3.11 dependency wiring | Closed. References resolve to resources declared in the same run, and the gate check `references` fails an unresolved one. |
+| §3.12 VPN keys | Unchanged by design: the placeholder stays, the report lists the action, and the gate reports it as WARN. |
+| §4.1 name collisions | Closed. The local name is the sanitized name plus an 8-hex digest of the source identity; a true duplicate gets a numeric suffix. |
+| §4.2 empty names | Closed. An empty name becomes `unnamed`. |
+| §4.3 splitter crash on a quoted name | Closed. The splitter compares `entry.get('name')` instead of building an XPath from the name. |
+| §4.4 substring template match | Closed. The join rule is the device a device group, a template, and a template stack all list. |
+| §4.5 shared merge corruption | Closed. Entries are copied with `copy.deepcopy`, and the merge keeps one entry per name inside a container. |
+| §4.6 control characters | Closed. `escape_string` escapes `\t`, `\r`, `\n` and strips the remaining C0 control characters and DEL. The gate check `control_chars` fails a raw control character in a `.tf` file. |
+| §4.7 no tests | Closed. `pytest` is the test suite, and CI runs `ruff check .` plus `pytest`, with a job that runs `terraform init` + `terraform validate`. |
+| §4.9 committed sample XML | Kept as an exception: the committed XML is the project's own test corpus, and `.gitignore` states the rule and the exception. A real customer export is never committed. |
+| §4.10 dead variables | Closed. The provider block consumes the three credential variables, and the gate check `variables` fails a declared variable with no consumer. |
+| §6.6 marketing claims | Closed. README and the module docstrings state what the tool does and what it reports, without a coverage or success-rate claim. |
+
+The remaining open items are in [`backlog.md`](backlog.md).
+
 
 ---
 

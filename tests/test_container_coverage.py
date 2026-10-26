@@ -9,7 +9,8 @@ Three groups of checks:
    these tests keep the table and the code in step.
 2. The section rule. A container is a section when no config-object entry lies
    between it and a config root. A container inside a config-object entry is a
-   property level, so this module does not report it (F4.4 covers it).
+   property level, so this module does not report it (the property-level scan, F4.4,
+   covers it).
 3. The report. A section the table does not cover produces one finding, sorted
    by tag chain then line, naming the file name only. An absent container is not
    a finding. A finding does not change the exit code.
@@ -205,7 +206,7 @@ def test_predefined_entries_are_not_findings():
 
 
 def test_property_level_entries_are_not_findings():
-    """F4.4 covers a config-object entry, so F4.2 does not report it."""
+    """A config-object entry is a property level, so F4.2 does not report it."""
     _, _, findings = _scan('kitchen_sink.xml')
     assert findings == [], findings
 

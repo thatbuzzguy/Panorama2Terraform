@@ -1,4 +1,4 @@
-"""Resource mapping (Epic 2).
+"""Resource mapping.
 
 Single source of truth for what the converter produces against the
 panos provider v2:

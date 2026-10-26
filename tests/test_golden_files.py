@@ -5,8 +5,9 @@ pipeline runs: the sample config and the kitchen-sink fixture (which
 exercises every generator path the sample never reaches).
 
 Any change to generator output must update the goldens deliberately so
-the behavior change is visible in review. When the Epic 2 provider-v2
-rewrite lands, these goldens are the before/after reference.
+the behavior change is visible in review. Reports are not in the golden
+set: only `.tf` files are, because report wording changes often and a
+byte-for-byte report pin makes a wording edit look like a behavior change.
 
 Regenerating a golden after an intended change:
     python3 panorama_to_terraform.py <source.xml> --output-dir /tmp/gold

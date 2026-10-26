@@ -16,16 +16,13 @@ GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
+Commercial terms are in LICENSE-COMMERCIAL.
 
-COMMERCIAL LICENSE AVAILABLE
-For use in proprietary applications without AGPL v3 obligations,
-contact sales@gswsystems.com for commercial licensing options.
-See LICENSE-COMMERCIAL for details.
-
-═══════════════════════════════════════════════════════════════════════
-
-Splits a Panorama export into separate configurations per device group.
-Useful for multi-HA-pair to multi-virtual-router migrations.
+Splits a Panorama export into one XML file per device group. Each file holds the
+device group entry, the shared section, and the templates and template stacks that
+target a device the group lists. This step is optional: the converter reads a full
+export on its own. See docs/DEVICE_GROUP_SPLITTING.md for the join rule and the
+usage.
 """
 
 import argparse
