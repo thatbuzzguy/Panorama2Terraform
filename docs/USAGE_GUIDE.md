@@ -1,379 +1,214 @@
-# Palo Alto Panorama to Terraform Converter
+# Usage Guide
 
-## Overview
+This is the technical reference for the two scripts. It states how to run them
+and what each output file holds. The rules behind the output are in
+[ARCHITECTURE.md](ARCHITECTURE.md); the document index is in
+[README.md](README.md).
 
-This tool converts Palo Alto Panorama XML configuration exports into Terraform configuration files. It's designed to help migrate Palo Alto firewall configurations to infrastructure-as-code, making it easier to manage, version control, and deploy replacement devices.
+## What the tool does
 
-## Features
+The converter reads a Panorama XML configuration export and writes Terraform
+configuration for the `PaloAltoNetworks/panos` provider v2 (pinned
+`~> 2.0.14`). It also writes reports for configuration that has no v2
+resource, so nothing is dropped silently.
 
-### Supported Configuration Elements
-
-- **Address Objects** (IP netmask, IP range, FQDN)
-- **Address Groups** (static and dynamic)
-- **Service Objects** (TCP/UDP ports)
-- **Service Groups**
-- **Security Policy Rules**
-- **NAT Policy Rules**
-- **Device Groups**
-
-### Key Capabilities
-
-- Parses standard Panorama XML export format
-- Handles both device group and shared configurations
-- Generates clean, readable Terraform code
-- Includes proper resource dependencies
-- Preserves descriptions, tags, and metadata
-- Automatic deduplication of resources
-- Sanitizes names for Terraform compatibility
+The tool is a local file converter. It connects to no server, runs no command,
+and needs no credentials to convert.
 
 ## Requirements
 
-- Python 3.9+ (standard library only)
-- Terraform 1.0+ for the validate gate
-- A Panorama XML export
+- Python 3.9 or later. Standard library only.
+- Terraform 1.0 or later, only for the optional `--validate` check.
+- A Panorama XML export.
 
-## Installation
+No installation step. Run the script from the repository.
 
-No installation required - just download the script:
-
-```bash
-# Make the script executable
-chmod +x panorama_to_terraform.py
-```
-
-## Exporting Configuration from Panorama
-
-### Method 1: Via Web UI
-
-1. Log in to Panorama web interface
-2. Navigate to **Device** → **Setup** → **Operations**
-3. Click **Save named Panorama configuration snapshot**
-4. Download the configuration file
-5. Extract the XML from the archive
-
-### Method 2: Via CLI
+## Running the converter
 
 ```bash
-# SSH into Panorama
-ssh admin@panorama-hostname
-
-# Export configuration
-> set cli config-output-format xml
-> configure
-# show
-> save config to <filename>.xml
-
-# Download the file using SCP
-scp admin@panorama-hostname:<filename>.xml ./
-```
-
-### Method 3: API Export
-
-```bash
-# Using curl
-curl -k -X GET 'https://panorama-hostname/api/?type=export&category=configuration&key=YOUR_API_KEY' -o config.xml
-```
-
-## Usage
-
-### Basic Usage
-
-```bash
-python3 panorama_to_terraform.py <input_file.xml>
-```
-
-This will create a `terraform_output` directory with all Terraform files.
-
-### Custom Output Directory
-
-```bash
-python3 panorama_to_terraform.py <input_file.xml> --output-dir /path/to/output
-```
-
-### Input Limit
-
-Both scripts refuse an input larger than 64 MiB before reading it, and an
-input that declares a DTD (a Panorama export carries none). A refusal
-names the file, the limit and the measured size, exits non-zero, and
-writes no output file.
-
-```bash
-# Raise the limit for a trusted file (both scripts take the same flag)
-python3 panorama_to_terraform.py big_export.xml --max-input-bytes 268435456
-```
-
-### Post-run sanity gate
-
-Every run checks the `.tf` files it wrote, prints a summary, and writes
-`SANITY_REPORT.txt`. A check that finds nothing reports PASS. A FAIL finding
-exits 1. A WARN does not fail the run, and a check the run could not perform
-reports SKIPPED and does not change the exit code.
-
-```bash
-# Static checks only (the default): no terraform needed
 python3 panorama_to_terraform.py export.xml --output-dir out
-
-# Static checks plus terraform init + terraform validate
-python3 panorama_to_terraform.py export.xml --output-dir out --validate
 ```
 
-The checks are: `emitted_types` (only `EMITTED_TYPES`), `location_present` (a
-`location` block on every resource), `references` (no `.name` reference to a
-resource this run did not declare), `variables` (no declared variable without a
-`var.` consumer), `control_chars` (no raw control character or DEL), and
-`placeholders` (an expected placeholder, such as the VPN key, listed for the
-operator). `--validate` adds the `terraform` check. The rules live in
-`sanity_checks.py` and are stated in
-[`docs/ARCHITECTURE.md`](ARCHITECTURE.md) §4.6.
+| Argument | Meaning |
+|---|---|
+| `input_file` | Panorama XML export |
+| `--output-dir DIR` | Output directory. Default `terraform_output` |
+| `--max-input-bytes N` | Refuse an input larger than N. Default 67,108,864 (64 MiB) |
+| `--validate` | Add the `terraform init` + `terraform validate` check to the post-run gate |
 
-### Example
+The input check runs before the read allocates and before any file is written.
+The tool refuses a DTD, which is the only path an entity expansion or an
+external entity takes, and a Panorama export carries none. A refusal names the
+file, the limit and the measured size, exits non-zero, and writes nothing.
+Raise the size limit only for a trusted file.
+
+## Quick start script
+
+`quick_start.sh` runs the converter on the committed sample export
+(`sample_panorama_config.xml`) and prints the next steps. It is a demonstration,
+not part of the converter. It adds `--validate` when the terraform binary is
+present, so the gate runs the terraform check when it can.
+
+## Running the splitter
+
+The splitter is optional pre-processing. It writes one XML file per device
+group.
 
 ```bash
-python3 panorama_to_terraform.py panorama_config.xml --output-dir ./terraform/palo_alto
+python3 split_device_groups.py export.xml --output-dir split_output
 ```
 
-## Output Structure
+| Argument | Meaning |
+|---|---|
+| `input_file` | Panorama XML export |
+| `--output-dir DIR`, `-o DIR` | Output directory. Default `split_configs` inside the input file's directory |
+| `--max-input-bytes N` | The same input check as the converter |
 
-Every emitted file exists only when the input contains data for it.
-The complete set (see `tests/golden/kitchen_sink/`, byte-gated by
-`tests/test_golden_files.py`):
+How the splitter joins a device group to a template is in
+[DEVICE_GROUP_SPLITTING.md](DEVICE_GROUP_SPLITTING.md). The splitter writes XML,
+so it has no `.tf` output and no gate run.
 
-```
-terraform_output/
-├── provider.tf           # Provider configuration (credentials wired from variables)
-├── variables.tf          # Variable definitions
-├── address_objects.tf    # Address object resources
-├── address_groups.tf     # Address group resources
-├── service_objects.tf    # Service object resources
-├── service_groups.tf     # Service group resources
-├── tags.tf               # Administrative tags
-├── application_groups.tf # Application group resources
-├── custom_url_categories.tf
-├── external_lists.tf     # External dynamic lists
-├── security_profile_groups.tf
-├── security_profiles.tf  # Security profile inventory (names/descriptions only; bodies are report-only)
-├── security_rules.tf     # Security policy rules (one resource per rule, one chain per device group and vsys)
-├── nat_rules.tf          # NAT policy rules
-├── decryption_rules.tf   # Decryption policy rules
-├── pbf_rules.tf          # PBF policy rules
-├── monitor_profiles.tf   # PBF path-monitor profiles
-├── interfaces.tf         # Ethernet interfaces + layer-3 subinterfaces
-├── zones.tf              # Zones
-├── virtual_routers.tf    # Virtual routers + static routes
-├── vpn.tf                # IKE/IPsec crypto profiles, gateways, tunnels
-├── README.md             # Deployment instructions
-├── MANUAL_SETUP_REPORT.txt     # BGP, OSPF, application filters, and other report-only items
-├── INTERFACE_MIGRATION_REPORT.txt   # grouped by device group, then template/device
-├── VPN_MIGRATION_REPORT.txt    # VPN key-management instructions (placeholder pre-shared keys)
-└── SANITY_REPORT.txt           # the post-run gate: result, checks, findings
-```
+## Output files
 
-Both reports list one section per scope the export declares (device group, then
-template or device), so the same object name in two device groups is two
-sections. The shared section is named `Shared`. The rule, and the test that
-pins both reports to it, is in
-[`docs/ARCHITECTURE.md`](ARCHITECTURE.md) §4.5.
+The converter writes a file only when it has content.
 
-## Terraform Deployment
+| File | Content |
+|---|---|
+| `provider.tf` | Provider block, wired to the three credential variables |
+| `variables.tf` | `panos_hostname`, `panos_username`, `panos_password` |
+| `address_objects.tf`, `address_groups.tf`, `service_objects.tf`, `service_groups.tf`, `tags.tf`, `custom_url_categories.tf`, `application_groups.tf`, `external_lists.tf` | Object resources |
+| `security_rules.tf`, `nat_rules.tf`, `decryption_rules.tf`, `pbf_rules.tf` | Policy rules, one resource per rule, chained in XML order |
+| `security_profile_groups.tf` | Profile group resources |
+| `security_profiles.tf` | Inventory only: names and descriptions, with the resource name the emitter would use |
+| `interfaces.tf`, `zones.tf`, `virtual_routers.tf`, `monitor_profiles.tf`, `vpn.tf` | Network and VPN resources |
+| `README.md` | Deployment steps for the generated directory |
+| `MANUAL_SETUP_REPORT.txt` | Report-only configuration, plus a section for a container no parse method reads |
+| `INTERFACE_MIGRATION_REPORT.txt` | Interface and IP inventory |
+| `VPN_MIGRATION_REPORT.txt` | VPN inventory and the pre-shared key actions |
+| `CONVERSION_REPORT.txt` | One line per entry the parse read |
+| `SANITY_REPORT.txt` | The post-run gate result |
 
-### Step 1: Configure Authentication
+The interface report, the VPN report, and the conversion report share one grouping
+rule: one section per scope the export declares (device group, then the template or
+the device), and the shared section is named `Shared`. The rule is in
+[ARCHITECTURE.md](ARCHITECTURE.md) §4.5. The manual report is organised by object
+kind instead, so it does not name the scope on each line; that is recorded in
+[`../backlog.md`](../backlog.md).
 
-Create a `terraform.tfvars` file:
+`SANITY_REPORT.txt` is written on every run, by the gate, not only when it has a
+finding. The other reports are written only when they have content.
 
-```hcl
-panos_hostname = "panorama.example.com"
-panos_username = "admin"
-panos_password = "your-secure-password"
-```
+## Post-run sanity gate
 
-Or use Terraform environment variables:
+Every conversion runs the gate on the files it wrote, prints a summary, and
+writes `SANITY_REPORT.txt`. The gate reads the files, so it reports what you
+receive, not what the generator intended.
 
-```bash
-export TF_VAR_panos_hostname="panorama.example.com"
-export TF_VAR_panos_username="admin"
-export TF_VAR_panos_password="your-secure-password"
-```
+| Check | Rule | Severity |
+|---|---|---|
+| `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |
+| `location_present` | every resource block carries `location` | FAIL |
+| `references` | every `.name` reference resolves to a resource declared in the same run | FAIL |
+| `variables` | every declared variable has a `var.` consumer | FAIL |
+| `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
+| `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
+| `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
 
-### Step 2: Initialize Terraform
+A WARN does not fail the run. A FAIL finding exits 1. A SKIPPED check never
+changes the exit code. The rules live in `sanity_checks.py` and are stated in
+[ARCHITECTURE.md](ARCHITECTURE.md) §4.6.
 
-```bash
-cd terraform_output
-terraform init
-```
+Exit codes: 0 when the gate reports no FAIL finding, 1 when a check fails or
+the input is refused. A coverage gap or an unaccounted entry is an operator
+action, so it does not change the exit code.
 
-### Step 3: Review the Plan
+## Reading the generated Terraform
 
-```bash
-terraform plan
-```
+Three things explain the shape of the output:
 
-Review the output carefully to ensure all resources are correct.
+- **Naming.** A local resource name is the sanitized PAN-OS name plus an 8-hex
+  digest of the source identity, so the same name in two device groups, virtual
+  systems, templates or firewalls is two resources. The rule is in
+  [ARCHITECTURE.md](ARCHITECTURE.md) §5.
+- **Location.** Each resource carries the `location` block the source scope
+  states, in the shape the provider declares for that type. The branch order is
+  in [ARCHITECTURE.md](ARCHITECTURE.md) §4.2.
+- **References.** A name the same run declares is emitted as a `.name`
+  reference, so apply order follows the dependency. A name outside the export
+  stays a plain string. The resolution order is in
+  [ARCHITECTURE.md](ARCHITECTURE.md) §4.3.
 
-### Step 4: Apply Configuration
+## Deploying the generated configuration
 
-```bash
-# Dry run first
-terraform plan -out=tfplan
-
-# Apply the plan
-terraform apply tfplan
-```
-
-## Advanced Usage
-
-### Filtering Specific Device Groups
-
-The converter emits one rule chain per device group, so you do not
-filter with variables: keep or delete the resource blocks for the
-device group you want, or pre-split the export with
-`split_device_groups.py` and run the converter on one file at a time.
-
-### Customizing Resource Names
-
-The script automatically sanitizes resource names, but you can modify the `sanitize_name()` function in the script to customize naming conventions.
-
-### Handling Large Configurations
-
-For very large configurations (1000+ rules), consider splitting the output:
-
-```python
-# Modify the script to generate separate files per device group
-# or split rules into multiple files
-```
+1. Create `terraform.tfvars` with the credentials. Do not commit it.
+2. Replace the placeholder VPN pre-shared keys.
+3. Read `MANUAL_SETUP_REPORT.txt` and configure those items by hand.
+4. Check interface names against the target platform
+   (`INTERFACE_MIGRATION_REPORT.txt`).
+5. `terraform init`, then `terraform plan`, then `terraform apply`. Review the
+   plan before you apply it.
 
 ## Troubleshooting
 
-### Common Issues
+| Symptom | Cause and action |
+|---|---|
+| `ParseError: not well-formed` | The export is truncated or invalid. Export again from Panorama. |
+| `Error: ... larger than the limit` | The input exceeds `--max-input-bytes`. Raise the limit only for a trusted file. |
+| `Refused: input declares a DTD` | The file is not a Panorama export. Do not disable the check; obtain the export again. |
+| Gate FAIL on `references` | A `.name` reference points at a resource this run did not declare. Read `SANITY_REPORT.txt`; the converter never declares a resource to make a reference work. |
+| Gate FAIL on `variables` | A declared variable has no `var.` consumer. Only the three credential variables are declared. |
+| Gate WARN on `placeholders` | Expected. A VPN pre-shared key is a placeholder, and you must set it before apply. |
+| Duplicate local resource names | A true duplicate of the same identity. The generator adds a numeric suffix so the output stays valid HCL. Two different identities never need it. |
+| `terraform validate` reports an unknown `location` sub-block | The gate checks presence only, not shape. Read `LOCATION_SCHEMA` in `resource_mapping.py`; `terraform validate` accepts an unknown sub-block and drops it silently. |
+| Apply fails with "not found" | The referenced object exists in another tenant, so the converter left the name as a plain string. Create it, or point the provider at the right device group. |
+| Splitter prints "No device groups found" | The export came from a firewall, not Panorama. Run the converter on it directly. |
+| Splitter copies no template | No device appears in both the device group and the template. The splitter prints the fact. Fix the export, or copy the template section by hand. |
 
-**Issue**: "ParseError: not well-formed"
-- **Solution**: Ensure the XML file is valid and complete. Try re-exporting from Panorama.
+## Extending the converter
 
-**Issue**: Duplicate resource names in Terraform
-- **Solution**: The script automatically handles duplicates. If issues persist, check for naming conflicts in the original config.
+Add a type in this order, so the tests cannot drift:
 
-**Issue**: Authentication failed when running Terraform
-- **Solution**: Verify credentials and network connectivity. Ensure API access is enabled on Panorama.
+1. Add the type to `EMITTED_TYPES` in `resource_mapping.py`, and to
+   `LOCATION_SCHEMA` with the sub-blocks the provider schema declares.
+2. Add a `COVERAGE_MATRIX` row with the XML element, the fixture entry, the
+   expected emitted name, the fixture, and the output file.
+3. Add the parse method, and mark each entry it reads. Add the container-table
+   row in `container_coverage.py`.
+4. Add the generator method.
+5. Add or extend a fixture, and the row test. Run `python3 -m pytest` and
+   `ruff check .`.
 
-**Issue**: Resources not found during apply
-- **Solution**: Ensure the device group exists and you have proper permissions. Check that shared resources are accessible.
-
-### Debug Mode
-
-To see detailed parsing information:
-
-```python
-# Add to the script before main():
-import logging
-logging.basicConfig(level=logging.DEBUG)
-```
-
-## Best Practices
-
-### Before Migration
-
-1. **Test in non-production** first
-2. **Backup existing configuration** using Panorama's native backup
-3. **Review generated Terraform** for accuracy
-4. **Validate rule ordering** matches your requirements
-5. **Check for deprecated features** that may not translate
-
-### During Migration
-
-1. **Use Terraform workspaces** for different environments
-2. **Apply in stages** (objects first, then rules)
-3. **Monitor logs** for any errors
-4. **Keep the XML source** for reference
-
-### After Migration
-
-1. **Commit Terraform to version control**
-2. **Document any manual adjustments**
-3. **Set up CI/CD** for future changes
-4. **Regular state backups** using remote state
+An emitter change that skips step 2 fails `tests/test_coverage_matrix.py`. A
+parse method that reads entries without marking them fails
+`tests/test_entry_coverage.py`.
 
 ## Limitations
 
-### Report-only configuration
+The limits are recorded in [`../backlog.md`](../backlog.md) and in
+[RESOURCE_MAPPING.md](RESOURCE_MAPPING.md). The main ones:
 
-The following have no v2 provider resource. The converter keeps their
-data visible in `MANUAL_SETUP_REPORT.txt` (or the VPN/interface
-migration reports) instead of emitting it — see
-[`docs/RESOURCE_MAPPING.md`](./RESOURCE_MAPPING.md) for the full list
-and rationale:
-
-- BGP (router, peer groups, peers)
-- OSPF (router, areas, interfaces)
-- Application filters
-- Application override rules
-- QoS profiles
-
-Next-VR static routes have no v2 route attribute either: configure
-them on the target device after apply.
-
-### VPN key management
-
-`vpn.tf` emits placeholder pre-shared keys. Replace them with the
-real keys before apply and follow `VPN_MIGRATION_REPORT.txt`.
-
-## Extending the Script
-
-### Adding New Resource Types
-
-To add support for additional resource types:
-
-1. Add a new parsing method in `PanoramaParser` class
-2. Add a new generation method in `TerraformGenerator` class
-3. Call both methods in `main()`
-
-Example:
-
-```python
-# In PanoramaParser:
-def parse_zones(self) -> List[Dict]:
-    zones = []
-    # Add parsing logic
-    return zones
-
-# In TerraformGenerator:
-def generate_zones(self, zones: List[Dict]):
-    # Add generation logic
-    pass
-
-# In main():
-zones = panorama.parse_zones()
-tf_gen.generate_zones(zones)
-```
-
-## Support and Contribution
-
-### Getting Help
-
-- Review the generated README.md in the output directory
-- Check Palo Alto Networks Terraform provider documentation
-- Consult the script's inline comments
-
-### Contributing
-
-To improve this script:
-1. Add support for additional resource types
-2. Improve error handling
-3. Add unit tests
-4. Enhance XML path detection
-
-## Version History
-
-- v1.0 - Initial release with core functionality
-  - Address objects and groups
-  - Service objects and groups
-  - Security and NAT rules
-  - Basic device group support
+- BGP, OSPF, application filters, application override rules, QoS profiles, and
+  IPsec tunnel monitor profiles have no v2 resource.
+- Security profile bodies, log forwarding profiles, and schedules are captured
+  only as name and description, so they are reported, not emitted.
+- Address types with no `panos_address` attribute (country, region, continent,
+  container, external) are reported.
+- A service that defines both tcp and udp emits one leg, because the provider
+  accepts one.
+- Rulebase (pre, post, shared) is not recorded, so a device group with both
+  pre- and post-rules chains across them.
+- `location.template_stack` is never emitted, and a template that targets two
+  devices keeps interface names as strings.
 
 ## License
 
-This script is provided as-is for use with Palo Alto Networks devices.
+The project is dual-licensed: AGPL v3 for open source use, and a commercial
+license for proprietary use. The terms are in
+[DUAL-LICENSING-EXPLAINED.md](DUAL-LICENSING-EXPLAINED.md), and the license
+texts are `LICENSE-AGPL` and `LICENSE-COMMERCIAL`.
 
-## Additional Resources
+## Additional resources
 
-- [Palo Alto Terraform Provider Documentation](https://registry.terraform.io/providers/PaloAltoNetworks/panos/latest/docs)
-- [Terraform Best Practices](https://www.terraform.io/docs/cloud/guides/recommended-practices/index.html)
-- [Palo Alto API Documentation](https://docs.paloaltonetworks.com/pan-os/9-1/pan-os-panorama-api)
+- [Palo Alto Terraform provider](https://registry.terraform.io/providers/PaloAltoNetworks/panos/latest/docs)
+- [PAN-OS API documentation](https://docs.paloaltonetworks.com/pan-os/11-0/pan-os-panorama-api/get-started-with-panorama-api)
+- Testing and linting: `python3 -m pytest`, `ruff check .`

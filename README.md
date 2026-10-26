@@ -58,7 +58,7 @@ The mapping and rationale are in
 The provider-resource <-> Panorama-XML-element coverage matrix — one
 row per emitted type with the XML element, fixture, and expected name,
 enforced by `tests/test_coverage_matrix.py` — is in
-[`COVERAGE_MATRIX`](resource_mapping.py) (machine-readable) and
+[`COVERAGE_MATRIX`](resource_mapping.py) (machine-readable, 28 rows) and
 [`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md) (table + method).
 
 ## Dependency wiring
@@ -149,18 +149,20 @@ resource — so the missing part stays in the report:
   `panos_service` accepts one leg, so the tcp leg emits and the udp leg is
   listed with its ports
 
-Reports written to the output directory:
+Reports written to the output directory, each only when it has content:
 
 - `MANUAL_SETUP_REPORT.txt` - everything above that must be configured
-  manually
+  manually, plus a section for a container no parse method reads
+  ([`container_coverage.py`](container_coverage.py))
 - `INTERFACE_MIGRATION_REPORT.txt` - interface and IP inventory
 - `VPN_MIGRATION_REPORT.txt` - VPN inventory; **pre-shared keys are
   placeholders and must be set before apply**
 - `CONVERSION_REPORT.txt` - one line per entry the parse read: source line,
   object type, entry name, destination, detail, and the fields it captured;
   the file names the input file name, not its path
+  ([`entry_coverage.py`](entry_coverage.py))
 
-Both migration reports are grouped by the scope the export declares: device
+The three grouped reports are grouped by the scope the export declares: device
 group first, then the template or the device the entry sits in, then the
 object kind inside the section. A section names only the scope the export
 states, so the same interface or gateway name on two device groups appears
@@ -180,12 +182,12 @@ security_profiles.tf  security_profile_groups.tf
 zones.tf  interfaces.tf  virtual_routers.tf  monitor_profiles.tf
 vpn.tf
 MANUAL_SETUP_REPORT.txt  INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.txt
-SANITY_REPORT.txt
+CONVERSION_REPORT.txt  SANITY_REPORT.txt
 ```
 
 (Only files with content are written; the list above is the union across
 all supported inputs. The kitchen-sink fixture exercises the full set,
-and `tests/test_golden_files.py` pins the exact file names and bytes.)
+and `tests/test_golden_files.py` pins the exact `.tf` file names and bytes.)
 
 ## Exporting from Panorama
 
@@ -261,29 +263,54 @@ call that module instead of restating them. The gate is described in
 ## Testing
 
 - `python3 -m pytest` - the full suite: parser and generator unit tests,
-  golden byte-for-byte gates, resource-mapping and schema conformance,
-  policy order and dependency wiring, robustness, the F2.8 coverage
-  matrix row tests, and the F2.10 no-dead-variable checks. XML fixtures drive the converter; provider schema
-  conformance runs `terraform providers schema -json` against the
-  pinned version (skipped when the `terraform` binary or registry
-  access is unavailable).
+  golden byte-for-byte gates, resource-mapping and provider-schema
+  conformance, policy order, dependency wiring, robustness, the coverage
+  matrix row tests, the container-table parity tests, the entry-mark tests,
+  and the no-dead-variable checks. XML fixtures drive the converter; schema
+  conformance runs `terraform providers schema -json` against the pinned
+  version (skipped when the `terraform` binary or registry access is
+  unavailable).
 - `tests/test_terraform_validate.py` - `terraform init` + `terraform
   validate` on the sample, kitchen-sink, and crypto-profile-only
   outputs (skipped when the `terraform` binary is absent)
 - `tests/test_sanity_gate.py` - the post-run gate: every check detects its
   violation, no fixture trips a false positive, the report is byte-identical
   between two runs, and the exit code follows the findings
+- `tests/test_container_coverage.py` - the container table and the code stay
+  in step: no parse method without a row, no row naming a path the method
+  does not read
+- `tests/test_entry_coverage.py` - every parse method that reads entries
+  marks them, so the per-entry report cannot lie
 - `ruff check .` - lint
+
+Run counts are not stated here. They change with every feature and are
+recorded in the git history and in `agent-status.md`.
 
 ## Documentation
 
+The full index is [`docs/README.md`](docs/README.md). Each rule lives in one
+document; the others link to it.
+
+- [`docs/USAGE_GUIDE.md`](docs/USAGE_GUIDE.md) - how to run each script and
+  what each output file holds
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - data model, parse pipeline,
   emit pipeline, and the naming rules
-- [`docs/MIGRATION_GUIDE.md`](docs/MIGRATION_GUIDE.md) - migration workflow
-- [`docs/USAGE_GUIDE.md`](docs/USAGE_GUIDE.md) - technical reference
 - [`docs/RESOURCE_MAPPING.md`](docs/RESOURCE_MAPPING.md) - v2 mapping rationale
-- [`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md) - coverage matrix, row schema, and test methodology
-- [`docs/DEVICE_GROUP_SPLITTING.md`](docs/DEVICE_GROUP_SPLITTING.md) - splitter notes
+- [`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md) - coverage matrix, row
+  schema, and test methodology
+- [`docs/MIGRATION_GUIDE.md`](docs/MIGRATION_GUIDE.md) - migration workflow,
+  including the multi-VR case
+- [`docs/DEVICE_GROUP_SPLITTING.md`](docs/DEVICE_GROUP_SPLITTING.md) - the
+  splitter and how it joins a device group to a template
+- [`docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md`](docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md) -
+  logical routers
+- [`docs/VPN_ROUTING_CONFIG_EXAMPLES.md`](docs/VPN_ROUTING_CONFIG_EXAMPLES.md) -
+  input shapes the parser reads
+- [`docs/DUAL-LICENSING-EXPLAINED.md`](docs/DUAL-LICENSING-EXPLAINED.md) - the
+  two license options
+
+Example output is in [`examples/`](examples/): the pointer to the pinned golden
+sample, and a real report from the kitchen-sink fixture.
 
 ## License
 
@@ -292,7 +319,12 @@ This project is **dual-licensed**:
 - **AGPL v3** - free for open source use (see [LICENSE-AGPL](LICENSE-AGPL))
 - **Commercial** - for proprietary use (see [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL))
 
+The summary of the two options, including the network copyleft rule, is in
+[`docs/DUAL-LICENSING-EXPLAINED.md`](docs/DUAL-LICENSING-EXPLAINED.md).
+
 ## Additional resources
 
 - [Palo Alto Terraform Provider](https://registry.terraform.io/providers/PaloAltoNetworks/panos/latest/docs)
-- [PAN-OS API documentation](https://docs.paloaltonetworks.com/pan-os/9-1/pan-os-panorama-api)
+- [PAN-OS Advanced Routing](https://docs.paloaltonetworks.com/pan-os/11-0/pan-os-networking-admin/advanced-routing)
+
+The converter reads a Panorama XML export file. It does not call the PAN-OS API.

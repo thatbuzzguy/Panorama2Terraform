@@ -8,8 +8,9 @@ Two rules, stated once here:
 2. The entry-container rule. A container is a **section** when no config-object
    entry lies between it and a config root. A config root is the `config`
    element or an entry that defines a scope (see `SCOPE_CONTAINERS`). A
-   container inside a config-object entry is a property level, not a section:
-   F4.4 covers it, so this module does not report it.
+   container inside a config-object entry is a property level, not a section: the
+   property-level scan (F4.4, not implemented) covers it, so this module does not
+   report it.
 
 The scan reports a section that no row covers. A section that is absent from
 the input is not a finding: an export does not have to contain every container
@@ -184,7 +185,8 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                  'network/ike/crypto-profiles/ipsec-crypto-profiles', 'emitted',
                  'panos_ike_crypto_profile'),
     # Sub-shape entries: read by a parse method, but inside a config-object
-    # entry, so they are property levels and F4.4 checks them.
+    # entry, so they are property levels. The property-level scan (F4.4, not
+    # implemented) would check them.
     ContainerRow('parse_interfaces', 'units', 'emitted', 'panos_ethernet_layer3_subinterface',
                  level='sub-shape'),
     ContainerRow('parse_interfaces', 'ip', 'nested-block',

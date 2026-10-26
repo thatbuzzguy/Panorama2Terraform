@@ -1,32 +1,46 @@
-# To Do — F4.4 Property-level coverage matrix (next feature)
+# To Do — Documentation Refresh (complete)
 
-F4.3 (per-entry conversion report) is complete and committed. Its pieces are
-recorded in `acceptance.md` (Result) and in the git history:
+Acceptance criteria and the result are in `acceptance.md`.
 
-- `entry_coverage.py`: the mark mechanism (`mark`, `mark_skipped`), the row rules,
-  the captured-field rule, `entry_line`, the report text, the gap section and the
-  console lines.
-- `TerraformGenerator.generate_conversion_report` writes `CONVERSION_REPORT.txt`
-  and groups rows with the F3.9 rule (`_report_scope_path`).
-- `container_coverage.DESTINATION_KINDS` gained `skipped` and `unaccounted`; the
-  `parse_device_groups` row changed from `count-only` to `bookkeeping`, because a
-  device group name reaches the output through `location`.
-- Every parse method marks the entries it reads, at the point it builds the object.
-- Tests: `tests/test_entry_coverage.py` (26), fixture
-  `tests/fixtures/entry_gaps.xml`.
+- [x] Read every markdown file in the repository and check each claim against the code.
+- [x] Overwrite `acceptance.md` with the criteria for this task.
+- [x] Measure the current facts: `pytest`, `ruff`, the mapping counts, the report
+  formats, the CLI flags, the CI job.
+- [x] `README.md`: claims, documentation index, testing section without counts.
+- [x] `docs/README.md`: one index that names each document and its reader task.
+- [x] `docs/ARCHITECTURE.md`: module table, §2.4 destinations, §3.1 the open path
+  exception, §4.5 report files, §7 the claims that are now implemented.
+- [x] `docs/USAGE_GUIDE.md`: rewrite the stale feature, output, troubleshooting and
+  version sections; add the quick start script.
+- [x] `docs/MIGRATION_GUIDE.md`: merge `docs/MULTI_VR_MIGRATION_GUIDE.md` into it;
+  fix the "what gets converted" list. `docs/MULTI_VR_MIGRATION_GUIDE.md` removed.
+- [x] `docs/DEVICE_GROUP_SPLITTING.md`: merge `docs/MULTI_VR_QUICK_ANSWER.md` into
+  it; fix the split-output tree and the shared-object claim.
+  `docs/MULTI_VR_QUICK_ANSWER.md` removed.
+- [x] `docs/COVERAGE_MATRIX.md`: regenerate the table from `COVERAGE_MATRIX` (28 rows).
+- [x] `docs/RESOURCE_MAPPING.md`: correct the bucket counts, add the interface kinds,
+  state the nested-block rule, verify each claim against the live provider schema.
+- [x] `docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md`: correct the parsed/not-parsed wording,
+  confirm the example against the golden file.
+- [x] `docs/VPN_ROUTING_CONFIG_EXAMPLES.md`: correct the generated-file claims and the
+  XML shapes the parser reads.
+- [x] `docs/DUAL-LICENSING-EXPLAINED.md`: trim to the factual license summary.
+- [x] In-code documentation: the generated output `README.md` text, the CI workflow
+  comment, the `test_golden_files.py` docstring, `quick_start.sh`, `examples/`, and the
+  module and test docstrings.
+- [x] `AGENTS.md`: state that `lib_docs/` is not in the repo.
+- [x] `ADVERSARIAL_AUDIT_REPORT.md`: add the status table so a point-in-time finding
+  is not read as a current fact.
+- [x] Add to `backlog.md` the gaps the documents confirmed: the overlapping BGP and
+  OSPF paths, the manual report sections that do not name their scope, BGP
+  redistribution captured but not printed, the two report lines that name F4.4, and
+  `lib_docs/` missing.
+- [x] Update `PLAN.md`, `agent-status.md`, then commit.
+- [x] Gate: `ruff check .`, `pytest`, goldens byte-identical, `terraform validate`,
+  exit codes unchanged.
 
-F4.4 is not started. Its pieces, when it starts:
+## Next feature — F4.4 property-level coverage
 
-- [ ] Overwrite `acceptance.md` with the F4.4 criteria before code or tests.
-- [ ] Decide what one property row states: the property path, the value, and the
-  output it produced.
-- [ ] Reconcile `COVERAGE_MATRIX` with `EMITTED_TYPES` and `resource_name_map`.
-- [ ] Report a property the parser captured but no output used (the extraction gaps
-  in `backlog.md`), per property, not per entry.
-- [ ] Tests: a fixture where an entry is read but one property is dropped, and a
-  test that every captured property appears in the matrix.
-- [ ] Keep the gate green: ruff, pytest, golden tests, `terraform validate`,
-  and the F4.1/F4.2/F4.3 exit codes.
-
-Scope guard: F4.4 does not change the F4.3 report row rules. Property entries stay
-counted on the parent row until the matrix covers them per property.
+Pieces go here when the work starts. The two report output lines that name F4.4 change
+with it (`backlog.md`), and the two report defects found during this task are fixed in
+the same pass (`PLAN.md` sequencing).

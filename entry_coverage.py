@@ -9,7 +9,8 @@ Three rules, stated once here.
    mark it fails the gate (tests/test_entry_coverage.py).
 2. The report row. One entry is one `<entry name>` element, not the lines it
    spans. An entry inside a config-object entry is a property level, so the
-   property matrix (F4.4) owns it; the parent row shows the count instead.
+   property matrix (F4.4, not implemented) owns it; today the parent row shows the
+   count instead.
    Entries under `predefined` are PAN-OS built-in definitions, not operator
    objects (F4.2), so they are not rows.
 3. The destination. The container table row that covers the entry's container
@@ -181,7 +182,8 @@ class EntryLedger:
         ))
 
     def property_entry_count(self, entry: ET.Element) -> int:
-        """Entries inside this entry. F4.4 reports each one; F4.3 counts them.
+        """Entries inside this entry. The property-level scan (F4.4, not implemented)
+        would report each one; this module counts them.
 
         The entry itself is not a property entry of itself.
         """

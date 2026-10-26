@@ -1,39 +1,63 @@
 # Agent Status
 
 ## Current position
-**F4.3 (per-entry conversion report) is committed** as c9a1f6b and closes the
-third Epic 4 feature. Gate: ruff clean, pytest 566 passed (26 new), both golden sets byte-identical, terraform
-validate green on all four outputs. Next feature: F4.4 property-level matrix
-(`to-do.md`).
 
-Files changed: `entry_coverage.py` (new), `container_coverage.py` (two destination
-kinds, `SCOPE_FACT_KEYS`, the `parse_device_groups` row is now `bookkeeping`),
-`panorama_to_terraform.py` (`PanoramaParser.mark` / `mark_skipped`, `ledger`,
-marks in every parse method, `TerraformGenerator.generate_conversion_report`,
-`main()` console), `tests/test_entry_coverage.py` (new),
-`tests/fixtures/entry_gaps.xml` (new), `tests/test_container_coverage.py`
-(docstring: eight destinations), `README.md`, `docs/ARCHITECTURE.md` §2.4 and the
-new §3.2.
+The documentation refresh is complete and committed. Gate at the commit:
+`ruff check .` clean, `pytest` 566 passed, both golden sets byte-identical,
+`terraform validate` green on all four outputs, exit codes unchanged.
 
-Rules F4.3 pinned:
-- One report row is one `<entry name>` element at section level. A container inside
-  a config-object entry is a property level, so the parent row counts the property
-  entries instead of printing a row (F4.4 covers them).
-- Object type is the F4.2 `section_path` rule; no second naming rule.
-- Destination is the longest matching container row, with two per-entry overrides:
-  `report_only` content is `report`, a skipped entry is `skipped`, and an entry no
-  parse method read is `unaccounted`. A scope entry is `bookkeeping`.
-- Captured fields are the object keys minus the entry name and the four scope facts,
-  minus empty values, sorted; `captured: name only` when there is nothing else.
-- The mark stores the object by reference, so a field added after the mark is
-  reported.
-- Gap kinds write nothing: `count-only`, `skipped`, `unaccounted`. A `report` row is
-  not a gap because the manual report is its output.
-- Rows are grouped by the F3.9 rule, ordered by line then object type then name, the
-  report names the file name only, two runs write the same bytes, no entries means no
-  file, no gaps means no extra console line, and the exit code stays with the F4.1 gate.
+The next feature is F4.4, the property-level coverage matrix (`PLAN.md`). Its pieces
+go into `to-do.md` when it starts. Two report defects found during this task land with
+it: the overlapping BGP and OSPF read paths, and the manual report sections that do not
+name their scope.
 
-Watch during F4.4: the mark rule is an AST check over parse methods and their helper
-calls, so a method that reads entries through a variable path is accepted only when it
-marks somewhere in the call chain (`tests/test_entry_coverage.py::_reads_entries`).
-The report line shape is pinned field by field in `entry_coverage.entry_line`.
+## What this task changed
+
+- Root markdown: `README.md`, `AGENTS.md`, `PLAN.md`, `backlog.md`,
+  `ADVERSARIAL_AUDIT_REPORT.md` (status table), `acceptance.md`, `to-do.md`,
+  `agent-status.md`.
+- `docs/`: the index (`docs/README.md`) and every document in it.
+  `docs/MULTI_VR_MIGRATION_GUIDE.md` and `docs/MULTI_VR_QUICK_ANSWER.md` were merged
+  into `MIGRATION_GUIDE.md` and `DEVICE_GROUP_SPLITTING.md` and removed.
+- In-code documentation: the generated `README.md` text in `generate_readme`, the CI
+  workflow comment, `quick_start.sh`, `examples/example_interface_report.txt`, the
+  module docstrings (`panorama_to_terraform.py`, `split_device_groups.py`,
+  `container_coverage.py`, `entry_coverage.py`, `resource_mapping.py`), and
+  `tests/test_golden_files.py` and `tests/test_container_coverage.py` docstrings.
+- No code behaviour changed. No test expectation changed.
+
+## Facts measured during this task
+
+| Fact | Value |
+|---|---|
+| `EMITTED_TYPES` | 28 |
+| `REPORT_ONLY_TYPES` | 10 |
+| `NOT_EMITTED_TYPES` | 3 |
+| `COVERAGE_MATRIX` rows | 28 |
+| `LOCATION_SCHEMA` | 28 types |
+| `INTERFACE_RESOURCE_TYPES` | 7 (virtual-wire and TAP are nested blocks, not types) |
+| `DESTINATION_KINDS` | 8 |
+| `CONTAINER_TABLE` rows | 68 |
+| Gate checks | 7, in report order: `emitted_types`, `location_present`, `references`, `variables`, `control_chars`, `placeholders`, `terraform` |
+| Report files | `CONVERSION_REPORT.txt`, `MANUAL_SETUP_REPORT.txt`, `INTERFACE_MIGRATION_REPORT.txt`, `VPN_MIGRATION_REPORT.txt`, written only when they have content; `SANITY_REPORT.txt` written on every run; plus `README.md` |
+| Provider | `PaloAltoNetworks/panos` 2.0.14, 128 resource types, read from `terraform providers schema -json` |
+
+## Rules to keep when writing documents
+
+- One owner document per rule; every other document links to it.
+- Machine-readable tables are code. A document explains a table and never restates it
+  row by row, so a regenerated table cannot drift.
+- No test counts in a document. Counts live here and in the git history.
+- A claim about what the tool does must name the module or the test that holds it. A
+  feature id is written only when a module or a test uses it as a name.
+- ASD-STE100 Simplified Technical English, no marketing voice, no emoji.
+- A historical record (the audit report) keeps its findings and states the current
+  state separately, so a reader does not take an old finding as a fact.
+
+## Watch during F4.4
+
+- The entry-mark rule is an AST check over parse methods and their helper calls, so a
+  method that reads entries through a variable path is accepted only when it marks
+  somewhere in the call chain (`tests/test_entry_coverage.py::_reads_entries`).
+- The report line shape is pinned field by field in `entry_coverage.entry_line`.
+- Two report lines already name F4.4 as if it exists; they change when the scan lands.

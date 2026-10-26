@@ -12,7 +12,8 @@ please consider these directions:
     - git commit messages will store the detailed feature or sub-feature completion history. 
     - please remove all epic, phase, feature and task information from markdown after the overall epic or phase is complete.
     - before you begin writing code or tests please overwrite acceptance.md with your acceptance criteria for your current task.
-    - API cheat sheets are in lib_docs/ for core libraries.
+    - API cheat sheets are in lib_docs/ for core libraries. That directory is not
+      in the repo yet; it is recorded in backlog.md.
     - be sure to add comments around any code that requires explanation or is not obvious.
     - consider if the code is functional, fit for purpose, and generally free from bugs.
     - please use ASD-STE100 Simplified Technical English (STE) plus programming specific vocabulary for git commits and technical documentation.

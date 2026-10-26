@@ -1,8 +1,8 @@
 # Coverage Matrix: Provider Resource <-> Panorama XML Element
 
 The machine-readable matrix lives in
-[`resource_mapping.py`](../resource_mapping.py) as `COVERAGE_MATRIX`.
-These tests enforce it: [`tests/test_coverage_matrix.py`](../tests/test_coverage_matrix.py).
+[`../resource_mapping.py`](../resource_mapping.py) as `COVERAGE_MATRIX`.
+These tests enforce it: [`../tests/test_coverage_matrix.py`](../tests/test_coverage_matrix.py).
 
 The matrix is the tracked source of truth for **which Panorama XML
 element feeds which provider v2 resource type**. It exists so that an
@@ -10,9 +10,18 @@ emitter that adds, renames, or drops a resource type can never do so
 silently: the drift tests fail when the matrix and the converter
 disagree.
 
+The table below is the matrix as it reads today. Do not maintain it by
+hand. Read the table from code, or let the row-set test fail:
+
+```bash
+python3 -c "import resource_mapping as rm; [print(r) for r in rm.COVERAGE_MATRIX]"
+```
+
+The document index is in [README.md](README.md).
+
 ## The matrix
 
-One row per emitted provider resource type (20 rows).
+One row per emitted provider resource type (28 rows).
 
 | Provider resource | Panorama XML element | Fixture entry | Emitted `name` | Fixture | Output file |
 |---|---|---|---|---|---|
@@ -26,7 +35,10 @@ One row per emitted provider resource type (20 rows).
 | `panos_service_group` | `service-group/entry` | `Web-Services` | `Web-Services` | `service_groups.xml` | `service_groups.tf` |
 | `panos_security_policy_rules` | `security/rules/entry` | `Allow-Web-Traffic` | `Allow-Web-Traffic` | `security_rules.xml` | `security_rules.tf` |
 | `panos_nat_policy_rules` | `nat/rules/entry` | `Outbound-NAT` | `Outbound-NAT` | `nat_rules.xml` | `nat_rules.tf` |
+| `panos_decryption_policy_rules` | `decryption/rules/entry` | `Decrypt-HTTPS` | `Decrypt-HTTPS` | `decryption_rules.xml` | `decryption_rules.tf` |
+| `panos_pbf_policy_rules` | `pbf/rules/entry` | `PBF-Forward` | `PBF-Forward` | `pbf_rules.xml` | `pbf_rules.tf` |
 | `panos_security_profile_group` | `profile-group/entry` | `Strict-Profile` | `Strict-Profile` | `security_profile_groups.xml` | `security_profile_groups.tf` |
+| `panos_monitor_profile` | `profiles/monitor-profile/entry` | `PM-Branch` | `PM-Branch` | `pbf_monitor_profiles.xml` | `monitor_profiles.tf` |
 | `panos_ethernet_interface` | `ethernet/entry` | `ethernet1/1` | `ethernet1/1` | `interfaces_ethernet.xml` | `interfaces.tf` |
 | `panos_ethernet_layer3_subinterface` | `ethernet/entry` | `ethernet1/1` | `ethernet1/1.0` | `interfaces_ethernet.xml` | `interfaces.tf` |
 | `panos_vlan_interface` | `vlan/units/entry` | `10` | `vlan.10` | `interfaces_other.xml` | `interfaces.tf` |
@@ -76,24 +88,31 @@ directions, one test per row where noted:
    subprocess) on the row's fixture. The output must contain a
    `resource "<type>"` block in `output_file` whose body carries
    `name = "<emitted_name>"`. This proves the full parse + generate
-   path maps the element to the provider resource, not just the parser
-   in isolation.
+   path maps the element to the provider resource, not the parser in
+   isolation.
 
-Implementation notes:
+Two levels sit beside the matrix:
 
-- Per-fixture pipeline runs are cached per test session
-  (module-level dict), so a fixture shared by two rows
-  (`interfaces_ethernet.xml` feeds both ethernet resource types)
-  converts only once.
-- A resource block runs from its `resource "..." "..." {` line to the
-  first line that is exactly `}` at column 0. Nested object values and
-  the `location` block close on indented lines, so the first
-  unindented brace is always the block end.
-- Tests identify resources by provider type and PAN-OS `name`, never
-  by the generated local name (F2.7 hashed local names are
-  deterministic but must not be asserted by tests).
+- **Container level.** `container_coverage.CONTAINER_TABLE` holds one row per
+  parse method, with the container it reads and the destination its entries
+  take. `tests/test_container_coverage.py` keeps the table and the code in
+  step. The rule and the destination kinds are in
+  [`ARCHITECTURE.md`](ARCHITECTURE.md) §3.1.
+- **Property level.** Not implemented. Each row will name the properties the
+  emitter reads, so the per-entry report can classify a property the parse
+  captured but no output used. This is the open feature recorded in
+  [`../PLAN.md`](../PLAN.md).
 
-### How this project verifies Terraform output
+## Maintenance duty
+
+An emitter change that adds, renames, or drops a provider resource
+type must update `COVERAGE_MATRIX` in the same change. A new row
+needs a fixture (or a new entry in an existing fixture) that contains
+the Panorama element with a stable entry name. When the work is done,
+all three enforcement directions must pass: row set, element
+grounding, and the per-row pipeline test.
+
+## How this project verifies Terraform output
 
 - **Provider schema source.** The panos provider's resource schemas
   come from `terraform providers schema -json`, run by
@@ -114,12 +133,3 @@ Implementation notes:
 - **Canonical commands.** `python3 -m pytest` runs the full suite
   (requirements.txt pins `pytest==9.1.1`, `ruff==0.16.10`);
   `ruff check .` is the lint gate.
-
-## Maintenance duty
-
-An emitter change that adds, renames, or drops a provider resource
-type must update `COVERAGE_MATRIX` in the same change. A new row
-needs a fixture (or a new entry in an existing fixture) that contains
-the Panorama element with a stable entry name. When the work is done,
-all three enforcement directions must pass: row set, element
-grounding, and the per-row pipeline test.

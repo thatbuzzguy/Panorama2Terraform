@@ -16,32 +16,17 @@ GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
+Commercial terms are in LICENSE-COMMERCIAL.
 
-COMMERCIAL LICENSE AVAILABLE
-For use in proprietary applications without AGPL v3 obligations,
-contact sales@gswsystems.com for commercial licensing options.
-See LICENSE-COMMERCIAL for details.
-
-═══════════════════════════════════════════════════════════════════════
-
-This script parses Palo Alto Panorama server output (XML format) and converts it
-into Terraform configuration files that can be used to configure replacement devices.
-
-Supports:
-- Device Groups
-- Security Policies
-- NAT Policies
-- Address Objects
-- Address Groups
-- Service Objects
-- Service Groups
-- Zones
-- Interfaces
-- Virtual Routers
-- And many more (36 object types total)
+This script reads a Panorama XML export and writes Terraform configuration for
+the provider `PaloAltoNetworks/panos` v2. An object the provider cannot model is
+reported, not dropped. The type list is in docs/RESOURCE_MAPPING.md; this docstring
+does not restate it.
 
 Usage:
-    python panorama_to_terraform.py <input_file.xml> [--output-dir <dir>]
+    python3 panorama_to_terraform.py <input_file.xml> [--output-dir <dir>] [--validate]
+
+See docs/USAGE_GUIDE.md for the flags, the report files, and the post-run gate.
 """
 
 import argparse
@@ -4943,14 +4928,35 @@ terraform apply
 
 ## File Structure
 
+The generator writes a file only when it has content, so a run produces the
+subset below that matches the input.
+
+Terraform configuration:
+
 - `provider.tf` - Provider configuration
 - `variables.tf` - Variable definitions
-- `address_objects.tf` - Address object configurations
-- `address_groups.tf` - Address group configurations
-- `service_objects.tf` - Service object configurations
-- `service_groups.tf` - Service group configurations
-- `security_rules.tf` - Security policy rules
-- `nat_rules.tf` - NAT policy rules
+- `address_objects.tf`, `address_groups.tf` - Address objects and groups
+- `service_objects.tf`, `service_groups.tf` - Service objects and groups
+- `tags.tf` - Administrative tags
+- `custom_url_categories.tf` - Custom URL categories
+- `application_groups.tf` - Application groups
+- `external_lists.tf` - External dynamic lists
+- `security_rules.tf`, `nat_rules.tf`, `decryption_rules.tf`, `pbf_rules.tf` -
+  Policy rules, one resource per rule
+- `monitor_profiles.tf` - PBF path monitoring profiles
+- `zones.tf`, `virtual_routers.tf`, `interfaces.tf` - Network objects
+- `security_profiles.tf` - Profile names and descriptions as comments, because the
+  parse does not capture the profile body
+- `security_profile_groups.tf` - Security profile groups
+- `vpn.tf` - IKE and IPsec crypto profiles, IKE gateways, IPsec tunnels
+
+Reports:
+
+- `CONVERSION_REPORT.txt` - one line per entry the parse read, with its destination
+- `MANUAL_SETUP_REPORT.txt` - objects the provider cannot model, and the reasons
+- `INTERFACE_MIGRATION_REPORT.txt` - interfaces and IP addresses to set on the target
+- `VPN_MIGRATION_REPORT.txt` - VPN objects and pre-shared key actions
+- `SANITY_REPORT.txt` - the post-run gate result
 
 ## Important Notes
 
@@ -4958,7 +4964,9 @@ terraform apply
 - Test in a non-production environment first
 - Back up your existing configuration
 - Adjust rule ordering as needed
-- Some features may require manual adjustment
+- Run `terraform validate` on this directory, or pass `--validate` to the
+  converter, so the gate reports findings instead of printing only success
+- Some features are reported, not generated: see the reports
 
 ## Provider Documentation
 
