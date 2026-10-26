@@ -103,7 +103,6 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 
 ## Out of Scope
 
-- Live Panorama API integration.
 - PAN-OS version matrix testing.
 - Dual-license legal review (audit §6.8).
 
@@ -238,3 +237,54 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 - `CONVERSION_REPORT.txt` groups rows with the F3.9 rule, so a report row and an
   interface report row for the same entry name sit in the same section. One shared
   grouping function, not two.
+
+## Design Decisions (upstream sources, Epic 5)
+
+- The parse layer keeps the ElementTree tree. `pan-os-python` is a byte producer,
+  never the input model, because four things are keyed on the tree: the container
+  table rows (XML paths), the entry ledger marks, the parent walk that gives the four
+  scope facts (§2.2), and the expat line map (`ET.TreeBuilder` reports no line, so
+  only the expat handler path can record one). A device-object model has no line
+  number, so the F4.2 reporting cannot survive it.
+- The F3.8 standard-library-only rule is narrowed, not dropped. `xml_input.py` stays
+  standard library, and the fetch layer is the only place a dependency exists, so no
+  producer can bypass the two checks. The SDK import is lazy and the fetch tests skip
+  when it is not installed, so Goal 1 (offline CI) still holds.
+- The size cap applies to the bytes a producer returns, after decompression. A
+  `Content-Encoding: gzip` response is a decompression bomb when the cap is applied to
+  the compressed body. The DTD refusal applies to the same bytes.
+- The fetch accepts https only, with verification on by default. Three rules it must
+  state: refuse a non-https scheme, refuse a redirect that changes the scheme, and a
+  `--insecure` flag that is explicit rather than a silent default.
+- The API key comes from the environment, never from argv (shell history, CI logs),
+  and never reaches a generated file. The provenance record names the host and the
+  scope, never the credential.
+- A fetch is cached and the cache is what gets parsed, so a report line still names
+  bytes a reader can reopen. A cache entry is not pruned while a report references it.
+  Two runs on the same cache bytes produce identical bytes, and the source descriptor
+  lives in a file the goldens do not cover.
+- The whole-config export (`type=export`, `category=configuration`) is the shape the
+  container table knows. A per-scope fetch (`type=config&action=get&path=...`) returns
+  a `response/result` wrapper, not a config root, so it needs either a normalised
+  wrapper or its own table rows. Decide this before F5.4 reads a fetched scope.
+- Provider data sources, verified against 2.0.14 with
+  `terraform providers schema -json`: 128 data sources mirror the 128 resources, and
+  every emitted type has one. 126 types have the identical attribute set and the
+  identical `location` sub-blocks. The two mismatches are name level:
+  `panos_certificate_import` and `panos_virtual_router_interface` have a resource and
+  no data source; `panos_certificate` and `panos_predefined_dlp_file_type` have a data
+  source and no resource. Only `panos_addresses` returns a collection (a map keyed by
+  name). `panos_device_group`, `panos_template` and `panos_template_stack` return the
+  membership facts `parse_associations` builds from the export; a data source resolves
+  at plan time, so it cannot feed a generation-time report.
+- A data source schema declares no required attributes, so `terraform validate` cannot
+  enforce `name` and `location` on a `data` block. That rule needs its own gate check,
+  for the same reason the `location` sub-block shape is pinned by test and not by
+  validate.
+- BGP and OSPF have neither a resource nor a data source, so read-through cannot cover
+  the report-only areas.
+- Read-through is opt-in per declared scope. A plain string already applies, because
+  Panorama resolves an object name through its own inheritance at commit time, and one
+  `data` block is one plan-time API call. A `data` block for a name that does not exist
+  fails at plan, not at validate, so a read-through run must be labelled in the
+  generated `README.md`.
