@@ -1,46 +1,44 @@
-# To Do — Documentation Refresh (complete)
+# To Do — F4.4 Property-level coverage (next feature)
 
-Acceptance criteria and the result are in `acceptance.md`.
+F5.1 (source read boundary) is complete and committed. Its record is in the git
+history. Acceptance criteria for F4.4 go into `acceptance.md` when the work starts.
 
-- [x] Read every markdown file in the repository and check each claim against the code.
-- [x] Overwrite `acceptance.md` with the criteria for this task.
-- [x] Measure the current facts: `pytest`, `ruff`, the mapping counts, the report
-  formats, the CLI flags, the CI job.
-- [x] `README.md`: claims, documentation index, testing section without counts.
-- [x] `docs/README.md`: one index that names each document and its reader task.
-- [x] `docs/ARCHITECTURE.md`: module table, §2.4 destinations, §3.1 the open path
-  exception, §4.5 report files, §7 the claims that are now implemented.
-- [x] `docs/USAGE_GUIDE.md`: rewrite the stale feature, output, troubleshooting and
-  version sections; add the quick start script.
-- [x] `docs/MIGRATION_GUIDE.md`: merge `docs/MULTI_VR_MIGRATION_GUIDE.md` into it;
-  fix the "what gets converted" list. `docs/MULTI_VR_MIGRATION_GUIDE.md` removed.
-- [x] `docs/DEVICE_GROUP_SPLITTING.md`: merge `docs/MULTI_VR_QUICK_ANSWER.md` into
-  it; fix the split-output tree and the shared-object claim.
-  `docs/MULTI_VR_QUICK_ANSWER.md` removed.
-- [x] `docs/COVERAGE_MATRIX.md`: regenerate the table from `COVERAGE_MATRIX` (28 rows).
-- [x] `docs/RESOURCE_MAPPING.md`: correct the bucket counts, add the interface kinds,
-  state the nested-block rule, verify each claim against the live provider schema.
-- [x] `docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md`: correct the parsed/not-parsed wording,
-  confirm the example against the golden file.
-- [x] `docs/VPN_ROUTING_CONFIG_EXAMPLES.md`: correct the generated-file claims and the
-  XML shapes the parser reads.
-- [x] `docs/DUAL-LICENSING-EXPLAINED.md`: trim to the factual license summary.
-- [x] In-code documentation: the generated output `README.md` text, the CI workflow
-  comment, the `test_golden_files.py` docstring, `quick_start.sh`, `examples/`, and the
-  module and test docstrings.
-- [x] `AGENTS.md`: state that `lib_docs/` is not in the repo.
-- [x] `ADVERSARIAL_AUDIT_REPORT.md`: add the status table so a point-in-time finding
-  is not read as a current fact.
-- [x] Add to `backlog.md` the gaps the documents confirmed: the overlapping BGP and
-  OSPF paths, the manual report sections that do not name their scope, BGP
-  redistribution captured but not printed, the two report lines that name F4.4, and
-  `lib_docs/` missing.
-- [x] Update `PLAN.md`, `agent-status.md`, then commit.
-- [x] Gate: `ruff check .`, `pytest`, goldens byte-identical, `terraform validate`,
-  exit codes unchanged.
+Pieces:
 
-## Next feature — F4.4 property-level coverage
+1. [ ] Name the properties an emitter reads, per matrix row. `COVERAGE_MATRIX` is type
+   level today; each row gains the property list the emitter uses.
+2. [ ] Keep the two rules that already exist unchanged: the entry-mark rule and the
+   section rule. A property level is a container inside a config-object entry, so
+   `container_coverage` still reports only the section level.
+3. [ ] Add the property scan and its report section: a property the parse captured but
+   no output used is a gap. `entry_coverage` counts property entries on the parent row
+   today; the scan reports them.
+4. [ ] Change the two report lines that state the property scan as if it exists:
+   `entry_coverage.summary_lines` prints "(F4.4 covers each one)", and the container
+   coverage report prints "Field-level coverage is F4.3" for a property level.
+5. [ ] Fix the two report defects found during the documentation refresh, in the same
+   pass, because both change report output:
+   - `parse_bgp` and `parse_ospf` read the same element through two paths, so a router
+     under a device is read twice and printed twice. Keep one path, which is the rule
+     in `docs/ARCHITECTURE.md` §3.4 that this pair breaks.
+   - The BGP and OSPF manual report sections do not name their scope or the router.
+     Apply the F3.9 scope rule to them.
+6. [ ] Decide BGP `redist-rules`: print them, or stop capturing them.
+7. [ ] Tests: the property scan, the parity between a matrix row and the properties its
+   emitter reads, and the report section.
+8. [ ] Documents: `docs/COVERAGE_MATRIX.md`, `docs/ARCHITECTURE.md` §2.4 and §3.1,
+   `README.md`.
+9. [ ] Gate: `ruff check .`, `pytest`, goldens byte-identical, report determinism tests,
+   exit codes unchanged.
 
-Pieces go here when the work starts. The two report output lines that name F4.4 change
-with it (`backlog.md`), and the two report defects found during this task are fixed in
-the same pass (`PLAN.md` sequencing).
+F5.4 and F5.6 wait on this feature, because a shadow and a drift are property-level
+facts.
+
+## Epic 5 pieces after F4.4
+
+- F5.2 Cached API export: a producer that hands bytes to `parse_bytes`, a cache, and
+  `--offline`. The tests use a fixture-backed producer, so no test calls the network.
+  Decide the response wrapper shape before the container table covers a fetched scope.
+- F5.3 Provenance record (`SOURCE.txt`) and the report label change.
+- F5.5 Read-through data blocks (opt-in): `DATA_SOURCE_SCHEMA` verified against the
+  provider `data_source_schemas`, plus the data-block gate rule.

@@ -17,7 +17,7 @@ a design rule enforced by construction.
 | File | Role | Rule it keeps |
 |---|---|---|
 | `panorama_to_terraform.py` | The converter: `PanoramaParser` (read and model), `TerraformGenerator` (model and write), `main()` (order) | reads input only through `xml_input.parse_xml` |
-| `xml_input.py` | The only input read, shared by both entry points | size cap checked before the read; DTD refused by the parser |
+| `xml_input.py` | The only input read, shared by both entry points, through one producer boundary (F5.1) | size cap checked before the read for a file, and on the bytes handed by any producer; DTD refused by the parser |
 | `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX` | the single source of truth; no resource name or attribute from memory |
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy` |
 | `container_coverage.py` | The container table (§3.1) and the section rule | the table is data, so a parse method cannot exist without a row |
@@ -112,15 +112,24 @@ accounted for.
 
 ## 3. Parse pipeline
 
-1. **Safe read.** `xml_input.parse_xml` checks the size before it allocates,
-   then refuses a DTD through an expat prolog scan that stops at the root
-   element. A DTD is the only entity door: with no DTD expat expands nothing and
-   fetches nothing. The tree is parsed from the bytes that passed both checks,
-   so the input is read once.
+1. **Safe read.** `xml_input.parse_bytes` is the producer boundary (F5.1): it checks
+   the size of the bytes it is handed, then refuses a DTD through an expat prolog scan
+   that stops at the root element, and parses those same bytes. A DTD is the only
+   entity door: with no DTD expat expands nothing and fetches nothing. The input is
+   read once, so a check cannot be handed different bytes from the bytes it parses.
+   `parse_xml(path)` is the file producer: it keeps the size check before the read, so
+   an over-limit file is never allocated, and hands its bytes to the boundary.
+   `SourceOrigin` (kind, name, path) lets a producer with no file behind it be refused
+   with the same words, naming the origin instead of a path. The tree shape is
+   unchanged, so the container table, the entry ledger, the parent walk and the line
+   map are unchanged.
    Pinned by `tests/test_safe_input.py`, including
    `::test_read_input_refuses_before_allocating`, `::test_utf16_dtd_is_refused`,
-   `::test_dtd_in_a_prolog_comment_is_not_a_refusal`, and
-   `::test_parse_reads_the_file_once`.
+   `::test_dtd_in_a_prolog_comment_is_not_a_refusal`,
+   `::test_parse_reads_the_file_once`, and the boundary tests
+   `::test_boundary_refuses_producer_bytes_over_the_limit`,
+   `::test_boundary_refuses_a_dtd_in_producer_bytes`, `::test_boundary_opened_no_file`,
+   and `::test_file_producer_runs_the_checks_through_the_boundary`.
 2. **Parent map.** ElementTree keeps no parent pointers, so the parser builds a
    child → parent map once. The four scope facts walk that map.
 3. **Association tables.** `parse_associations` reads the four membership lists
