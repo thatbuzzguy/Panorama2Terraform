@@ -11,6 +11,16 @@ go into `to-do.md` when it starts. Two report defects found during this task lan
 it: the overlapping BGP and OSPF read paths, and the manual report sections that do not
 name their scope.
 
+Epic 5 (upstream data sources) is now open, from the 2026-10-26 design conversation.
+Three decisions came from it, and they are recorded in `PLAN.md` and `backlog.md`: the
+first source is a cached Panorama API export; `pan-os-python` is allowed as a fetch
+dependency with `xml_input.py` still standard library; references outside the run stay
+plain strings, with read-through data blocks as an opt-in per declared scope.
+
+One ordering decision is pending, so `to-do.md` is not written yet: F4.4 first, or F5.1
+(first) with F4.4 second. F5.1 changes no behaviour, so it is safe in either order; F5.4
+and F5.6 cannot start before F4.4.
+
 ## What this task changed
 
 - Root markdown: `README.md`, `AGENTS.md`, `PLAN.md`, `backlog.md`,
@@ -41,6 +51,19 @@ name their scope.
 | Gate checks | 7, in report order: `emitted_types`, `location_present`, `references`, `variables`, `control_chars`, `placeholders`, `terraform` |
 | Report files | `CONVERSION_REPORT.txt`, `MANUAL_SETUP_REPORT.txt`, `INTERFACE_MIGRATION_REPORT.txt`, `VPN_MIGRATION_REPORT.txt`, written only when they have content; `SANITY_REPORT.txt` written on every run; plus `README.md` |
 | Provider | `PaloAltoNetworks/panos` 2.0.14, 128 resource types, read from `terraform providers schema -json` |
+
+## Facts measured on 2026-10-26 (provider data sources)
+
+| Fact | Value |
+|---|---|
+| `data_source_schemas` in panos 2.0.14 | 128, mirroring the 128 `resource_schemas` |
+| Emitted types with a data-source counterpart | all 28 |
+| Types whose data-source schema equals the resource schema (attributes and `location` sub-blocks) | 126 of 128 |
+| Resource-only names | `panos_certificate_import`, `panos_virtual_router_interface` |
+| Data-source-only names | `panos_certificate`, `panos_predefined_dlp_file_type` |
+| `required_attributes` on a data source | none, so `terraform validate` cannot enforce `name` + `location` |
+| Data source that returns a collection | `panos_addresses` (map keyed by name) |
+| Membership data sources | `panos_device_group` (devices + vsys, templates), `panos_template_stack` (devices, templates), `panos_template` (default_vsys) |
 
 ## Rules to keep when writing documents
 
