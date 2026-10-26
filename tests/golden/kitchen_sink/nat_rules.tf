@@ -1,6 +1,6 @@
 # NAT Policy Rules
 
-resource "panos_nat_policy_rules" "outbound_nat_a79e9d81" {
+resource "panos_nat_policy_rules" "outbound_nat_c2f57405" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -11,7 +11,7 @@ resource "panos_nat_policy_rules" "outbound_nat_a79e9d81" {
   }
 
   rules = [
-{
+    {
       name = "Outbound-NAT"
       description = "Outbound NAT"
       source_zones = [ "Trust" ]
@@ -31,7 +31,7 @@ resource "panos_nat_policy_rules" "outbound_nat_a79e9d81" {
   ]
 }
 
-resource "panos_nat_policy_rules" "inbound_web_nat_4da8a1a9" {
+resource "panos_nat_policy_rules" "inbound_web_nat_78d3e7e9" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -42,10 +42,10 @@ resource "panos_nat_policy_rules" "inbound_web_nat_4da8a1a9" {
     directly = true
     pivot = "Outbound-NAT"
   }
-  depends_on = [ panos_nat_policy_rules.outbound_nat_a79e9d81 ]
+  depends_on = [ panos_nat_policy_rules.outbound_nat_c2f57405 ]
 
   rules = [
-{
+    {
       name = "Inbound-Web-NAT"
       description = "Inbound NAT for web"
       source_zones = [ "Untrust" ]

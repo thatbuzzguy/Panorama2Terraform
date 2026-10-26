@@ -1,21 +1,17 @@
 # Address Groups
 
-resource "panos_address_group" "web_servers_18d3eea0" {
+resource "panos_address_group" "web_servers_526fa33a" {
   location = {
-    device_group = {
-      name = "Shared"
-    }
+    shared = {}
   }
   name = "Web-Servers"
   description = "All web servers"
-  static = [panos_address.web_server_1_91d60c17.name, "Web-Server-2"]
+  static = [panos_address.web_server_1_df7a622a.name, "Web-Server-2"]
 }
 
-resource "panos_address_group" "dynamic_web_30a07597" {
+resource "panos_address_group" "dynamic_web_f2b0e073" {
   location = {
-    device_group = {
-      name = "Shared"
-    }
+    shared = {}
   }
   name = "Dynamic-Web"
   dynamic = {

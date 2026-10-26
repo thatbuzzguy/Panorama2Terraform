@@ -142,13 +142,26 @@ terraform apply
 - NAT policies for that DG
 - Security profiles for that DG
 
-✅ **Template Configuration** (if matched)
+✅ **Template Configuration** (when the export associates one)
 - Zones for that HA pair
 - Interfaces for that HA pair
 - Virtual routers for that HA pair
 - BGP/OSPF config for that HA pair
 - VPN tunnels for that HA pair
 - Static routes for that HA pair
+
+The splitter takes the association from the export, not from a name. A
+template belongs to a device group when both list the same device:
+
+```
+device-group/entry/DG-Internet/devices/entry/fw-1.example.com
+templates/entry/HQ-Networks/devices/entry/fw-1.example.com
+```
+
+`HQ-Networks` is copied into `DG-Internet.xml` even though the two names do
+not resemble each other. A device group that lists no device, or whose
+devices no template targets, gets no template, and the splitter prints
+that fact.
 
 ✅ **Shared Objects** (included in all)
 - Shared address objects
@@ -170,11 +183,23 @@ Found 3 device groups:
   - DG-Guest
 ```
 
-### Template Matching
-The splitter tries to match templates to device groups:
-- Exact match: `DG-Internet` → `Internet` template
-- Name contains: `Internet` template if "Internet" in DG name
-- Falls back gracefully if no template found
+### Template And Template Stack Matching
+The splitter joins a device group, a template, and a template stack on the
+devices each one lists in the export:
+
+- A template is copied when it targets one of the device group's devices.
+- A template stack is copied when it targets one of the device group's
+  devices.
+- A device group that lists no device copies neither, and the splitter
+  prints `device group lists no devices: no template or template-stack
+  copied`.
+- A device group whose devices no template and no template stack targets
+  prints `no template or template-stack targets this device group's
+  devices: none copied`.
+
+The device group name never finds a template. The old code stripped a `DG-`
+prefix and then tested whether the device group name appeared inside a
+template name; both matched names instead of facts, and both are gone.
 
 ### Safe File Naming
 Device group names are sanitized for filenames:
@@ -201,9 +226,11 @@ Found 3 device groups:
 Splitting configurations into: split_configs
 
 Processing device group: DG-Internet
+  - copied template: Internet
   ✓ Saved to: split_configs/DG-Internet.xml
 
 Processing device group: DG-DMZ
+  - no template or template-stack targets this device group's devices: none copied
   ✓ Saved to: split_configs/DG-DMZ.xml
 
 Processing device group: DG-Guest
@@ -289,6 +316,16 @@ project/
 python3 split_device_groups.py panorama_export.xml --output-dir /tmp/my-splits
 ```
 
+### Input Limit
+
+The splitter applies the same input checks as the converter: it refuses an
+export larger than 64 MiB before reading it, and an export that declares a
+DTD. A refusal writes nothing. Raise the size limit for a trusted file:
+
+```bash
+python3 split_device_groups.py big_export.xml --max-input-bytes 268435456
+```
+
 ### Process Specific Device Group Only
 
 If you only want one device group:
@@ -341,9 +378,18 @@ grep -o 'device-group/entry name="[^"]*"' panorama_export.xml
 
 ### Issue: Template not included in split
 
-**Cause**: Template name doesn't match device group name pattern
+**Cause**: The template targets no device that the device group contains.
+The splitter copies a template only when the export lists one device in
+both.
 
-**Solution**: Manually extract template or use the converter without network config
+**Solution**: Check the device lists of the device group and of the
+template:
+```bash
+grep -A 6 'device-group' panorama_export.xml | grep -B 2 -A 4 'devices'
+grep -A 6 '<templates>' panorama_export.xml
+```
+If Panorama really does not link them, add the device to the template in
+Panorama, or copy the template section into the split file by hand.
 
 ### Issue: Missing shared objects
 

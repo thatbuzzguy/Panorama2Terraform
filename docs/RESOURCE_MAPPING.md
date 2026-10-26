@@ -37,8 +37,8 @@ the v2 attribute shapes that differ from the v1 output.
 | `panos_administrative_tag` | identity | colors are numeric: `color1`..`colorN` (PAN-OS color words map in GUI order: red, orange, yellow, green, blue, purple, gray) |
 | `panos_application_group` | identity | `static` member list |
 | `panos_custom_url_category` | identity | `static` member list |
-| `panos_external_dynamic_list` | `panos_external_list` | `type = { <type> = { url, recurring = { <freq> = {} }, description } }` |
-| `panos_service` | `panos_service_object` | flat `protocol`+`destination_port` becomes `protocol = { tcp = { destination_port = "80" } }` |
+| `panos_external_dynamic_list` | `panos_external_list` | `type = { <type> = { url, exception_list, certificate_profile, recurring = { <freq> = { ... } }, description } }`; `expand_domain` exists on the `domain` sub-shape only, and the `predefined_*` sub-shapes take `url`/`exception_list`/`description` only |
+| `panos_service` | `panos_service_object` | flat `protocol`+`destination_port` becomes `protocol = { tcp = { destination_port, source_port, override = { ... } } }`; the provider accepts **one** protocol leg, so a tcp+udp object emits tcp and reports udp |
 | `panos_service_group` | identity | `static` member list |
 
 ### Policy rules (one resource per rule, chained per device group)
@@ -60,7 +60,7 @@ the v2 attribute shapes that differ from the v1 output.
 
 | v2 type | Renamed from | v2 attribute notes |
 |---|---|---|
-| `panos_ethernet_interface` | identity | `layer3 { ipv4 = { ip_address = [...] } }`; no `static_ips`/`management_profile` |
+| `panos_ethernet_interface` | identity | `layer3` / `layer2` are mode blocks (`layer3 { interface_management_profile, ... }`); no `static_ips`/`management_profile`. The untagged interface's IPv4 address goes on the `.0` subinterface's `ip` list |
 | `panos_ethernet_layer3_subinterface` | `panos_layer2_subinterface` | PAN-OS VLAN subinterfaces (`ethernet1/1.5`) are v2 layer-3 subinterfaces; `parent`/`tag` derive from the `.unit` name |
 | `panos_virtual_router` | identity | required: `location`, `name` |
 | `panos_virtual_router_static_route_ipv4` | `panos_static_route_ipv4` | static routes belong to the virtual router; `nexthop = { ip_address = "..." }` |

@@ -2,7 +2,7 @@
 # One panos_decryption_policy_rules resource per rule; per-device-group
 # chains preserve XML order (F2.5).
 
-resource "panos_decryption_policy_rules" "decrypt_https_d5e53b0a" {
+resource "panos_decryption_policy_rules" "decrypt_https_af42764c" {
   location = {
     device_group = {
       name = "Production-DG"
@@ -13,7 +13,7 @@ resource "panos_decryption_policy_rules" "decrypt_https_d5e53b0a" {
   }
 
   rules = [
-{
+    {
       name = "Decrypt-HTTPS"
       description = "Decrypt HTTPS"
       source_zones = [ "Trust" ]

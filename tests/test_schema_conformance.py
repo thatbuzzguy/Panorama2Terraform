@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+import sanity_checks
 from conftest import GOLDEN_DIR, RESOURCE_RE
 
 # Top-level arguments of a generated resource block are exactly the lines
@@ -65,14 +66,15 @@ def test_resource_type_exists_in_provider(rtype, provider_schema):
 
 
 def test_every_block_has_location():
-    """Every emitted resource block must carry the required location block (F2.3)."""
-    missing = [
-        f"{rtype} block {i}"
-        for rtype, blocks in sorted(EMITTED_BLOCKS.items())
-        for i, args in enumerate(blocks)
-        if 'location' not in args
-    ]
-    assert not missing, f"resource blocks missing the required location block: {missing}"
+    """Every emitted resource block must carry the required location block (F2.3).
+
+    The rule lives in `sanity_checks.py` (F4.1), so the conversion gate and this
+    test share it.
+    """
+    files = {str(p.relative_to(GOLDEN_DIR)): p.read_text() for p in sorted(GOLDEN_DIR.rglob('*.tf'))}
+    findings = sanity_checks.check_location_present(files)
+    assert not findings, 'resource blocks missing the required location block: ' + \
+        ', '.join(f.render() for f in findings)
 
 
 @pytest.mark.parametrize("rtype", EMITTED_TYPES)

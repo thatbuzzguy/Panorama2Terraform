@@ -1,0 +1,216 @@
+<?xml version="1.0"?>
+<!-- F3.9: per-device-group reports.
+
+     The two operator-facing reports must say which scope each entry came
+     from. This fixture puts the same names in two device groups, so a flat
+     report cannot tell them apart:
+
+       Office-FW      ethernet1/1, GW-Common, TUN-Common
+       Datacenter-FW  ethernet1/1, GW-Common, TUN-Common
+
+     It also covers the three scopes the grouping rule has to name without
+     inventing one:
+
+       shared section          ethernet1/9, GW-Shared
+       template HQ-Networks    ethernet1/2 (no device group declared)
+       device fw-2.example.com ethernet1/3 (no device group declared)
+       template DC-Networks    ethernet1/6 on the "this device" placeholder
+
+     and a declared vsys (vsys2), which the report prints only when the
+     export declares one.
+-->
+<config version="10.1.0" urldb="paloaltonetworks">
+  <panorama>
+    <device-group>
+      <entry name="Office-FW">
+        <devices>
+          <entry name="fw-1.example.com" />
+        </devices>
+        <network>
+          <interface>
+            <ethernet>
+              <entry name="ethernet1/1">
+                <layer3>
+                  <ip><entry name="10.1.1.1/24" /></ip>
+                </layer3>
+                <comment>HQ uplink</comment>
+              </entry>
+            </ethernet>
+          </interface>
+          <ike>
+            <gateway>
+              <entry name="GW-Common">
+                <protocol>
+                  <ikev2><ike-crypto-profile>IKE-DEFAULT</ike-crypto-profile></ikev2>
+                </protocol>
+                <peer-address><ip>203.0.1.10</ip></peer-address>
+              </entry>
+            </gateway>
+          </ike>
+          <tunnel>
+            <ipsec>
+              <entry name="TUN-Common">
+                <tunnel-interface>tunnel.1</tunnel-interface>
+                <auto-key>
+                  <gateway><entry name="GW-Common" /></gateway>
+                  <ipsec-crypto-profile>IPSEC-DEFAULT</ipsec-crypto-profile>
+                  <proxy-id>
+                    <entry name="hq-proxy">
+                      <local>10.1.0.0/16</local>
+                      <remote>10.2.0.0/16</remote>
+                    </entry>
+                  </proxy-id>
+                </auto-key>
+              </entry>
+            </ipsec>
+          </tunnel>
+        </network>
+      </entry>
+
+      <entry name="Datacenter-FW">
+        <devices>
+          <entry name="fw-2.example.com" />
+        </devices>
+        <network>
+          <interface>
+            <ethernet>
+              <entry name="ethernet1/1">
+                <layer3>
+                  <ip><entry name="10.5.5.5/24" /></ip>
+                </layer3>
+                <comment>Datacenter uplink</comment>
+              </entry>
+            </ethernet>
+          </interface>
+          <!-- A declared vsys: the report prints it, and prints nothing for
+               an entry the export places in no vsys. -->
+          <vsys>
+            <entry name="vsys2">
+              <network>
+                <interface>
+                  <ethernet>
+                    <entry name="ethernet1/5">
+                      <layer3>
+                        <ip><entry name="10.6.6.6/24" /></ip>
+                      </layer3>
+                    </entry>
+                  </ethernet>
+                </interface>
+                <ike>
+                  <gateway>
+                    <entry name="GW-Vsys">
+                      <protocol>
+                        <ikev2><ike-crypto-profile>IKE-DEFAULT</ike-crypto-profile></ikev2>
+                      </protocol>
+                      <peer-address><ip>203.0.1.13</ip></peer-address>
+                    </entry>
+                  </gateway>
+                </ike>
+              </network>
+            </entry>
+          </vsys>
+          <ike>
+            <gateway>
+              <entry name="GW-Common">
+                <protocol>
+                  <ikev1><ike-crypto-profile>IKE-DEFAULT</ike-crypto-profile></ikev1>
+                </protocol>
+                <peer-address><ip>203.0.1.11</ip></peer-address>
+              </entry>
+            </gateway>
+          </ike>
+          <tunnel>
+            <ipsec>
+              <entry name="TUN-Common">
+                <tunnel-interface>tunnel.2</tunnel-interface>
+                <auto-key>
+                  <gateway><entry name="GW-Common" /></gateway>
+                  <ipsec-crypto-profile>IPSEC-DEFAULT</ipsec-crypto-profile>
+                </auto-key>
+              </entry>
+            </ipsec>
+          </tunnel>
+        </network>
+      </entry>
+    </device-group>
+
+    <shared>
+      <network>
+        <interface>
+          <ethernet>
+            <entry name="ethernet1/9">
+              <layer3>
+                <ip><entry name="10.9.9.9/24" /></ip>
+              </layer3>
+              <comment>Shared management</comment>
+            </entry>
+          </ethernet>
+        </interface>
+        <ike>
+          <gateway>
+            <entry name="GW-Shared">
+              <protocol>
+                <ikev2><ike-crypto-profile>IKE-DEFAULT</ike-crypto-profile></ikev2>
+              </protocol>
+              <peer-address><ip>203.0.1.12</ip></peer-address>
+            </entry>
+          </gateway>
+        </ike>
+      </network>
+    </shared>
+
+    <templates>
+      <!-- A template declares no device group, so the section names the
+           template, not a device group. -->
+      <entry name="HQ-Networks">
+        <devices>
+          <entry name="fw-1.example.com" />
+        </devices>
+        <network>
+          <interface>
+            <ethernet>
+              <entry name="ethernet1/2">
+                <layer3 />
+              </entry>
+            </ethernet>
+          </interface>
+        </network>
+      </entry>
+      <!-- An entry nested on the PAN-OS "this device" placeholder inside a
+           template: the placeholder names no firewall. -->
+      <entry name="DC-Networks">
+        <devices>
+          <entry name="localhost.localdomain">
+            <network>
+              <interface>
+                <ethernet>
+                  <entry name="ethernet1/6">
+                    <layer3 />
+                  </entry>
+                </ethernet>
+              </interface>
+            </network>
+          </entry>
+        </devices>
+      </entry>
+    </templates>
+  </panorama>
+
+  <devices>
+    <!-- A firewall's own config: the section names the device. -->
+    <entry name="fw-2.example.com">
+      <network>
+        <interface>
+          <ethernet>
+            <entry name="ethernet1/3">
+              <layer3>
+                <ip><entry name="10.3.3.3/24" /></ip>
+              </layer3>
+              <comment>Own config</comment>
+            </entry>
+          </ethernet>
+        </interface>
+      </network>
+    </entry>
+  </devices>
+</config>

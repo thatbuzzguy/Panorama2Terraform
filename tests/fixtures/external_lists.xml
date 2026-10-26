@@ -1,4 +1,5 @@
 <?xml version="1.0"?>
+<!-- External dynamic lists (F3.4): the v2.0.14 sub-shape set and fields. -->
 <config version="10.0.0" urldb="paloaltonetworks">
   <shared>
     <external-list>
@@ -18,6 +19,48 @@
           </ip>
         </type>
         <description>Threat IP list</description>
+      </entry>
+      <!-- domain sub-shape: exception list, expand domain, weekly recurring -->
+      <entry name="bad-domains">
+        <type>
+          <domain>
+            <url>https://threat.example.com/domains.txt</url>
+            <exception-list>
+              <member>example.com</member>
+            </exception-list>
+            <expand-domain>yes</expand-domain>
+            <certificate-profile>default</certificate-profile>
+            <recurring>
+              <weekly>
+                <at>6</at>
+                <day-of-week>monday</day-of-week>
+              </weekly>
+            </recurring>
+            <description>Bad domain list</description>
+          </domain>
+        </type>
+      </entry>
+      <!-- F3.4: expand_domain is a domain-only field; on an ip list the
+           emitter must not write it (the v2 ip sub-shape has no such field) -->
+      <entry name="ip-with-expand">
+        <type>
+          <ip>
+            <url>https://threat.example.com/ips.txt</url>
+            <expand-domain>yes</expand-domain>
+          </ip>
+        </type>
+      </entry>
+      <!-- predefined-url sub-shape, five-minute recurring flag -->
+      <entry name="panw-url-list">
+        <type>
+          <predefined-url>
+            <url>https://url.paloaltonetworks.com/geturlversion.php</url>
+            <recurring>
+              <five-minute/>
+            </recurring>
+          </predefined-url>
+        </type>
+        <description>Palo Alto Networks URL list</description>
       </entry>
     </external-list>
   </shared>

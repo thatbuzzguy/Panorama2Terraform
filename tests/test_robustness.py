@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+import sanity_checks
+
 REPO_ROOT = Path(__file__).parent.parent
 CONVERTER = REPO_ROOT / 'panorama_to_terraform.py'
 SPLITTER = REPO_ROOT / 'split_device_groups.py'
@@ -82,17 +84,23 @@ def test_splitter_rejects_dtd(tmp_path):
 # --- Degenerate input: must produce valid output ----------------------------
 
 def test_tab_cr_names_produce_valid_tf(tmp_path):
-    """Names with tabs/CRs generate .tf files free of raw control chars."""
+    """Names with tabs/CRs generate .tf files free of raw control chars.
+
+    The rule lives in `sanity_checks.py` (F4.1), so the conversion gate and this
+    test share it: LF is the only legal raw control byte, and a tab or a CR
+    means an escape was missed.
+    """
     proc = _run(CONVERTER, str(FIXTURES_DIR / 'robust_tab_cr_names.xml'),
                 '--output-dir', str(tmp_path / 'out'), workdir=tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    address_tf = (tmp_path / 'out' / 'address_objects.tf').read_bytes()
-    # HCL .tf files must not carry raw CR or C0 control characters (LF is
-    # the only legal raw control byte).
-    illegal = [b for b in address_tf if b < 0x20 and b != 0x0A]
-    assert illegal == []
-    assert b'\t' not in address_tf
-    assert b'\r' not in address_tf
+    out_dir = tmp_path / 'out'
+    files = {f.name: f.read_text(encoding='utf-8', errors='surrogateescape')
+             for f in sorted(out_dir.glob('*.tf'))}
+    findings = sanity_checks.check_control_chars(files)
+    assert findings == [], ', '.join(f.render() for f in findings)
+    # The whole output also passes the gate, so the exit code above is the
+    # gate's verdict, not only the generator's.
+    assert not sanity_checks.run_checks(out_dir).failed
 
 
 def test_entry_without_name_is_skipped(tmp_path):
@@ -212,3 +220,71 @@ def test_declare_same_name_in_two_contexts_gets_unique_names(generator):
     # A reference to the name resolves to the first declared name.
     assert generator.name_ref('default', ('panos_virtual_router',)).expr == (
         f'panos_virtual_router.{first}.name')
+
+
+def test_name_ref_prefers_referrers_own_context(generator):
+    """F3.1: a referrer resolves same-named objects in its own device group."""
+    scope = 'panos_address'
+    dg_a = generator.declare_resource_name('web', scope, context='DG-A')
+    dg_b = generator.declare_resource_name('web', scope, context='DG-B')
+    # A rule in DG-B references DG-B's 'web', not DG-A's.
+    assert generator.name_ref('web', (scope,), context='DG-B').expr == f'{scope}.{dg_b}.name'
+    assert generator.name_ref('web', (scope,), context='DG-A').expr == f'{scope}.{dg_a}.name'
+
+
+def test_name_ref_falls_back_to_shared_then_contextless(generator):
+    """F3.1: context order is referrer context, Shared, then contextless."""
+    scope = 'panos_address'
+    shared = generator.declare_resource_name('sh-web', scope, context='Shared')
+    # A DG referrer inherits the shared object when it has no local one.
+    assert generator.name_ref('sh-web', (scope,), context='DG-A').expr == f'{scope}.{shared}.name'
+    # Template-scoped objects are declared contextless (F3.6 adds templates);
+    # the contextless bucket is the last keyed stop before the flat fallback.
+    zone = generator.declare_resource_name('zone-x', 'panos_zone')
+    assert generator.name_ref('zone-x', ('panos_zone',), context='DG-A').expr == (
+        f'panos_zone.{zone}.name')
+
+
+# --- F3.2: vsys completes the identity key -----------------------------------
+
+def test_declare_same_name_in_two_vsys_gets_unique_names(generator):
+    """F3.2: the same name in two vsys gets two digest-based names.
+
+    The digest covers (scope, context, vsys, name), so the taken-name
+    counter never decides which object keeps the base name.
+    """
+    scope = 'panos_address'
+    vs1 = generator.declare_resource_name('web', scope, context='DG-A', vsys='vsys1')
+    vs2 = generator.declare_resource_name('web', scope, context='DG-A', vsys='vsys2')
+    assert re.fullmatch(r'web_[0-9a-f]{8}', vs1)
+    assert re.fullmatch(r'web_[0-9a-f]{8}', vs2)
+    assert vs1 != vs2
+    # No counter suffix: the digest, not the guard, keeps them apart.
+    assert not vs1.endswith('_2') and not vs2.endswith('_2')
+
+
+def test_name_ref_prefers_referrers_own_vsys(generator):
+    """F3.2: a referrer resolves same-named objects in its own vsys."""
+    scope = 'panos_address'
+    vs1 = generator.declare_resource_name('web2', scope, context='DG-A', vsys='vsys1')
+    vs2 = generator.declare_resource_name('web2', scope, context='DG-A', vsys='vsys2')
+    # A rule in vsys2 references vsys2's 'web2', not vsys1's.
+    assert generator.name_ref('web2', (scope,), context='DG-A', vsys='vsys2').expr == (
+        f'{scope}.{vs2}.name')
+    assert generator.name_ref('web2', (scope,), context='DG-A', vsys='vsys1').expr == (
+        f'{scope}.{vs1}.name')
+
+
+def test_name_ref_vsys_resolution_is_declaration_order_independent(tmp_path):
+    """F3.2: which vsys wins does not depend on which vsys was declared first."""
+    import panorama_to_terraform
+    scope = 'panos_address'
+    g1 = panorama_to_terraform.TerraformGenerator(str(tmp_path / 'g1'))
+    g2 = panorama_to_terraform.TerraformGenerator(str(tmp_path / 'g2'))
+    for vs in ('vsys1', 'vsys2'):
+        g1.declare_resource_name('web', scope, context='DG-A', vsys=vs)
+    for vs in ('vsys2', 'vsys1'):
+        g2.declare_resource_name('web', scope, context='DG-A', vsys=vs)
+    for vs in ('vsys1', 'vsys2'):
+        assert g1.name_ref('web', (scope,), context='DG-A', vsys=vs).expr == \
+            g2.name_ref('web', (scope,), context='DG-A', vsys=vs).expr

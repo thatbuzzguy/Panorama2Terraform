@@ -1,54 +1,32 @@
-# To-Do — F4.1: Post-Run Sanity Gate (current task)
+# To Do — F4.4 Property-level coverage matrix (next feature)
 
-Goal 4: the conversion is fully traceable and verified. F4.1 makes the
-output side true: every run verifies the `.tf` files it wrote, instead of
-leaving verification to the test suite alone.
+F4.3 (per-entry conversion report) is complete and committed. Its pieces are
+recorded in `acceptance.md` (Result) and in the git history:
 
-F2.9 (real resources or explicit reports) landed 2026-10-04, worked
-before F4.1 per direction; its detail is in `agent-status.md`.
+- `entry_coverage.py`: the mark mechanism (`mark`, `mark_skipped`), the row rules,
+  the captured-field rule, `entry_line`, the report text, the gap section and the
+  console lines.
+- `TerraformGenerator.generate_conversion_report` writes `CONVERSION_REPORT.txt`
+  and groups rows with the F3.9 rule (`_report_scope_path`).
+- `container_coverage.DESTINATION_KINDS` gained `skipped` and `unaccounted`; the
+  `parse_device_groups` row changed from `count-only` to `bookkeeping`, because a
+  device group name reaches the output through `location`.
+- Every parse method marks the entries it reads, at the point it builds the object.
+- Tests: `tests/test_entry_coverage.py` (26), fixture
+  `tests/fixtures/entry_gaps.xml`.
 
-Acceptance criteria for the current task go in `acceptance.md` before
-code.
+F4.4 is not started. Its pieces, when it starts:
 
-## Task
+- [ ] Overwrite `acceptance.md` with the F4.4 criteria before code or tests.
+- [ ] Decide what one property row states: the property path, the value, and the
+  output it produced.
+- [ ] Reconcile `COVERAGE_MATRIX` with `EMITTED_TYPES` and `resource_name_map`.
+- [ ] Report a property the parser captured but no output used (the extraction gaps
+  in `backlog.md`), per property, not per entry.
+- [ ] Tests: a fixture where an entry is read but one property is dropped, and a
+  test that every captured property appears in the matrix.
+- [ ] Keep the gate green: ruff, pytest, golden tests, `terraform validate`,
+  and the F4.1/F4.2/F4.3 exit codes.
 
-- [ ] **F4.1 Post-run sanity gate**
-  - [ ] `--validate` CLI flag: after generation, run `terraform init -backend=false -input=false` then `terraform validate` in the output directory. Flag set but binary missing: clear error, non-zero exit (an explicit request is never silently skipped).
-  - [ ] Static check module (pure Python, runs at the end of every conversion):
-    - no dangling references: every `panos_<type>.<local>` reference in the output resolves to a declared resource address,
-    - every resource block carries a `location` block (v2 hard requirement),
-    - every emitted resource type is in `EMITTED_TYPES` (`resource_mapping.py`),
-    - every variable declared in `variables.tf` is consumed (the F2.10 check),
-    - no raw C0 control characters or DEL in any `.tf` file,
-    - expected placeholders (VPN pre-shared keys) are WARN with a pointer to `VPN_MIGRATION_REPORT.txt`; unexpected placeholder tokens are FAIL.
-  - [ ] `SANITY_REPORT.txt` with PASS / WARN / FAIL sections, written even on failure; console summary; non-zero exit on any FAIL (after all output files and the report are written).
-  - [ ] Tests: kitchen-sink output passes all checks (VPN placeholder WARNs); negative fixtures are caught — dangling reference, missing `location`, undeclared type, dead variable — each with the offending file and line in the report; determinism (two runs byte-identical) pinned as a test-side invariant.
-  - [ ] Docs: README documents the flag and the report; `agent-status.md` updated; commit.
-
-## Deferred (tracked in PLAN.md)
-
-- **Epic 2:** F2.10 (one-time dead-variable cleanup; its permanent check lands in F4.1), F2.11 (verified claims).
-- **Epic 3:** F3.1 (keyed data model) first, then F3.2–F3.10.
-- **Epic 4:** F4.2 (container table + line tracking; may land during Epic 3), F4.3 (per-entry `CONVERSION_REPORT.txt`; after F3.1), F4.4 (property-level matrix extending the landed F2.8 type-level matrix; after F3.1, last in Epic 4).
-
-## Notes
-
-- **F2.9 (real resources or explicit reports) landed 2026-10-04** —
-  decryption, PBF, and PBF path monitoring profiles now emit as real v2
-  resources; app override, QoS, IPsec tunnel monitor, schedules, log
-  forwarding, and zone protection go to `MANUAL_SETUP_REPORT.txt` with
-  their data and the reason. All comment-only `.tf` generators are gone.
-- **F2.8 (type-level coverage matrix) landed 2026-07-13** — finished
-  per direction to continue the previously active task: `COVERAGE_MATRIX`
-  in `resource_mapping.py`, `tests/test_coverage_matrix.py` (61 tests:
-  row set, element grounding, per-row pipeline), `docs/COVERAGE_MATRIX.md`
-  (matrix, row schema, testing methodology). It exposed and fixed the
-  VPN emission gate (standalone crypto profiles were silently dropped)
-  and added the third `terraform validate` case.
-- The static no-dangling-reference rule already exists as a test in
-  `tests/test_dependency_wiring.py`; F4.1 shares that rule with the
-  runtime check instead of copying it.
-- The coverage report (F4.3/F4.4) keys on logical entries
-  (`<entry name>` plus its properties), not physical lines; the reported
-  line number is the entry's opening tag. Decision recorded in
-  `backlog.md`.
+Scope guard: F4.4 does not change the F4.3 report row rules. Property entries stay
+counted on the parent row until the matrix covers them per property.

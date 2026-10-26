@@ -28,9 +28,9 @@ This tool converts Palo Alto Panorama XML configuration exports into Terraform c
 
 ## Requirements
 
-- Python 3.6 or higher
-- Terraform 1.0 or higher
-- Access to Palo Alto Panorama or firewall
+- Python 3.9+ (standard library only)
+- Terraform 1.0+ for the validate gate
+- A Panorama XML export
 
 ## Installation
 
@@ -90,6 +90,42 @@ This will create a `terraform_output` directory with all Terraform files.
 python3 panorama_to_terraform.py <input_file.xml> --output-dir /path/to/output
 ```
 
+### Input Limit
+
+Both scripts refuse an input larger than 64 MiB before reading it, and an
+input that declares a DTD (a Panorama export carries none). A refusal
+names the file, the limit and the measured size, exits non-zero, and
+writes no output file.
+
+```bash
+# Raise the limit for a trusted file (both scripts take the same flag)
+python3 panorama_to_terraform.py big_export.xml --max-input-bytes 268435456
+```
+
+### Post-run sanity gate
+
+Every run checks the `.tf` files it wrote, prints a summary, and writes
+`SANITY_REPORT.txt`. A check that finds nothing reports PASS. A FAIL finding
+exits 1. A WARN does not fail the run, and a check the run could not perform
+reports SKIPPED and does not change the exit code.
+
+```bash
+# Static checks only (the default): no terraform needed
+python3 panorama_to_terraform.py export.xml --output-dir out
+
+# Static checks plus terraform init + terraform validate
+python3 panorama_to_terraform.py export.xml --output-dir out --validate
+```
+
+The checks are: `emitted_types` (only `EMITTED_TYPES`), `location_present` (a
+`location` block on every resource), `references` (no `.name` reference to a
+resource this run did not declare), `variables` (no declared variable without a
+`var.` consumer), `control_chars` (no raw control character or DEL), and
+`placeholders` (an expected placeholder, such as the VPN key, listed for the
+operator). `--validate` adds the `terraform` check. The rules live in
+`sanity_checks.py` and are stated in
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md) §4.6.
+
 ### Example
 
 ```bash
@@ -98,20 +134,45 @@ python3 panorama_to_terraform.py panorama_config.xml --output-dir ./terraform/pa
 
 ## Output Structure
 
-The script generates the following Terraform files:
+Every emitted file exists only when the input contains data for it.
+The complete set (see `tests/golden/kitchen_sink/`, byte-gated by
+`tests/test_golden_files.py`):
 
 ```
 terraform_output/
-├── provider.tf           # Provider configuration
+├── provider.tf           # Provider configuration (credentials wired from variables)
 ├── variables.tf          # Variable definitions
 ├── address_objects.tf    # Address object resources
 ├── address_groups.tf     # Address group resources
 ├── service_objects.tf    # Service object resources
 ├── service_groups.tf     # Service group resources
-├── security_rules.tf     # Security policy rules
-├── nat_rules.tf         # NAT policy rules
-└── README.md            # Deployment instructions
+├── tags.tf               # Administrative tags
+├── application_groups.tf # Application group resources
+├── custom_url_categories.tf
+├── external_lists.tf     # External dynamic lists
+├── security_profile_groups.tf
+├── security_profiles.tf  # Security profile inventory (names/descriptions only; bodies are report-only)
+├── security_rules.tf     # Security policy rules (one resource per rule, one chain per device group and vsys)
+├── nat_rules.tf          # NAT policy rules
+├── decryption_rules.tf   # Decryption policy rules
+├── pbf_rules.tf          # PBF policy rules
+├── monitor_profiles.tf   # PBF path-monitor profiles
+├── interfaces.tf         # Ethernet interfaces + layer-3 subinterfaces
+├── zones.tf              # Zones
+├── virtual_routers.tf    # Virtual routers + static routes
+├── vpn.tf                # IKE/IPsec crypto profiles, gateways, tunnels
+├── README.md             # Deployment instructions
+├── MANUAL_SETUP_REPORT.txt     # BGP, OSPF, application filters, and other report-only items
+├── INTERFACE_MIGRATION_REPORT.txt   # grouped by device group, then template/device
+├── VPN_MIGRATION_REPORT.txt    # VPN key-management instructions (placeholder pre-shared keys)
+└── SANITY_REPORT.txt           # the post-run gate: result, checks, findings
 ```
+
+Both reports list one section per scope the export declares (device group, then
+template or device), so the same object name in two device groups is two
+sections. The shared section is named `Shared`. The rule, and the test that
+pins both reports to it, is in
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md) §4.5.
 
 ## Terraform Deployment
 
@@ -123,15 +184,14 @@ Create a `terraform.tfvars` file:
 panos_hostname = "panorama.example.com"
 panos_username = "admin"
 panos_password = "your-secure-password"
-device_group   = "Production-DG"
 ```
 
-Or use environment variables:
+Or use Terraform environment variables:
 
 ```bash
-export PANOS_HOSTNAME="panorama.example.com"
-export PANOS_USERNAME="admin"
-export PANOS_PASSWORD="your-secure-password"
+export TF_VAR_panos_hostname="panorama.example.com"
+export TF_VAR_panos_username="admin"
+export TF_VAR_panos_password="your-secure-password"
 ```
 
 ### Step 2: Initialize Terraform
@@ -163,7 +223,10 @@ terraform apply tfplan
 
 ### Filtering Specific Device Groups
 
-Edit the generated files to include only specific device groups by modifying the `device_group` variable or adding conditional logic.
+The converter emits one rule chain per device group, so you do not
+filter with variables: keep or delete the resource blocks for the
+device group you want, or pre-split the export with
+`split_device_groups.py` and run the converter on one file at a time.
 
 ### Customizing Resource Names
 
@@ -230,25 +293,27 @@ logging.basicConfig(level=logging.DEBUG)
 
 ## Limitations
 
-### Current Limitations
+### Report-only configuration
 
-- Does not support all Panorama features (work in progress)
-- Zone configuration must be manually created
-- Interface configuration requires manual setup
-- Virtual router configuration not included
-- Some advanced features may need manual adjustment
+The following have no v2 provider resource. The converter keeps their
+data visible in `MANUAL_SETUP_REPORT.txt` (or the VPN/interface
+migration reports) instead of emitting it — see
+[`docs/RESOURCE_MAPPING.md`](./RESOURCE_MAPPING.md) for the full list
+and rationale:
 
-### Manual Configuration Required
+- BGP (router, peer groups, peers)
+- OSPF (router, areas, interfaces)
+- Application filters
+- Application override rules
+- QoS profiles
 
-The following must be configured manually or added separately:
+Next-VR static routes have no v2 route attribute either: configure
+them on the target device after apply.
 
-- Network interfaces
-- Zones
-- Virtual routers
-- VPN configurations
-- User-ID settings
-- GlobalProtect configurations
-- High Availability settings
+### VPN key management
+
+`vpn.tf` emits placeholder pre-shared keys. Replace them with the
+real keys before apply and follow `VPN_MIGRATION_REPORT.txt`.
 
 ## Extending the Script
 

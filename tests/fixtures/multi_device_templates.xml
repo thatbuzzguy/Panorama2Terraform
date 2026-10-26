@@ -1,0 +1,111 @@
+<?xml version="1.0"?>
+<!-- F3.6: multi-device, template-aware parsing.
+
+     This fixture is the Panorama shape the converter must read the device
+     relationships from:
+
+       device-group/entry/<DG>/devices/entry/<device>
+       templates/entry/<template>/devices/entry/<device>
+       template-stack/entry/<stack>/devices/entry/<device>
+       template-stack/entry/<stack>/templates/member/<template>
+
+     The device group names and the template names are deliberately
+     unrelated (Office-FW and HQ-Networks), so a test cannot pass by
+     matching one name against the other. Only the shared device name
+     fw-1.example.com associates them.
+
+     Two devices declare the same interface name (ethernet1/1) and two
+     templates declare the same virtual router name (vr-hq), which is what
+     the naming context has to separate.
+-->
+<config version="10.1.0" urldb="paloaltonetworks">
+  <panorama>
+    <device-group>
+      <entry name="Office-FW">
+        <devices>
+          <entry name="fw-1.example.com" />
+        </devices>
+      </entry>
+      <entry name="Datacenter-FW">
+        <devices>
+          <entry name="fw-2.example.com" />
+        </devices>
+      </entry>
+      <!-- A device group that lists no device: the splitter copies no
+           template for it and says so. -->
+      <entry name="Unassigned-DG" />
+    </device-group>
+    <templates>
+      <entry name="HQ-Networks">
+        <devices>
+          <entry name="fw-1.example.com" />
+        </devices>
+        <network>
+          <virtual-router>
+            <entry name="vr-hq">
+              <interface>
+                <member>ethernet1/1</member>
+              </interface>
+            </entry>
+          </virtual-router>
+        </network>
+      </entry>
+      <entry name="DC-Networks">
+        <devices>
+          <entry name="fw-2.example.com" />
+        </devices>
+        <network>
+          <!-- Same router name as HQ-Networks: two resources, two
+               locations. -->
+          <virtual-router>
+            <entry name="vr-hq">
+              <interface>
+                <member>ethernet1/1</member>
+              </interface>
+            </entry>
+          </virtual-router>
+        </network>
+      </entry>
+    </templates>
+    <template-stack>
+      <!-- fw-3 takes HQ-Networks through the stack, so
+           templates_for_device('fw-3.example.com') is ['HQ-Networks']. -->
+      <entry name="Branch-Stack">
+        <devices>
+          <entry name="fw-3.example.com" />
+        </devices>
+        <templates>
+          <member>HQ-Networks</member>
+        </templates>
+      </entry>
+    </template-stack>
+  </panorama>
+  <devices>
+    <!-- Two firewalls, one interface name. Each is that device's own
+         config, so each resource carries location.ngfw. -->
+    <entry name="fw-1.example.com">
+      <network>
+        <interface>
+          <ethernet>
+            <entry name="ethernet1/1">
+              <layer3 />
+              <comment>HQ uplink</comment>
+            </entry>
+          </ethernet>
+        </interface>
+      </network>
+    </entry>
+    <entry name="fw-2.example.com">
+      <network>
+        <interface>
+          <ethernet>
+            <entry name="ethernet1/1">
+              <layer3 />
+              <comment>Datacenter uplink</comment>
+            </entry>
+          </ethernet>
+        </interface>
+      </network>
+    </entry>
+  </devices>
+</config>

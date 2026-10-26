@@ -25,6 +25,168 @@ Verified against provider v2.0.14 (128 resource types) with
 `terraform providers schema -json`.
 """
 
+# F3.3: parsed interface kind -> provider resource type. The generator uses
+# this table to pick the resource type for each interface entry.
+INTERFACE_RESOURCE_TYPES = {
+    'ethernet': 'panos_ethernet_interface',
+    'ethernet-subinterface': 'panos_ethernet_layer3_subinterface',
+    'vlan': 'panos_vlan_interface',
+    'loopback': 'panos_loopback_interface',
+    'tunnel': 'panos_tunnel_interface',
+    'aggregate': 'panos_aggregate_interface',
+    'aggregate-subinterface': 'panos_aggregate_layer3_subinterface',
+}
+
+# F3.5: the `location` sub-blocks the v2.0.14 schema declares for each
+# emitted type, with the fields of every sub-block. The generator picks the
+# sub-block from this table; it never emits a sub-block or a field the table
+# omits.
+#
+# Per type the table lists only the sub-blocks the converter can use
+# (device_group, shared, vsys, template). The schema declares more for some
+# types — `ngfw`, `template_stack`, `template_stack_vsys`, `template_vsys`
+# — for direct-firewall and template-stack placement; the converter targets
+# Panorama device groups and templates, so it never uses them and the table
+# is a deliberate subset. tests/test_multi_vsys_location.py checks every
+# listed sub-block and field against the live provider schema. That check
+# matters because `terraform validate` accepts an unknown `location`
+# sub-block and drops it silently, so a wrong sub-block fails at apply,
+# not at validate.
+#
+# Verified against provider v2.0.14 with `terraform providers schema -json`.
+LOCATION_SCHEMA = {
+    'panos_address': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_address_group': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_administrative_tag': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_aggregate_interface': {
+        'ngfw': ('ngfw_device',),
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_aggregate_layer3_subinterface': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_application_group': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_custom_url_category': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_decryption_policy_rules': {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_ethernet_interface': {
+        'ngfw': ('ngfw_device',),
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_ethernet_layer3_subinterface': {
+        'ngfw': ('ngfw_device',),
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_external_dynamic_list': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_ike_crypto_profile': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_ike_gateway': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_ipsec_crypto_profile': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_ipsec_tunnel': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_loopback_interface': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_monitor_profile': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_nat_policy_rules': {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_pbf_policy_rules': {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_security_policy_rules': {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_security_profile_group': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+    },
+    'panos_service': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_service_group': {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_tunnel_interface': {
+        'ngfw': ('ngfw_device',),
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_virtual_router': {
+        'ngfw': ('ngfw_device',),
+        'vsys': ('name', 'ngfw_device'),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+    'panos_virtual_router_static_route_ipv4': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_vlan_interface': {
+        'ngfw': ('ngfw_device',),
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    'panos_zone': {
+        'vsys': ('name', 'ngfw_device'),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+    },
+}
+
 # Provider v2 resource types emitted by the generator.
 EMITTED_TYPES = frozenset({
     # Objects (device-group scoped)
@@ -52,6 +214,13 @@ EMITTED_TYPES = frozenset({
     'panos_monitor_profile',
     'panos_ethernet_interface',
     'panos_ethernet_layer3_subinterface',
+    # F3.3: the other interface kinds. The provider has no virtual-wire or
+    # tap resource type; those are nested blocks on panos_ethernet_interface.
+    'panos_vlan_interface',
+    'panos_loopback_interface',
+    'panos_tunnel_interface',
+    'panos_aggregate_interface',
+    'panos_aggregate_layer3_subinterface',
     'panos_virtual_router',
     'panos_virtual_router_static_route_ipv4',
     'panos_zone',
@@ -253,6 +422,41 @@ COVERAGE_MATRIX = (
         'xml_name': 'ethernet1/1',
         'emitted_name': 'ethernet1/1.0',
         'fixture': 'interfaces_ethernet.xml',
+        'output_file': 'interfaces.tf',
+    }, {
+        'resource': 'panos_vlan_interface',
+        'xml_element': 'vlan/units/entry',
+        'xml_name': '10',
+        'emitted_name': 'vlan.10',
+        'fixture': 'interfaces_other.xml',
+        'output_file': 'interfaces.tf',
+    }, {
+        'resource': 'panos_loopback_interface',
+        'xml_element': 'loopback/units/entry',
+        'xml_name': '1',
+        'emitted_name': 'loopback.1',
+        'fixture': 'interfaces_other.xml',
+        'output_file': 'interfaces.tf',
+    }, {
+        'resource': 'panos_tunnel_interface',
+        'xml_element': 'tunnel/units/entry',
+        'xml_name': '1',
+        'emitted_name': 'tunnel.1',
+        'fixture': 'interfaces_other.xml',
+        'output_file': 'interfaces.tf',
+    }, {
+        'resource': 'panos_aggregate_interface',
+        'xml_element': 'aggregate-ethernet/entry',
+        'xml_name': 'ae1',
+        'emitted_name': 'ae1',
+        'fixture': 'interfaces_other.xml',
+        'output_file': 'interfaces.tf',
+    }, {
+        'resource': 'panos_aggregate_layer3_subinterface',
+        'xml_element': 'aggregate-ethernet/entry',
+        'xml_name': 'ae1.101',
+        'emitted_name': 'ae1.101',
+        'fixture': 'interfaces_other.xml',
         'output_file': 'interfaces.tf',
     }, {
         'resource': 'panos_virtual_router',

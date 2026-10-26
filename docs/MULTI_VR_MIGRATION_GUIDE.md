@@ -125,16 +125,26 @@ DMZ-VR <--[VR Route]--> Guest-VR
 **ha-pair-1-tf/virtual_routers.tf:**
 ```hcl
 # BEFORE (generated)
-resource "panos_virtual_router" "default" {
+resource "panos_virtual_router" "default_d1a0562b" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "default"
   interfaces = ["ethernet1/1", "ethernet1/2", "ethernet1/3", "ethernet1/4"]
 }
 
 # AFTER (customized for target)
 resource "panos_virtual_router" "internet_vr" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "Internet-VR"
   interfaces = [
-    "ethernet1/1",  # WAN1 
+    "ethernet1/1",  # WAN1
     "ethernet1/2",  # WAN2
     "ethernet1/3",  # Backup WAN
     "ethernet1/4",  # MPLS
@@ -150,6 +160,11 @@ resource "panos_virtual_router" "internet_vr" {
 ```hcl
 # AFTER (customized for target)
 resource "panos_virtual_router" "dmz_vr" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "DMZ-VR"
   interfaces = [
     "ethernet1/9",   # DMZ Subnet 1
@@ -165,6 +180,11 @@ resource "panos_virtual_router" "dmz_vr" {
 ```hcl
 # AFTER (customized for target)
 resource "panos_virtual_router" "guest_vr" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "Guest-VR"
   interfaces = [
     "ethernet1/17",  # Guest WiFi
@@ -180,102 +200,125 @@ resource "panos_virtual_router" "guest_vr" {
 Update each interface configuration file to match target platform:
 
 **ha-pair-1-tf/interfaces.tf:**
+
+In v2 the physical interface carries the mode, and the IPv4 address
+lives on the `.0` layer-3 subinterface:
+
 ```hcl
 resource "panos_ethernet_interface" "wan1" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "ethernet1/1"  # Target PA-5450 interface
-  mode = "layer3"
-  static_ips = ["203.0.113.1/30"]  # Same IP from source
+  layer3 = {}
   comment = "WAN1 - ISP A (from HA Pair 1 eth1/1)"
 }
 
+# IPv4 address from the source, on the .0 subinterface
+resource "panos_ethernet_layer3_subinterface" "wan1_0" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
+  name = "ethernet1/1.0"
+  parent = panos_ethernet_interface.wan1.name
+  tag = 0
+  ip = [{ name = "203.0.113.1/30" }]
+}
+
 resource "panos_ethernet_interface" "wan2" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "ethernet1/2"  # Target PA-5450 interface
-  mode = "layer3"
-  static_ips = ["198.51.100.1/30"]  # Same IP from source
+  layer3 = {}
   comment = "WAN2 - ISP B (from HA Pair 1 eth1/2)"
+}
+
+resource "panos_ethernet_layer3_subinterface" "wan2_0" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
+  name = "ethernet1/2.0"
+  parent = panos_ethernet_interface.wan2.name
+  tag = 0
+  ip = [{ name = "198.51.100.1/30" }]
 }
 ```
 
 #### Step 3: Update Zone Configurations
 
 **ha-pair-1-tf/zones.tf:**
+
+In v2 the zone membership lives under `network`:
+
 ```hcl
 resource "panos_zone" "untrust" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "Untrust"
-  mode = "layer3"
-  interfaces = ["ethernet1/1", "ethernet1/2"]  # Updated for target
+  network = {
+    layer3 = ["ethernet1/1", "ethernet1/2"]  # Updated for target
+  }
 }
 
-# Must explicitly set VR for zones
 resource "panos_zone" "wan" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "WAN"
-  mode = "layer3"
-  interfaces = ["ethernet1/3", "ethernet1/4"]
+  network = {
+    layer3 = ["ethernet1/3", "ethernet1/4"]
+  }
 }
 ```
 
 #### Step 4: Update BGP/OSPF Configurations
 
-**ha-pair-1-tf/bgp.tf:**
-```hcl
-resource "panos_bgp" "internet_vr_bgp" {
-  virtual_router = panos_virtual_router.internet_vr.name  # Updated VR reference
-  enable = true
-  router_id = "1.1.1.1"
-  as_number = "65001"
-}
-
-resource "panos_bgp_peer" "isp_a" {
-  virtual_router = panos_virtual_router.internet_vr.name
-  bgp_peer_group = "ISP-Peers"
-  name = "ISP-A"
-  peer_as = "65000"
-  local_address_interface = "ethernet1/1"  # Updated interface
-  peer_address_ip = "203.0.113.2"
-}
-```
-
-**ha-pair-2-tf/ospf.tf:**
-```hcl
-resource "panos_ospf" "dmz_vr_ospf" {
-  virtual_router = panos_virtual_router.dmz_vr.name  # Updated VR reference
-  enable = true
-  router_id = "2.2.2.2"  # Different router ID
-}
-```
+The v2 panos provider has no BGP or OSPF resources, so the converter
+puts the captured protocol data (router ID, AS, peers, areas) into
+`MANUAL_SETUP_REPORT.txt` for each HA pair. Configure it on the target
+after the Terraform apply. Keep the source per-VR settings, and use a
+different router ID per VR on the merged device.
 
 ### Phase 4: Configure VR Inter-connectivity
 
-If virtual routers need to communicate, configure VR-to-VR routes:
+If virtual routers need to communicate, add static routes. Normal
+next-hop routes use the v2
+`panos_virtual_router_static_route_ipv4` resource:
 
 ```hcl
-# In Internet-VR: Route to DMZ networks via DMZ-VR
-resource "panos_static_route_ipv4" "internet_to_dmz" {
-  virtual_router = panos_virtual_router.internet_vr.name
+# In Internet-VR: Route to DMZ networks
+resource "panos_virtual_router_static_route_ipv4" "internet_to_dmz" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "To-DMZ-Networks"
+  virtual_router = panos_virtual_router.internet_vr.name
   destination = "172.16.0.0/16"
-  type = "next-vr"
-  next_vr = "DMZ-VR"
-}
-
-# In DMZ-VR: Default route to Internet-VR
-resource "panos_static_route_ipv4" "dmz_default" {
-  virtual_router = panos_virtual_router.dmz_vr.name
-  name = "Default-via-Internet-VR"
-  destination = "0.0.0.0/0"
-  type = "next-vr"
-  next_vr = "Internet-VR"
-}
-
-# In Guest-VR: Route via DMZ-VR to internal resources
-resource "panos_static_route_ipv4" "guest_to_internal" {
-  virtual_router = panos_virtual_router.guest_vr.name
-  name = "To-Internal"
-  destination = "10.0.0.0/8"
-  type = "next-vr"
-  next_vr = "DMZ-VR"
+  nexthop = {
+    ip_address = "10.255.0.1"  # DMZ uplink IP
+  }
 }
 ```
+
+PAN-OS "next-VR" routes (route via another virtual router) have no
+attribute on the v2 route resource. Configure them on the target after
+the apply, or carry the traffic with policy-based forwarding.
 
 ### Phase 5: Merge Terraform Configurations
 
@@ -406,56 +449,98 @@ mv ../ha-pair-3-tf/virtual_routers.tf vr-guest.tf
 
 ### Policy Isolation
 
-Each VR should have separate security policies:
+Each VR should have separate security policies. In v2 each rule is its
+own `panos_security_policy_rules` resource, ordered with `position`:
 
 ```hcl
 # Internet-VR policies
-resource "panos_security_rule_group" "internet_vr_outbound" {
-  position_keyword = "bottom"
-  
-  rule {
-    name = "Internet-Outbound"
-    source_zones = ["WAN"]
-    destination_zones = ["Untrust"]
-    # ... Internet-specific policies
+resource "panos_security_policy_rules" "internet_outbound" {
+  location = {
+    device_group = {
+      name = "Production-DG"
+    }
   }
+  position = {
+    where = "last"
+  }
+  rules = [
+    {
+      name = "Internet-Outbound"
+      source_zones = ["WAN"]
+      destination_zones = ["Untrust"]
+      action = "allow"
+    }
+  ]
 }
 
-# DMZ-VR policies  
-resource "panos_security_rule_group" "dmz_vr_policies" {
-  position_keyword = "bottom"
-  
-  rule {
-    name = "DMZ-to-Internal"
-    source_zones = ["DMZ"]
-    destination_zones = ["Internal-DMZ"]
-    # ... DMZ-specific policies
+# DMZ-VR policies
+resource "panos_security_policy_rules" "dmz_to_internal" {
+  location = {
+    device_group = {
+      name = "Production-DG"
+    }
   }
+  position = {
+    where = "last"
+  }
+  rules = [
+    {
+      name = "DMZ-to-Internal"
+      source_zones = ["DMZ"]
+      destination_zones = ["Internal-DMZ"]
+      action = "allow"
+    }
+  ]
 }
 ```
 
 ### VR-to-VR Traffic Control
 
-Control inter-VR traffic with policies:
+Control inter-VR traffic with policies. The order of rules follows the
+`position` argument; the converter emits `position` plus `depends_on`
+so the order is deterministic:
 
 ```hcl
-resource "panos_security_rule_group" "vr_to_vr" {
-  position_keyword = "top"  # Higher priority
-  
-  rule {
-    name = "Guest-to-Internet-Only"
-    source_zones = ["Guest"]
-    destination_zones = ["Untrust"]
-    action = "allow"
+resource "panos_security_policy_rules" "guest_to_internet_only" {
+  location = {
+    device_group = {
+      name = "Production-DG"
+    }
   }
-  
-  rule {
-    name = "Block-Guest-to-Internal"
-    source_zones = ["Guest"]
-    destination_zones = ["DMZ", "Internal"]
-    action = "deny"
-    log_end = true
+  position = {
+    where = "first"
   }
+  rules = [
+    {
+      name = "Guest-to-Internet-Only"
+      source_zones = ["Guest"]
+      destination_zones = ["Untrust"]
+      action = "allow"
+    }
+  ]
+}
+
+resource "panos_security_policy_rules" "block_guest_to_internal" {
+  location = {
+    device_group = {
+      name = "Production-DG"
+    }
+  }
+  position = {
+    where = "after"
+    directly = true
+    pivot = "Guest-to-Internet-Only"
+  }
+  depends_on = [panos_security_policy_rules.guest_to_internet_only]
+  rules = [
+    {
+      name = "Block-Guest-to-Internal"
+      source_zones = ["Guest"]
+      destination_zones = ["DMZ", "Internal"]
+      action = "deny"
+      log_end = true
+    }
+  ]
 }
 ```
 
@@ -522,7 +607,9 @@ show routing route virtual-router Internet-VR
 show network virtual-router all
 ```
 
-**Solution**: Add static routes with `type = "next-vr"`
+**Solution**: Add the missing static routes (the v2
+`panos_virtual_router_static_route_ipv4` resource for next-hop routes;
+next-VR routes are configured on the device).
 
 ### Policy Not Matching
 
@@ -541,23 +628,11 @@ tail -f /var/log/pan/traffic.log
 
 ### Scenario 1: BGP in Multiple VRs
 
-If multiple VRs run BGP (e.g., different ISPs per VR):
-
-```hcl
-# Internet-VR: Primary BGP
-resource "panos_bgp" "internet_bgp" {
-  virtual_router = "Internet-VR"
-  as_number = "65001"
-  router_id = "1.1.1.1"
-}
-
-# Backup-VR: Backup BGP
-resource "panos_bgp" "backup_bgp" {
-  virtual_router = "Backup-VR"
-  as_number = "65001"  # Same AS
-  router_id = "1.1.1.2"  # Different router ID
-}
-```
+If multiple VRs run BGP (e.g., different ISPs per VR), configure BGP
+per VR on the target after the apply. The v2 panos provider has no BGP
+resource, and the converter records the captured BGP data in
+`MANUAL_SETUP_REPORT.txt`. Keep the source AS per VR and use a
+different router ID per VR.
 
 ### Scenario 2: OSPF Redistribution Between VRs
 

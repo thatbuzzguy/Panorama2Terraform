@@ -5,7 +5,7 @@
 
 # IKE Crypto Profiles
 
-resource "panos_ike_crypto_profile" "ike_profile_ike_default_58021a99" {
+resource "panos_ike_crypto_profile" "ike_profile_ike_default_c43fed03" {
   location = {
     template = {
       name = "Shared"
@@ -22,7 +22,7 @@ resource "panos_ike_crypto_profile" "ike_profile_ike_default_58021a99" {
 
 # IPsec Crypto Profiles
 
-resource "panos_ipsec_crypto_profile" "ipsec_profile_ipsec_default_964d437a" {
+resource "panos_ipsec_crypto_profile" "ipsec_profile_ipsec_default_c8e40af6" {
   location = {
     template = {
       name = "Shared"
@@ -46,7 +46,7 @@ resource "panos_ipsec_crypto_profile" "ipsec_profile_ipsec_default_964d437a" {
 # WARNING: Pre-shared keys use placeholder "***CHANGE_ME***"
 # Update these with actual keys from your key management system!
 
-resource "panos_ike_gateway" "ike_gw_ike_gw_branch_2b6fe510" {
+resource "panos_ike_gateway" "ike_gw_ike_gw_branch_4b617d92" {
   location = {
     template = {
       name = "Shared"
@@ -56,7 +56,7 @@ resource "panos_ike_gateway" "ike_gw_ike_gw_branch_2b6fe510" {
   protocol = {
     version = "ikev2"
     ikev2 = {
-      ike_crypto_profile = panos_ike_crypto_profile.ike_profile_ike_default_58021a99.name
+      ike_crypto_profile = panos_ike_crypto_profile.ike_profile_ike_default_c43fed03.name
     }
   }
   peer_address = {
@@ -77,7 +77,7 @@ resource "panos_ike_gateway" "ike_gw_ike_gw_branch_2b6fe510" {
 
 # IPsec Tunnels
 
-resource "panos_ipsec_tunnel" "tunnel_tun_branch_654a01ce" {
+resource "panos_ipsec_tunnel" "tunnel_tun_branch_666031d0" {
   location = {
     template = {
       name = "Shared"
@@ -87,13 +87,13 @@ resource "panos_ipsec_tunnel" "tunnel_tun_branch_654a01ce" {
   tunnel_interface = "tunnel.1"
   auto_key = {
     ike_gateway = [
-{
-        name = panos_ike_gateway.ike_gw_ike_gw_branch_2b6fe510.name
+      {
+        name = panos_ike_gateway.ike_gw_ike_gw_branch_4b617d92.name
       }
     ]
-    ipsec_crypto_profile = panos_ipsec_crypto_profile.ipsec_profile_ipsec_default_964d437a.name
+    ipsec_crypto_profile = panos_ipsec_crypto_profile.ipsec_profile_ipsec_default_c8e40af6.name
     proxy_id = [
-{
+      {
         name = "proxy-1"
         local = "10.0.0.0/8"
         remote = "192.168.0.0/16"

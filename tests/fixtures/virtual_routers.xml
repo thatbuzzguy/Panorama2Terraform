@@ -49,5 +49,31 @@
         </entry>
       </vsys>
     </entry>
+    <!-- F3.5: a firewall's own config export puts network config at device
+         level, and can declare more than one virtual system. -->
+    <entry name="fw-1.example.com">
+      <network>
+        <virtual-router>
+          <entry name="vr-device">
+            <interface>
+              <member>ethernet1/4</member>
+            </interface>
+          </entry>
+        </virtual-router>
+      </network>
+      <vsys>
+        <entry name="vsys2">
+          <network>
+            <virtual-router>
+              <entry name="vr-vsys2">
+                <interface>
+                  <member>ethernet1/5</member>
+                </interface>
+              </entry>
+            </virtual-router>
+          </network>
+        </entry>
+      </vsys>
+    </entry>
   </devices>
 </config>

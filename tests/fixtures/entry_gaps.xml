@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<!-- F4.3: entries that produce no output.
+
+  region/North-America: a parse method reads it, and the container table row for
+  `region` is count-only, so the entry writes nothing.
+
+  The unnamed address entry under `shared/address`: a parse method visits it and
+  cannot model an entry with no name, so the mark records it as skipped. It sits
+  at section level, so it is a report row; an unnamed entry inside a
+  config-object entry is a property level and belongs to F4.4.
+
+Both containers are covered by the table, so this fixture produces no F4.2
+section finding. It only demonstrates the entry-level gap.
+-->
+<config version="10.0.0" urldb="paloaltonetworks">
+  <shared>
+    <region>
+      <entry name="North-America">
+        <address>
+          <member>US</member>
+        </address>
+      </entry>
+    </region>
+    <address>
+      <entry>
+        <ip-netmask>10.0.0.9/32</ip-netmask>
+      </entry>
+    </address>
+  </shared>
+  <device-group>
+    <entry name="Edge">
+      <address>
+        <entry name="Named-Host">
+          <ip-netmask>10.0.0.1/32</ip-netmask>
+        </entry>
+      </address>
+    </entry>
+  </device-group>
+</config>

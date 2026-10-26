@@ -38,6 +38,22 @@
         <fqdn>api.example.com</fqdn>
         <description>External API</description>
       </entry>
+      <!-- F3.4: ip-wildcard is a v2-modeled address type -->
+      <entry name="Web-Wildcard" type="ip-wildcard">
+        <ip-wildcard>10.1.3.*</ip-wildcard>
+        <description>Wildcard subnet</description>
+      </entry>
+      <!-- F3.4: disable-override is a v2 bool attribute -->
+      <entry name="Masked-Host">
+        <ip-netmask>10.1.4.5/32</ip-netmask>
+        <disable-override>yes</disable-override>
+      </entry>
+      <!-- F3.4: location type has no v2 attribute; report-only -->
+      <entry name="Country-US" type="location">
+        <country>US</country>
+        <region>North America</region>
+        <description>Country address object</description>
+      </entry>
       <entry name="Reference-Only">
         <id>4815</id>
       </entry>
@@ -90,6 +106,35 @@
           </ip>
         </type>
         <description>Threat IP list</description>
+      </entry>
+      <!-- F3.4: domain sub-shape with the extended field set -->
+      <entry name="bad-domains">
+        <type>
+          <domain>
+            <url>https://threat.example.com/domains.txt</url>
+            <exception-list>
+              <member>example.com</member>
+            </exception-list>
+            <expand-domain>yes</expand-domain>
+            <certificate-profile>default</certificate-profile>
+            <recurring>
+              <weekly>
+                <at>6</at>
+                <day-of-week>monday</day-of-week>
+              </weekly>
+            </recurring>
+          </domain>
+        </type>
+        <description>Bad domain list</description>
+      </entry>
+      <!-- F3.4: predefined-url sub-shape (fewer fields in the v2 schema) -->
+      <entry name="panw-url-list">
+        <type>
+          <predefined-url>
+            <url>https://url.paloaltonetworks.com/geturlversion.php</url>
+          </predefined-url>
+        </type>
+        <description>Palo Alto Networks URL list</description>
       </entry>
     </external-list>
     <log-settings>
@@ -215,6 +260,34 @@
             <port>514</port>
           </udp>
         </protocol>
+      </entry>
+      <!-- F3.4: dual protocol, multi-port, source port, override, tags -->
+      <entry name="Dual-Protocol" type="application">
+        <protocol>
+          <tcp>
+            <port>80,443</port>
+            <source-port>1024-65535</source-port>
+            <override>
+              <yes>
+                <halfclose-timeout>120</halfclose-timeout>
+                <timeout>1800</timeout>
+                <timewait-timeout>120</timewait-timeout>
+              </yes>
+            </override>
+          </tcp>
+          <udp>
+            <port>53</port>
+            <override>
+              <yes>
+                <timeout>120</timeout>
+              </yes>
+            </override>
+          </udp>
+        </protocol>
+        <description>Dual protocol service</description>
+        <tag>
+          <member>web</member>
+        </tag>
       </entry>
     </service>
     <tag>
@@ -445,261 +518,269 @@
         <entry name="Dev-DG">
         </entry>
       </device-group>
+      <!-- F3.5: a PAN-OS export puts network config (interfaces,
+           routers, VPN) at device level and keeps vsys-scoped objects
+           under vsys/entry. The converter reads both. -->
+      <network>
+        <virtual-router>
+          <entry name="default">
+            <protocol>
+              <bgp>
+                <enable>yes</enable>
+                <router-id>10.0.0.1</router-id>
+                <local-as>65001</local-as>
+                <peer-group>
+                  <entry name="PG-Branch">
+                    <type>external</type>
+                    <export-nexthop>self</export-nexthop>
+                    <import-nexthop>self</import-nexthop>
+                  </entry>
+                </peer-group>
+                <peer>
+                  <entry name="10.55.0.2">
+                    <peer-as>65002</peer-as>
+                    <local-address>
+                      <ip>10.55.0.1</ip>
+                    </local-address>
+                    <peer-address>
+                      <ip>10.55.0.2</ip>
+                    </peer-address>
+                    <enable>yes</enable>
+                    <peer-group>PG-Branch</peer-group>
+                  </entry>
+                </peer>
+                <redist-rules>
+                  <entry name="redist-static">
+                    <enable>yes</enable>
+                    <address-family-identifier>ipv4-unicast</address-family-identifier>
+                  </entry>
+                </redist-rules>
+              </bgp>
+              <ospf>
+                <enable>yes</enable>
+                <router-id>10.0.0.1</router-id>
+                <area>
+                  <entry name="0.0.0.0">
+                    <type>
+                      <stub />
+                    </type>
+                    <range>
+                      <entry name="10.0.0.0/8">
+                        <name>10.0.0.0/8</name>
+                      </entry>
+                    </range>
+                  </entry>
+                </area>
+                <interface>
+                  <entry name="ethernet1/1">
+                    <enable>yes</enable>
+                    <passive>yes</passive>
+                    <link-type>point-to-point</link-type>
+                    <metric>10</metric>
+                  </entry>
+                </interface>
+              </ospf>
+            </protocol>
+          </entry>
+          <entry name="vr-nobgp">
+            <protocol>
+              <bgp>
+                <enable>no</enable>
+              </bgp>
+            </protocol>
+          </entry>
+          <entry name="vr-dmz">
+            <interface>
+              <member>ethernet1/3</member>
+            </interface>
+          </entry>
+        </virtual-router>
+        <ike>
+          <crypto-profiles>
+            <ike-crypto-profiles>
+              <entry name="IKE-DEFAULT">
+                <dh-group>
+                  <member>group14</member>
+                </dh-group>
+                <authentication>
+                  <member>sha256</member>
+                </authentication>
+                <encryption>
+                  <member>aes256</member>
+                </encryption>
+                <lifetime>
+                  <hours>24</hours>
+                </lifetime>
+              </entry>
+            </ike-crypto-profiles>
+            <ipsec-crypto-profiles>
+              <entry name="IPSEC-DEFAULT">
+                <esp>
+                  <encryption>
+                    <member>aes256</member>
+                  </encryption>
+                  <authentication>
+                    <member>sha256</member>
+                  </authentication>
+                </esp>
+                <dh-group>group14</dh-group>
+                <lifetime>
+                  <hours>1</hours>
+                  <kilobytes>4608000</kilobytes>
+                </lifetime>
+              </entry>
+            </ipsec-crypto-profiles>
+          </crypto-profiles>
+          <gateway>
+            <entry name="IKE-GW-Branch">
+              <protocol>
+                <ikev2>
+                  <ike-crypto-profile>IKE-DEFAULT</ike-crypto-profile>
+                </ikev2>
+              </protocol>
+              <peer-address>
+                <fqdn>branch.example.com</fqdn>
+              </peer-address>
+              <authentication>
+                <pre-shared-key>
+                  <profile>psk-profile</profile>
+                </pre-shared-key>
+              </authentication>
+              <local-id>
+                <id>local.example.com</id>
+              </local-id>
+              <peer-id>
+                <id>peer.example.com</id>
+              </peer-id>
+            </entry>
+          </gateway>
+        </ike>
+        <interface>
+          <ethernet>
+            <entry name="ethernet1/1">
+              <mode>layer3</mode>
+              <layer3>
+                <interface-management-profile>Management1</interface-management-profile>
+                <ip>
+                  <entry name="192.168.1.1/24" />
+                </ip>
+              </layer3>
+              <comment>Trust uplink</comment>
+            </entry>
+            <entry name="ethernet1/2">
+              <mode>layer2</mode>
+              <layer2 />
+            </entry>
+          </ethernet>
+          <vlan>
+            <units>
+              <entry name="10">
+                <tag>10</tag>
+                <description>VLAN 10</description>
+                <ip>
+                  <entry name="10.10.10.1/24" />
+                </ip>
+              </entry>
+            </units>
+          </vlan>
+          <loopback>
+            <units>
+              <entry name="1">
+                <ip>
+                  <entry name="169.254.0.1/32" />
+                </ip>
+              </entry>
+            </units>
+          </loopback>
+          <tunnel>
+            <units>
+              <entry name="1">
+                <ip>
+                  <entry name="10.255.0.1/32" />
+                </ip>
+              </entry>
+            </units>
+          </tunnel>
+          <aggregate-ethernet>
+            <!-- F3.3: the aggregate group itself (no ip, parent, or tag
+                 in the provider schema). -->
+            <entry name="ae1">
+              <layer2 />
+            </entry>
+            <entry name="ae1.101">
+              <layer3>
+                <ip>
+                  <entry name="172.16.1.1/24" />
+                </ip>
+                <units>
+                  <entry name="ae1.101.20">
+                    <tag>20</tag>
+                    <ip>
+                      <entry name="172.16.20.1/24" />
+                    </ip>
+                  </entry>
+                </units>
+              </layer3>
+            </entry>
+          </aggregate-ethernet>
+        </interface>
+        <tunnel>
+          <ipsec>
+            <entry name="TUN-Branch">
+              <tunnel-interface>tunnel.1</tunnel-interface>
+              <auto-key>
+                <gateway>
+                  <entry name="IKE-GW-Branch" />
+                </gateway>
+                <ipsec-crypto-profile>IPSEC-DEFAULT</ipsec-crypto-profile>
+                <proxy-id>
+                  <entry name="proxy-1">
+                    <local>10.0.0.0/8</local>
+                    <remote>192.168.0.0/16</remote>
+                    <protocol>
+                      <number>17</number>
+                    </protocol>
+                  </entry>
+                </proxy-id>
+              </auto-key>
+            </entry>
+          </ipsec>
+        </tunnel>
+        <profiles>
+          <monitor-profile>
+            <entry name="PM-Branch" uuid="pm-ks-1">
+              <action>wait-recover</action>
+              <interval>10</interval>
+              <threshold>5</threshold>
+            </entry>
+          </monitor-profile>
+        </profiles>
+        <qos>
+          <profile>
+            <entry name="QOS-Default">
+              <class>
+                <entry name="Class-1">
+                  <priority>high</priority>
+                </entry>
+                <entry name="Class-2">
+                  <priority>low</priority>
+                </entry>
+              </class>
+            </entry>
+          </profile>
+        </qos>
+        <tunnel-monitor>
+          <monitor-profile>
+            <entry name="TM-Default">
+              <interval>30</interval>
+              <threshold>3</threshold>
+              <action>reset</action>
+            </entry>
+          </monitor-profile>
+        </tunnel-monitor>
+      </network>
       <vsys>
         <entry name="vsys1">
-          <network>
-            <virtual-router>
-              <entry name="default">
-                <protocol>
-                  <bgp>
-                    <enable>yes</enable>
-                    <router-id>10.0.0.1</router-id>
-                    <local-as>65001</local-as>
-                    <peer-group>
-                      <entry name="PG-Branch">
-                        <type>external</type>
-                        <export-nexthop>self</export-nexthop>
-                        <import-nexthop>self</import-nexthop>
-                      </entry>
-                    </peer-group>
-                    <peer>
-                      <entry name="10.55.0.2">
-                        <peer-as>65002</peer-as>
-                        <local-address>
-                          <ip>10.55.0.1</ip>
-                        </local-address>
-                        <peer-address>
-                          <ip>10.55.0.2</ip>
-                        </peer-address>
-                        <enable>yes</enable>
-                        <peer-group>PG-Branch</peer-group>
-                      </entry>
-                    </peer>
-                    <redist-rules>
-                      <entry name="redist-static">
-                        <enable>yes</enable>
-                        <address-family-identifier>ipv4-unicast</address-family-identifier>
-                      </entry>
-                    </redist-rules>
-                  </bgp>
-                  <ospf>
-                    <enable>yes</enable>
-                    <router-id>10.0.0.1</router-id>
-                    <area>
-                      <entry name="0.0.0.0">
-                        <type>
-                          <stub />
-                        </type>
-                        <range>
-                          <entry name="10.0.0.0/8">
-                            <name>10.0.0.0/8</name>
-                          </entry>
-                        </range>
-                      </entry>
-                    </area>
-                    <interface>
-                      <entry name="ethernet1/1">
-                        <enable>yes</enable>
-                        <passive>yes</passive>
-                        <link-type>point-to-point</link-type>
-                        <metric>10</metric>
-                      </entry>
-                    </interface>
-                  </ospf>
-                </protocol>
-              </entry>
-              <entry name="vr-nobgp">
-                <protocol>
-                  <bgp>
-                    <enable>no</enable>
-                  </bgp>
-                </protocol>
-              </entry>
-              <entry name="vr-dmz">
-                <interface>
-                  <member>ethernet1/3</member>
-                </interface>
-              </entry>
-            </virtual-router>
-            <ike>
-              <crypto-profiles>
-                <ike-crypto-profiles>
-                  <entry name="IKE-DEFAULT">
-                    <dh-group>
-                      <member>group14</member>
-                    </dh-group>
-                    <authentication>
-                      <member>sha256</member>
-                    </authentication>
-                    <encryption>
-                      <member>aes256</member>
-                    </encryption>
-                    <lifetime>
-                      <hours>24</hours>
-                    </lifetime>
-                  </entry>
-                </ike-crypto-profiles>
-                <ipsec-crypto-profiles>
-                  <entry name="IPSEC-DEFAULT">
-                    <esp>
-                      <encryption>
-                        <member>aes256</member>
-                      </encryption>
-                      <authentication>
-                        <member>sha256</member>
-                      </authentication>
-                    </esp>
-                    <dh-group>group14</dh-group>
-                    <lifetime>
-                      <hours>1</hours>
-                      <kilobytes>4608000</kilobytes>
-                    </lifetime>
-                  </entry>
-                </ipsec-crypto-profiles>
-              </crypto-profiles>
-              <gateway>
-                <entry name="IKE-GW-Branch">
-                  <protocol>
-                    <ikev2>
-                      <ike-crypto-profile>IKE-DEFAULT</ike-crypto-profile>
-                    </ikev2>
-                  </protocol>
-                  <peer-address>
-                    <fqdn>branch.example.com</fqdn>
-                  </peer-address>
-                  <authentication>
-                    <pre-shared-key>
-                      <profile>psk-profile</profile>
-                    </pre-shared-key>
-                  </authentication>
-                  <local-id>
-                    <id>local.example.com</id>
-                  </local-id>
-                  <peer-id>
-                    <id>peer.example.com</id>
-                  </peer-id>
-                </entry>
-              </gateway>
-            </ike>
-            <interface>
-              <ethernet>
-                <entry name="ethernet1/1">
-                  <mode>layer3</mode>
-                  <layer3>
-                    <interface-management-profile>Management1</interface-management-profile>
-                    <ip>
-                      <entry name="192.168.1.1/24" />
-                    </ip>
-                  </layer3>
-                  <comment>Trust uplink</comment>
-                </entry>
-                <entry name="ethernet1/2">
-                  <mode>layer2</mode>
-                  <layer2 />
-                </entry>
-              </ethernet>
-              <vlan>
-                <units>
-                  <entry name="10">
-                    <tag>10</tag>
-                    <description>VLAN 10</description>
-                    <ip>
-                      <entry name="10.10.10.1/24" />
-                    </ip>
-                  </entry>
-                </units>
-              </vlan>
-              <loopback>
-                <units>
-                  <entry name="1">
-                    <ip>
-                      <entry name="169.254.0.1/32" />
-                    </ip>
-                  </entry>
-                </units>
-              </loopback>
-              <tunnel>
-                <units>
-                  <entry name="1">
-                    <ip>
-                      <entry name="10.255.0.1/32" />
-                    </ip>
-                  </entry>
-                </units>
-              </tunnel>
-              <aggregate-ethernet>
-                <entry name="ae1.101">
-                  <layer3>
-                    <ip>
-                      <entry name="172.16.1.1/24" />
-                    </ip>
-                    <units>
-                      <entry name="ae1.101.20">
-                        <tag>20</tag>
-                        <ip>
-                          <entry name="172.16.20.1/24" />
-                        </ip>
-                      </entry>
-                    </units>
-                  </layer3>
-                </entry>
-              </aggregate-ethernet>
-            </interface>
-            <tunnel>
-              <ipsec>
-                <entry name="TUN-Branch">
-                  <tunnel-interface>tunnel.1</tunnel-interface>
-                  <auto-key>
-                    <gateway>
-                      <entry name="IKE-GW-Branch" />
-                    </gateway>
-                    <ipsec-crypto-profile>IPSEC-DEFAULT</ipsec-crypto-profile>
-                    <proxy-id>
-                      <entry name="proxy-1">
-                        <local>10.0.0.0/8</local>
-                        <remote>192.168.0.0/16</remote>
-                        <protocol>
-                          <number>17</number>
-                        </protocol>
-                      </entry>
-                    </proxy-id>
-                  </auto-key>
-                </entry>
-              </ipsec>
-            </tunnel>
-            <profiles>
-              <monitor-profile>
-                <entry name="PM-Branch" uuid="pm-ks-1">
-                  <action>wait-recover</action>
-                  <interval>10</interval>
-                  <threshold>5</threshold>
-                </entry>
-              </monitor-profile>
-            </profiles>
-            <qos>
-              <profile>
-                <entry name="QOS-Default">
-                  <class>
-                    <entry name="Class-1">
-                      <priority>high</priority>
-                    </entry>
-                    <entry name="Class-2">
-                      <priority>low</priority>
-                    </entry>
-                  </class>
-                </entry>
-              </profile>
-            </qos>
-            <tunnel-monitor>
-              <monitor-profile>
-                <entry name="TM-Default">
-                  <interval>30</interval>
-                  <threshold>3</threshold>
-                  <action>reset</action>
-                </entry>
-              </monitor-profile>
-            </tunnel-monitor>
-          </network>
           <zone>
             <entry name="trust">
               <network>
@@ -715,6 +796,76 @@
                 <layer2>
                   <member>ethernet1/3</member>
                 </layer2>
+              </network>
+            </entry>
+          </zone>
+        </entry>
+      </vsys>
+    </entry>
+    <!-- F3.5: a second device with two virtual systems. The same object
+         name in vsys1 and vsys2 must produce two resources, and a vsys
+         location must name this device in ngfw_device. The router sits
+         under network (device level), the shape a firewall's own config
+         export uses. -->
+    <entry name="fw-2.example.com">
+      <network>
+        <virtual-router>
+          <entry name="vr-device-level">
+            <interface>
+              <member>ethernet1/1</member>
+            </interface>
+          </entry>
+        </virtual-router>
+      </network>
+      <vsys>
+        <entry name="vsys1">
+          <address>
+            <entry name="Vsys-Duplicate">
+              <ip-netmask>10.20.1.10/32</ip-netmask>
+              <description>vsys1 copy of a shared name</description>
+            </entry>
+          </address>
+          <service>
+            <entry name="Vsys-Service">
+              <protocol>
+                <tcp>
+                  <port>7001</port>
+                </tcp>
+              </protocol>
+            </entry>
+          </service>
+          <zone>
+            <entry name="vsys-zone1">
+              <network>
+                <layer3>
+                  <member>ethernet1/1</member>
+                </layer3>
+              </network>
+            </entry>
+          </zone>
+        </entry>
+        <entry name="vsys2">
+          <address>
+            <entry name="Vsys-Duplicate">
+              <ip-netmask>10.20.2.10/32</ip-netmask>
+              <description>vsys2 copy of a shared name</description>
+            </entry>
+          </address>
+          <service>
+            <entry name="Vsys-Service">
+              <protocol>
+                <tcp>
+                  <port>7002</port>
+                </tcp>
+              </protocol>
+            </entry>
+          </service>
+          <zone>
+            <entry name="vsys-zone2">
+              <network>
+                <layer3>
+                  <member>ethernet1/2</member>
+                </layer3>
               </network>
             </entry>
           </zone>

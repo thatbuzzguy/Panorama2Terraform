@@ -112,6 +112,16 @@ def splitter_module():
     return _load_module("split_device_groups", "split_device_groups.py")
 
 
+@pytest.fixture(scope="session")
+def xml_input_module(converter_module):
+    """The shared safe-input module (F3.8) both entry points import.
+
+    Returned after the converter loads, so the module object is the one the
+    scripts hold: a test and a script then share one UnsafeInputError class.
+    """
+    return sys.modules["xml_input"]
+
+
 @pytest.fixture
 def make_parser(converter_module):
     """Return a factory that builds a PanoramaParser bound to a fixture file."""

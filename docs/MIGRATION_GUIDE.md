@@ -129,8 +129,20 @@ The script generates `INTERFACE_MIGRATION_REPORT.txt` which contains:
 - VLAN tags
 - Platform-specific guidance
 
+Entries are grouped by the scope the export declares: device group first, then
+the template or the device the entry sits in, then the interface type. The
+rule both reports share is in
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md) §4.5.
+
 **Example Report Structure:**
 ```
+================================================================================
+DEVICE GROUP: Office-FW
+================================================================================
+
+ETHERNET INTERFACES (1)
+--------------------------------------------------------------------------------
+
 Interface: ethernet1/1
   Type: ethernet
   Mode: layer3
@@ -182,35 +194,74 @@ Create a mapping document like this:
 
 Edit `interfaces.tf` to match your target platform:
 
+In v2 the physical interface carries the mode, and the IPv4 address
+lives on the `.0` layer-3 subinterface:
+
 ```hcl
 # Before (from converter)
-resource "panos_ethernet_interface" "ethernet1_1" {
+resource "panos_ethernet_interface" "ethernet1_1_d74b05bd" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "ethernet1/1"
-  mode = "layer3"
-  static_ips = ["10.1.1.1/24"]
+  layer3 = {}
 }
 
 # After (adjusted for target)
-resource "panos_ethernet_interface" "ethernet1_1" {
+resource "panos_ethernet_interface" "ethernet1_1_d74b05bd" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
   name = "ethernet1/1"  # Verify this matches target platform
-  mode = "layer3"
-  static_ips = ["10.1.1.1/24"]
-  management_profile = "Allow-Ping"
+  layer3 = {
+    interface_management_profile = "Allow-Ping"
+  }
   comment = "Trust Interface - Internal Network"
 }
+
+resource "panos_ethernet_layer3_subinterface" "ethernet1_1_0_279a35e7" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
+  name = "ethernet1/1.0"
+  parent = panos_ethernet_interface.ethernet1_1_d74b05bd.name
+  tag = 0
+  ip = [{ name = "10.1.1.1/24" }]
+}
 ```
+
+(Local resource names are the sanitized PAN-OS name plus an 8-hex digest
+of the object's source identity.)
 
 ### Step 3: Update Zone Assignments
 
-Ensure zones reference the correct interfaces:
+Ensure zones reference the correct interfaces. In v2 the membership
+lives under `network`. A zone the export defines inside a virtual system
+is placed with `vsys`:
 
 ```hcl
 resource "panos_zone" "trust" {
+  location = {
+    vsys = {
+      name = "vsys1"
+    }
+  }
   name = "Trust"
-  mode = "layer3"
-  interfaces = ["ethernet1/1", "vlan.10"]  # Verify these exist on target
+  network = {
+    layer3 = ["ethernet1/1", "vlan.10"]  # Verify these exist on target
+  }
 }
 ```
+
+A zone a template defines instead gets
+`template = { name = "<template>" }`, and `ngfw_device = "<firewall>"` is
+added to the `vsys` block when the export names the owning firewall.
 
 ## Detailed Migration Steps
 
@@ -373,11 +424,18 @@ show interface all
 2. Use Terraform depends_on if needed:
 ```hcl
 resource "panos_zone" "trust" {
+  location = {
+    vsys = {
+      name = "vsys1"
+    }
+  }
   name = "Trust"
-  interfaces = ["ethernet1/1"]
-  
+  network = {
+    layer3 = ["ethernet1/1"]
+  }
+
   depends_on = [
-    panos_ethernet_interface.ethernet1_1
+    panos_ethernet_interface.ethernet1_1_d74b05bd
   ]
 }
 ```

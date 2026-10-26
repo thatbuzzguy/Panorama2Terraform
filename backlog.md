@@ -4,22 +4,82 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 
 ## Tech Debt
 
+- `tools/build_kitchen_sink.py` still calls `ET.parse` directly. Accepted
+  (F3.8): it is a developer tool that assembles the kitchen-sink fixture
+  from files already committed to this repository, not an entry point that
+  reads an operator's export. Leave it alone unless it ever takes a
+  command-line path.
+
 - `.gitignore` consistency: `*.xml` is ignored, yet `sample_panorama_config.xml` is committed (audit §4.9).
-- No input size limit on XML files. DTD rejection (F1.7) removes the entity-expansion DoS, but a multi-GB well-formed file still allocates memory. A size limit is a product decision (pair with F3.8).
 - Parser extraction gaps found by F1.2 unit tests (each silently drops data; fix lands with the Epic 2/3 rewrites):
   - Application filter `description` is not extracted.
-  - Service object tags are not extracted.
   - Schedule `description` is not extracted.
   - Security rule profile group references are not extracted.
   - NAT rule `service` in member-list form is captured as whitespace text; only text form works.
-  - Ethernet subinterfaces (`ethernet.1.10`) are not parsed as individual interfaces; only vlan and aggregate subunits are.
-  - Dual-protocol (tcp+udp) service objects keep tcp only; the udp definition is dropped (pinned by F1.6 edge fixture).
-- Stale narrative docs still show v1-era output (type names and file layout): `docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md`, `docs/MULTI_VR_MIGRATION_GUIDE.md`, `docs/MULTI_VR_QUICK_ANSWER.md`, `examples/example_terraform_output.txt`. Refresh when the output stabilizes (F2.11 territory).
-- Policy rules do not record which rulebase (pre, post, or shared) they came from. F2.5 chains are ordered per device group across all rulebases, which matches PAN-OS evaluation order for a single rulebase but mixes rulebases when a device group has both pre- and post-rules. Tracking the rulebase per rule (and chaining within one rulebase) lands with the F3.1 keyed model.
-- `name_ref` resolves a PAN-OS name to the first declaration in a scope; the context (defining device group or template) is not part of the lookup. F2.7 puts the context in the name digest, but a reference to a name that exists in two device groups still picks the first declared object. F3.1 needs a context-keyed registry so references resolve to the defining object.
+  - Service object `disable-override` is not extracted (the address parser
+    extracts it since F3.4; the service parser does not).
+  - Regions are parsed but reach no output: `parse_regions` returns objects
+    that only the console count uses. Recorded by F3.10 (`docs/ARCHITECTURE.md`
+    §2.4); the F4.3 per-entry report will surface each region.
+- Service objects with both tcp and udp legs cannot be emitted whole. The v2
+  `panos_service` schema declares `protocol.tcp` and `protocol.udp`, but the
+  provider accepts one leg only: a config with both fails `terraform
+  validate` with "Invalid Attribute Combination" (verified against 2.0.14,
+  F3.4). F3.4 decision: emit the tcp leg (udp when tcp is absent), keep the
+  dropped leg as a `# NOTE:` comment and a `MANUAL_SETUP_REPORT.txt` entry.
+  A future release could offer a two-object split as an opt-in.
+- External dynamic list `auth` (username/password) is not parsed. Writing
+  credential material into generated HCL is not acceptable (F3.4). An EDL
+  that authenticates to its fetch URL needs the credentials configured by
+  hand; the converter cannot express them safely. Revisit only with an
+  explicit secret-manager design (e.g. a `var.` reference, never a literal).
+- Policy rules do not record which rulebase (pre, post, or shared) they came from. F2.5 chains are ordered per device group across all rulebases, which matches PAN-OS evaluation order for a single rulebase but mixes rulebases when a device group has both pre- and post-rules. F3.5 confirmed the provider can express it: `panos_security_policy_rules`, `panos_nat_policy_rules`, `panos_decryption_policy_rules` and `panos_pbf_policy_rules` all declare `location.device_group.rulebase` and `location.shared.rulebase` (v2.0.14 schema). F3.5 decision (2026-10-08): do not emit it. The parser does not record the rulebase, and the accepted value string is unverified — the provider binary carries the literal `pre-rulebase` and no `post-rulebase` literal, so the omitted-attribute default is the only safe output. Verify the value against a live target, then record the rulebase per rule, chain within one rulebase, and emit `rulebase` for the four rule types. Note that `location.vsys` declares no `rulebase` field, so a vsys-scoped rule cannot carry it at all and must be reported instead.
 - Security profile bodies are not parsed (antivirus, anti-spyware, vulnerability, URL filtering, file blocking, WildFire, zone protection). The v2 provider has resources for them, but emitting empty profile objects would silently create misconfigured resources. F2.9 decision (2026-10-04): the names and descriptions go to `MANUAL_SETUP_REPORT.txt` with the reason; real emission waits for the Epic 3 profile parsing.
 - Schedules: `panos_schedule` exists in v2, but only entry names are parsed (day/time ranges not captured) and v2.0.14 has no monthly schedule support. F2.9 decision (2026-10-04): report entry; revisit when schedule parsing lands.
 - IPsec tunnel monitor profiles have no v2 resource: `panos_monitor_profile` is the PBF path monitoring profile (`network/profiles/monitor-profile`), a different PAN-OS object — verified in the provider/pango source. F2.9 decision (2026-10-04): report entry.
+- The six security profile categories are declared with an empty naming
+  context (F3.1) because their emitter is a stub that writes no `location`
+  at all: the objects carry `device_group` and `vsys`, but putting either in
+  the digest would promise a scope the emitted resource does not have.
+  F3.6 left them alone for that reason. When real profile bodies land, give
+  them their device group or template context and regenerate the digests.
+- Reference resolution order (F3.2, acceptance-recorded): the keyed chain is
+  (referrer context, referrer vsys), then (Shared, referrer vsys), then
+  (contextless, referrer vsys), then the flat first-declaration index. The
+  flat index is not vsys-aware, so a name that exists only in another vsys
+  still resolves through it. F3.6 gave the template-scoped types a real
+  context (their template, else their device), so the flat index is no
+  longer their primary route; it stays for call sites that pass no vsys.
+- Device-aware resolution (F3.5, F3.6) covers only names a device declared,
+  and only the interface generators declare a device. A name a device
+  declared resolves inside that device; a deviceless referrer resolves it
+  only when exactly one device declares it, and keeps the plain name when
+  several do. A zone, address or profile name that repeats on two firewalls
+  still resolves first-wins through the context chain. Extend the rule when
+  a generator declares per-device objects other than interfaces.
+- A template that targets two or more devices cannot say which device an
+  unqualified interface name means, so a virtual router or logical router in
+  such a template keeps `interfaces = ["ethernet1/1"]` as strings instead of
+  referencing one firewall's resource (F3.6). The fix is per-target-device
+  emission of the template's config, not a guess; it needs a fixture that
+  shows how a real export distinguishes the two.
+- `location.template_stack` is never emitted (F3.6). A stack holds device and
+  template members, not config, so nothing in an export is placed in one. If
+  an export ever nests config under a stack, report it rather than placing it
+  there.
+- The splitter copies a template only when the export lists a device in both
+  the device group and the template (F3.6). An export whose device groups
+  list devices and whose templates list none therefore copies no template and
+  prints that fact; the operator fixes the export or the split file. Do not
+  restore a name-based fallback for this case.
+- An entry under `devices/entry/<device>` (not inside a device group) records
+  `device_group = 'Shared'`, because `device_group_of` has no other fallback.
+  F3.6 removed the naming consequence for template-scoped types (an interface
+  or router there takes its device as digest context and is placed with
+  `location.ngfw`), but an *object* entry under a device (an address, a
+  service) still hashes `'Shared'` as its context, because object types take
+  the device group as context and no device group is declared. Give
+  device-level objects their own context when a fixture shows the collision.
 
 ## Out of Scope
 
@@ -30,15 +90,131 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 ## Nice-to-Haves
 
 - Adopt `ruff format` as a gate. A one-time format pass of both legacy scripts is required first (about 1500 changed lines in `panorama_to_terraform.py`). Do it as its own task so the diff stays reviewable.
-- Deeper post-run checks (beyond F4.1): parse the generated HCL and cross-check object counts against the input (round-trip; needs the F4.3/F4.4 coverage data); `tflint` integration.
+- Deeper post-run checks (beyond F4.1): parse the generated HCL and cross-check object counts against the input (round-trip; needs the F4.3/F4.4 coverage data); `tflint` integration. `sanity_checks.py` is the runtime home for the static rules; it now holds the F1.7 control-character rule and the placeholder rule.
 
 ## Notes on Already-Completed Work
 
-- F3.8 (safe XML input) is implemented: both scripts reject DTDs before parsing (F1.7). If F3.8 is promoted, only `defusedxml` or the size limit remains.
+- F3.6 (multi-device) found a wrong claim about ElementTree worth keeping:
+  `ElementTree.append` does **not** reparent. It keeps no parent bookkeeping,
+  so appending an element that already has a parent makes one element object
+  a child of two trees, and a later mutation of either shows in both. The
+  splitter therefore copies with `copy.deepcopy` for every element it takes
+  out of the source export.
+- F3.5 (multi-vsys) corrected a wrong assumption held since F2.3: v2
+  `location` **does** have a `vsys { name, ngfw_device }` sub-block for the
+  object types and the four policy-rule types. `panos_security_profile_group`
+  is the emitted type that lacks it. `localhost.localdomain` is the PAN-OS
+  placeholder for "this device", so it is never emitted as `ngfw_device`;
+  the resource is reported instead. Shared entries emit `shared = {}`, not
+  `device_group = { name = "Shared" }`.
+- F3.9 (per-device-group reports) settled two facts worth keeping: `Shared` in
+  `device_group` is the parser fallback for an entry it cannot place, so it is
+  **not** a device group for an entry whose scope is a template or a device —
+  the report prints a device group only when the export declares one, and the
+  shared section is named `Shared`. And the report groups by the scope the
+  export states, never by an association the converter could infer: a template
+  section does not name the device group that device belongs to, because the
+  export states the membership for the device, not for the entry.
+
+- F3.4 (full object types) closed two F1.2 extraction gaps: service object
+  tags are extracted and emitted, and dual-protocol services keep both legs
+  in the parse model (the emit limit is a provider constraint, recorded
+  above). Address `ip-wildcard`, `disable-override`, EDL `exception_list`,
+  `expand_domain`, `certificate_profile` and the recurring schedules are
+  parsed and emitted; address types with no v2 attribute (location, external)
+  are report-only.
+- F3.8 (safe XML input) closed the input risks and corrected two wrong
+  claims held since F1.7: the `<!DOCTYPE` text search was **not** encoding
+  safe (a UTF-16 export hid the DTD from it while expat parsed and expanded
+  it — reproduced), and it refused legal input that only mentioned
+  `<!DOCTYPE` in a prolog comment. The check now asks the parser. Also
+  verified and relied on: with no DTD, expat expands no entity (`&a;` is a
+  hard parse error) and fetches no external entity, because `xml.etree`
+  installs no `ExternalEntityRefHandler`. `defusedxml` was considered and
+  rejected — it would not cover the size risk, and the scripts stay
+  standard-library only.
 - F2.4 (emitter rewrite) also fixed two F1.6 extraction gaps: dynamic address group filters are serialized from the structured `<filter>` XML, and IPv6 address objects (`<ipv6>`, `<ipv6-range>`) are parsed and emitted.
+
+## Design Decisions (Epic 3 planning)
+
+- Policy chains key on (device group, vsys) since F3.2. Each chain anchors
+  at `where = "last"`, so a vsys boundary restarts the chain; a rule never
+  pivots on, or depends on, a rule in another vsys.
+- `location` carries the source scope since F3.5 and F3.6: `vsys { name,
+  ngfw_device }` for a declared vsys on a type that accepts it, `template {
+  name }` (plus `vsys`, and `ngfw_device` when the export nests the entry
+  under a device inside the template) for a declared template, `ngfw {
+  ngfw_device }` for config an export places under one device, otherwise the
+  device group, `shared = {}`, or the `Shared` template placeholder — which
+  is emitted only when nothing in the export places the entry, and is listed
+  in `MANUAL_SETUP_REPORT.txt` with the templates that device does take. A
+  declared scope the type cannot carry is reported, never dropped silently.
+- The multi-device association is data, never a name (F3.6). A device group,
+  a template and a template stack belong together when the export lists the
+  same device under each. `localhost.localdomain` is the PAN-OS placeholder
+  for "this device", so it is never an `ngfw_device` and never joins two
+  things.
 
 ## Design Decisions (Epic 4 planning)
 
 - The conversion report (F4.3) keys on logical entries — an `<entry name>` plus its properties — not physical lines; one entry spans many lines in the XML. The reported line number is the entry's opening tag.
 - The coverage matrix (F4.4, former F2.8) is a permanent maintenance duty: every emitter change must keep the property matrix honest, or `CONVERSION_REPORT.txt` silently lies. F4.3/F4.4 include a test that an unmarked element read fails CI for this reason.
 - The parser extraction gaps listed above will surface in the F4.2/F4.3 reports; fix each gap when the report confirms it in a fixture, rather than fixing them speculatively now.
+- The sanity gate (F4.1, landed) reads the output files, so it cannot see an entry that produced no file. F4.3 is the accounting for that case; the gate cannot replace it.
+- The gate `location` check is presence only, not shape. The sub-block and field shape stays pinned by `tests/test_multi_vsys_location.py`, because `terraform validate` accepts an unknown sub-block and drops it silently. Move the shape rule into the gate when the property matrix (F4.4) becomes a live structure.
+- The placeholder check lists the VPN pre-shared key only. When F4.3 adds per-entry accounting, the expected placeholders should come from the same table that decides the report entries.
+- Consider a `--checks` selector on the converter CLI if the gate grows; today every check runs on every conversion, and a WARN never changes the exit code.
+
+## Design Decisions (F4.2, landed 2026-10-20)
+
+- `parse_xml` returns `ParsedSource`, not an element, because a line map needs
+  the file it came from. The line is recorded by expat handlers:
+  `ET.TreeBuilder` has no `CurrentLineNumber`, so `xml.etree` cannot report one.
+  The F3.8 read order (size check, read, size check on the read bytes, DTD
+  refusal, parse the same bytes) and the `ET.ParseError` type are unchanged.
+- The line map covers the tree that was parsed. An element copied out of it has
+  no line, which is why the device-group splitter, which builds new trees from
+  copies, never asks for one.
+- A container is reported only at section level: no config-object entry between
+  it and a config root. A container inside a config-object entry is a property
+  level, so F4.4 owns it. The table marks those rows `level='sub-shape'`.
+- A `predefined` container is not a finding: those entries are PAN-OS built-in
+  definitions, not operator objects. `container_coverage.is_predefined` states
+  the rule, and the fixture keeps a `predefined` entry to pin it.
+- `nested-block` is a destination kind: virtual-wire, TAP, `ip` and
+  `ipv6/address` write lines inside a parent resource block and have no resource
+  type of their own (provider v2.0.14, verified in F3.3).
+- The table parity test matches a row path by segment presence, not by full path
+  order, because a method can reach a container through a helper (`parse_bgp`
+  reads `protocol/bgp` through a path list, `parse_interfaces` reaches `layer3`
+  through the interface kinds). A row that names a segment no code path contains
+  fails; a row with the right segments in the wrong order does not. Narrowing
+  this to full-path comparison needs the pattern list to be data, not string
+  literals inside methods.
+## Design Decisions (F4.3, landed 2026-10-20)
+
+- A destination kind is a container fact in the table, so two per-entry kinds were
+  added: `skipped` (a parse method visited the entry and did not model it) and
+  `unaccounted` (no parse method read it, so no row covers its container). A
+  `report` row is not a gap: the manual report is its output. The gap kinds are the
+  three that write nothing.
+- The `parse_device_groups` row moved from `count-only` to `bookkeeping`. A device
+  group name reaches the output through `location`, so the entry does produce output;
+  only the entry itself is not a resource.
+- A report row is one entry at section level. A container inside a config-object
+  entry is a property level, so the parent row shows the property-entry count and the
+  matrix (F4.4) states the properties. F4.3 does not print property rows.
+- Captured fields are the keys of the object the parse method built, not the XML tag.
+  A field inside a type sub-shape is reported under the object key (`fields`), so the
+  report reads through the data model, not through the XML.
+- The mark stores the captured object by reference, so a field added after the mark is
+  in the report. This is deliberate: it lets a method mark where it builds the object
+  and still fill the rest.
+- The read-but-not-marked check follows the helper calls a parse method makes, but it
+  does not follow a `findall` path held in a variable. A method that reads entries
+  through a variable path is accepted only when it marks somewhere in its call chain.
+  The corpus check (every entry in a covered container is marked) is the check that
+  cannot lie; the AST check is the early warning.
+- `CONVERSION_REPORT.txt` groups rows with the F3.9 rule, so a report row and an
+  interface report row for the same entry name sit in the same section. One shared
+  grouping function, not two.
