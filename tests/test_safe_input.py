@@ -14,7 +14,9 @@ Two checks, one implementation (`xml_input.py`):
 
 F4.2 adds a third job to the same read: record the source line of every
 element, so a report can name the line an entry came from. The tests here pin
-that the extra job did not change the tree or the checks.
+that the extra job did not change the tree or the checks. F5.1 puts both checks
+behind one producer boundary, so a source that hands bytes is refused the same way a
+file is; the tests for that are at the end of this file.
 """
 import copy
 import subprocess
@@ -450,3 +452,100 @@ def test_a_copied_element_has_no_line(xml_input_module, tmp_path):
     duplicate = copy.deepcopy(original)
     assert parsed.line_of(original), 'the parsed tree has a line'
     assert parsed.line_of(duplicate) is None
+
+
+# --- F5.1: the producer boundary --------------------------------------------
+
+def _api_origin(xml_input_module):
+    """An origin with no file behind it, for a producer that hands bytes."""
+    return xml_input_module.SourceOrigin(kind='api', name='panorama:export')
+
+
+def test_boundary_refuses_producer_bytes_over_the_limit(xml_input_module):
+    """A source that hands bytes is refused for size before the parse.
+
+    The file producer checks the size before it allocates. A producer has already
+    handed the bytes, so the check applies to the bytes it hands. This is the class of
+    input F5.2 reads from a network.
+    """
+    data = f'<?xml version="1.0"?>\n{BODY}'.encode()
+    with pytest.raises(xml_input_module.UnsafeInputError) as excinfo:
+        xml_input_module.parse_bytes(data, _api_origin(xml_input_module), 16)
+    message = str(excinfo.value)
+    assert 'panorama:export' in message, 'the refusal names the origin, not a path'
+    assert 'larger than the limit' in message
+    assert 'limit of 16 bytes' in message
+
+
+def test_boundary_refuses_a_dtd_in_producer_bytes(xml_input_module):
+    """The DTD refusal holds for bytes that did not come from a file."""
+    data = f'<?xml version="1.0"?>\n<!DOCTYPE config>\n{BODY}'.encode()
+    with pytest.raises(xml_input_module.UnsafeInputError) as excinfo:
+        xml_input_module.parse_bytes(data, _api_origin(xml_input_module))
+    message = str(excinfo.value)
+    assert 'panorama:export' in message, 'the refusal names the origin, not a path'
+    assert 'declares a DTD' in message
+
+
+def test_boundary_refuses_a_nonpositive_limit(xml_input_module):
+    """The limit guard uses the same words as the file producer's."""
+    with pytest.raises(xml_input_module.UnsafeInputError) as excinfo:
+        xml_input_module.parse_bytes(b'<config/>', _api_origin(xml_input_module), 0)
+    assert 'must be greater than 0 bytes' in str(excinfo.value)
+
+
+def test_boundary_gives_the_same_tree_and_the_same_lines(xml_input_module):
+    """A producer gets the contract the reports depend on: origin, tree, line map."""
+    data = f'<?xml version="1.0"?>\n{BODY}'.encode()
+    origin = _api_origin(xml_input_module)
+    parsed = xml_input_module.parse_bytes(data, origin)
+    assert parsed.origin is origin
+    assert parsed.origin.path is None, 'a network origin has no file to name'
+    assert parsed.name == 'panorama:export', 'the report value is the origin name'
+    assert _shape(parsed.root) == _shape(ET.fromstring(data)), 'the tree is the ET tree'
+    assert parsed.line_of(parsed.root) == 2
+    assert parsed.line_of(parsed.root.find('.//entry')) == 2
+
+
+def test_boundary_opened_no_file(xml_input_module, monkeypatch):
+    """The boundary reads nothing, so a check cannot be handed different bytes.
+
+    The producer hands the bytes and the parse uses those same bytes. This is the F3.8
+    'read once' rule stated for a producer that has no file.
+    """
+    real_open = Path.open
+    opened = []
+
+    def counting_open(self, *args, **kwargs):
+        opened.append(self)
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'open', counting_open)
+    parsed = xml_input_module.parse_bytes(
+        f'<?xml version="1.0"?>\n{BODY}'.encode(), _api_origin(xml_input_module))
+    assert parsed.root.tag == 'config'
+    assert opened == [], 'the boundary opened nothing'
+
+
+def test_file_producer_runs_the_checks_through_the_boundary(xml_input_module, tmp_path, monkeypatch):
+    """parse_xml is a producer, not a second copy of the two checks.
+
+    F3.8 pinned that no entry point keeps its own check. F5.1 pins that no producer
+    keeps its own check either: every producer hands its bytes to the boundary.
+    """
+    source = tmp_path / 'in.xml'
+    data = f'<?xml version="1.0"?>\n{BODY}'.encode()
+    source.write_bytes(data)
+
+    calls = []
+    real = xml_input_module.parse_bytes
+
+    def recording(handed, origin, limit):
+        calls.append((len(handed), origin.kind, origin.name))
+        return real(handed, origin, limit)
+
+    monkeypatch.setattr(xml_input_module, 'parse_bytes', recording)
+    parsed = xml_input_module.parse_xml(source)
+    assert calls == [(len(data), 'file', source.name)], calls
+    assert parsed.origin.kind == 'file'
+    assert parsed.origin.path == source

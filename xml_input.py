@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Safe XML input for both entry points (F3.8).
+Safe XML input for both entry points (F3.8), through one producer boundary (F5.1).
 
 Copyright (c) 2025 GSW Systems
 
@@ -39,6 +39,12 @@ handlers that read ``CurrentLineNumber`` at the moment an opening tag is
 decoded. The tree is the same tree ``ET.fromstring`` returns for the pinned
 shapes (tag, ``name`` attribute, child order, comment, namespace).
 
+F5.1 adds the producer boundary. ``parse_bytes`` is the door: it runs both checks on
+the bytes it is handed, so no producer can bypass them. ``parse_xml`` is the file
+producer and keeps the size check before the read. A producer that hands bytes with no
+file behind it gets the same refusal as a file. The tree shape does not change, so the
+container table, the entry ledger, the parent walk and the line map are unchanged.
+
 Facts this module depends on, verified against expat 2.6.1 (the parser
 behind ``xml.etree``):
 
@@ -53,6 +59,12 @@ Usage:
     from xml_input import parse_xml
     source = parse_xml('export.xml')
     root = source.root
+    line = source.line_of(root.find('.//entry'))
+
+    # A producer that hands bytes uses the same door:
+    from xml_input import parse_bytes, SourceOrigin
+    origin = SourceOrigin(kind='api', name='panorama:export')
+    source = parse_bytes(data, origin)
     line = source.line_of(root.find('.//entry'))
 """
 
@@ -91,6 +103,31 @@ class _DtdFound(Exception):
         self.has_external_id = has_external_id
 
 
+@dataclass(frozen=True)
+class SourceOrigin:
+    """Where the bytes a producer handed came from, as a report states it.
+
+    ``kind`` is ``file`` for the file producer. F5.2 adds ``api`` and F5.6 adds
+    ``state``.
+
+    ``name`` is the value a report prints. For a file it is the file name with no
+    directory, so a report line does not depend on the path.
+
+    ``path`` is the file a reader can reopen, and is None for a producer that hands
+    bytes with no file behind it. A report must still name a source a reader can check,
+    so a network producer caches what it fetched and the cache file becomes the path.
+    """
+
+    kind: str
+    name: str
+    path: Optional[Path] = None
+
+    @classmethod
+    def for_path(cls, path: Path) -> 'SourceOrigin':
+        """The origin of a file read."""
+        return cls(kind='file', name=path.name, path=path)
+
+
 def _format_size(count: int) -> str:
     """A byte count for a message: '67108864 bytes (64 MiB)'."""
     if count >= _MIB:
@@ -98,11 +135,16 @@ def _format_size(count: int) -> str:
     return f"{count} bytes"
 
 
-def _too_large(source: Path, measured: int, limit: int, exact: bool = True) -> UnsafeInputError:
+def _origin_phrase(origin: SourceOrigin) -> str:
+    """The source as a refusal names it: the path when there is one, else the origin."""
+    return f"'{origin.path}'" if origin.path is not None else f"'{origin.name}'"
+
+
+def _too_large(origin: SourceOrigin, measured: int, limit: int, exact: bool = True) -> UnsafeInputError:
     """Build the refusal for an input over the size limit."""
     found = f"the input is {_format_size(measured)}" if exact else "the input is larger than the limit"
     return UnsafeInputError(
-        f"refusing to read '{source}': {found}, which exceeds the input limit of "
+        f"refusing to read {_origin_phrase(origin)}: {found}, which exceeds the input limit of "
         f"{_format_size(limit)}. Pass --max-input-bytes N to raise the limit for a trusted file."
     )
 
@@ -117,26 +159,26 @@ def read_input(path, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> bytes:
     """
     if max_input_bytes <= 0:
         raise UnsafeInputError(f"the input limit must be greater than 0 bytes, got {max_input_bytes}")
-    source = Path(path)
+    origin = SourceOrigin.for_path(Path(path))
     try:
-        size = source.stat().st_size
+        size = origin.path.stat().st_size
     except OSError as exc:
-        raise UnsafeInputError(f"cannot read '{source}': {exc.strerror or exc}") from exc
+        raise UnsafeInputError(f"cannot read {_origin_phrase(origin)}: {exc.strerror or exc}") from exc
     if size > max_input_bytes:
-        raise _too_large(source, size, max_input_bytes)
+        raise _too_large(origin, size, max_input_bytes)
     try:
-        with source.open('rb') as handle:
+        with origin.path.open('rb') as handle:
             data = handle.read(max_input_bytes + 1)
     except OSError as exc:
         # A directory, a permission denial or a vanished file: a refusal
         # with the same shape as every other input fault, not a traceback.
-        raise UnsafeInputError(f"cannot read '{source}': {exc.strerror or exc}") from exc
+        raise UnsafeInputError(f"cannot read {_origin_phrase(origin)}: {exc.strerror or exc}") from exc
     if len(data) > max_input_bytes:
-        raise _too_large(source, len(data), max_input_bytes, exact=False)
+        raise _too_large(origin, len(data), max_input_bytes, exact=False)
     return data
 
 
-def reject_dtd(data: bytes, source) -> None:
+def reject_dtd(data: bytes, origin: SourceOrigin) -> None:
     """Refuse input that declares a DTD.
 
     expat reports the DOCTYPE declaration while it reads the prolog, so
@@ -168,7 +210,7 @@ def reject_dtd(data: bytes, source) -> None:
     except _DtdFound as found:
         external = " with an external id" if found.has_external_id else ""
         raise UnsafeInputError(
-            f"refusing to parse '{source}': the input declares a DTD for "
+            f"refusing to parse {_origin_phrase(origin)}: the input declares a DTD for "
             f"'{found.doctype_name}'{external}, which a Panorama export never includes. "
             "A DTD can expand entities without bound or name a file to read."
         ) from None
@@ -180,7 +222,7 @@ def reject_dtd(data: bytes, source) -> None:
 
 @dataclass(frozen=True)
 class ParsedSource:
-    """A parsed input: the tree, and the source line of each element.
+    """A parsed input: the source it came from, the tree, and the source line of each element.
 
     ``line_of`` answers the F4.2 question a report needs: which line of the
     input defined this entry. Only the opening tag has a position, because
@@ -192,14 +234,14 @@ class ParsedSource:
     device-group splitter, which builds new trees from copies, gets no line.
     """
 
-    path: Path
+    origin: SourceOrigin
     root: ET.Element
     lines: dict = field(default_factory=dict, compare=False, repr=False)
 
     @property
     def name(self) -> str:
-        """File name, no directory. A report line must not depend on the path."""
-        return self.path.name
+        """Source name, no directory. A report line must not depend on the path."""
+        return self.origin.name
 
     def line_of(self, elem: ET.Element) -> Optional[int]:
         """Line of elem's opening tag, or None when the parse did not record it."""
@@ -216,7 +258,7 @@ def _fixname(name: str) -> str:
     return '{' + name if '}' in name else name
 
 
-def _parse_with_lines(data: bytes, source: Path) -> ParsedSource:
+def _parse_with_lines(data: bytes, origin: SourceOrigin) -> ParsedSource:
     """Parse the checked bytes once and record each element's opening line.
 
     expat reports the line it is reading in ``CurrentLineNumber``. The handlers
@@ -270,22 +312,42 @@ def _parse_with_lines(data: bytes, source: Path) -> ParsedSource:
         # Keep the F3.8 error type: both entry points catch ET.ParseError.
         raise ET.ParseError(str(exc)) from exc
 
-    return ParsedSource(path=source, root=builder.close(), lines=lines)
+    return ParsedSource(origin=origin, root=builder.close(), lines=lines)
+
+
+def parse_bytes(data: bytes, origin: SourceOrigin,
+                max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ParsedSource:
+    """The producer boundary (F5.1): check the bytes a producer handed, then parse them.
+
+    Both F3.8 checks run here, so no producer can bypass them: the size check on
+    the bytes as they arrived, and the DTD refusal through the parser. The tree is
+    parsed from the bytes that passed both checks.
+
+    A producer that hands bytes with no file behind it is refused the same way a file
+    is, and the refusal names the origin. This is the fact F5.2 depends on: adding a
+    source means adding a producer, not adding a check.
+
+    Raises UnsafeInputError for a size or DTD refusal, and
+    xml.etree.ElementTree.ParseError for malformed XML.
+    """
+    if max_input_bytes <= 0:
+        raise UnsafeInputError(f"the input limit must be greater than 0 bytes, got {max_input_bytes}")
+    if len(data) > max_input_bytes:
+        raise _too_large(origin, len(data), max_input_bytes, exact=False)
+    reject_dtd(data, origin)
+    return _parse_with_lines(data, origin)
 
 
 def parse_xml(path, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ParsedSource:
-    """Read and parse an input file, refusing unsafe input.
+    """The file producer (F5.1): read the file, then check and parse the bytes.
 
-    Returns a ParsedSource: the root element and the source line of each
-    element. Raises UnsafeInputError for a size or DTD refusal, and
-    xml.etree.ElementTree.ParseError for malformed XML.
+    The size is checked before the read, so an over-limit file is never allocated.
+    The bytes that passed both checks are the bytes that are parsed, so the input is
+    read once and no check can be handed different bytes.
     """
-    source = Path(path)
-    data = read_input(source, max_input_bytes)
-    reject_dtd(data, source)
-    # Parse the bytes that passed both checks, so nothing can change
-    # between the check and the parse.
-    return _parse_with_lines(data, source)
+    origin = SourceOrigin.for_path(Path(path))
+    data = read_input(origin.path, max_input_bytes)
+    return parse_bytes(data, origin, max_input_bytes)
 
 
 def positive_int(text: str) -> int:

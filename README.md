@@ -198,11 +198,12 @@ and `tests/test_golden_files.py` pins the exact `.tf` file names and bytes.)
 
 ## Safe input
 
-Both scripts read the input through one check (`xml_input.py`) and refuse
-input they cannot parse safely before they allocate for it and before they
-write any file:
+Both scripts read the input through one boundary (`xml_input.py`) that runs the two
+checks on the bytes a producer hands, and refuses input it cannot parse safely before
+it parses it and before it writes any file:
 
-- **Size.** The read is capped at 64 MiB (`--max-input-bytes N`). A
+- **Size.** The read is capped at 64 MiB (`--max-input-bytes N`), and the same limit
+  applies to the bytes a producer hands. A
   Panorama export this project has seen is three orders of magnitude
   smaller, and `xml.etree` builds the whole document in memory, so an
   unbounded read is a memory denial of service.
@@ -213,11 +214,11 @@ write any file:
   nothing. A `<!DOCTYPE` that only appears in a prolog comment is legal
   input and is not a refusal.
 
-A refusal names the file, the limit and the measured size, exits
-non-zero, and writes no output. Raise the limit only for a trusted file.
-The converter is standard-library only by design: `defusedxml` would close
-the DTD class but not the size class, so it is not a reason to add a
-dependency.
+A refusal names the source, the limit and the measured size, exits
+non-zero, and writes no output. For a file it names the path; for a producer with no
+file behind it it names the source (F5.1). Raise the limit only for a trusted input.
+The input boundary is standard-library only by design: `defusedxml` would close the DTD
+class but not the size class, so it is not a reason to add a dependency to the boundary.
 
 ## Deploying with Terraform
 
