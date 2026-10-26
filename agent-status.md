@@ -2,7 +2,7 @@
 
 ## Current position
 
-The documentation refresh is complete and committed. Gate at the commit:
+The documentation refresh is complete and committed as 068e3fd. Gate at the commit:
 `ruff check .` clean, `pytest` 566 passed, both golden sets byte-identical,
 `terraform validate` green on all four outputs, exit codes unchanged.
 
