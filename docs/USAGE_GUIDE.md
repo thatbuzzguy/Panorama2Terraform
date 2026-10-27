@@ -69,7 +69,8 @@ python3 panorama_to_terraform.py --source api --host panorama --offline --output
   the cache and sends no request. `--offline` reads the cache only and refuses an entry
   that is not there.
 - A stored response is the bytes the parser read, so the report lines name the lines of
-  that file. The report names the cache entry as the input.
+  that file. The report names the cache entry as the source, and `SOURCE.txt` records the
+  request identity and the entry the run read.
 - An API response is an envelope (`response/result/config`). The converter reads the
   `config` element inside it, so the conversion is the same as for an export file.
 
@@ -113,6 +114,7 @@ The converter writes a file only when it has content.
 | `security_profiles.tf` | Inventory only: names and descriptions, with the resource name the emitter would use |
 | `interfaces.tf`, `zones.tf`, `virtual_routers.tf`, `monitor_profiles.tf`, `vpn.tf` | Network and VPN resources |
 | `README.md` | Deployment steps for the generated directory |
+| `SOURCE.txt` | What the run read, as `field: value` data: kind, name, path, scope, request, cache_entry, size, and the SHA-256 hex of the parsed bytes |
 | `MANUAL_SETUP_REPORT.txt` | Report-only configuration, plus a section for a container no parse method reads |
 | `INTERFACE_MIGRATION_REPORT.txt` | Interface and IP inventory |
 | `VPN_MIGRATION_REPORT.txt` | VPN inventory and the pre-shared key actions |
@@ -127,7 +129,35 @@ kind instead, so it does not name the scope on each line; that is recorded in
 [`../backlog.md`](../backlog.md).
 
 `SANITY_REPORT.txt` is written on every run, by the gate, not only when it has a
-finding. The other reports are written only when they have content.
+finding. `SOURCE.txt` is written on every completed run, because a run always reads a
+source. The other reports are written only when they have content.
+
+### The provenance record
+
+`SOURCE.txt` is one record per run, written as data:
+
+```text
+kind: api
+name: 6cf3d2e1....xml
+path: panorama_cache/6cf3d2e1....xml
+scope: whole-config
+request: panorama?category=configuration&type=export
+cache_entry: 6cf3d2e1....xml
+size: 24658
+sha256: 9b1c...
+```
+
+- `kind`, `name`, `path` name the bytes you can reopen. `path` is the path the run received,
+  so a record written from another directory names a different path.
+- `scope` names the scope the source holds. `whole-config` is the only scope a source holds
+  today.
+- `request` and `cache_entry` are the key-free request identity and the entry it names, for
+  an api source. A file source writes `-` for both. The record never names the API key.
+- `size` and `sha256` are measured on the bytes the input door parsed, so the record names
+  the bytes the report lines describe, not a file that changed after the run.
+- The rule lives in `provenance.py`, and the report bodies keep the rule that a report names
+  the source name only, never the path
+  ([ARCHITECTURE.md](ARCHITECTURE.md) §3.3). The label the report bodies use is `Source:`.
 
 ## Post-run sanity gate
 

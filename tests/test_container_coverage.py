@@ -263,14 +263,17 @@ def _convert(fixture_name: str, out_dir: Path) -> dict:
     return {'proc': proc, 'report': report.read_text(encoding='utf-8') if report.is_file() else ''}
 
 
-def test_report_names_the_file_not_the_path(tmp_path):
-    """The report section names the input file name, never the path."""
+def test_report_names_the_source_not_the_path(tmp_path):
+    """The report section names the source name, never the path (F4.2 rule 6).
+
+    The path is in the provenance record (F5.3), which is not a report body.
+    """
     result = _convert(UNKNOWN_FIXTURE, tmp_path)
     lines = result['report'].splitlines()
     section = [line for line in lines if 'Entry Coverage' in line]
     assert section, result['report']
-    file_line = [line for line in lines if line.startswith('Input file:')]
-    assert file_line == ['Input file: unknown_containers.xml'], file_line
+    file_line = [line for line in lines if line.startswith(container_coverage.SOURCE_LABEL)]
+    assert file_line == [f'Source: {UNKNOWN_FIXTURE}'], file_line
     assert str(FIXTURES_DIR) not in result['report']
 
 

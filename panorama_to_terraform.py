@@ -39,6 +39,7 @@ from typing import Any, Optional
 
 import container_coverage
 import entry_coverage
+import provenance
 import sanity_checks
 import source_fetch
 from resource_mapping import INTERFACE_RESOURCE_TYPES, LOCATION_SCHEMA
@@ -4481,7 +4482,8 @@ variable "panos_password" {
 
         One line per report row, grouped by the F3.9 scope rule so a reader can
         tell two same-named entries on two device groups apart. The report names
-        the input file name only, never the path (F4.2 rule 6).
+        the source name only, never the path (F4.2 rule 6); the path is in the
+        provenance record (`provenance.py`, F5.3).
 
         Returns '' when the input has no report rows, and writes no file in that
         case (F4.3 AC-9): a run that read no entry has nothing to report.
@@ -4491,7 +4493,8 @@ variable "panos_password" {
             return ''
 
         lines = ['=' * 80, entry_coverage.REPORT_HEADING, '=' * 80, '',
-                 f'Input file: {ledger.source.name}', '', entry_coverage.RULE_PARAGRAPH, '']
+                 f'{container_coverage.SOURCE_LABEL} {ledger.source.name}', '',
+                 entry_coverage.RULE_PARAGRAPH, '']
         lines.extend(entry_coverage.summary_lines(ledger))
 
         gaps = ledger.gaps()
@@ -4982,6 +4985,9 @@ Terraform configuration:
 
 Reports:
 
+- `SOURCE.txt` - what this run read, as `field: value` data: the source kind, the source
+  name, the path, the scope, the request identity, the cache entry, the size, and the
+  SHA-256 hex of the bytes the input door parsed
 - `CONVERSION_REPORT.txt` - one line per entry the parse read, with its destination
 - `MANUAL_SETUP_REPORT.txt` - objects the provider cannot model, and the reasons
 - `INTERFACE_MIGRATION_REPORT.txt` - interfaces and IP addresses to set on the target
@@ -5077,6 +5083,10 @@ def main():
             parser.error('--source api does not take an input file; it reads the cached API export')
         if args.insecure and args.offline:
             parser.error('--insecure applies to the network producer, and --offline never calls one')
+
+    # F5.3: the request the run read, so the provenance record can name the identity. A
+    # file run has no request, so the two api fields stay `-`.
+    request = None
 
     try:
         if args.source == 'file':
@@ -5298,6 +5308,14 @@ def main():
         # F4.1 gate does).
         tf_gen.generate_conversion_report(panorama.ledger)
 
+        # F5.3: the provenance record. Written outside the report bodies, so the report
+        # byte rule still holds: a report body names the source name, and the record is
+        # the file that names the path. Written as data, so the cache reference a prune
+        # action reads is the `cache_entry` field, not a printed line.
+        record = provenance.record_for(panorama.source, request=request)
+        record_path = Path(args.output_dir) / provenance.PROVENANCE_FILE
+        record_path.write_text(provenance.render(record), encoding='utf-8')
+
         print("\n✓ Successfully generated Terraform configuration!")
         print("\n📄 Generated Migration Reports:")
         print("  - INTERFACE_MIGRATION_REPORT.txt (Interface and IP inventory)")
@@ -5305,6 +5323,7 @@ def main():
             print("  - CONVERSION_REPORT.txt (one line per entry the parser read)")
         if ike_gateways or ipsec_tunnels:
             print("  - VPN_MIGRATION_REPORT.txt ⚠️  (VPN config with key management instructions)")
+        print(f"Provenance record: {record_path}")
 
         # F4.2: one console line per uncovered section, so a run that read an
         # entry it cannot model is visible without opening the report.

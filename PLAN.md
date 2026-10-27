@@ -60,9 +60,11 @@ Terraform state, and so an entry can name which source it came from.
   and its name is the request identity without the credential. `--offline` reads the cache
   only, so a run with no network passes CI. https only, no scheme-changing redirect, key from
   the environment. The rules are in `docs/ARCHITECTURE.md` §3.
-- [ ] **F5.3 Provenance record** — `SOURCE.txt` names the source, the scope and the
-  cache entry. It is written outside the report bodies, so the report byte rule
-  still holds. This feature also carries the report label change to `Source:`.
+- [x] **F5.3 Provenance record** — `SOURCE.txt`, one record per completed run, as
+  `field: value` data: the source kind, the name, the path, the scope, the request
+  identity, the cache entry, and the size and SHA-256 hex of the bytes the door parsed.
+  Written outside the report bodies, so the report byte rule holds. It carries the report
+  label change to `Source:`. The rules are in `docs/ARCHITECTURE.md` §3.3.
 - [ ] **F5.4 Cross-source shadow report** — uses the property scan (F4.4). A
   per-device-group run cannot see its parent, so an inherited name stays a plain string
   and a shadowed object is invisible. With the parent as a second source, the ledger
@@ -80,8 +82,9 @@ Terraform state, and so an entry can name which source it came from.
 
 ## Sequencing
 
-1. Epic 4 is complete, so the open work is Epic 5. F5.1 and F5.2 landed, so F5.3 is next: it
-   records what a run read, and it carries the report label change that F5.1 left as it was.
+1. Epic 4 is complete, so the open work is Epic 5. F5.1, F5.2 and F5.3 landed, so F5.4 is
+   next: it reads a declared scope, and the record `scope` field is the hook F5.3 left for it
+   (`whole-config` is the only value a source writes today).
 2. F5.4 and F5.6 use the property scan F4.4 landed, because a shadow and a drift are
    property-level facts.
 3. The two report defects found while refreshing the documentation landed with F4.4:

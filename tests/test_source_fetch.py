@@ -373,8 +373,9 @@ def test_two_runs_on_the_same_cache_bytes_write_identical_bytes(converter_module
     files1 = {p.name: p.read_bytes() for p in sorted(out1.rglob('*')) if p.is_file()}
     files2 = {p.name: p.read_bytes() for p in sorted(out2.rglob('*')) if p.is_file()}
     assert files1 == files2, 'the same cache bytes produce the same bytes'
+    assert 'SOURCE.txt' in files1, 'the provenance record is part of the run output'
     report = files2['CONVERSION_REPORT.txt'].decode('utf-8')
-    assert f'Input file: {cache_name}' in report, 'the report names the cache entry'
+    assert f'Source: {cache_name}' in report, 'the report names the cache entry'
     # The report row keeps the line the response bytes carry, so the report can
     # point back into the cache entry.
     assert re.search(rf'{ENTRY_LINE}\s+device-group/entry/address/web-server', report), report
