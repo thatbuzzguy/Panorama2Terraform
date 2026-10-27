@@ -3,8 +3,8 @@
 Four groups of checks:
 
 1. The mark mechanism. `mark` records the entry and returns the object it built,
-   the object is stored by reference, and `mark_skipped` records an entry a parse
-   method visited and did not model.
+   which is the recorded object the parse method works through, and `mark_skipped`
+   records an entry a parse method visited and did not model.
 2. The read-but-not-marked rule. A parse method that reads config-object entries
    marks them, and a method that reads entries without marking them fails. A
    negative control pins that the check really fails. The corpus check runs the
@@ -32,7 +32,7 @@ from pathlib import Path
 import container_coverage
 import entry_coverage
 import xml_input
-from conftest import FIXTURES_DIR, REPO_ROOT, run_script
+from conftest import FIXTURES_DIR, REPO_ROOT, run_pipeline, run_script
 
 GAP_FIXTURE = 'entry_gaps.xml'
 UNKNOWN_FIXTURE = 'unknown_containers.xml'
@@ -67,24 +67,30 @@ def _convert(fixture_name: str, out_dir: Path) -> dict:
 
 # --- 1. The mark mechanism ---------------------------------------------------
 
-def test_mark_records_the_entry_and_returns_the_object(converter_module):
-    """A parse method marks at the point it builds the object, so `mark` returns it."""
+def test_mark_records_the_entry_and_returns_the_recorded_object(converter_module):
+    """A parse method marks at the point it builds the object, so `mark` returns it.
+
+    F4.4: the stored object is the `RecordingDict` that carries the read record, so a
+    parse method must work through the object `mark` returns. Identity that matters is
+    the ledger's object and the returned object, not the dict the caller passed in.
+    """
     parser = converter_module.PanoramaParser(str(FIXTURES_DIR / GAP_FIXTURE))
     entry = next(e for e in parser.root.iter() if e.tag == 'entry' and e.get('name') == 'Named-Host')
     obj = {'name': entry.get('name'), 'type': 'ip-netmask', 'value': '10.0.0.1/32'}
     returned = parser.mark(entry, obj)
-    assert returned is obj
     mark = parser.ledger.mark_for(entry)
-    assert mark is not None and mark['captured'] is obj
+    assert mark is not None
+    assert mark['captured'] is returned
+    assert returned == obj  # the recorded object carries the content the parse captured
 
 
-def test_fields_added_after_the_mark_are_recorded(converter_module):
-    """The ledger stores the object by reference, so a late field is still reported."""
+def test_fields_added_through_the_recorded_object_are_recorded(converter_module):
+    """A field a parse method adds after the mark is still in the report."""
     parser = converter_module.PanoramaParser(str(FIXTURES_DIR / GAP_FIXTURE))
     entry = next(e for e in parser.root.iter() if e.tag == 'entry' and e.get('name') == 'Named-Host')
     obj = {'name': entry.get('name'), 'type': 'ip-netmask', 'value': '10.0.0.1/32'}
-    parser.mark(entry, obj)
-    obj['description'] = 'added after the mark'
+    recorded = parser.mark(entry, obj)
+    recorded['description'] = 'added after the mark'
     assert entry_coverage.entry_line(parser.ledger.row_for(entry)).endswith(
         'captured: description, type, value')
 
@@ -368,6 +374,14 @@ def test_report_groups_rows_by_the_f3_9_scope_rule(tmp_path, converter_module):
     assert sections, sections
     for header in sections:
         assert header in report, header
+    # The scope facts must come from the entry that defines each scope, so a row inside
+    # a device group is not printed as the shared section (F3.9).
+    assert {'DEVICE GROUP: Datacenter-FW', 'DEVICE GROUP: Office-FW'} <= set(sections)
+    # The F3.9 point, pinned on the report itself: one name, two sections.
+    same_name = sorted({tf_gen._report_section_header(path)
+                        for path, rows in tf_gen._group_by_scope(ledger.rows())
+                        for row in rows if row['name'] == 'ethernet1/1'})
+    assert same_name == ['DEVICE GROUP: Datacenter-FW', 'DEVICE GROUP: Office-FW'], same_name
     # The interface report prints the same section titles for the same input.
     parser = converter_module.PanoramaParser(str(FIXTURES_DIR / GROUPING_FIXTURE))
     tf_gen.generate_interface_report(parser.parse_interfaces())
@@ -395,7 +409,15 @@ def test_no_report_file_when_the_input_has_no_entries(tmp_path):
 
 
 def test_console_reports_the_gaps_and_prints_nothing_extra(tmp_path, converter_module):
-    ledger = _parsed_ledger(converter_module, GAP_FIXTURE)
+    """The console prints the summary and the gap block for a run with gaps.
+
+    The counts must come from the run the console prints, so the ledger here is a
+    pipeline run: the property scan counts what the outputs read, and a parse-only
+    ledger has no reads to count (F4.4).
+    """
+    parser = run_pipeline(converter_module, GAP_FIXTURE, tmp_path / 'run')
+    assert parser is not None
+    ledger = parser.ledger
     tf_gen = converter_module.TerraformGenerator(output_dir=str(tmp_path / 'gen'))
     stdout = _convert(GAP_FIXTURE, tmp_path)['proc'].stdout
     for line in entry_coverage.summary_lines(ledger) + entry_coverage.console_lines(

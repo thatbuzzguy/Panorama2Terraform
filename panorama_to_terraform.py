@@ -124,9 +124,10 @@ class PanoramaParser:
              destination: Optional[str] = None) -> dict:
         """Record what this method took from an entry, and return the object.
 
-        F4.3 AC-1: a parse method that reads entries marks them. The ledger keeps
-        the object by reference, so a field a method adds after the mark is still
-        in the report.
+        F4.3 AC-1: a parse method that reads entries marks them. The ledger stores the
+        object as a `RecordingDict` and returns it, so a field a method adds after the
+        mark is still in the report, and the object also records which keys an output
+        reads from it (F4.4).
         """
         return self.ledger.mark(entry, captured, detail, destination)
 
@@ -1817,144 +1818,139 @@ class PanoramaParser:
 
         return profiles
 
-    def parse_bgp(self) -> dict[str, Any]:
-        """Parse BGP configuration"""
-        bgp_config = {
-            'enabled': False,
-            'router_id': None,
-            'as_number': None,
-            'peer_groups': [],
-            'peers': [],
-            'redistribution_rules': []
-        }
+    def parse_bgp(self) -> list[dict]:
+        """Parse BGP configuration: one record per virtual router that has BGP enabled.
 
-        paths = [
-            ".//network/virtual-router/entry/protocol/bgp",
-            ".//devices/entry/network/virtual-router/entry/protocol/bgp"
-        ]
+        F4.4 keeps one path. `.//` already reaches a router under a device, so the
+        second path this method used read every device router twice. The record is
+        the router, and it carries the four scope facts, so the report can name the
+        scope the export places the router in (F3.9) instead of a single flat block.
 
-        for path in paths:
-            for bgp in self.root.findall(path):
-                if bgp.find('enable') is not None and bgp.find('enable').text == 'yes':
-                    bgp_config['enabled'] = True
+        A router row belongs to `panos_virtual_router`, which `parse_virtual_routers`
+        marks. The entries under the router are property level, so the marks here are
+        the property entries the report counts on the router row.
+        """
+        routers = []
 
-                    # Router ID
-                    router_id = bgp.find('router-id')
-                    if router_id is not None:
-                        bgp_config['router_id'] = router_id.text
+        for router in self.root.findall('.//network/virtual-router/entry'):
+            bgp = router.find('protocol/bgp')
+            if bgp is None or self._get_text(bgp, 'enable') != 'yes':
+                continue
 
-                    # AS Number
-                    local_as = bgp.find('local-as')
-                    if local_as is not None:
-                        bgp_config['as_number'] = local_as.text
+            record = {
+                'name': router.get('name'),
+                **self.identity_of(router),
+                'router_id': self._get_text(bgp, 'router-id'),
+                'as_number': self._get_text(bgp, 'local-as'),
+                'peer_groups': [],
+                'peers': [],
+                'redistribution_rules': [],
+            }
 
-                    # Peer Groups
-                    for pg in bgp.findall('.//peer-group/entry'):
-                        pg_name = pg.get('name')
-                        if pg_name:
-                            peer_group = self.mark(pg, {
-                                'name': pg_name,
-                                'type': self._get_text(pg, 'type'),
-                                'export_nexthop': self._get_text(pg, 'export-nexthop'),
-                                'import_nexthop': self._get_text(pg, 'import-nexthop')
-                            })
-                            bgp_config['peer_groups'].append(peer_group)
+            # Peer Groups
+            for pg in bgp.findall('.//peer-group/entry'):
+                pg_name = pg.get('name')
+                if pg_name:
+                    record['peer_groups'].append(self.mark(pg, {
+                        'name': pg_name,
+                        'type': self._get_text(pg, 'type'),
+                        'export_nexthop': self._get_text(pg, 'export-nexthop'),
+                        'import_nexthop': self._get_text(pg, 'import-nexthop')
+                    }))
 
-                    # BGP Peers
-                    for peer in bgp.findall('.//peer/entry'):
-                        peer_name = peer.get('name')
-                        if peer_name:
-                            peer_config = self.mark(peer, {
-                                'name': peer_name,
-                                'peer_as': self._get_text(peer, 'peer-as'),
-                                'local_address_interface': self._get_text(peer, 'local-address/interface'),
-                                'local_address_ip': self._get_text(peer, 'local-address/ip'),
-                                'peer_address_ip': self._get_text(peer, 'peer-address/ip'),
-                                'enable': self._get_text(peer, 'enable') == 'yes',
-                                'peer_group': self._get_text(peer, 'peer-group')
-                            })
-                            bgp_config['peers'].append(peer_config)
+            # BGP Peers
+            for peer in bgp.findall('.//peer/entry'):
+                peer_name = peer.get('name')
+                if peer_name:
+                    record['peers'].append(self.mark(peer, {
+                        'name': peer_name,
+                        'peer_as': self._get_text(peer, 'peer-as'),
+                        'local_address_interface': self._get_text(peer, 'local-address/interface'),
+                        'local_address_ip': self._get_text(peer, 'local-address/ip'),
+                        'peer_address_ip': self._get_text(peer, 'peer-address/ip'),
+                        'enable': self._get_text(peer, 'enable') == 'yes',
+                        'peer_group': self._get_text(peer, 'peer-group')
+                    }))
 
-                    # Redistribution rules
-                    for redist in bgp.findall('.//redist-rules/entry'):
-                        rule_name = redist.get('name')
-                        if rule_name:
-                            redist_rule = self.mark(redist, {
-                                'name': rule_name,
-                                'enable': self._get_text(redist, 'enable') == 'yes',
-                                'address_family': self._get_text(redist, 'address-family-identifier')
-                            })
-                            bgp_config['redistribution_rules'].append(redist_rule)
+            # Redistribution rules
+            for redist in bgp.findall('.//redist-rules/entry'):
+                rule_name = redist.get('name')
+                if rule_name:
+                    record['redistribution_rules'].append(self.mark(redist, {
+                        'name': rule_name,
+                        'enable': self._get_text(redist, 'enable') == 'yes',
+                        'address_family': self._get_text(redist, 'address-family-identifier')
+                    }))
 
-        return bgp_config if bgp_config['enabled'] else None
+            routers.append(record)
 
-    def parse_ospf(self) -> dict[str, Any]:
-        """Parse OSPF configuration"""
-        ospf_config = {
-            'enabled': False,
-            'router_id': None,
-            'areas': [],
-            'interfaces': []
-        }
+        return routers
 
-        paths = [
-            ".//network/virtual-router/entry/protocol/ospf",
-            ".//devices/entry/network/virtual-router/entry/protocol/ospf"
-        ]
+    def parse_ospf(self) -> list[dict]:
+        """Parse OSPF configuration: one record per virtual router that has OSPF enabled.
 
-        for path in paths:
-            for ospf in self.root.findall(path):
-                if ospf.find('enable') is not None and ospf.find('enable').text == 'yes':
-                    ospf_config['enabled'] = True
+        F4.4 keeps one path, the same rule as `parse_bgp`. The record is the router,
+        with the four scope facts, so the report names the scope and the router.
+        """
+        routers = []
 
-                    # Router ID
-                    router_id = ospf.find('router-id')
-                    if router_id is not None:
-                        ospf_config['router_id'] = router_id.text
+        for router in self.root.findall('.//network/virtual-router/entry'):
+            ospf = router.find('protocol/ospf')
+            if ospf is None or self._get_text(ospf, 'enable') != 'yes':
+                continue
 
-                    # OSPF Areas
-                    for area in ospf.findall('.//area/entry'):
-                        area_id = area.get('name')
-                        if area_id:
-                            area_config = self.mark(area, {
-                                'area_id': area_id,
-                                'type': 'normal'
-                            })
+            record = {
+                'name': router.get('name'),
+                **self.identity_of(router),
+                'router_id': self._get_text(ospf, 'router-id'),
+                'areas': [],
+                'interfaces': [],
+            }
 
-                            # Check for stub/nssa
-                            if area.find('type/stub') is not None:
-                                area_config['type'] = 'stub'
-                            elif area.find('type/nssa') is not None:
-                                area_config['type'] = 'nssa'
+            # OSPF Areas
+            for area in ospf.findall('.//area/entry'):
+                area_id = area.get('name')
+                if area_id:
+                    area_config = self.mark(area, {
+                        'area_id': area_id,
+                        'type': 'normal'
+                    })
 
-                            # Area ranges
-                            ranges = []
-                            for range_entry in area.findall('.//range/entry'):
-                                range_name = range_entry.get('name')
-                                if range_name:
-                                    # F4.3: the range entry is a name reference, so the
-                                    # parent row records it through the field it fills.
-                                    self.mark(range_entry, {'name': range_name},
-                                              'name reference in field ranges')
-                                    ranges.append(range_name)
-                            area_config['ranges'] = ranges
+                    # Check for stub/nssa
+                    if area.find('type/stub') is not None:
+                        area_config['type'] = 'stub'
+                    elif area.find('type/nssa') is not None:
+                        area_config['type'] = 'nssa'
 
-                            ospf_config['areas'].append(area_config)
+                    # Area ranges
+                    ranges = []
+                    for range_entry in area.findall('.//range/entry'):
+                        range_name = range_entry.get('name')
+                        if range_name:
+                            # F4.3: the range entry is a name reference, so the
+                            # parent row records it through the field it fills.
+                            self.mark(range_entry, {'name': range_name},
+                                      'name reference in field ranges')
+                            ranges.append(range_name)
+                    area_config['ranges'] = ranges
 
-                    # OSPF Interfaces
-                    for iface in ospf.findall('.//interface/entry'):
-                        iface_name = iface.get('name')
-                        if iface_name:
-                            iface_config = {
-                                'interface': iface_name,
-                                'enable': self._get_text(iface, 'enable') == 'yes',
-                                'passive': self._get_text(iface, 'passive') == 'yes',
-                                'link_type': self._get_text(iface, 'link-type'),
-                                'metric': self._get_text(iface, 'metric')
-                            }
-                            ospf_config['interfaces'].append(iface_config)
+                    record['areas'].append(area_config)
 
-        return ospf_config if ospf_config['enabled'] else None
+            # OSPF Interfaces
+            for iface in ospf.findall('.//interface/entry'):
+                iface_name = iface.get('name')
+                if iface_name:
+                    record['interfaces'].append(self.mark(iface, {
+                        'interface': iface_name,
+                        'enable': self._get_text(iface, 'enable') == 'yes',
+                        'passive': self._get_text(iface, 'passive') == 'yes',
+                        'link_type': self._get_text(iface, 'link-type'),
+                        'metric': self._get_text(iface, 'metric')
+                    }))
+
+            routers.append(record)
+
+        return routers
 
     def parse_ipsec_tunnels(self) -> list[dict]:
         """Parse IPsec VPN tunnel configurations"""
@@ -4205,8 +4201,8 @@ variable "panos_password" {
             f.write(content)
 
 
-    def generate_manual_setup_report(self, bgp_config: dict[str, Any],
-                                     ospf_config: dict[str, Any],
+    def generate_manual_setup_report(self, bgp_routers: list[dict],
+                                     ospf_routers: list[dict],
                                      application_filters: list[dict],
                                      manual_key_tunnels: list[dict],
                                      application_override_rules: Optional[list[dict]] = None,
@@ -4231,7 +4227,7 @@ variable "panos_password" {
         The parsed data is preserved here instead of being emitted as .tf
         resources, so nothing is silently dropped (see resource_mapping.py).
         """
-        if not (bgp_config or ospf_config or application_filters or manual_key_tunnels
+        if not (bgp_routers or ospf_routers or application_filters or manual_key_tunnels
                 or application_override_rules or qos_profiles
                 or tunnel_monitor_profiles or schedules or log_settings
                 or zone_protection_profiles or report_only_addresses
@@ -4245,29 +4241,53 @@ variable "panos_password" {
         lines.append('against this report.')
         lines.append('')
 
-        if bgp_config:
+        # BGP and OSPF name the scope (F3.9), because a router is an object the export
+        # places: the parse returns one record per router with the four scope facts, so
+        # the shared grouping rule applies to it like it applies to any other object.
+        if bgp_routers:
             lines.append('--- BGP (no v2 resource: panos_bgp, panos_bgp_peer_group, panos_bgp_peer) ---')
-            lines.append(f"  router_id: {bgp_config.get('router_id')}")
-            lines.append(f"  as_number: {bgp_config.get('as_number')}")
-            for pg in bgp_config.get('peer_groups', []):
-                lines.append(f"  peer_group: {pg.get('name')} (type: {pg.get('type')})")
-            for peer in bgp_config.get('peers', []):
-                lines.append(f"  peer: {peer.get('name')} "
-                             f"(peer_as: {peer.get('peer_as')}, "
-                             f"local: {peer.get('local_address_ip') or peer.get('local_address_interface')}, "
-                             f"remote: {peer.get('peer_address_ip')}, "
-                             f"group: {peer.get('peer_group')}, enable: {peer.get('enable')})")
+            for path, routers in self._group_by_scope(bgp_routers):
+                lines.append(self._report_section_header(path))
+                for router in routers:
+                    lines.append(f"  router: {router['name']} "
+                                 f"(router_id: {router.get('router_id')}, "
+                                 f"as_number: {router.get('as_number')})")
+                    for pg in router['peer_groups']:
+                        lines.append(f"    peer_group: {pg['name']} (type: {pg.get('type')}, "
+                                     f"export-nexthop: {pg.get('export_nexthop')}, "
+                                     f"import-nexthop: {pg.get('import_nexthop')})")
+                    for peer in router['peers']:
+                        lines.append(f"    peer: {peer['name']} (peer_as: {peer.get('peer_as')}, "
+                                     f"local: {peer.get('local_address_ip') or peer.get('local_address_interface')}, "
+                                     f"remote: {peer.get('peer_address_ip')}, "
+                                     f"group: {peer.get('peer_group')}, enable: {peer.get('enable')})")
+                    # The capture decision is now the print decision: a redist rule the
+                    # parse keeps is printed here, so it is not a silent drop.
+                    for rule in router['redistribution_rules']:
+                        lines.append(f"    redist_rule: {rule['name']} "
+                                     f"(family: {rule.get('address_family')}, "
+                                     f"enable: {rule.get('enable')})")
+                    vsys_line = self._report_vsys_line(router).rstrip()
+                    if vsys_line:
+                        lines.append(vsys_line)
             lines.append('')
 
-        if ospf_config:
+        if ospf_routers:
             lines.append('--- OSPF (no v2 resource: panos_ospf, panos_ospf_area, panos_ospf_area_interface) ---')
-            lines.append(f"  router_id: {ospf_config.get('router_id')}")
-            for area in ospf_config.get('areas', []):
-                lines.append(f"  area: {area.get('area_id')} (type: {area.get('type')})")
-            for iface in ospf_config.get('interfaces', []):
-                lines.append(f"  interface: {iface.get('interface')} "
-                             f"(enable: {iface.get('enable')}, passive: {iface.get('passive')}, "
-                             f"metric: {iface.get('metric')})")
+            for path, routers in self._group_by_scope(ospf_routers):
+                lines.append(self._report_section_header(path))
+                for router in routers:
+                    lines.append(f"  router: {router['name']} (router_id: {router.get('router_id')})")
+                    for area in router['areas']:
+                        ranges = f", ranges: {', '.join(area['ranges'])}" if area['ranges'] else ''
+                        lines.append(f"    area: {area['area_id']} (type: {area.get('type')}{ranges})")
+                    for iface in router['interfaces']:
+                        lines.append(f"    interface: {iface['interface']} "
+                                     f"(enable: {iface.get('enable')}, passive: {iface.get('passive')}, "
+                                     f"link type: {iface.get('link_type')}, metric: {iface.get('metric')})")
+                    vsys_line = self._report_vsys_line(router).rstrip()
+                    if vsys_line:
+                        lines.append(vsys_line)
             lines.append('')
 
         if application_filters:
@@ -4482,6 +4502,17 @@ variable "panos_password" {
                 lines.append(self._report_section_header(path))
                 for row in group:
                     lines.append(entry_coverage.entry_line(row))
+
+        # F4.4: the property scan. A captured property no output read is a gap. A
+        # finding is an operator action, not a broken output, so it does not change the
+        # exit code (the F4.1 gate does).
+        findings = ledger.property_findings()
+        if findings:
+            lines.extend(['', f'--- {entry_coverage.PROPERTY_HEADING} ---', entry_coverage.PROPERTY_RULE])
+            for path, group in self._group_by_scope(findings):
+                lines.append(self._report_section_header(path))
+                for row in group:
+                    lines.append(entry_coverage.property_line(row))
 
         lines.extend(['', 'Entry lines are grouped by the scope the export declares (F3.9).',
                       '  line <source line>  <object type>/<entry name>  <destination>  '
@@ -5059,9 +5090,9 @@ def main():
         # provider manages them as panos_monitor_profile)
         pbf_monitor_profiles = panorama.parse_pbf_monitor_profiles()
 
-        # Dynamic routing
-        bgp_config = panorama.parse_bgp()
-        ospf_config = panorama.parse_ospf()
+        # Dynamic routing (one record per router, F4.4)
+        bgp_routers = panorama.parse_bgp()
+        ospf_routers = panorama.parse_ospf()
 
         # VPN configurations
         ike_gateways = panorama.parse_ike_gateways()
@@ -5107,12 +5138,17 @@ def main():
         print(f"  - {len(pbf_monitor_profiles)} PBF path monitoring profiles")
 
         # Dynamic routing
-        if bgp_config:
-            peer_count = len(bgp_config.get('peers', []))
-            print(f"  - BGP enabled with {peer_count} peers")
-        if ospf_config:
-            area_count = len(ospf_config.get('areas', []))
-            print(f"  - OSPF enabled with {area_count} areas")
+        if bgp_routers:
+            print(f"  - BGP enabled on {len(bgp_routers)} router(s)")
+            for router in bgp_routers:
+                print(f"    {router['name']}: AS {router.get('as_number')}, "
+                      f"{len(router['peers'])} peers, {len(router['peer_groups'])} peer groups, "
+                      f"{len(router['redistribution_rules'])} redistribution rules")
+        if ospf_routers:
+            print(f"  - OSPF enabled on {len(ospf_routers)} router(s)")
+            for router in ospf_routers:
+                print(f"    {router['name']}: {len(router['areas'])} areas, "
+                      f"{len(router['interfaces'])} interfaces")
 
         # VPN
         print(f"  - {len(ike_gateways)} IKE gateways")
@@ -5120,6 +5156,10 @@ def main():
 
         print(f"\nGenerating Terraform configuration in {args.output_dir}...")
         tf_gen = TerraformGenerator(args.output_dir, panorama.parse_associations())
+
+        # F4.4: the property scan measures which keys an output reads from a captured
+        # object, so the record starts here and not during the parse.
+        panorama.ledger.start_recording()
 
         # Core configuration
         tf_gen.generate_provider_config()
@@ -5182,7 +5222,7 @@ def main():
         # output, so it does not change the exit code (the F4.1 gate does).
         coverage_findings = container_coverage.scan(panorama.source, panorama.parent_map)
         tf_gen.generate_manual_setup_report(
-            bgp_config, ospf_config, application_filters, manual_key_tunnels,
+            bgp_routers, ospf_routers, application_filters, manual_key_tunnels,
             application_override_rules=app_override_rules,
             qos_profiles=qos_profiles,
             tunnel_monitor_profiles=tunnel_monitor_profiles,

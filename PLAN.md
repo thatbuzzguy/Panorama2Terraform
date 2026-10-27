@@ -15,8 +15,8 @@ against the pinned provider, no parse method keys by name alone, and the test ga
 covers the generated Terraform. `ADVERSARIAL_AUDIT_REPORT.md` is the audit record;
 its status table states the current state.
 
-Two features are open: the property-level coverage matrix (F4.4, Epic 4), and the
-upstream source layer (Epic 5). The open gaps and decided limits are in `backlog.md`.
+One feature is open: the upstream source layer (Epic 5). The open gaps and decided
+limits are in `backlog.md`.
 
 ## Goals
 
@@ -31,18 +31,16 @@ upstream source layer (Epic 5). The open gaps and decided limits are in `backlog
 A brown-field config is an existing production config: mixed shared objects,
 per-device-group overrides, template stacks, and multiple virtual systems.
 
-## Epic 4 — Full Traceability and Verification (Goal 4)
+## Epic 4 — Full Traceability and Verification (Goal 4) — complete
 
-F4.1 (sanity gate), F4.2 (container table and line tracking) and F4.3 (per-entry
-report) landed. Their rules are in `docs/ARCHITECTURE.md` §3.1, §3.2 and §4.6.
+F4.1 (sanity gate), F4.2 (container table and line tracking), F4.3 (per-entry
+report) and F4.4 (property-level coverage) landed. Their rules are in
+`docs/ARCHITECTURE.md` §2.4, §3.1, §3.2 and §4.6, and in `docs/COVERAGE_MATRIX.md`.
 
-- [ ] **F4.4 Property-level coverage** — the matrix is type level today. Extend it so
-  each row names the properties an emitter reads, so a property the parse captured
-  but no output used is reported as a gap. Foundation: `COVERAGE_MATRIX` in
-  `resource_mapping.py`. A property level is a container inside a config-object
-  entry, so `container_coverage` reports only the section level and the per-entry
-  report counts property entries on the parent row. Keep the entry-mark rule and the
-  section rule unchanged; add the property scan and its report section.
+F4.4 gave each matrix row the emitter method and the property list that emitter reads,
+and the report prints a captured property no output read. Goal 4 is met: every input
+entry is classified, every property a row declares is grounded in the emitter that reads
+it, and the output passes the sanity gate.
 
 ## Epic 5 — Upstream Data Sources (Goal 5)
 
@@ -65,11 +63,11 @@ Terraform state, and so an entry can name which source it came from.
 - [ ] **F5.3 Provenance record** — `SOURCE.txt` names the source, the scope and the
   cache entry. It is written outside the report bodies, so the report byte rule
   still holds. This feature also carries the report label change to `Source:`.
-- [ ] **F5.4 Cross-source shadow report** — needs F4.4. A per-device-group run
-  cannot see its parent, so an inherited name stays a plain string and a shadowed
-  object is invisible. With the parent as a second source, the ledger names the
-  source of each entry, and a child name that repeats a parent name is reported as
-  a shadow.
+- [ ] **F5.4 Cross-source shadow report** — uses the property scan (F4.4). A
+  per-device-group run cannot see its parent, so an inherited name stays a plain string
+  and a shadowed object is invisible. With the parent as a second source, the ledger
+  names the source of each entry, and a child name that repeats a parent name is
+  reported as a shadow.
 - [ ] **F5.5 Read-through data blocks** (opt-in) — plain strings stay the default
   for a name outside the run. A declared upstream scope may emit `data` blocks
   instead, where the value has to be verified. Needs `DATA_SOURCE_SCHEMA` in
@@ -77,18 +75,18 @@ Terraform state, and so an entry can name which source it came from.
   one new gate rule. The provider facts are in `backlog.md`.
 - [ ] **F5.6 Terraform state as a source** — report-only ownership and drift: which
   entries another workspace already owns. Offline, because a state file is a JSON
-  document. Needs F4.4, because ownership and drift are property-level facts.
+  document. Uses the property scan (F4.4), because ownership and drift are
+  property-level facts.
 
 ## Sequencing
 
-1. F5.1 is a refactor that changes no behaviour, so it can land before F4.4. F4.4
-   builds on the F4.2 container table and the F4.3 ledger, so it does not need a new
-   naming or grouping rule.
-2. F4.4 comes before F5.4 and F5.6, because a shadow and a drift are property-level
-   facts and the property scan is the only thing that can state them.
-3. Fix the two open defects found while refreshing the documentation in the same
-   pass as F4.4, because both change report output: the overlapping BGP and OSPF
-   paths (`backlog.md`), and the manual report sections that do not name their scope.
+1. Epic 4 is complete, so the open work is Epic 5. F5.2 is next: it is the first source
+   the tool reads, and F5.3 records what a run read from it.
+2. F5.4 and F5.6 use the property scan F4.4 landed, because a shadow and a drift are
+   property-level facts.
+3. The two report defects found while refreshing the documentation landed with F4.4:
+   the overlapping BGP and OSPF paths, and the manual report sections that did not name
+   their scope.
 
 ## Out of Scope (tracked in backlog.md)
 

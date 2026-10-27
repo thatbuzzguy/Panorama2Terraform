@@ -13,8 +13,10 @@ panos provider v2:
                          MANUAL_SETUP_REPORT.txt with the reason (F2.9).
     COVERAGE_MATRIX    - one row per emitted type: the Panorama XML
                          element that feeds the resource, the fixture
-                         that exercises it, and the expected emitted
-                         name. Enforced by tests/test_coverage_matrix.py.
+                         that exercises it, the expected emitted name, the
+                         emitter method, and the properties that emitter
+                         reads. Enforced by tests/test_coverage_matrix.py
+                         and tests/test_property_coverage.py.
 
 The generator emits the v2 types directly; the old v1 names
 (panos_address_object, panos_security_rule_group, ...) no longer exist
@@ -299,11 +301,21 @@ NOT_EMITTED_TYPES = {
 #   fixture      - the XML fixture under tests/fixtures/ for the row test.
 #   output_file  - the .tf file (relative to the output directory) that
 #                  must contain the resource block.
+#   emitter      - the TerraformGenerator method names that read this row's
+#                  properties. Two names when a report writer reads properties
+#                  the .tf emitter does not.
+#   properties   - the keys of the parsed object those emitters read. The
+#                  entry name and the four scope facts are the row identity,
+#                  not properties, so they are not listed here.
 #
 # Maintenance duty: an emitter change that adds, renames, or drops a
-# resource type must update this matrix in the same change.
+# resource type must update this matrix in the same change, and an emitter
+# that reads or stops reading a property must update that row's
+# `properties` in the same change.
 # tests/test_coverage_matrix.py fails when the matrix and the converter
-# disagree (row set, fixture content, or emitted output).
+# disagree (row set, fixture content, emitted output, row shape, or a
+# declared property the emitter does not read). The measured read sets are
+# pinned by tests/test_property_coverage.py.
 COVERAGE_MATRIX = (
     {
         'resource': 'panos_address',
@@ -312,6 +324,17 @@ COVERAGE_MATRIX = (
         'emitted_name': 'Web-Server-1',
         'fixture': 'address_objects.xml',
         'output_file': 'address_objects.tf',
+        'emitter': ('generate_address_objects', 'generate_manual_setup_report',),
+        'properties': (
+            'declared_type',
+            'description',
+            'disable_override',
+            'other',
+            'report_only',
+            'tags',
+            'type',
+            'value',
+        ),
     }, {
         'resource': 'panos_address_group',
         'xml_element': 'address-group/entry',
@@ -319,6 +342,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'Web-Servers',
         'fixture': 'address_groups.xml',
         'output_file': 'address_groups.tf',
+        'emitter': ('generate_address_groups',),
+        'properties': ('description', 'dynamic_filter', 'static_members',),
     }, {
         'resource': 'panos_administrative_tag',
         'xml_element': 'tag/entry',
@@ -326,6 +351,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'env-prod',
         'fixture': 'tags.xml',
         'output_file': 'tags.tf',
+        'emitter': ('generate_tags',),
+        'properties': ('color', 'comments', 'description',),
     }, {
         'resource': 'panos_application_group',
         'xml_element': 'application-group/entry',
@@ -333,6 +360,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'web-apps',
         'fixture': 'application_groups.xml',
         'output_file': 'application_groups.tf',
+        'emitter': ('generate_application_groups',),
+        'properties': ('members',),
     }, {
         'resource': 'panos_custom_url_category',
         'xml_element': 'custom-url-category/entry',
@@ -340,6 +369,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'blocked-sites',
         'fixture': 'custom_url_categories.xml',
         'output_file': 'custom_url_categories.tf',
+        'emitter': ('generate_custom_url_categories',),
+        'properties': ('description', 'list', 'type',),
     }, {
         'resource': 'panos_external_dynamic_list',
         'xml_element': 'external-list/entry',
@@ -347,6 +378,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'threat-ips',
         'fixture': 'external_lists.xml',
         'output_file': 'external_lists.tf',
+        'emitter': ('generate_external_lists',),
+        'properties': ('fields', 'type',),
     }, {
         'resource': 'panos_service',
         'xml_element': 'service/entry',
@@ -354,6 +387,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'TCP-8080',
         'fixture': 'service_objects.xml',
         'output_file': 'service_objects.tf',
+        'emitter': ('generate_service_objects',),
+        'properties': ('description', 'other_protocol', 'protocols', 'tags',),
     }, {
         'resource': 'panos_service_group',
         'xml_element': 'service-group/entry',
@@ -361,6 +396,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'Web-Services',
         'fixture': 'service_groups.xml',
         'output_file': 'service_groups.tf',
+        'emitter': ('generate_service_groups',),
+        'properties': ('members',),
     }, {
         'resource': 'panos_security_policy_rules',
         'xml_element': 'security/rules/entry',
@@ -368,6 +405,20 @@ COVERAGE_MATRIX = (
         'emitted_name': 'Allow-Web-Traffic',
         'fixture': 'security_rules.xml',
         'output_file': 'security_rules.tf',
+        'emitter': ('generate_security_rules',),
+        'properties': (
+            'action',
+            'applications',
+            'description',
+            'destination_addresses',
+            'destination_zones',
+            'disabled',
+            'log_end',
+            'log_start',
+            'services',
+            'source_addresses',
+            'source_zones',
+        ),
     }, {
         'resource': 'panos_nat_policy_rules',
         'xml_element': 'nat/rules/entry',
@@ -375,6 +426,20 @@ COVERAGE_MATRIX = (
         'emitted_name': 'Outbound-NAT',
         'fixture': 'nat_rules.xml',
         'output_file': 'nat_rules.tf',
+        'emitter': ('generate_nat_rules',),
+        'properties': (
+            'description',
+            'destination_addresses',
+            'destination_translation_address',
+            'destination_translation_port',
+            'destination_zone',
+            'disabled',
+            'service',
+            'source_addresses',
+            'source_translation_address',
+            'source_translation_type',
+            'source_zones',
+        ),
     }, {
         # F2.9: decryption rules emit as real v2 resources (one per rule)
         'resource': 'panos_decryption_policy_rules',
@@ -383,6 +448,24 @@ COVERAGE_MATRIX = (
         'emitted_name': 'Decrypt-HTTPS',
         'fixture': 'decryption_rules.xml',
         'output_file': 'decryption_rules.tf',
+        'emitter': ('generate_decryption_rules',),
+        'properties': (
+            'action',
+            'categories',
+            'description',
+            'destination_addresses',
+            'destination_zones',
+            'disabled',
+            'log_end',
+            'log_setting',
+            'log_start',
+            'profile',
+            'services',
+            'source_addresses',
+            'source_users',
+            'source_zones',
+            'type',
+        ),
     }, {
         # F2.9: PBF rules emit as real v2 resources (one per rule)
         'resource': 'panos_pbf_policy_rules',
@@ -391,6 +474,20 @@ COVERAGE_MATRIX = (
         'emitted_name': 'PBF-Forward',
         'fixture': 'pbf_rules.xml',
         'output_file': 'pbf_rules.tf',
+        'emitter': ('generate_pbf_rules',),
+        'properties': (
+            'action',
+            'applications',
+            'description',
+            'destination_addresses',
+            'disabled',
+            'enforce_symmetric_return',
+            'schedule',
+            'services',
+            'source_addresses',
+            'source_users',
+            'source_zones',
+        ),
     }, {
         'resource': 'panos_security_profile_group',
         'xml_element': 'profile-group/entry',
@@ -398,6 +495,18 @@ COVERAGE_MATRIX = (
         'emitted_name': 'Strict-Profile',
         'fixture': 'security_profile_groups.xml',
         'output_file': 'security_profile_groups.tf',
+        'emitter': ('generate_security_profile_groups',),
+        'properties': (
+            'data_filtering',
+            'file_blocking',
+            'gtp',
+            'sctp',
+            'spyware',
+            'url_filtering',
+            'virus',
+            'vulnerability',
+            'wildfire_analysis',
+        ),
     }, {
         # F2.9: PBF path monitoring profiles are template-scoped in v2;
         # a different PAN-OS object from the IPsec tunnel monitor profile
@@ -407,6 +516,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'PM-Branch',
         'fixture': 'pbf_monitor_profiles.xml',
         'output_file': 'monitor_profiles.tf',
+        'emitter': ('generate_pbf_monitor_profiles',),
+        'properties': ('action', 'interval', 'threshold',),
     }, {
         'resource': 'panos_ethernet_interface',
         'xml_element': 'ethernet/entry',
@@ -414,6 +525,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'ethernet1/1',
         'fixture': 'interfaces_ethernet.xml',
         'output_file': 'interfaces.tf',
+        'emitter': ('generate_interfaces',),
+        'properties': ('comment', 'ip_addresses', 'ipv6_addresses', 'management_profile', 'mode', 'tag', 'type',),
     }, {
         'resource': 'panos_ethernet_layer3_subinterface',
     # The physical L3 interface feeds its derived .0 subinterface:
@@ -423,6 +536,17 @@ COVERAGE_MATRIX = (
         'emitted_name': 'ethernet1/1.0',
         'fixture': 'interfaces_ethernet.xml',
         'output_file': 'interfaces.tf',
+        'emitter': ('generate_interfaces',),
+        'properties': (
+            'comment',
+            'ip_addresses',
+            'ipv6_addresses',
+            'management_profile',
+            'mode',
+            'parent',
+            'tag',
+            'type',
+        ),
     }, {
         'resource': 'panos_vlan_interface',
         'xml_element': 'vlan/units/entry',
@@ -430,6 +554,17 @@ COVERAGE_MATRIX = (
         'emitted_name': 'vlan.10',
         'fixture': 'interfaces_other.xml',
         'output_file': 'interfaces.tf',
+        'emitter': ('generate_interfaces',),
+        'properties': (
+            'comment',
+            'ip_addresses',
+            'ipv6_addresses',
+            'management_profile',
+            'mode',
+            'parent',
+            'tag',
+            'type',
+        ),
     }, {
         'resource': 'panos_loopback_interface',
         'xml_element': 'loopback/units/entry',
@@ -437,6 +572,17 @@ COVERAGE_MATRIX = (
         'emitted_name': 'loopback.1',
         'fixture': 'interfaces_other.xml',
         'output_file': 'interfaces.tf',
+        'emitter': ('generate_interfaces',),
+        'properties': (
+            'comment',
+            'ip_addresses',
+            'ipv6_addresses',
+            'management_profile',
+            'mode',
+            'parent',
+            'tag',
+            'type',
+        ),
     }, {
         'resource': 'panos_tunnel_interface',
         'xml_element': 'tunnel/units/entry',
@@ -444,6 +590,17 @@ COVERAGE_MATRIX = (
         'emitted_name': 'tunnel.1',
         'fixture': 'interfaces_other.xml',
         'output_file': 'interfaces.tf',
+        'emitter': ('generate_interfaces',),
+        'properties': (
+            'comment',
+            'ip_addresses',
+            'ipv6_addresses',
+            'management_profile',
+            'mode',
+            'parent',
+            'tag',
+            'type',
+        ),
     }, {
         'resource': 'panos_aggregate_interface',
         'xml_element': 'aggregate-ethernet/entry',
@@ -451,6 +608,17 @@ COVERAGE_MATRIX = (
         'emitted_name': 'ae1',
         'fixture': 'interfaces_other.xml',
         'output_file': 'interfaces.tf',
+        'emitter': ('generate_interfaces',),
+        'properties': (
+            'comment',
+            'ip_addresses',
+            'ipv6_addresses',
+            'management_profile',
+            'mode',
+            'parent',
+            'tag',
+            'type',
+        ),
     }, {
         'resource': 'panos_aggregate_layer3_subinterface',
         'xml_element': 'aggregate-ethernet/entry',
@@ -458,6 +626,17 @@ COVERAGE_MATRIX = (
         'emitted_name': 'ae1.101',
         'fixture': 'interfaces_other.xml',
         'output_file': 'interfaces.tf',
+        'emitter': ('generate_interfaces',),
+        'properties': (
+            'comment',
+            'ip_addresses',
+            'ipv6_addresses',
+            'management_profile',
+            'mode',
+            'parent',
+            'tag',
+            'type',
+        ),
     }, {
         'resource': 'panos_virtual_router',
         'xml_element': 'virtual-router/entry',
@@ -465,6 +644,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'default',
         'fixture': 'virtual_routers.xml',
         'output_file': 'virtual_routers.tf',
+        'emitter': ('generate_virtual_routers',),
+        'properties': ('interfaces', 'router_type', 'static_routes',),
     }, {
         'resource': 'panos_virtual_router_static_route_ipv4',
         'xml_element': 'static-route/entry',
@@ -472,6 +653,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'default-gw',
         'fixture': 'virtual_routers.xml',
         'output_file': 'virtual_routers.tf',
+        'emitter': ('generate_virtual_routers',),
+        'properties': ('destination', 'metric', 'nexthop_interface', 'nexthop_ip',),
     }, {
         'resource': 'panos_zone',
         'xml_element': 'zone/entry',
@@ -479,6 +662,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'trust',
         'fixture': 'zones.xml',
         'output_file': 'zones.tf',
+        'emitter': ('generate_zones',),
+        'properties': ('interfaces', 'type', 'zone_protection_profile',),
     }, {
         'resource': 'panos_ike_crypto_profile',
         'xml_element': 'crypto-profiles/ike-crypto-profiles/entry',
@@ -486,6 +671,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'IKE-DEFAULT',
         'fixture': 'ike_crypto_profiles.xml',
         'output_file': 'vpn.tf',
+        'emitter': ('generate_vpn_config',),
+        'properties': ('authentications', 'dh_groups', 'encryptions', 'lifetime_hours',),
     }, {
         'resource': 'panos_ike_gateway',
         'xml_element': 'ike/gateway/entry',
@@ -493,6 +680,19 @@ COVERAGE_MATRIX = (
         'emitted_name': 'IKE-GW-Branch',
         'fixture': 'ike_gateways.xml',
         'output_file': 'vpn.tf',
+        'emitter': ('generate_vpn_config',),
+        'properties': (
+            'auth_type',
+            'ike_crypto_profile',
+            'local_address',
+            'local_address_interface',
+            'local_id',
+            'peer_address',
+            'peer_address_type',
+            'peer_id',
+            'pre_shared_key',
+            'version',
+        ),
     }, {
         'resource': 'panos_ipsec_crypto_profile',
         'xml_element': 'crypto-profiles/ipsec-crypto-profiles/entry',
@@ -500,6 +700,8 @@ COVERAGE_MATRIX = (
         'emitted_name': 'IPSEC-DEFAULT',
         'fixture': 'ipsec_crypto_profiles.xml',
         'output_file': 'vpn.tf',
+        'emitter': ('generate_vpn_config',),
+        'properties': ('authentications', 'dh_group', 'encryptions', 'lifetime_hours', 'lifetime_kb',),
     }, {
         'resource': 'panos_ipsec_tunnel',
         'xml_element': 'tunnel/ipsec/entry',
@@ -507,6 +709,17 @@ COVERAGE_MATRIX = (
         'emitted_name': 'TUN-Branch',
         'fixture': 'ipsec_tunnels.xml',
         'output_file': 'vpn.tf',
+        'emitter': ('generate_vpn_config',),
+        'properties': (
+            'ike_gateway',
+            'ipsec_crypto_profile',
+            'local',
+            'protocol',
+            'proxy_ids',
+            'remote',
+            'tunnel_interface',
+            'type',
+        ),
     }
 )
 

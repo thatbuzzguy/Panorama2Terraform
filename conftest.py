@@ -4,7 +4,9 @@ The two converter scripts live at the repository root and are not an
 installed package. Load them by file path so tests run from any directory.
 """
 
+import contextlib
 import importlib.util
+import io
 import json
 import re
 import shutil
@@ -141,3 +143,36 @@ def run_script(filename: str, *args: str) -> subprocess.CompletedProcess:
         cwd=REPO_ROOT,
         timeout=120,
     )
+
+
+def run_pipeline(module, fixture_name: str, output_dir):
+    """Run the converter pipeline in process and return the parser it built.
+
+    The F4.4 property scan measures which keys an output reads from a captured object,
+    so a test that wants the read record must run the pipeline in process: `run_script`
+    runs a subprocess and the record is lost with the process. `main()` builds the
+    parser itself, so this helper hooks `PanoramaParser.__init__` to get the instance
+    back.
+
+    Returns None when the run refuses the input before the parse, because no parser
+    exists to return. Console output is redirected, so a corpus run does not fill the
+    pytest report.
+    """
+    captured = {}
+    original_init = module.PanoramaParser.__init__
+
+    def init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        captured['parser'] = self
+
+    saved_argv = list(sys.argv)
+    module.PanoramaParser.__init__ = init
+    try:
+        sys.argv = ['panorama_to_terraform.py', str(FIXTURES_DIR / fixture_name),
+                    '--output-dir', str(output_dir)]
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.suppress(SystemExit):
+            module.main()
+    finally:
+        module.PanoramaParser.__init__ = original_init
+        sys.argv = saved_argv
+    return captured.get('parser')

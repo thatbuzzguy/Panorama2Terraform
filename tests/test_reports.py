@@ -221,3 +221,50 @@ def test_no_report_when_there_is_nothing_to_report(tmp_path):
     files = _generate(tmp_path, 'address_objects.xml')
     assert 'INTERFACE_MIGRATION_REPORT.txt' not in files
     assert 'VPN_MIGRATION_REPORT.txt' not in files
+
+
+# --- manual setup report: BGP and OSPF (F4.4) -----------------------------
+
+def _manual_sections(text: str) -> dict[str, str]:
+    """{scope section title: body} for the grouped manual report sections."""
+    blocks = {}
+    current = None
+    for line in text.splitlines():
+        if line.startswith(SCOPE_TITLES):
+            current = line
+            blocks[current] = []
+        elif current is not None:
+            blocks[current].append(line)
+    return {title: '\n'.join(body) for title, body in blocks.items()}
+
+
+def test_bgp_and_ospf_sections_name_the_scope_and_the_router(tmp_path):
+    """The router sections use the same grouping rule as the other reports.
+
+    tests/fixtures/router_scopes.xml puts two routers in two scopes, so a flat section
+    cannot tell them apart.
+    """
+    report = _generate(tmp_path, 'router_scopes.xml')['MANUAL_SETUP_REPORT.txt']
+    sections = _manual_sections(report)
+    assert set(sections) == {'DEVICE GROUP: Router-Group', 'TEMPLATE: Router-Template'}, sections
+    assert 'router: R1' in sections['DEVICE GROUP: Router-Group']
+    assert 'router: R2' in sections['TEMPLATE: Router-Template']
+    # One router is one block: the parse keeps one path, so a router under a device is
+    # not read twice.
+    assert report.count('router: R1') == 1
+    assert report.count('router: R2') == 1
+
+
+def test_device_router_section_names_the_device(tmp_path):
+    """A router in a device's own config is printed under the device, not a device group."""
+    report = _generate(tmp_path, 'bgp.xml')['MANUAL_SETUP_REPORT.txt']
+    assert 'DEVICE (this device placeholder): localhost.localdomain' in report
+    assert report.count('router: default') == 1
+    assert 'Vsys: vsys1' in report
+
+
+def test_bgp_section_prints_what_the_parse_captured(tmp_path):
+    """The capture decision is the print decision: peer-group nexthops and redist rules print."""
+    report = _generate(tmp_path, 'bgp.xml')['MANUAL_SETUP_REPORT.txt']
+    assert 'peer_group: PG-Branch (type: external, export-nexthop: self, import-nexthop: self)' in report
+    assert 'redist_rule: redist-static (family: ipv4-unicast, enable: True)' in report

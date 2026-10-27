@@ -1,88 +1,101 @@
-# Acceptance Criteria — F5.1 Source read boundary (current task)
+# Acceptance Criteria — F4.4 Property-level coverage (current task)
 
-Scope: the input door takes bytes from a producer instead of taking a path. The two
-F3.8 checks stay inside `xml_input.py`, so no producer can bypass them. The parse
-layer keeps the ElementTree tree, because the container table, the entry ledger, the
-parent walk and the line map are keyed on it.
+Scope: the coverage matrix moves from type level to property level. Each row names the
+properties its emitter reads. A property the parse captured but no output reads is a gap,
+and the conversion report prints that gap. The two report lines that state the property
+scan as if it already exist change in this pass, with the two BGP and OSPF report defects.
 
-The record of the previous task is in the git history.
+The record of the previous task (F5.1) is in the git history.
 
 Out of scope for this task:
 
-- The fetch, the cache and the provenance record (F5.2, F5.3). This task adds the
-  boundary they need; it does not add a source.
-- The report label change (`Input file:` to `Source:`). It lands with the provenance
-  record, so report bytes do not change here.
-- `pan-os-python`, any network call, and any test that needs one.
-- F4.4 and the two report defects that land with it.
+- The entry-mark rule and the section rule are unchanged. `container_coverage` still
+  reports only the section level; a property level stays inside a config-object entry.
+- The cross-source shadow report (F5.4) and the ownership drift report (F5.6). Both need
+  this feature, neither is part of it.
+- `.tf` output bytes. A property gap is reported, not emitted, so both golden sets stay
+  byte-identical.
 
-## AC-1 — One door, one shape
+## AC-1 — Each matrix row names its properties
 
-1. `parse_bytes(data, origin, max_input_bytes)` is the only place the two checks run,
-   and it parses the bytes that passed them.
-2. `parse_xml(path)` is the file producer: the size check before the read, then
-   `parse_bytes`. Its name and signature do not change, so both entry points and the
-   test that pins the single door keep passing.
-3. `tools/build_kitchen_sink.py` is not an entry point and does not use the door. That
-   F3.8 exemption is unchanged.
+1. Every row in `resource_mapping.COVERAGE_MATRIX` gains `emitter` and `properties`, so a
+   row holds eight fields: `resource`, `xml_element`, `xml_name`, `emitted_name`,
+   `fixture`, `output_file`, `emitter`, `properties`.
+2. `emitter` names the generator method that writes the row's output, and `properties`
+   lists the entry keys that output reads for this container. A key that names the object
+   or places it (`name`, the four scope facts) is not a property, so `properties` uses the
+   same key set as `entry_coverage.NON_FIELD_KEYS` excludes.
+3. `emitter` may name two methods when the row has two output paths: the `.tf` emitter and
+   the report writer that prints the row when the entry takes the other path. The row for
+   `panos_address` is the case: `generate_address_objects` writes the resource, and
+   `generate_manual_setup_report` prints a report-only entry.
+4. `tests/test_coverage_matrix.py` pins the row shape: every row has the eight fields,
+   `emitter` names a method on `TerraformGenerator`, and `properties` is not empty.
 
-## AC-2 — The checks hold for any producer, not only for a file
+## AC-2 — Parity between a row and what the output reads
 
-1. `parse_bytes` refuses bytes over the limit before it parses them, and the refusal
-   names the origin.
-2. `parse_bytes` refuses a DTD in bytes from any producer, through the parser, not a
-   text search.
-3. `read_input` keeps the pre-allocation size check for a file and the size check on
-   the bytes it read.
-4. A test pins that a producer with no file behind it is refused for size and for a
-   DTD the same way a file is. This is the fact F5.2 depends on, so it is pinned here
-   and not assumed there.
-5. A test pins that the input is still read once: `parse_xml` reads the file once and
-   `parse_bytes` opens nothing.
+1. The pipeline records, for each entry object, the property keys an output reads from it.
+   The record starts after the parse, so a key the parse method read off the XML element is
+   not a property the output used.
+2. For every matrix row, `properties` equals the recorded key set for the corpus entries of
+   that container. A key the output reads that the row does not name fails the test, and a
+   property the row names that no output reads fails it too.
+3. Every property a row names appears as a key read in one of its `emitter` methods,
+   checked on the source (the same style as the entry-mark rule in
+   `tests/test_entry_coverage.py`).
 
-## AC-3 — Source identity
+## AC-3 — The property scan and its report section
 
-1. `SourceOrigin` holds `kind` and `name`, and `path` when a file can be reopened.
-   `kind` is `file` for the file producer.
-2. `name` is what a report prints. For a file it is the file name with no directory,
-   so a report line does not depend on the path.
-3. `ParsedSource` keeps `root`, the line map and `line_of`. The line rule is unchanged:
-   only the parse records a line, so an element copied out of the tree has none.
-4. An error message names the origin: the path when the origin has one, the origin name
-   when it has none.
+1. A captured property that is not in the row's `properties` is a finding. The scan runs on
+   the entries a matrix row covers, in report order, and `CONVERSION_REPORT.txt` prints one
+   line per finding with the scope path, the object type, the entry name, and the properties
+   the parse captured but no output read.
+2. Scan scope is the entries a matrix row covers. An entry in a report, inventory,
+   bookkeeping, count-only, or nested-block destination has no matrix row, so the scan does
+   not report it; those field gaps stay in `backlog.md`. A property entry inside a
+   config-object entry is in scope when its container maps to a matrix row.
+3. A finding is an operator action, not a broken output: the exit code is still decided by
+   the F4.1 gate, and no `.tf` byte changes.
+4. Report order is fixed (source line, then object type, then entry name), so the same input
+   produces the same bytes.
+5. The committed corpus has findings. `tests/test_property_coverage.py` pins them by name,
+   so a new finding cannot appear without a test change. The properties recorded for the
+   corpus are the ones AC-2 pins.
 
-## AC-4 — No behaviour change
+## AC-4 — The two report lines that name the property scan
 
-1. `ruff check .` clean and `pytest` green with no existing expectation changed.
+1. `entry_coverage.summary_lines` no longer prints `(F4.4 covers each one)`. It states the
+   scan: the property entries counted, and the findings the scan reported.
+2. `container_coverage.render_section` no longer prints `Field-level coverage is F4.3`. It
+   names the property scan as the section that owns a property level.
+3. Both lines state what the code does now, and no other report wording changes.
+
+## AC-5 — BGP and OSPF report defects, in the same pass
+
+1. `parse_bgp` and `parse_ospf` read one path each. `.//network/virtual-router/entry/protocol/...`
+   already matches a router under a device, so the second pattern is dropped, and the §3.4
+   one-path rule holds for this pair. A router under a device is read once and printed once.
+2. Each BGP and OSPF record carries the four scope facts and the router name, so the manual
+   report groups those two sections with the F3.9 rule and names the router. Same rule, one
+   implementation: `TerraformGenerator._report_scope_path`.
+3. BGP `redist-rules` are printed. The capture exists, so the report prints the rule name and
+   the address family; the decision closes the backlog item that said "print them, or stop
+   capturing them".
+4. BGP peer-group `export-nexthop` and `import-nexthop` are printed in the peer group line,
+   so a captured property has an output.
+
+## AC-6 — Gate
+
+1. `ruff check .` clean, `pytest` green.
 2. Both golden sets byte-identical.
-3. The four report files and the sanity report are byte-identical for the same input,
-   including the committed example report.
-4. Exit codes unchanged: a size or DTD refusal still exits non-zero and writes no
-   output.
+3. Report output is deterministic for the same input (the report determinism tests still
+   pass), and the committed example report is unchanged except for the sections AC-3 and
+   AC-4 add.
+4. Exit codes unchanged: a run with property findings still exits 0, and the F4.1 gate still
+   decides the exit code.
 
-## AC-5 — Documents
+## Documents to update
 
-1. `docs/ARCHITECTURE.md` §1 and §3 name the producer boundary as the single door, and
-   state that the checks run on the bytes a producer hands.
-2. `README.md` Safe input states the two checks apply to bytes from any producer.
-3. `xml_input.py` states what the boundary holds and what a producer must not bypass.
-4. `PLAN.md` F5.1 records that the report label change moved to F5.3, so F5.1 changes
-   no report output.
-
-## Gate
-
-`ruff check .`, `pytest`, goldens byte-identical, reports byte-identical, exit codes
-unchanged.
-
-## Result — complete
-
-1. `parse_bytes(data, origin, max_input_bytes)` is the boundary. `parse_xml(path)` is
-   the file producer and keeps its signature, so both entry points still import it.
-2. `SourceOrigin` holds `kind`, `name` and `path`. `ParsedSource.name` reads the origin,
-   so no report text changed. Error messages name the origin: the path when there is
-   one, the origin name when there is not.
-3. Six tests added, in the F5.1 section of `tests/test_safe_input.py`. No existing
-   expectation changed.
-4. Gate: `ruff check .` clean, 572 tests passed, the kitchen-sink output is byte-identical
-   against the same run at the commit before this task, a size refusal still exits 1 and
-   writes no output, and both entry points still share one door.
+`docs/COVERAGE_MATRIX.md` (row schema and the property level), `docs/ARCHITECTURE.md` §2.4
+and §3.1 and §3.4, `README.md`, `backlog.md` (the closed items), `to-do.md`,
+`agent-status.md`.

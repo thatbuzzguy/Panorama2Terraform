@@ -7,6 +7,11 @@ Panorama-XML-element matrix. These tests enforce it in three directions:
   report-only can never gain a row without first leaving
   REPORT_ONLY_TYPES, and an emitter change must add or remove its row
   in the same change.
+- row shape (F4.4): eight fields. A row names the emitter method that writes
+  its output file and the properties that emitter reads. The declared
+  properties are grounded in the emitter source (or the generator helper it
+  calls), and the measured read sets are pinned by
+  tests/test_property_coverage.py.
 - element grounding: every row's fixture actually contains the row's
   Panorama XML element with the named entry.
 - pipeline: running the converter on the row's fixture emits the
@@ -17,8 +22,11 @@ dict), so a fixture shared by two rows (interfaces_ethernet.xml feeds
 both ethernet resource types) converts only once.
 """
 
+import ast
+import inspect
 import re
 import tempfile
+import textwrap
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -134,3 +142,58 @@ def test_row_emits_the_provider_resource(row):
     assert any(expected in block for block in blocks), (
         f"row for {row['resource']}: no block in {row['output_file']!r} carries "
         f'{expected!r}')
+
+
+# --- F4.4 row shape --------------------------------------------------------
+
+# The eight fields of a row. `emitter` is the generator method that writes
+# `output_file`; `properties` is what that method reads from the entry.
+ROW_FIELDS = ('resource', 'xml_element', 'xml_name', 'emitted_name', 'fixture',
+             'output_file', 'emitter', 'properties')
+
+
+def _literal_keys(generator, method_name: str) -> set[str]:
+    """String constants inside one generator method and the helpers it calls.
+
+    The emitter reads a property as `obj['x']` or `obj.get('x')`, or holds the property
+    names in a literal collection it iterates (the profile-group categories). An emitter
+    that reads through a helper (`_emit_interface_resource`) is still the row's emitter,
+    so the check follows `self.<helper>()` calls.
+    """
+    pending = [method_name]
+    seen = set()
+    literals = set()
+    while pending:
+        name = pending.pop()
+        if name in seen or not hasattr(generator, name):
+            continue
+        seen.add(name)
+        tree = ast.parse(textwrap.dedent(inspect.getsource(getattr(generator, name))))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                literals.add(node.value)
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                    and isinstance(node.func.value, ast.Name) and node.func.value.id == 'self':
+                pending.append(node.func.attr)
+    return literals
+
+
+@pytest.mark.parametrize('row', ROWS, ids=_row_id)
+def test_row_names_its_emitter_and_properties(row, converter_module):
+    """Eight fields, a real generator method, and at least one property."""
+    assert sorted(row) == sorted(ROW_FIELDS), row['resource']
+    assert row['emitter'], f"row for {row['resource']} names no emitter"
+    generator = converter_module.TerraformGenerator
+    for method in row['emitter']:
+        assert hasattr(generator, method), f"{row['resource']}: {method} is not a generator method"
+    assert row['properties'], f"row for {row['resource']} declares no properties"
+
+
+@pytest.mark.parametrize('row', ROWS, ids=_row_id)
+def test_declared_property_is_a_key_the_emitter_reads(row, converter_module):
+    """Each declared property appears as a key read inside the row's emitter."""
+    literals = set()
+    for method in row['emitter']:
+        literals |= _literal_keys(converter_module.TerraformGenerator, method)
+    missing = [prop for prop in row['properties'] if prop not in literals]
+    assert missing == [], (row['resource'], missing)
