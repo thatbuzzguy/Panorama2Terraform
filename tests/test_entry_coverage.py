@@ -47,7 +47,7 @@ def _ledger(fixture_name: str, folder: Path = FIXTURES_DIR) -> entry_coverage.En
 
 def _parsed_ledger(converter_module, fixture_name: str) -> entry_coverage.EntryLedger:
     """Run every parse method, so the ledger holds the marks the parse made."""
-    parser = converter_module.PanoramaParser(str(FIXTURES_DIR / fixture_name))
+    parser = converter_module.PanoramaParser(xml_input.parse_xml(FIXTURES_DIR / fixture_name))
     for name in [n for n in dir(parser) if n.startswith('parse_')]:
         getattr(parser, name)()
     return parser.ledger
@@ -74,7 +74,7 @@ def test_mark_records_the_entry_and_returns_the_recorded_object(converter_module
     parse method must work through the object `mark` returns. Identity that matters is
     the ledger's object and the returned object, not the dict the caller passed in.
     """
-    parser = converter_module.PanoramaParser(str(FIXTURES_DIR / GAP_FIXTURE))
+    parser = converter_module.PanoramaParser(xml_input.parse_xml(FIXTURES_DIR / GAP_FIXTURE))
     entry = next(e for e in parser.root.iter() if e.tag == 'entry' and e.get('name') == 'Named-Host')
     obj = {'name': entry.get('name'), 'type': 'ip-netmask', 'value': '10.0.0.1/32'}
     returned = parser.mark(entry, obj)
@@ -86,7 +86,7 @@ def test_mark_records_the_entry_and_returns_the_recorded_object(converter_module
 
 def test_fields_added_through_the_recorded_object_are_recorded(converter_module):
     """A field a parse method adds after the mark is still in the report."""
-    parser = converter_module.PanoramaParser(str(FIXTURES_DIR / GAP_FIXTURE))
+    parser = converter_module.PanoramaParser(xml_input.parse_xml(FIXTURES_DIR / GAP_FIXTURE))
     entry = next(e for e in parser.root.iter() if e.tag == 'entry' and e.get('name') == 'Named-Host')
     obj = {'name': entry.get('name'), 'type': 'ip-netmask', 'value': '10.0.0.1/32'}
     recorded = parser.mark(entry, obj)
@@ -97,7 +97,7 @@ def test_fields_added_through_the_recorded_object_are_recorded(converter_module)
 
 def test_mark_skipped_records_the_reason(converter_module):
     """An entry a parse method visited and did not model is reported as skipped."""
-    parser = converter_module.PanoramaParser(str(FIXTURES_DIR / GAP_FIXTURE))
+    parser = converter_module.PanoramaParser(xml_input.parse_xml(FIXTURES_DIR / GAP_FIXTURE))
     entry = next(e for e in parser.root.iter() if e.tag == 'entry' and e.get('name') is None)
     parser.mark_skipped(entry, 'entry has no name attribute')
     row = parser.ledger.row_for(entry)
@@ -185,7 +185,7 @@ def test_corpus_entries_in_a_covered_container_are_all_marked(converter_module):
     """
     for path in sorted(FIXTURES_DIR.glob('*.xml')) + [REPO_ROOT / 'sample_panorama_config.xml']:
         try:
-            parser = converter_module.PanoramaParser(str(path))
+            parser = converter_module.PanoramaParser(xml_input.parse_xml(path))
         except (ET.ParseError, xml_input.UnsafeInputError):
             continue  # the hostile fixtures are refused before the parse
         for name in [n for n in dir(parser) if n.startswith('parse_')]:
@@ -383,7 +383,7 @@ def test_report_groups_rows_by_the_f3_9_scope_rule(tmp_path, converter_module):
                         for row in rows if row['name'] == 'ethernet1/1'})
     assert same_name == ['DEVICE GROUP: Datacenter-FW', 'DEVICE GROUP: Office-FW'], same_name
     # The interface report prints the same section titles for the same input.
-    parser = converter_module.PanoramaParser(str(FIXTURES_DIR / GROUPING_FIXTURE))
+    parser = converter_module.PanoramaParser(xml_input.parse_xml(FIXTURES_DIR / GROUPING_FIXTURE))
     tf_gen.generate_interface_report(parser.parse_interfaces())
     interface_report = (tmp_path / 'INTERFACE_MIGRATION_REPORT.txt').read_text(encoding='utf-8')
     shared = [header for header in sections if header in interface_report]

@@ -161,6 +161,13 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   installs no `ExternalEntityRefHandler`. `defusedxml` was considered and
   rejected — it would not cover the size risk, and the scripts stay
   standard-library only.
+- F5.1 and F5.2 (source producers, landed 2026-10-26 and 2026-10-27) closed the producer
+  boundary: the two checks run once, inside the door, so a producer cannot hand bytes
+  different from the bytes it parses. The fetch producer asks for no `Accept-Encoding`, so
+  the bytes it hands are the bytes on the wire; a `Content-Encoding: gzip` response would be
+  a decompression bomb only if the cap ran on the compressed body. The cache entry name
+  excludes the credential, so two different keys for the same request find one entry — the
+  fact a shared CI cache depends on.
 - F2.4 (emitter rewrite) also fixed two F1.6 extraction gaps: dynamic address group filters are serialized from the structured `<filter>` XML, and IPv6 address objects (`<ipv6>`, `<ipv6-range>`) are parsed and emitted.
 
 ## Design Decisions (multi-scope model)
@@ -280,33 +287,27 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   element, so a run inside a declared scope prints its device-group, template, and device
   sections instead of a blank scope.
 
-- The parse layer keeps the ElementTree tree. `pan-os-python` is a byte producer,
-  never the input model, because four things are keyed on the tree: the container
-  table rows (XML paths), the entry ledger marks, the parent walk that gives the four
-  scope facts (§2.2), and the expat line map (`ET.TreeBuilder` reports no line, so
-  only the expat handler path can record one). A device-object model has no line
-  number, so the F4.2 reporting cannot survive it.
-- The F3.8 standard-library-only rule is narrowed, not dropped. `xml_input.py` stays
-  standard library, and the fetch layer is the only place a dependency exists, so no
-  producer can bypass the two checks. The SDK import is lazy and the fetch tests skip
-  when it is not installed, so Goal 1 (offline CI) still holds.
-- The size cap applies to the bytes a producer returns, after decompression. A
-  `Content-Encoding: gzip` response is a decompression bomb when the cap is applied to
-  the compressed body. The DTD refusal applies to the same bytes.
-- The fetch accepts https only, with verification on by default. Three rules it must
-  state: refuse a non-https scheme, refuse a redirect that changes the scheme, and a
-  `--insecure` flag that is explicit rather than a silent default.
-- The API key comes from the environment, never from argv (shell history, CI logs),
-  and never reaches a generated file. The provenance record names the host and the
-  scope, never the credential.
-- A fetch is cached and the cache is what gets parsed, so a report line still names
-  bytes a reader can reopen. A cache entry is not pruned while a report references it.
-  Two runs on the same cache bytes produce identical bytes, and the source descriptor
-  lives in a file the goldens do not cover.
-- The whole-config export (`type=export`, `category=configuration`) is the shape the
-  container table knows. A per-scope fetch (`type=config&action=get&path=...`) returns
-  a `response/result` wrapper, not a config root, so it needs either a normalised
-  wrapper or its own table rows. Decide this before F5.4 reads a fetched scope.
+## Design Decisions (Epic 5 sources)
+
+- The parse layer keeps the ElementTree tree. The fetch layer is a byte producer, never the
+  input model, because four things are keyed on the tree: the container table rows (XML
+  paths), the entry ledger marks, the parent walk that gives the four scope facts (§2.2),
+  and the expat line map (`ET.TreeBuilder` reports no line, so only the expat handler path
+  can record one). A device-object model has no line number, so the F4.2 reporting cannot
+  survive it.
+- Standard library only, closed by F5.2 (landed 2026-10-27). `source_fetch.py` uses
+  `urllib.request`. This supersedes the planned `pan-os-python` producer: the SDK exposes no
+  redirect hook, so the scheme rule cannot be enforced through it, and a standard-library
+  producer enforces all three https rules and needs no test skip. No module in the project
+  imports a third-party package, so the F3.8 rule needed no narrowing after all.
+- The response wrapper is normalised (F5.2, landed 2026-10-27); the rule is in
+  `ARCHITECTURE.md` §3. The open part is the per-scope fetch (`type=config&action=get&path=...`),
+  which returns a `result` with no `config` element and is refused today. F5.4 needs its own
+  rule for that shape when it reads a fetched scope.
+- Open: cache pruning. A cache entry is not pruned while a report references it. The rule
+  waits for the provenance record (F5.3), because a report line names the cache entry it read.
+- Open: the provenance record names the host and the scope, never the credential. The key
+  rule itself (environment only, never argv, never a generated file) is in `ARCHITECTURE.md` §3.
 - Provider data sources, verified against 2.0.14 with
   `terraform providers schema -json`: 128 data sources mirror the 128 resources, and
   every emitted type has one. 126 types have the identical attribute set and the

@@ -18,6 +18,7 @@ that the extra job did not change the tree or the checks. F5.1 puts both checks
 behind one producer boundary, so a source that hands bytes is refused the same way a
 file is; the tests for that are at the end of this file.
 """
+import argparse
 import copy
 import subprocess
 import sys
@@ -319,18 +320,25 @@ def test_parse_reads_the_file_once(xml_input_module, tmp_path, monkeypatch):
 
 
 def test_parser_and_splitter_use_the_shared_default(xml_input_module, converter_module, splitter_module,
-                                                    tmp_path):
-    """Neither entry point keeps its own limit or its own DTD check."""
+                                                     fetch_module, tmp_path):
+    """Neither entry point keeps its own limit or its own DTD check.
+
+    F5.2: the converter keeps no limit of its own any more, because the parser no
+    longer reads. The CLI default and the fetch default are the door's constant.
+    """
     assert converter_module.parse_xml is xml_input_module.parse_xml
     assert splitter_module.parse_xml is xml_input_module.parse_xml
-    assert converter_module.DEFAULT_MAX_INPUT_BYTES == xml_input_module.DEFAULT_MAX_INPUT_BYTES
+    cli = argparse.ArgumentParser()
+    xml_input_module.add_max_input_argument(cli)
+    assert cli.parse_args([]).max_input_bytes == xml_input_module.DEFAULT_MAX_INPUT_BYTES
     assert splitter_module.DEFAULT_MAX_INPUT_BYTES == xml_input_module.DEFAULT_MAX_INPUT_BYTES
+    assert fetch_module.DEFAULT_MAX_INPUT_BYTES == xml_input_module.DEFAULT_MAX_INPUT_BYTES
 
     # A DTD reaches both entry points through the one check.
     source = tmp_path / 'dtd.xml'
     source.write_bytes(f'<?xml version="1.0"?>\n<!DOCTYPE config>\n{BODY}'.encode())
     with pytest.raises(xml_input_module.UnsafeInputError):
-        converter_module.PanoramaParser(str(source))
+        converter_module.PanoramaParser(xml_input_module.parse_xml(source))
     assert splitter_module.split_panorama_config(str(source), str(tmp_path / 'split')) is False
 
 

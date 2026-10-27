@@ -2,61 +2,48 @@
 
 ## Current position
 
-F4.4 (property-level coverage) is complete and committed. Gate at the commit:
-`ruff check .` clean, `pytest` 642 passed, both golden sets byte-identical, report
-determinism pinned by test, exit codes unchanged (a property finding is an operator
-action, so it does not change the exit code).
+F5.2 (cached API export) is complete. Gate at the commit: `ruff check .` clean, `pytest`
+666 passed, both golden sets byte-identical, report determinism pinned by test, exit codes
+unchanged (a fetch refusal is an input refusal and exits 1; an invalid argument combination
+exits 2; the gate still decides the conversion exit code).
 
-The next feature is F5.2, the cached API export. Its pieces are in `to-do.md`.
+The next feature is F5.3, the provenance record (`SOURCE.txt`) and the report label change.
+Its pieces are in `to-do.md`.
 
-F5.2 starts by deciding the response wrapper shape, because a fetched scope needs an
-identity the report can name.
+## What F5.2 changed
 
-## What F4.4 changed
+- `source_fetch.py`, the second producer behind the door: `ApiRequest` (host and sorted
+  params, no key field), `SourceFetchError` (an `UnsafeInputError` subclass, so `main()`
+  prints and exits through the same path), `_SameSchemeRedirectHandler`, `_ssl_context`
+  (verification on by default), `network_producer`, `unwrap_config_root` (the wrapper
+  decision), and `fetch` (cache hit reads through `read_input`; a miss runs the checks
+  through the door before any file is written).
+- `PanoramaParser` takes a `ParsedSource`, not a path. Every call site is migrated; no
+  backward path is kept, because the parser no longer reads.
+- CLI: `input_file` is optional; `--source file|api`, `--host`, `--cache-dir` (default
+  `panorama_cache`), `--offline`, `--insecure`. `--offline` and `--insecure` apply only to
+  `--source api`, so a file source refuses them.
+- `conftest.py`: `fetch_module` fixture, `run_main(module, argv)` helper for a CLI run inside
+  the process, and `make_parser` now parses through the door.
+- `tests/fixtures/api_response.xml`: the wrapper fixture. Its physical lines are pinned in the
+  test (prolog 1, response 2, result 3, config 4), and it holds no unmarked entry, so the
+  corpus pins do not move.
+- `.gitignore`: `panorama_cache/`, because a cache holds fetched customer data.
+- `tests/test_source_fetch.py` (23 tests, six groups: door, wrapper, cache, offline, https and
+  key, CLI and gate). No test calls the network.
 
-- `resource_mapping.COVERAGE_MATRIX`: each row gained `emitter` (the generator methods
-  that read the row's properties) and `properties` (the keys those emitters read). The
-  entry name and the four scope facts are the row identity, so they are not properties.
-- `entry_coverage.py`: rule 4 (the property scan), `RecordingDict` (a captured object
-  that records the keys an output reads from it), `start_recording()` so the record
-  starts after the parse, `MATRIX_BY_RESOURCE`, `PROPERTY_HEADING`, `PROPERTY_RULE`,
-  `property_findings()`, `property_line()`. `mark()` returns the recorded object, so a
-  parse method must work through what it returns.
-- `entry_coverage.EntryLedger.scope()` defect fixed: a scope name lives on the scope
-  `<entry>`, not on the container, so the conversion report now prints the device-group,
-  template and device sections.
-- `panorama_to_terraform.py`: the property section in `generate_conversion_report` after
-  the gap section, `main()` starts the read record before the first generator call, the
-  console summary names the finding count.
-- `parse_bgp` and `parse_ospf`: one path (`network/virtual-router/entry`), one record per
-  enabled router, the four scope facts plus the router name. OSPF interface entries are
-  now marked.
-- The BGP and OSPF manual report sections name the scope and the router, print the
-  peer-group nexthops and the redist rules. The capture decision is closed: what the
-  parse captures is what the section prints.
-- `container_coverage.py`: the stale report line for a property level, the ipsec crypto
-  profile note.
-- Tests: `tests/test_property_coverage.py` (the read record, parity with the matrix, the
-  scan scope, the corpus findings, the report section), row-shape and grounding tests in
-  `tests/test_coverage_matrix.py`, the mark rule and console pins in
-  `tests/test_entry_coverage.py`, the BGP and OSPF parse shape in
-  `tests/test_parse_network.py`, the router scope sections in `tests/test_reports.py`, and
-  `run_pipeline` in `conftest.py` for a pipeline run inside the process.
-- `tests/fixtures/router_scopes.xml`: two routers in two scopes, so a flat report cannot
-  tell them apart.
+## Facts measured during F5.2
 
-## Facts measured during F4.4
-
-- The corpus findings are the pinned set in `tests/test_property_coverage.py`. A property
-  the parse captured and no output read, for a container a matrix row covers.
-- Only `panos_address` names two emitters, because the manual setup report reads
-  `declared_type`, `other` and `description` from a parsed object the `.tf` emitter does
-  not read.
-- One row has no corpus entry to measure: `panos_aggregate_layer3_subinterface`. The
-  container table maps an aggregate subinterface to the ethernet subinterface row, so no
-  entry reaches it.
-- Field gaps in a container no row covers are measured and recorded in `backlog.md`:
-  `report`, `inventory`, `bookkeeping`, `count-only` and `nested-block` containers.
+- `urllib.request.HTTPRedirectHandler.redirect_request` takes `msg` between `code` and
+  `headers`. An override with fewer arguments is not the handler urllib calls, so the guard
+  uses the parent signature.
+- `urllib.request.Request` exposes `full_url`. `fullurl` is the removed alias, so nothing in
+  the project uses it.
+- The cache entry name is the SHA-256 hex of `host?sorted_params`. The key is not a field of
+  the request, so no cache name can carry it, and two different keys for one request find one
+  entry — the fact a shared CI cache depends on.
+- The report label is still `Input file:` for both sources. F5.3 owns the change to `Source:`;
+  the file-run report bytes are unchanged by F5.2.
 
 ## Rules to keep when writing documents
 
@@ -71,15 +58,12 @@ identity the report can name.
 - A historical record (the audit report) keeps its findings and states the current
   state separately, so a reader does not take an old finding as a fact.
 
-## Watch during F5.2
+## Watch during F5.3
 
-- The parse layer keeps the ElementTree tree, so a fetched scope must arrive as bytes and
-  be parsed through `xml_input.parse_bytes`, never as a device-object model.
-- The cache is the thing the report names, so a report line must be able to reopen the
-  bytes it describes.
-- The response wrapper shape decides whether a fetched scope can be named by the container
-  table, which is what a report row keys on.
-- `pan-os-python` is a lazy import in the fetch layer only. No test calls the network, so
-  the producer in tests is fixture-backed.
+- `SOURCE.txt` is written outside the report bodies, so the report byte rule still holds.
+- The label change regenerates the golden sets: state it in the acceptance criteria before the
+  code, and keep the byte-identical gate as the proof.
+- The provenance record names the host, the scope and the cache entry. It never names the key.
+- A cache entry is not pruned while a report references it, so the reference must be data.
 - The property scan measures reads at run time, so a test that wants the read record must
   run the pipeline in process (`conftest.run_pipeline`), not through `run_script`.
