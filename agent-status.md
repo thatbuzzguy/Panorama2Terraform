@@ -2,49 +2,61 @@
 
 ## Current position
 
-F5.3 (the provenance record, `SOURCE.txt`, and the report label change to `Source:`) is
-complete. Gate at the commit: `ruff check .` clean, `pytest` 682 passed, both golden sets
-byte-identical (the goldens cover `.tf` files only, so the label change regenerated
-nothing), report determinism pinned, exit codes unchanged.
+F5.4 (the cross-source shadow report) is complete. Gate at the commit: `ruff check .` clean,
+`pytest` 714 passed, both golden sets byte-identical (the goldens cover `.tf` files only), report
+determinism pinned, exit codes unchanged (input refusal 1, argument error 2).
 
-The next feature is F5.4, the cross-source shadow report. Its pieces are in `to-do.md`.
+No feature is in progress. The next feature is F5.6 (Terraform state as a source), then F5.5
+(read-through data blocks). `PLAN.md` holds the epic; `to-do.md` holds the pieces that need a
+decision. Write `acceptance.md` before the code.
 
-## What F5.3 changed
+## What F5.4 changed
 
-- `provenance.py`, the record as data: `FIELD_ORDER` (eight fields, and each field name is
-  the printed key), `ABSENT` for a field that does not apply to the source kind,
-  `DEFAULT_SCOPE` (`whole-config`), `record_for`, `render`, `parse_record`,
-  `cache_reference`, `prunable_entries`. `provenance.py` imports `source_fetch` for the
-  request identity; `source_fetch` does not import it, so there is no cycle.
-- `xml_input.ParsedSource` records `size` and `sha256` of the bytes the door parsed, so the
-  record names the bytes it checked, not a file that may have changed since the run.
-- `container_coverage.SOURCE_LABEL` is the one label, and both report writers read it. A
-  report body names the source name, never the path.
-- `main()` writes `SOURCE.txt` after the reports and before the gate, prints its path, and
-  the generated `README.md` lists it.
-- Tests: `tests/test_provenance.py` (16 tests, five groups: what the record states, the
-  record as data outside the report bodies, the label, the pruning rule, determinism and the
-  gate). The three `Input file:` pins moved to `Source:` in `tests/test_container_coverage.py`,
-  `tests/test_entry_coverage.py` and `tests/test_source_fetch.py`, and the two-run cache test
-  now compares the record too.
-- No gate check was added: the gate reads `.tf` files, so a record cannot change what it
-  counts or decides.
+- `shadow_coverage.py` (new, the rule owner): `SHADOW_HEADING`, `SHADOW_RULE`, `parent_index`
+  (keyed by matrix row and entry name, first row wins in report order), `shadow_findings`, and the
+  fixed `shadow_line` shape. It owns no console wording, so a shadow prints only in the report.
+- `container_coverage.py`: `ENVELOPE` (`response`, `result`), `SCOPE_PATH_ROOTS`, and
+  `container_tag` as the one source-aware place rule the scan, the entry ledger, and the parser
+  scope walk all read. `record_path` and `is_scope_path` hold the path shape the CLI checks.
+- `entry_coverage.py`: every row carries `source` as data; `matrix_row_for(section)` is the F4.4
+  scan-scope helper both the property scan and the shadow scan use; `entry_line` prints no source,
+  so the entry-line bytes are unchanged for a one-source run.
+- `xml_input.py`: `DEFAULT_SCOPE` and `ENTRY_SEGMENT` are the scope vocabulary, one definition,
+  read by `provenance.py`, `container_coverage.py` and `source_fetch.py`. The import pin lets the
+  fetch layer import only the door, so the segment cannot live in `container_coverage.py`.
+  `ParsedSource.scope` records the declared path, and `is_per_scope` and `scope_container` read it.
+- `source_fetch.py`: `ApiRequest.path`, `is_per_scope`, `segments`, `request_params` (the path is
+  part of the request identity), `unwrap_config_root(source, request)` with two branches, and
+  `fetch` passes the request. It still imports no ElementTree.
+- `provenance.py`: `parse_records` and `render_records`; `record_for` reads `source.scope`. A file
+  with one record writes the same bytes as the F5.3 rule.
+- `main()`: `--path` and `--parent` (api source only, `--parent` needs `--path`, a path must name a
+  scope path), the parent read, the parent ledger, `generate_conversion_report(ledger, shadows)`,
+  and the record file written from the list of records.
+- Fixtures: `tests/fixtures/scope_child.xml` and `tests/fixtures/scope_parent.xml`, one shared name
+  on line 10 in each. As file inputs both are finding-free, so the corpus pins still hold.
+- Tests: `tests/test_shadow_coverage.py` (18 tests, six groups), and the pins migrated in
+  `tests/test_source_fetch.py` (the wrapper refusal now has two branches, and the offline test reads
+  the second request), `tests/test_provenance.py` (the record file as data, and a printed parent
+  source is not a reference), `tests/test_container_coverage.py` (the envelope), and
+  `tests/test_entry_coverage.py` (the row source key, and the entry line prints no source).
+  `conftest.run_pipeline` takes extra arguments, so a test can pass `--path` and `--parent`.
 
-## Facts measured during F5.3
+## Facts measured during F5.4
 
-- The golden sets cover `.tf` files only (`tests/test_golden_files.py`), so the label change
-  regenerated no golden. The F5.3 to-do premise that the goldens pin the report bytes was
-  wrong, and the acceptance criteria stated the corrected rule before the code.
-- A dataclass field cannot be a printed key that contains a space, so every record field name
-  is the printed key and `parse_record` reads a written record back as the same record. The
-  byte count field is `size`, because `bytes` is a builtin.
-- A record names the path as the run received it, so a relative path stays relative: the
-  determinism claim is the same arguments and the same bytes, not the same bytes from any
-  directory. `cache_entry` is the only cache-derived value in a record, and it does not depend
-  on the cache directory, which is the fact a determinism test can compare across two caches.
-- `run_script` and `run_main` both write the record, so a test can read it from either path.
-  A property-level test still needs `conftest.run_pipeline`, because the read record is a
-  run-time fact.
+- `section_path` keeps the entry segment, so a per-scope child entry reads as
+  `device-group/entry/address` and the same name in the parent scope reads as `address`. Both
+  resolve to the same matrix row, which is what makes them one finding.
+- A per-scope entry takes the declared scope as its scope fact, so the shadow section prints under
+  the declared device group instead of `SHARED SECTION`. The grouping needs `container_tag`, not
+  the raw element tag.
+- The record `path` field is the path the run received, so two runs on the same bytes write the
+  same record only when they read the same cache directory. The determinism test seeds one cache
+  and runs twice against it.
+- `fetch` checks `PANOS_API_KEY` before it calls an injected producer, so an in-process test sets
+  the environment variable even when the producer is monkeypatched.
+- The line map is the response bytes, not a reparse: `result` is line 7 of each fixture, and the
+  entry the shadow names is line 10.
 
 ## Rules to keep when writing documents
 
@@ -61,14 +73,15 @@ The next feature is F5.4, the cross-source shadow report. Its pieces are in `to-
 - A record is data, so a document describes its fields and never restates a record. The
   example in `docs/USAGE_GUIDE.md` is an illustration with a shortened hash, not a pin.
 
-## Watch during F5.4
+## Watch during F5.6
 
-- A `result` with no `config` element is refused today because it is not the shape the
-  container table knows. F5.4 owns the rule for that shape, and the wrapper decision in
-  `source_fetch.py` must not be widened by guessing.
-- A shadow is a property-level fact, so a shadow test must run the pipeline in process
-  (`conftest.run_pipeline`), not through `run_script`.
-- The record `scope` field is the hook F5.3 left: `whole-config` is the only value a source
-  writes today, and a per-scope source names its own scope.
-- The pruning rule reads parsed records. A report line that shows a cache entry name is not a
-  reference, so a new report section must not be read as one.
+- A state source is a JSON document, so the door's DTD rule and the size check still apply to its
+  bytes, but the container table, the parent walk, and the expat line map do not: they are keyed on
+  the ElementTree tree (`backlog.md`, Epic 5 decisions). A rule is needed before the property scan
+  can read a state document.
+- The record `scope` field is the hook F5.3 left and F5.4 filled for a declared path. A state
+  source names its own workspace, so the record shape does not change.
+- The prune action still needs the record directory decided, and a two-source run writes two records
+  in one file, so a prune action reads a record file, not one record.
+- A shadow test runs the pipeline in process, because the shadow fact is a run fact read from the
+  ledger. The same applies to a drift fact.

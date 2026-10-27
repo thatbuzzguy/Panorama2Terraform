@@ -49,6 +49,11 @@ F5.3 records the size and the SHA-256 hex of the bytes the door parsed, so the
 provenance record names the bytes it checked, not whatever file stands at the origin
 path now. The door is the only place that can know which bytes were parsed.
 
+F5.4 adds the `scope` field: the scope the source holds. `whole-config` is the default;
+a per-scope source names its own declared path. The field is a fact the producer records,
+so `container_coverage` and `entry_coverage` read it through the contract, and the
+provenance record states it.
+
 Facts this module depends on, verified against expat 2.6.1 (the parser
 behind ``xml.etree``):
 
@@ -82,6 +87,12 @@ from typing import Optional
 
 # Refuse an input larger than this before reading it (F3.8).
 DEFAULT_MAX_INPUT_BYTES = 64 * 1024 * 1024
+
+# The scope vocabulary a source states (F5.4). One definition, read by `provenance.py`, by
+# the per-scope rule in `container_coverage.py`, and by the request-shape check in
+# `source_fetch.py`, which may import only this module.
+DEFAULT_SCOPE = 'whole-config'
+ENTRY_SEGMENT = 'entry'
 
 # One MiB, for the human-readable part of a size message.
 _MIB = 1024 * 1024
@@ -241,6 +252,10 @@ class ParsedSource:
     ``size`` and ``sha256`` are the facts the F5.3 provenance record states: measured on
     the bytes the door parsed, so the record names the bytes it checked, not a file that
     may have changed since the run.
+
+    ``scope`` is the fact the F5.4 rule reads: ``whole-config`` for a source that declares
+    no scope, and the declared path (no leading slash) for a per-scope source. The producer
+    records it, so the scan and the record read it through the contract.
     """
 
     origin: SourceOrigin
@@ -248,11 +263,22 @@ class ParsedSource:
     lines: dict = field(default_factory=dict, compare=False, repr=False)
     size: int = 0
     sha256: str = ''
+    scope: str = DEFAULT_SCOPE
 
     @property
     def name(self) -> str:
         """Source name, no directory. A report line must not depend on the path."""
         return self.origin.name
+
+    @property
+    def is_per_scope(self) -> bool:
+        """True when the source holds a declared scope, not the whole config."""
+        return self.scope != DEFAULT_SCOPE
+
+    @property
+    def scope_container(self) -> str:
+        """The first segment of the declared path, or '' for the whole config."""
+        return self.scope.split('/')[0] if self.is_per_scope else ''
 
     def line_of(self, elem: ET.Element) -> Optional[int]:
         """Line of elem's opening tag, or None when the parse did not record it."""

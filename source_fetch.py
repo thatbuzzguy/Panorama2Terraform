@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-F5.2: the cached API export. A byte producer for the input door.
+F5.2: the cached API export. A byte producer for the input door. F5.4 adds the per-scope
+request (`type=config&action=get&path=...`) and the wrapper rule for its response shape.
 
 Copyright (c) 2025 GSW Systems
 
@@ -25,15 +26,17 @@ of the two checks, and it builds no device-object model, because the
 container table, the entry ledger, the parent walk and the line map are
 keyed on the ElementTree tree.
 
-Four rules, stated once here:
+Five rules, stated once here:
 
-1. The wrapper decision (F5.2 AC-2). A fetched response is a `response` /
+1. The wrapper decision (F5.2 AC-2, F5.4 AC-1). A fetched response is a `response` /
    `result` wrapper, not a config root. The fetch parses the whole response
-   bytes, then moves the tree root to the `config` element under `result`.
-   No reparse, so the line map survives. `response` and `result` sit above
-   the config root, so the container table never scans them and needs no
-   row. A `result` that holds no `config` element is the per-scope shape;
-   it is refused here and belongs to F5.4.
+   bytes, then moves the tree root to the element the request shape names.
+   No reparse, so the line map survives. A whole-config request takes the `config`
+   element under `result`. A per-scope request (a `path` param, F5.4) takes the element
+   the path names: `result` becomes the root, read as the place the path names. The
+   response shape must match the request shape; a mismatch is refused, not guessed.
+   `response` and `result` are never read as containers, so the container table needs no
+   wrapper row.
 2. The cache entry is what gets parsed (F5.2 AC-3). The entry name is the
    SHA-256 hex of the request identity (host and sorted params), so the same
    request finds the same entry, and the credential is not part of the
@@ -57,7 +60,8 @@ Usage:
     from source_fetch import ApiRequest, fetch
     request = ApiRequest(host='panorama.example.com')
     source = fetch(request, 'panorama_cache')   # reads the API once, then the cache
-    source = fetch(request, 'panorama_cache', offline=True)
+    scope_request = ApiRequest(host='panorama.example.com', path='device-group/entry/Edge')
+    source = fetch(scope_request, 'panorama_cache', offline=True)
     line = source.line_of(source.root.find('.//entry'))
 """
 
@@ -72,6 +76,7 @@ from typing import Callable, Optional
 
 from xml_input import (
     DEFAULT_MAX_INPUT_BYTES,
+    ENTRY_SEGMENT,
     ParsedSource,
     SourceOrigin,
     UnsafeInputError,
@@ -85,6 +90,12 @@ SOURCE_KIND = 'api'
 # Request shape the container table knows: the whole-config export.
 EXPORT_TYPE = 'export'
 EXPORT_CATEGORY = 'configuration'
+
+# The per-scope request shape (F5.4). The path is part of the request identity, so each
+# declared scope gets its own cache entry. `ENTRY_SEGMENT` comes from the shared scope
+# vocabulary in `xml_input.py`, the only module the fetch layer may import.
+CONFIG_TYPE = 'config'
+CONFIG_ACTION = 'get'
 
 DEFAULT_CACHE_DIR = 'panorama_cache'
 API_KEY_ENV = 'PANOS_API_KEY'
@@ -102,10 +113,31 @@ class SourceFetchError(UnsafeInputError):
 @dataclass(frozen=True)
 class ApiRequest:
     """What the producer asks for. The API key is not a field, so the cache
-    identity can never carry the credential."""
+    identity can never carry the credential.
+
+    A `path` (F5.4) makes the request a per-scope request. It is stored without a
+    leading slash, so the path is the same shape the record states, and it is part of
+    the request identity: one cache entry per request identity.
+    """
 
     host: str
+    path: str = ''
     params: tuple = ((EXPORT_CATEGORY, 'configuration'), (EXPORT_TYPE, 'export'))
+
+    def is_per_scope(self) -> bool:
+        """True when the request declares a scope path, not the whole-config export."""
+        return bool(self.path)
+
+    def segments(self) -> tuple:
+        """The declared path as segments: ('device-group', 'entry', 'Edge')."""
+        return tuple(self.path.split('/')) if self.path else ()
+
+    def request_params(self) -> tuple:
+        """The params the identity hashes, including the declared path when there is one."""
+        params = dict(self.params)
+        if self.path:
+            params['path'] = self.path
+        return tuple(sorted(params.items()))
 
     def https_host(self) -> str:
         """The host as the producer accepts it: https only.
@@ -127,7 +159,7 @@ class ApiRequest:
 
     def canonical(self) -> str:
         """The request identity the cache key hashes: host and sorted params, no key."""
-        query = '&'.join(f'{key}={value}' for key, value in sorted(self.params))
+        query = '&'.join(f'{key}={value}' for key, value in self.request_params())
         return f'{self.https_host()}?{query}'
 
     def cache_name(self) -> str:
@@ -136,7 +168,7 @@ class ApiRequest:
 
     def url(self, api_key: str) -> str:
         """The request URL. The key reaches this URL and nothing else."""
-        query = '&'.join(f'{key}={value}' for key, value in sorted(self.params))
+        query = '&'.join(f'{key}={value}' for key, value in self.request_params())
         return f'https://{self.https_host()}/api/?{query}&key={api_key}'
 
 
@@ -180,13 +212,30 @@ def network_producer(request: ApiRequest, api_key: str, insecure: bool = False) 
         return response.read()
 
 
-def unwrap_config_root(source: ParsedSource) -> ParsedSource:
-    """The wrapper decision: move the tree root to the config element (F5.2 AC-2).
+def _named_element(element, request: ApiRequest) -> bool:
+    """True when `element` is the element the request path names (F5.4 AC-1.2).
+
+    A path that names an entry (`container/entry/name`) names that entry by name; a path
+    that names a container names the element with that tag. The wrapper decision checks
+    the response against the request; it does not guess a shape the path does not state.
+    """
+    segments = request.segments()
+    if len(segments) == 3 and segments[1] == ENTRY_SEGMENT:
+        return element.tag == 'entry' and element.get('name') == segments[2]
+    return element.tag == segments[0]
+
+
+def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = None) -> ParsedSource:
+    """The wrapper decision: move the tree root to the element the request shape names
+    (F5.2 AC-2, F5.4 AC-1).
 
     The origin and the line map are the same object, so a report line still names
-    the line the response bytes carry. Three shapes are accepted:
-    `response`/`result`/`config`, `result`/`config`, and a plain `config` root.
-    The response success check runs here, before the cache entry is written.
+    the line the response bytes carry. A whole-config request accepts
+    `response`/`result`/`config`, `result`/`config`, and a plain `config` root. A
+    per-scope request accepts `response`/`result` and `result`, and `result` must hold
+    exactly one element, the element the path names; `result` then becomes the root,
+    read as the place the path names. A shape that does not match its request is
+    refused. The response success check runs here, before the cache entry is written.
     """
     root = source.root
     if root.tag == 'response':
@@ -205,12 +254,35 @@ def unwrap_config_root(source: ParsedSource) -> ParsedSource:
                 "the response has no result element."
             )
         root = result
+    if request is not None and request.is_per_scope():
+        # The per-scope shape (F5.4): `result` holds the element the path names, and
+        # `result` itself becomes the root, read as the place the path names.
+        if root.tag != 'result':
+            raise SourceFetchError(
+                f"refusing the API response from '{source.name}': the per-scope request for "
+                f"'{request.path}' needs the result element, and the root element "
+                f"'{root.tag}' is the whole-config shape."
+            )
+        held = list(root)
+        if len(held) != 1:
+            raise SourceFetchError(
+                f"refusing the API response from '{source.name}': the result holds no element, "
+                f"or {len(held)} elements, not the one element the path '{request.path}' names."
+            )
+        if not _named_element(held[0], request):
+            raise SourceFetchError(
+                f"refusing the API response from '{source.name}': the element under the result "
+                f"does not match the path '{request.path}'. The wrapper decision reads the "
+                "shape the request states, not a shape that looks similar."
+            )
+        return replace(source, root=root, scope=request.path)
     if root.tag == 'result':
         config = root.find('config')
         if config is None:
             raise SourceFetchError(
                 f"refusing the API response from '{source.name}': the result holds no config "
-                "element. A per-scope fetch is the shape F5.4 reads with its own rule."
+                "element. The whole-config request needs the config element; a per-scope "
+                "response is read only by the request that declares its path (F5.4)."
             )
         return replace(source, root=config)
     if root.tag == 'config':
@@ -242,7 +314,7 @@ def fetch(request: ApiRequest, cache_dir, producer: Optional[Callable[[ApiReques
 
     if entry.exists():
         data = read_input(entry, max_input_bytes)
-        return unwrap_config_root(parse_bytes(data, origin, max_input_bytes))
+        return unwrap_config_root(parse_bytes(data, origin, max_input_bytes), request)
 
     if offline:
         raise SourceFetchError(
@@ -263,7 +335,7 @@ def fetch(request: ApiRequest, cache_dir, producer: Optional[Callable[[ApiReques
     # them. The cache entry then holds exactly the bytes the door parsed.
     data = producer(request) if producer is not None else network_producer(request, key, insecure)
     source = parse_bytes(data, origin, max_input_bytes)
-    source = unwrap_config_root(source)
+    source = unwrap_config_root(source, request)
     entry.parent.mkdir(parents=True, exist_ok=True)
     entry.write_bytes(data)
     return source

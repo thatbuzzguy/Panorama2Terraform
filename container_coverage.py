@@ -21,6 +21,13 @@ Matching is by suffix on the tag chain from the config root, because a parse
 method reads a container with a relative pattern (`findall('.//address/entry')`)
 and the same container can sit under a scope entry or under a rulebase prefix.
 
+F5.4 adds the per-scope shape rule: `response` and `result` are the envelope, never a
+container name. For a per-scope source, `result` is the place the declared path names,
+and the scan reads the element under it as an entry inside the container the path names
+first, so the entry under the root is the declared scope entry. `container_tag` is the
+one function that states this, and the scan, the ledger, and the parser scope walk all
+read it.
+
 Report order is fixed: findings are sorted by tag chain, then line, so the same
 input produces the same bytes. A report body names the source name only, never the
 path (`SOURCE_LABEL`); the path is in the provenance record (`provenance.py`, F5.3).
@@ -30,7 +37,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Optional
 
-from xml_input import ParsedSource
+from xml_input import ENTRY_SEGMENT, ParsedSource
 
 # Where the entries of a container go. Six destinations match
 # docs/ARCHITECTURE.md §2.4. F4.3 adds two entry kinds: `skipped` is an entry a
@@ -55,6 +62,15 @@ READ_VIAS = ('pattern', 'scope walk')
 # walk, so the section rule and the identity keys agree.
 SCOPE_CONTAINERS = frozenset({'device-group', 'templates', 'template-stack',
                               'devices', 'vsys'})
+
+# The envelope of an API response (F4.2, F5.4). Never a container name: the wrapper
+# decision reads `result` as the place a per-scope path names, not as a scanned container.
+ENVELOPE = frozenset({'response', 'result'})
+
+# The first path segment a scope path may name (F5.4 AC-1). `shared` is a place the scan
+# already knows (PATH_ROOTS), so the CLI validates against the set plus the shared section,
+# through this one definition.
+SCOPE_PATH_ROOTS = SCOPE_CONTAINERS | frozenset({'shared'})
 
 # The four scope facts (F3.1, F3.2) in report order. F4.3 uses these keys for
 # the captured-field rule, so the facts are named in one place.
@@ -239,31 +255,59 @@ def parent_map(root: ET.Element) -> dict:
     return {child: parent for parent in root.iter() for child in parent}
 
 
-def is_scope_entry(elem: ET.Element, parents: dict) -> bool:
-    """True when elem is an entry whose container defines a scope (F3.5)."""
-    return elem.tag == 'entry' and (parents.get(elem) is not None
-                                    and parents[elem].tag in SCOPE_CONTAINERS)
+def container_tag(node: ET.Element, parents: dict,
+                  source: Optional[ParsedSource] = None) -> Optional[str]:
+    """The container name the scan reads node's parent as (F5.4).
+
+    Normally the parent's tag. For a per-scope source, `result` is the place the path
+    names, so the element directly under the root is read as an entry inside the container
+    the first path segment names. The envelope is never a container name, so a node whose
+    parent is an envelope element that is not the per-scope root has no container name
+    here. This is the one place the per-scope shape is stated; the scan, the ledger, and
+    the parser scope walk all read it.
+    """
+    parent = parents.get(node)
+    if parent is None:
+        return None
+    if source is not None and source.is_per_scope and parent is source.root:
+        return source.scope_container
+    if parent.tag in ENVELOPE:
+        return None
+    return parent.tag
 
 
-def is_section(container: ET.Element, parents: dict) -> bool:
+def is_scope_entry(elem: ET.Element, parents: dict,
+                   source: Optional[ParsedSource] = None) -> bool:
+    """True when elem is an entry whose container defines a scope (F3.5, F5.4)."""
+    return elem.tag == 'entry' and container_tag(elem, parents, source) in SCOPE_CONTAINERS
+
+
+def is_section(container: ET.Element, parents: dict,
+              source: Optional[ParsedSource] = None) -> bool:
     """True when no config-object entry lies between container and a config root."""
     node = container
     while node is not None:
         node = parents.get(node)
         if node is None:
-            return True  # reached the config root
-        if node.tag == 'entry' and not is_scope_entry(node, parents):
+            return True  # reached the config root, or the per-scope place (F5.4)
+        if node.tag == 'entry' and not is_scope_entry(node, parents, source):
             return False
     return True
 
 
-def section_path(container: ET.Element, parents: dict) -> str:
+def section_path(container: ET.Element, parents: dict,
+                 source: Optional[ParsedSource] = None) -> str:
     """Tag chain from the config root to the container.
 
     The config element and the Panorama scope markers (``shared``, ``panorama``)
     are places, not part of a container name, so the leading marker is dropped.
     A scope entry stays in the chain because it names the shape the operator
     sees in the file.
+
+    F5.4: for a per-scope source, `result` is the place the path names, never a segment
+    of a container name. When the path names an entry, `result` stands as the container
+    the path names first, so the chain reads as it reads for the same shape in a
+    whole-config export.
     """
     parts = [container.tag]
     node = container
@@ -273,6 +317,11 @@ def section_path(container: ET.Element, parents: dict) -> str:
             break
         parts.append(node.tag)
     chain = list(reversed(parts))
+    if source is not None and source.is_per_scope:
+        if chain and chain[0] == 'result':
+            chain[0] = source.scope_container  # the root itself is the place
+        elif ENTRY_SEGMENT in source.scope.split('/'):
+            chain.insert(0, source.scope_container)
     while chain and chain[0] in PATH_ROOTS:
         chain.pop(0)
     return '/'.join(chain)
@@ -292,6 +341,28 @@ def is_known(section: str) -> bool:
     return any(covers(row.path, section) for row in CONTAINER_TABLE)
 
 
+def record_path(path: str) -> str:
+    """The declared path as the record states it: no leading slash (F5.4 AC-5.3).
+
+    The CLI shows a scope path with a leading slash; the request identity, the record, and
+    the scan read it without one, so the same path is the same string in all three. A run
+    that declares no path has no path to state, so this answers ''.
+    """
+    return path.strip('/') if path else ''
+
+def is_scope_path(path: str) -> bool:
+    """True when a declared path names a scope place (F5.4 AC-6.2).
+
+    The shape is `/<container>` or `/<container>/entry/<name>`, and the first segment
+    must name a declared scope container. The CLI validates through this function, so
+    the set of readable scopes is stated once.
+    """
+    segments = [segment for segment in path.strip('/').split('/') if segment]
+    if not segments or segments[0] not in SCOPE_PATH_ROOTS:
+        return False
+    return len(segments) == 1 or (len(segments) == 3 and segments[1] == ENTRY_SEGMENT and segments[2])
+
+
 def is_predefined(container: ET.Element, parents: dict) -> bool:
     """True when the container sits under a `predefined` section."""
     node = container
@@ -302,9 +373,16 @@ def is_predefined(container: ET.Element, parents: dict) -> bool:
     return False
 
 
-def entry_containers(root: ET.Element, parents: dict) -> list[ET.Element]:
-    """Every element that holds entries, in document order."""
-    return [el for el in root.iter() if any(child.tag == 'entry' for child in el)]
+def entry_containers(root: ET.Element, parents: dict,
+                     source: Optional[ParsedSource] = None) -> list[ET.Element]:
+    """Every element that holds entries, in document order.
+
+    The envelope is never a scanned container (F4.2, F5.4). A per-scope source reads its
+    root `result` as the container the path names, so the root is not skipped; the name
+    comes from `section_path`.
+    """
+    return [el for el in root.iter() if any(child.tag == 'entry' for child in el)
+            and not (el.tag in ENVELOPE and el is not root)]
 
 
 @dataclass(frozen=True)
@@ -319,10 +397,10 @@ class Finding:
 def scan(source: ParsedSource, parents: dict) -> list[Finding]:
     """Find every section container the table does not cover, in report order."""
     findings = []
-    for container in entry_containers(source.root, parents):
-        if not is_section(container, parents) or is_predefined(container, parents):
+    for container in entry_containers(source.root, parents, source):
+        if not is_section(container, parents, source) or is_predefined(container, parents):
             continue
-        path = section_path(container, parents)
+        path = section_path(container, parents, source)
         if is_known(path):
             continue
         findings.append(Finding(path=path,

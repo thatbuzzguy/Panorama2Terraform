@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- F5.4 shadow fixture: the per-scope response for one device group. The wrapper
+     decision reads `result` as the place the declared path names, so the entry under it
+     is the declared scope entry. As a file input this is the envelope, so the corpus pins
+     hold: no container finding. -->
+<response type="success" code="0">
+<result>
+<entry name="Production-DG">
+  <address>
+    <entry name="Web-Server-1">
+      <ip-netmask>10.20.30.41</ip-netmask>
+    </entry>
+  </address>
+</entry>
+</result>
+</response>

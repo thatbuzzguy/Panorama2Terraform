@@ -24,10 +24,15 @@ import container_coverage
 import entry_coverage
 import provenance
 import sanity_checks
+import xml_input
 from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_main, run_script
 
 FETCH_FIXTURE = 'api_response.xml'
 UNKNOWN_FIXTURE = 'unknown_containers.xml'
+
+# The F5.4 pair: the child scope the run reads, and the parent scope it declares.
+CHILD_PATH = 'device-group/entry/Production-DG'
+PARENT_PATH = 'shared'
 
 # A key that a test can search for in every output file, so a leak is visible.
 SECRET_KEY = 'SECRET-KEY-9f3'
@@ -64,6 +69,22 @@ def _record(out_dir) -> provenance.ProvenanceRecord:
     return provenance.parse_record(path.read_text(encoding='utf-8'))
 
 
+def _run_pair(converter_module, fetch_module, tmp_path, monkeypatch):
+    """Run the converter for a child scope and its declared parent (F5.4), reading both
+    from a seeded cache so no test opens a connection. Returns (cache, out)."""
+    monkeypatch.setenv(fetch_module.API_KEY_ENV, SECRET_KEY)
+    cache = tmp_path / 'cache'
+    cache.mkdir(parents=True, exist_ok=True)
+    for path, fixture in ((CHILD_PATH, 'scope_child.xml'), (PARENT_PATH, 'scope_parent.xml')):
+        request = fetch_module.ApiRequest(host=HOST, path=path)
+        (cache / request.cache_name()).write_bytes((FIXTURES_DIR / fixture).read_bytes())
+    out = tmp_path / 'out'
+    assert run_main(converter_module, ['--source', 'api', '--host', HOST, '--cache-dir', str(cache),
+                                       '--path', f'/{CHILD_PATH}', '--parent', f'/{PARENT_PATH}',
+                                       '--offline', '--output-dir', str(out)]) == 0
+    return cache, out
+
+
 # --- 1. What the record states ------------------------------------------------
 
 def test_the_record_field_names_are_the_printed_keys():
@@ -84,7 +105,7 @@ def test_a_file_run_record_names_bytes_a_reader_can_reopen(tmp_path):
     assert record.kind == 'file'
     assert record.name == SAMPLE_CONFIG.name, 'the name is the report value, no directory'
     assert record.path == str(SAMPLE_CONFIG), 'the record is the file a reader reopens'
-    assert record.scope == provenance.DEFAULT_SCOPE
+    assert record.scope == xml_input.DEFAULT_SCOPE
     assert record.request == provenance.ABSENT, 'a file source has no request identity'
     assert record.cache_entry == provenance.ABSENT
     assert record.size == len(data)
@@ -105,7 +126,7 @@ def test_an_api_run_record_names_the_request_identity_and_the_cache_entry(
     assert record.path == str(cache / request.cache_name())
     assert record.size == len(data)
     assert record.sha256 == hashlib.sha256(data).hexdigest(), 'the cache entry holds the parsed bytes'
-    assert record.scope == provenance.DEFAULT_SCOPE
+    assert record.scope == xml_input.DEFAULT_SCOPE
 
 
 def test_the_record_never_names_the_key(converter_module, fetch_module, tmp_path, monkeypatch):
@@ -127,6 +148,31 @@ def test_the_record_round_trips_as_data(tmp_path):
     assert provenance.render(record) == text
     # Data only: one line per field, so no prose line and no timestamp line.
     assert len(text.splitlines()) == len(provenance.FIELD_ORDER), text
+
+
+def test_one_record_writes_the_same_bytes_as_the_f5_3_rule(fetch_module):
+    """F5.4 adds records, not a new record shape: a one-record file is `render`."""
+    request = fetch_module.ApiRequest(host=HOST)
+    origin = xml_input.SourceOrigin(kind='api', name=request.cache_name())
+    source = fetch_module.unwrap_config_root(xml_input.parse_bytes(_bytes(), origin), request)
+    record = provenance.record_for(source, request=request)
+    assert record.scope == xml_input.DEFAULT_SCOPE, 'a whole-config record states the whole config'
+    assert provenance.render_records([record]) == provenance.render(record)
+    assert provenance.parse_records(provenance.render_records([record])) == [record]
+
+
+def test_the_record_file_holds_one_record_per_source_read(converter_module, fetch_module, tmp_path, monkeypatch):
+    """AC-5.1 and AC-5.3: the main source, then the declared parent, in read order, with
+    each record stating its own scope."""
+    _, out = _run_pair(converter_module, fetch_module, tmp_path, monkeypatch)
+    text = (out / provenance.PROVENANCE_FILE).read_text(encoding='utf-8')
+    records = provenance.parse_records(text)
+    assert [record.scope for record in records] == [CHILD_PATH, PARENT_PATH], records
+    assert len(text.split('\n\n')) == 2, text
+    assert text == provenance.render_records(records), 'the record file reads back as itself'
+    assert records[0].request.endswith(f'path={CHILD_PATH}'), records[0].request
+    assert 'key=' not in records[1].request, 'the key rule holds for the second request (AC-5.5)'
+    assert records[0].cache_entry != records[1].cache_entry, 'one cache entry per request identity'
 
 
 def test_a_record_line_that_is_not_a_field_is_refused():
@@ -223,6 +269,22 @@ def test_the_reference_is_data_not_a_printed_line(converter_module, fetch_module
     assert provenance.prunable_entries(cache, [file_record]) == [cache / request.cache_name()], \
         'the printed line protects nothing'
     assert provenance.prunable_entries(cache, [file_record, api_record]) == []
+
+
+def test_a_printed_parent_source_is_not_a_reference(converter_module, fetch_module, tmp_path, monkeypatch):
+    """AC-6.4: the shadow section prints a source name, and that printed line is not a
+    reference. The reference is the `cache_entry` field of a parsed record."""
+    cache, out = _run_pair(converter_module, fetch_module, tmp_path, monkeypatch)
+    records = provenance.parse_records((out / provenance.PROVENANCE_FILE).read_text(encoding='utf-8'))
+    parent = records[1]
+    assert provenance.prunable_entries(cache, records) == [], 'both records reference their entries'
+
+    # Read with the child record only: the parent entry is prunable, even though the
+    # report line names it.
+    prunable = provenance.prunable_entries(cache, records[:1])
+    assert prunable == [cache / parent.cache_entry], prunable
+    assert parent.name in (out / entry_coverage.REPORT_FILE).read_text(encoding='utf-8'), \
+        'the shadow line shows the name, and that line is not a reference'
 
 
 # --- 5. Determinism and the gate ---------------------------------------------

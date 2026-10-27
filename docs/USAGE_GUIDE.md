@@ -38,6 +38,8 @@ python3 panorama_to_terraform.py export.xml --output-dir out
 | `--source file\|api` | Where the input comes from. Default `file` |
 | `--host HOST` | Panorama host for `--source api`. Required with `--source api` |
 | `--cache-dir DIR` | Where fetched responses are kept. Default `panorama_cache` |
+| `--path /PATH` | Scope path for `--source api`: read one scope instead of the whole config, as `/<container>` or `/<container>/entry/<name>`. The first segment must name a scope container |
+| `--parent /PATH` | Parent scope path for `--source api`, read as the second source for the shadow scan. Needs `--path` |
 | `--offline` | Read the cache only: no request, no key |
 | `--insecure` | Skip certificate verification. Explicit choice, api source only |
 | `--output-dir DIR` | Output directory. Default `terraform_output` |
@@ -57,6 +59,8 @@ checks through the same boundary, and a refusal is written to no cache entry.
 export PANOS_API_KEY=...
 python3 panorama_to_terraform.py --source api --host panorama --output-dir out
 python3 panorama_to_terraform.py --source api --host panorama --offline --output-dir out
+python3 panorama_to_terraform.py --source api --host panorama --path /device-group/entry/Production-DG \
+  --parent /shared --output-dir out
 ```
 
 - The key is read from `PANOS_API_KEY`. It is never taken from a command line, so it
@@ -71,6 +75,17 @@ python3 panorama_to_terraform.py --source api --host panorama --offline --output
 - A stored response is the bytes the parser read, so the report lines name the lines of
   that file. The report names the cache entry as the source, and `SOURCE.txt` records the
   request identity and the entry the run read.
+- `--path` reads one scope instead of the whole config, and `--parent` reads the parent scope as
+  the second source. Both apply to `--source api` only, and `--parent` needs `--path`: a
+  whole-config source holds its own parent, so the tool does not guess which scope a file run
+  holds. A path must be `/<container>` or `/<container>/entry/<name>`, and its first segment must
+  name a scope container; anything else is an argument error (exit 2). Each scope is its own cache
+  entry, because the path is part of the request identity, and `--offline` covers both requests.
+- The second source is what the shadow scan reads. A run that reads one device group cannot see the
+  parent it inherits from, so an inherited name stays a string. The report lists a child entry whose
+  name repeats a parent entry name within the same coverage matrix row, in the shadow section of
+  `CONVERSION_REPORT.txt`, with the parent source and the parent line. The section prints only when
+  it has a finding, and a finding is an operator action: it does not change the exit code.
 - An API response is an envelope (`response/result/config`). The converter reads the
   `config` element inside it, so the conversion is the same as for an export file.
 
@@ -114,11 +129,11 @@ The converter writes a file only when it has content.
 | `security_profiles.tf` | Inventory only: names and descriptions, with the resource name the emitter would use |
 | `interfaces.tf`, `zones.tf`, `virtual_routers.tf`, `monitor_profiles.tf`, `vpn.tf` | Network and VPN resources |
 | `README.md` | Deployment steps for the generated directory |
-| `SOURCE.txt` | What the run read, as `field: value` data: kind, name, path, scope, request, cache_entry, size, and the SHA-256 hex of the parsed bytes |
+| `SOURCE.txt` | One record per source the run read, as `field: value` data: kind, name, path, scope, request, cache_entry, size, and the SHA-256 hex of the parsed bytes |
 | `MANUAL_SETUP_REPORT.txt` | Report-only configuration, plus a section for a container no parse method reads |
 | `INTERFACE_MIGRATION_REPORT.txt` | Interface and IP inventory |
 | `VPN_MIGRATION_REPORT.txt` | VPN inventory and the pre-shared key actions |
-| `CONVERSION_REPORT.txt` | One line per entry the parse read |
+| `CONVERSION_REPORT.txt` | One line per entry the parse read, plus the gap section, the property section, and the shadow section for a run that declares a parent source |
 | `SANITY_REPORT.txt` | The post-run gate result |
 
 The interface report, the VPN report, and the conversion report share one grouping
@@ -134,7 +149,9 @@ source. The other reports are written only when they have content.
 
 ### The provenance record
 
-`SOURCE.txt` is one record per run, written as data:
+`SOURCE.txt` is one record per source the run read, in read order, separated by one blank line,
+written as data. A run that reads one source writes one record, and the bytes are the same as the
+single-record rule before it:
 
 ```text
 kind: api
@@ -149,8 +166,10 @@ sha256: 9b1c...
 
 - `kind`, `name`, `path` name the bytes you can reopen. `path` is the path the run received,
   so a record written from another directory names a different path.
-- `scope` names the scope the source holds. `whole-config` is the only scope a source holds
-  today.
+- `scope` names the scope the source holds: `whole-config` when the producer declares none, or the
+  declared path (`device-group/entry/Production-DG`, no leading slash) for a per-scope run. A run
+  with a declared parent writes a second record for it, so each record names the source the shadow
+  line prints.
 - `request` and `cache_entry` are the key-free request identity and the entry it names, for
   an api source. A file source writes `-` for both. The record never names the API key.
 - `size` and `sha256` are measured on the bytes the input door parsed, so the record names

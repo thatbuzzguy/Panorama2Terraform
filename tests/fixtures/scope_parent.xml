@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- F5.4 shadow fixture: the per-scope response for the parent scope, the shared section.
+     `result` holds the container the path names. The entry name repeats the name the child
+     fixture carries, so the two fixtures are one shadow pair. As a file input the corpus
+     pins hold: no container finding. -->
+<response type="success" code="0">
+<result>
+<shared>
+  <address>
+    <entry name="Web-Server-1">
+      <ip-netmask>10.20.30.99</ip-netmask>
+    </entry>
+  </address>
+</shared>
+</result>
+</response>

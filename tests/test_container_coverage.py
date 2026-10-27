@@ -10,7 +10,9 @@ Three groups of checks:
 2. The section rule. A container is a section when no config-object entry lies
    between it and a config root. A container inside a config-object entry is a
    property level, so this module does not report it (the property-level scan, F4.4,
-   covers it).
+   covers it). F5.4 adds the envelope rule and the per-scope place rule: `response`
+   and `result` are never scanned containers, and for a per-scope source `result` is
+   read as the place the declared path names.
 3. The report. A section the table does not cover produces one finding, sorted
    by tag chain then line, naming the file name only. An absent container is not
    a finding. A finding does not change the exit code.
@@ -21,6 +23,7 @@ segment. It is a presence check, not a full path comparison.
 """
 
 import ast
+import dataclasses
 import inspect
 import re
 import textwrap
@@ -215,6 +218,40 @@ def test_absent_container_is_not_a_finding():
     """An export does not have to contain every container the converter knows."""
     _, _, findings = _scan('kitchen_sink.xml')
     assert not any('region' in f.path for f in findings)
+
+
+def test_the_envelope_is_never_a_scanned_container():
+    """F4.2 and F5.4: `response` and `result` are the wrapper, not a container name."""
+    assert frozenset({'response', 'result'}) == container_coverage.ENVELOPE
+    assert not ({'response', 'result'} & {row.path for row in container_coverage.CONTAINER_TABLE})
+    assert not {'response', 'result'} & container_coverage.PATH_ROOTS
+
+
+def test_the_scan_reads_a_per_scope_root_as_the_place_the_path_names():
+    """F5.4: for a per-scope source the root `result` is the place the path names, so the
+    entry under it is the declared scope entry and the container inside it is a section."""
+    origin = xml_input.SourceOrigin(kind='api', name='scope_child.xml')
+    parsed = xml_input.parse_bytes((FIXTURES_DIR / 'scope_child.xml').read_bytes(), origin)
+    result = parsed.root.find('result')
+    source = dataclasses.replace(parsed, root=result, scope='device-group/entry/Production-DG')
+    parents = container_coverage.parent_map(result)
+
+    scope_entry = result[0]
+    assert container_coverage.container_tag(scope_entry, parents, source) == 'device-group'
+    assert container_coverage.is_scope_entry(scope_entry, parents, source)
+    assert container_coverage.section_path(result, parents, source) == 'device-group'
+    assert container_coverage.section_path(scope_entry.find('address'), parents, source) == \
+        'device-group/entry/address', 'the chain keeps the entry the operator sees in the file'
+    assert container_coverage.scan(source, parents) == [], container_coverage.scan(source, parents)
+
+    # The same bytes read as a file have no request, so `result` is the envelope and is
+    # never a scanned container.
+    file_source = xml_input.parse_bytes((FIXTURES_DIR / 'scope_child.xml').read_bytes(),
+                                        xml_input.SourceOrigin(kind='file', name='scope_child.xml'))
+    file_parents = container_coverage.parent_map(file_source.root)
+    assert all(container.tag not in container_coverage.ENVELOPE
+               for container in container_coverage.entry_containers(file_source.root, file_parents, file_source))
+    assert container_coverage.scan(file_source, file_parents) == []
 
 
 def test_empty_known_container_is_not_a_finding(tmp_path):

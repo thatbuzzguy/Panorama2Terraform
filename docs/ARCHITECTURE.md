@@ -17,14 +17,15 @@ a design rule enforced by construction.
 | File | Role | Rule it keeps |
 |---|---|---|
 | `panorama_to_terraform.py` | The converter: `PanoramaParser` (model), `TerraformGenerator` (model and write), `main()` (order) | the parser consumes only the producer contract (`ParsedSource`); it reads no file and opens no connection itself, so a source is either the file producer or the api producer |
-| `xml_input.py` | The only input read, shared by both entry points, through one producer boundary (F5.1) | size cap checked before the read for a file, and on the bytes handed by any producer; DTD refused by the parser |
-| `source_fetch.py` | The api producer (F5.2): the https request, the cached copy, the response wrapper | https only; a redirect that changes the scheme is refused; the cache holds exactly the bytes the boundary parsed; the key comes from the environment only |
+| `xml_input.py` | The only input read, shared by both entry points, through one producer boundary (F5.1), and the scope vocabulary a source states (F5.4) | size cap checked before the read for a file, and on the bytes handed by any producer; DTD refused by the parser; one definition of the scope a source holds (`DEFAULT_SCOPE`) and of the path segment that names an entry (`ENTRY_SEGMENT`) |
+| `source_fetch.py` | The api producer (F5.2): the https request, the cached copy, the response wrapper, and the per-scope request shape (F5.4) | https only; a redirect that changes the scheme is refused; the cache holds exactly the bytes the boundary parsed; the key comes from the environment only; the declared path is part of the request identity, so each scope gets its own entry |
 | `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX` | the single source of truth; no resource name or attribute from memory |
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy` |
 | `container_coverage.py` | The container table (§3.1) and the section rule | the table is data, so a parse method cannot exist without a row |
 | `entry_coverage.py` | The per-entry report (§3.2) | a destination comes from the table row, or from the mark when the method knows better |
+| `shadow_coverage.py` | The cross-source shadow scan (§3.2): a child entry name that repeats a parent entry name | the key is the matrix row, not the name alone; both sources are read with the same row rule, so no second naming rule exists; a run with no declared parent has no parent to read |
 | `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state |
-| `provenance.py` | The provenance record (F5.3): what one run read, written as `SOURCE.txt` | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line |
+| `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4) | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line |
 | `conftest.py`, `tests/` | The gate | each rule in this document names the test that pins it |
 
 `tools/build_kitchen_sink.py` assembles the fixture corpus from committed files.
@@ -141,32 +142,44 @@ declared property list, so its field gaps are recorded in `backlog.md` instead.
    boundary, so the two checks apply to a response exactly as they apply to a file. Three
    rules:
 
-   - **The wrapper is normalised.** A Panorama API response is not a configuration export:
-     it is a transport envelope, `response/result/config`, and the converter reads a
-     `config` element. The producer moves the root to the `config` element the envelope
-     carries. It does not reparse, so the origin and the line map are the same objects, and
-     a report line still names the line the response carries. Accepted shapes are
-     `response/result/config`, `result/config`, and a plain `config`. A `result` with no
-     `config` element is a per-scope response, which F5.4 owns, so the producer refuses it
-     instead of guessing. The cache holds the response as it arrived: normalising before the
-     cache write would put bytes in the file that the parser never saw. Pinned by
-     `tests/test_source_fetch.py::test_fetch_root_is_the_config_element_under_result` (the
-     origin and the line map are the same objects),
-     `::test_result_root_and_plain_config_root_are_accepted`,
-     `::test_failed_response_is_refused_before_the_cache_entry_is_written`,
-     `::test_result_without_a_config_element_is_refused`, and
+   - **The wrapper is normalised, one shape per request shape.** A Panorama API response is not
+     a configuration export: it is a transport envelope, `response/result/config`, and the
+     converter reads a `config` element. The producer moves the root to the element the request
+     shape names, and it does not guess a shape the request does not state. A whole-config
+     request takes the `config` element under `result`; accepted shapes are
+     `response/result/config`, `result/config`, and a plain `config`. A per-scope request (F5.4)
+     declares a path, and its `result` must hold exactly one element: the container the path
+     names, or the entry with the name the path states. `result` itself becomes the root, read as
+     the place the path names (§3.1). A shape that does not match its own request is refused: a
+     `result` with no `config` element read by a whole-config request, a `result` that holds
+     nothing, more than one element, or an element the path does not name, and a whole-config
+     shape read by a per-scope request. The producer does not reparse, so the origin and the line
+     map are the same objects, and a report line still names the line the response carries. The
+     response check (type `success`, code `0`) runs for both shapes, before the cache entry is
+     written. The cache holds the response as it arrived: normalising before the cache write would
+     put bytes in the file that the parser never saw. Pinned by
+     `tests/test_source_fetch.py::test_fetch_root_is_the_config_element_under_result` (the origin
+     and the line map are the same objects), `::test_one_shape_per_request_shape`,
+     `::test_a_per_scope_response_holds_the_element_the_path_names`,
+     `::test_a_per_scope_response_that_does_not_match_its_path_is_refused`,
+     `::test_the_response_check_runs_for_both_shapes`,
+     `::test_result_root_and_plain_config_root_are_accepted`, and
      `::test_container_table_names_no_wrapper_row`.
    - **The cache holds the parsed bytes under a key-free name.** An entry is named by the
      SHA-256 hex of the host and the sorted request parameters. The key is not part of the
      name, so the credential never appears in a file name, and two requests with the same
      parameters but different keys share one entry. `--offline` reads only this cache and
      refuses a missing entry; it needs no key, so a CI run on a committed cache connects to
-     no server. The checks must pass before a write, so a refused response never reaches the
-     cache, and two runs on the same cache write byte-identical output. Pinned by
+     no server. The declared path is part of the identity (F5.4), so each scope gets its own
+     entry, and `--offline` covers both requests of a two-source run. The checks must pass
+     before a write, so a refused response never reaches the cache, and two runs on the same
+     cache write byte-identical output. Pinned by
      `tests/test_source_fetch.py::test_cache_miss_then_hit_reopens_the_same_bytes`,
      `::test_cache_entry_name_is_the_request_identity_without_the_key`,
+     `::test_the_declared_path_is_part_of_the_request_identity`,
      `::test_cache_hit_over_the_limit_is_refused_through_the_door`,
      `::test_offline_refuses_a_missing_entry_and_calls_no_producer`,
+     `::test_offline_refuses_a_missing_entry_for_the_second_request`,
      `::test_offline_reopens_an_entry_with_no_key`, and
      `::test_two_runs_on_the_same_cache_bytes_write_identical_bytes`.
    - **https only, with no silent downgrade.** The request uses https; `--insecure` is the
@@ -225,7 +238,7 @@ pattern or the parent walk of §2.2. This document does not restate the table;
 parse method cannot exist without a row and a row cannot name a path the method
 does not read.
 
-Two rules the scan uses:
+Three rules the scan uses:
 
 - A container is a **section** when no config-object entry lies between it and a
   config root: the `config` element, or an entry whose container is one of the
@@ -240,6 +253,15 @@ Two rules the scan uses:
   console line per finding. An absent section is not a finding, an empty known
   section is not a finding, and an entry container under `predefined` is not a
   finding: those entries are PAN-OS built-in definitions, not operator objects.
+- **The envelope is never a scanned container** (`container_coverage.ENVELOPE`:
+  `response` and `result`). For a per-scope source (F5.4) `result` is read as the place the
+  declared path names, so the entry under it is the declared scope entry, and a container inside
+  that entry is a section. `container_coverage.container_tag` is the one function that gives the
+  tag for a source, and the scan, the entry ledger, and the parser scope walk all read it, so an
+  entry in a per-scope run takes the declared scope as its scope fact instead of the `Shared`
+  fallback. Pinned by `tests/test_container_coverage.py::test_the_envelope_is_never_a_scanned_container`,
+  `::test_the_scan_reads_a_per_scope_root_as_the_place_the_path_names`, and
+  `tests/test_shadow_coverage.py::test_the_declared_scope_fact_replaces_the_shared_fallback`.
 
 The parse records the opening line of every element
 (`xml_input.ParsedSource.line_of`), so a finding names the line the container was
@@ -255,7 +277,7 @@ one line per config entry the parse pipeline read, in this order:
   line <source line>  <object type>/<entry name>  <destination>  <detail>  captured: <fields>
 ```
 
-Five rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
+Six rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
 
 - **One entry is one report row**, at section level only. An entry inside a
   config-object entry is a property level (§3.1), so the property scan reports it and
@@ -273,6 +295,11 @@ Five rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
   An entry with nothing but its name says `captured: name only`. A field the
   method stored inside a type sub-shape is reported under the object key, not the
   XML tag.
+- **Every row names the source that holds the entry** (F5.4): `source` is the report value of the
+  source, never a path (rule 6 below). It is row data for the cross-source scan, and `entry_line`
+  does not print it, so the entry-line bytes are unchanged for a one-source run. Pinned by
+  `tests/test_entry_coverage.py::test_every_row_names_the_source_that_holds_the_entry` and
+  `::test_the_entry_line_prints_no_source`.
 - **A property the parse captured and no output read is a finding**, and the report
   prints findings in their own section after the gap section:
 
@@ -289,6 +316,25 @@ Five rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
   report section. The console prints the gap lines only; a property finding prints in
   the report, because it names a matrix row.
 
+**The cross-source shadow scan** (F5.4) adds one finding kind, in `shadow_coverage.py`, and the
+report prints it in its own section after the property section:
+
+```text
+  line <source line>  <object type>/<entry name>  <matrix row>  parent source: <parent name> (parent line <n>)
+```
+
+A child entry is a shadow when its name repeats a parent entry name and both entries are covered
+by the same matrix row. The key is the matrix row, not the name alone, so a shadow is a fact
+within one container kind: an address that repeats a shared address of the same name is a shadow,
+and a service group with the same name is not. The scan scope is the rule above, and the parent
+source is read with the same container helpers and the same row rule, so no second naming rule
+exists. A run with no declared parent has no parent to read, so it prints no shadow section. The
+second source is what makes the name visible: a per-device-group run cannot see its parent, so an
+inherited name stays a plain string and the parent entry is invisible. The console prints no shadow
+line, and a shadow is an operator action, so it does not change the exit code. Pinned by
+`tests/test_shadow_coverage.py`, including the fixed line shape, the row key, the scan scope, the
+grouping, and the no-parent run.
+
 Rows are grouped with the F3.9 scope rule (`_report_scope_path`), the same rule
 the interface and manual reports use, so the same name in two device groups is two
 sections. A scope name is read from the scope `<entry>`, not from the container
@@ -301,20 +347,24 @@ no report file, and a run with no gaps prints no extra console line.
 
 ### 3.3 Provenance record
 
-`main()` writes one record per completed run, as `SOURCE.txt` in the output directory. The
-record names the bytes a reader can reopen, so a report line can be checked against the file
-it describes. Eight fields, in this order: `kind`, `name`, `path`, `scope`, `request`,
-`cache_entry`, `size`, `sha256`. A field that does not apply to the source kind is `-`, so
-one shape reads. The rule lives in `provenance.py`.
+`main()` writes one record per source the run read, as `SOURCE.txt` in the output directory, in
+read order: the main source, then a declared parent source (F5.4). A one-source run writes the same
+bytes as the F5.3 rule. The record names the bytes a reader can reopen, so a report line can be
+checked against the file it describes. Eight fields, in this order: `kind`, `name`, `path`, `scope`,
+`request`, `cache_entry`, `size`, `sha256`. A field that does not apply to the source kind is `-`, so
+one shape reads. Records are separated by one blank line, which is the whole record shape. The rule
+lives in `provenance.py`.
 
 Four rules the record keeps:
 
 - **The record is data.** One `field: value` line per field, in the fixed order, with no
   prose and no timestamp, so two runs on the same bytes write the same record.
-  `parse_record` reads a written record back as the record, so a tool can act on it, and a
-  line that is not a declared field is refused. Pinned by
-  `tests/test_provenance.py::test_the_record_round_trips_as_data` and
-  `::test_a_record_line_that_is_not_a_field_is_refused`.
+  `parse_record` reads one record and `parse_records` reads a record file, so a tool can act on
+  it, and a line that is not a declared field is refused. Pinned by
+  `tests/test_provenance.py::test_the_record_round_trips_as_data`,
+  `::test_a_record_line_that_is_not_a_field_is_refused`,
+  `::test_one_record_writes_the_same_bytes_as_the_f5_3_rule`, and
+  `::test_the_record_file_holds_one_record_per_source_read`.
 - **The record is not a report body.** A report body names the source name only, never the
   path (F4.2 rule 6), so the path field here cannot move a report byte. The label a report
   body uses for the source is `Source:` (`container_coverage.SOURCE_LABEL`), for both
@@ -328,17 +378,20 @@ Four rules the record keeps:
   `tests/test_provenance.py::test_a_file_run_record_names_bytes_a_reader_can_reopen` and
   `::test_an_api_run_record_names_the_request_identity_and_the_cache_entry`.
 - **The pruning rule.** A cache entry is not pruned while a written record references it, so
-  the reference is the `cache_entry` field of a parsed record, never a printed line.
-  `provenance.prunable_entries` states the rule; no command runs the prune yet (see
-  [`../backlog.md`](../backlog.md)). Pinned by
-  `tests/test_provenance.py::test_the_reference_is_data_not_a_printed_line`.
+  the reference is the `cache_entry` field of a parsed record, never a printed line. A shadow
+  line prints a source name, and that printed line protects nothing. `provenance.prunable_entries`
+  states the rule; no command runs the prune yet (see [`../backlog.md`](../backlog.md)). Pinned by
+  `tests/test_provenance.py::test_the_reference_is_data_not_a_printed_line` and
+  `::test_a_printed_parent_source_is_not_a_reference`.
 
 The record names no credential: the `request` field is the key-free identity the cache name
-is hashed from (F5.2 key rule, pinned by
-`tests/test_provenance.py::test_the_record_never_names_the_key`). A run that refuses its
+is hashed from, for both requests of a two-source run (F5.2 key rule, pinned by
+`tests/test_provenance.py::test_the_record_never_names_the_key` and
+`::test_the_record_file_holds_one_record_per_source_read`). A run that refuses its
 input writes no record, like every other input refusal. The `scope` field names the scope the
-source holds; `whole-config` is the only scope a source holds today, and the per-scope source
-(F5.4) and the state source (F5.6) read that field.
+source holds: `whole-config` when the producer declares none (the one definition is
+`xml_input.DEFAULT_SCOPE`), and the declared path for a per-scope source (F5.4). The state
+source (F5.6) reads that field too.
 
 ## 4. Emit pipeline
 
@@ -437,7 +490,11 @@ Pinned by `tests/test_policy_order.py` and
 
 Four report files, each written only when it has content:
 
-- `CONVERSION_REPORT.txt` — one line per config entry the parse pipeline read (§3.2).
+- `CONVERSION_REPORT.txt` — one line per config entry the parse pipeline read (§3.2). Section
+  order is fixed: report header, summary, gaps, property findings, shadows, then the grouped entry
+  lines. Each section prints only when it has content, and the shadow section prints only for a run
+  that declares a parent source (`--path` with `--parent`, the api source only; a path that is not
+  a scope path is an argument error, exit 2).
 - `MANUAL_SETUP_REPORT.txt` — report-only areas, the location facts a type
   cannot carry, and the placeholder template. The BGP and OSPF blocks name the scope
   and the router, because two routers in two scopes can hold the same values, and they
@@ -451,7 +508,8 @@ Four report files, each written only when it has content:
   per scope the export declares: device group first, then the template, then the
   device, then the object kind inside the section. One shared rule
   (`_report_scope_path`, `_group_by_scope`, `_report_section_header`) serves
-  both, so they cannot disagree.
+  both, and the conversion report uses it for the property section and the shadow section, so
+  they cannot disagree.
 
 The post-run gate writes `SANITY_REPORT.txt` on every run (§4.6). The five files
 above are the complete set the generator writes; `main()` adds `README.md` and the
@@ -564,6 +622,9 @@ Two runs on the same input produce identical bytes.
   `tests/test_provenance.py::test_two_runs_on_the_same_bytes_write_the_same_record` and
   `::test_a_cache_derived_name_repeats_across_cache_dirs`.
   Determinism is pinned by test, not paid in the CLI.
+- The shadow scan sorts findings by line, then object type, then name, and the parent index keeps
+  the first parent row for a key, so two runs on the same two sources write the same bytes
+  (`tests/test_shadow_coverage.py::test_two_runs_on_the_same_sources_write_the_same_bytes`).
 
 ## 7. What this document does not claim
 
