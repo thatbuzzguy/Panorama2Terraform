@@ -25,10 +25,17 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   These are not findings today, and each one needs a rule before it can become one: an
   emitter must exist, or the report writer must read the field it names.
 
-- The console prints the gap lines only; a property finding prints in
-  `CONVERSION_REPORT.txt`, because a finding names a matrix row. Printing findings on
+- The console prints the gap lines only; a property finding and a shadow print in
+  `CONVERSION_REPORT.txt`, because each names a matrix row. Printing findings on
   the console needs the console line shape decided first, so a run does not print a
-  matrix row it has no room for.
+  matrix row it has no room for. A shadow line also names a source, so its shape needs
+  the source field decided with it.
+
+- The shadow parent index is keyed by (matrix row, entry name), so a parent name the export
+  declares in two scopes gives one key and the first parent row wins, in report order. Identity
+  is (device group, vsys, type, name) (`docs/ARCHITECTURE.md` §2.1), so a key that also named the
+  parent scope would say which parent entry the child repeats. Not built: one child entry is one
+  finding today, and the parent scope is not a row key.
 
 - `panos_aggregate_layer3_subinterface` has no corpus entry to measure: the container
   table maps an aggregate subinterface to the ethernet subinterface row, so no entry
@@ -300,18 +307,17 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   redirect hook, so the scheme rule cannot be enforced through it, and a standard-library
   producer enforces all three https rules and needs no test skip. No module in the project
   imports a third-party package, so the F3.8 rule needed no narrowing after all.
-- The response wrapper is normalised (F5.2, landed 2026-10-27); the rule is in
-  `ARCHITECTURE.md` §3. The open part is the per-scope fetch (`type=config&action=get&path=...`),
-  which returns a `result` with no `config` element and is refused today. F5.4 needs its own
-  rule for that shape when it reads a fetched scope.
+- The response wrapper is normalised, one shape per request shape (F5.2 and F5.4, landed
+  2026-10-27); the rule is in `ARCHITECTURE.md` §3. The fetch layer checks the response against
+  the request it made, so a per-scope shape is not guessed from what it looks like, and the
+  container table still names no wrapper row.
 - Open: the pruning rule, stated in `provenance.py` (F5.3, landed 2026-10-27). A cache entry
   is not pruned while a written record references it, and the reference is the `cache_entry`
   field of a parsed record, so the rule reads data and not a printed line. The prune action
   itself is not built: it needs the record directory decided first, because a record is
   written per output directory and a later run cannot know which records a prune action will
-  read.
-- Open: the record `scope` field is `whole-config` today, because that is the only scope a
-  source holds. F5.4 and F5.6 read that field for a declared scope.
+  read. A two-source run writes two records in one file (F5.4), so the prune action reads a
+  record file, not one record.
 - Open: the provenance record names the host and the scope, never the credential. The key
   rule itself (environment only, never argv, never a generated file) is in `ARCHITECTURE.md` §3.
 - Provider data sources, verified against 2.0.14 with

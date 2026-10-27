@@ -7,7 +7,10 @@ Six groups, one per acceptance rule:
    the two checks, and it builds no device-object model.
 2. The wrapper decision. The tree root becomes the `config` element under `result`,
    through the same origin and the same line map. A failed response is refused before
-   the cache entry is written. The container table names no wrapper row.
+   the cache entry is written. The container table names no wrapper row. F5.4 adds the
+   per-scope branch: `result` holds the element the declared path names, `result`
+   becomes the root, and a response that does not match its own request is refused.
+   The path is part of the request identity, so each scope gets its own cache entry.
 3. The cache. The entry name is the request identity without the key. A miss calls the
    producer once and caches only the bytes that passed the door and the response
    check; a hit parses the cache bytes with no producer. Two runs on the same cache
@@ -33,6 +36,7 @@ import urllib.request
 import pytest
 
 import container_coverage
+import xml_input
 from conftest import FIXTURES_DIR, REPO_ROOT, run_main, run_pipeline, run_script
 
 FETCH_FIXTURE = 'api_response.xml'
@@ -47,8 +51,8 @@ def _bytes():
     return (FIXTURES_DIR / FETCH_FIXTURE).read_bytes()
 
 
-def _request(fetch_module, host='panorama.test'):
-    return fetch_module.ApiRequest(host=host)
+def _request(fetch_module, host='panorama.test', path=''):
+    return fetch_module.ApiRequest(host=host, path=path)
 
 
 def _producer(fetch_module, data):
@@ -164,15 +168,104 @@ def test_failed_response_is_refused_before_the_cache_entry_is_written(fetch_modu
     assert not (tmp_path / request.cache_name()).exists(), 'no cache entry for a refused response'
 
 
-def test_result_without_a_config_element_is_refused(fetch_module, tmp_path):
-    """A result that holds no config element is the per-scope shape F5.4 owns."""
+def test_one_shape_per_request_shape(fetch_module, tmp_path):
+    """The wrapper decision has two branches (F5.2, F5.4), and each request reads its
+    own shape: the response is not guessed from what it looks like."""
+    whole = (b'<?xml version="1.0"?>\n<response type="success" code="0">\n'
+             b'<result><config><device-group/></config></result>\n</response>\n')
     scoped = (b'<?xml version="1.0"?>\n<response type="success" code="0">\n'
               b'<result><device-group name="Edge"><entry name="Edge"/></device-group></result>\n</response>\n')
+
+    # The whole-config request reads the per-scope shape: refused by its own rule.
     with pytest.raises(fetch_module.SourceFetchError) as excinfo:
         fetch_module.fetch(_request(fetch_module), tmp_path,
                            producer=_producer(fetch_module, scoped))
     assert 'no config element' in str(excinfo.value)
     assert 'F5.4' in str(excinfo.value)
+
+    # The per-scope request reads the whole-config shape: refused by its own rule.
+    path = 'device-group/entry/Edge'
+    with pytest.raises(fetch_module.SourceFetchError) as excinfo:
+        fetch_module.fetch(_request(fetch_module, path=path), tmp_path / 'b',
+                           producer=_producer(fetch_module, whole))
+    assert 'does not match the path' in str(excinfo.value), str(excinfo.value)
+
+    # A whole-config body handed to a per-scope request is refused by the same rule: the
+    # per-scope branch needs the result element, not the config element.
+    body = b'<?xml version="1.0"?>\n<config><device-group><entry name="Edge"/></device-group></config>\n'
+    parsed = xml_input.parse_bytes(body, xml_input.SourceOrigin(kind='api', name='whole.xml'))
+    with pytest.raises(fetch_module.SourceFetchError) as excinfo:
+        fetch_module.unwrap_config_root(parsed, _request(fetch_module, path=path))
+    assert 'needs the result element' in str(excinfo.value), str(excinfo.value)
+    assert 'whole-config shape' in str(excinfo.value), str(excinfo.value)
+
+
+def test_a_per_scope_response_holds_the_element_the_path_names(fetch_module, tmp_path):
+    """AC-1.2 and AC-1.3: `result` holds the element the path names, `result` becomes the
+    root, and the origin and the line map are the same objects."""
+    data = (FIXTURES_DIR / 'scope_child.xml').read_bytes()
+    path = 'device-group/entry/Production-DG'
+    request = _request(fetch_module, path=path)
+    source = fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, data))
+    assert source.root.tag == 'result'
+    assert source.scope == path
+    assert [child.get('name') for child in source.root] == ['Production-DG']
+    assert source.line_of(source.root) == 7, 'the line map is the response bytes, not a reparse'
+    assert source.line_of(source.root.find(".//entry[@name='Web-Server-1']")) == 10, \
+        'the line the report prints is the line the response bytes carry'
+
+    # A path that names a container reads the element with that tag.
+    parent = (FIXTURES_DIR / 'scope_parent.xml').read_bytes()
+    scoped = _request(fetch_module, path='shared')
+    source = fetch_module.fetch(scoped, tmp_path / 'b', producer=_producer(fetch_module, parent))
+    assert source.root[0].tag == 'shared'
+    assert source.scope == 'shared'
+    assert source.line_of(source.root[0]) == 8
+
+
+def test_a_per_scope_response_that_does_not_match_its_path_is_refused(fetch_module, tmp_path):
+    """AC-1.6: `result` holds nothing, more than one element, or an element the path does
+    not name. Each is an input refusal, and no cache entry is written."""
+    path = 'device-group/entry/Edge'
+    request = _request(fetch_module, path=path)
+    shapes = {
+        'no element': b'<result></result>',
+        'two elements': b'<result><device-group name="Edge"><entry name="Edge"/></device-group>'
+                        b'<address><entry name="Edge"/></address></result>',
+        'another name': b'<result><entry name="Other"/></result>',
+        'another container': b'<result><service-group><entry name="Edge"/></service-group></result>',
+    }
+    for label, body in shapes.items():
+        cache = tmp_path / label
+        data = b'<?xml version="1.0"?>\n<response type="success" code="0">\n' + body + b'\n</response>\n'
+        with pytest.raises(fetch_module.SourceFetchError) as excinfo:
+            fetch_module.fetch(request, cache, producer=_producer(fetch_module, data))
+        message = str(excinfo.value)
+        assert 'result holds' in message or 'does not match the path' in message, (label, message)
+        assert not (cache / request.cache_name()).exists(), f'no cache entry for {label}'
+
+
+def test_the_response_check_runs_for_both_shapes(fetch_module, tmp_path):
+    """AC-1.5: type `success` code `0` is checked before the cache entry is written, for a
+    whole-config request and for a per-scope request."""
+    request = _request(fetch_module, path='shared')
+    failed = (b'<?xml version="1.0"?>\n<response type="error" code="14">\n'
+              b'<result><shared><address><entry name="x"/></address></shared></result>\n</response>\n')
+    with pytest.raises(fetch_module.SourceFetchError) as excinfo:
+        fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, failed))
+    assert "type 'error' code '14'" in str(excinfo.value), str(excinfo.value)
+    assert not (tmp_path / request.cache_name()).exists(), 'no cache entry for a refused response'
+
+
+def test_the_declared_path_is_part_of_the_request_identity(fetch_module):
+    """AC-1.1: each scope gets its own cache entry, and the identity stays key-free."""
+    plain = _request(fetch_module)
+    scoped = _request(fetch_module, path='shared')
+    assert scoped.canonical().endswith('path=shared'), scoped.canonical()
+    assert scoped.cache_name() != plain.cache_name(), 'one cache entry per request identity'
+    assert 'key=' not in scoped.canonical(), 'the identity is the key-free shape'
+    assert 'key=' not in scoped.url('SECRET-KEY-9f3').split('?')[0]
+    assert 'path=shared' in scoped.url('SECRET-KEY-9f3'), 'the path is the path the request states'
 
 
 def test_container_table_names_no_wrapper_row():
@@ -245,6 +338,25 @@ def test_offline_refuses_a_missing_entry_and_calls_no_producer(fetch_module, tmp
         fetch_module.fetch(request, tmp_path, producer=no_call, offline=True)
     assert request.cache_name() in str(excinfo.value)
     assert '--offline reads the cache only' in str(excinfo.value)
+
+
+def test_offline_refuses_a_missing_entry_for_the_second_request(fetch_module, tmp_path):
+    """F5.4: `--offline` covers both requests, and each request needs its own entry."""
+    child = _request(fetch_module, path='device-group/entry/Production-DG')
+    parent = _request(fetch_module, path='shared')
+    child_data = (FIXTURES_DIR / 'scope_child.xml').read_bytes()
+    fetch_module.fetch(child, tmp_path, producer=_producer(fetch_module, child_data))
+
+    def no_call(request):
+        raise AssertionError('the offline path must not call the producer')
+
+    with pytest.raises(fetch_module.SourceFetchError) as excinfo:
+        fetch_module.fetch(parent, tmp_path, producer=no_call, offline=True)
+    assert parent.cache_name() in str(excinfo.value), str(excinfo.value)
+
+    # The first request still reads its own entry from the cache.
+    source = fetch_module.fetch(child, tmp_path, producer=no_call, offline=True)
+    assert source.scope == child.path, 'the cached response is read by the request that declared its path'
 
 
 def test_offline_reopens_an_entry_with_no_key(fetch_module, tmp_path, monkeypatch):

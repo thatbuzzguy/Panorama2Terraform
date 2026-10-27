@@ -65,11 +65,13 @@ Terraform state, and so an entry can name which source it came from.
   identity, the cache entry, and the size and SHA-256 hex of the bytes the door parsed.
   Written outside the report bodies, so the report byte rule holds. It carries the report
   label change to `Source:`. The rules are in `docs/ARCHITECTURE.md` §3.3.
-- [ ] **F5.4 Cross-source shadow report** — uses the property scan (F4.4). A
-  per-device-group run cannot see its parent, so an inherited name stays a plain string
-  and a shadowed object is invisible. With the parent as a second source, the ledger
-  names the source of each entry, and a child name that repeats a parent name is
-  reported as a shadow.
+- [x] **F5.4 Cross-source shadow report** — the per-scope source shape and the shadow fact. A
+  request that declares a path reads one scope, and `result` is read as the place the path names.
+  A child entry is a shadow when its name repeats a parent entry name within the same matrix row;
+  the parent is a second source (`--parent`), read through the same cached producer. The ledger
+  names the source of each entry as row data, `SOURCE.txt` holds one record per source read, and
+  the report prints the shadow section after the property section. The rules are in
+  `docs/ARCHITECTURE.md` §3.1, §3.2, §3.3 and §4.5, and in `shadow_coverage.py`.
 - [ ] **F5.5 Read-through data blocks** (opt-in) — plain strings stay the default
   for a name outside the run. A declared upstream scope may emit `data` blocks
   instead, where the value has to be verified. Needs `DATA_SOURCE_SCHEMA` in
@@ -82,11 +84,11 @@ Terraform state, and so an entry can name which source it came from.
 
 ## Sequencing
 
-1. Epic 4 is complete, so the open work is Epic 5. F5.1, F5.2 and F5.3 landed, so F5.4 is
-   next: it reads a declared scope, and the record `scope` field is the hook F5.3 left for it
-   (`whole-config` is the only value a source writes today).
-2. F5.4 and F5.6 use the property scan F4.4 landed, because a shadow and a drift are
-   property-level facts.
+1. Epic 4 is complete, so the open work is Epic 5. F5.1, F5.2, F5.3 and F5.4 landed. F5.6 is
+   next: a state source reads the same source contract, and the record `scope` field is the hook
+   F5.3 left for it. F5.5 waits for `DATA_SOURCE_SCHEMA` verified against the provider.
+2. F5.6 uses the property scan F4.4 landed, because ownership and drift are property-level
+   facts, the same kind of fact the shadow scan reads.
 3. The two report defects found while refreshing the documentation landed with F4.4:
    the overlapping BGP and OSPF paths, and the manual report sections that did not name
    their scope.

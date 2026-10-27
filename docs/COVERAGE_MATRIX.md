@@ -88,6 +88,12 @@ keep it honest:
   fails when a row declares a property no output reads. A property captured but not
   read is a finding, not a declaration: the report prints it (§3.2).
 
+The row is also the key of the cross-source shadow scan (F5.4): a child entry name that
+repeats a parent entry name is a finding only when both entries are covered by the same row,
+so the same name under a different row is not a shadow. Pinned by
+`tests/test_shadow_coverage.py::test_the_matrix_row_is_the_key_not_the_name_alone`, and the scan
+scope is the same rule (`::test_the_scan_scope_is_the_f4_4_rule`).
+
 One row has no corpus entry to measure: `panos_aggregate_layer3_subinterface`,
 because the container table maps an aggregate subinterface to the ethernet
 subinterface row. That row is grounded by the emitter check only, and the table

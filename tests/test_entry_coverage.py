@@ -225,6 +225,26 @@ def test_object_type_is_the_f4_2_section_path():
         'device-group/entry/address'
 
 
+def test_every_row_names_the_source_that_holds_the_entry():
+    """F5.4: `source` is row data for the cross-source scan, and it is the report value of
+    the source (F5.1), so a file row names the file name only."""
+    ledger = _ledger(GAP_FIXTURE)
+    assert ledger.rows(), 'the rule needs rows to read'
+    assert all(row['source'] == ledger.source.name for row in ledger.rows()), ledger.rows()
+    assert all(row['source'] == GAP_FIXTURE for row in ledger.rows()), ledger.rows()
+    assert all('/' not in row['source'] for row in ledger.rows()), 'the report value, not a path'
+
+
+def test_the_entry_line_prints_no_source():
+    """F5.4: `source` is row data, not a printed field, so a row and the same row without
+    it write the same bytes: the entry-line bytes are unchanged for a one-source run."""
+    ledger = _ledger(GAP_FIXTURE)
+    for row in ledger.rows():
+        without = {key: value for key, value in row.items() if key != 'source'}
+        assert entry_coverage.entry_line(row) == entry_coverage.entry_line(without), row
+        assert row['source'] not in entry_coverage.entry_line(row), row
+
+
 def test_longest_matching_row_wins_for_a_sub_shape():
     """A sub-shape row describes an entry more exactly than the general row."""
     general = entry_coverage.covering_row('protocol/bgp')

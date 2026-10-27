@@ -21,6 +21,8 @@ that document instead of restating the rule.
 |---|---|
 | Identity, the four scope facts, parsed object shape | `ARCHITECTURE.md` §2 |
 | Safe input read, container table, entry marks | `ARCHITECTURE.md` §3 |
+| Per-scope source shape, the envelope rule, the scope path shape | `ARCHITECTURE.md` §3.1, and `container_coverage.py` |
+| Cross-source shadow scan (the fact, the line shape, the heading) | `ARCHITECTURE.md` §3.2, and `shadow_coverage.py` |
 | Emit order, location, reference resolution, policy chains, reports, gate | `ARCHITECTURE.md` §4 |
 | Local resource naming | `ARCHITECTURE.md` §5 |
 | Determinism | `ARCHITECTURE.md` §6 |

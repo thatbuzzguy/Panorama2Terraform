@@ -30,6 +30,10 @@ identity, not as content the parser took. A field the parser read as a name
 reference (an interface `ip` entry, an OSPF area `range` entry) is recorded on
 the parent row through the field the name went into.
 
+F5.4: every row carries `source`, the report value of the source that holds the entry.
+It is row data for the cross-source scan (`shadow_coverage.py`), not a printed field, so
+the entry-line bytes are unchanged for a one-source run.
+
 Report order is fixed: rows are sorted by line, then object type, then name, so
 the same input produces the same bytes. The report names the source name only, never
 the path (F4.2 rule 6); the path is in the provenance record (F5.3). The label is
@@ -154,6 +158,19 @@ def row_detail(row: ContainerRow) -> str:
     return row.note
 
 
+def matrix_row_for(section: str) -> Optional[dict]:
+    """The matrix row that covers a section path (F4.4 scan scope).
+
+    None when no row covers it, or when the covering row is not an emitted row: a
+    report, inventory, bookkeeping, count-only, or nested-block destination has no
+    matrix row, so the property scan and the shadow scan do not read an entry there.
+    """
+    container_row = covering_row(section)
+    if container_row is None or container_row.destination != 'emitted':
+        return None
+    return MATRIX_BY_RESOURCE.get(row_detail(container_row))
+
+
 class EntryLedger:
     """The marks one parse run made, and the report rows they produce."""
 
@@ -211,13 +228,18 @@ class EntryLedger:
         An entry inside a config-object entry is a property level (F4.2 AC-3.2),
         so the property matrix owns it and this report counts it on the parent row.
         `predefined` entries are PAN-OS definitions, not operator objects.
+        An entry whose container is the envelope has no container the table can read
+        (F5.4), so a file input writes no row for it; a per-scope source reads its root
+        through the place rule, so its scope entry is a row.
         """
         container = self.parents.get(entry)
         if container is None:
             return False
+        if container.tag in container_coverage.ENVELOPE and container is not self.source.root:
+            return False
         if container_coverage.is_predefined(container, self.parents):
             return False
-        return container_coverage.is_section(container, self.parents)
+        return container_coverage.is_section(container, self.parents, self.source)
 
     def destination(self, entry: ET.Element) -> str:
         """Destination for one entry: the mark wins over the table row (F4.3 AC-2.4)."""
@@ -225,10 +247,10 @@ class EntryLedger:
         if mark and mark['destination']:
             return mark['destination']
         container = self.parents.get(entry)
-        if container_coverage.is_scope_entry(entry, self.parents):
+        if container_coverage.is_scope_entry(entry, self.parents, self.source):
             # A scope entry defines a scope, so it is not an object inside one.
             return 'bookkeeping'
-        row = covering_row(container_coverage.section_path(container, self.parents))
+        row = covering_row(container_coverage.section_path(container, self.parents, self.source))
         if row:
             return row.destination
         return 'unaccounted'
@@ -260,14 +282,17 @@ class EntryLedger:
         A scope is an entry, not an attribute: the name of a device group, a template,
         or a device sits on the `<entry>` the scope container holds, so the walk has to
         read the entry that defines each scope, not the container above it.
+
+        The container name comes from `container_coverage.container_tag` (F5.4), so a
+        per-scope entry takes the declared scope as its fact instead of the fallback.
         """
         facts = dict.fromkeys(container_coverage.SCOPE_FACT_KEYS, '')
         node = entry
         while node is not None:
             container = self.parents.get(node)
-            key = REPORT_SCOPE_KEYS.get(container.tag) if container is not None else None
+            key = REPORT_SCOPE_KEYS.get(container_coverage.container_tag(node, self.parents, self.source))
             if key and node.get('name') and not facts[key] \
-                    and container_coverage.is_scope_entry(node, self.parents):
+                    and container_coverage.is_scope_entry(node, self.parents, self.source):
                 facts[key] = node.get('name')
             node = container
         return facts
@@ -277,7 +302,7 @@ class EntryLedger:
     def row_for(self, entry: ET.Element) -> dict:
         """Build one report row."""
         container = self.parents.get(entry)
-        path = container_coverage.section_path(container, self.parents)
+        path = container_coverage.section_path(container, self.parents, self.source)
         row = covering_row(path)
         mark = self.mark_for(entry)
         destination = self.destination(entry)
@@ -290,6 +315,7 @@ class EntryLedger:
         if mark and mark['detail']:
             detail = f'{detail} - {mark["detail"]}' if detail else mark['detail']
         row_data = {'line': self.source.line_of(entry),
+                    'source': self.source.name,
                     'container': path,
                     'name': entry.get('name') or '(no name)',
                     'destination': destination,
@@ -340,10 +366,7 @@ class EntryLedger:
             mark = self.mark_for(entry)
             if container is None or not mark or not isinstance(mark['captured'], RecordingDict):
                 continue
-            row = covering_row(container_coverage.section_path(container, self.parents))
-            if row is None or row.destination != 'emitted':
-                continue
-            matrix_row = MATRIX_BY_RESOURCE.get(row_detail(row))
+            matrix_row = matrix_row_for(container_coverage.section_path(container, self.parents, self.source))
             if matrix_row is None:
                 continue
             captured = set(self.captured_fields(mark))

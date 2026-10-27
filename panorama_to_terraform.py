@@ -41,6 +41,7 @@ import container_coverage
 import entry_coverage
 import provenance
 import sanity_checks
+import shadow_coverage
 import source_fetch
 from resource_mapping import INTERFACE_RESOURCE_TYPES, LOCATION_SCHEMA
 from xml_input import (
@@ -156,15 +157,19 @@ class PanoramaParser:
         An entry under a <device-group><entry> belongs to that group. An
         entry under <shared> or at the top level belongs to the shared
         device group, which PAN-OS names "Shared".
+
+        F5.4: the container name comes from `container_coverage.container_tag`, so a
+        per-scope source reads its root as the place its path names and the declared
+        scope entry names the group, instead of falling back to Shared.
         """
         node = elem
         while node is not None:
-            parent = self.parent_map.get(node)
-            if parent is not None and parent.tag == 'device-group' and node.tag == 'entry':
+            container = container_coverage.container_tag(node, self.parent_map, self.source)
+            if container == 'device-group' and node.tag == 'entry':
                 return node.get('name') or 'Shared'
             if node.tag == 'shared':
                 return 'Shared'
-            node = parent
+            node = self.parent_map.get(node)
         return 'Shared'
 
     def vsys_of(self, elem: ET.Element) -> str:
@@ -177,13 +182,16 @@ class PanoramaParser:
         to tell that case from an entry the export places in vsys1. A
         <vsys><entry> with no name attribute is the default vsys, which
         PAN-OS names vsys1.
+
+        The container name comes from `container_coverage.container_tag` (F5.4), so a
+        per-scope source reads its root as the place its path names.
         """
         node = elem
         while node is not None:
-            parent = self.parent_map.get(node)
-            if parent is not None and parent.tag == 'vsys' and node.tag == 'entry':
+            container = container_coverage.container_tag(node, self.parent_map, self.source)
+            if node.tag == 'entry' and container == 'vsys':
                 return node.get('name') or 'vsys1'
-            node = parent
+            node = self.parent_map.get(node)
         return ''
 
     def template_of(self, elem: ET.Element) -> str:
@@ -194,13 +202,16 @@ class PanoramaParser:
         under <templates><entry><devices><entry>, so a template-defined
         object reports its template here and its placeholder device name
         from device_of.
+
+        The container name comes from `container_coverage.container_tag` (F5.4), so a
+        per-scope source reads its root as the place its path names.
         """
         node = elem
         while node is not None:
-            parent = self.parent_map.get(node)
-            if parent is not None and parent.tag == 'templates' and node.tag == 'entry':
+            container = container_coverage.container_tag(node, self.parent_map, self.source)
+            if node.tag == 'entry' and container == 'templates':
                 return node.get('name') or ''
-            node = parent
+            node = self.parent_map.get(node)
         return ''
 
     def device_of(self, elem: ET.Element) -> str:
@@ -213,13 +224,16 @@ class PanoramaParser:
         a firewall's own config use the placeholder name
         'localhost.localdomain', which means "this device"; the emitter
         treats it as no device name (F3.5).
+
+        The container name comes from `container_coverage.container_tag` (F5.4), so a
+        per-scope source reads its root as the place its path names.
         """
         node = elem
         while node is not None:
-            parent = self.parent_map.get(node)
-            if parent is not None and parent.tag == 'devices' and node.tag == 'entry':
+            container = container_coverage.container_tag(node, self.parent_map, self.source)
+            if node.tag == 'entry' and container == 'devices':
                 return node.get('name') or ''
-            node = parent
+            node = self.parent_map.get(node)
         return ''
 
     def identity_of(self, elem: ET.Element) -> dict:
@@ -4477,13 +4491,17 @@ variable "panos_password" {
         with open(self.output_dir / 'MANUAL_SETUP_REPORT.txt', 'w') as f:
             f.write('\n'.join(lines) + '\n')
 
-    def generate_conversion_report(self, ledger) -> str:
+    def generate_conversion_report(self, ledger, shadows=None) -> str:
         """Generate CONVERSION_REPORT.txt for the entries the parse read (F4.3).
 
         One line per report row, grouped by the F3.9 scope rule so a reader can
         tell two same-named entries on two device groups apart. The report names
         the source name only, never the path (F4.2 rule 6); the path is in the
         provenance record (`provenance.py`, F5.3).
+
+        `shadows` is the F5.4 cross-source scan result. It prints in its own section,
+        after the property section, only when there is a finding, and it is grouped by
+        the same scope rule as the other sections.
 
         Returns '' when the input has no report rows, and writes no file in that
         case (F4.3 AC-9): a run that read no entry has nothing to report.
@@ -4515,6 +4533,17 @@ variable "panos_password" {
                 lines.append(self._report_section_header(path))
                 for row in group:
                     lines.append(entry_coverage.property_line(row))
+
+        # F5.4: the cross-source shadow scan. A child entry name that repeats a parent
+        # entry name is an operator action, not a broken output, so it does not change
+        # the exit code (the F4.1 gate does). The section prints only when there is a
+        # finding, and the console prints no shadow line.
+        if shadows:
+            lines.extend(['', f'--- {shadow_coverage.SHADOW_HEADING} ---', shadow_coverage.SHADOW_RULE])
+            for path, group in self._group_by_scope(shadows):
+                lines.append(self._report_section_header(path))
+                for row in group:
+                    lines.append(shadow_coverage.shadow_line(row))
 
         lines.extend(['', 'Entry lines are grouped by the scope the export declares (F3.9).',
                       '  line <source line>  <object type>/<entry name>  <destination>  '
@@ -4985,10 +5014,11 @@ Terraform configuration:
 
 Reports:
 
-- `SOURCE.txt` - what this run read, as `field: value` data: the source kind, the source
-  name, the path, the scope, the request identity, the cache entry, the size, and the
-  SHA-256 hex of the bytes the input door parsed
-- `CONVERSION_REPORT.txt` - one line per entry the parse read, with its destination
+- `SOURCE.txt` - what this run read, as `field: value` data, one record per source read: the
+  source kind, the source name, the path, the scope, the request identity, the cache entry, the
+  size, and the SHA-256 hex of the bytes the input door parsed
+- `CONVERSION_REPORT.txt` - one line per entry the parse read, with its destination, and the
+  shadow section for a run that declares a parent source
 - `MANUAL_SETUP_REPORT.txt` - objects the provider cannot model, and the reasons
 - `INTERFACE_MIGRATION_REPORT.txt` - interfaces and IP addresses to set on the target
 - `VPN_MIGRATION_REPORT.txt` - VPN objects and pre-shared key actions
@@ -5035,6 +5065,18 @@ def main():
         '--host',
         help='Panorama host for --source api; https only, a bare host is read as https',
     )
+    # F5.4: a per-scope run reads one scope instead of the whole config, and the declared
+    # parent scope is the second source the shadow scan reads.
+    parser.add_argument(
+        '--path',
+        help='scope path for --source api, as /<container> or /<container>/entry/<name>. '
+             'The request reads that scope, not the whole config (F5.4)',
+    )
+    parser.add_argument(
+        '--parent',
+        help='parent scope path for --source api, read as the second source for the '
+             'shadow scan (F5.4). Needs --path',
+    )
     parser.add_argument(
         '--cache-dir',
         default=source_fetch.DEFAULT_CACHE_DIR,
@@ -5072,6 +5114,10 @@ def main():
             parser.error('--source file needs an input file')
         if args.offline or args.insecure:
             parser.error('--offline and --insecure apply to --source api, and a file source reads no network')
+        # F5.4: a file is one source and holds its own scopes, so a declared scope path
+        # has nothing to name.
+        if args.path or args.parent:
+            parser.error('--path and --parent apply to --source api, and a file source reads one scope: the file')
         # Check if input file exists
         if not os.path.exists(args.input_file):
             print(f"Error: Input file '{args.input_file}' not found")
@@ -5083,10 +5129,26 @@ def main():
             parser.error('--source api does not take an input file; it reads the cached API export')
         if args.insecure and args.offline:
             parser.error('--insecure applies to the network producer, and --offline never calls one')
+        # F5.4: the parent is the second source, so it needs a child scope to compare with.
+        # A whole-config source holds its own parent, and the tool does not guess which
+        # scope a run reads.
+        if args.parent and not args.path:
+            parser.error('--parent needs --path: a whole-config source holds its own parent, '
+                         'and the converter does not guess which scope a run reads')
+        for flag, declared in (('--path', args.path), ('--parent', args.parent)):
+            if declared and not container_coverage.is_scope_path(declared):
+                parser.error(
+                    f'{flag} must name a scope path: /<container> or /<container>/entry/<name>, '
+                    f'where <container> is a declared scope container '
+                    f'({", ".join(sorted(container_coverage.SCOPE_PATH_ROOTS))})'
+                )
 
     # F5.3: the request the run read, so the provenance record can name the identity. A
-    # file run has no request, so the two api fields stay `-`.
+    # file run has no request, so the two api fields stay `-`. F5.4 adds the parent
+    # request, so the record holds one record per source the run read.
     request = None
+    parent_request = None
+    parent_source = None
 
     try:
         if args.source == 'file':
@@ -5095,13 +5157,26 @@ def main():
         else:
             # F5.2: the producer hands bytes to the door, and the cache entry is
             # what gets parsed, so the run names the entry it read.
-            request = source_fetch.ApiRequest(host=args.host)
+            request = source_fetch.ApiRequest(host=args.host, path=container_coverage.record_path(args.path))
             print(f"Reading Panorama configuration from the API export of {request.https_host()} "
                   f"(cache entry {request.cache_name()})...")
             source = source_fetch.fetch(
                 request, args.cache_dir,
                 offline=args.offline, insecure=args.insecure,
                 max_input_bytes=args.max_input_bytes)
+
+            # F5.4: the declared parent is the second source, read through the same cached
+            # producer, so --offline covers both requests and each request keeps its own
+            # cache entry.
+            if args.parent:
+                parent_request = source_fetch.ApiRequest(host=args.host,
+                                                         path=container_coverage.record_path(args.parent))
+                print(f"Reading the parent scope '{parent_request.path}' from the same host "
+                      f"(cache entry {parent_request.cache_name()})...")
+                parent_source = source_fetch.fetch(
+                    parent_request, args.cache_dir,
+                    offline=args.offline, insecure=args.insecure,
+                    max_input_bytes=args.max_input_bytes)
 
         panorama = PanoramaParser(source)
 
@@ -5306,15 +5381,24 @@ def main():
         # F4.3: one line per entry the parse pipeline read. A gap is an operator
         # action, not a broken output, so it does not change the exit code (the
         # F4.1 gate does).
-        tf_gen.generate_conversion_report(panorama.ledger)
+        # F5.4: the parent ledger is read with the same row rule, so the matrix row that
+        # covers a parent entry is the row that covers the child entry. A run with no
+        # declared parent has no shadow to report.
+        parent_ledger = entry_coverage.EntryLedger(parent_source) if parent_source is not None else None
+        shadows = shadow_coverage.shadow_findings(panorama.ledger, parent_ledger)
+        tf_gen.generate_conversion_report(panorama.ledger, shadows)
 
         # F5.3: the provenance record. Written outside the report bodies, so the report
         # byte rule still holds: a report body names the source name, and the record is
         # the file that names the path. Written as data, so the cache reference a prune
-        # action reads is the `cache_entry` field, not a printed line.
-        record = provenance.record_for(panorama.source, request=request)
-        record_path = Path(args.output_dir) / provenance.PROVENANCE_FILE
-        record_path.write_text(provenance.render(record), encoding='utf-8')
+        # action reads is the `cache_entry` field, not a printed line. F5.4: one record per
+        # source the run read, in read order, so the shadow line names a source a reader
+        # can check against the record.
+        records = [provenance.record_for(panorama.source, request=request)]
+        if parent_request is not None:
+            records.append(provenance.record_for(parent_source, request=parent_request))
+        record_file = Path(args.output_dir) / provenance.PROVENANCE_FILE
+        record_file.write_text(provenance.render_records(records), encoding='utf-8')
 
         print("\n✓ Successfully generated Terraform configuration!")
         print("\n📄 Generated Migration Reports:")
@@ -5323,7 +5407,7 @@ def main():
             print("  - CONVERSION_REPORT.txt (one line per entry the parser read)")
         if ike_gateways or ipsec_tunnels:
             print("  - VPN_MIGRATION_REPORT.txt ⚠️  (VPN config with key management instructions)")
-        print(f"Provenance record: {record_path}")
+        print(f"Provenance record: {record_file}")
 
         # F4.2: one console line per uncovered section, so a run that read an
         # entry it cannot model is visible without opening the report.

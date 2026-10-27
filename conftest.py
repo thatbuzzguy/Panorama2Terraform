@@ -176,7 +176,7 @@ def run_main(module, argv: list):
         sys.argv = saved_argv
 
 
-def run_pipeline(module, fixture_name: str, output_dir):
+def run_pipeline(module, fixture_name, output_dir, extra_args: tuple = ()):
     """Run the converter pipeline in process and return the parser it built.
 
     The F4.4 property scan measures which keys an output reads from a captured object,
@@ -184,6 +184,9 @@ def run_pipeline(module, fixture_name: str, output_dir):
     runs a subprocess and the record is lost with the process. `main()` builds the
     parser itself, so this helper hooks `PanoramaParser.__init__` to get the instance
     back.
+
+    `extra_args` is appended to argv (F5.4), so a run can declare a source, a host, or a
+    scope path. `fixture_name` is None when argv names the source instead of a file.
 
     Returns None when the run refuses the input before the parse, because no parser
     exists to return. Console output is redirected, so a corpus run does not fill the
@@ -196,11 +199,16 @@ def run_pipeline(module, fixture_name: str, output_dir):
         original_init(self, *args, **kwargs)
         captured['parser'] = self
 
+    argv = ['panorama_to_terraform.py']
+    if fixture_name:
+        argv.append(str(FIXTURES_DIR / fixture_name))
+    argv.extend(['--output-dir', str(output_dir)])
+    argv.extend(str(arg) for arg in extra_args)
+
     saved_argv = list(sys.argv)
     module.PanoramaParser.__init__ = init
     try:
-        sys.argv = ['panorama_to_terraform.py', str(FIXTURES_DIR / fixture_name),
-                    '--output-dir', str(output_dir)]
+        sys.argv = argv
         with contextlib.redirect_stdout(io.StringIO()), contextlib.suppress(SystemExit):
             module.main()
     finally:

@@ -152,9 +152,9 @@ resource — so the missing part stays in the report:
 Reports written to the output directory. Each report is written only when it has content;
 `SOURCE.txt` is written on every completed run, because a run always reads a source:
 
-- `SOURCE.txt` - what the run read, as `field: value` data: the source kind, the name, the
-  path, the scope, the request identity, the cache entry, the size, and the SHA-256 hex of
-  the bytes the input door parsed ([`provenance.py`](provenance.py))
+- `SOURCE.txt` - what the run read, as `field: value` data, one record per source read: the
+  source kind, the name, the path, the scope, the request identity, the cache entry, the size,
+  and the SHA-256 hex of the bytes the input door parsed ([`provenance.py`](provenance.py))
 - `MANUAL_SETUP_REPORT.txt` - everything above that must be configured
   manually, plus a section for a container no parse method reads
   ([`container_coverage.py`](container_coverage.py))
@@ -164,8 +164,9 @@ Reports written to the output directory. Each report is written only when it has
 - `CONVERSION_REPORT.txt` - one line per entry the parse read: source line,
   object type, entry name, destination, detail, and the fields it captured;
   a section for a captured field no output read, for an entry a coverage matrix
-  row covers ([`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md)); the file
-  names the input file name, not its path
+  row covers ([`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md)); a section for a child entry
+  name that repeats a parent entry name, for a run that reads a declared parent source
+  ([`shadow_coverage.py`](shadow_coverage.py)); the file names the input file name, not its path
   ([`entry_coverage.py`](entry_coverage.py))
 
 The three grouped reports are grouped by the scope the export declares: device
@@ -206,7 +207,10 @@ The converter can also read the API response itself (`--source api --host panora
 which fetches over https and keeps a cached copy. The response is an envelope
 (`response/result/config`), so the fetch layer normalises the root to the `config` element
 before the parse. A cached entry lets a later run work with `--offline`, which needs no
-key. The key is read from `PANOS_API_KEY`, never from a command line. The arguments are in
+key. The key is read from `PANOS_API_KEY`, never from a command line. `--path` reads one scope
+instead of the whole config, and `--parent` declares the parent scope the run reads as a second
+source, which is what the shadow scan reads ([`shadow_coverage.py`](shadow_coverage.py)); both
+apply to the api source only. The arguments are in
 [docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md); the rules are in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §3.
 
@@ -304,9 +308,13 @@ call that module instead of restating them. The gate is described in
 - `tests/test_source_fetch.py` - the api producer: bytes handed to the shared door,
   the response wrapper, the key-free cache name, `--offline`, the https rules, and the
   key from the environment. No test calls the network
+- `tests/test_shadow_coverage.py` - the cross-source shadow scan: the per-scope shape in the
+  scan, the shadow fact (the matrix row is the key), the report section and its line shape,
+  the CLI argument rules, and the offline run reading both cache entries
 - `tests/test_provenance.py` - the provenance record (`SOURCE.txt`): the fields, the record
-  read back as data, the `Source:` label for both sources, the rule that a cache entry is
-  not pruned while a written record references it, and the record byte rule between two runs
+  read back as data, one record per source the run read, the `Source:` label for both sources,
+  the rule that a cache entry is not pruned while a written record references it, and the record
+  byte rule between two runs
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are
