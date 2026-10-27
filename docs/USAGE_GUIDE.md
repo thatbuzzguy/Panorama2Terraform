@@ -12,8 +12,10 @@ configuration for the `PaloAltoNetworks/panos` provider v2 (pinned
 `~> 2.0.14`). It also writes reports for configuration that has no v2
 resource, so nothing is dropped silently.
 
-The tool is a local file converter. It connects to no server, runs no command,
-and needs no credentials to convert.
+The tool is a local file converter. By default it connects to no server, runs no
+command, and needs no credentials. Reading from the Panorama API is an explicit
+choice (`--source api`), and a run that reads only the cache (`--offline`) needs no
+key and connects to no server.
 
 ## Requirements
 
@@ -21,7 +23,8 @@ and needs no credentials to convert.
 - Terraform 1.0 or later, only for the optional `--validate` check.
 - A Panorama XML export.
 
-No installation step. Run the script from the repository.
+No installation step. Run the script from the repository. The API source needs no
+package: it uses `urllib`, so the https rules below are the tool's own.
 
 ## Running the converter
 
@@ -31,7 +34,12 @@ python3 panorama_to_terraform.py export.xml --output-dir out
 
 | Argument | Meaning |
 |---|---|
-| `input_file` | Panorama XML export |
+| `input_file` | Panorama XML export. Optional with `--source api` |
+| `--source file\|api` | Where the input comes from. Default `file` |
+| `--host HOST` | Panorama host for `--source api`. Required with `--source api` |
+| `--cache-dir DIR` | Where fetched responses are kept. Default `panorama_cache` |
+| `--offline` | Read the cache only: no request, no key |
+| `--insecure` | Skip certificate verification. Explicit choice, api source only |
 | `--output-dir DIR` | Output directory. Default `terraform_output` |
 | `--max-input-bytes N` | Refuse an input larger than N. Default 67,108,864 (64 MiB) |
 | `--validate` | Add the `terraform init` + `terraform validate` check to the post-run gate |
@@ -40,7 +48,30 @@ The input check runs before the read allocates and before any file is written.
 The tool refuses a DTD, which is the only path an entity expansion or an
 external entity takes, and a Panorama export carries none. A refusal names the
 file, the limit and the measured size, exits non-zero, and writes nothing.
-Raise the size limit only for a trusted file.
+Raise the size limit only for a trusted file. A fetched response runs the same
+checks through the same boundary, and a refusal is written to no cache entry.
+
+### Reading from the API
+
+```bash
+export PANOS_API_KEY=...
+python3 panorama_to_terraform.py --source api --host panorama --output-dir out
+python3 panorama_to_terraform.py --source api --host panorama --offline --output-dir out
+```
+
+- The key is read from `PANOS_API_KEY`. It is never taken from a command line, so it
+  does not appear in a shell history or in a process list, and it never appears in an
+  output file or in a cache entry name.
+- The request is https only. A redirect that changes the scheme is refused, because
+  following it would send the key over a plain connection.
+- Each response is stored in `--cache-dir` under the SHA-256 hex of the host and the
+  sorted request parameters. The same request finds the same entry, so a repeat run reads
+  the cache and sends no request. `--offline` reads the cache only and refuses an entry
+  that is not there.
+- A stored response is the bytes the parser read, so the report lines name the lines of
+  that file. The report names the cache entry as the input.
+- An API response is an envelope (`response/result/config`). The converter reads the
+  `config` element inside it, so the conversion is the same as for an export file.
 
 ## Quick start script
 

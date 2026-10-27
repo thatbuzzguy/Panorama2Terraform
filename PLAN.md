@@ -44,9 +44,9 @@ it, and the output passes the sanity gate.
 
 ## Epic 5 — Upstream Data Sources (Goal 5)
 
-The tool reads one kind of source today: a file, through `xml_input.parse_xml`
-(`docs/ARCHITECTURE.md` §1). Epic 5 makes the source a declared thing, so a run can
-read the same config from a file, from a cached Panorama API export, or from
+The tool reads two kinds of source now: a file, and a cached Panorama API response
+through `source_fetch.py` (`docs/ARCHITECTURE.md` §3). Epic 5 makes the source a declared
+thing, so a run can read the same config from a file, from the API export, or from
 Terraform state, and so an entry can name which source it came from.
 
 - [x] **F5.1 Source read boundary** (refactor, no behaviour change) —
@@ -54,12 +54,12 @@ Terraform state, and so an entry can name which source it came from.
   is the file producer. `ParsedSource` carries the source origin. The report label stays
   as it is, because the label change belongs with the provenance record, so F5.1 writes
   the same report bytes as before. Every other piece in this epic depends on this one.
-- [ ] **F5.2 Cached API export** — `source_fetch.py`. The SDK is a byte producer
-  only: the parse layer keeps the ElementTree tree, because the container table,
-  the entry ledger and the line map are keyed on the tree. The response is cached
-  and the cache is what gets parsed, so a report line still names bytes a reader
-  can reopen. `--offline` reads the cache only. CI uses a fixture-backed producer,
-  so no test calls the network.
+- [x] **F5.2 Cached API export** — `source_fetch.py`, a standard-library byte producer for
+  the door. The response wrapper is normalised to the `config` element, so the container
+  table needs no wrapper row and the line map survives. The cache entry is what gets parsed,
+  and its name is the request identity without the credential. `--offline` reads the cache
+  only, so a run with no network passes CI. https only, no scheme-changing redirect, key from
+  the environment. The rules are in `docs/ARCHITECTURE.md` §3.
 - [ ] **F5.3 Provenance record** — `SOURCE.txt` names the source, the scope and the
   cache entry. It is written outside the report bodies, so the report byte rule
   still holds. This feature also carries the report label change to `Source:`.
@@ -80,8 +80,8 @@ Terraform state, and so an entry can name which source it came from.
 
 ## Sequencing
 
-1. Epic 4 is complete, so the open work is Epic 5. F5.2 is next: it is the first source
-   the tool reads, and F5.3 records what a run read from it.
+1. Epic 4 is complete, so the open work is Epic 5. F5.1 and F5.2 landed, so F5.3 is next: it
+   records what a run read, and it carries the report label change that F5.1 left as it was.
 2. F5.4 and F5.6 use the property scan F4.4 landed, because a shadow and a drift are
    property-level facts.
 3. The two report defects found while refreshing the documentation landed with F4.4:

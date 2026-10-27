@@ -34,6 +34,9 @@ split_configs/
 *-tf/
 terraform_output/
 
+# Cached API responses: fetched customer data, and the CI cache the tests build
+panorama_cache/
+
 # Temporary files
 *.tmp
 *.log

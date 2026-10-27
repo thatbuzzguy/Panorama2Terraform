@@ -198,6 +198,14 @@ and `tests/test_golden_files.py` pins the exact `.tf` file names and bytes.)
 - **CLI:** `show` with `set cli config-output-format xml`.
 - **API:** `curl -k -X GET 'https://panorama/api/?type=export&category=configuration&key=KEY' -o config.xml`
 
+The converter can also read the API response itself (`--source api --host panorama`),
+which fetches over https and keeps a cached copy. The response is an envelope
+(`response/result/config`), so the fetch layer normalises the root to the `config` element
+before the parse. A cached entry lets a later run work with `--offline`, which needs no
+key. The key is read from `PANOS_API_KEY`, never from a command line. The arguments are in
+[docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md); the rules are in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §3.
+
 ## Safe input
 
 Both scripts read the input through one boundary (`xml_input.py`) that runs the two
@@ -221,6 +229,11 @@ non-zero, and writes no output. For a file it names the path; for a producer wit
 file behind it it names the source (F5.1). Raise the limit only for a trusted input.
 The input boundary is standard-library only by design: `defusedxml` would close the DTD
 class but not the size class, so it is not a reason to add a dependency to the boundary.
+
+The api producer hands its response bytes through the same boundary, so a response over the
+limit or carrying a DTD is refused with the same words, and a refused response is never
+written to the cache. The https rules for that producer are in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §3.
 
 ## Deploying with Terraform
 
@@ -284,6 +297,9 @@ call that module instead of restating them. The gate is described in
   does not read
 - `tests/test_entry_coverage.py` - every parse method that reads entries
   marks them, so the per-entry report cannot lie
+- `tests/test_source_fetch.py` - the api producer: bytes handed to the shared door,
+  the response wrapper, the key-free cache name, `--offline`, the https rules, and the
+  key from the environment. No test calls the network
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are

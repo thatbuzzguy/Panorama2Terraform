@@ -40,9 +40,10 @@ from typing import Any, Optional
 import container_coverage
 import entry_coverage
 import sanity_checks
+import source_fetch
 from resource_mapping import INTERFACE_RESOURCE_TYPES, LOCATION_SCHEMA
 from xml_input import (
-    DEFAULT_MAX_INPUT_BYTES,
+    ParsedSource,
     UnsafeInputError,
     add_max_input_argument,
     parse_xml,
@@ -95,16 +96,14 @@ class PanoramaParser:
         'certificate-profile': 'certificate_profile',
     }
 
-    def __init__(self, xml_file: str, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES,
+    def __init__(self, source: ParsedSource,
                  ledger: Optional[entry_coverage.EntryLedger] = None):
-        self.xml_file = xml_file
-        # F3.8: one safe read for both entry points. It caps the input size
-        # and refuses a DTD at parser level (a DTD is the only way an entity
-        # expansion or an external entity reaches the parser), so nothing here
-        # expands an entity and nothing here reads an unbounded file.
-        # F4.2: the same parse records the source line of every element, so a
-        # report can name the line an entry came from.
-        self.source = parse_xml(xml_file, max_input_bytes)
+        # F5.2: the parser takes the ParsedSource the producer boundary returns,
+        # the same contract for every source. The parser keeps no read of its
+        # own: the size cap and the DTD refusal (F3.8) and the line map (F4.2)
+        # belong to the door, so a source that bypasses the door cannot reach
+        # this class.
+        self.source = source
         self.root = self.source.root
         # ElementTree has no parent pointers; build a child -> parent map so
         # parse methods can find the enclosing device group of an entry (F2.3)
@@ -5013,9 +5012,37 @@ def main():
     parser = argparse.ArgumentParser(
         description='Convert Palo Alto Panorama XML output to Terraform configuration'
     )
+    # F5.2: the input is a declared source. The file source is the default and
+    # behaves as before; the api source reads the cached API export.
     parser.add_argument(
         'input_file',
-        help='Input XML file from Panorama'
+        nargs='?',
+        help='Input XML file from Panorama (the source when --source file, the default)',
+    )
+    parser.add_argument(
+        '--source',
+        choices=('file', 'api'),
+        default='file',
+        help='where the input comes from: a file (default) or the Panorama API export (F5.2)',
+    )
+    parser.add_argument(
+        '--host',
+        help='Panorama host for --source api; https only, a bare host is read as https',
+    )
+    parser.add_argument(
+        '--cache-dir',
+        default=source_fetch.DEFAULT_CACHE_DIR,
+        help=f'cache directory for API responses (default: {source_fetch.DEFAULT_CACHE_DIR})',
+    )
+    parser.add_argument(
+        '--offline',
+        action='store_true',
+        help='read the cache entry only; never call the network',
+    )
+    parser.add_argument(
+        '--insecure',
+        action='store_true',
+        help='skip certificate verification for the API request. Verification is on by default',
     )
     parser.add_argument(
         '--output-dir',
@@ -5034,14 +5061,39 @@ def main():
 
     args = parser.parse_args()
 
-    # Check if input file exists
-    if not os.path.exists(args.input_file):
-        print(f"Error: Input file '{args.input_file}' not found")
-        return 1
+    if args.source == 'file':
+        if not args.input_file:
+            parser.error('--source file needs an input file')
+        if args.offline or args.insecure:
+            parser.error('--offline and --insecure apply to --source api, and a file source reads no network')
+        # Check if input file exists
+        if not os.path.exists(args.input_file):
+            print(f"Error: Input file '{args.input_file}' not found")
+            return 1
+    else:
+        if not args.host:
+            parser.error('--source api needs --host')
+        if args.input_file:
+            parser.error('--source api does not take an input file; it reads the cached API export')
+        if args.insecure and args.offline:
+            parser.error('--insecure applies to the network producer, and --offline never calls one')
 
     try:
-        print(f"Parsing Panorama configuration from {args.input_file}...")
-        panorama = PanoramaParser(args.input_file, args.max_input_bytes)
+        if args.source == 'file':
+            print(f"Parsing Panorama configuration from {args.input_file}...")
+            source = parse_xml(args.input_file, args.max_input_bytes)
+        else:
+            # F5.2: the producer hands bytes to the door, and the cache entry is
+            # what gets parsed, so the run names the entry it read.
+            request = source_fetch.ApiRequest(host=args.host)
+            print(f"Reading Panorama configuration from the API export of {request.https_host()} "
+                  f"(cache entry {request.cache_name()})...")
+            source = source_fetch.fetch(
+                request, args.cache_dir,
+                offline=args.offline, insecure=args.insecure,
+                max_input_bytes=args.max_input_bytes)
+
+        panorama = PanoramaParser(source)
 
         print("Extracting configuration elements...")
         device_groups = panorama.parse_device_groups()

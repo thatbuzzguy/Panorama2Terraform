@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response type="success" code="0" result="config">
+<result>
+<config version="11.1.2">
+  <device-group>
+    <entry name="Edge">
+      <address>
+        <entry name="web-server">
+          <ip-netmask>10.0.0.7</ip-netmask>
+        </entry>
+      </address>
+    </entry>
+  </device-group>
+</config>
+</result>
+</response>

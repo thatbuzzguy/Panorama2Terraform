@@ -21,6 +21,7 @@ those field gaps stay in backlog.md.
 
 import container_coverage
 import entry_coverage
+import xml_input
 from conftest import FIXTURES_DIR, run_pipeline, run_script
 from resource_mapping import COVERAGE_MATRIX
 
@@ -134,7 +135,7 @@ def _finding_rows(ledger) -> list:
 
 def test_read_record_tracks_the_keys_an_output_reads(converter_module, tmp_path):
     """`mark` returns the recorded object, and a read through it counts after the start."""
-    parser = converter_module.PanoramaParser(str(FIXTURES_DIR / 'tags.xml'))
+    parser = converter_module.PanoramaParser(xml_input.parse_xml(FIXTURES_DIR / 'tags.xml'))
     entry = next(e for e in parser.root.iter() if e.tag == 'entry' and e.get('name') == 'env-prod')
     recorded = parser.mark(entry, {'name': 'env-prod', 'color': 'light blue'})
     assert recorded.used_keys() == (), 'the record must stay off during the parse'
@@ -145,7 +146,8 @@ def test_read_record_tracks_the_keys_an_output_reads(converter_module, tmp_path)
 
 def test_parse_time_read_is_not_a_property_use(converter_module):
     """A key the parse method read off the XML element is not a property the output used."""
-    parser = converter_module.PanoramaParser(str(FIXTURES_DIR / 'ipsec_crypto_profiles.xml'))
+    parser = converter_module.PanoramaParser(
+        xml_input.parse_xml(FIXTURES_DIR / 'ipsec_crypto_profiles.xml'))
     parser.parse_ipsec_crypto_profiles()
     entry = next(e for e in parser.ledger.entries() if e.get('name') == 'IPSEC-DEFAULT')
     mark = parser.ledger.mark_for(entry)

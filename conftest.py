@@ -124,12 +124,27 @@ def xml_input_module(converter_module):
     return sys.modules["xml_input"]
 
 
+@pytest.fixture(scope="session")
+def fetch_module(xml_input_module):
+    """The F5.2 fetch module as the converter holds it.
+
+    The same module object, so a test and the script share one
+    SourceFetchError class and the same parse_bytes reference the door is.
+    """
+    return sys.modules["source_fetch"]
+
+
 @pytest.fixture
-def make_parser(converter_module):
-    """Return a factory that builds a PanoramaParser bound to a fixture file."""
+def make_parser(converter_module, xml_input_module):
+    """Return a factory that builds a PanoramaParser bound to a fixture file.
+
+    F5.2: the parser takes a ParsedSource, so the factory reads the fixture
+    through the door and hands the contract, not a path.
+    """
 
     def _make(fixture_name: str):
-        return converter_module.PanoramaParser(str(FIXTURES_DIR / fixture_name))
+        return converter_module.PanoramaParser(
+            xml_input_module.parse_xml(FIXTURES_DIR / fixture_name))
 
     return _make
 
@@ -143,6 +158,22 @@ def run_script(filename: str, *args: str) -> subprocess.CompletedProcess:
         cwd=REPO_ROOT,
         timeout=120,
     )
+
+
+def run_main(module, argv: list):
+    """Run the converter main() in process with the given argv. Returns the exit code.
+
+    F5.2 tests need an in-process run so an injected producer can stand in for the
+    network. Console output is redirected, so an in-process run does not fill the
+    pytest report.
+    """
+    saved_argv = list(sys.argv)
+    sys.argv = ['panorama_to_terraform.py', *[str(a) for a in argv]]
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            return module.main()
+    finally:
+        sys.argv = saved_argv
 
 
 def run_pipeline(module, fixture_name: str, output_dir):

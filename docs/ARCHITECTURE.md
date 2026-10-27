@@ -16,8 +16,9 @@ a design rule enforced by construction.
 
 | File | Role | Rule it keeps |
 |---|---|---|
-| `panorama_to_terraform.py` | The converter: `PanoramaParser` (read and model), `TerraformGenerator` (model and write), `main()` (order) | reads input only through `xml_input.parse_xml` |
+| `panorama_to_terraform.py` | The converter: `PanoramaParser` (model), `TerraformGenerator` (model and write), `main()` (order) | the parser consumes only the producer contract (`ParsedSource`); it reads no file and opens no connection itself, so a source is either the file producer or the api producer |
 | `xml_input.py` | The only input read, shared by both entry points, through one producer boundary (F5.1) | size cap checked before the read for a file, and on the bytes handed by any producer; DTD refused by the parser |
+| `source_fetch.py` | The api producer (F5.2): the https request, the cached copy, the response wrapper | https only; a redirect that changes the scheme is refused; the cache holds exactly the bytes the boundary parsed; the key comes from the environment only |
 | `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX` | the single source of truth; no resource name or attribute from memory |
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy` |
 | `container_coverage.py` | The container table (§3.1) and the section rule | the table is data, so a parse method cannot exist without a row |
@@ -134,6 +135,50 @@ declared property list, so its field gaps are recorded in `backlog.md` instead.
    `::test_boundary_refuses_producer_bytes_over_the_limit`,
    `::test_boundary_refuses_a_dtd_in_producer_bytes`, `::test_boundary_opened_no_file`,
    and `::test_file_producer_runs_the_checks_through_the_boundary`.
+
+   **The api producer** (`source_fetch.py`, F5.2) is a second producer behind the same
+   boundary, so the two checks apply to a response exactly as they apply to a file. Three
+   rules:
+
+   - **The wrapper is normalised.** A Panorama API response is not a configuration export:
+     it is a transport envelope, `response/result/config`, and the converter reads a
+     `config` element. The producer moves the root to the `config` element the envelope
+     carries. It does not reparse, so the origin and the line map are the same objects, and
+     a report line still names the line the response carries. Accepted shapes are
+     `response/result/config`, `result/config`, and a plain `config`. A `result` with no
+     `config` element is a per-scope response, which F5.4 owns, so the producer refuses it
+     instead of guessing. The cache holds the response as it arrived: normalising before the
+     cache write would put bytes in the file that the parser never saw. Pinned by
+     `tests/test_source_fetch.py::test_fetch_root_is_the_config_element_under_result` (the
+     origin and the line map are the same objects),
+     `::test_result_root_and_plain_config_root_are_accepted`,
+     `::test_failed_response_is_refused_before_the_cache_entry_is_written`,
+     `::test_result_without_a_config_element_is_refused`, and
+     `::test_container_table_names_no_wrapper_row`.
+   - **The cache holds the parsed bytes under a key-free name.** An entry is named by the
+     SHA-256 hex of the host and the sorted request parameters. The key is not part of the
+     name, so the credential never appears in a file name, and two requests with the same
+     parameters but different keys share one entry. `--offline` reads only this cache and
+     refuses a missing entry; it needs no key, so a CI run on a committed cache connects to
+     no server. The checks must pass before a write, so a refused response never reaches the
+     cache, and two runs on the same cache write byte-identical output. Pinned by
+     `tests/test_source_fetch.py::test_cache_miss_then_hit_reopens_the_same_bytes`,
+     `::test_cache_entry_name_is_the_request_identity_without_the_key`,
+     `::test_cache_hit_over_the_limit_is_refused_through_the_door`,
+     `::test_offline_refuses_a_missing_entry_and_calls_no_producer`,
+     `::test_offline_reopens_an_entry_with_no_key`, and
+     `::test_two_runs_on_the_same_cache_bytes_write_identical_bytes`.
+   - **https only, with no silent downgrade.** The request uses https; `--insecure` is the
+     explicit choice to skip certificate verification. A redirect that changes the scheme is
+     refused, because following it would send the credential over a plain connection. The
+     key is read from the environment (`PANOS_API_KEY`) only, never from a command line, so
+     it does not appear in a shell history or in a process list. Standard library only: the
+     planned `pan-os-python` producer cannot enforce the redirect rule, so it is not a
+     dependency (see `backlog.md`). Pinned by
+     `tests/test_source_fetch.py::test_the_producer_accepts_https_only`,
+     `::test_a_redirect_that_changes_the_scheme_is_refused`,
+     `::test_verification_is_on_by_default_and_insecure_is_explicit`, and
+     `::test_the_key_never_reaches_the_cache_name_or_the_output`.
 2. **Parent map.** ElementTree keeps no parent pointers, so the parser builds a
    child → parent map once. The four scope facts walk that map.
 3. **Association tables.** `parse_associations` reads the four membership lists
