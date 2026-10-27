@@ -334,10 +334,11 @@ def test_report_line_fields_are_in_report_order(converter_module):
     assert 'captured: name only' in line
 
 
-def test_report_names_the_file_not_the_path(tmp_path):
+def test_report_names_the_source_not_the_path(tmp_path):
+    """The report body names the source name, never the path (F4.2 rule 6)."""
     report = _convert(GAP_FIXTURE, tmp_path)['report']
-    file_line = [line for line in report.splitlines() if line.startswith('Input file:')]
-    assert file_line == [f'Input file: {GAP_FIXTURE}'], file_line
+    file_line = [line for line in report.splitlines() if line.startswith(container_coverage.SOURCE_LABEL)]
+    assert file_line == [f'Source: {GAP_FIXTURE}'], file_line
     assert str(FIXTURES_DIR) not in report
 
 

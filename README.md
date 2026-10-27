@@ -149,8 +149,12 @@ resource — so the missing part stays in the report:
   `panos_service` accepts one leg, so the tcp leg emits and the udp leg is
   listed with its ports
 
-Reports written to the output directory, each only when it has content:
+Reports written to the output directory. Each report is written only when it has content;
+`SOURCE.txt` is written on every completed run, because a run always reads a source:
 
+- `SOURCE.txt` - what the run read, as `field: value` data: the source kind, the name, the
+  path, the scope, the request identity, the cache entry, the size, and the SHA-256 hex of
+  the bytes the input door parsed ([`provenance.py`](provenance.py))
 - `MANUAL_SETUP_REPORT.txt` - everything above that must be configured
   manually, plus a section for a container no parse method reads
   ([`container_coverage.py`](container_coverage.py))
@@ -184,7 +188,7 @@ security_profiles.tf  security_profile_groups.tf
 zones.tf  interfaces.tf  virtual_routers.tf  monitor_profiles.tf
 vpn.tf
 MANUAL_SETUP_REPORT.txt  INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.txt
-CONVERSION_REPORT.txt  SANITY_REPORT.txt
+CONVERSION_REPORT.txt  SANITY_REPORT.txt  SOURCE.txt
 ```
 
 (Only files with content are written; the list above is the union across
@@ -300,6 +304,9 @@ call that module instead of restating them. The gate is described in
 - `tests/test_source_fetch.py` - the api producer: bytes handed to the shared door,
   the response wrapper, the key-free cache name, `--offline`, the https rules, and the
   key from the environment. No test calls the network
+- `tests/test_provenance.py` - the provenance record (`SOURCE.txt`): the fields, the record
+  read back as data, the `Source:` label for both sources, the rule that a cache entry is
+  not pruned while a written record references it, and the record byte rule between two runs
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are
@@ -346,4 +353,6 @@ The summary of the two options, including the network copyleft rule, is in
 - [Palo Alto Terraform Provider](https://registry.terraform.io/providers/PaloAltoNetworks/panos/latest/docs)
 - [PAN-OS Advanced Routing](https://docs.paloaltonetworks.com/pan-os/11-0/pan-os-networking-admin/advanced-routing)
 
-The converter reads a Panorama XML export file. It does not call the PAN-OS API.
+The converter reads a declared source. By default it reads a file and calls no server.
+Reading the PAN-OS API export is an explicit choice (`--source api`), and `--offline`
+reads the cache only, so a run that calls no server still produces the same bytes.

@@ -1,34 +1,37 @@
-# To Do — F5.3 Provenance Record (next feature)
+# To Do — F5.4 Cross-Source Shadow Report (next feature)
 
-Epic 5 in progress. F5.1 (the read door) and F5.2 (the cached API export) landed; their
-records are in the git history. F5.3 is next, because a run now needs to say which source it
-read.
+Epic 5 in progress. F5.1 (the read door), F5.2 (the cached API export) and F5.3 (the
+provenance record) landed; their records are in the git history. F5.4 is next, because the
+record now names the scope a source holds, and a shadow is the fact a single source cannot
+show.
 
-Acceptance criteria for F5.3 go into `acceptance.md` when the work starts.
+Acceptance criteria for F5.4 go into `acceptance.md` when the work starts.
 
 Pieces:
 
-1. [ ] Decide what the provenance record states: the source kind, the file path or the host
-   and request identity, the cache entry the run read, and the scope. One record per run,
-   naming bytes a reader can reopen.
-2. [ ] `SOURCE.txt` is written outside the report bodies, so the report byte rule still holds.
-   Decide which files the goldens cover, and how a determinism test handles a name that comes
-   from the cache.
-3. [ ] The report label change from `Input file:` to `Source:`, which F5.1 left as it was. The
-   golden sets pin the report bytes, so the label change regenerates them; state that in the
-   acceptance criteria before the code.
-4. [ ] The cache pruning rule: an entry is not pruned while a report references it. The rule
-   needs the reference to be data, not a printed line.
-5. [ ] Gate: `ruff check .`, `pytest`, goldens byte-identical after the label change, report
-   determinism, exit codes unchanged.
-6. [ ] Documents: `docs/ARCHITECTURE.md` §3 and §6, `docs/USAGE_GUIDE.md` (the output file
-   list), `README.md`.
-
-F5.4 and F5.6 use the property scan F4.4 landed, because a shadow and a drift are
-property-level facts.
+1. [ ] Decide the per-scope response rule. A `result` with no `config` element is the
+   per-scope shape (`type=config&action=get&path=...`), which the wrapper decision refuses
+   today because it is not the whole-config shape the container table knows. F5.4 owns a rule
+   for it, and the rule must keep the origin and the line map as the same objects.
+2. [ ] Decide what a shadow is at property level: a child entry name that repeats a parent
+   name. A per-device-group run cannot see its parent, so an inherited name stays a plain
+   string and a shadowed object is invisible (the property scan, F4.4).
+3. [ ] Decide which property scan rule reports a shadow, and where it prints: the property
+   section of `CONVERSION_REPORT.txt` is the section that names a matrix row, so a shadow is
+   a finding there or it needs its own section decided first.
+4. [ ] The ledger names the source of each entry. The provenance record is the data for that,
+   so a shadow row names both sources by the bytes each one read.
+5. [ ] The parent as a second source, read offline: one cache entry per request identity, so a
+   shadow test runs with no network and CI still passes.
+6. [ ] Gate: `ruff check .`, `pytest`, goldens byte-identical, report determinism, exit codes
+   unchanged.
+7. [ ] Documents: `docs/ARCHITECTURE.md` §3.3 and §4.5, `docs/COVERAGE_MATRIX.md`,
+   `docs/USAGE_GUIDE.md`, `README.md`.
 
 ## Open items that are not in this feature
 
+- The prune action. The rule is in `provenance.py` (F5.3), and the reference is data, but no
+  command runs the prune. Recorded in `backlog.md`.
 - Property gaps in a container no matrix row covers (report, inventory, bookkeeping,
   count-only, nested-block): recorded in `backlog.md`, and pinned as out of scope by
   `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers`.
@@ -36,7 +39,7 @@ property-level facts.
   line shape decided first.
 - `panos_aggregate_layer3_subinterface` has no corpus entry to measure, so its declared
   properties are grounded in the emitter source only.
-- The per-scope API fetch (`type=config&action=get&path=...`) is refused today because a
-  `result` with no `config` element is not the shape the container table knows. F5.4 owns it.
 - F5.5 Read-through data blocks (opt-in): `DATA_SOURCE_SCHEMA` verified against the
   provider `data_source_schemas`, plus the data-block gate rule.
+- F5.6 Terraform state as a source: report-only ownership and drift, offline, using the
+  property scan.

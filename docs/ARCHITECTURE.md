@@ -24,6 +24,7 @@ a design rule enforced by construction.
 | `container_coverage.py` | The container table (§3.1) and the section rule | the table is data, so a parse method cannot exist without a row |
 | `entry_coverage.py` | The per-entry report (§3.2) | a destination comes from the table row, or from the mark when the method knows better |
 | `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state |
+| `provenance.py` | The provenance record (F5.3): what one run read, written as `SOURCE.txt` | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line |
 | `conftest.py`, `tests/` | The gate | each rule in this document names the test that pins it |
 
 `tools/build_kitchen_sink.py` assembles the fixture corpus from committed files.
@@ -298,6 +299,47 @@ destination writes nothing. A gap is an operator action, so it does not change t
 exit code, which the F4.1 gate still decides (§4.6). A run with no entries writes
 no report file, and a run with no gaps prints no extra console line.
 
+### 3.3 Provenance record
+
+`main()` writes one record per completed run, as `SOURCE.txt` in the output directory. The
+record names the bytes a reader can reopen, so a report line can be checked against the file
+it describes. Eight fields, in this order: `kind`, `name`, `path`, `scope`, `request`,
+`cache_entry`, `size`, `sha256`. A field that does not apply to the source kind is `-`, so
+one shape reads. The rule lives in `provenance.py`.
+
+Four rules the record keeps:
+
+- **The record is data.** One `field: value` line per field, in the fixed order, with no
+  prose and no timestamp, so two runs on the same bytes write the same record.
+  `parse_record` reads a written record back as the record, so a tool can act on it, and a
+  line that is not a declared field is refused. Pinned by
+  `tests/test_provenance.py::test_the_record_round_trips_as_data` and
+  `::test_a_record_line_that_is_not_a_field_is_refused`.
+- **The record is not a report body.** A report body names the source name only, never the
+  path (F4.2 rule 6), so the path field here cannot move a report byte. The label a report
+  body uses for the source is `Source:` (`container_coverage.SOURCE_LABEL`), for both
+  sources, and both report writers read that one constant. Pinned by
+  `tests/test_provenance.py::test_the_report_bodies_still_name_the_name_not_the_path` and
+  `::test_one_label_for_both_sources`, and by the pins in `tests/test_container_coverage.py`
+  and `tests/test_entry_coverage.py`.
+- **The byte facts come from the door.** `xml_input.ParsedSource` records the size and the
+  SHA-256 hex of the bytes it parsed, so the record names the bytes the door checked, not a
+  file that may have changed since the run. Pinned by
+  `tests/test_provenance.py::test_a_file_run_record_names_bytes_a_reader_can_reopen` and
+  `::test_an_api_run_record_names_the_request_identity_and_the_cache_entry`.
+- **The pruning rule.** A cache entry is not pruned while a written record references it, so
+  the reference is the `cache_entry` field of a parsed record, never a printed line.
+  `provenance.prunable_entries` states the rule; no command runs the prune yet (see
+  [`../backlog.md`](../backlog.md)). Pinned by
+  `tests/test_provenance.py::test_the_reference_is_data_not_a_printed_line`.
+
+The record names no credential: the `request` field is the key-free identity the cache name
+is hashed from (F5.2 key rule, pinned by
+`tests/test_provenance.py::test_the_record_never_names_the_key`). A run that refuses its
+input writes no record, like every other input refusal. The `scope` field names the scope the
+source holds; `whole-config` is the only scope a source holds today, and the per-scope source
+(F5.4) and the state source (F5.6) read that field.
+
 ## 4. Emit pipeline
 
 ### 4.1 Order
@@ -412,7 +454,8 @@ Four report files, each written only when it has content:
   both, so they cannot disagree.
 
 The post-run gate writes `SANITY_REPORT.txt` on every run (§4.6). The five files
-are the complete set the generator writes, plus `README.md`.
+above are the complete set the generator writes; `main()` adds `README.md` and the
+provenance record `SOURCE.txt` (§3.3), which every completed run writes.
 
 A device group prints only when the export declares one. `Shared` names the
 shared section, not a device group. `localhost.localdomain` prints as the "this
@@ -514,6 +557,12 @@ Two runs on the same input produce identical bytes.
   `tests/test_sanity_gate.py::test_report_is_byte_identical_between_runs`. The
   sanity report names no timestamp and no absolute path, which is what makes that
   claim testable.
+- The provenance record (§3.3) states no timestamp and no value the run did not receive, so
+  two runs with the same arguments write the same record bytes. Its `path` field is the path
+  the run received, so the cache name is the only cache-derived value in it, and that name
+  comes from the request identity, not from the cache directory. Pinned by
+  `tests/test_provenance.py::test_two_runs_on_the_same_bytes_write_the_same_record` and
+  `::test_a_cache_derived_name_repeats_across_cache_dirs`.
   Determinism is pinned by test, not paid in the CLI.
 
 ## 7. What this document does not claim

@@ -304,8 +304,14 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   `ARCHITECTURE.md` §3. The open part is the per-scope fetch (`type=config&action=get&path=...`),
   which returns a `result` with no `config` element and is refused today. F5.4 needs its own
   rule for that shape when it reads a fetched scope.
-- Open: cache pruning. A cache entry is not pruned while a report references it. The rule
-  waits for the provenance record (F5.3), because a report line names the cache entry it read.
+- Open: the pruning rule, stated in `provenance.py` (F5.3, landed 2026-10-27). A cache entry
+  is not pruned while a written record references it, and the reference is the `cache_entry`
+  field of a parsed record, so the rule reads data and not a printed line. The prune action
+  itself is not built: it needs the record directory decided first, because a record is
+  written per output directory and a later run cannot know which records a prune action will
+  read.
+- Open: the record `scope` field is `whole-config` today, because that is the only scope a
+  source holds. F5.4 and F5.6 read that field for a declared scope.
 - Open: the provenance record names the host and the scope, never the credential. The key
   rule itself (environment only, never argv, never a generated file) is in `ARCHITECTURE.md` §3.
 - Provider data sources, verified against 2.0.14 with

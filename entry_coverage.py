@@ -31,8 +31,9 @@ reference (an interface `ip` entry, an OSPF area `range` entry) is recorded on
 the parent row through the field the name went into.
 
 Report order is fixed: rows are sorted by line, then object type, then name, so
-the same input produces the same bytes. The report names the input file name
-only, never the path (F4.2 rule 6).
+the same input produces the same bytes. The report names the source name only, never
+the path (F4.2 rule 6); the path is in the provenance record (F5.3). The label is
+`container_coverage.SOURCE_LABEL`.
 """
 
 import re

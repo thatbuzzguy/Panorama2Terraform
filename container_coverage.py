@@ -22,8 +22,8 @@ method reads a container with a relative pattern (`findall('.//address/entry')`)
 and the same container can sit under a scope entry or under a rulebase prefix.
 
 Report order is fixed: findings are sorted by tag chain, then line, so the same
-input produces the same bytes. The report names the input file name only, never
-the path.
+input produces the same bytes. A report body names the source name only, never the
+path (`SOURCE_LABEL`); the path is in the provenance record (`provenance.py`, F5.3).
 """
 
 import xml.etree.ElementTree as ET
@@ -333,6 +333,12 @@ def scan(source: ParsedSource, parents: dict) -> list[Finding]:
 
 SECTION_TITLE = 'Entry Coverage: Containers The Parser Does Not Read'
 
+# The label a report body uses for the source it read (F5.3). One label, stated here, so
+# the per-entry report and this section cannot disagree. It names the source name only:
+# the path belongs to the provenance record, because a report body must stay byte-identical
+# between runs that read the same bytes from different paths.
+SOURCE_LABEL = 'Source:'
+
 
 def entry_phrase(count: int) -> str:
     """'1 entry' or 'N entries'. One wording for the report and the console."""
@@ -363,7 +369,7 @@ def render_section(findings: list[Finding], source_name: str) -> str:
     """The report section for the findings. Empty when there is nothing to say."""
     if not findings:
         return ''
-    lines = [f'--- {SECTION_TITLE} ---', f'Input file: {source_name}']
+    lines = [f'--- {SECTION_TITLE} ---', f'{SOURCE_LABEL} {source_name}']
     lines.extend(report_line(finding) for finding in findings)
     lines.append('  No parse method reads these containers, so their entries are '
                  'not in the model and cannot be emitted. Property-level coverage '

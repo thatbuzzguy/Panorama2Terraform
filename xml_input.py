@@ -45,6 +45,10 @@ producer and keeps the size check before the read. A producer that hands bytes w
 file behind it gets the same refusal as a file. The tree shape does not change, so the
 container table, the entry ledger, the parent walk and the line map are unchanged.
 
+F5.3 records the size and the SHA-256 hex of the bytes the door parsed, so the
+provenance record names the bytes it checked, not whatever file stands at the origin
+path now. The door is the only place that can know which bytes were parsed.
+
 Facts this module depends on, verified against expat 2.6.1 (the parser
 behind ``xml.etree``):
 
@@ -69,6 +73,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import xml.etree.ElementTree as ET
 import xml.parsers.expat as expat
 from dataclasses import dataclass, field
@@ -232,11 +237,17 @@ class ParsedSource:
     every element stays alive while the source is held and an id cannot be
     reused. An element copied out of this tree is not in the map, so the
     device-group splitter, which builds new trees from copies, gets no line.
+
+    ``size`` and ``sha256`` are the facts the F5.3 provenance record states: measured on
+    the bytes the door parsed, so the record names the bytes it checked, not a file that
+    may have changed since the run.
     """
 
     origin: SourceOrigin
     root: ET.Element
     lines: dict = field(default_factory=dict, compare=False, repr=False)
+    size: int = 0
+    sha256: str = ''
 
     @property
     def name(self) -> str:
@@ -267,6 +278,10 @@ def _parse_with_lines(data: bytes, origin: SourceOrigin) -> ParsedSource:
 
     Namespace processing is enabled the way ``xml.etree`` enables it, so the
     tree is the tree ``ET.fromstring`` builds from the same bytes.
+
+    The size and the SHA-256 hex are measured on these bytes, so the F5.3 record names
+    the bytes the door checked. A caller that hashes a file instead can name bytes the
+    parse never saw.
     """
     parser = expat.ParserCreate(None, "}")
     builder = ET.TreeBuilder()
@@ -312,7 +327,13 @@ def _parse_with_lines(data: bytes, origin: SourceOrigin) -> ParsedSource:
         # Keep the F3.8 error type: both entry points catch ET.ParseError.
         raise ET.ParseError(str(exc)) from exc
 
-    return ParsedSource(origin=origin, root=builder.close(), lines=lines)
+    return ParsedSource(
+        origin=origin,
+        root=builder.close(),
+        lines=lines,
+        size=len(data),
+        sha256=hashlib.sha256(data).hexdigest(),
+    )
 
 
 def parse_bytes(data: bytes, origin: SourceOrigin,
@@ -326,6 +347,9 @@ def parse_bytes(data: bytes, origin: SourceOrigin,
     A producer that hands bytes with no file behind it is refused the same way a file
     is, and the refusal names the origin. This is the fact F5.2 depends on: adding a
     source means adding a producer, not adding a check.
+
+    The bytes that passed both checks are the bytes recorded in the F5.3 provenance
+    record, so the record names the bytes the door checked.
 
     Raises UnsafeInputError for a size or DTD refusal, and
     xml.etree.ElementTree.ParseError for malformed XML.
