@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<!-- F4.4: the BGP and OSPF manual report sections name the scope and the router.
+
+     Two routers, in two scopes, so a flat report cannot tell them apart:
+
+       device group Router-Group   R1, OSPF enabled
+       template Router-Template    R2, BGP enabled
+
+     Each router is read once, because the parse keeps one path.
+-->
+<config version="10.1.0" urldb="paloaltonetworks">
+  <device-group>
+    <entry name="Router-Group">
+      <network>
+        <virtual-router>
+          <entry name="R1">
+            <protocol>
+              <ospf>
+                <enable>yes</enable>
+                <router-id>10.0.0.1</router-id>
+                <area>
+                  <entry name="0.0.0.0">
+                    <type><stub/></type>
+                  </entry>
+                </area>
+              </ospf>
+            </protocol>
+          </entry>
+        </virtual-router>
+      </network>
+    </entry>
+  </device-group>
+  <templates>
+    <entry name="Router-Template">
+      <network>
+        <virtual-router>
+          <entry name="R2">
+            <protocol>
+              <bgp>
+                <enable>yes</enable>
+                <router-id>10.0.0.2</router-id>
+                <local-as>65002</local-as>
+                <peer-group>
+                  <entry name="PG-Remote">
+                    <type>external</type>
+                    <export-nexthop>non-default</export-nexthop>
+                    <import-nexthop>non-default</import-nexthop>
+                  </entry>
+                </peer-group>
+                <redist-rules>
+                  <entry name="redist-connected">
+                    <enable>yes</enable>
+                    <address-family-identifier>ipv4-unicast</address-family-identifier>
+                  </entry>
+                </redist-rules>
+              </bgp>
+            </protocol>
+          </entry>
+        </virtual-router>
+      </network>
+    </entry>
+  </templates>
+</config>

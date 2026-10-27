@@ -110,6 +110,10 @@ recorded in `backlog.md`. The F4.3 per-entry report lists it as a gap, so the
 operator sees which entry it is instead of the document claiming every entry is
 accounted for.
 
+A captured field that no output reads is a property gap, and the property scan reports
+it for a container the matrix covers (§3.2). A destination with no matrix row has no
+declared property list, so its field gaps are recorded in `backlog.md` instead.
+
 ## 3. Parse pipeline
 
 1. **Safe read.** `xml_input.parse_bytes` is the producer boundary (F5.1): it checks
@@ -146,16 +150,18 @@ accounted for.
    object per entry. Design rule enforced by construction: one path per element
    kind, so no entry is visited twice. The multi-path methods read disjoint
    element kinds (6 interface kinds, 6 profile categories, the two tunnel
-   monitor paths). One exception is open: `parse_bgp` and `parse_ospf` list two
-   patterns that match the same element when the router sits under a device, so
-   those entries are read twice and the manual report prints their lines twice.
-   That case is recorded in [`../backlog.md`](../backlog.md).
+   monitor paths, `parse_bgp` and `parse_ospf` reading one
+   `network/virtual-router/entry` path). `tests/test_coverage_matrix.py` and
+   `tests/test_container_coverage.py` keep the paths and the table in step.
    Each parse method also marks the entries it reads (F4.3): `self.mark(entry,
    captured)` at the point it builds the object, and `self.mark_skipped(entry,
-   reason)` for an entry it visits and does not model. The mark stores the object
-   by reference, so a field added after the mark is still reported. Pinned by
-   `tests/test_entry_coverage.py::test_every_parse_method_that_reads_entries_marks_them`
-   and `::test_corpus_entries_in_a_covered_container_are_all_marked`.
+   reason)` for an entry it visits and does not model. `mark` returns the recorded
+   object, so a parse method must work through the object it returns: a field added
+   after the mark is still reported, and that object records the keys an output reads
+   from it (F4.4, §3.2). Pinned by
+   `tests/test_entry_coverage.py::test_every_parse_method_that_reads_entries_marks_them`,
+   `::test_fields_added_through_the_recorded_object_are_recorded`, and
+   `::test_corpus_entries_in_a_covered_container_are_all_marked`.
 5. **Splitter (optional).** `split_device_groups.py` joins a device group, a
    template and a template stack on the devices they list, and copies each entry
    with `copy.deepcopy`, because ElementTree `append` does not reparent: it makes
@@ -178,8 +184,11 @@ Two rules the scan uses:
 - A container is a **section** when no config-object entry lies between it and a
   config root: the `config` element, or an entry whose container is one of the
   four scope containers in §2.2. A container inside a config-object entry is a
-  property level. The property-level scan (F4.4) does not exist yet, so this
-  section does not report it and the per-entry row counts the entries instead.
+  property level, and the property scan (F4.4) covers it (§3.2). The scan scope is
+  the entries a matrix row covers, so a report, inventory, bookkeeping, count-only,
+  or nested-block container is not a property finding: it has no row, and only a row
+  can name the properties an emitter reads. Those field gaps are recorded in
+  [`../backlog.md`](../backlog.md).
 - A section no row covers is a finding. The scan reports it in
   `MANUAL_SETUP_REPORT.txt` with its source line and entry count, and prints one
   console line per finding. An absent section is not a finding, an empty known
@@ -200,11 +209,11 @@ one line per config entry the parse pipeline read, in this order:
   line <source line>  <object type>/<entry name>  <destination>  <detail>  captured: <fields>
 ```
 
-Four rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
+Five rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
 
 - **One entry is one report row**, at section level only. An entry inside a
-  config-object entry is a property level (§3.1), so the property-level scan
-  covers it and this report shows the count on the parent row instead. Entries
+  config-object entry is a property level (§3.1), so the property scan reports it and
+  this report shows the count on the parent row instead. Entries
   under `predefined` are not rows; the header gives the count.
 - **Object type is the F4.2 `section_path`** of the entry's container. No second
   naming rule.
@@ -218,10 +227,27 @@ Four rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
   An entry with nothing but its name says `captured: name only`. A field the
   method stored inside a type sub-shape is reported under the object key, not the
   XML tag.
+- **A property the parse captured and no output read is a finding**, and the report
+  prints findings in their own section after the gap section:
+
+  ```text
+    line <source line>  <object type>/<entry name>  <matrix row>  no output read: <properties>
+  ```
+
+  The scan measures reads at run time: the captured object records the keys an output
+  reads from it, and the record starts after the parse, so a key the parse method read
+  off the XML element is not a property an output used. Only an entry a matrix row
+  covers is in scope, so a report, inventory, bookkeeping, count-only, or nested-block
+  container is not a finding (§3.1). Pinned by `tests/test_property_coverage.py`,
+  including the corpus findings, the parity with the matrix row, the scan scope, and the
+  report section. The console prints the gap lines only; a property finding prints in
+  the report, because it names a matrix row.
 
 Rows are grouped with the F3.9 scope rule (`_report_scope_path`), the same rule
 the interface and manual reports use, so the same name in two device groups is two
-sections. The report names the input file name, never the path (§4.4), and two
+sections. A scope name is read from the scope `<entry>`, not from the container
+element, so the report prints the device group, template, and device sections for a
+row inside a scope. The report names the input file name, never the path (§4.4), and two
 runs on the same input write the same bytes. The gap section lists every row whose
 destination writes nothing. A gap is an operator action, so it does not change the
 exit code, which the F4.1 gate still decides (§4.6). A run with no entries writes
@@ -326,7 +352,14 @@ Four report files, each written only when it has content:
 
 - `CONVERSION_REPORT.txt` — one line per config entry the parse pipeline read (§3.2).
 - `MANUAL_SETUP_REPORT.txt` — report-only areas, the location facts a type
-  cannot carry, and the placeholder template.
+  cannot carry, and the placeholder template. The BGP and OSPF blocks name the scope
+  and the router, because two routers in two scopes can hold the same values, and they
+  use the same grouping rule as the other two reports. A field the parse captures for
+  these sections is either printed or reported as a property no output read (§3.2),
+  so it cannot be held and left out. Pinned by
+  `tests/test_reports.py::test_bgp_and_ospf_sections_name_the_scope_and_the_router`,
+  `::test_device_router_section_names_the_device`, and
+  `::test_bgp_section_prints_what_the_parse_captured`.
 - `INTERFACE_MIGRATION_REPORT.txt` and `VPN_MIGRATION_REPORT.txt` — one section
   per scope the export declares: device group first, then the template, then the
   device, then the object kind inside the section. One shared rule
@@ -442,15 +475,17 @@ Two runs on the same input produce identical bytes.
 
 These are planned (`PLAN.md`) and not implemented:
 
-- **Property-level coverage** — `COVERAGE_MATRIX` is type level. No scan reports
-  a property the parse captured but no output used.
 - **Rulebase** — not recorded, so not emitted.
 
 F4.1 is implemented (§4.6): the static rules run on every conversion, and the
 result is `SANITY_REPORT.txt`. F4.2 is implemented (§3.1): the container table is
 code, the parse records the source line of every element, and an uncovered section
 is reported. F4.3 is implemented (§3.2): one report row per entry the parse read,
-with its destination, and a gap section for the rows that write nothing.
+with its destination, and a gap section for the rows that write nothing. F4.4 is
+implemented (§3.1, §3.2, `docs/COVERAGE_MATRIX.md`): each matrix row names the
+properties its emitter reads, and a captured property no output read is reported for
+an entry a row covers. A field gap in a container no row covers is not reported; it
+is recorded in `backlog.md`.
 
 These are decided limits, not bugs: the rulebase is not emitted, security profile
 bodies are not parsed, EDL credentials are never written, a service emits one

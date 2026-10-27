@@ -10,23 +10,32 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   reads an operator's export. Leave it alone unless it ever takes a
   command-line path.
 
-- `parse_bgp` and `parse_ospf` read the same element through two paths
-  (`.../network/virtual-router/entry/protocol/<kind>` and
-  `.../devices/entry/network/virtual-router/entry/protocol/<kind>`), so an export
-  that puts a router under a device reads that element twice. The manual report then
-  prints each line twice. Fix: keep one path, which is the rule in
-  `docs/ARCHITECTURE.md` §3.4 that this pair breaks.
-- The manual report prints the BGP and OSPF blocks without naming the scope the
-  entry came from, and without naming the router, so two routers that hold the same
-  values look like one duplicate. Apply the F3.9 scope rule to these two sections.
-- BGP `redist-rules` are captured into the parse model, but the manual report prints
-  only the router, the peer groups and the peers. Print them, or stop capturing them.
-- Two report lines state the property-level scan as if it exists:
-  `entry_coverage.summary_lines` prints "(F4.4 covers each one)", and the container
-  coverage report prints "Field-level coverage is F4.3" for a property level. F4.3
-  counts property entries on the parent row; it does not report them. Change both
-  lines when the property-level scan lands, since they are report output and the
-  change belongs with the feature.
+- Property gaps the scan does not report, because the container that holds them has
+  no matrix row: only an `emitted` container can name the properties an emitter reads.
+  The scan scope rule pins this in
+  `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers`.
+  Measured on the corpus:
+  - `report` containers: `description` and `destination_addresses` on an application
+    override rule. The report prints the rule but does not read these fields.
+  - `count-only` (`parse_regions`): `addresses`. Nothing reads a region at all.
+  - `nested-block` (a layer-3 subinterface inside its parent interface row): `parent`.
+    The nested block prints the parent name from the parent object, not through the
+    child object, so the read is not recorded on the child.
+  - `bookkeeping` (association table and scope facts): `devices`, `templates`.
+  These are not findings today, and each one needs a rule before it can become one: an
+  emitter must exist, or the report writer must read the field it names.
+
+- The console prints the gap lines only; a property finding prints in
+  `CONVERSION_REPORT.txt`, because a finding names a matrix row. Printing findings on
+  the console needs the console line shape decided first, so a run does not print a
+  matrix row it has no room for.
+
+- `panos_aggregate_layer3_subinterface` has no corpus entry to measure: the container
+  table maps an aggregate subinterface to the ethernet subinterface row, so no entry
+  reaches it. That row's properties are grounded in the emitter source only
+  (`tests/test_coverage_matrix.py::test_declared_property_is_a_key_the_emitter_reads`),
+  and the parity test names it as the one unmeasured row. A fixture entry that reaches
+  the aggregate shape closes this.
 - `AGENTS.md` points to `lib_docs/` for API cheat sheets. The directory is not in the
   repo. Add the cheat sheets, or remove the reference.
 - Parser extraction gaps found by the parse unit tests (each drops data; fix each
@@ -177,10 +186,18 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 ## Design Decisions (coverage and gate)
 
 - The conversion report (F4.3) keys on logical entries — an `<entry name>` plus its properties — not physical lines; one entry spans many lines in the XML. The reported line number is the entry's opening tag.
-- The coverage matrix (F4.4, former F2.8) is a permanent maintenance duty: every emitter change must keep the property matrix honest, or `CONVERSION_REPORT.txt` silently lies. F4.3/F4.4 include a test that an unmarked element read fails CI for this reason.
+- The coverage matrix (F4.4, former F2.8) is a permanent maintenance duty: every
+  emitter change must keep the property list on its row honest, or the property
+  section of `CONVERSION_REPORT.txt` silently lies. The entry-mark rule (F4.3) is
+  the test that makes an unmarked element read fail CI.
 - The parser extraction gaps listed above will surface in the F4.2/F4.3 reports; fix each gap when the report confirms it in a fixture, rather than fixing them speculatively now.
 - The sanity gate (F4.1, landed) reads the output files, so it cannot see an entry that produced no file. F4.3 is the accounting for that case; the gate cannot replace it.
-- The gate `location` check is presence only, not shape. The sub-block and field shape stays pinned by `tests/test_multi_vsys_location.py`, because `terraform validate` accepts an unknown sub-block and drops it silently. Move the shape rule into the gate when the property matrix (F4.4) becomes a live structure.
+- The gate `location` check is presence only, not shape. The sub-block and field shape
+  stays pinned by `tests/test_multi_vsys_location.py`, because `terraform validate`
+  accepts an unknown sub-block and drops it silently. Move the shape rule into the gate
+  when the location shape is data the gate can read, not a per-type literal inside an
+  emitter. The property matrix (F4.4, landed) names the properties a row reads, which
+  is the data a shape check needs; the location sub-blocks are not that data yet.
 - The placeholder check lists the VPN pre-shared key only. When F4.3 adds per-entry accounting, the expected placeholders should come from the same table that decides the report entries.
 - Consider a `--checks` selector on the converter CLI if the gate grows; today every check runs on every conversion, and a WARN never changes the exit code.
 
@@ -238,7 +255,30 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   interface report row for the same entry name sit in the same section. One shared
   grouping function, not two.
 
-## Design Decisions (upstream sources, Epic 5)
+## Design Decisions (F4.4, landed 2026-10-26)
+
+- The read record is a run-time measurement, so `mark` returns the recorded object and a
+  parse method must build its object through what it returns. The record stays off during
+  the parse and the run turns it on before the first generator call, because a key the
+  parse method read off the XML element is not a property an output used.
+- A property name is the measured key name, so the grounding test can find it as a string
+  in the emitter source. `declared_type` and `other` stay on the `panos_address` row
+  because the manual setup report reads them for a report-only address.
+- The entry name and the four scope facts are the row identity, not properties, so the
+  parity check compares the captured fields only.
+- `emitter` names two methods when a report writer reads properties the `.tf` emitter does
+  not. Only `panos_address` has this today, because the manual setup report prints a
+  report-only address from the same parsed object.
+- The scan scope is the entries an `emitted` container row covers, because only a row can
+  name the properties an emitter reads. A finding is an operator action, so it does not
+  change the exit code. The console prints the gap lines only.
+- A manual report section prints what the parse captured for it, so a captured field is
+  either printed or reported as unread. The BGP and OSPF sections now name the scope and
+  the router, print the peer-group nexthops and the redist rules, and read the routers
+  through one path.
+- The conversion report reads a scope name from the scope `<entry>`, not from the container
+  element, so a run inside a declared scope prints its device-group, template, and device
+  sections instead of a blank scope.
 
 - The parse layer keeps the ElementTree tree. `pan-os-python` is a byte producer,
   never the input model, because four things are keyed on the tree: the container

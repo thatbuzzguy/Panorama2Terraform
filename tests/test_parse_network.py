@@ -175,10 +175,18 @@ def test_parse_logical_routers(make_parser):
 
 
 def test_parse_bgp_enabled(make_parser):
+    """BGP returns one record per router with BGP enabled (F4.4)."""
     p = _parser(make_parser, "bgp.xml")
-    bgp = p.parse_bgp()
-    assert bgp is not None
-    assert bgp["enabled"] is True
+    routers = p.parse_bgp()
+    # The fixture puts the router under a device. One path reads it once, so the
+    # report prints one block for it.
+    assert len(routers) == 1, routers
+    bgp = routers[0]
+    assert bgp["name"] == "default"
+    # The record carries the four scope facts the report groups by (F3.9).
+    assert bgp["vsys_device"] == "localhost.localdomain"
+    assert bgp["vsys"] == "vsys1"
+    assert bgp["template"] == ""
     assert bgp["router_id"] == "10.0.0.1"
     assert bgp["as_number"] == "65001"
 
@@ -186,6 +194,8 @@ def test_parse_bgp_enabled(make_parser):
     pg = bgp["peer_groups"][0]
     assert pg["name"] == "PG-Branch"
     assert pg["type"] == "external"
+    assert pg["export_nexthop"] == "self"
+    assert pg["import_nexthop"] == "self"
 
     assert len(bgp["peers"]) == 1
     peer = bgp["peers"][0]
@@ -204,16 +214,20 @@ def test_parse_bgp_enabled(make_parser):
 
 
 def test_parse_bgp_absent(make_parser):
-    """BGP returns None when no virtual router has BGP enabled."""
+    """BGP returns no record when no virtual router has BGP enabled."""
     p = _parser(make_parser, "zones.xml")
-    assert p.parse_bgp() is None
+    assert p.parse_bgp() == []
 
 
 def test_parse_ospf(make_parser):
+    """OSPF returns one record per router with OSPF enabled (F4.4)."""
     p = _parser(make_parser, "ospf.xml")
-    ospf = p.parse_ospf()
-    assert ospf is not None
-    assert ospf["enabled"] is True
+    routers = p.parse_ospf()
+    assert len(routers) == 1, routers
+    ospf = routers[0]
+    assert ospf["name"] == "default"
+    assert ospf["vsys_device"] == "localhost.localdomain"
+    assert ospf["vsys"] == "vsys1"
     assert ospf["router_id"] == "10.0.0.1"
 
     assert len(ospf["areas"]) == 1
@@ -232,6 +246,6 @@ def test_parse_ospf(make_parser):
 
 
 def test_parse_ospf_absent(make_parser):
-    """OSPF returns None when no virtual router has OSPF enabled."""
+    """OSPF returns no record when no virtual router has OSPF enabled."""
     p = _parser(make_parser, "zones.xml")
-    assert p.parse_ospf() is None
+    assert p.parse_ospf() == []

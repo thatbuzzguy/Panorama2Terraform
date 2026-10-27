@@ -21,7 +21,10 @@ The document index is in [README.md](README.md).
 
 ## The matrix
 
-One row per emitted provider resource type (28 rows).
+One row per emitted provider resource type (28 rows). The table below shows the
+six identity fields; the Row schema section names the other two, which are too
+long to read in a table. Read a whole row from the command at the top of this
+document.
 
 | Provider resource | Panorama XML element | Fixture entry | Emitted `name` | Fixture | Output file |
 |---|---|---|---|---|---|
@@ -60,7 +63,7 @@ one without first leaving the report-only set and entering
 
 ## Row schema
 
-Each row is a dict with exactly six fields:
+Each row is a dict with exactly eight fields:
 
 | Field | Meaning |
 |---|---|
@@ -70,11 +73,30 @@ Each row is a dict with exactly six fields:
 | `emitted_name` | The `name` attribute the emitted resource must carry. Equals `xml_name` except where the converter derives a name: the `.0` layer-3 subinterface is emitted as `ethernet1/1.0` from the `ethernet1/1` entry. |
 | `fixture` | The XML fixture under `tests/fixtures/` whose pipeline run exercises the row. |
 | `output_file` | The `.tf` file (relative to the output directory) that must contain the resource block. |
+| `emitter` | The `TerraformGenerator` method names that read this row's properties. Usually one method. Two names appear when a report writer reads a property the `.tf` emitter does not, which is the case for `panos_address`: the manual setup report prints a report-only address row from the same parsed object. |
+| `properties` | The keys of the parsed object that the row's emitters read. The entry name and the four scope facts are not properties: they are the row identity (§2.2 of [`ARCHITECTURE.md`](ARCHITECTURE.md)), so they are not listed here. |
+
+The property list is what makes the row a property-level statement, and two tests
+keep it honest:
+
+- `tests/test_coverage_matrix.py::test_declared_property_is_a_key_the_emitter_reads`
+  checks each declared property against the emitter source, so a row cannot name a
+  property its emitter does not read. The check follows `self.<helper>()` calls,
+  because an emitter that reads through a helper is still the row's emitter.
+- `tests/test_property_coverage.py::test_measured_reads_equal_the_declared_properties`
+  measures the keys the corpus outputs read from the entries each row covers, and
+  fails when a row declares a property no output reads. A property captured but not
+  read is a finding, not a declaration: the report prints it (§3.2).
+
+One row has no corpus entry to measure: `panos_aggregate_layer3_subinterface`,
+because the container table maps an aggregate subinterface to the ethernet
+subinterface row. That row is grounded by the emitter check only, and the table
+limit is recorded in [`../backlog.md`](../backlog.md).
 
 ## Testing methodology
 
-`tests/test_coverage_matrix.py` enforces the matrix in three
-directions, one test per row where noted:
+`tests/test_coverage_matrix.py` enforces the matrix in five directions, one test per
+row where noted:
 
 1. **Row set (once).** The row `resource` set is exactly
    `EMITTED_TYPES`: no missing type, no duplicate row, no row for a
@@ -90,6 +112,18 @@ directions, one test per row where noted:
    `name = "<emitted_name>"`. This proves the full parse + generate
    path maps the element to the provider resource, not the parser in
    isolation.
+4. **Row shape (per row).** A row holds the eight fields of the Row schema, the
+   emitter names are real `TerraformGenerator` methods, and `properties` is a
+   non-empty tuple of names
+   (`::test_row_names_its_emitter_and_properties`).
+5. **Property grounding (per row).** Each declared property appears as a string key
+   inside the row's emitter, or inside the generator helper that emitter calls
+   (`::test_declared_property_is_a_key_the_emitter_reads`).
+
+The measured read sets are pinned separately, in
+`tests/test_property_coverage.py`, because that check needs a whole pipeline run: the
+scan records which keys an output reads from a captured object, so it cannot run inside
+one parse method.
 
 Two levels sit beside the matrix:
 
@@ -98,19 +132,25 @@ Two levels sit beside the matrix:
   take. `tests/test_container_coverage.py` keeps the table and the code in
   step. The rule and the destination kinds are in
   [`ARCHITECTURE.md`](ARCHITECTURE.md) §3.1.
-- **Property level.** Not implemented. Each row will name the properties the
-  emitter reads, so the per-entry report can classify a property the parse
-  captured but no output used. This is the open feature recorded in
-  [`../PLAN.md`](../PLAN.md).
+- **Property level.** Each row names the properties its emitter reads (Row schema
+  above). A property the parse captured but no output read is a finding, and the
+  per-entry report prints those findings in their own section
+  ([`ARCHITECTURE.md`](ARCHITECTURE.md) §3.2). The scan scope is the entries a matrix
+  row covers, so a report, inventory, bookkeeping, count-only, or nested-block
+  container is not a finding: it has no row, and only a row can name the properties an
+  emitter reads. Those field gaps are recorded in [`../backlog.md`](../backlog.md).
 
 ## Maintenance duty
 
 An emitter change that adds, renames, or drops a provider resource
 type must update `COVERAGE_MATRIX` in the same change. A new row
 needs a fixture (or a new entry in an existing fixture) that contains
-the Panorama element with a stable entry name. When the work is done,
-all three enforcement directions must pass: row set, element
-grounding, and the per-row pipeline test.
+the Panorama element with a stable entry name. An emitter change that
+reads a property, or stops reading one, must update that row's
+`properties` in the same change, because the parity test measures the
+run rather than restating the row. When the work is done, all five
+enforcement directions must pass: row set, element grounding, the
+per-row pipeline test, row shape, and property grounding.
 
 ## How this project verifies Terraform output
 

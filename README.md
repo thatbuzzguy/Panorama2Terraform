@@ -159,7 +159,9 @@ Reports written to the output directory, each only when it has content:
   placeholders and must be set before apply**
 - `CONVERSION_REPORT.txt` - one line per entry the parse read: source line,
   object type, entry name, destination, detail, and the fields it captured;
-  the file names the input file name, not its path
+  a section for a captured field no output read, for an entry a coverage matrix
+  row covers ([`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md)); the file
+  names the input file name, not its path
   ([`entry_coverage.py`](entry_coverage.py))
 
 The three grouped reports are grouped by the scope the export declares: device

@@ -9,8 +9,7 @@ Two rules, stated once here:
    entry lies between it and a config root. A config root is the `config`
    element or an entry that defines a scope (see `SCOPE_CONTAINERS`). A
    container inside a config-object entry is a property level, not a section: the
-   property-level scan (F4.4, not implemented) covers it, so this module does not
-   report it.
+   property-level scan (F4.4) reports it, so this module reports the section level.
 
 The scan reports a section that no row covers. A section that is absent from
 the input is not a finding: an export does not have to contain every container
@@ -183,10 +182,10 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                  'panos_ike_crypto_profile'),
     ContainerRow('parse_ipsec_crypto_profiles',
                  'network/ike/crypto-profiles/ipsec-crypto-profiles', 'emitted',
-                 'panos_ike_crypto_profile'),
+                 'panos_ipsec_crypto_profile'),
     # Sub-shape entries: read by a parse method, but inside a config-object
-    # entry, so they are property levels. The property-level scan (F4.4, not
-    # implemented) would check them.
+    # entry, so they are property levels. The property-level scan (F4.4) reports
+    # the ones a matrix row covers.
     ContainerRow('parse_interfaces', 'units', 'emitted', 'panos_ethernet_layer3_subinterface',
                  level='sub-shape'),
     ContainerRow('parse_interfaces', 'ip', 'nested-block',
@@ -367,6 +366,6 @@ def render_section(findings: list[Finding], source_name: str) -> str:
     lines = [f'--- {SECTION_TITLE} ---', f'Input file: {source_name}']
     lines.extend(report_line(finding) for finding in findings)
     lines.append('  No parse method reads these containers, so their entries are '
-                 'not in the model and cannot be emitted. Field-level coverage '
-                 'is F4.3.')
+                 'not in the model and cannot be emitted. Property-level coverage '
+                 'is F4.4, in the property section of CONVERSION_REPORT.txt.')
     return '\n'.join(lines)
