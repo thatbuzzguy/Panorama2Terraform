@@ -44,10 +44,11 @@ it, and the output passes the sanity gate.
 
 ## Epic 5 — Upstream Data Sources (Goal 5)
 
-The tool reads two kinds of source now: a file, and a cached Panorama API response
-through `source_fetch.py` (`docs/ARCHITECTURE.md` §3). Epic 5 makes the source a declared
-thing, so a run can read the same config from a file, from the API export, or from
-Terraform state, and so an entry can name which source it came from.
+The tool reads three kinds of source now: a file, a cached Panorama API response through
+`source_fetch.py`, and a Terraform state document as a reference source through `state_input.py`
+(`docs/ARCHITECTURE.md` §3). Epic 5 makes the source a declared thing, so a run can read the same
+config from a file, from the API export, or from Terraform state, and so an entry can name which
+source it came from.
 
 - [x] **F5.1 Source read boundary** (refactor, no behaviour change) —
   `parse_bytes(data, origin)` holds the F3.8 size and DTD checks, and `parse_xml(path)`
@@ -77,21 +78,20 @@ Terraform state, and so an entry can name which source it came from.
   instead, where the value has to be verified. Needs `DATA_SOURCE_SCHEMA` in
   `resource_mapping.py`, verified against the provider `data_source_schemas`, and
   one new gate rule. The provider facts are in `backlog.md`.
-- [ ] **F5.6 Terraform state as a source** — report-only ownership and drift: which
-  entries another workspace already owns. Offline, because a state file is a JSON
-  document. Uses the property scan (F4.4), because ownership and drift are
-  property-level facts.
+- [x] **F5.6 Terraform state as a source** (landed 2026-10-27) — report-only ownership and drift:
+  which entries another workspace already owns, and which owned value this run does not match. The
+  state document is a reference source: it reads through the same door and the same row rule, writes
+  no output, and reports in its own two sections after the shadow section. Offline, because a state
+  read is a file read. The rules are in `docs/ARCHITECTURE.md` §3, §3.2 and §3.3, in `state_input.py`
+  and in `state_coverage.py`.
 
 ## Sequencing
 
-1. Epic 4 is complete, so the open work is Epic 5. F5.1, F5.2, F5.3 and F5.4 landed. F5.6 is
-   next: a state source reads the same source contract, and the record `scope` field is the hook
-   F5.3 left for it. F5.5 waits for `DATA_SOURCE_SCHEMA` verified against the provider.
-2. F5.6 uses the property scan F4.4 landed, because ownership and drift are property-level
-   facts, the same kind of fact the shadow scan reads.
-3. The two report defects found while refreshing the documentation landed with F4.4:
-   the overlapping BGP and OSPF paths, and the manual report sections that did not name
-   their scope.
+1. F5.1, F5.2, F5.3, F5.4 and F5.6 landed. F5.5 is the only open feature in Epic 5: it needs
+   `DATA_SOURCE_SCHEMA` verified against the provider `data_source_schemas`, and one new gate rule.
+2. A state source is a reference source, so it cannot move an output fact: it writes no `.tf` byte, it
+   is not an output read for the property scan, and its record references no cache entry, so it prunes
+   nothing.
 
 ## Out of Scope (tracked in backlog.md)
 

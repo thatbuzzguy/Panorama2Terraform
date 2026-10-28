@@ -43,8 +43,11 @@ import provenance
 import sanity_checks
 import shadow_coverage
 import source_fetch
+import state_coverage
+import state_input
 from resource_mapping import INTERFACE_RESOURCE_TYPES, LOCATION_SCHEMA
 from xml_input import (
+    DEFAULT_SCOPE,
     ParsedSource,
     UnsafeInputError,
     add_max_input_argument,
@@ -2436,8 +2439,9 @@ class TerraformGenerator:
 
     # PAN-OS writes this device entry name for "this device" (Panorama
     # itself, or a firewall's own config export). It names no firewall, so
-    # it cannot go into `ngfw_device` (F3.5).
-    _LOCAL_DEVICE_PLACEHOLDER = 'localhost.localdomain'
+    # it cannot go into `ngfw_device` (F3.5). The one definition is
+    # `container_coverage.PLACEHOLDER_DEVICE`, which the state scan reads too (F5.6).
+    _LOCAL_DEVICE_PLACEHOLDER = container_coverage.PLACEHOLDER_DEVICE
 
     def _report_location(self, kind: str, line: str) -> None:
         """Record a location the emitted resource cannot carry (F3.5, F3.6).
@@ -4491,7 +4495,7 @@ variable "panos_password" {
         with open(self.output_dir / 'MANUAL_SETUP_REPORT.txt', 'w') as f:
             f.write('\n'.join(lines) + '\n')
 
-    def generate_conversion_report(self, ledger, shadows=None) -> str:
+    def generate_conversion_report(self, ledger, shadows=None, state=None) -> str:
         """Generate CONVERSION_REPORT.txt for the entries the parse read (F4.3).
 
         One line per report row, grouped by the F3.9 scope rule so a reader can
@@ -4499,9 +4503,9 @@ variable "panos_password" {
         the source name only, never the path (F4.2 rule 6); the path is in the
         provenance record (`provenance.py`, F5.3).
 
-        `shadows` is the F5.4 cross-source scan result. It prints in its own section,
-        after the property section, only when there is a finding, and it is grouped by
-        the same scope rule as the other sections.
+        `shadows` is the F5.4 cross-source scan result. `state` is the F5.6 state scan result.
+        Both print in their own section, after the property section, only when there is a
+        finding, and both are grouped by the same scope rule as the other sections.
 
         Returns '' when the input has no report rows, and writes no file in that
         case (F4.3 AC-9): a run that read no entry has nothing to report.
@@ -4544,6 +4548,26 @@ variable "panos_password" {
                 lines.append(self._report_section_header(path))
                 for row in group:
                     lines.append(shadow_coverage.shadow_line(row))
+
+        # F5.6: the state scan. Ownership and drift are operator actions, not broken output, so
+        # they do not change the exit code (the F4.1 gate does). Each section prints only when it
+        # has a finding, and the console prints no state line.
+        if state:
+            lines.extend(['', f'--- {state_coverage.OWNERSHIP_HEADING} ---', state_coverage.OWNERSHIP_RULE])
+            for path, group in self._group_by_scope(state):
+                lines.append(self._report_section_header(path))
+                for row in group:
+                    lines.append(state_coverage.ownership_line(row))
+
+            # A drift fact needs an ownership fact, so this section is a subset of the one above.
+            drifting = [row for row in state if row['drift']]
+            if drifting:
+                lines.extend(['', f'--- {state_coverage.DRIFT_HEADING} ---', state_coverage.DRIFT_RULE])
+                for path, group in self._group_by_scope(drifting):
+                    lines.append(self._report_section_header(path))
+                    for row in group:
+                        lines.append(state_coverage.drift_line(row))
+
 
         lines.extend(['', 'Entry lines are grouped by the scope the export declares (F3.9).',
                       '  line <source line>  <object type>/<entry name>  <destination>  '
@@ -5077,6 +5101,18 @@ def main():
         help='parent scope path for --source api, read as the second source for the '
              'shadow scan (F5.4). Needs --path',
     )
+    # F5.6: the state document is a reference source, so it applies to any source kind:
+    # the run reads it for the ownership and drift facts and writes no output from it.
+    parser.add_argument(
+        '--state',
+        help='Terraform state document to read as a reference source (F5.6). The ownership '
+             'and drift sections report the entries it already owns',
+    )
+    parser.add_argument(
+        '--workspace',
+        help='the workspace the state document belongs to, so the record can name it. '
+             'Needs --state (F5.6)',
+    )
     parser.add_argument(
         '--cache-dir',
         default=source_fetch.DEFAULT_CACHE_DIR,
@@ -5143,12 +5179,21 @@ def main():
                     f'({", ".join(sorted(container_coverage.SCOPE_PATH_ROOTS))})'
                 )
 
+    # F5.6: the state source is a reference source, so it applies to both source kinds.
+    # The workspace names the state document, so it needs a state document to name.
+    if args.workspace and not args.state:
+        parser.error('--workspace needs --state: the workspace names the state document, and a '
+                     'run that declares no --state reads no state document')
+
     # F5.3: the request the run read, so the provenance record can name the identity. A
     # file run has no request, so the two api fields stay `-`. F5.4 adds the parent
     # request, so the record holds one record per source the run read.
     request = None
     parent_request = None
     parent_source = None
+    # F5.6: the state document is the third source the record can name. It has no request,
+    # so its two api fields stay `-` and it references nothing.
+    state_source = None
 
     try:
         if args.source == 'file':
@@ -5177,6 +5222,15 @@ def main():
                     parent_request, args.cache_dir,
                     offline=args.offline, insecure=args.insecure,
                     max_input_bytes=args.max_input_bytes)
+
+        # F5.6: the state document is the third source the run reads, and it is read as a
+        # file. A state read is a file read, so --offline needs no new rule: no producer is
+        # called for it. It is a reference source, so the run writes no output from it.
+        if args.state:
+            print(f"Reading the state document {args.state} as a reference source "
+                  f"(workspace {args.workspace or DEFAULT_SCOPE})...")
+            state_source = state_input.read_state(args.state, workspace=args.workspace,
+                                                   max_input_bytes=args.max_input_bytes)
 
         panorama = PanoramaParser(source)
 
@@ -5386,7 +5440,11 @@ def main():
         # declared parent has no shadow to report.
         parent_ledger = entry_coverage.EntryLedger(parent_source) if parent_source is not None else None
         shadows = shadow_coverage.shadow_findings(panorama.ledger, parent_ledger)
-        tf_gen.generate_conversion_report(panorama.ledger, shadows)
+        # F5.6: the state scan reads the same row rule, so the matrix row that covers a run
+        # entry is the row that covers the state resource. A run with no declared state source
+        # has no state to read, so it reports neither fact.
+        state_findings = state_coverage.state_findings(panorama.ledger, state_source)
+        tf_gen.generate_conversion_report(panorama.ledger, shadows, state_findings)
 
         # F5.3: the provenance record. Written outside the report bodies, so the report
         # byte rule still holds: a report body names the source name, and the record is
@@ -5397,6 +5455,10 @@ def main():
         records = [provenance.record_for(panorama.source, request=request)]
         if parent_request is not None:
             records.append(provenance.record_for(parent_source, request=parent_request))
+        # F5.6: the state source is read last, so its record is last. It has no request, so
+        # the two api fields stay `-` and the record references nothing: it prunes nothing.
+        if state_source is not None:
+            records.append(provenance.record_for(state_source))
         record_file = Path(args.output_dir) / provenance.PROVENANCE_FILE
         record_file.write_text(provenance.render_records(records), encoding='utf-8')
 

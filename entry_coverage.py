@@ -62,6 +62,10 @@ GAP_KINDS = ('count-only', 'skipped', 'unaccounted')
 # four scope facts.
 NON_FIELD_KEYS = frozenset({'name'}) | frozenset(container_coverage.SCOPE_FACT_KEYS)
 
+# A field with no value is not a captured field (F4.3 rule 3), so the property scan and the
+# state scan (F5.6) both drop it through this one definition.
+EMPTY_FIELD_VALUES = (None, '', [], {}, ())
+
 # Which report key each scope container fills. The container set is
 # container_coverage.SCOPE_CONTAINERS, so this is the mapping, not a second rule.
 REPORT_SCOPE_KEYS = {
@@ -111,6 +115,15 @@ class RecordingDict(dict):
     def used_keys(self) -> tuple:
         """Keys an output read from this object, in sorted order."""
         return tuple(sorted(self._used))
+
+    def value(self, key):
+        """Read a captured value without recording the read (F5.6).
+
+        The state scan is not an output, so a read through it must not count as a property an
+        output used. `dict.get` is the base read, so the recording override is bypassed.
+        """
+        return dict.get(self, key)
+
 
 RULE_PARAGRAPH = (
     'Rule: one line per config entry the parse pipeline read. One entry is one '
@@ -261,7 +274,7 @@ class EntryLedger:
             return ()
         return tuple(sorted(
             key for key, value in mark['captured'].items()
-            if key not in NON_FIELD_KEYS and value not in (None, '', [], {}, ())
+            if key not in NON_FIELD_KEYS and value not in EMPTY_FIELD_VALUES
         ))
 
     def property_entry_count(self, entry: ET.Element) -> int:

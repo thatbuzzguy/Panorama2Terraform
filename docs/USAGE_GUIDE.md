@@ -42,6 +42,8 @@ python3 panorama_to_terraform.py export.xml --output-dir out
 | `--parent /PATH` | Parent scope path for `--source api`, read as the second source for the shadow scan. Needs `--path` |
 | `--offline` | Read the cache only: no request, no key |
 | `--insecure` | Skip certificate verification. Explicit choice, api source only |
+| `--state PATH` | Terraform state document read as a reference source (F5.6). Applies to any source kind |
+| `--workspace NAME` | The workspace the state document belongs to, so the record names it. Needs `--state` |
 | `--output-dir DIR` | Output directory. Default `terraform_output` |
 | `--max-input-bytes N` | Refuse an input larger than N. Default 67,108,864 (64 MiB) |
 | `--validate` | Add the `terraform init` + `terraform validate` check to the post-run gate |
@@ -89,6 +91,34 @@ python3 panorama_to_terraform.py --source api --host panorama --path /device-gro
 - An API response is an envelope (`response/result/config`). The converter reads the
   `config` element inside it, so the conversion is the same as for an export file.
 
+### Reading a state document
+
+```bash
+python3 panorama_to_terraform.py export.xml --state production.tfstate --workspace production --output-dir out
+```
+
+- The state document is a reference source: the run reads it for two facts and writes no output from
+  it, so the generated `.tf` files are unchanged. It applies to `--source file` and `--source api`
+  alike, and `--workspace` needs `--state` (exit 2). A state read is a file read, so `--offline` still
+  covers the api producer only and no test opens a connection.
+- The ownership section lists a run entry the state document already owns. The key is the entry
+  identity (matrix row, entry name, and the four declared scope facts) read from the `location` block
+  the state holds, so the same name in a different scope is a different object.
+- The drift section lists an owned entry with a value this run does not match. Only a property the
+  coverage matrix row declares is compared, and only when both sides hold it by the same name, so the
+  parse key `tags` and the provider attribute `tag` are not compared. Values print as JSON text, and
+  member order is part of the value.
+- Both sections print in `CONVERSION_REPORT.txt` after the shadow section, in the order ownership then
+  drift, and each prints only when it has a finding. The line names the run entry's source line and
+  the state entry's resource address, because a state entry has no source line of its own. Both facts
+  are operator actions: the console prints no state line and neither changes the exit code.
+- The state document is refused when the bytes are not JSON, when the document is not one object with a
+  `resources` array, when a `resources` item is not an object, or when a resource names no `type` or no
+  `name`, because the identity key cannot read it. A refusal names the file, exits 1, and writes no
+  record. A state document larger than `--max-input-bytes` is refused before the read.
+- `SOURCE.txt` records the state source last, in read order, with `-` for the two request fields: it
+  references no cache entry, so it prunes nothing.
+
 ## Quick start script
 
 `quick_start.sh` runs the converter on the committed sample export
@@ -133,7 +163,7 @@ The converter writes a file only when it has content.
 | `MANUAL_SETUP_REPORT.txt` | Report-only configuration, plus a section for a container no parse method reads |
 | `INTERFACE_MIGRATION_REPORT.txt` | Interface and IP inventory |
 | `VPN_MIGRATION_REPORT.txt` | VPN inventory and the pre-shared key actions |
-| `CONVERSION_REPORT.txt` | One line per entry the parse read, plus the gap section, the property section, and the shadow section for a run that declares a parent source |
+| `CONVERSION_REPORT.txt` | One line per entry the parse read, plus the gap section, the property section, the shadow section for a run that declares a parent source, and the ownership and drift sections for a run that declares a state source |
 | `SANITY_REPORT.txt` | The post-run gate result |
 
 The interface report, the VPN report, and the conversion report share one grouping
@@ -150,8 +180,8 @@ source. The other reports are written only when they have content.
 ### The provenance record
 
 `SOURCE.txt` is one record per source the run read, in read order, separated by one blank line,
-written as data. A run that reads one source writes one record, and the bytes are the same as the
-single-record rule before it:
+written as data: the main source, then a declared parent source, then a state source. A run that
+reads one source writes one record, and the bytes are the same as the single-record rule before it:
 
 ```text
 kind: api
@@ -169,9 +199,11 @@ sha256: 9b1c...
 - `scope` names the scope the source holds: `whole-config` when the producer declares none, or the
   declared path (`device-group/entry/Production-DG`, no leading slash) for a per-scope run. A run
   with a declared parent writes a second record for it, so each record names the source the shadow
-  line prints.
+  line prints. A state source names the workspace the run declared, or `whole-config` when it
+  declares none.
 - `request` and `cache_entry` are the key-free request identity and the entry it names, for
-  an api source. A file source writes `-` for both. The record never names the API key.
+  an api source. A file source and a state source write `-` for both, so a state record references
+  nothing and prunes nothing. The record never names the API key.
 - `size` and `sha256` are measured on the bytes the input door parsed, so the record names
   the bytes the report lines describe, not a file that changed after the run.
 - The rule lives in `provenance.py`, and the report bodies keep the rule that a report names
@@ -279,6 +311,10 @@ The limits are recorded in [`../backlog.md`](../backlog.md) and in
   pre- and post-rules chains across them.
 - `location.template_stack` is never emitted, and a template that targets two
   devices keeps interface names as strings.
+- The state scan compares only a property the matrix row declares that both sides hold by the same
+  name, because no rule maps a parse key to a provider attribute name, so the parse key `tags` and
+  the provider attribute `tag` are not compared. The state source is read only: a run reports what a
+  state document holds and never writes one.
 
 ## License
 

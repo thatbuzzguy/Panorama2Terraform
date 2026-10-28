@@ -121,6 +121,8 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 
 - PAN-OS version matrix testing.
 - Dual-license legal review (audit §6.8).
+- The state source has no write path (F5.6). A run reports what a state document holds and never
+  writes one, so a drift finding is an operator action, not an update.
 
 ## Nice-to-Haves
 
@@ -341,3 +343,13 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   `data` block is one plan-time API call. A `data` block for a name that does not exist
   fails at plan, not at validate, so a read-through run must be labelled in the
   generated `README.md`.
+- The state document is a reference source, so it reads through the same door and the same row rule
+  (F5.6, landed 2026-10-27); the rules are in `ARCHITECTURE.md` §3 and §3.2. A state entry has no
+  source line, because only the expat handler path records one, so its position is its resource
+  address, and the scan reads the matrix row through the resource type instead of through a container
+  path.
+- Open: the state scan compares only a property both sides hold by the same name (F5.6). The matrix
+  row names the key the emitter reads and the state document names the attribute the provider stored,
+  so no mapping rule exists between them: the parse key `tags` and the provider attribute `tag` are
+  not compared. A comparison table would have to be verified per type against the provider schema, the
+  way `LOCATION_SCHEMA` is, so the scan keeps the same-name rule until such a table exists.

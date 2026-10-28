@@ -15,14 +15,18 @@ Five rules, stated once here.
    it. Records are separated by one blank line; a one-record file writes the same bytes as
    the F5.3 rule.
 3. The byte facts come from the door. `xml_input.ParsedSource` records the size and the
-   hash of the bytes it parsed, so the record names the bytes the door checked, not a file
-   that may have changed since the run.
+   hash of the bytes it parsed, and `state_input.StateSource` records the same two facts for
+   the bytes its door checked, so the record names the bytes the door checked, not a file that
+   may have changed since the run.
 4. The pruning rule: a cache entry is not pruned while a written record references it, so
    the reference is the `cache_entry` field of a parsed record, never a printed line.
    `prunable_entries` is the rule; no command runs the prune yet (see `backlog.md`).
-5. Records are in read order: the main source, then the declared parent. `scope` is the
-   fact the door records, so the record does not state a naming rule of its own; the one
-   definition is `xml_input.DEFAULT_SCOPE`, and a per-source run states its declared path.
+5. Records are in read order: the main source, then the declared parent, then the state
+   source (F5.6). `scope` is the fact the door records, so the record does not state a naming
+   rule of its own; the one definition is `xml_input.DEFAULT_SCOPE`, a per-source run states its
+   declared path, and a state source states the workspace the run declared. A state source has no
+   request, so its two request fields are `-` and its record references nothing: it prunes
+   nothing.
 
 The record is a run output, not a report body. The report bodies name the source name and
 never the path (F4.2 rule 6), so the path field here does not touch the report byte rule.
@@ -33,16 +37,18 @@ shape the cache entry is hashed from (F5.2 AC-5.4).
 Usage:
     from provenance import record_for, render, render_records, parse_record, parse_records
     record = record_for(source, request=request)
-    (output_dir / PROVENANCE_FILE).write_text(render_records([record, parent_record]), encoding='utf-8')
+    (output_dir / PROVENANCE_FILE).write_text(
+        render_records([record, parent_record, state_record]), encoding='utf-8')
     reference = parse_records((output_dir / PROVENANCE_FILE).read_text())[0].cache_entry
 """
 
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import source_fetch
+import state_input
 from xml_input import ParsedSource
 
 PROVENANCE_FILE = 'SOURCE.txt'
@@ -69,14 +75,17 @@ class ProvenanceRecord:
     sha256: str
 
 
-def record_for(source: ParsedSource, request: Optional[source_fetch.ApiRequest] = None) -> ProvenanceRecord:
+def record_for(source: Union[ParsedSource, state_input.StateSource],
+               request: Optional[source_fetch.ApiRequest] = None) -> ProvenanceRecord:
     """Build the record for one source the run read, from the source the door returned and
     the request it read.
 
     The origin already carries the kind, the report name and the path, so the record does
     not restate a naming rule. The request carries the identity and the entry name; a file
-    source has no request, so those two fields are `-`. `scope` is the fact the door
-    records: `whole-config`, or the declared path of a per-scope source (F5.4).
+    source and a state source have no request, so those two fields are `-`. `scope` is the
+    fact the door records: `whole-config`, the declared path of a per-scope source (F5.4), or
+    the declared workspace of a state source (F5.6). Both door shapes state the same four
+    record facts, so no new field is needed.
     """
     path = source.origin.path
     return ProvenanceRecord(

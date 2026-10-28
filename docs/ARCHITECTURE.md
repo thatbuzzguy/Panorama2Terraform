@@ -17,13 +17,15 @@ a design rule enforced by construction.
 | File | Role | Rule it keeps |
 |---|---|---|
 | `panorama_to_terraform.py` | The converter: `PanoramaParser` (model), `TerraformGenerator` (model and write), `main()` (order) | the parser consumes only the producer contract (`ParsedSource`); it reads no file and opens no connection itself, so a source is either the file producer or the api producer |
-| `xml_input.py` | The only input read, shared by both entry points, through one producer boundary (F5.1), and the scope vocabulary a source states (F5.4) | size cap checked before the read for a file, and on the bytes handed by any producer; DTD refused by the parser; one definition of the scope a source holds (`DEFAULT_SCOPE`) and of the path segment that names an entry (`ENTRY_SEGMENT`) |
+| `xml_input.py` | The only input read, shared by every entry point, through one producer boundary (F5.1), and the scope vocabulary a source states (F5.4) | the two byte checks are one function (`check_bytes`) every source kind runs, so the size cap and the DTD refusal are kind-independent and only the parse step is chosen by the kind; one definition of the scope a source holds (`DEFAULT_SCOPE`) and of the path segment that names an entry (`ENTRY_SEGMENT`) |
 | `source_fetch.py` | The api producer (F5.2): the https request, the cached copy, the response wrapper, and the per-scope request shape (F5.4) | https only; a redirect that changes the scheme is refused; the cache holds exactly the bytes the boundary parsed; the key comes from the environment only; the declared path is part of the request identity, so each scope gets its own entry |
 | `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX` | the single source of truth; no resource name or attribute from memory |
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy` |
 | `container_coverage.py` | The container table (§3.1) and the section rule | the table is data, so a parse method cannot exist without a row |
 | `entry_coverage.py` | The per-entry report (§3.2) | a destination comes from the table row, or from the mark when the method knows better |
 | `shadow_coverage.py` | The cross-source shadow scan (§3.2): a child entry name that repeats a parent entry name | the key is the matrix row, not the name alone; both sources are read with the same row rule, so no second naming rule exists; a run with no declared parent has no parent to read |
+| `state_input.py` | The state producer (F5.6): a Terraform state document read as a reference source, through the same door | the two byte checks run on the state bytes, and only the parse step is chosen by the kind, so a `<!DOCTYPE` inside a JSON value is not a refusal; a document the identity key cannot read is an input refusal; the state source writes no output, so no `.tf` byte changes |
+| `state_coverage.py` | The state scan (§3.2): the ownership fact and the drift fact | the matrix row is the same table the property scan uses, keyed by the resource type; the ownership key is §2.1 identity with the declared facts, never the `Shared` fallback; the scan is not an output, so it reads captured values without recording |
 | `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state |
 | `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4) | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line |
 | `conftest.py`, `tests/` | The gate | each rule in this document names the test that pins it |
@@ -193,6 +195,26 @@ declared property list, so its field gaps are recorded in `backlog.md` instead.
      `::test_a_redirect_that_changes_the_scheme_is_refused`,
      `::test_verification_is_on_by_default_and_insecure_is_explicit`, and
      `::test_the_key_never_reaches_the_cache_name_or_the_output`.
+
+   **The state producer** (`state_input.py`, F5.6) is a third producer behind the same door, so the
+   two checks run on a state document exactly as they run on a file: `check_bytes` measures the size
+   and asks the parser for the DTD. Only XML has a prolog, so a JSON document reaches no DOCTYPE and
+   a `<!DOCTYPE` inside a JSON value is not a refusal: only the parse step is chosen by the kind. The
+   tree rule does not apply to a JSON document, because the container table, the parent walk, and the
+   line map are keyed on the ElementTree tree, so a state document gives the scan one shape per
+   entry: the entry name, the resource type, the attribute values, and the position. The position is
+   the resource address (`type.name`, or `module.path:type.name` inside a module instance), because
+   no source line exists. A document the identity key cannot read is refused: bytes that are not
+   JSON, a document that is not one object with a `resources` array, a `resources` item that is not
+   an object, and a resource that names no `type` or no `name`. The state source is a reference
+   source, so the run writes no output from it and no `.tf` byte changes, and a state read calls no
+   producer, so `--offline` needs no new rule. Pinned by `tests/test_state_input.py`, including
+   `::test_the_size_check_runs_on_the_state_bytes`,
+   `::test_the_dtd_check_refuses_nothing_for_a_json_document`,
+   `::test_the_producer_keeps_both_nested_block_shapes`,
+   `::test_a_document_the_scan_cannot_key_is_an_input_refusal`, and
+   `::test_a_state_read_calls_no_producer`.
+
 2. **Parent map.** ElementTree keeps no parent pointers, so the parser builds a
    child → parent map once. The four scope facts walk that map.
 3. **Association tables.** `parse_associations` reads the four membership lists
@@ -335,6 +357,46 @@ line, and a shadow is an operator action, so it does not change the exit code. P
 `tests/test_shadow_coverage.py`, including the fixed line shape, the row key, the scan scope, the
 grouping, and the no-parent run.
 
+**The state scan** (F5.6) adds two fact kinds, in `state_coverage.py`, and the report prints them in
+their own two sections after the shadow section, in this order: ownership, then drift. Each section
+prints only when it has a finding, and both use one fixed shape:
+
+```text
+  line <source line>  <object type>/<entry name>  <matrix row>  state source: <state name> (<resource address>)
+```
+
+The drift line is the ownership line with the values added:
+
+```text
+  ...  state source: <state name> (<resource address>)  value differs: <property> (<run value> vs <state value>)
+```
+
+The line names the run entry's source line, the same line the entry rows print, because a state entry
+has no line of its own. Values are printed as their JSON text and properties are in sorted order, so
+one finding stays on one line.
+
+The ownership key is §2.1 identity as the F3.9 rule reads it: the matrix row, the entry name, and the
+four declared facts, read from the `location` block the state document holds, through the block names
+`LOCATION_SCHEMA` declares. The `Shared` fallback is never in the key, because it is a parse fallback
+and not a declared fact; the `shared` block states no name, so it fills no fact; `localhost.localdomain`
+names no device (F3.5); and a sub-block the table does not declare for the row names a scope this
+converter never emits, so an entry placed there is not keyed. The first state entry that carries a key
+wins, in document order, because one run entry is one finding (the F5.4 rule). The scan scope is the
+property rule on both sides: an entry no row covers is not a finding, and a state resource whose type
+has no row is not in the index. A run with no declared state source has no state to read, so it prints
+neither section.
+
+Drift compares only a property the row declares that both sides hold by the same name, because no rule
+maps a parse key to a provider attribute name: the parse key `tags` and the provider attribute `tag`
+are not compared, and that limit is recorded in [`../backlog.md`](../backlog.md). A value is compared as
+the two sides hold it, so member order is part of the value. A drift fact needs an ownership fact, so
+the drift section is a subset of the ownership section. The state scan is not an output, so it reads
+captured values through the non-recording read (`entry_coverage.RecordingDict.value`) and cannot move a
+property finding. Both facts are grouped by the same F3.9 scope rule, the console prints no state line,
+and both are operator actions, so neither changes the exit code, which the F4.1 gate still decides.
+Pinned by `tests/test_state_coverage.py`, including the fixed line shapes, the key, the scan scope on
+both sides, the grouping, the property-read parity, and the no-state run.
+
 Rows are grouped with the F3.9 scope rule (`_report_scope_path`), the same rule
 the interface and manual reports use, so the same name in two device groups is two
 sections. A scope name is read from the scope `<entry>`, not from the container
@@ -348,12 +410,12 @@ no report file, and a run with no gaps prints no extra console line.
 ### 3.3 Provenance record
 
 `main()` writes one record per source the run read, as `SOURCE.txt` in the output directory, in
-read order: the main source, then a declared parent source (F5.4). A one-source run writes the same
-bytes as the F5.3 rule. The record names the bytes a reader can reopen, so a report line can be
-checked against the file it describes. Eight fields, in this order: `kind`, `name`, `path`, `scope`,
-`request`, `cache_entry`, `size`, `sha256`. A field that does not apply to the source kind is `-`, so
-one shape reads. Records are separated by one blank line, which is the whole record shape. The rule
-lives in `provenance.py`.
+read order: the main source, then a declared parent source (F5.4), then the state source (F5.6). A
+one-source run writes the same bytes as the F5.3 rule. The record names the bytes a reader can
+reopen, so a report line can be checked against the file it describes. Eight fields, in this order:
+`kind`, `name`, `path`, `scope`, `request`, `cache_entry`, `size`, `sha256`. A field that does not
+apply to the source kind is `-`, so one shape reads. Records are separated by one blank line, which
+is the whole record shape. The rule lives in `provenance.py`.
 
 Four rules the record keeps:
 
@@ -373,16 +435,21 @@ Four rules the record keeps:
   `::test_one_label_for_both_sources`, and by the pins in `tests/test_container_coverage.py`
   and `tests/test_entry_coverage.py`.
 - **The byte facts come from the door.** `xml_input.ParsedSource` records the size and the
-  SHA-256 hex of the bytes it parsed, so the record names the bytes the door checked, not a
-  file that may have changed since the run. Pinned by
-  `tests/test_provenance.py::test_a_file_run_record_names_bytes_a_reader_can_reopen` and
-  `::test_an_api_run_record_names_the_request_identity_and_the_cache_entry`.
+  SHA-256 hex of the bytes it parsed, and `state_input.StateSource` records the same two facts for
+  the bytes its door checked (F5.6), so the record names the bytes the door checked, not a file that
+  may have changed since the run. Pinned by
+  `tests/test_provenance.py::test_a_file_run_record_names_bytes_a_reader_can_reopen`,
+  `::test_an_api_run_record_names_the_request_identity_and_the_cache_entry`, and
+  `tests/test_state_input.py::test_the_producer_states_the_record_facts`.
 - **The pruning rule.** A cache entry is not pruned while a written record references it, so
   the reference is the `cache_entry` field of a parsed record, never a printed line. A shadow
-  line prints a source name, and that printed line protects nothing. `provenance.prunable_entries`
-  states the rule; no command runs the prune yet (see [`../backlog.md`](../backlog.md)). Pinned by
-  `tests/test_provenance.py::test_the_reference_is_data_not_a_printed_line` and
-  `::test_a_printed_parent_source_is_not_a_reference`.
+  line prints a source name, and that printed line protects nothing. A state record has no request
+  and no cache entry, so it references nothing and prunes nothing (F5.6).
+  `provenance.prunable_entries` states the rule; no command runs the prune yet (see
+  [`../backlog.md`](../backlog.md)). Pinned by
+  `tests/test_provenance.py::test_the_reference_is_data_not_a_printed_line`,
+  `::test_a_printed_parent_source_is_not_a_reference`, and
+  `tests/test_state_input.py::test_a_state_record_references_nothing_so_it_prunes_nothing`.
 
 The record names no credential: the `request` field is the key-free identity the cache name
 is hashed from, for both requests of a two-source run (F5.2 key rule, pinned by
@@ -390,8 +457,11 @@ is hashed from, for both requests of a two-source run (F5.2 key rule, pinned by
 `::test_the_record_file_holds_one_record_per_source_read`). A run that refuses its
 input writes no record, like every other input refusal. The `scope` field names the scope the
 source holds: `whole-config` when the producer declares none (the one definition is
-`xml_input.DEFAULT_SCOPE`), and the declared path for a per-scope source (F5.4). The state
-source (F5.6) reads that field too.
+`xml_input.DEFAULT_SCOPE`), the declared path for a per-scope source (F5.4), and the declared
+workspace for a state source (F5.6). No new field is needed, so `parse_records` reads a state record
+with no change; this is pinned by
+`tests/test_state_input.py::test_the_producer_states_the_record_facts` and
+`tests/test_state_coverage.py::test_the_state_record_reads_back_with_no_new_field`.
 
 ## 4. Emit pipeline
 
@@ -625,6 +695,11 @@ Two runs on the same input produce identical bytes.
 - The shadow scan sorts findings by line, then object type, then name, and the parent index keeps
   the first parent row for a key, so two runs on the same two sources write the same bytes
   (`tests/test_shadow_coverage.py::test_two_runs_on_the_same_sources_write_the_same_bytes`).
+- The state scan keeps the first state entry for an ownership key, in document order, and sorts
+  findings by line, then object type, then name, so two runs on the same arguments and the same
+  bytes write the same bytes
+  (`tests/test_state_coverage.py::test_two_runs_on_the_same_bytes_write_the_same_bytes`). A state
+  read is a file read, so no cache-derived value enters its record.
 
 ## 7. What this document does not claim
 
@@ -644,6 +719,8 @@ is recorded in `backlog.md`.
 
 These are decided limits, not bugs: the rulebase is not emitted, security profile
 bodies are not parsed, EDL credentials are never written, a service emits one
-protocol leg, `location.template_stack` is never used, and a template that
-targets two devices keeps interface names as strings. Each one is recorded in
-`backlog.md`.
+protocol leg, `location.template_stack` is never used, a template that
+targets two devices keeps interface names as strings, a state scan compares only
+a property both sides name the same way (the parse key `tags` and the provider
+attribute `tag` are not compared), and a state source is read only: it has no
+write path. Each one is recorded in `backlog.md`.
