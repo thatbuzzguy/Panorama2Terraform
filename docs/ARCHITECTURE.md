@@ -31,6 +31,7 @@ a design rule enforced by construction.
 | `unit_manifest.py` | The unit as data (F6.1): one row per declared scope, as `CODEBASE_MANIFEST.json` (§3.4) | the rows come from the ledger, so the module adds no parse data; it takes the §5 naming rule as an argument, so no second naming rule exists; the reference names arrive from §4.3, so this module resolves no name |
 | `ownership.py` | The owner of a repeated name (F6.2): one row per entry a matrix row covers, as `OWNERSHIP.json` (§3.5), and the report finding for a case the rule cannot decide | the row scope is the F4.4 rule read through the report row, so no second scope rule exists; the identity key and the naming rule are read through `state_coverage` and `unit_manifest`, so no second key or naming rule exists; `disable_override` names the entry that cannot be overridden, not the owner; the scan reads a captured value without recording |
 | `reference_edges.py` | The reference between units (F6.3): one row per pair, as `REFERENCE_EDGES.json` (§3.6), the acyclic rule, and the unit order on the manifest row | the edge set is the names §4.3 recorded, so this module records no name and resolves no name; the target is the ownership `owner`, so the pair joins to §3.4 on `directory` and to §3.5 on (`type`, `entry`); a row that names one unit is refused; the order comes from the three bases §6 of `CODEBASE_ASSEMBLY.md` states, read through the module that holds each fact |
+| `import_blocks.py` | The import block (F6.4): one block per entry, as `imports.tf` (§4.8), and the id shape | the block is built from the same data the resource block uses, so this module states no location rule and no naming rule; the id is the base64 JSON object the provider documents, and `decode_id` refuses a shape it does not declare; the four `*_policy_rules` types are the rows `LOCATION_SCHEMA` declares `rulebase` for, so no second table names them |
 | `conftest.py`, `tests/` | The gate | each rule in this document names the test that pins it |
 
 `tools/build_kitchen_sink.py` assembles the fixture corpus from committed files.
@@ -747,15 +748,17 @@ Four report files, each written only when it has content:
   repeated-name section, so they cannot disagree.
 
 The post-run gate writes `SANITY_REPORT.txt` on every run (§4.6). The generator
-also writes `read_through.tf` for a run that declares read-through scopes (§4.7),
-and `main()` adds `README.md`, the provenance record `SOURCE.txt` (§3.3), the unit
-manifest `CODEBASE_MANIFEST.json` (§3.4), and the ownership record `OWNERSHIP.json` (§3.5).
+also writes `read_through.tf` for a run that declares read-through scopes (§4.7), and
+`imports.tf` for a run that declares import blocks (§4.8), and `main()` adds
+`README.md`, the provenance record `SOURCE.txt` (§3.3), the unit manifest
+`CODEBASE_MANIFEST.json` (§3.4), and the ownership record `OWNERSHIP.json` (§3.5).
 `SANITY_REPORT.txt` and `SOURCE.txt` are written on every completed run, and the four report files
-above, `read_through.tf`, and the two data files are written only when they have content. These
-files are the complete set a run writes.
+above, `read_through.tf`, `imports.tf`, and the three data files are written only when they have
+content. These files are the complete set a run writes.
 
-The two data files are not report bodies, so no report names them or restates a row, and the gate
-reads only `.tf` files, so neither is a gate input. Pinned by
+The three data files are not report bodies, so no report names them or restates a row, and the gate
+reads only `.tf` files, so none is a gate input. `imports.tf` is a `.tf` file, so the gate reads it
+(§4.6). Pinned by
 `tests/test_unit_manifest.py::test_no_report_names_a_field_the_manifest_states` and
 `::test_the_gate_reads_no_data_file`, and by
 `tests/test_ownership.py::test_no_report_names_a_field_the_record_states` and
@@ -789,6 +792,7 @@ conversion. The splitter writes XML, so it has no `.tf` to check.
 | `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |
 | `location_present` | every `resource` and `data` block carries a `location` block | FAIL |
 | `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type | FAIL |
+| `import_blocks` | every `import` block agrees with the `resource` block it names: the type, the local name, the entry name, and the location | FAIL for a violation; WARN for a rule type the shape cannot state (§4.8) |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
@@ -796,17 +800,27 @@ conversion. The splitter writes XML, so it has no `.tf` to check.
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
 
 One block reader serves every block kind the gate reads: `resource`, `data`,
-`import`, and `action` (F5.5; Epic 6 F6.4 and F6.7 add the `import` and `action`
-rules with the same reader, so no second reader appears). A block is read up to the
+`import`, and `action`. F5.5 added the `data` rule and F6.4 added the `import` rule
+with the same reader (§4.8), so no second reader appears. A block is read up to the
 first column-0 brace, which is how the generator writes one and how the tests read
 one. A block is reported once for a fact: `location_present` reads both kinds, so
 the `data_blocks` rule reports the shape inside the block, not the missing block.
+An `import` block has no header names, so the reader takes the type and the local name
+from `to` inside the body, which is the same pair a reference names.
 
 `data_blocks` checks the type, the `location` sub-block, the fields inside it, and
 `name` when the row declares one. A row that declares no `name` (the settings,
 policy, and collection shapes, 22 rows) is not refused for having none, so the rule
 is stated per row. `references` keys a block by (kind, type, local name): a `data.`
 reference answers to a `data` block and a plain reference to a `resource` block.
+
+`import_blocks` compares a written block with the block it names: `to` must name a
+`resource` block this run declares (a `data` block cannot answer, because an import
+object names a resource), `id` must decode to the declared shape, the decoded name must
+equal the block's `name`, and the decoded location must equal the block's `location`
+sub-block, field for field. A rule entry of the four `*_policy_rules` types writes no
+block, so the rule reports it as WARN with the reason (§4.8). The finding names the file
+and the line the one reader read.
 
 - A WARN does not fail the gate: a placeholder is correct output that still needs
   an operator action, so the run exits 0.
@@ -874,6 +888,49 @@ Two rules hold for a read-through run:
 
 The gate reads these blocks with the same reader (§4.6). Pinned by
 `tests/test_data_blocks.py`.
+
+### 4.8 Import blocks (opt-in)
+
+An `import` block binds a resource block to the object the live config already has, so the first plan
+for a unit reads `N to import, 0 to add, 0 to change, 0 to destroy` for the entries the parse models.
+The shape is opt-in and off by default: a run that declares no `--import-blocks` writes no import file
+and the same `.tf` bytes as before, so both golden sets stay byte-identical. This is the §4.7 precedent.
+
+The file is `imports.tf`, one file for the run, one block per entry the run declares, written only when
+the run declares the shape and has a block to write. A `.tf` file is the choice, because the gate rule
+reads `.tf` files only (§4.5); a data file could not be a gate input.
+
+One block per entry:
+
+| Part | Value |
+|---|---|
+| `to` | the block address, `<resource type>.<local name>` |
+| `id` | base64 of the JSON object: `{"location": <the location sub-block as the block states it>, "name": <the entry name>}` |
+
+The two fields come from the same data the resource block uses. `location_data` is the one location
+rule, and `declare_block_name` is the one naming rule, so the block and the id cannot state two
+different facts. `import_blocks.py` states the id shape, the row shape, and the order; it resolves no
+name, picks no location, and defines no naming rule. The JSON keys sort at every level with compact
+separators, and the file is ASCII, so two runs on the same bytes write the same bytes. `decode_id` is
+the inverse of `build_id` and refuses a value that is not the declared shape, the way the data-file
+readers refuse a row that is not the declared shape.
+
+A field the generator does not emit is not in the id. The provider's `location.device_group` row has a
+`panorama_device` field, and the docs example states one, but no parse fact names a device, so the tool
+states no device fact. Blocks print in unit order, then local-name order, and no block names a
+timestamp or a path.
+
+The four `*_policy_rules` types write no block, and each rule entry is one WARN finding, because their
+import object names the rulebase, the position in the live rulebase, and a list of names. The parse
+records no rulebase for an entry (F3.5 gates the accepted value), and `position` is live-config state,
+because a chain anchors at `where = "last"` (§4.4). The four types are the rows `LOCATION_SCHEMA`
+declares `rulebase` for, so no second table names them. The rule types stay out of the id until F3.5
+decides the rulebase and a source states the position.
+
+Pinned by `tests/test_import_blocks.py`, including the id round trip, each violation type the gate rule
+detects, the rule-types decision, the no-false-positive run across the fixture corpus, the order, the
+byte equality between two runs, and the golden no-change rule. The provider example is pinned in
+`docs/CODEBASE_ASSEMBLY.md` §12.
 
 ## 5. Naming rules
 
@@ -955,6 +1012,12 @@ Two runs on the same input produce identical bytes.
   `::test_the_manifest_names_no_path_and_no_timestamp`). A directory name comes from the unit
   identity digest and not from the set of units in the run, so a name does not move when an
   unrelated scope is added (`::test_a_directory_name_does_not_move_when_an_unrelated_unit_is_added`).
+- The import file prints one block per entry in unit order, then local-name order, sorts the JSON keys
+  at every level, and states no timestamp or path, so two runs with the same arguments write the same
+  bytes (`tests/test_import_blocks.py::test_two_runs_write_the_same_bytes` and
+  `::test_the_file_names_no_timestamp_and_no_path`). The goldens are the bytes of a run that declares no
+  import block, so the default stays pinned
+  (`::test_a_run_that_declares_no_import_blocks_writes_the_golden_bytes`).
 - The shadow scan sorts findings by line, then object type, then name, and the parent index keeps
   the first parent row for a key, so two runs on the same two sources write the same bytes
   (`tests/test_shadow_coverage.py::test_two_runs_on_the_same_sources_write_the_same_bytes`).

@@ -39,6 +39,7 @@ from typing import Any, Optional
 
 import container_coverage
 import entry_coverage
+import import_blocks
 import ownership
 import provenance
 import reference_edges
@@ -2294,6 +2295,9 @@ class TerraformGenerator:
         # four scope facts (`unit_manifest.facts_of`), so the manifest row can state them. One
         # name is stored once per unit.
         self._unit_references: dict[tuple, set] = {}
+        # F6.4: one import row per entry a `resource` block declares, recorded at the site that applied the
+        # naming rule (`import_blocks.row`). `render` prints them in the order a reader can reproduce.
+        self.import_rows: list[dict] = []
         # F3.5: declarations that name a target device, keyed
         # (scope, device, name). An interface belongs to one device, and two
         # devices can declare the same interface name, so a reference from a
@@ -2427,6 +2431,17 @@ class TerraformGenerator:
     def unit_references(self) -> dict:
         """The recorded reference names, keyed by the referrer's four scope facts, in sorted order."""
         return {facts: tuple(sorted(names)) for facts, names in self._unit_references.items()}
+
+    def record_import_row(self, resource_type: str, obj: dict, local_name: str, location: dict) -> None:
+        """Record the import row for one entry, at the site that applied the naming rule (F6.4).
+
+        The row states only facts the resource block already states: the type, the local name the naming rule
+        gave, the entry name the block writes, and the location `location_data` built. The unit is the
+        `unit_manifest` identity, read through `facts_of`, so no second identity key appears.
+        """
+        unit = unit_manifest.directory_name(unit_manifest.facts_of(obj), self.sanitize_name)
+        self.import_rows.append(import_blocks.row(
+            unit, resource_type, local_name, obj.get('name') or '', location))
 
     def _resolve_reference(self, name: str, scopes, key: Optional[str] = None,
                            context: Optional[str] = None, vsys: Optional[str] = None,
@@ -2727,7 +2742,119 @@ class TerraformGenerator:
             return f'device {device} takes template(s): {", ".join(names)}'
         return f'the export associates no template with device {device}'
 
-    def location_block(self, resource_type: str, obj: dict) -> str:
+    def location_data(self, resource_type: str, obj: dict) -> dict:
+        """The location as data: {sub-block: {field: value}}, in the order the block prints it (F6.4).
+
+        One location rule. `location_block` renders from it, and `import_blocks.row` encodes from it, so the
+        resource block and the import id cannot state two different locations. The field order is the order the
+        block prints, so the goldens keep their bytes.
+        """
+        scopes = LOCATION_SCHEMA[resource_type]
+        vsys = (obj.get('vsys') or '').strip()
+        template = (obj.get('template') or '').strip()
+        device = (obj.get('vsys_device') or '').strip()
+        group = (obj.get('device_group') or '').strip()
+        where = self._location_source_text(obj)
+
+        def keep(scope: str, fields: dict) -> dict:
+            """Keep only the fields the sub-block declares, in the order it was given."""
+            return {k: v for k, v in fields.items() if k in scopes[scope]}
+
+        # 1. Virtual-system placement (F3.5).
+        if vsys and not template and 'vsys' in scopes:
+            fields = {'name': vsys}
+            if device and device != self._LOCAL_DEVICE_PLACEHOLDER:
+                fields['ngfw_device'] = device
+            else:
+                self._report_location(
+                    'device',
+                    f'  {resource_type} "{obj.get("name")}" ({where}): '
+                    f'location.vsys.ngfw_device is empty because the export '
+                    f'names no target device')
+            return {'vsys': keep('vsys', fields)}
+
+        # 2. Template placement. An entry the export nests under
+        #    templates/entry/<T>/devices/entry/<D> is that device's own
+        #    config inside the template; the schema carries it as
+        #    template.ngfw_device (F3.6).
+        if template and 'template' in scopes:
+            fields = {'name': template}
+            if device and device != self._LOCAL_DEVICE_PLACEHOLDER:
+                fields['ngfw_device'] = device
+            if vsys:
+                if 'vsys' in scopes['template']:
+                    fields['vsys'] = vsys
+                else:
+                    self._report_location(
+                        'scope',
+                        f'  {resource_type} "{obj.get("name")}" ({where}): vsys '
+                        f'dropped because {resource_type} location.template '
+                        f'declares no vsys field')
+            return {'template': keep('template', fields)}
+
+        # 3. Device-specific placement (F3.6). The export put the entry under
+        #    devices/entry/<device>/network, so it is that firewall's own
+        #    config and not a template's. Provider v2 places it with
+        #    location.ngfw ("Located in a specific NGFW device"). Only the
+        #    template-scoped types declare it: objects live in a virtual
+        #    system and take branch 1.
+        if device and device != self._LOCAL_DEVICE_PLACEHOLDER and 'ngfw' in scopes:
+            return {'ngfw': keep('ngfw', {'ngfw_device': device})}
+
+        # 4. Report every declared scope the type cannot carry, then fall
+        #    back to the location the type does accept.
+        if vsys and 'vsys' not in scopes:
+            self._report_location(
+                'scope',
+                f'  {resource_type} "{obj.get("name")}" ({where}): vsys dropped '
+                f'because {resource_type} has no location.vsys sub-block; place '
+                f'the object in the virtual system by hand')
+        if template and 'template' not in scopes:
+            self._report_location(
+                'scope',
+                f'  {resource_type} "{obj.get("name")}" ({where}): template '
+                f'dropped because {resource_type} has no location.template '
+                f'sub-block; place the object in the template by hand')
+        if group and group != 'Shared' and 'device_group' not in scopes:
+            self._report_location(
+                'scope',
+                f'  {resource_type} "{obj.get("name")}" ({where}): device group '
+                f'dropped because {resource_type} has no location.device_group '
+                f'sub-block; place the object in the device group by hand')
+
+        if 'device_group' in scopes:
+            if group and group != 'Shared':
+                return {'device_group': {'name': group}}
+            if 'shared' in scopes:
+                # The export defines the entry under <shared>. The schema
+                # calls that location `shared`; a device group named
+                # "Shared" is a different object that does not exist
+                # (F3.5).
+                return {'shared': {}}
+        if 'template' not in scopes:
+            # Defensive: every emitted type declares `device_group`,
+            # `shared`, or `template`, so no branch above returned. Emit no
+            # location (the resource then fails `terraform validate` loudly)
+            # and say why, rather than emitting a sub-block the type lacks.
+            self._report_location(
+                'scope',
+                f'  {resource_type} "{obj.get("name")}" ({where}): no location '
+                f'emitted because {resource_type} declares no sub-block this '
+                f'entry can use; place the object by hand')
+            return {}
+        # Nothing in the export places this entry and the type only lives in
+        # a template. Emit the placeholder and report it with the templates
+        # the entry's device does take, so the operator replaces the guess
+        # rather than applying it (F3.6).
+        self._report_location(
+            'placeholder',
+            f'  {resource_type} "{obj.get("name")}" ({where}): '
+            f'location.template.name is the "{self._TEMPLATE_PLACEHOLDER}" '
+            f'placeholder because the export places this entry in no '
+            f'template; {self._device_template_text(device)}')
+        return {'template': {'name': self._TEMPLATE_PLACEHOLDER}}
+
+    def location_block(self, resource_type: str, obj: dict, local_name: str = '') -> str:
         """Required location object for a generated resource (F2.3, F3.5).
 
         Provider v2 requires `location` on every resource, and the sub-blocks
@@ -2756,116 +2883,21 @@ class TerraformGenerator:
         sub-block or field is emitted that the schema does not declare:
         `terraform validate` accepts an unknown `location` sub-block and
         drops it, so a wrong sub-block fails at apply, not at validate.
+
+        The block renders from `location_data` and records the import row at the site that applied the naming
+        rule (F6.4), so the block and the block's id state one location and one name.
         """
-        scopes = LOCATION_SCHEMA[resource_type]
-        vsys = (obj.get('vsys') or '').strip()
-        template = (obj.get('template') or '').strip()
-        device = (obj.get('vsys_device') or '').strip()
-        group = (obj.get('device_group') or '').strip()
-        where = self._location_source_text(obj)
-
-        def render(scope: str, fields: dict) -> str:
-            """Emit one location sub-block with only the fields it declares."""
-            kept = [(k, v) for k, v in fields.items() if k in scopes[scope]]
-            if not kept:
-                # An empty sub-block is the `shared = {}` shape.
-                return f'  location = {{\n    {scope} = {{}}\n  }}\n'
-            body = ''.join(f'      {k} = {self.escape_string(v)}\n' for k, v in kept)
-            return f'  location = {{\n    {scope} = {{\n{body}    }}\n  }}\n'
-
-        # 1. Virtual-system placement (F3.5).
-        if vsys and not template and 'vsys' in scopes:
-            fields = {'name': vsys}
-            if device and device != self._LOCAL_DEVICE_PLACEHOLDER:
-                fields['ngfw_device'] = device
-            else:
-                self._report_location(
-                    'device',
-                    f'  {resource_type} "{obj.get("name")}" ({where}): '
-                    f'location.vsys.ngfw_device is empty because the export '
-                    f'names no target device')
-            return render('vsys', fields)
-
-        # 2. Template placement. An entry the export nests under
-        #    templates/entry/<T>/devices/entry/<D> is that device's own
-        #    config inside the template; the schema carries it as
-        #    template.ngfw_device (F3.6).
-        if template and 'template' in scopes:
-            fields = {'name': template}
-            if device and device != self._LOCAL_DEVICE_PLACEHOLDER:
-                fields['ngfw_device'] = device
-            if vsys:
-                if 'vsys' in scopes['template']:
-                    fields['vsys'] = vsys
-                else:
-                    self._report_location(
-                        'scope',
-                        f'  {resource_type} "{obj.get("name")}" ({where}): vsys '
-                        f'dropped because {resource_type} location.template '
-                        f'declares no vsys field')
-            return render('template', fields)
-
-        # 3. Device-specific placement (F3.6). The export put the entry under
-        #    devices/entry/<device>/network, so it is that firewall's own
-        #    config and not a template's. Provider v2 places it with
-        #    location.ngfw ("Located in a specific NGFW device"). Only the
-        #    template-scoped types declare it: objects live in a virtual
-        #    system and take branch 1.
-        if device and device != self._LOCAL_DEVICE_PLACEHOLDER and 'ngfw' in scopes:
-            return render('ngfw', {'ngfw_device': device})
-
-        # 4. Report every declared scope the type cannot carry, then fall
-        #    back to the location the type does accept.
-        if vsys and 'vsys' not in scopes:
-            self._report_location(
-                'scope',
-                f'  {resource_type} "{obj.get("name")}" ({where}): vsys dropped '
-                f'because {resource_type} has no location.vsys sub-block; place '
-                f'the object in the virtual system by hand')
-        if template and 'template' not in scopes:
-            self._report_location(
-                'scope',
-                f'  {resource_type} "{obj.get("name")}" ({where}): template '
-                f'dropped because {resource_type} has no location.template '
-                f'sub-block; place the object in the template by hand')
-        if group and group != 'Shared' and 'device_group' not in scopes:
-            self._report_location(
-                'scope',
-                f'  {resource_type} "{obj.get("name")}" ({where}): device group '
-                f'dropped because {resource_type} has no location.device_group '
-                f'sub-block; place the object in the device group by hand')
-
-        if 'device_group' in scopes:
-            if group and group != 'Shared':
-                return render('device_group', {'name': group})
-            if 'shared' in scopes:
-                # The export defines the entry under <shared>. The schema
-                # calls that location `shared`; a device group named
-                # "Shared" is a different object that does not exist
-                # (F3.5).
-                return render('shared', {})
-        if 'template' not in scopes:
-            # Defensive: every emitted type declares `device_group`,
-            # `shared`, or `template`, so no branch above returned. Emit no
-            # location (the resource then fails `terraform validate` loudly)
-            # and say why, rather than emitting a sub-block the type lacks.
-            self._report_location(
-                'scope',
-                f'  {resource_type} "{obj.get("name")}" ({where}): no location '
-                f'emitted because {resource_type} declares no sub-block this '
-                f'entry can use; place the object by hand')
+        data = self.location_data(resource_type, obj)
+        if local_name:
+            self.record_import_row(resource_type, obj, local_name, data)
+        if not data:
             return ''
-        # Nothing in the export places this entry and the type only lives in
-        # a template. Emit the placeholder and report it with the templates
-        # the entry's device does take, so the operator replaces the guess
-        # rather than applying it (F3.6).
-        self._report_location(
-            'placeholder',
-            f'  {resource_type} "{obj.get("name")}" ({where}): '
-            f'location.template.name is the "{self._TEMPLATE_PLACEHOLDER}" '
-            f'placeholder because the export places this entry in no '
-            f'template; {self._device_template_text(device)}')
-        return render('template', {'name': self._TEMPLATE_PLACEHOLDER})
+        scope, fields = next(iter(data.items()))
+        if not fields:
+            # An empty sub-block is the `shared = {}` shape.
+            return f'  location = {{\n    {scope} = {{}}\n  }}\n'
+        body = ''.join(f'      {k} = {self.escape_string(v)}\n' for k, v in fields.items())
+        return f'  location = {{\n    {scope} = {{\n{body}    }}\n  }}\n'
 
     def hcl_value(self, value: Any, indent: str = '  ') -> str:
         """Render a Python value as an HCL expression.
@@ -2985,7 +3017,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_address" "{resource_name}" {{\n'
-            content += self.location_block('panos_address', addr)
+            content += self.location_block('panos_address', addr, resource_name)
             content += f'  name = {self.escape_string(addr["name"])}\n'
 
             if addr.get('description'):
@@ -3052,7 +3084,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_address_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_address_group', grp)
+            content += self.location_block('panos_address_group', grp, resource_name)
             content += f'  name = {self.escape_string(grp["name"])}\n'
 
             if grp.get('description'):
@@ -3103,7 +3135,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_service" "{resource_name}" {{\n'
-            content += self.location_block('panos_service', svc)
+            content += self.location_block('panos_service', svc, resource_name)
             content += f'  name = {self.escape_string(svc["name"])}\n'
 
             if svc.get('description'):
@@ -3192,7 +3224,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_service_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_service_group', grp)
+            content += self.location_block('panos_service_group', grp, resource_name)
             content += f'  name = {self.escape_string(grp["name"])}\n'
 
             if grp.get('members'):
@@ -3228,7 +3260,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_administrative_tag" "{resource_name}" {{\n'
-            content += self.location_block('panos_administrative_tag', tag)
+            content += self.location_block('panos_administrative_tag', tag, resource_name)
             content += f'  name = {self.escape_string(tag["name"])}\n'
 
             # v2 uses numeric color names (color1..colorN); PAN-OS exports use
@@ -3266,7 +3298,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_custom_url_category" "{resource_name}" {{\n'
-            content += self.location_block('panos_custom_url_category', cat)
+            content += self.location_block('panos_custom_url_category', cat, resource_name)
             content += f'  name = {self.escape_string(cat["name"])}\n'
 
             if cat.get('type'):
@@ -3298,7 +3330,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_application_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_application_group', ag)
+            content += self.location_block('panos_application_group', ag, resource_name)
             content += f'  name = {self.escape_string(ag["name"])}\n'
 
             if ag.get('members'):
@@ -3354,7 +3386,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_external_dynamic_list" "{resource_name}" {{\n'
-            content += self.location_block('panos_external_dynamic_list', ext_list)
+            content += self.location_block('panos_external_dynamic_list', ext_list, resource_name)
             content += f'  name = {self.escape_string(ext_list["name"])}\n'
 
             # v2 type is a nested object keyed by list type
@@ -3437,7 +3469,7 @@ variable "panos_password" {
                 )
 
                 content += f'resource "panos_security_policy_rules" "{resource_name}" {{\n'
-                content += self.location_block('panos_security_policy_rules', rule)
+                content += self.location_block('panos_security_policy_rules', rule, resource_name)
                 content += self._policy_position_block(
                     'panos_security_policy_rules', prev_rule_name, prev_resource_name
                 )
@@ -3514,7 +3546,7 @@ variable "panos_password" {
                 )
 
                 content += f'resource "panos_nat_policy_rules" "{resource_name}" {{\n'
-                content += self.location_block('panos_nat_policy_rules', rule)
+                content += self.location_block('panos_nat_policy_rules', rule, resource_name)
                 content += self._policy_position_block(
                     'panos_nat_policy_rules', prev_rule_name, prev_resource_name
                 )
@@ -3620,7 +3652,7 @@ variable "panos_password" {
                 )
 
                 content += f'resource "panos_decryption_policy_rules" "{resource_name}" {{\n'
-                content += self.location_block('panos_decryption_policy_rules', rule)
+                content += self.location_block('panos_decryption_policy_rules', rule, resource_name)
                 content += self._policy_position_block(
                     'panos_decryption_policy_rules', prev_rule_name, prev_resource_name
                 )
@@ -3719,7 +3751,7 @@ variable "panos_password" {
                 )
 
                 content += f'resource "panos_pbf_policy_rules" "{resource_name}" {{\n'
-                content += self.location_block('panos_pbf_policy_rules', rule)
+                content += self.location_block('panos_pbf_policy_rules', rule, resource_name)
                 content += self._policy_position_block(
                     'panos_pbf_policy_rules', prev_rule_name, prev_resource_name
                 )
@@ -3822,7 +3854,7 @@ variable "panos_password" {
                 context=self.scope_context(prof), vsys=prof.get('vsys') or ''
             )
             content += f'resource "panos_monitor_profile" "{resource_name}" {{\n'
-            content += self.location_block('panos_monitor_profile', prof)
+            content += self.location_block('panos_monitor_profile', prof, resource_name)
             content += f'  name = {self.escape_string(prof["name"])}\n'
             for attr in ('interval', 'threshold'):
                 raw = prof.get(attr)
@@ -3856,7 +3888,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_zone" "{resource_name}" {{\n'
-            content += self.location_block('panos_zone', zone)
+            content += self.location_block('panos_zone', zone, resource_name)
             content += f'  name = {self.escape_string(zone["name"])}\n'
 
             # v2 network object: membership list is keyed by layer type
@@ -3912,7 +3944,7 @@ variable "panos_password" {
             content += f'# Type: {rtype}\n'
 
             content += f'resource "panos_virtual_router" "{resource_name}" {{\n'
-            content += self.location_block('panos_virtual_router', router)
+            content += self.location_block('panos_virtual_router', router, resource_name)
             content += f'  name = {self.escape_string(router["name"])}\n'
 
             # v2 interfaces is a flat string list
@@ -3943,7 +3975,7 @@ variable "panos_password" {
                     # identity; only the report name is the route's own
                     content += self.location_block(
                         'panos_virtual_router_static_route_ipv4',
-                        {**router, 'name': route['name']})
+                        {**router, 'name': route['name']}, route_resource)
                     content += f'  name = {self.escape_string(route["name"])}\n'
                     # Reference the owning virtual router resource
                     content += f'  virtual_router = panos_virtual_router.{resource_name}.name\n'
@@ -4016,7 +4048,7 @@ variable "panos_password" {
             resource_name = self.declare_resource_name(
                 name, scope, context=context, vsys=vsys, device=device)
             out = f'resource "{scope}" "{resource_name}" {{\n'
-            out += self.location_block(scope, iface)
+            out += self.location_block(scope, iface, resource_name)
             out += f'  name = {self.escape_string(name)}\n'
             # F2.6: the parent is an interface declared in this run
             # (or a brown-field interface outside the export);
@@ -4037,7 +4069,7 @@ variable "panos_password" {
         resource_name = self.declare_resource_name(
             name, scope, context=context, vsys=vsys, device=device)
         out = f'resource "{scope}" "{resource_name}" {{\n'
-        out += self.location_block(scope, iface)
+        out += self.location_block(scope, iface, resource_name)
         out += f'  name = {self.escape_string(name)}\n'
 
         if iface.get('comment'):
@@ -4073,7 +4105,7 @@ variable "panos_password" {
             out += f'resource "{scope_sub}" "{sub_resource}" {{\n'
             # The subinterface is its own object, so reports name it by its
             # own name (the location itself comes from the same source entry).
-            out += self.location_block(scope_sub, {**iface, 'name': sub_name})
+            out += self.location_block(scope_sub, {**iface, 'name': sub_name}, sub_resource)
             out += f'  name = {self.escape_string(sub_name)}\n'
             # F2.6: the parent is the physical interface declared above;
             # F3.2: resolve in the subinterface's vsys key
@@ -4100,7 +4132,7 @@ variable "panos_password" {
         resource_name = self.declare_resource_name(
             name, scope, context=context, vsys=vsys, device=device)
         out = f'resource "{scope}" "{resource_name}" {{\n'
-        out += self.location_block(scope, iface)
+        out += self.location_block(scope, iface, resource_name)
         out += f'  name = {self.escape_string(name)}\n'
         if iface.get('comment'):
             out += f'  comment = {self.escape_string(iface["comment"])}\n'
@@ -4357,7 +4389,7 @@ variable "panos_password" {
             )
 
             content += f'resource "panos_security_profile_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_security_profile_group', grp)
+            content += self.location_block('panos_security_profile_group', grp, resource_name)
             content += f'  name = {self.escape_string(grp["name"])}\n'
 
             for category in categories:
@@ -4794,7 +4826,7 @@ variable "panos_password" {
                     context=self.scope_context(profile), vsys=profile.get('vsys') or ''
                 )
                 content += f'resource "panos_ike_crypto_profile" "{resource_name}" {{\n'
-                content += self.location_block('panos_ike_crypto_profile', profile)
+                content += self.location_block('panos_ike_crypto_profile', profile, resource_name)
                 content += f'  name = {self.escape_string(profile["name"])}\n'
 
                 if profile.get('encryptions'):
@@ -4830,7 +4862,7 @@ variable "panos_password" {
                     context=self.scope_context(profile), vsys=profile.get('vsys') or ''
                 )
                 content += f'resource "panos_ipsec_crypto_profile" "{resource_name}" {{\n'
-                content += self.location_block('panos_ipsec_crypto_profile', profile)
+                content += self.location_block('panos_ipsec_crypto_profile', profile, resource_name)
                 content += f'  name = {self.escape_string(profile["name"])}\n'
 
                 # v2 dh_group is a single string (not a list)
@@ -4876,7 +4908,7 @@ variable "panos_password" {
                     context=self.scope_context(gw), vsys=gw.get('vsys') or ''
                 )
                 content += f'resource "panos_ike_gateway" "{resource_name}" {{\n'
-                content += self.location_block('panos_ike_gateway', gw)
+                content += self.location_block('panos_ike_gateway', gw, resource_name)
                 content += f'  name = {self.escape_string(gw["name"])}\n'
 
                 # v2 protocol object: version + ikev1/ikev2 sub-object
@@ -4946,7 +4978,7 @@ variable "panos_password" {
                     context=self.scope_context(tunnel), vsys=tunnel.get('vsys') or ''
                 )
                 content += f'resource "panos_ipsec_tunnel" "{resource_name}" {{\n'
-                content += self.location_block('panos_ipsec_tunnel', tunnel)
+                content += self.location_block('panos_ipsec_tunnel', tunnel, resource_name)
                 content += f'  name = {self.escape_string(tunnel["name"])}\n'
 
                 if tunnel.get('tunnel_interface'):
@@ -5355,6 +5387,14 @@ def main():
         help='a reference scope this run may read through, as a provider data source type. '
              'Repeatable, or a comma-separated list. A name that no scope in this run declares '
              f'becomes a data block in {TerraformGenerator.READ_THROUGH_FILE} (F5.5)',
+    )
+    # F6.4: the import blocks are an opt-in. Off by default, so a run that declares nothing
+    # writes the same `.tf` bytes as before (`import_blocks.py` rule 1).
+    parser.add_argument(
+        '--import-blocks',
+        action='store_true',
+        help=f'write one import block per entry the run declares, in {import_blocks.IMPORT_FILE}. '
+             'The id is base64 of the location object and the entry name (F6.4)',
     )
     parser.add_argument(
         '--cache-dir',
@@ -5772,6 +5812,14 @@ def main():
         edge_file = Path(args.output_dir) / reference_edges.EDGE_FILE
         if edge_rows:
             edge_file.write_text(reference_edges.render(edge_rows), encoding='utf-8')
+
+        # F6.4: the import blocks. A `.tf` file, because the gate rule that checks an import block reads the
+        # files the operator receives (`ARCHITECTURE.md` §4.5), and written only when the run declares them and
+        # has rows that state an id. A row that states a rule instead of an id writes no block.
+        import_file = Path(args.output_dir) / import_blocks.IMPORT_FILE
+        import_rows = [row for row in tf_gen.import_rows if row['import_id']]
+        if args.import_blocks and import_rows:
+            import_file.write_text(import_blocks.render(import_rows), encoding='utf-8')
 
         print("\n✓ Successfully generated Terraform configuration!")
         print("\n📄 Generated Migration Reports:")

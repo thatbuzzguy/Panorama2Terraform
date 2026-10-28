@@ -16,8 +16,9 @@ covers the generated Terraform. `ADVERSARIAL_AUDIT_REPORT.md` is the audit recor
 its status table states the current state.
 
 Epic 5 (the upstream source layer) is complete. Epic 6 (codebase assembly) is started: F6.1
-(the unit boundary as data) and F6.2 (ownership as data) landed, and their rules are in
-`docs/ARCHITECTURE.md` §3.4 and §3.5. The open decisions are in `backlog.md`.
+(the unit boundary as data), F6.2 (ownership as data), F6.3 (the reference between units and the
+unit order) and F6.4 (import blocks) landed, and their rules are in `docs/ARCHITECTURE.md` §3.4,
+§3.5, §3.6 and §4.8. The open decisions are in `backlog.md`.
 
 ## Goals
 
@@ -65,7 +66,7 @@ half of the codebase reference rule, so Epic 6 F6.3 follows it.
 
 A codebase is a set of directories, one per declared scope, that a platform plans and
 applies. The design record is `docs/CODEBASE_ASSEMBLY.md`. Every feature below is a rule
-to decide, then a module to write. F6.1, F6.2 and F6.3 are implemented, so their rules name the module
+to decide, then a module to write. F6.1, F6.2, F6.3 and F6.4 are implemented, so their rules name the module
 and the test that holds them; the rest is not implemented.
 
 F6.1 (the unit boundary as data, the codebase manifest, landed 2026-10-28) is in the git
@@ -94,10 +95,16 @@ deeper scope inside it, and the target unit before the referrer unit. The rules 
 directory, so the codebase gate rule and the write path are still open, and the outputs rule for a name
 another unit owns stays in `backlog.md`.
 
-- [ ] **F6.4 Import blocks** — one `import` block per entry, from the same identity data
-  the resource block uses, plus the gate rule that an import block agrees with the
-  resource block it names. The rule types need the rulebase decision, and the position
-  must be the position the live config holds.
+F6.4 (import blocks, landed 2026-10-28) is in the git history. `imports.tf` states one `import` block per
+entry the run declares, as `to` and `id`, and `id` is base64 of the location object plus the entry name,
+built from the same data the resource block uses, so no second naming rule and no second location rule
+exists. The shape is opt-in (`--import-blocks`), so a run that declares nothing writes the same `.tf` bytes
+as before. The gate rule that reads an `import` block is the second gate rule for a block kind, and it uses
+the one block reader. The four `*_policy_rules` types write no block, because their import object names the
+rulebase, the position in the live rulebase, and a list of names, so each rule entry is a WARN finding. The
+rules are in `docs/ARCHITECTURE.md` §4.8 and `docs/CODEBASE_ASSEMBLY.md` §7. F6.4 writes no directory, so
+the write path stays open.
+
 - [ ] **F6.5 Scope objects as output** — `panos_device_group`, `panos_device_group_parent`,
   `panos_template`, `panos_template_stack`, `panos_template_variable`, `panos_vsys`,
   written from the provider schema. Needs new `EMITTED_TYPES` entries and matrix rows for
@@ -116,8 +123,9 @@ another unit owns stays in `backlog.md`.
 2. A state source is a reference source, so it cannot move an output fact: it writes no `.tf` byte, it
    is not an output read for the property scan, and its record references no cache entry, so it prunes
    nothing.
-3. Epic 6 is started: F6.1 landed the unit as data, F6.2 landed the owner of a repeated name, and F6.3
-   landed the pair and the order between units, so F6.4 reads all three. The order is in
+3. Epic 6 is started: F6.1 landed the unit as data, F6.2 landed the owner of a repeated name, F6.3 landed
+   the pair and the order between units, and F6.4 landed the block that binds an entry to the live config,
+   so F6.5 reads the unit, the owner, the pair and the block. The order is in
    `docs/CODEBASE_ASSEMBLY.md` §14.
 
 ## Out of Scope (tracked in backlog.md)

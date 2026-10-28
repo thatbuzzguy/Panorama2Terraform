@@ -15,6 +15,7 @@ Checks, in report order:
 | `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |
 | `location_present` | every `resource` and `data` block carries a `location` block | FAIL |
 | `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type | FAIL |
+| `import_blocks` | every `import` block agrees with the `resource` block it names | FAIL, WARN |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
@@ -38,6 +39,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import import_blocks
 import resource_mapping
 
 FAIL = 'FAIL'
@@ -50,6 +52,7 @@ CHECK_ORDER = (
     'emitted_types',
     'location_present',
     'data_blocks',
+    'import_blocks',
     'references',
     'variables',
     'control_chars',
@@ -65,6 +68,10 @@ REPORT_RULE = '=' * 80
 # `action` (F6.7) with this same reader, so no second block reader appears.
 BLOCK_RE = re.compile(r'\b(resource|data|import|action)\s+"([a-z0-9_]+)"\s+"([^"]+)"\s*\{')
 BLOCK_KINDS = ('resource', 'data', 'import', 'action')
+# F6.4: an `import` block may name its target inside the block, as `to = <type>.<local name>`, so the
+# reader reads the two names from the body for that shape. One reader still serves every kind.
+IMPORT_BLOCK_RE = re.compile(r'\bimport\s*\{')
+TO_RE = re.compile(r'\bto\s*=\s*([a-z0-9_]+)\.([A-Za-z0-9_]+)')
 VARIABLE_RE = re.compile(r'^variable\s+"([A-Za-z0-9_]+)"', re.M)
 # A `.name` reference, with the kind the reference names. A `data.` reference
 # resolves to a data block and a plain reference to a resource block, so the
@@ -129,6 +136,38 @@ class Block:
                 if depth == 0:
                     return self.body[start + 1:index]
         return self.body[start + 1:]
+
+    def attribute(self, key: str) -> str:
+        """One quoted field of this block, as the gate reads it (the one field reader)."""
+        return import_blocks.block_value(self, key)
+
+    def location_values(self) -> dict[str, dict[str, str]]:
+        """The `location` sub-block as {sub-block: {field: value}}, in sorted order.
+
+        The shape the import id states (`import_blocks.decode_id`), so the agreement rule compares
+        the block and the id through one reader. A sub-block with no field is the `{}` shape.
+        """
+        text = self.location_body()
+        found: dict[str, dict[str, str]] = {}
+        for match in re.finditer(r'([A-Za-z0-9_]+)\s*=\s*\{', text):
+            name = match.group(1)
+            start = match.end() - 1
+            depth = 0
+            end = len(text)
+            for index in range(start, len(text)):
+                char = text[index]
+                if char == '{':
+                    depth += 1
+                elif char == '}':
+                    depth -= 1
+                    if depth == 0:
+                        end = index
+                        break
+            inner = text[start + 1:end]
+            fields = {m.group(1): import_blocks.unescape(m.group(2))
+                      for m in re.finditer(r'([A-Za-z0-9_]+)\s*=\s*"((?:[^"\\]|\\.)*)"', inner)}
+            found[name] = dict(sorted(fields.items()))
+        return dict(sorted(found.items()))
 
     def sub_blocks(self) -> dict[str, tuple[str, ...]]:
         """The `location` sub-blocks as {sub-block: fields}, in sorted order.
@@ -284,20 +323,19 @@ def blocks(files: dict[str, str], kinds: tuple[str, ...] = BLOCK_KINDS) -> list[
     found = []
     for name in sorted(files):
         text = files[name]
-        for match in BLOCK_RE.finditer(text):
-            kind = match.group(1)
-            if kind not in kinds:
-                continue
-            end = text.find('\n}', match.end())
-            body = text[match.end():end] if end != -1 else text[match.end():]
-            found.append(Block(
-                name,
-                text.count('\n', 0, match.start()) + 1,
-                kind,
-                match.group(2),
-                match.group(3),
-                body,
-            ))
+        # One pass, so the blocks come out in file order whatever header shape they use.
+        matches = [(m.start(), m.group(1), m.group(2), m.group(3), m.end())
+                   for m in BLOCK_RE.finditer(text) if m.group(1) in kinds]
+        if 'import' in kinds:
+            for match in IMPORT_BLOCK_RE.finditer(text):
+                body = text[match.end():text.find('\n}', match.end())]
+                target = TO_RE.search(body)
+                if target:
+                    matches.append((match.start(), 'import', target.group(1), target.group(2), match.end()))
+        for start, kind, rtype, local, end in sorted(matches):
+            close = text.find('\n}', end)
+            body = text[end:close] if close != -1 else text[end:]
+            found.append(Block(name, text.count('\n', 0, start) + 1, kind, rtype, local, body))
     return found
 
 
@@ -385,6 +423,58 @@ def check_data_blocks(files: dict[str, str]) -> list[Finding]:
                         f'data {block.address} location.{sub_block}.{field} is not a '
                         f'field {block.rtype} declares',
                     ))
+    return findings
+
+
+def check_import_blocks(files: dict[str, str]) -> list[Finding]:
+    """Every `import` block must agree with the `resource` block it names (F6.4).
+
+    Four facts, each read through one rule: the address (`to`, read by `blocks`), the entry name, the
+    location, and the id shape (`import_blocks.decode_id`). A wrong type and a wrong local name are both
+    "the address names no resource block", and a `data` block cannot answer, because an import object names
+    a resource.
+
+    A `*_policy_rules` entry writes no block: its import object names the rulebase, the position, and a
+    list (`import_blocks` rule 5). The run reports the entry as an operator action, so the finding is WARN
+    and the exit code is unchanged. It is reported only when the run declared import blocks.
+    """
+    import_blocks_read = blocks(files, ('import',))
+    resources = {(block.rtype, block.local): block for block in resource_blocks(files)}
+    findings = []
+    for block in import_blocks_read:
+        try:
+            decoded = import_blocks.decode_id(block.attribute('id'))
+        except ValueError as exc:
+            findings.append(Finding('import_blocks', FAIL, block.file, block.line, str(exc)))
+            continue
+        target = resources.get((block.rtype, block.local))
+        if target is None:
+            findings.append(Finding(
+                'import_blocks', FAIL, block.file, block.line,
+                f'import {block.address} names no resource block in this run',
+            ))
+            continue
+        name = target.attribute('name')
+        if decoded['name'] != name:
+            findings.append(Finding(
+                'import_blocks', FAIL, block.file, block.line,
+                f'import {block.address} id name {decoded["name"]!r} is not the name '
+                f'the block states ({name!r})',
+            ))
+        location = target.location_values()
+        if decoded['location'] != location:
+            findings.append(Finding(
+                'import_blocks', FAIL, block.file, block.line,
+                f'import {block.address} id location is not the location the block states '
+                f'({location})',
+            ))
+    if import_blocks_read:
+        for block in resource_blocks(files):
+            if block.rtype in import_blocks.rule_types():
+                findings.append(Finding(
+                    'import_blocks', WARN, block.file, block.line,
+                    f'resource {block.address}: no import id, because {import_blocks.RULE_DECISION}',
+                ))
     return findings
 
 
@@ -523,6 +613,7 @@ def run_checks(output_dir: Path, run_terraform: bool = False,
         CheckResult('emitted_types', tuple(check_emitted_types(files))),
         CheckResult('location_present', tuple(check_location_present(files))),
         CheckResult('data_blocks', tuple(check_data_blocks(files))),
+        CheckResult('import_blocks', tuple(check_import_blocks(files))),
         CheckResult('references', tuple(check_references(files))),
         CheckResult('variables', tuple(check_variables(files))),
         CheckResult('control_chars', tuple(check_control_chars(files))),

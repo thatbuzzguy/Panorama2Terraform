@@ -45,6 +45,7 @@ python3 panorama_to_terraform.py export.xml --output-dir out
 | `--state PATH` | Terraform state document read as a reference source (F5.6). Applies to any source kind |
 | `--workspace NAME` | The workspace the state document belongs to, so the record names it. Needs `--state` |
 | `--data-blocks SCOPE` | A reference scope this run may read through, as a provider data source type. Repeatable, or a comma-separated list. Off by default (F5.5) |
+| `--import-blocks` | Write one `import` block per entry the run declares, in `imports.tf`. Off by default (F6.4) |
 | `--output-dir DIR` | Output directory. Default `terraform_output` |
 | `--max-input-bytes N` | Refuse an input larger than N. Default 67,108,864 (64 MiB) |
 | `--validate` | Add the `terraform init` + `terraform validate` check to the post-run gate |
@@ -142,6 +143,27 @@ python3 panorama_to_terraform.py export.xml --data-blocks panos_address,panos_zo
   built-in name table exists. The generated `README.md` labels the run with the declared scopes and
   the block count for that reason.
 
+### Import blocks (opt-in)
+
+```bash
+python3 panorama_to_terraform.py export.xml --import-blocks --output-dir out
+```
+
+- Off by default. A run that does not declare it writes no `imports.tf`, so the generated `.tf` files
+  are unchanged.
+- One `import` block per entry the run declares, in one file for the run, in unit order then local-name
+  order. Each block states `to` (the block address) and `id` (base64 of the location object plus the
+  entry name, the provider shape).
+- The block and the id state one fact: the location comes from the same rule the resource block renders
+  from, and the local name comes from the same naming rule. `panorama_device` is not stated, because the
+  generator emits no device fact.
+- A gate rule reads the file (`import_blocks`, §4.6 of [ARCHITECTURE.md](ARCHITECTURE.md)): a block must
+  agree with the resource block it names. A wrong type, a wrong local name, a wrong location, or a wrong
+  name is a FAIL finding, so the run exits 1.
+- The four `*_policy_rules` types write no block, because their import object names the rulebase, the
+  position in the live rulebase, and a list of names. Each rule entry is a WARN finding with that reason,
+  and a WARN does not change the exit code.
+
 ## Quick start script
 
 `quick_start.sh` runs the converter on the committed sample export
@@ -182,6 +204,7 @@ The converter writes a file only when it has content.
 | `security_profiles.tf` | Inventory only: names and descriptions, with the resource name the emitter would use |
 | `interfaces.tf`, `zones.tf`, `virtual_routers.tf`, `monitor_profiles.tf`, `vpn.tf` | Network and VPN resources |
 | `read_through.tf` | One `data` block per name a reference needed and the run did not read. Written only for a run that declares `--data-blocks` (F5.5) |
+| `imports.tf` | One `import` block per entry the run declares, as `to` and `id`: the block address, and base64 of the location object plus the entry name. Written only for a run that declares `--import-blocks` and has a block to write (F6.4) |
 | `README.md` | Deployment steps for the generated directory |
 | `SOURCE.txt` | One record per source the run read, as `field: value` data: kind, name, path, scope, request, cache_entry, size, and the SHA-256 hex of the parsed bytes |
 | `MANUAL_SETUP_REPORT.txt` | Report-only configuration, plus a section for a container no parse method reads |
