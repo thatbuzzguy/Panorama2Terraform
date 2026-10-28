@@ -1,29 +1,17 @@
 # To Do
 
-F6.2 (ownership as data) is complete. Acceptance criteria are in `acceptance.md`; the rules landed in
-`ownership.py`, `main()`, the service parse and emit legs, `resource_mapping.py`, and
-`tests/test_ownership.py`.
+No feature is in progress. F6.2 (ownership as data) is complete and committed
+(`44496dd`), so its task list is removed here.
 
-Pieces, all done:
+The next feature in `PLAN.md` is F6.3 (the reference between units as an edge list). It is not started.
 
-1. [x] Measure the corpus for the repeated-name groups and the flag, so the decisions rest on a
-   measurement (acceptance.md Decision 2 rule 8, AC-3.7).
-2. [x] Write the acceptance criteria for F6.2 (`acceptance.md`).
-3. [x] `ownership.py`: the row shape, the scan scope, the owner rule, `render`, `parse_rows`, and the
-   report line shape.
-4. [x] Close the service extraction gap: capture `disable_override` in `parse_service_objects`, emit it
-   in `generate_service_objects`, and add the property to the `panos_service` matrix row.
-5. [x] New fixture `tests/fixtures/ownership_override.xml`: the shared entry plus the device-group entry,
-   with and without the flag, and a service entry that carries the flag.
-6. [x] `main()`: write `OWNERSHIP.json` when the rows have content, and pass the findings to the
-   conversion report section.
-7. [x] `tests/test_ownership.py`: the row scope, the declaring unit and the join, the owner rule, the
-   service leg, the report finding, determinism, and the corpus no-false-positive set.
-8. [x] Gates: `ruff check .`, `pytest`, both golden sets byte-identical, exit codes unchanged.
-9. [x] Docs: `docs/CODEBASE_ASSEMBLY.md` §2, §4, §5 and §14, `docs/ARCHITECTURE.md` (§1 module table,
-   §3.5, §4.5 section order), `docs/USAGE_GUIDE.md` (the output file table and the record section),
-   `README.md` (the file list), `PLAN.md`, `backlog.md`, `agent-status.md`.
-10. [ ] Commit: "F6.2: ownership as data, the override rule".
+Open pieces for Epic 6, held here until the next feature takes them:
 
-Still open for Epic 6, out of scope for F6.2: the directory write path, the edge list (F6.3), the
-import blocks (F6.4), and the gate rule that reads a data file.
+- The directory write path: F6.1 and F6.2 name the unit and the owner and write no directory.
+- The gate rule that reads a data file: the gate reads `.tf` files only, so neither data file is a
+  gate input today.
+- F6.3 must decide whether the reference fact stays one fact (names per unit) or splits into two kinds
+  (outside the run, ambiguous inside the run), and the record shape that holds (referrer unit, target
+  unit).
+- F6.4 import blocks, the rulebase decision for the four `*_policy_rules` types, the site data layer
+  (F6.6), and the commit action (F6.7).

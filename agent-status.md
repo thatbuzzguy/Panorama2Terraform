@@ -2,7 +2,7 @@
 
 ## Current position
 
-F6.2 (ownership as data, the repeated-name rule) is complete and committed. No feature is in
+F6.2 (ownership as data, the repeated-name rule) is complete and committed (`44496dd`). No feature is in
 progress. The next feature in `PLAN.md` is F6.3 (the reference between units as an edge list). F6.1 and
 F6.2 name the unit and the owner and write no directory, so the write path and the gate rule that reads
 the two data files are still open.
