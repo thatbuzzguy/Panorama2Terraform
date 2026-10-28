@@ -1,18 +1,19 @@
 # Codebase Assembly (design record)
 
 This is the design record for Epic 6 (`PLAN.md`). It states what a full Terraform
-codebase needs and what the converter does not do yet. F6.1 is implemented, so its rules
-name the module and the test that holds them. The rest of this document is not
-implemented, so no test pins it. Every statement about the converter names the module or
-the test that holds it. Provider facts come from the pinned provider (2.0.14) and are
-listed in §12.
+codebase needs and what the converter does not do yet. F6.1, F6.2 and F6.3 are
+implemented, so their sections name the module and the test that holds them. The rest of
+this document is not implemented, so no test pins it. Every statement about the converter
+names the module or the test that holds it. Provider facts come from the pinned provider
+(2.0.14) and are listed in §12.
 
 ## 1. What a codebase is
 
 The converter writes one output directory per run: the `.tf` files, the five report
-files, `README.md`, `SOURCE.txt`, the unit manifest `CODEBASE_MANIFEST.json` (§3), and the
-ownership record `OWNERSHIP.json` (§4). A codebase is a set of directories that a platform
-plans and applies, one plan per directory. Six facts define it:
+files, `README.md`, `SOURCE.txt`, the unit manifest `CODEBASE_MANIFEST.json` (§3), the
+ownership record `OWNERSHIP.json` (§4), and the edge record `REFERENCE_EDGES.json` (§5).
+A codebase is a set of directories that a platform plans and applies, one plan per
+directory. Six facts define it:
 
 1. A unit is one declared scope, as [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.2 states
    the four scope facts: a device group, a template, a template stack, or a virtual
@@ -42,7 +43,7 @@ These parts are true today, so a codebase can be built on them.
 |---|---|---|
 | Identity: (device group, vsys, type, name) | The key the state scan uses, and the same data a provider import id holds (§7) | `ARCHITECTURE.md` §2.1 |
 | Local name: sanitized name plus the 8-hex identity digest | A resource address that does not move when a unit is regenerated, so a Git diff and an import block stay stable across runs | `ARCHITECTURE.md` §5 and §6 |
-| The reference rule | A name defined outside the run stays a plain string. The set of those names is the reference edge list between units (§5) | `ARCHITECTURE.md` §4.3 |
+| The reference rule | A name defined outside the run stays a plain string. The set of those names is the reference edge list between units (§5) | `ARCHITECTURE.md` §4.3, §5 |
 | The policy chain rule | Order inside a unit, and no rule depends on a rule in another unit, so the graph between units stays coarse | `ARCHITECTURE.md` §4.4 |
 | The shadow scan | The naming-collision check between a parent scope and a child scope, which is the pre-flight check a codebase needs | `shadow_coverage.py`, `ARCHITECTURE.md` §3.2 |
 | The ownership record | The unit that owns a name, so one plan holds one entry and an override resolves through its owner | `ownership.py`, §4 |
@@ -50,7 +51,8 @@ These parts are true today, so a codebase can be built on them.
 | The api producer | One request per scope path and one cached entry per path, so a per-unit run reads one scope | `source_fetch.py`, `ARCHITECTURE.md` §3 |
 | The gate, determinism, offline CI | A codebase gate that can run on every unit with no device access | `ARCHITECTURE.md` §4.6, §6 |
 
-§3 and §4 are landed. The gaps are §5 to §11.
+§3, §4 and §5 are landed, and §6 is landed for the order data it can state. The gaps are
+§7 to §11.
 
 ## 3. The unit boundary as data (F6.1, landed)
 
@@ -81,11 +83,14 @@ directory. F6.1 states the unit boundary as data: one row per declared scope in
    row (the `docs/README.md` rule). Fields print in the declared order, the rows sort by the
    identity, the reference names are sorted, and no field states a timestamp or a path.
    `parse_rows` reads a written file back, and a row that is not the declared shape is a
-   refusal, the way `provenance.parse_record` refuses a line that is not a field.
+   refusal, the way `provenance.parse_record` refuses a line that is not a field. The two order
+   fields `rank` and `after` print after the F6.1 fields (§6 rule 1).
 5. **One file per codebase run.** The edge list (§5) needs the whole set of units, and a reader
    cannot find a per-unit file before it knows the directory name, so one file holds one row per
    unit. `CODEBASE_MANIFEST.json` is written only when it has content, following the rule for the
-   report files, and the CLI takes no flag for it.
+   report files, and the CLI takes no flag for it. The three data files are the manifest (one row
+   per unit), the ownership record (one row per entry), and the edge record (one row per pair), so
+   no file states the unit set twice, which is why the order lives on the manifest row.
 6. **The reference names.** The reference rule records them (`ARCHITECTURE.md` §4.3), keyed by
    the referrer's four scope facts, so a row states the names a unit references from outside
    itself. This module resolves no name.
@@ -160,53 +165,104 @@ names the property
 (`tests/test_ownership.py::test_the_service_row_names_the_property_the_emitter_reads`). The edge list
 (§5) is the next gap, and it now has the owner fact to build on.
 
-## 5. Gap — the reference between units
+## 5. The reference between units as data (F6.3, landed)
 
-For a name outside the run, the converter keeps a plain string
-(`ARCHITECTURE.md` §4.3). A codebase needs that name to resolve at plan time, in one of
-two ways:
+The converter now states the pair as data: `REFERENCE_EDGES.json`, one row per edge. The rules are
+in `reference_edges.py`, and `main()` writes the file.
 
-1. A provider data source (F5.5): one `data` block per outside name. It resolves at
-   plan, costs one API call per block, and fails at plan when the name does not exist,
-   so a read-through run must be labelled in the generated `README.md`.
-2. The state of another unit (a remote state data source, or a Terraform Cloud output).
-   It costs no API call, but a unit must export outputs, and the generator writes no
-   outputs today.
+1. **The edge set is the names the reference rule recorded** (`TerraformGenerator.name_ref`,
+   `ARCHITECTURE.md` §4.3), so the module records no name and resolves no name. A name the rule
+   resolved inside the run is a reference inside one root, not an edge between units, so it writes
+   no row. A name no unit in the run declares writes no row either: the pair does not exist, and
+   that name is already stated in the manifest's `references` field, the only place that states a
+   reference name.
+2. **The target unit is the owner**, the `owner` field of the ownership row for (`type`, `entry`),
+   not the declaring unit (§4 rule 5). A name several units declare as separate objects gives one
+   row per owner, which is the ambiguous-device case in `ARCHITECTURE.md` §4.3 rule 1.
+3. **Self-reference exclusion.** A row whose target is the referrer writes no row, because an edge
+   is a fact between two units and a unit cannot come before itself. The same rule keeps a unit out
+   of its own `after` (§6 rule 3).
+4. **The row shape, and the join.** `referrer` and `target` name units by their directory, so the
+   row joins to `CODEBASE_MANIFEST.json` on `directory` and to `OWNERSHIP.json` on (`type`,
+   `entry`). Fields print in the declared order, rows sort by the four fields in field order, one
+   row per pair, no timestamp and no path. `parse_rows` reads a written file back and refuses a row
+   that is not the declared shape, including a row that names one unit instead of two. The module
+   defines no naming rule and no identity key: it takes `TerraformGenerator.sanitize_name` as an
+   argument, the way `unit_manifest.build_rows` and `ownership.build_rows` do.
 
-Decision needed: which one is the codebase rule. F5.5 chose the data block for a single
-run (implemented, `ARCHITECTURE.md` §4.7), and that choice is the base for the codebase
-rule. The remote state route needs a new rule for outputs, which the gate does not read
-today.
+| Field | Value |
+|---|---|
+| `referrer` | the unit that uses the name, by its directory |
+| `target` | the unit that owns the name, by its directory |
+| `type` | the coverage matrix row that covers the target entry |
+| `entry` | the reference name |
 
-A reference is also a dependency. A `data` block does not order two units, so the order
-comes from §6.
+5. **The mechanism that resolves a name is not data here.** A name outside the run resolves through
+   the `data` block, which is the codebase rule F5.5 chose (`ARCHITECTURE.md` §4.7), and the gate
+   rule `data_blocks` reads it. A name another unit in the run owns cannot resolve through a `data`
+   block, because that unit declares the entry in its own root and one plan runs against one state
+   (§1 rule 3): the mechanism must be that unit's outputs, and the generator writes no outputs. The
+   outputs rule stays open in `backlog.md`. A plain run writes the same `.tf` bytes as before,
+   because the module writes no `.tf` byte.
+6. **The reference fact stays one fact.** `name_ref` records one fact: the name resolved outside the
+   run. It is not split into two kinds, because the edge row states the other unit when the
+   ownership rule can name one, and the two cases are told apart by whether an edge row exists. A
+   name the flat index resolves is not an edge: its split across unit directories is the write path
+   and the import-block decision (§7), which is recorded in `backlog.md`.
 
-The target unit is now knowable: `ownership.py` names the unit that declares each entry (§4 rule 1), and
-`owner` names the unit that owns a repeated name, so an edge can point at a directory the manifest
-already names. What is still open is the record shape, because the reference fact today is names per unit
-and an edge needs a pair.
+The decision this section asked for is settled: the edge list is a data file, not a report section,
+and it is written only when it has content. `tests/test_reference_edges.py` pins it, including
+`::test_the_record_is_one_row_per_edge_the_data_can_name`,
+`::test_the_row_joins_to_the_manifest_and_to_the_ownership_record`,
+`::test_a_name_no_unit_declares_writes_no_row_and_stays_in_the_manifest`,
+`::test_the_module_resolves_no_name_and_records_no_name`,
+`::test_a_self_reference_writes_no_row`, and `::test_the_golden_tf_bytes_are_unchanged`.
 
-## 6. Gap — order between units
+The acyclic rule, which this section asked for, is §6.
 
-Order inside a unit is pinned (`ARCHITECTURE.md` §4.1). Order between units comes from
-three facts:
+## 6. The unit order as data (F6.3, landed)
 
-1. The parent device group before the child, because the shadow scan needs the parent
-   read first (`ARCHITECTURE.md` §3.2).
-2. The scope object before the config inside it, because a resource cannot be placed in
-   a device group or a template that does not exist (§8).
-3. The reference edges: unit A before unit B when B references a name A defines.
+Order inside a unit is pinned (`ARCHITECTURE.md` §4.1). Order between units is now data on the
+manifest row, because the manifest is the file that names each unit (§3 rule 5).
 
-The generator already knows which names resolve inside the run and which do not, so the
-edge list can come from data the parse holds. The tool can emit the edge list; it cannot
-enforce the order, because enforcement is the platform's job (§13).
+1. **The two fields.** `after` names the units a unit must be planned after, by their directory,
+   sorted; `rank` is its position in the order, from 1, and 0 for a unit that cannot be ordered.
+   `unit_manifest.py` states the row shape; `reference_edges.order` fills the two fields, because
+   the order comes from the rules this section states.
+2. **The three bases**, each read through the module that holds the fact, so no second rule appears:
+   - **the parent before the child**: the owner unit before the unit that carries an override of a
+     name it owns (§4 rule 5), which is also the fact the shadow scan reads in read order
+     (`ARCHITECTURE.md` §3.2);
+   - **the shallower scope before the deeper scope inside it** (§1 rule 6, and §8 for the scope
+     object a resource needs): the device group unit before the template unit inside it, before the
+     device unit inside it, in the F3.9 level order. A container the manifest does not name adds no
+     dependency, and a declared parent source names no unit, because a unit exists when the run's
+     ledger has a row in it;
+   - **the reference edge**: the target unit before the referrer unit.
+3. **Ties, and the acyclic rule.** A unit with no dependency is ranked in the identity order, which
+   is the order the manifest rows already print, so `rank` is deterministic. A cycle is a finding:
+   two units that reference each other cannot be put in a plan order. A finding is an operator
+   action, so it does not change the exit code, which the F4.1 gate decides, and the console prints
+   no cycle line. The report prints one line per cycle in its own section, after the repeated-names
+   section and before the state sections, grouped by the F3.9 rule, and a cycle is read from its
+   smallest unit so one cycle is reported once. A unit in a cycle keeps `rank` 0, and the section
+   names it.
+4. **The graph is unit level only**, never rule level, because the rule that a policy chain never
+   crosses a virtual system or a device group already holds (`ARCHITECTURE.md` §4.4).
+5. **The tool emits the order; it cannot enforce it** (§13). The platform plans in the order the
+   data states.
 
-Rule needed: the edge graph must be acyclic. Two units that reference each other are a
-finding, and a finding is an operator action, so it does not change the exit code
-(`ARCHITECTURE.md` §4.6, and the F4.3 rule in `backlog.md`).
-
-The rule that a policy chain never crosses a virtual system or a device group already
-holds (`ARCHITECTURE.md` §4.4), so the graph is unit level only, never rule level.
+Pinned by `tests/test_reference_edges.py`, including
+`::test_the_cycle_fixture_produces_two_edges_and_one_finding`,
+`::test_no_corpus_fixture_produces_a_cycle_finding`,
+`::test_a_unit_in_a_cycle_states_no_rank`,
+`::test_the_parent_unit_comes_before_the_unit_that_overrides_its_name`,
+`::test_the_shallower_scope_comes_before_the_deeper_scope_inside_it`,
+`::test_the_edge_target_comes_before_the_referrer`,
+`::test_a_declared_parent_source_adds_no_dependency`,
+`::test_the_gate_reads_no_data_file_and_check_order_is_unchanged`, and
+`::test_two_runs_write_the_same_bytes`. `tests/fixtures/reference_cycle.xml` is the fixture that
+pins a cycle; no other fixture in the corpus produces one.
 
 ## 7. Gap — binding the codebase to the live config
 
@@ -349,7 +405,9 @@ file, and a run with no network passes CI.
 2. The unit manifest (§3), because ownership, edges, and import blocks all need the unit.
    No new parse data is needed. Landed as F6.1.
 3. The ownership assignment (§4), after the override decision. Landed as F6.2.
-4. The import blocks (§7). The single-unit case does not need the ownership rule. The rule types need
+4. The reference edge list (§5) and the unit order (§6), because both need the unit and the owner.
+   Landed as F6.3. The outputs rule for a name another unit owns is still open in `backlog.md`.
+5. The import blocks (§7). The single-unit case does not need the ownership rule. The rule types need
    the rulebase decision.
 5. The scope objects (§8).
 6. The site data layer (§9).

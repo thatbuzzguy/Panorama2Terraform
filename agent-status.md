@@ -2,57 +2,60 @@
 
 ## Current position
 
-F6.2 (ownership as data, the repeated-name rule) is complete and committed (`44496dd`). No feature is in
-progress. The next feature in `PLAN.md` is F6.3 (the reference between units as an edge list). F6.1 and
-F6.2 name the unit and the owner and write no directory, so the write path and the gate rule that reads
-the two data files are still open.
+F6.3 (the reference between units as an edge list, and the unit order as data) is complete and committed
+(`b098c8b`). No feature is in progress. The next feature in `PLAN.md` is F6.4 (import blocks). F6.1, F6.2
+and F6.3 name the unit, the owner, the pair and the order, and write no directory, so the write path and
+the gate rule that reads the three data files are still open. The outputs rule for a name another unit
+owns is still open in `backlog.md`.
 
-State at the commit: `ruff check .` clean, `pytest` 997 passed (961 before this feature, 36 added),
-both golden `.tf` sets byte-identical, report and record determinism pinned, exit codes unchanged (0,
-input refusal 1, argument error 2), every test offline. The report bytes changed for the three fixtures
-with a finding group; no other report body changed.
+State at the commit: `ruff check .` clean, `pytest` 1030 passed (997 before this feature: 32 added in
+`tests/test_reference_edges.py`, and the new fixture adds one parametrized case), both golden `.tf` sets
+byte-identical, report and record determinism pinned, exit codes unchanged (0, input refusal 1, argument
+error 2), `--help` unchanged, every test offline. The report bytes change only for the fixture with a
+cycle finding; no other report body changed.
 
-## What F6.2 changed
+## What F6.3 changed
 
-- `ownership.py` (new): `OWNERSHIP_FILE`, `FIELD_ORDER`, `FACT_KEYS` (read through
-  `container_coverage.SCOPE_FACT_KEYS`, the same order `unit_manifest.FACT_KEYS` holds), `KINDS`,
-  `OVERRIDE_VALUES`, `FLAG_KEY`, `FINDING_HEADING`, `FINDING_RULE`, the reason strings
-  (`NO_RELATION`, `FLAG_NOT_ANCESTOR`, `FLAG_FORBIDS_OVERRIDE`), `row_facts`, `row_key`, `in_chain`,
-  `override_value`, `scan_row`, `decide`, `is_ancestor`, `build_rows`, `render`, `parse_rows`,
-  `findings`, `finding_line`. The module defines no identity key and no naming rule: it reads
-  `state_coverage.ownership_key` and takes `TerraformGenerator.sanitize_name` as an argument.
-- `panorama_to_terraform.py`: `parse_service_objects` captures `disable_override`, and
-  `generate_service_objects` prints it after `description`, as the string the parse read.
-  `generate_conversion_report` gained the repeated-name section, after the shadow section and before the
-  two state sections. `main()` builds the rows and writes `OWNERSHIP.json` only when it has content.
-- `resource_mapping.py`: the `panos_service` row gained `disable_override`, so the declared property and
-  the emitter read agree.
-- Tests: `tests/test_ownership.py` (36 tests, seven groups: the row scope, the declaring unit and the
-  join, the owner rule, the service leg, the record shape, determinism and the content rule, the report
-  section). `tests/test_unit_manifest.py::test_the_manifest_is_one_file_for_the_codebase` now names both
-  data files. New fixture `tests/fixtures/ownership_override.xml`.
-- Docs: `docs/CODEBASE_ASSEMBLY.md` §2, §4, §5 and §14, `docs/ARCHITECTURE.md` §1, §3.5, §4.5,
-  `docs/USAGE_GUIDE.md`, `README.md`.
+- `reference_edges.py` (new): `EDGE_FILE`, `FIELD_ORDER`, `FACT_KEYS` (read through `unit_manifest`),
+  `LEVEL_KEYS` (the F3.9 level order), `CYCLE_HEADING`, `CYCLE_RULE`, `CYCLE_REASON`, `NO_RANK`,
+  `build_rows`, `render`, `parse_rows`, `graph`, `cycles`, `findings`, `cycle_line`, `dependencies`,
+  `order`. The module defines no naming rule, no identity key and no resolution rule: it takes
+  `TerraformGenerator.sanitize_name` as an argument and reads the unit identity through `unit_manifest`.
+- `unit_manifest.py`: `FIELD_ORDER` gained `rank` and `after` at the end, `parse_rows` validates them as
+  a position and a list of directories, and rule 5 states that the row shape lives here while the order
+  rules live in `reference_edges.py`.
+- `panorama_to_terraform.py`: `main()` builds the edge rows, fills the two order fields on the manifest
+  rows before the report (because a cycle finding reads its grouping facts through the manifest row),
+  writes `REFERENCE_EDGES.json` only when it has content, and passes the cycle findings to
+  `generate_conversion_report`, which prints them in a new section after the repeated-names section and
+  before the state sections.
+- Tests: `tests/test_reference_edges.py` (32 tests, six groups: the edge row and the join, the reference
+  fact, the acyclic rule, the unit order, the report section and the exit codes, the gates and
+  determinism). `tests/test_unit_manifest.py::test_the_manifest_is_one_file_for_the_codebase` now names
+  the three data files, and the row-shape pins name the two added fields. New fixture
+  `tests/fixtures/reference_cycle.xml`.
+- Docs: `docs/CODEBASE_ASSEMBLY.md` §1, §2, §3, §5, §6 and §14, `docs/ARCHITECTURE.md` §1, §3.6, §4.3 and
+  §4.5, `docs/USAGE_GUIDE.md`, `README.md`.
 
-## Facts measured during F6.2
+## Facts measured during F6.3
 
-- The corpus writes 204 ownership rows. Findings come from three fixtures only:
-  `edge_dup_names_across_dgs.xml` (2), `ownership_override.xml` (4), `report_grouping.xml` (6). Seven
-  groups, twelve lines, no false positive.
-- The pinned provider schema declares `disable_override` for 25 resource types. The coverage matrix names
-  the property for two rows, `panos_address` and `panos_service`. `terraform providers schema -json`
-  against the committed provider fixture confirms the 2026-10-27 measurement.
-- A test that needs the read record must run the pipeline in process, the way the shadow and manifest
-  tests do, because `RecordingDict` records during the parse.
-- `tests/test_property_coverage.py::test_measured_reads_equal_the_declared_properties` is green for
-  `panos_service` only because the new fixture carries the flag on a service entry: the matrix row now
-  names the property, so the corpus must show a read of it.
-- A single fixture cannot print all four report sections at once, so the section-order test feeds four
-  scan results to `generate_conversion_report`.
-- `main()` builds the parent ledger from entry names and never runs the parse methods, so a parent-source
-  row states `override` as `unknown` while the owner rule still names the parent as the ancestor.
-- The CLI takes no flag for the record, so `--help` text is unchanged; the test asserts the help does not
-  name `OWNERSHIP`.
+- The corpus writes seven edge rows from three fixtures: `kitchen_sink.xml` (3),
+  `multi_device_templates.xml` (2), `reference_cycle.xml` (2). 109 names are recorded across the corpus,
+  and only the ones that join to an ownership row become edges.
+- No fixture but `reference_cycle.xml` produces a cycle finding, and no fixture produces a row that names
+  one unit, so the self-reference rule and the acyclic rule are pinned on their own input as well as on
+  the corpus.
+- `after` comes from three bases, and each base has a fixture: `ownership_override.xml` for the owner
+  before the override, `multi_device_templates.xml` for the level chain, `kitchen_sink.xml` for the edge.
+- `rank` is a total order for every acyclic fixture in the corpus, and the two units of the cycle fixture
+  are the only units that state 0.
+- A cycle fixture must put the referrer entry in the same unit as the declaring entry, because a
+  template-scoped zone and its device are two units, and the reference rule keeps a device-declared name
+  inside the device that declared it (`ARCHITECTURE.md` §4.3 rule 1).
+- `findings` reads the grouping facts through the manifest row, so the report can group a cycle with the
+  F3.9 rule without a second fact order, and `render` writes only the four declared fields.
+- The record is a data file, so no report names it, and the cycle line names units by their directory
+  instead of by a field name.
 
 ## Rules to keep when writing documents
 
@@ -71,18 +74,13 @@ with a finding group; no other report body changed.
 
 ## Watch for Epic 6
 
-- F6.3 needs the target unit of an edge. `ownership.py` names the declaring unit and the owner, so the
-  edge can point at a directory the manifest already names; the reference record is names per unit today,
-  so the pair shape must be decided. `unit_manifest.facts_of` is the identity both should read, so no
-  second identity key appears.
-- F6.3 should decide whether the reference fact stays one fact (outside the run) or splits into two
-  kinds (outside the run, ambiguous inside the run). The ownership scan cannot settle this, because a name
-  a unit uses but does not declare writes no ownership row.
+- F6.4, F6.5, F6.6 and F6.7 still write no directory. The three data files name the unit, the entry and
+  the pair, so the write path is the step that turns a `directory` field into a real directory.
 - The block reader in `sanity_checks.py` serves every kind, so the `import` (F6.4) and `action` (F6.7)
   rules must use `blocks(files, kinds)`; no second block reader should appear.
 - A gate rule that reads a data file has no rule today, because the gate reads `.tf` files only. If a
   codebase feature makes a data file a gate input, the file set statement in `ARCHITECTURE.md` §4.5 and
-  both no-change tests must change together.
+  the no-change tests must change together.
 - The import position for the four `*_policy_rules` types must be the position the live config holds,
   and the F3.5 rulebase decision gates it.
 - Actions need Terraform 1.14 or later; the committed goldens declare no Terraform minimum.
@@ -94,3 +92,5 @@ with a finding group; no other report body changed.
   prunes nothing, and the prune rule reads a record file, not one record.
 - A coverage fact that comes from a run must be read from the run's ledger, so the scan tests run the
   pipeline in process.
+- A cycle test needs the referrer entry and the declaring entry in the same unit, for the reason recorded
+  above.

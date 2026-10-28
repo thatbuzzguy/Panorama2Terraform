@@ -30,6 +30,7 @@ a design rule enforced by construction.
 | `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4) | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line |
 | `unit_manifest.py` | The unit as data (F6.1): one row per declared scope, as `CODEBASE_MANIFEST.json` (§3.4) | the rows come from the ledger, so the module adds no parse data; it takes the §5 naming rule as an argument, so no second naming rule exists; the reference names arrive from §4.3, so this module resolves no name |
 | `ownership.py` | The owner of a repeated name (F6.2): one row per entry a matrix row covers, as `OWNERSHIP.json` (§3.5), and the report finding for a case the rule cannot decide | the row scope is the F4.4 rule read through the report row, so no second scope rule exists; the identity key and the naming rule are read through `state_coverage` and `unit_manifest`, so no second key or naming rule exists; `disable_override` names the entry that cannot be overridden, not the owner; the scan reads a captured value without recording |
+| `reference_edges.py` | The reference between units (F6.3): one row per pair, as `REFERENCE_EDGES.json` (§3.6), the acyclic rule, and the unit order on the manifest row | the edge set is the names §4.3 recorded, so this module records no name and resolves no name; the target is the ownership `owner`, so the pair joins to §3.4 on `directory` and to §3.5 on (`type`, `entry`); a row that names one unit is refused; the order comes from the three bases §6 of `CODEBASE_ASSEMBLY.md` states, read through the module that holds each fact |
 | `conftest.py`, `tests/` | The gate | each rule in this document names the test that pins it |
 
 `tools/build_kitchen_sink.py` assembles the fixture corpus from committed files.
@@ -566,6 +567,48 @@ Pinned by `tests/test_ownership.py`, including
 `::test_the_gate_reads_no_data_file`, and
 `::test_no_report_names_a_field_the_record_states`.
 
+### 3.6 Reference edge record (F6.3)
+
+`main()` writes one row per reference pair, as `REFERENCE_EDGES.json` in the output directory. A pair
+cannot be a manifest field (§3.4 holds one row per unit) or an ownership row (§3.5 holds one row per
+entry), so it has its own file. The rules are in `reference_edges.py` and in
+[`CODEBASE_ASSEMBLY.md`](CODEBASE_ASSEMBLY.md) §5 and §6; this section states only the shape.
+
+- **The row shape.** `referrer`, `target`, `type`, `entry`. `referrer` is the unit that uses the name,
+  from the §4.3 record; `target` is the `owner` field of the §3.5 row for (`type`, `entry`); `type` is
+  the matrix row that covers the target entry. A name no unit declares writes no row, and a row whose
+  target is the referrer writes no row.
+- **The join.** `referrer` and `target` join to §3.4 on `directory`, and (`type`, `entry`) joins to
+  §3.5, so the record states no path and no second identity key.
+- **The row order.** The four fields in field order, one row per pair, no repeated row.
+- **The bytes.** `json.dumps(rows, indent=2)` with one trailing newline, ASCII output, no timestamp
+  and no path, so two runs on the same bytes write the same bytes.
+- **The refusal rule.** `parse_rows` reads a written file back as data and refuses a row that is not
+  the declared shape, including a row that names one unit instead of two, the way `parse_record`
+  refuses a line (§3.3).
+- **The content rule.** Written only when it has content, following the rule for the report files
+  (§4.5). A plain run writes it, so the CLI takes no flag for it, and the gate reads no data file.
+- **The two order fields** `rank` and `after` print on the §3.4 row, after the eight F6.1 fields,
+  because §3.4 is the file that names each unit. `rank` is the position from 1, or 0 for a unit in a
+  cycle; `after` is the sorted list of directories the unit must be planned after.
+
+The scan result keeps the cycle walk, the names on each hop, and the reason as run facts, so they are
+not written: the record states a pair, the report states a finding. A finding reads its grouping facts
+through the manifest row of the unit the cycle is read from, so the report groups it with the F3.9 rule
+and no second fact order appears. The finding prints in its own section, after the repeated-names
+section and before the state sections (§4.5), one line per cycle, read from its smallest unit; the
+console prints no cycle line and a cycle does not change the exit code, which the gate decides.
+
+Pinned by `tests/test_reference_edges.py`, including
+`::test_the_rows_are_the_declared_shape_in_field_order`,
+`::test_the_row_joins_to_the_manifest_and_to_the_ownership_record`,
+`::test_the_record_round_trips_as_data`, `::test_a_row_that_is_not_the_declared_shape_is_refused`,
+`::test_the_record_names_no_path_and_no_timestamp`,
+`::test_the_record_is_written_only_when_it_has_content`,
+`::test_the_gate_reads_no_data_file_and_check_order_is_unchanged`,
+`::test_no_report_names_the_record_or_a_field_it_states`,
+`::test_the_cycle_line_shape_is_fixed`, and `::test_two_runs_write_the_same_bytes`.
+
 ## 4. Emit pipeline
 
 ### 4.1 Order
@@ -644,7 +687,8 @@ The rule also records what it resolved outside the run (F6.1). `name_ref` takes 
 the reference site belongs to and records each outside name against that object's four scope
 facts, so the manifest row can state the names a unit references from outside itself (§3.4).
 The record is made here, at the site that applies the rule, so no second resolution rule
-exists. Pinned by `tests/test_unit_manifest.py::test_the_reference_names_are_recorded_for_the_referrers_facts`
+exists. The same record is the edge set (§3.6), because an edge is a recorded name that an
+ownership row also covers. Pinned by `tests/test_unit_manifest.py::test_the_reference_names_are_recorded_for_the_referrers_facts`
 and `::test_a_name_the_run_declares_is_not_recorded`.
 
 Pinned by `tests/test_robustness.py::test_name_ref_never_dangles`,
@@ -682,9 +726,10 @@ Four report files, each written only when it has content:
 
 - `CONVERSION_REPORT.txt` — one line per config entry the parse pipeline read (§3.2). Section
   order is fixed: report header, summary, gaps, property findings, shadows, repeated names (§3.5),
-  state ownership, state drift, then the grouped entry lines. Each section prints only when it has
-  content, and the shadow section prints only for a run that declares a parent source (`--path` with
-  `--parent`, the api source only; a path that is not a scope path is an argument error, exit 2).
+  reference cycles (§3.6), state ownership, state drift, then the grouped entry lines. Each section
+  prints only when it has content, and the shadow section prints only for a run that declares a
+  parent source (`--path` with `--parent`, the api source only; a path that is not a scope path is
+  an argument error, exit 2).
 - `MANUAL_SETUP_REPORT.txt` — report-only areas, the location facts a type
   cannot carry, and the placeholder template. The BGP and OSPF blocks name the scope
   and the router, because two routers in two scopes can hold the same values, and they

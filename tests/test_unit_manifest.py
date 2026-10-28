@@ -28,6 +28,7 @@ import pytest
 import container_coverage
 import entry_coverage
 import ownership
+import reference_edges
 import sanity_checks
 import unit_manifest
 from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, run_script
@@ -269,12 +270,14 @@ def test_the_row_fields_are_the_declared_shape_in_order(tmp_path):
     row.
     """
     assert unit_manifest.FIELD_ORDER == ('unit', 'device_group', 'vsys', 'template', 'vsys_device',
-                                         'directory', 'entry_count', 'references')
+                                         'directory', 'entry_count', 'references', 'rank', 'after')
     _run(FIXTURES_DIR / GROUPING, tmp_path)
     text = (tmp_path / MANIFEST).read_text(encoding='utf-8')
     assert list(json.loads(text)[0]) == list(unit_manifest.FIELD_ORDER)
     # Fields print in the declared order, not alphabetically.
     assert text.index('"unit"') < text.index('"device_group"') < text.index('"directory"')
+    # F6.3 rule 5: the two order fields print after the F6.1 fields.
+    assert text.index('"references"') < text.index('"rank"') < text.index('"after"')
 
 
 def test_the_manifest_round_trips_as_data(gen, tmp_path):
@@ -291,7 +294,8 @@ def test_the_manifest_round_trips_as_data(gen, tmp_path):
 def test_a_row_that_is_not_the_declared_shape_is_refused():
     """The manifest is data, so a reader cannot fall back to reading prose."""
     good = {'unit': 'Shared', 'device_group': '', 'vsys': '', 'template': '', 'vsys_device': '',
-            'directory': 'shared_be5be69f', 'entry_count': 2, 'references': []}
+            'directory': 'shared_be5be69f', 'entry_count': 2, 'references': [],
+            'rank': 1, 'after': []}
     assert unit_manifest.parse_rows(json.dumps([good]))[0]['directory'] == 'shared_be5be69f'
     bad_rows = (
         json.dumps({'unit': 'Shared'}),                       # not a list of rows
@@ -301,6 +305,8 @@ def test_a_row_that_is_not_the_declared_shape_is_refused():
         json.dumps([dict(good, entry_count='2')]),
         json.dumps([dict(good, references='IKE-DEFAULT')]),
         json.dumps([dict(good, vsys=None)]),
+        json.dumps([dict(good, rank='1')]),                   # F6.3: rank is a position
+        json.dumps([dict(good, after='shared_be5be69f')]),    # F6.3: after is a list of directories
     )
     for bad in bad_rows:
         with pytest.raises(ValueError):
@@ -312,14 +318,15 @@ def test_the_manifest_is_one_file_for_the_codebase(tmp_path):
     directory name, and the directory name is the fact the manifest decides.
 
     F6.2: the two data files are the manifest (one row per unit) and the ownership record (one row
-    per entry), so the assertion names both. A third `.json` would be a second place that states a
-    unit or an entry.
+    per entry). F6.3 adds the edge record (one row per pair), which states neither a unit set nor an
+    entry set, so the assertion names the three. A fourth `.json` that listed units or entries would be
+    a second place that states them, which is why the unit order lives on this row instead (rule 5).
     """
     _run(FIXTURES_DIR / GROUPING, tmp_path)
     rows = _manifest(tmp_path)
     assert len(rows) == len(GROUPING_UNITS)
     assert (tmp_path / MANIFEST).is_file()
-    data_files = {MANIFEST, ownership.OWNERSHIP_FILE}
+    data_files = {MANIFEST, ownership.OWNERSHIP_FILE, reference_edges.EDGE_FILE}
     assert not any(p.name.endswith('.json') and p.name not in data_files for p in tmp_path.iterdir())
     assert not [p for p in tmp_path.iterdir() if p.is_dir()], 'F6.1 names the directory, it writes none'
 
