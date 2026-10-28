@@ -15,8 +15,9 @@ against the pinned provider, no parse method keys by name alone, and the test ga
 covers the generated Terraform. `ADVERSARIAL_AUDIT_REPORT.md` is the audit record;
 its status table states the current state.
 
-One feature is open: the upstream source layer (Epic 5). The open gaps and decided
-limits are in `backlog.md`.
+One feature is open in the upstream source layer (Epic 5): F5.5. Its gaps and decided
+limits are in `backlog.md`. Epic 6 (codebase assembly) is planned and not started; its
+design record is `docs/CODEBASE_ASSEMBLY.md`.
 
 ## Goals
 
@@ -27,6 +28,7 @@ limits are in `backlog.md`.
 | 3 | Architectural support for complex, multi-device, real-life brown-field device configs | Multi-device-group and multi-vsys fixtures generate output with no silent drops and preserved policy order. |
 | 4 | Full traceability and verification of the conversion | Every input entry is classified converted, report-only, or unaccounted in a per-entry report with line numbers. Every output passes the sanity gate. No silent drops, no unverified output. |
 | 5 | Input comes from a declared source, and the run records which source it used | The parse boundary returns the same contract for every source. The F3.8 size and DTD checks apply to the bytes a source returns. A run with no network passes CI. The provenance record names the source, the scope, and the cache entry it read. |
+| 6 | The output is a codebase, not one directory: one unit per declared scope, one owner per entry, and the path that binds each entry to the live config | A codebase run writes one directory per declared scope, a manifest that names each unit and the entries it owns, an import block per entry, and the reference edges between units. The gate reads the manifest, the import blocks, and the action blocks. Every rule stays offline and deterministic. |
 
 A brown-field config is an existing production config: mixed shared objects,
 per-device-group overrides, template stacks, and multiple virtual systems.
@@ -85,6 +87,39 @@ source it came from.
   read is a file read. The rules are in `docs/ARCHITECTURE.md` §3, §3.2 and §3.3, in `state_input.py`
   and in `state_coverage.py`.
 
+## Epic 6 — Codebase assembly (Goal 6) — planned, not started
+
+A codebase is a set of directories, one per declared scope, that a platform plans and
+applies. The design record is `docs/CODEBASE_ASSEMBLY.md`. Every feature below is a rule
+to decide, then a module to write. No rule in that document is implemented, so no test
+pins one yet.
+
+- [ ] **F6.1 Unit boundary as data** — the declared scopes, one directory name per scope,
+  and the manifest row (the four scope facts, the directory, the entry count, and the
+  names the unit references from outside itself). Built from the ledger
+  `entry_coverage.py` already writes. Needs the directory naming rule and the data file
+  shape decided.
+- [ ] **F6.2 Ownership as data** — which unit owns each entry, so a name a parent defines
+  is not owned by a child. Needs the override decision (`disable_override`, and the
+  service leg the parse does not extract).
+- [ ] **F6.3 Reference between units** — the plain-string names as an edge list, and the
+  mechanism that resolves a name defined by another unit. F5.5 is the first half. Needs
+  the data block or remote state decision.
+- [ ] **F6.4 Import blocks** — one `import` block per entry, from the same identity data
+  the resource block uses, plus the gate rule that an import block agrees with the
+  resource block it names. The rule types need the rulebase decision, and the position
+  must be the position the live config holds.
+- [ ] **F6.5 Scope objects as output** — `panos_device_group`, `panos_device_group_parent`,
+  `panos_template`, `panos_template_stack`, `panos_template_variable`, `panos_vsys`,
+  written from the provider schema. Needs new `EMITTED_TYPES` entries and matrix rows for
+  the scopes the container table marks as bookkeeping.
+- [ ] **F6.6 Site data layer** — one JSON data file per site, the `.tfvars` the tool writes
+  for it, and the device name as a variable instead of a literal. Needs the
+  value-to-variable mapping as a pinned table.
+- [ ] **F6.7 Commit and push per unit** — one `panos_commit` action block per unit, the rule
+  that no action names a scope another unit owns, and the gate rule that reads an `action`
+  block. Needs the Terraform minimum decision (actions need 1.14 or later).
+
 ## Sequencing
 
 1. F5.1, F5.2, F5.3, F5.4 and F5.6 landed. F5.5 is the only open feature in Epic 5. The provider data
@@ -93,6 +128,9 @@ source it came from.
 2. A state source is a reference source, so it cannot move an output fact: it writes no `.tf` byte, it
    is not an output read for the property scan, and its record references no cache entry, so it prunes
    nothing.
+3. Epic 6 is planned and not started. F5.5 decides the reference mechanism, so F6.3 follows it. F6.1 is
+   the unit, and F6.2, F6.3 and F6.4 all need the unit. F6.4 can land before F6.2 for one unit, because
+   a single-unit run owns everything it read. The order is in `docs/CODEBASE_ASSEMBLY.md` §14.
 
 ## Out of Scope (tracked in backlog.md)
 

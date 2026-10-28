@@ -119,6 +119,13 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 
 ## Out of Scope
 
+- The orchestrator is not this tool's job. The tool writes data an orchestrator reads: the unit
+  manifest, the reference edges, the import blocks, and the `.tfvars`. It runs no plan, no apply,
+  and no commit, and it manages no secrets. The rule is in `docs/CODEBASE_ASSEMBLY.md` §13.
+- The Day 1 device bootstrap cannot be expressed in the pinned provider schema: no resource
+  registers a device, defines an HA pair, sets a management interface, or holds an auth key. Serial
+  registration, HA grouping, management IP, DNS, NTP, and the admin account stay outside the
+  codebase. The fact is in `docs/CODEBASE_ASSEMBLY.md` §12.
 - PAN-OS version matrix testing.
 - Dual-license legal review (audit §6.8).
 - The state source has no write path (F5.6). A run reports what a state document holds and never
@@ -363,3 +370,43 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   so no mapping rule exists between them: the parse key `tags` and the provider attribute `tag` are
   not compared. A comparison table would have to be verified per type against the provider schema, the
   way `LOCATION_SCHEMA` is, so the scan keeps the same-name rule until such a table exists.
+
+## Design Decisions (Epic 6, planned)
+
+The design record is `docs/CODEBASE_ASSEMBLY.md`. Each item below is a decision, not a rule the code
+holds.
+
+- The reference between units: the provider `data` block (F5.5), or the state of another unit through
+  a remote state data source or a platform output. The remote state route needs outputs, and the
+  generator writes no outputs today. The choice decides which gate rule the codebase needs.
+- The owner of a repeated name. Panorama resolves it through inheritance at commit time, so a repeated
+  name is one object on the device and two entries in the export. `panos_address` declares
+  `disable_override`, and the service parser does not extract it (the extraction gap above). Until the
+  rule names the owner, two units can claim one object.
+- Import agreement: the gate reads `resource` blocks only, so an `import` block is not checked today. A
+  codebase that writes import blocks needs a rule that an import block agrees with the resource block it
+  names (the same type, the same local name, the same location).
+- The import position for the four `*_policy_rules` types must be the position the live config holds,
+  not the create-time position the generator emits: a chain anchors at `where = "last"`, which is not
+  the position of a rule that already exists. The F3.5 rulebase decision gates this, because the rulebase
+  is part of the import object for those types.
+- Actions: the pinned schema declares `panos_commit` and `panos_push_to_devices`. Actions need Terraform
+  1.14 or later, the committed goldens declare no Terraform minimum, and the gate reads no `action`
+  block, so a codebase that emits actions needs both a minimum and a gate rule.
+- The credential rule needs one statement that covers both the fetch layer (the key from the environment
+  only, never a generated file) and the generated provider block, which declares `panos_username` and
+  `panos_password` variables. The provider reads `PANOS_API_KEY` from the environment, so the codebase
+  shape is a host variable plus the key, not a credential pair.
+- The value-to-variable mapping must be a pinned table, the way `LOCATION_SCHEMA` is, not a choice
+  inside an emitter. The site data format stays JSON, because the project keeps the standard library
+  only (F5.2).
+- Local inspection mode (`config_file`, `panos_version`) exists in the pinned provider schema and could
+  let CI plan against a committed export with no server. It is not a rule in this project, and a plan in
+  that mode cannot show drift, so it is not a replacement for the state scan.
+- The tool cannot derive a module from an export: a module is a standard a person writes. The tool's
+  part is the data file a module consumes.
+- Reports are per run. A codebase-level view (the units, the entries each owns, the managed boundary) is
+  not built.
+- Hygiene: the committed sample output directory `terraform_output/` states provider `~> 2.0.7` in
+  `provider.tf` and declares a `device_group` variable in `variables.tf` that the generator no longer
+  emits (F2.10). The generator pins `~> 2.0.14`. Regenerate the sample or drop it.

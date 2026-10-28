@@ -2,15 +2,16 @@
 
 ## Current position
 
-F5.6 (Terraform state as a source) is complete. Gate at the commit: `ruff check .` clean,
-`pytest` 758 passed, both golden sets byte-identical (the goldens cover `.tf` files only), report
-and record determinism pinned, exit codes unchanged (input refusal 1, argument error 2), every test
-offline.
+F5.5 (read-through data blocks) is still the open feature, and its pieces are in `to-do.md`. On
+2026-10-27 the Epic 6 planning pass ran: what a full codebase needs, and what the converter does not
+do yet. The design record is `docs/CODEBASE_ASSEMBLY.md` (design only, no rule implemented), the
+feature list is `PLAN.md` Epic 6, and the open decisions are in `backlog.md`. No code changed, so the
+gate is unchanged from F5.6: `ruff check .` clean, `pytest` 758 passed, both golden sets
+byte-identical, report and record determinism pinned, exit codes unchanged, every test offline.
 
-The next feature is F5.5 (read-through data blocks). It needs `DATA_SOURCE_SCHEMA` in
-`resource_mapping.py`, written from the provider `data_source_schemas`, and one new gate rule. The
-provider facts were checked again on 2026-10-27 and hold, so F5.5 is not blocked. Write
-`acceptance.md` before the code.
+The next code feature is still F5.5. It is the first half of the codebase reference mechanism, so the
+Epic 6 reference decision (`docs/CODEBASE_ASSEMBLY.md` §5) waits for it. Write `acceptance.md` before
+the F5.5 code.
 
 ## What F5.6 changed
 
@@ -64,6 +65,35 @@ provider facts were checked again on 2026-10-27 and hold, so F5.5 is not blocked
   (ownership only), `Web-Services` at line 5 of `service_groups.xml` (member order), and
   `North-America` in `regions.xml` as a count-only row, which the scan cannot read.
 
+## Facts measured during the Epic 6 planning pass (2026-10-27)
+
+Provider 2.0.14, through `terraform providers schema -json` and the provider docs:
+
+- The schema holds 128 resources, 128 data sources, and 2 actions: `panos_commit` and
+  `panos_push_to_devices`. Actions need Terraform 1.14 or later; the provider needs 1.8 or later.
+  `panos_commit` can commit one device group, one template, or one template stack, so a commit can stay
+  inside one unit.
+- No resource registers a device, defines an HA pair, sets a management interface, or holds an auth key.
+  So the Day 1 bootstrap cannot be expressed in Terraform with this provider. The provider names a
+  device (`location.ngfw_device`, `panos_device_group.devices`, the `target` argument) and nothing else.
+- A resource exists for each scope: `panos_device_group` (`parent`, `devices`, `templates`),
+  `panos_device_group_parent`, `panos_template` (`default_vsys`), `panos_template_stack`,
+  `panos_template_variable`, `panos_vsys`. The container table marks the two parse methods that read the
+  scopes as `bookkeeping`, so no scope is emitted today.
+- No resource schema declares an `id` attribute, so the import id is the base64 JSON of the location plus
+  the name. For the four `*_policy_rules` types the import object also names the rulebase, the position,
+  and a list of names. The generator writes the same location block, so an import block can come from the
+  same data as the resource block.
+- The provider supports a local inspection mode (`config_file`, `panos_version`), which reads a config
+  file with no server. No rule in this project uses it, and a plan in that mode cannot show drift.
+- The gate reads `resource` blocks only, so a `data` block, an `import` block, and an `action` block are
+  not checked. F5.5 writes the first rule that reads a block that is not a resource block.
+- `panorama_to_terraform.py` `generate_variables` declares `panos_hostname`, `panos_username` and
+  `panos_password`, and `generate_provider_config` uses them, while the fetch rule keeps the key in the
+  environment only. One rule must cover both.
+- `tests/golden/kitchen_sink/zones.tf` writes `ngfw_device` as a literal, so a serial change changes
+  every resource in that template. A codebase needs the device name as a variable.
+
 ## Rules to keep when writing documents
 
 - One owner document per rule; every other document links to it.
@@ -99,3 +129,6 @@ provider facts were checked again on 2026-10-27 and hold, so F5.5 is not blocked
   prunes nothing, and the prune rule reads a record file, not one record.
 - A coverage fact that comes from a run must be read from the run's ledger, so the scan tests run the
   pipeline in process.
+- F5.5 is the first half of the codebase reference rule (`docs/CODEBASE_ASSEMBLY.md` §5). Write the gate
+  block reader so a later kind can use it: `import` blocks (Epic 6 F6.4) and `action` blocks (F6.7) need
+  the same reader, so a second block reader should not appear.
