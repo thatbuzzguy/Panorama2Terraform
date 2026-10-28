@@ -1,55 +1,47 @@
-# To Do — F5.6 Terraform state as a source
+# To Do — F5.5 Read-through data blocks (opt-in)
 
-F5.1 to F5.4 landed; their records are in the git history. F5.5 (read-through data blocks)
-waits for `DATA_SOURCE_SCHEMA` verified against the provider. F5.6 is in progress, with the
-acceptance criteria written in `acceptance.md`.
+F5.1 to F5.6 landed; their records are in the git history. F5.5 is the open feature in Epic 5.
+The provider facts are verified (see `backlog.md`, Epic 5 decisions), so the feature is not blocked;
+`acceptance.md` must be overwritten with the F5.5 criteria before the code.
 
 ## Decisions taken
 
-1. The state source is a **reference source**, in the same position the declared parent source
-   holds (F5.4). `--state PATH` names it, and `--workspace NAME` names the workspace it belongs
-   to. The run does not generate output from it, so no `.tf` byte changes.
-2. The door keeps its two byte checks for every source kind; the parse step is chosen by the
-   kind. A JSON document has no prolog, so the DTD check cannot refuse one. The tree rule does
-   not apply, so the state source gives the scan one shape per entry: the entry name, the matrix
-   row, the properties, and the position (the Terraform resource address, not a source line).
-3. The ownership key is §2.1 identity as the F3.9 rule reads it: the matrix row, the entry name,
-   and the four declared scope facts, read from the `location` block the state holds.
-4. The drift fact compares only a property the matrix row declares that both sides hold by the
-   same name. No name mapping rule exists, so `tags` (parse) and `tag` (provider) are not
-   compared. Recorded as a limitation below.
-5. Both facts print in `CONVERSION_REPORT.txt`, in their own sections after the shadow section.
-   No console line. Neither changes the exit code.
-6. The record shape does not change: `kind` is `state`, `scope` names the workspace, `request`
-   and `cache_entry` are `-`.
+1. Plain strings stay the default. A `data` block is emitted only for a name outside the run, and only
+   for a scope the run declares, so a run that declares nothing writes the same bytes as before.
+2. `DATA_SOURCE_SCHEMA` is data in `resource_mapping.py`, one row per type, written from the provider
+   `data_source_schemas` and pinned by a test that reads the live schema, the way `LOCATION_SCHEMA` is.
+   No attribute name comes from memory.
+3. A read-through run must be labelled in the generated `README.md`, because a `data` block resolves at
+   plan time and fails at plan, not at validate.
+4. The gate must read a `data` block. `sanity_checks.py` reads only `resource` blocks today, so a run
+   without `--validate` checks no `data` block. The new rule reads `location` and the sub-block shape,
+   and `name` where the type declares one. `validate` enforces the required pair for the 106 types that
+   have both, so the gate rule is the offline check, not a replacement for validate.
 
 ## Pieces
 
-- [ ] `state_input.py`: the state producer — the byte checks through the door, the JSON read,
-      the entry shape, the refusals, the resource address.
-- [ ] `state_coverage.py`: the state index (identity key), the ownership scan, the drift scan,
-      the two line shapes, the two headings and rule paragraphs.
-- [ ] `entry_coverage.py`: `value` read on the recorded object that does not count as an output
-      read, so the state scan cannot move a property finding.
-- [ ] `main()`: `--state` and `--workspace`, the state read, the scan, the two report sections,
-      the state record in read order.
-- [ ] Fixture: `tests/fixtures/state_workspace.json` — one owned entry with a differing property,
-      one owned entry with no difference, and entries the scan must not read.
-- [ ] Tests: `tests/test_state_input.py` (the shape, the checks, the refusals, the record) and
-      `tests/test_state_coverage.py` (the two facts, the sections, the console, the exit code,
-      the CLI rules, determinism).
-- [ ] Docs: `docs/ARCHITECTURE.md` §1 module table, §3 the state producer, §3.2 the two facts;
-      `docs/USAGE_GUIDE.md` CLI table and report list; `README.md` report list.
+- [ ] `resource_mapping.py`: `DATA_SOURCE_SCHEMA`, verified against the provider `data_source_schemas`
+      through the `provider_schema` fixture, which runs offline when the terraform binary and the
+      provider cache are present.
+- [ ] `sanity_checks.py`: read `data` blocks as blocks of their own (the gate reads `resource` blocks
+      only). The rule: `location` present, every `location` sub-block one that `DATA_SOURCE_SCHEMA` or
+      `LOCATION_SCHEMA` declares for the type, and `name` where the type declares one.
+- [ ] The emit path: which name becomes a `data` block, and what the block holds (the type, the name,
+      the location, and nothing else). A reference that resolves inside the run stays a plain string.
+- [ ] A rule for the reports: a read-through name is not an entry the parse read, so the entry report,
+      the property scan, and the shadow scan must not count it. State which section, if any, names it.
+- [ ] The generated `README.md`: label a read-through run, so a reader knows the plan will call the API.
+- [ ] Tests: the table against the live schema, the new gate rule (each violation detected, no false
+      positive on the corpus), the opt-in path (a run that declares no read-through scope writes the
+      golden bytes), and the label.
+- [ ] Docs: `docs/ARCHITECTURE.md` §4 (the data block shape) and §4.6 (the gate rule),
+      `docs/USAGE_GUIDE.md` and `README.md`.
 
 ## Open items for this feature
 
-- The ownership key does not name a scope level the state cannot state. A state `location` block
-  names one level, so a run entry the export places at a different level is a different key. The
-  backlog carries this.
-- A property the two sides name differently is not compared. A mapping rule needs the provider
-  attribute names as data (`lib_docs/` reference, recorded in the backlog).
-
-## After F5.6
-
-F5.5 (read-through data blocks) is the next feature, with its pieces recorded above in the
-`backlog.md` provider facts.
+- The 22 data sources with no `name` attribute need the gate rule stated per shape, because a rule that
+  requires `name` would refuse a settings or policy data block that is correct.
+- A data source that returns a collection (`panos_addresses`) has no entry name to key, so it cannot
+  feed a per-entry fact. Decide whether it is in scope at all.
+- The coverage matrix has no row for a `data` block, so a property finding cannot name one. The gate
+  rule is the only check that reads a `data` block.

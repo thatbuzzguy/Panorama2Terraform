@@ -8,8 +8,9 @@ and record determinism pinned, exit codes unchanged (input refusal 1, argument e
 offline.
 
 The next feature is F5.5 (read-through data blocks). It needs `DATA_SOURCE_SCHEMA` in
-`resource_mapping.py`, verified against the provider `data_source_schemas`, and one new gate rule.
-The provider facts are in `backlog.md`. Write `acceptance.md` before the code.
+`resource_mapping.py`, written from the provider `data_source_schemas`, and one new gate rule. The
+provider facts were checked again on 2026-10-27 and hold, so F5.5 is not blocked. Write
+`acceptance.md` before the code.
 
 ## What F5.6 changed
 
@@ -80,14 +81,20 @@ The provider facts are in `backlog.md`. Write `acceptance.md` before the code.
 
 ## Watch for F5.5
 
-- `DATA_SOURCE_SCHEMA` must be verified against the provider `data_source_schemas`, not from memory.
-  The provider facts recorded in `backlog.md` (128 data sources, two name-level mismatches, only
-  `panos_addresses` returns a collection) need one check against the live schema before the table is
-  written. The `provider_schema` fixture runs `terraform init` + `terraform providers schema -json`
-  and skips without the binary or registry access.
-- A data source schema declares no required attributes, so `terraform validate` cannot enforce `name`
-  and `location` on a `data` block. That rule needs its own gate check, for the same reason the
-  `location` sub-block shape is pinned by test.
+- `DATA_SOURCE_SCHEMA` must be written from the provider `data_source_schemas`, not from memory. The
+  check ran on 2026-10-27 through the `provider_schema` fixture: 128 data sources mirror the 128
+  resources, the 126 shared types have the identical attribute set and the identical `location`
+  sub-blocks, and the two name-level mismatches are `panos_certificate_import` and
+  `panos_virtual_router_interface` (a resource with no data source) and `panos_certificate` and
+  `panos_predefined_dlp_file_type` (a data source with no resource).
+- Corrected during that check: a data source schema does declare required attributes. `location` is
+  required for all 128, and `name` is required for every data source that has a `name` attribute (106
+  types). 22 data sources have no `name` attribute, the settings, policy and collection shapes, so the
+  gate rule must be stated without `name` for them. The gate reads only `resource` blocks today, so the
+  F5.5 rule is the one that reads a `data` block at all: without `--validate` nothing checks a `data`
+  block, and validate accepts a `location` sub-block the type does not declare by dropping it silently.
+- The provider check needs the terraform binary and the provider cache. It skips without them, so the
+  table test needs a committed schema snapshot or a skip marker, decided before the test is written.
 - The prune action still needs the record directory decided. A state record references nothing, so it
   prunes nothing, and the prune rule reads a record file, not one record.
 - A coverage fact that comes from a run must be read from the run's ledger, so the scan tests run the

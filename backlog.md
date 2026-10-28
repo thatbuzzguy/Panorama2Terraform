@@ -320,6 +320,14 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   written per output directory and a later run cannot know which records a prune action will
   read. A two-source run writes two records in one file (F5.4), so the prune action reads a
   record file, not one record.
+- Corrected by the check on 2026-10-27: a data source schema does declare required attributes.
+  For every one of the 128 data sources `location` is required, and for every data source that has a
+  `name` attribute `name` is required (106 types have both; 22 have no `name`, the settings, policy and
+  collection shapes). So `terraform validate` can enforce `name` and `location` on a `data` block for
+  those 106 types. The gate rule F5.5 still needs is the one that reads a `data` block at all:
+  `sanity_checks.py` reads only `resource` blocks, so a run without `--validate` checks no `data`
+  block, and validate accepts a `location` sub-block the type does not declare by dropping it
+  silently.
 - Open: the provenance record names the host and the scope, never the credential. The key
   rule itself (environment only, never argv, never a generated file) is in `ARCHITECTURE.md` §3.
 - Provider data sources, verified against 2.0.14 with
@@ -331,7 +339,9 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   source and no resource. Only `panos_addresses` returns a collection (a map keyed by
   name). `panos_device_group`, `panos_template` and `panos_template_stack` return the
   membership facts `parse_associations` builds from the export; a data source resolves
-  at plan time, so it cannot feed a generation-time report.
+  at plan time, so it cannot feed a generation-time report. The check ran again on
+  2026-10-27 for F5.6 and the counts and the name-level mismatches hold, so
+  `DATA_SOURCE_SCHEMA` can be written from that schema, not from memory.
 - A data source schema declares no required attributes, so `terraform validate` cannot
   enforce `name` and `location` on a `data` block. That rule needs its own gate check,
   for the same reason the `location` sub-block shape is pinned by test and not by
