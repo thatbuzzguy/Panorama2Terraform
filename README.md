@@ -45,6 +45,19 @@ python3 panorama_to_terraform.py your_export.xml --state production.tfstate --wo
 The state document writes no output, so the generated `.tf` files are the same as without it; the
 report gains two sections. The rule is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §3.2.
 
+Read a name the run cannot resolve as a provider data source instead of a plain string, for scopes
+you declare:
+
+```bash
+python3 panorama_to_terraform.py your_export.xml --data-blocks panos_address,panos_zone
+```
+
+A run that declares no read-through scope keeps the plain-string rule. A run that declares one
+writes `read_through.tf`, one `data` block per name it cannot resolve, and labels itself in the
+generated `README.md`, because a `data` block resolves at plan time and the plan fails when the
+entry is not present in the location the block names. The rule is in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §4.7.
+
 ## Requirements
 
 - Python 3.9+ (standard library only)
@@ -84,6 +97,11 @@ make a reference work, so the output always passes
 `terraform validate`. The resolution order is in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.3.
 
+A run may opt in to `data` blocks for the names it cannot resolve
+(`--data-blocks`), one block per name, in `read_through.tf`. That is a
+plan-time read, so the run is labelled in the generated `README.md`.
+The rule is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.7.
+
 ## Resource naming
 
 A local resource name is the sanitized PAN-OS name plus an 8-hex digest
@@ -93,8 +111,10 @@ is deterministic: the same object always gets the same local name, the
 name does not depend on emission order, and same-named objects in
 different device groups, virtual systems, templates, or firewalls stay
 distinct. Two firewalls that both declare `ethernet1/1` are two resources
-with two locations, not one resource and a numeric suffix. The full rule
-is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5. For example:
+with two locations, not one resource and a numeric suffix. One name rule
+serves both block kinds, so a read-through `data` block takes the name the
+object would have had as a resource. The full rule is in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5. For example:
 
 ```hcl
 resource "panos_address" "web_server_1_11f477f4" {
@@ -288,8 +308,9 @@ what you receive, not what the generator intended.
 | Check | Rule | Severity |
 |---|---|---|
 | `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |
-| `location_present` | every resource block carries `location` | FAIL |
-| `references` | every `.name` reference resolves to a resource declared in the same run | FAIL |
+| `location_present` | every `resource` and `data` block carries `location` | FAIL |
+| `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type | FAIL |
+| `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
@@ -339,6 +360,13 @@ call that module instead of restating them. The gate is described in
 - `tests/test_state_coverage.py` - the state scan: the ownership key, the drift rule, the two report
   sections and their line shapes, the rule that a state read is not an output read, the exit code, and
   the record read back with no new field
+- `tests/test_data_source_schema.py` - the data source table against the live provider schema: the rows,
+  the required `location` and `name`, the 22 rows that declare no `name`, and the pin between
+  `DATA_SOURCE_SCHEMA` and `LOCATION_SCHEMA`
+- `tests/test_data_blocks.py` - the read-through data blocks: the one block reader for every block kind,
+  the gate rule for a `data` block, the kind rule for a reference, the opt-in emit path (a run that
+  declares nothing writes the golden bytes), the CLI argument rules, the report rule, the generated
+  `README.md` label, and the byte rule between two runs
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are

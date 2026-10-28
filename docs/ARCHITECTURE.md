@@ -19,14 +19,14 @@ a design rule enforced by construction.
 | `panorama_to_terraform.py` | The converter: `PanoramaParser` (model), `TerraformGenerator` (model and write), `main()` (order) | the parser consumes only the producer contract (`ParsedSource`); it reads no file and opens no connection itself, so a source is either the file producer or the api producer |
 | `xml_input.py` | The only input read, shared by every entry point, through one producer boundary (F5.1), and the scope vocabulary a source states (F5.4) | the two byte checks are one function (`check_bytes`) every source kind runs, so the size cap and the DTD refusal are kind-independent and only the parse step is chosen by the kind; one definition of the scope a source holds (`DEFAULT_SCOPE`) and of the path segment that names an entry (`ENTRY_SEGMENT`) |
 | `source_fetch.py` | The api producer (F5.2): the https request, the cached copy, the response wrapper, and the per-scope request shape (F5.4) | https only; a redirect that changes the scheme is refused; the cache holds exactly the bytes the boundary parsed; the key comes from the environment only; the declared path is part of the request identity, so each scope gets its own entry |
-| `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX` | the single source of truth; no resource name or attribute from memory |
+| `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `DATA_SOURCE_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX` | the single source of truth; no resource name or attribute from memory |
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy` |
 | `container_coverage.py` | The container table (§3.1) and the section rule | the table is data, so a parse method cannot exist without a row |
 | `entry_coverage.py` | The per-entry report (§3.2) | a destination comes from the table row, or from the mark when the method knows better |
 | `shadow_coverage.py` | The cross-source shadow scan (§3.2): a child entry name that repeats a parent entry name | the key is the matrix row, not the name alone; both sources are read with the same row rule, so no second naming rule exists; a run with no declared parent has no parent to read |
 | `state_input.py` | The state producer (F5.6): a Terraform state document read as a reference source, through the same door | the two byte checks run on the state bytes, and only the parse step is chosen by the kind, so a `<!DOCTYPE` inside a JSON value is not a refusal; a document the identity key cannot read is an input refusal; the state source writes no output, so no `.tf` byte changes |
 | `state_coverage.py` | The state scan (§3.2): the ownership fact and the drift fact | the matrix row is the same table the property scan uses, keyed by the resource type; the ownership key is §2.1 identity with the declared facts, never the `Shared` fallback; the scan is not an output, so it reads captured values without recording |
-| `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state |
+| `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state; one block reader serves every block kind a rule reads, so a fact about a block is reported once |
 | `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4) | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line |
 | `conftest.py`, `tests/` | The gate | each rule in this document names the test that pins it |
 
@@ -525,10 +525,17 @@ Order, first match wins:
 2. The context chain, each stop paired with the referrer's vsys: the referrer's
    own context, then `Shared`, then contextless declarations.
 3. The flat `(scope, name)` first-declaration index.
-4. Otherwise the plain name.
+4. A read-through `data` block, when the run declares one of the scopes in this
+   site's lookup order (§4.7). The block type is the first opted-in scope in that
+   order, which is the order PAN-OS resolves a name in.
+5. Otherwise the plain name.
 
 Object scopes come before group scopes, so a name that both an object and a
 group carry resolves to the object.
+
+A `data` block is the only block `name_ref` creates, and only for a scope the run
+declares. A name that resolves inside the run, or that stays ambiguous under
+rule 1, stays a plain string.
 
 Pinned by `tests/test_robustness.py::test_name_ref_never_dangles`,
 `::test_name_ref_prefers_referrers_own_context`,
@@ -538,7 +545,10 @@ Pinned by `tests/test_robustness.py::test_name_ref_never_dangles`,
 `::test_virtual_router_reference_stays_inside_its_device`,
 `tests/test_multi_device_template.py::test_reference_resolves_inside_the_template_target_device`,
 `::test_ambiguous_template_keeps_a_plain_interface_name`,
-`::test_single_device_declaration_still_resolves_without_a_device`.
+`::test_single_device_declaration_still_resolves_without_a_device`, and the
+read-through part by `tests/test_data_blocks.py::test_a_name_that_resolves_inside_the_run_stays_a_resource_reference`,
+`::test_an_ambiguous_device_name_stays_a_plain_string`,
+`::test_the_block_type_is_the_first_opted_in_scope_in_the_lookup_order`.
 
 ### 4.4 Policy chains
 
@@ -581,9 +591,16 @@ Four report files, each written only when it has content:
   both, and the conversion report uses it for the property section and the shadow section, so
   they cannot disagree.
 
-The post-run gate writes `SANITY_REPORT.txt` on every run (§4.6). The five files
-above are the complete set the generator writes; `main()` adds `README.md` and the
-provenance record `SOURCE.txt` (§3.3), which every completed run writes.
+The post-run gate writes `SANITY_REPORT.txt` on every run (§4.6). The generator
+also writes `read_through.tf` for a run that declares read-through scopes (§4.7),
+and `main()` adds `README.md` and the provenance record `SOURCE.txt` (§3.3), which
+every completed run writes. The four report files above, plus those four files, are
+the complete set a run writes.
+
+A coverage section cannot name a read-through name, because the three scans read
+entries the parse captured and a read-through name is not one of them (§4.7). The
+manual report is the one report that may name one, through the location rules
+above.
 
 A device group prints only when the export declares one. `Shared` names the
 shared section, not a device group. `localhost.localdomain` prints as the "this
@@ -606,15 +623,26 @@ conversion. The splitter writes XML, so it has no `.tf` to check.
 | Check | Rule | Severity |
 |---|---|---|
 | `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |
-| `location_present` | every resource block carries a `location` block | FAIL |
-| `references` | every `.name` reference resolves to a resource declared in the same run | FAIL |
+| `location_present` | every `resource` and `data` block carries a `location` block | FAIL |
+| `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type | FAIL |
+| `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder, such as the VPN key `***CHANGE_ME***`, is listed | WARN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
 
-A resource block is read up to the first column-0 brace, which is how the
-generator writes one and how the tests read one.
+One block reader serves every block kind the gate reads: `resource`, `data`,
+`import`, and `action` (F5.5; Epic 6 F6.4 and F6.7 add the `import` and `action`
+rules with the same reader, so no second reader appears). A block is read up to the
+first column-0 brace, which is how the generator writes one and how the tests read
+one. A block is reported once for a fact: `location_present` reads both kinds, so
+the `data_blocks` rule reports the shape inside the block, not the missing block.
+
+`data_blocks` checks the type, the `location` sub-block, the fields inside it, and
+`name` when the row declares one. A row that declares no `name` (the settings,
+policy, and collection shapes, 22 rows) is not refused for having none, so the rule
+is stated per row. `references` keys a block by (kind, type, local name): a `data.`
+reference answers to a `data` block and a plain reference to a `resource` block.
 
 - A WARN does not fail the gate: a placeholder is correct output that still needs
   an operator action, so the run exits 0.
@@ -624,19 +652,70 @@ generator writes one and how the tests read one.
 - Each rule exists once, in `sanity_checks.py`. `tests/test_dependency_wiring.py`,
   `tests/test_variables.py`, `tests/test_schema_conformance.py` and
   `tests/test_robustness.py` call the module instead of restating a rule.
-- The gate checks that `location` is present. The sub-block and field shape stays
+- For a `resource` block the gate checks `location` presence only. That shape stays
   pinned by `tests/test_multi_vsys_location.py`, because `terraform validate`
-  accepts an unknown sub-block and drops it silently.
+  accepts an unknown sub-block and drops it silently. For a `data` block the gate
+  reads the shape, because the shape is data the gate can read
+  (`DATA_SOURCE_SCHEMA`).
+- The console summary names resource blocks only, so a run that writes `data` blocks
+  reports the same resource count as the same run without them.
 
 Pinned by `tests/test_sanity_gate.py`: the gate runs on a conversion,
 every check detects its own violation, the gate reports no FAIL finding on every
-fixture, the exit code follows the findings, and `--validate` runs the terraform
-check or reports it as SKIPPED.
+fixture, the report is byte-identical between two runs, the exit code follows the
+findings, and `--validate` runs the terraform check or reports it as SKIPPED. The
+`data` rules are pinned by `tests/test_data_blocks.py`, and the table itself by
+`tests/test_data_source_schema.py` against the live provider schema.
+
+### 4.7 Read-through data blocks (opt-in)
+
+A read-through `data` block is the record of one name a reference site needed and
+this run did not read. The feature is opt-in, and off by default: a run that
+declares no read-through scope keeps the plain-string rule, so both golden sets
+write the same bytes and no read-through file is written.
+
+`--data-blocks SCOPE` declares the scopes a run may read through. It is repeatable
+and takes a comma-separated list. A scope must be one the reference rule resolves
+against, and its `DATA_SOURCE_SCHEMA` row must declare `name`: a data source with no
+`name` cannot hold the entry name a reference needs. An empty value, a scope outside
+the reference sets, or a no-name scope is an argument error (exit 2).
+
+One block per identity (type, context, vsys, name):
+
+| Part | Value |
+|---|---|
+| type | the first opted-in scope in the reference site's lookup order (§4.3) |
+| local name | the name rule in §5, one rule for both block kinds |
+| `name` | the PAN-OS name the reference names |
+| `location` | `location_block` for the identity the referrer holds (§4.2) |
+
+A second site with the same identity uses the same block, and a site in another
+context writes its own, because PAN-OS resolves a name in the referrer's own scope
+before the shared section. The blocks go in one file for the run,
+`read_through.tf`, so a reader can separate what the run read from what the plan
+will read. The file is written only when it has blocks, in sorted (type, local
+name) order, so it is byte-identical between runs.
+
+Two rules hold for a read-through run:
+
+- A read-through name is not an entry the parse read, so the entry report, the
+  property scan, and the shadow scan cannot name it (§3.2, §4.5). No matrix row
+  covers a `data` block, so a property finding cannot name one either. The record of
+  the run is `read_through.tf` plus the `README.md` label.
+- The run labels itself, because a `data` block resolves at plan time and fails at
+  plan, not at validate. A declared scope turns every name outside the run into a
+  `data` block, including a built-in such as `any`, because no verified built-in name
+  table exists, so the label names the declared scopes and the block count and states
+  what a reader must check.
+
+The gate reads these blocks with the same reader (§4.6). Pinned by
+`tests/test_data_blocks.py`.
 
 ## 5. Naming rules
 
-The local name of a resource is **the sanitized PAN-OS name plus an 8-hex
-digest of the source identity**.
+The local name of a block is **the sanitized PAN-OS name plus an 8-hex digest of
+the source identity**. One rule serves both block kinds (F5.5): a read-through
+`data` block takes the name the object would have had as a `resource` (§4.7).
 
 ```
 local = sanitize(name) + '_' + sha256('scope|context|vsys|name')[:8]
@@ -651,12 +730,15 @@ local = sanitize(name) + '_' + sha256('scope|context|vsys|name')[:8]
   names that sanitize to the same base (`a-b` and `a_b`) stay apart.
 - The digest makes the name independent of emission order and run count. The
   same object always gets the same local name.
-- Taken names are tracked per type (one domain per `scope`). A true duplicate
-  gets a numeric suffix (`_2`), so the output is always valid HCL. The suffix is
-  a validity guard, not the identity mechanism: two different identities never
-  need it.
+- Taken names are tracked per type (one domain per `scope`), for both block kinds.
+  A true duplicate gets a numeric suffix (`_2`), so the output is always valid HCL.
+  The suffix is a validity guard, not the identity mechanism: two different
+  identities never need it.
 - `device` is not in the digest. It indexes a declaration so a reference from one
   device cannot resolve to another device's resource of the same name.
+- A block a reference site creates (a read-through `data` block, §4.7) enters no
+  declaration index, because it stands for an entry this run did not read, so a
+  plain reference cannot resolve to it.
 
 Pinned by `tests/test_dependency_wiring.py::test_local_names_are_sanitized_name_plus_digest`,
 `tests/test_robustness.py::test_declare_resource_name_is_order_independent`,
@@ -666,8 +748,9 @@ Pinned by `tests/test_dependency_wiring.py::test_local_names_are_sanitized_name_
 `::test_declare_same_name_in_two_contexts_gets_unique_names`,
 `::test_declare_same_name_in_two_vsys_gets_unique_names`,
 `tests/test_edge_cases.py::test_dup_names_across_vsys_emit_distinct_digests`,
-`::test_identity_to_name_assignment_survives_entry_order_flip`, and
-`tests/test_multi_device_template.py::test_same_interface_name_on_two_devices`.
+`::test_identity_to_name_assignment_survives_entry_order_flip`,
+`tests/test_multi_device_template.py::test_same_interface_name_on_two_devices`, and
+`tests/test_data_blocks.py::test_the_read_through_path_cannot_change_a_resource_name`.
 
 ## 6. Determinism
 
@@ -684,7 +767,12 @@ Two runs on the same input produce identical bytes.
   for the sanity report, by
   `tests/test_sanity_gate.py::test_report_is_byte_identical_between_runs`. The
   sanity report names no timestamp and no absolute path, which is what makes that
-  claim testable.
+  claim testable. The goldens are the bytes of a run that declares no read-through
+  scope, so the plain-string default stays pinned. A read-through run pins its own
+  bytes: the block list sorts by type then local name, the block for an identity is
+  the first block written for it, and the `README.md` label states the sorted scopes
+  and the block count
+  (`tests/test_data_blocks.py::test_the_read_through_file_is_byte_identical_between_runs`).
 - The provenance record (§3.3) states no timestamp and no value the run did not receive, so
   two runs with the same arguments write the same record bytes. Its `path` field is the path
   the run received, so the cache name is the only cache-derived value in it, and that name
@@ -722,5 +810,7 @@ bodies are not parsed, EDL credentials are never written, a service emits one
 protocol leg, `location.template_stack` is never used, a template that
 targets two devices keeps interface names as strings, a state scan compares only
 a property both sides name the same way (the parse key `tags` and the provider
-attribute `tag` are not compared), and a state source is read only: it has no
-write path. Each one is recorded in `backlog.md`.
+attribute `tag` are not compared), a state source is read only: it has no
+write path, and a read-through run cannot name the scope that holds a name outside
+the run or recognise a built-in name, because no verified table for either exists,
+so such a run is labelled (§4.7). Each one is recorded in `backlog.md`.

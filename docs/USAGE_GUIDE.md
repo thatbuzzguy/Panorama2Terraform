@@ -44,6 +44,7 @@ python3 panorama_to_terraform.py export.xml --output-dir out
 | `--insecure` | Skip certificate verification. Explicit choice, api source only |
 | `--state PATH` | Terraform state document read as a reference source (F5.6). Applies to any source kind |
 | `--workspace NAME` | The workspace the state document belongs to, so the record names it. Needs `--state` |
+| `--data-blocks SCOPE` | A reference scope this run may read through, as a provider data source type. Repeatable, or a comma-separated list. Off by default (F5.5) |
 | `--output-dir DIR` | Output directory. Default `terraform_output` |
 | `--max-input-bytes N` | Refuse an input larger than N. Default 67,108,864 (64 MiB) |
 | `--validate` | Add the `terraform init` + `terraform validate` check to the post-run gate |
@@ -119,6 +120,28 @@ python3 panorama_to_terraform.py export.xml --state production.tfstate --workspa
 - `SOURCE.txt` records the state source last, in read order, with `-` for the two request fields: it
   references no cache entry, so it prunes nothing.
 
+### Read-through data blocks (opt-in)
+
+```bash
+python3 panorama_to_terraform.py export.xml --data-blocks panos_address,panos_zone --output-dir out
+```
+
+- Off by default. A run that declares no read-through scope keeps the plain-string rule, so the
+  generated `.tf` files and the `README.md` are unchanged.
+- `--data-blocks` names a scope the reference rule resolves against, and its provider data source
+  must declare `name`. An empty value, a scope outside the reference sets, or a no-name scope is an
+  argument error (exit 2).
+- A reference that resolves inside the run stays a `.name` reference to the resource. Only a name the
+  run cannot resolve becomes one `data` block, one per identity (type, context, vsys, name), in
+  `read_through.tf`. The block holds the type, the local name, `name`, and the `location` the
+  referrer's identity states, and nothing else.
+- Read the file as a plan-time read, not as a stored fact: `terraform plan` asks the device for each
+  block, and the plan fails when the entry is not present in the location the block names.
+  `terraform validate` cannot check it.
+- Every name outside the run becomes a block, including a built-in such as `any`, because no verified
+  built-in name table exists. The generated `README.md` labels the run with the declared scopes and
+  the block count for that reason.
+
 ## Quick start script
 
 `quick_start.sh` runs the converter on the committed sample export
@@ -158,6 +181,7 @@ The converter writes a file only when it has content.
 | `security_profile_groups.tf` | Profile group resources |
 | `security_profiles.tf` | Inventory only: names and descriptions, with the resource name the emitter would use |
 | `interfaces.tf`, `zones.tf`, `virtual_routers.tf`, `monitor_profiles.tf`, `vpn.tf` | Network and VPN resources |
+| `read_through.tf` | One `data` block per name a reference needed and the run did not read. Written only for a run that declares `--data-blocks` (F5.5) |
 | `README.md` | Deployment steps for the generated directory |
 | `SOURCE.txt` | One record per source the run read, as `field: value` data: kind, name, path, scope, request, cache_entry, size, and the SHA-256 hex of the parsed bytes |
 | `MANUAL_SETUP_REPORT.txt` | Report-only configuration, plus a section for a container no parse method reads |
@@ -219,14 +243,20 @@ receive, not what the generator intended.
 | Check | Rule | Severity |
 |---|---|---|
 | `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |
-| `location_present` | every resource block carries `location` | FAIL |
-| `references` | every `.name` reference resolves to a resource declared in the same run | FAIL |
+| `location_present` | every `resource` and `data` block carries `location` | FAIL |
+| `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type (the type, the `location` sub-block and its fields, and `name` when the row declares one) | FAIL |
+| `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
 
-A WARN does not fail the run. A FAIL finding exits 1. A SKIPPED check never
+One block reader serves every block kind the gate reads, so a `data` block is checked
+by the same reader as a `resource` block, and the same fact is not reported twice: the
+missing `location` block is the `location_present` finding for both kinds. The
+`data_blocks` rule is the only check that reads the shape of a `data` block, because
+`terraform validate` accepts an unknown `location` sub-block and drops it silently. A
+WARN does not fail the run. A FAIL finding exits 1. A SKIPPED check never
 changes the exit code. The rules live in `sanity_checks.py` and are stated in
 [ARCHITECTURE.md](ARCHITECTURE.md) §4.6.
 
@@ -247,7 +277,9 @@ Three things explain the shape of the output:
   in [ARCHITECTURE.md](ARCHITECTURE.md) §4.2.
 - **References.** A name the same run declares is emitted as a `.name`
   reference, so apply order follows the dependency. A name outside the export
-  stays a plain string. The resolution order is in
+  stays a plain string, unless the run declares a read-through scope, in which case
+  it becomes one `data` block the plan reads
+  ([ARCHITECTURE.md](ARCHITECTURE.md) §4.7). The resolution order is in
   [ARCHITECTURE.md](ARCHITECTURE.md) §4.3.
 
 ## Deploying the generated configuration
