@@ -17,6 +17,12 @@ panos provider v2:
                          emitter method, and the properties that emitter
                          reads. Enforced by tests/test_coverage_matrix.py
                          and tests/test_property_coverage.py.
+    DATA_SOURCE_SCHEMA - one row per provider data source type: whether it
+                         declares `name`, and the `location` sub-blocks it
+                         declares with their fields. Enforced by
+                         tests/test_data_source_schema.py against the live
+                         schema, and read by the gate rule for a `data`
+                         block (tests/test_data_blocks.py).
 
 The generator emits the v2 types directly; the old v1 names
 (panos_address_object, panos_security_rule_group, ...) no longer exist
@@ -187,6 +193,722 @@ LOCATION_SCHEMA = {
         'vsys': ('name', 'ngfw_device'),
         'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
     },
+}
+
+# F5.5: the shape of every provider data source type, written from
+# `terraform providers schema -json` against the provider version the golden
+# provider.tf declares (v2.0.14), and pinned against the live schema by
+# tests/test_data_source_schema.py.
+#
+# Row shape: type -> (declares `name`, {sub-block: fields}). The two facts are
+# the two the gate rule for a `data` block needs
+# (`sanity_checks.check_data_blocks`).
+#
+# Unlike LOCATION_SCHEMA this table is not a generator subset: it lists every
+# sub-block the provider declares, because the gate must refuse a sub-block or
+# field a type does not declare. `terraform validate` accepts an unknown
+# `location` sub-block and drops it silently, so a wrong sub-block fails at
+# apply, not at validate.
+#
+# Verified against provider v2.0.14 with `terraform providers schema -json`:
+# 128 data sources, 106 that declare `name` and 22 that do not (the settings,
+# policy, and collection shapes), `location` required for all 128, and `name`
+# required for every data source that declares it.
+DATA_SOURCE_SCHEMA = {
+    'panos_address': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_address_group': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_addresses': (False, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_admin_role': (True, {
+        'template': ('name', 'panorama_device'),
+    }),
+    'panos_administrative_tag': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_administrator': (True, {
+        'ngfw': (),
+        'panorama': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+    }),
+    'panos_aggregate_interface': (True, {
+        'ngfw': ('ngfw_device',),
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_aggregate_layer3_subinterface': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_anti_spyware_security_profile': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_antivirus_security_profile': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_application': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_application_group': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_authentication_policy': (False, {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_authentication_policy_rules': (False, {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_authentication_profile': (True, {
+        'panorama': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_bfd_network_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_bfd_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_bgp_address_family_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_bgp_auth_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_bgp_dampening_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_bgp_filtering_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_bgp_redistribution_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_bgp_timer_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_certificate': (True, {
+        'panorama': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_certificate_profile': (True, {
+        'panorama': (),
+        'shared': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+    }),
+    'panos_config_log_settings': (True, {
+        'panorama': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+    }),
+    'panos_correlation_log_settings': (True, {
+        'panorama': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+    }),
+    'panos_custom_data_object': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_custom_spyware': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_custom_url_category': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_custom_vulnerability': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_data_filtering_profile': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+    }),
+    'panos_decryption_policy': (False, {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_decryption_policy_rules': (False, {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_decryption_profile': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_default_security_policy': (False, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+    }),
+    'panos_device_group': (True, {
+        'panorama': ('panorama_device',),
+    }),
+    'panos_device_group_parent': (False, {
+        'panorama': ('panorama_device',),
+    }),
+    'panos_dhcp': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_dns_proxy': (True, {
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_dns_settings': (False, {
+        'system': ('device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_dos_protection_profile': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+    }),
+    'panos_dynamic_updates': (False, {
+        'system': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_dynamic_user_group': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_email_server_profile': (True, {
+        'panorama': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_ethernet_interface': (True, {
+        'ngfw': ('ngfw_device',),
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_ethernet_layer3_subinterface': (True, {
+        'ngfw': ('ngfw_device',),
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_external_dynamic_list': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_file_blocking_security_profile': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_filters_access_list_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_filters_as_path_access_list_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_filters_bgp_route_map_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_filters_community_list_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_filters_prefix_list_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_filters_route_maps_redistribution_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_general_settings': (False, {
+        'system': ('device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_globalprotect_gateway': (True, {
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_globalprotect_log_settings': (True, {
+        'panorama': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+    }),
+    'panos_globalprotect_portal': (True, {
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_gre_tunnel': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_hipmatch_log_settings': (True, {
+        'panorama': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+    }),
+    'panos_ike_crypto_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_ike_gateway': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_interface_management_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_ip_tag': (False, {
+        'panorama': (),
+        'target_device': ('serial', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_ipsec_crypto_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_ipsec_tunnel': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_iptag_log_settings': (True, {
+        'panorama': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+    }),
+    'panos_ldap_profile': (True, {
+        'panorama': (),
+        'shared': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_lldp_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_local_user': (True, {
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_log_export_schedule': (True, {
+        'system': ('device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_log_forwarding_profile': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+    }),
+    'panos_logical_router': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_loopback_interface': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_mfa_server_profile': (True, {
+        'shared': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_monitor_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_multicast_pim_interface_timer_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_nat_policy': (False, {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_nat_policy_rules': (False, {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_ntp_settings': (False, {
+        'system': ('device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_ospf_auth_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_ospf_interface_timer_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_ospf_redistribution_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_ospf_spf_timer_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_ospfv3_auth_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_ospfv3_if_timer_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_ospfv3_redistribution_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_ospfv3_spf_timer_routing_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_password_profile': (True, {
+        'ngfw': (),
+        'panorama': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+    }),
+    'panos_pbf_policy': (False, {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_pbf_policy_rules': (False, {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_predefined_dlp_file_type': (True, {
+        'predefined': (),
+    }),
+    'panos_proxy_settings': (False, {
+        'system': ('device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_radius_profile': (True, {
+        'panorama': (),
+        'shared': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_saml_idp_profile': (True, {
+        'panorama': (),
+        'shared': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_schedule': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_security_policy': (False, {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_security_policy_rules': (False, {
+        'device_group': ('name', 'panorama_device', 'rulebase'),
+        'shared': ('rulebase',),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_security_profile_group': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+    }),
+    'panos_service': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_service_group': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_snmptrap_profile': (True, {
+        'panorama': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_ssl_decrypt': (False, {
+        'panorama': (),
+        'shared': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+    }),
+    'panos_ssl_tls_service_profile': (True, {
+        'panorama': (),
+        'shared': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+    }),
+    'panos_syslog_profile': (True, {
+        'panorama': (),
+        'shared': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_system_log_settings': (True, {
+        'panorama': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+    }),
+    'panos_tacacs_plus_profile': (True, {
+        'panorama': (),
+        'shared': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_template': (True, {
+        'panorama': ('panorama_device',),
+    }),
+    'panos_template_stack': (True, {
+        'panorama': ('panorama_device',),
+    }),
+    'panos_template_variable': (True, {
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+    }),
+    'panos_tunnel_interface': (True, {
+        'ngfw': ('ngfw_device',),
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_url_filtering_security_profile': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+    }),
+    'panos_userid_log_settings': (True, {
+        'panorama': (),
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+    }),
+    'panos_virtual_router': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack_vsys': ('ngfw_device', 'panorama_device', 'template_stack', 'vsys'),
+        'template_vsys': ('ngfw_device', 'panorama_device', 'template', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_virtual_router_static_route_ipv4': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_virtual_router_static_route_ipv6': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_virtual_router_static_routes_ipv4': (False, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_virtual_router_static_routes_ipv6': (False, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_virtual_wire': (True, {
+        'ngfw': ('ngfw_device',),
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_vlan': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_vlan_entry': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_vlan_interface': (True, {
+        'ngfw': ('ngfw_device',),
+        'shared': (),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_vsys': (True, {
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
+    'panos_vulnerability_security_profile': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+    }),
+    'panos_wildfire_analysis_security_profile': (True, {
+        'device_group': ('name', 'panorama_device'),
+        'shared': (),
+    }),
+    'panos_zone': (True, {
+        'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
+        'vsys': ('name', 'ngfw_device'),
+    }),
+    'panos_zone_protection_profile': (True, {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    }),
 }
 
 # Provider v2 resource types emitted by the generator.

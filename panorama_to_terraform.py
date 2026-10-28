@@ -45,7 +45,7 @@ import shadow_coverage
 import source_fetch
 import state_coverage
 import state_input
-from resource_mapping import INTERFACE_RESOURCE_TYPES, LOCATION_SCHEMA
+from resource_mapping import DATA_SOURCE_SCHEMA, INTERFACE_RESOURCE_TYPES, LOCATION_SCHEMA
 from xml_input import (
     DEFAULT_SCOPE,
     ParsedSource,
@@ -2217,6 +2217,16 @@ IKE_CRYPTO_SCOPES = ('panos_ike_crypto_profile',)
 IPSEC_CRYPTO_SCOPES = ('panos_ipsec_crypto_profile',)
 IKE_GATEWAY_SCOPES = ('panos_ike_gateway',)
 
+# F5.5: every scope a reference site resolves a name against. A read-through
+# `data` block exists to answer a name a reference needs, so `--data-blocks`
+# accepts a scope from this set only, and only a scope whose `DATA_SOURCE_SCHEMA`
+# row declares `name`: a data source with no `name` attribute cannot hold the
+# entry name a reference needs. tests/test_data_blocks.py pins both rules.
+REFERENCE_SCOPES = tuple(sorted({
+    *ADDR_SCOPES, *SERVICE_SCOPES, *ZONE_SCOPES, *INTERFACE_SCOPES, *IFACE_SCOPES,
+    *TAG_SCOPES, *IKE_CRYPTO_SCOPES, *IPSEC_CRYPTO_SCOPES, *IKE_GATEWAY_SCOPES,
+}))
+
 
 class TerraformGenerator:
     """Generate Terraform configuration files from Panorama data"""
@@ -2232,18 +2242,43 @@ class TerraformGenerator:
         'ssh-proxy': 'ssh_proxy',
     }
 
-    def __init__(self, output_dir: str, associations: Optional[dict] = None):
+    def __init__(self, output_dir: str, associations: Optional[dict] = None,
+                 data_scopes: Optional[frozenset] = None):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        # Collision handling for resource names. Two different PAN-OS names
+        # Collision handling for block names. Two different PAN-OS names
         # can sanitize to the same Terraform name (for example 'a-b' and
-        # 'a_b'). The registry maps (scope, context, input) -> assigned name
-        # so a reference site that recomputes the same identity gets the same
-        # name (F3.1 keyed identity). The flat (scope, input) index keeps
-        # contextless reference sites resolving to the first declaration.
-        self._name_registry: dict[tuple[str, str, str], str] = {}
+        # 'a_b'). The registry maps (kind, scope, context, input) -> assigned
+        # name so a reference site that recomputes the same identity gets the
+        # same name (F3.1 keyed identity, F5.5 kind). The flat (scope, input)
+        # index keeps contextless reference sites resolving to the first
+        # declaration.
+        self._block_registry: dict[tuple, str] = {}
         self._flat_registry: dict[tuple[str, str], str] = {}
         self._taken_names: dict[str, set[str]] = {}
+        # F3.5: declarations that name a target device, keyed
+        # (scope, device, name). An interface belongs to one device, and two
+        # devices can declare the same interface name, so a reference from a
+        # device-scoped referrer resolves against this index instead of the
+        # flat (scope, name) index.
+        self._device_registry: dict[tuple[str, str, str], str] = {}
+        # F3.6: (scope, name) -> the devices that declared it. A name two
+        # devices declare cannot be resolved by a referrer that names no
+        # device, so name_ref keeps it a plain string.
+        self._device_index: dict[tuple[str, str], set] = {}
+        # F3.5: (kind, line) pairs for a source scope the emitted location
+        # cannot carry ('scope') and for a vsys location with no target
+        # device name ('device'). generate_manual_setup_report writes them.
+        self._location_reports: list[tuple[str, str]] = []
+        # F3.6: the device membership the export declares
+        # (PanoramaParser.parse_associations). A template-scoped entry the
+        # export leaves unplaced is reported with the templates its device
+        # takes, so the operator sets the real name.
+        self._associations: dict = associations or {}
+        # F5.5: the read-through scopes the run declares (`--data-blocks`), and
+        # the blocks the reference sites needed, keyed by (type, local name).
+        self.data_scopes = frozenset(data_scopes or ())
+        self._data_blocks: dict[tuple[str, str], dict] = {}
         # F3.5: declarations that name a target device, keyed
         # (scope, device, name). An interface belongs to one device, and two
         # devices can declare the same interface name, so a reference from a
@@ -2277,7 +2312,17 @@ class TerraformGenerator:
 
     def declare_resource_name(self, name: str, scope: str, context: str = '',
                               vsys: str = '', device: str = '') -> str:
-        """Assign a collision-free Terraform name for a new resource declaration.
+        """Assign a collision-free name for a `resource` declaration (F2.7)."""
+        return self.declare_block_name(name, scope, context, vsys, device)
+
+    def declare_block_name(self, name: str, scope: str, context: str = '',
+                           vsys: str = '', device: str = '',
+                           kind: str = 'resource') -> str:
+        """Assign a collision-free Terraform name for a new block declaration.
+
+        One name rule for both block kinds (F5.5): a read-through `data` block
+        takes the name the object would have had as a `resource`, so a run that
+        declares no read-through scope writes the same bytes as before.
 
         The local name is the sanitized PAN-OS name plus a short hash of the
         object's source identity (F2.7, F3.2): the path of the entry in the
@@ -2318,9 +2363,15 @@ class TerraformGenerator:
             candidate = f'{base}_{digest}_{n}'
             n += 1
         taken.add(candidate)
-        # Reference sites resolve by (scope, context, vsys, name); the first
-        # declaration of the same identity wins.
-        self._name_registry.setdefault((scope, context, vsys, name), candidate)
+        # Reference sites resolve by (kind, scope, context, vsys, name); the
+        # first declaration of the same identity wins.
+        self._block_registry.setdefault((kind, scope, context, vsys, name), candidate)
+        if kind == 'data':
+            # A `data` block is created by a reference site, not by a parsed
+            # entry, so it enters no declaration index: a plain reference must
+            # not resolve to it, and a `data.` reference resolves only to the
+            # block the same identity created (F5.5).
+            return candidate
         # Contextless reference sites resolve by (scope, name); the first
         # declaration wins regardless of context (F2.6 robustness).
         self._flat_registry.setdefault((scope, name), candidate)
@@ -2363,6 +2414,12 @@ class TerraformGenerator:
         names no device, such a name resolves only when exactly one device
         declares it (F3.6). A name no device declared (a template-supplied
         interface) still resolves through the normal chain.
+
+        F5.5: when no scope in `scopes` holds a declaration and the run declares
+        that scope with `--data-blocks`, the name becomes one read-through `data`
+        block, and the reference is `data.<scope>.<local>.name`. A name that
+        resolves inside the run, or that stays ambiguous under the device rule
+        above, stays a plain string.
         """
         lookup = key if key is not None else name
         vs = vsys or ''
@@ -2399,7 +2456,7 @@ class TerraformGenerator:
                 chain.append(pair)
         for scope in scopes:
             for ctx, vs_key in chain:
-                local = self._name_registry.get((scope, ctx, vs_key, lookup))
+                local = self._block_registry.get(('resource', scope, ctx, vs_key, lookup))
                 if local is not None:
                     return HclRef(f'{scope}.{local}.name')
         # Flat fallback for contextless call sites: the first declaration of
@@ -2408,6 +2465,35 @@ class TerraformGenerator:
             local = self._flat_registry.get((scope, lookup))
             if local is not None:
                 return HclRef(f'{scope}.{local}.name')
+        # F5.5: the read-through branch. Nothing in this run declares the name,
+        # so a scope the run opted in (`--data-blocks`) writes one data block.
+        # The block type is the first opted-in scope in this site's lookup
+        # order, which is the order PAN-OS resolves a name in. The block name is
+        # the first block written for the identity (scope, context, vsys, name),
+        # so a second site with the same identity uses the same block and a site
+        # in another context writes its own, because PAN-OS looks in the
+        # referrer's own scope before the shared section.
+        for scope in scopes:
+            if scope not in self.data_scopes:
+                continue
+            identity = ('data', scope, context or '', vs, lookup)
+            local = self._block_registry.get(identity)
+            if local is None:
+                local = self.declare_block_name(name, scope, context or '', vs,
+                                                device or '', kind='data')
+                self._data_blocks[(scope, local)] = {
+                    'name': name,
+                    # The location the referrer's identity names: one location
+                    # rule (`location_block`), and the tool does not guess which
+                    # scope holds a name outside the run (F5.5).
+                    'location': self.location_block(scope, {
+                        'name': name,
+                        'device_group': context or '',
+                        'vsys': vs,
+                        'vsys_device': device or '',
+                    }),
+                }
+            return HclRef(f'data.{scope}.{local}.name')
         return name
 
     def escape_string(self, value: str) -> str:
@@ -4968,9 +5054,44 @@ variable "panos_password" {
         with open(self.output_dir / 'VPN_MIGRATION_REPORT.txt', 'w') as f:
             f.write(content)
 
+    # F5.5: the read-through blocks go in one file for the run, so a reader can
+    # separate what the run read from what the plan will read.
+    READ_THROUGH_FILE = 'read_through.tf'
+
+    def generate_read_through(self):
+        """Write the read-through data blocks (F5.5).
+
+        One block per name a reference site needed and this run did not read. The
+        file is written only when the run has blocks, so a run that declares no
+        read-through scope writes no file and the golden bytes stay unchanged.
+        Blocks are in sorted (type, local name) order, so the file is
+        byte-identical between two runs on the same bytes.
+        """
+        if not self._data_blocks:
+            return
+
+        content = '# Read-through data blocks\n\n'
+        content += ('# Each block names an entry this run did not read. A `data` block resolves\n'
+                    '# at plan time, so the plan reads the device and fails when the entry is\n'
+                    '# not present in the location the block names.\n\n')
+        for rtype, local in sorted(self._data_blocks):
+            block = self._data_blocks[(rtype, local)]
+            content += f'data "{rtype}" "{local}" {{\n'
+            content += f'  name = {self.escape_string(block["name"])}\n\n'
+            content += block['location']
+            content += '}\n\n'
+
+        with open(self.output_dir / self.READ_THROUGH_FILE, 'w') as f:
+            f.write(content)
+
     def generate_readme(self):
-        """Generate README with usage instructions"""
-        content = '''# Palo Alto Terraform Configuration
+        """Generate README with usage instructions.
+
+        F5.5: a run that declares read-through scopes adds the label section, so a
+        reader knows the plan will call the API. A run that declares no read-through
+        scope writes the same README as before.
+        """
+        head = '''# Palo Alto Terraform Configuration
 
 This directory contains Terraform configuration files generated from Palo Alto Panorama export.
 
@@ -5047,7 +5168,28 @@ Reports:
 - `INTERFACE_MIGRATION_REPORT.txt` - interfaces and IP addresses to set on the target
 - `VPN_MIGRATION_REPORT.txt` - VPN objects and pre-shared key actions
 - `SANITY_REPORT.txt` - the post-run gate result
+'''
 
+        # F5.5 label. Deterministic: the sorted scopes, then the block count. The
+        # tool cannot know which scope holds a name outside the run, so the label
+        # states what a reader must check.
+        label = ''
+        if self.data_scopes:
+            label = (
+                '\n## Read-through data blocks\n\n'
+                f'This run declares read-through scopes '
+                f'({", ".join(sorted(self.data_scopes))}) and writes '
+                f'`{self.READ_THROUGH_FILE}` with {len(self._data_blocks)} data blocks for '
+                'names this run did not read.\n\n'
+                'A `data` block resolves at plan time, so `terraform plan` reads the device '
+                'and fails when a name is not present in the location the block names. '
+                '`terraform validate` cannot check it. Each block carries the location of '
+                'the reference that needed the name, because no rule here names the scope '
+                'that holds an entry outside the run, so check each block against the '
+                'device before applying.\n'
+            )
+
+        tail = '''
 ## Important Notes
 
 - Review all configurations before applying
@@ -5065,7 +5207,7 @@ https://registry.terraform.io/providers/PaloAltoNetworks/panos/latest/docs
 '''
 
         with open(self.output_dir / 'README.md', 'w') as f:
-            f.write(content)
+            f.write(head + label + tail)
 
 
 def main():
@@ -5112,6 +5254,16 @@ def main():
         '--workspace',
         help='the workspace the state document belongs to, so the record can name it. '
              'Needs --state (F5.6)',
+    )
+    # F5.5: the read-through opt-in. Off by default, so a run that declares no
+    # scope writes the same bytes as before.
+    parser.add_argument(
+        '--data-blocks',
+        action='append',
+        metavar='SCOPE',
+        help='a reference scope this run may read through, as a provider data source type. '
+             'Repeatable, or a comma-separated list. A name that no scope in this run declares '
+             f'becomes a data block in {TerraformGenerator.READ_THROUGH_FILE} (F5.5)',
     )
     parser.add_argument(
         '--cache-dir',
@@ -5184,6 +5336,25 @@ def main():
     if args.workspace and not args.state:
         parser.error('--workspace needs --state: the workspace names the state document, and a '
                      'run that declares no --state reads no state document')
+
+    # F5.5: the read-through scopes are checked before the run. A scope outside the
+    # reference sets answers no reference, and a data source that declares no `name`
+    # cannot hold the entry name a reference needs, so both are argument errors.
+    data_scopes = sorted({scope.strip() for arg in (args.data_blocks or [])
+                          for scope in arg.split(',') if scope.strip()})
+    if args.data_blocks and not data_scopes:
+        parser.error('--data-blocks needs at least one scope')
+    for scope in data_scopes:
+        if scope not in REFERENCE_SCOPES:
+            parser.error(
+                f'--data-blocks must name a scope a reference resolves against '
+                f'({", ".join(REFERENCE_SCOPES)}); {scope} answers no reference'
+            )
+        if not DATA_SOURCE_SCHEMA[scope][0]:
+            parser.error(
+                f'--data-blocks scope {scope} declares no name in the provider schema, so a '
+                f'data block for it cannot hold the entry name a reference needs'
+            )
 
     # F5.3: the request the run read, so the provenance record can name the identity. A
     # file run has no request, so the two api fields stay `-`. F5.4 adds the parent
@@ -5346,7 +5517,8 @@ def main():
         print(f"  - {len(ipsec_tunnels)} IPsec tunnels")
 
         print(f"\nGenerating Terraform configuration in {args.output_dir}...")
-        tf_gen = TerraformGenerator(args.output_dir, panorama.parse_associations())
+        tf_gen = TerraformGenerator(args.output_dir, panorama.parse_associations(),
+                                    data_scopes=data_scopes)
 
         # F4.4: the property scan measures which keys an output reads from a captured
         # object, so the record starts here and not during the parse.
@@ -5427,6 +5599,10 @@ def main():
             ],
             entry_coverage=container_coverage.render_section(coverage_findings, panorama.source.name),
         )
+
+        # F5.5: the read-through blocks, one file for the run, written before the
+        # reports so the label can state the count and the gate can read the file.
+        tf_gen.generate_read_through()
 
         # Reports
         tf_gen.generate_interface_report(interfaces)

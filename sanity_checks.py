@@ -13,8 +13,9 @@ Checks, in report order:
 | Check | Rule | Severity |
 |---|---|---|
 | `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |
-| `location_present` | every resource block carries a `location` block | FAIL |
-| `references` | every `.name` reference resolves to a resource declared in the same run | FAIL |
+| `location_present` | every `resource` and `data` block carries a `location` block | FAIL |
+| `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type | FAIL |
+| `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder is listed so the operator replaces it | WARN |
@@ -23,6 +24,11 @@ Checks, in report order:
 Exit code: 0 when no finding is FAIL, 1 when one is. A WARN and a SKIPPED do
 not fail the gate, so a run that only needs an operator action still exits 0
 and an offline run still reports the checks it could not run.
+
+One reader serves every block kind, so a rule that covers more than one kind
+reads the same block text. A block is reported once for a fact: the presence of
+a `location` block is the `location_present` rule for both kinds, so the `data`
+rule reports the shape inside the block and not the missing block.
 """
 
 import re
@@ -43,6 +49,7 @@ NOT_RUN = 'NOT RUN'
 CHECK_ORDER = (
     'emitted_types',
     'location_present',
+    'data_blocks',
     'references',
     'variables',
     'control_chars',
@@ -52,11 +59,17 @@ CHECK_ORDER = (
 
 REPORT_RULE = '=' * 80
 
-# A resource block header. The body ends at the first column-0 brace, which is
-# how the generator writes a block and how the existing tests read one.
-RESOURCE_RE = re.compile(r'resource\s+"([a-z0-9_]+)"\s+"([^"]+)"\s*\{')
+# A block header, for every block kind a gate rule reads. The body ends at the
+# first column-0 brace, which is how the generator writes a block and how the
+# existing tests read one. F5.5 reads `data`; Epic 6 reads `import` (F6.4) and
+# `action` (F6.7) with this same reader, so no second block reader appears.
+BLOCK_RE = re.compile(r'\b(resource|data|import|action)\s+"([a-z0-9_]+)"\s+"([^"]+)"\s*\{')
+BLOCK_KINDS = ('resource', 'data', 'import', 'action')
 VARIABLE_RE = re.compile(r'^variable\s+"([A-Za-z0-9_]+)"', re.M)
-REFERENCE_RE = re.compile(r'\b(panos_[a-z0-9_]+)\.([a-z0-9_]+)\.name\b')
+# A `.name` reference, with the kind the reference names. A `data.` reference
+# resolves to a data block and a plain reference to a resource block, so the
+# kind is part of the identity (F5.5).
+REFERENCE_RE = re.compile(r'\b(data\.)?(panos_[a-z0-9_]+)\.([a-z0-9_]+)\.name\b')
 ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
 
 # Placeholders the generator writes on purpose. The operator must replace them
@@ -80,14 +93,70 @@ class Finding:
 
 
 @dataclass(frozen=True)
-class ResourceBlock:
-    """One `resource` block as the operator reads it."""
+class Block:
+    """One block as the operator reads it: `resource`, `data`, `import`, `action`."""
 
     file: str
     line: int
+    kind: str
     rtype: str
     local: str
     body: str
+
+    @property
+    def address(self) -> str:
+        """The block address, in the shape a reference names it."""
+        return f'{self.rtype}.{self.local}'
+
+    @property
+    def has_location(self) -> bool:
+        """Whether this block carries a `location` block."""
+        return re.search(r'\blocation\s*=\s*\{', self.body) is not None
+
+    def location_body(self) -> str:
+        """The text inside this block's `location` block, or '' when it has none."""
+        match = re.search(r'\blocation\s*=\s*\{', self.body)
+        if match is None:
+            return ''
+        start = match.end() - 1
+        depth = 0
+        for index in range(start, len(self.body)):
+            char = self.body[index]
+            if char == '{':
+                depth += 1
+            elif char == '}':
+                depth -= 1
+                if depth == 0:
+                    return self.body[start + 1:index]
+        return self.body[start + 1:]
+
+    def sub_blocks(self) -> dict[str, tuple[str, ...]]:
+        """The `location` sub-blocks as {sub-block: fields}, in sorted order.
+
+        A sub-block is read as `name = { ... }` or as the one-line `name = {}`
+        shape, which is what the generator writes for an empty sub-block.
+        """
+        text = self.location_body()
+        found: dict[str, list[str]] = {}
+        for match in re.finditer(r'([A-Za-z0-9_]+)\s*=\s*\{', text):
+            name = match.group(1)
+            start = match.end() - 1
+            depth = 0
+            end = len(text)
+            for index in range(start, len(text)):
+                char = text[index]
+                if char == '{':
+                    depth += 1
+                elif char == '}':
+                    depth -= 1
+                    if depth == 0:
+                        end = index
+                        break
+            inner = text[start + 1:end]
+            fields = sorted(m.group(1) for m in re.finditer(
+                r'([A-Za-z0-9_]+)\s*=\s*[^{\n]', inner))
+            found[name] = tuple(fields)
+        return {name: tuple(fields) for name, fields in sorted(found.items())}
 
 
 @dataclass(frozen=True)
@@ -206,22 +275,40 @@ def read_tf_files(output_dir: Path) -> dict[str, str]:
     return files
 
 
-def resource_blocks(files: dict[str, str]) -> list[ResourceBlock]:
-    """Every `resource` block, in file order then line order."""
-    blocks = []
+def blocks(files: dict[str, str], kinds: tuple[str, ...] = BLOCK_KINDS) -> list[Block]:
+    """Every block, in file order then line order.
+
+    `kinds` limits the reader to the block kinds a rule reads, so one reader
+    serves every rule (F5.5, and Epic 6 for `import` and `action`).
+    """
+    found = []
     for name in sorted(files):
         text = files[name]
-        for match in RESOURCE_RE.finditer(text):
+        for match in BLOCK_RE.finditer(text):
+            kind = match.group(1)
+            if kind not in kinds:
+                continue
             end = text.find('\n}', match.end())
             body = text[match.end():end] if end != -1 else text[match.end():]
-            blocks.append(ResourceBlock(
+            found.append(Block(
                 name,
                 text.count('\n', 0, match.start()) + 1,
-                match.group(1),
+                kind,
                 match.group(2),
+                match.group(3),
                 body,
             ))
-    return blocks
+    return found
+
+
+def resource_blocks(files: dict[str, str]) -> list[Block]:
+    """Every `resource` block, through the same reader as the other kinds."""
+    return blocks(files, ('resource',))
+
+
+def data_blocks(files: dict[str, str]) -> list[Block]:
+    """Every `data` block, through the same reader as the other kinds."""
+    return blocks(files, ('data',))
 
 
 def variables(files: dict[str, str]) -> list[tuple[str, str, int]]:
@@ -249,28 +336,75 @@ def check_emitted_types(files: dict[str, str]) -> list[Finding]:
 
 
 def check_location_present(files: dict[str, str]) -> list[Finding]:
-    """Provider v2 requires `location` on every resource (F2.3)."""
+    """Provider v2 requires `location` on every resource and data block (F2.3, F5.5)."""
     findings = []
-    for block in resource_blocks(files):
-        if 'location = {' not in block.body:
+    for block in blocks(files, ('resource', 'data')):
+        if not block.has_location:
             findings.append(Finding(
                 'location_present', FAIL, block.file, block.line,
-                f'resource {block.rtype}.{block.local} has no location block',
+                f'{block.kind} {block.address} has no location block',
             ))
     return findings
 
 
+def check_data_blocks(files: dict[str, str]) -> list[Finding]:
+    """Every `data` block must match its `DATA_SOURCE_SCHEMA` row (F5.5).
+
+    The missing `location` block is the `location_present` rule, so this rule
+    reports the shape inside it: the sub-block, the fields, and `name`. A row
+    that declares no `name` (the settings, policy, and collection shapes) is not
+    refused for having none.
+    """
+    findings = []
+    for block in data_blocks(files):
+        row = resource_mapping.DATA_SOURCE_SCHEMA.get(block.rtype)
+        if row is None:
+            findings.append(Finding(
+                'data_blocks', FAIL, block.file, block.line,
+                f'data {block.address} is not in DATA_SOURCE_SCHEMA',
+            ))
+            continue
+        declares_name, shape = row
+        if declares_name and not re.search(r'\bname\s*=', block.body):
+            findings.append(Finding(
+                'data_blocks', FAIL, block.file, block.line,
+                f'data {block.address} has no name, which {block.rtype} declares',
+            ))
+        for sub_block, fields in block.sub_blocks().items():
+            if sub_block not in shape:
+                findings.append(Finding(
+                    'data_blocks', FAIL, block.file, block.line,
+                    f'data {block.address} location.{sub_block} is not a sub-block '
+                    f'{block.rtype} declares',
+                ))
+                continue
+            for field in fields:
+                if field not in shape[sub_block]:
+                    findings.append(Finding(
+                        'data_blocks', FAIL, block.file, block.line,
+                        f'data {block.address} location.{sub_block}.{field} is not a '
+                        f'field {block.rtype} declares',
+                    ))
+    return findings
+
+
 def check_references(files: dict[str, str]) -> list[Finding]:
-    """Every `.name` reference must resolve to a resource declared in this run (F2.6)."""
-    declared = {(block.rtype, block.local) for block in resource_blocks(files)}
+    """Every `.name` reference must resolve to a block declared in this run (F2.6, F5.5).
+
+    The kind is part of the identity: a `data.` reference resolves to a `data`
+    block and a plain reference to a `resource` block, so a block of one kind
+    cannot answer a reference written for the other.
+    """
+    declared = {(block.kind, block.rtype, block.local) for block in blocks(files)}
     findings = []
     for name in sorted(files):
         for line, text in enumerate(files[name].split('\n'), start=1):
-            for rtype, local in REFERENCE_RE.findall(text):
-                if (rtype, local) not in declared:
+            for prefix, rtype, local in REFERENCE_RE.findall(text):
+                kind = 'data' if prefix else 'resource'
+                if (kind, rtype, local) not in declared:
                     findings.append(Finding(
                         'references', FAIL, name, line,
-                        f'dangling reference {rtype}.{local}.name',
+                        f'dangling reference {prefix}{rtype}.{local}.name',
                     ))
     return findings
 
@@ -388,6 +522,7 @@ def run_checks(output_dir: Path, run_terraform: bool = False,
     checks = [
         CheckResult('emitted_types', tuple(check_emitted_types(files))),
         CheckResult('location_present', tuple(check_location_present(files))),
+        CheckResult('data_blocks', tuple(check_data_blocks(files))),
         CheckResult('references', tuple(check_references(files))),
         CheckResult('variables', tuple(check_variables(files))),
         CheckResult('control_chars', tuple(check_control_chars(files))),

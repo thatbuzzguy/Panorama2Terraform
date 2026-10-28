@@ -49,8 +49,8 @@ def emitted_types() -> set[str]:
 
 
 @pytest.fixture(scope="session")
-def provider_schema(tmp_path_factory) -> dict:
-    """The panos provider's resource schemas, keyed by resource type.
+def provider_schemas(tmp_path_factory) -> dict:
+    """The panos provider schema block for one type block: both kinds.
 
     Runs `terraform init` + `terraform providers schema -json` against the
     provider version declared in the golden provider.tf. Skips when the
@@ -89,7 +89,19 @@ def provider_schema(tmp_path_factory) -> dict:
     assert schema.returncode == 0, schema.stderr
     data = json.loads(schema.stdout)
     key = next(k for k in data["provider_schemas"] if k.endswith("/panos"))
-    return data["provider_schemas"][key]["resource_schemas"]
+    return data["provider_schemas"][key]
+
+
+@pytest.fixture(scope="session")
+def provider_schema(provider_schemas) -> dict:
+    """The panos provider's resource schemas, keyed by resource type."""
+    return provider_schemas["resource_schemas"]
+
+
+@pytest.fixture(scope="session")
+def provider_data_schemas(provider_schemas) -> dict:
+    """The panos provider's data source schemas, keyed by data source type (F5.5)."""
+    return provider_schemas["data_source_schemas"]
 
 
 def _load_module(alias: str, filename: str):

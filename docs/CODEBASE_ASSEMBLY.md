@@ -105,8 +105,9 @@ two ways:
    outputs today.
 
 Decision needed: which one is the codebase rule. F5.5 chose the data block for a single
-run, and that choice is the base for the codebase rule. The remote state route needs a
-new rule for outputs, which the gate does not read today.
+run (implemented, `ARCHITECTURE.md` §4.7), and that choice is the base for the codebase
+rule. The remote state route needs a new rule for outputs, which the gate does not read
+today.
 
 A reference is also a dependency. A `data` block does not order two units, so the order
 comes from §6.

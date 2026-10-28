@@ -2,97 +2,70 @@
 
 ## Current position
 
-F5.5 (read-through data blocks) is still the open feature, and its pieces are in `to-do.md`. On
-2026-10-27 the Epic 6 planning pass ran: what a full codebase needs, and what the converter does not
-do yet. The design record is `docs/CODEBASE_ASSEMBLY.md` (design only, no rule implemented), the
-feature list is `PLAN.md` Epic 6, and the open decisions are in `backlog.md`. No code changed, so the
-gate is unchanged from F5.6: `ruff check .` clean, `pytest` 758 passed, both golden sets
-byte-identical, report and record determinism pinned, exit codes unchanged, every test offline.
+F5.5 (read-through data blocks, opt-in) is complete and committed. Epic 5 is complete. No feature is
+in progress; the next code feature is Epic 6 F6.1 (unit boundary as data), which needs the directory
+naming rule and the manifest shape decided first (`to-do.md`). F5.5 landed the reference mechanism half
+of `docs/CODEBASE_ASSEMBLY.md` §5, so F6.3 follows it.
 
-The next code feature is still F5.5. It is the first half of the codebase reference mechanism, so the
-Epic 6 reference decision (`docs/CODEBASE_ASSEMBLY.md` §5) waits for it. Write `acceptance.md` before
-the F5.5 code.
+State at the commit: `ruff check .` clean, `pytest` 928 passed (758 before this feature, 170 added),
+both golden sets byte-identical, report and record determinism pinned, exit codes unchanged (input
+refusal 1, argument error 2), every test offline. The data source table test keeps the fixture's skip
+marker, so it skips without the terraform binary or registry access.
 
-## What F5.6 changed
+## What F5.5 changed
 
-- `state_input.py` (new, the producer and its door): `check_bytes` runs the two byte checks, then the
-  kind chooses the parse step. `parse_state(data, origin, workspace=...)` reads the document;
-  `read_state(path, workspace=...)` is the file producer. `StateEntry` (resource type, resource name,
-  entry name, attributes, address) and `StateSource` (origin, name, size, sha256, scope, entries). The
-  document-shape refusals use the door's refusal class, so an input refusal exits 1 and writes no
-  record.
-- `state_coverage.py` (new, the rule owner): the two headings, the two rule paragraphs, `nested_block`,
-  `state_facts`, `state_properties`, `STATE_SCOPE_KEYS`, `STATE_IDENTITY_KEYS`, `state_index`,
-  `state_findings`, `drift_properties`, `value_text`, `ownership_line`, `drift_line`. It owns no
-  console wording, so a state fact prints only in the report.
-- `xml_input.py`: `check_bytes` is the two byte checks for every source kind, and `origin_phrase` is
-  the phrase a refusal uses to name a source. Only the parse step is chosen by the kind.
-- `entry_coverage.py`: `RecordingDict.value(key)` reads a captured value without recording it, so the
-  state scan is not an output read. `EMPTY_FIELD_VALUES` is the one definition of an empty value, read
-  by the property rule and by the state scan.
-- `container_coverage.py`: `PLACEHOLDER_DEVICE` is the one definition of the "this device" name, read
-  by the generator (`_LOCAL_DEVICE_PLACEHOLDER`) and by the state scan.
-- `provenance.py`: `record_for` reads the record facts from a `ParsedSource` or a `StateSource`; rule 5
-  states the read order (main, parent, state) and that a state record references nothing, so it prunes
-  nothing.
-- `main()`: `--state` and `--workspace` (`--workspace` needs `--state`, exit 2; `--state` applies to
-  both source kinds), the state read after the main and parent reads, the scan,
-  `generate_conversion_report(ledger, shadows, state_findings)`, and the state record appended in read
-  order.
-- Fixture: `tests/fixtures/state_workspace.json`, 14 resources, one rule each, so every entry the scan
-  must not key is in the file.
-- Tests: `tests/test_state_input.py` (21 tests, six groups) and `tests/test_state_coverage.py`
-  (23 tests, six groups). `conftest.run_pipeline` returns the parser, so a coverage test reads the
-  facts from the run.
+- `resource_mapping.py`: `DATA_SOURCE_SCHEMA`, 128 rows, one per provider data source type. Each row
+  states whether the type declares `name`, and every `location` sub-block it declares with its fields.
+  Written from `terraform providers schema -json`, not from memory. It is the complete declared shape,
+  not the generator's subset `LOCATION_SCHEMA`, because the gate must refuse a sub-block the type does
+  not declare and the field sets differ per type.
+- `conftest.py`: `provider_schemas` (one provider schema block for both kinds) with the
+  `provider_schema` and `provider_data_schemas` wrappers, so the table pin reads the same fixture the
+  resource pin uses.
+- `sanity_checks.py`: one block reader for every kind a rule reads (`resource`, `data`, `import`,
+  `action`), `blocks(files, kinds)`, the `Block` dataclass (kind, address, `has_location`,
+  `location_body`, `sub_blocks`), the `resource_blocks` and `data_blocks` wrappers, the new
+  `data_blocks` check in `CHECK_ORDER` after `location_present`, `check_location_present` covering both
+  kinds, and `check_references` keying a block by (kind, type, local name). `SanityReport.resource_count`
+  counts resource blocks only, so the console summary line is unchanged.
+- `panorama_to_terraform.py`: `data_scopes` constructor arg, `--data-blocks` (repeatable,
+  comma-separated), `REFERENCE_SCOPES` (the scopes a reference resolves against), the read-through
+  branch in `name_ref`, `declare_block_name` with `declare_resource_name` as the resource wrapper, the
+  data block index, `generate_read_through` (`read_through.tf`, one file per run, sorted by type then
+  local name, written only when it has blocks), and the `README.md` label for a run that declares
+  scopes.
+- Tests: `tests/test_data_source_schema.py` (135 tests, the table against the live schema) and
+  `tests/test_data_blocks.py` (35 tests, eight groups: the reader, the gate rule, the reference kind
+  rule, the emit path, the CLI, the reports, the label, determinism and the exit code).
+- Docs: `docs/ARCHITECTURE.md` §4.3, §4.5, §4.6, §4.7 and §5, `docs/USAGE_GUIDE.md`, `README.md`.
 
-## Facts measured during F5.6
+## Facts measured during F5.5
 
-- A JSON document has no prolog, so the DTD check reaches no DOCTYPE and a `<!DOCTYPE` inside a JSON
-  value is legal input. The size check still refuses a state document over the limit.
-- The corpus pins iterate `tests/fixtures/*.xml` only, so a JSON fixture cannot move
-  `test_committed_corpus_has_no_findings` or `CORPUS_FINDINGS`. A new XML fixture would.
-- `EntryLedger.scope(entry)` returns only the declared facts, so a shared run entry keys with four
-  empty facts, never the `Shared` fallback. This is why the ownership key reads declared facts.
-- `LOCATION_SCHEMA` declares no `template_stack` sub-block for the address row, so a state entry placed
-  in a template stack returns None from `state_facts` and is not keyed.
-- A nested `location` block reads as an object or as a one-element list of an object; both shapes are
-  in the fixture and both key the same entry.
-- Values compare as the two sides hold them, so `["a", "b"]` and `["b", "a"]` are two values. That is
-  the service group member-order finding in the fixture.
-- The drift line is the ownership line with the values added, so the drift section is a subset of the
-  ownership section.
-- Pinned entries: `Web-Server-1` at line 5 of `address_objects.xml` (drift), `Web-Range` at line 13
-  (ownership only), `Web-Services` at line 5 of `service_groups.xml` (member order), and
-  `North-America` in `regions.xml` as a count-only row, which the scan cannot read.
-
-## Facts measured during the Epic 6 planning pass (2026-10-27)
-
-Provider 2.0.14, through `terraform providers schema -json` and the provider docs:
-
-- The schema holds 128 resources, 128 data sources, and 2 actions: `panos_commit` and
-  `panos_push_to_devices`. Actions need Terraform 1.14 or later; the provider needs 1.8 or later.
-  `panos_commit` can commit one device group, one template, or one template stack, so a commit can stay
-  inside one unit.
-- No resource registers a device, defines an HA pair, sets a management interface, or holds an auth key.
-  So the Day 1 bootstrap cannot be expressed in Terraform with this provider. The provider names a
-  device (`location.ngfw_device`, `panos_device_group.devices`, the `target` argument) and nothing else.
-- A resource exists for each scope: `panos_device_group` (`parent`, `devices`, `templates`),
-  `panos_device_group_parent`, `panos_template` (`default_vsys`), `panos_template_stack`,
-  `panos_template_variable`, `panos_vsys`. The container table marks the two parse methods that read the
-  scopes as `bookkeeping`, so no scope is emitted today.
-- No resource schema declares an `id` attribute, so the import id is the base64 JSON of the location plus
-  the name. For the four `*_policy_rules` types the import object also names the rulebase, the position,
-  and a list of names. The generator writes the same location block, so an import block can come from the
-  same data as the resource block.
-- The provider supports a local inspection mode (`config_file`, `panos_version`), which reads a config
-  file with no server. No rule in this project uses it, and a plan in that mode cannot show drift.
-- The gate reads `resource` blocks only, so a `data` block, an `import` block, and an `action` block are
-  not checked. F5.5 writes the first rule that reads a block that is not a resource block.
-- `panorama_to_terraform.py` `generate_variables` declares `panos_hostname`, `panos_username` and
-  `panos_password`, and `generate_provider_config` uses them, while the fetch rule keeps the key in the
-  environment only. One rule must cover both.
-- `tests/golden/kitchen_sink/zones.tf` writes `ngfw_device` as a literal, so a serial change changes
-  every resource in that template. A codebase needs the device name as a variable.
+- Among the 126 types a resource and a data source both have, no `name` flag differs. The two
+  differences between the two sets are set membership only: `panos_certificate_import` and
+  `panos_virtual_router_interface` have a resource and no data source; `panos_certificate` and
+  `panos_predefined_dlp_file_type` have a data source and no resource. The earlier note called these
+  "name-level mismatches"; that wording was wrong.
+- `location` is required for all 128 data sources, and `name` is required for every data source that
+  declares one (106). 22 rows declare no `name`: the settings, policy and collection shapes.
+- 26 distinct `location` shapes and 20 distinct sub-block name sets across the 128 rows, so a shape
+  group naming scheme would need ambiguous names. The table stays flat, one row per type, in the
+  `LOCATION_SCHEMA` style.
+- The shape differs per type even for the same sub-block name, so a row per sub-block name would be
+  wrong; the table is per type.
+- `LOCATION_SCHEMA` is a subset of each data row for the shared types. A gate rule that reads only the
+  generator subset would accept a sub-block the data source does not declare, so the data table holds
+  the full declared shape.
+- A read-through scope turns every name outside the run into a `data` block, including a built-in such
+  as `any`, because no verified built-in name table exists. The sample run with `panos_address` and
+  `panos_zone` writes 6 blocks, two of them built-in. This is why a read-through run is labelled.
+- A block a reference site creates enters no declaration index, so a plain reference cannot resolve to
+  it; only a `data.` reference resolves to a `data` block.
+- Adding a gate check changes `SANITY_REPORT.txt` bytes for every run, because the report carries one
+  more row. Reports are not golden, so the determinism pins still hold.
+- Every reference scope has a data row, declares `name`, and has a `location` row the generator can
+  render, so the CLI's "declares no name" refusal cannot fire today. It stands for a reference scope a
+  future feature adds, and the test that pins it names that.
 
 ## Rules to keep when writing documents
 
@@ -109,26 +82,20 @@ Provider 2.0.14, through `terraform providers schema -json` and the provider doc
 - A record is data, so a document describes its fields and never restates a record. The
   example in `docs/USAGE_GUIDE.md` is an illustration with a shortened hash, not a pin.
 
-## Watch for F5.5
+## Watch for Epic 6
 
-- `DATA_SOURCE_SCHEMA` must be written from the provider `data_source_schemas`, not from memory. The
-  check ran on 2026-10-27 through the `provider_schema` fixture: 128 data sources mirror the 128
-  resources, the 126 shared types have the identical attribute set and the identical `location`
-  sub-blocks, and the two name-level mismatches are `panos_certificate_import` and
-  `panos_virtual_router_interface` (a resource with no data source) and `panos_certificate` and
-  `panos_predefined_dlp_file_type` (a data source with no resource).
-- Corrected during that check: a data source schema does declare required attributes. `location` is
-  required for all 128, and `name` is required for every data source that has a `name` attribute (106
-  types). 22 data sources have no `name` attribute, the settings, policy and collection shapes, so the
-  gate rule must be stated without `name` for them. The gate reads only `resource` blocks today, so the
-  F5.5 rule is the one that reads a `data` block at all: without `--validate` nothing checks a `data`
-  block, and validate accepts a `location` sub-block the type does not declare by dropping it silently.
-- The provider check needs the terraform binary and the provider cache. It skips without them, so the
-  table test needs a committed schema snapshot or a skip marker, decided before the test is written.
+- F6.1 needs the directory naming rule and the manifest data shape decided. F6.2, F6.3 and F6.4 all
+  need the unit.
+- The block reader in `sanity_checks.py` serves every kind, so the `import` (F6.4) and `action` (F6.7)
+  rules must use `blocks(files, kinds)`; no second block reader should appear.
+- The import position for the four `*_policy_rules` types must be the position the live config holds,
+  and the F3.5 rulebase decision gates it.
+- Actions need Terraform 1.14 or later; the committed goldens declare no Terraform minimum.
+- The credential rule needs one statement that covers both the fetch layer and the generated provider
+  block.
+- The value-to-variable mapping must be a pinned table, the way `LOCATION_SCHEMA` and
+  `DATA_SOURCE_SCHEMA` are.
 - The prune action still needs the record directory decided. A state record references nothing, so it
   prunes nothing, and the prune rule reads a record file, not one record.
 - A coverage fact that comes from a run must be read from the run's ledger, so the scan tests run the
   pipeline in process.
-- F5.5 is the first half of the codebase reference rule (`docs/CODEBASE_ASSEMBLY.md` §5). Write the gate
-  block reader so a later kind can use it: `import` blocks (Epic 6 F6.4) and `action` blocks (F6.7) need
-  the same reader, so a second block reader should not appear.

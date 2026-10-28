@@ -215,12 +215,12 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   the test that makes an unmarked element read fail CI.
 - The parser extraction gaps listed above will surface in the F4.2/F4.3 reports; fix each gap when the report confirms it in a fixture, rather than fixing them speculatively now.
 - The sanity gate (F4.1, landed) reads the output files, so it cannot see an entry that produced no file. F4.3 is the accounting for that case; the gate cannot replace it.
-- The gate `location` check is presence only, not shape. The sub-block and field shape
-  stays pinned by `tests/test_multi_vsys_location.py`, because `terraform validate`
-  accepts an unknown sub-block and drops it silently. Move the shape rule into the gate
-  when the location shape is data the gate can read, not a per-type literal inside an
-  emitter. The property matrix (F4.4, landed) names the properties a row reads, which
-  is the data a shape check needs; the location sub-blocks are not that data yet.
+- The gate `location` check is presence only, for both block kinds. The resource sub-block and field
+  shape stays pinned by `tests/test_multi_vsys_location.py`, because `terraform validate` accepts an
+  unknown sub-block and drops it silently. The `data` shape is checked by the gate, because
+  `DATA_SOURCE_SCHEMA` is data the gate can read (F5.5, landed). A `resource` shape stays inside
+  `LOCATION_SCHEMA`, which is the generator's subset, until the emitted shape becomes data the gate can
+  read for both kinds.
 - The placeholder check lists the VPN pre-shared key only. When F4.3 adds per-entry accounting, the expected placeholders should come from the same table that decides the report entries.
 - Consider a `--checks` selector on the converter CLI if the gate grows; today every check runs on every conversion, and a WARN never changes the exit code.
 
@@ -327,39 +327,51 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   written per output directory and a later run cannot know which records a prune action will
   read. A two-source run writes two records in one file (F5.4), so the prune action reads a
   record file, not one record.
-- Corrected by the check on 2026-10-27: a data source schema does declare required attributes.
-  For every one of the 128 data sources `location` is required, and for every data source that has a
-  `name` attribute `name` is required (106 types have both; 22 have no `name`, the settings, policy and
-  collection shapes). So `terraform validate` can enforce `name` and `location` on a `data` block for
-  those 106 types. The gate rule F5.5 still needs is the one that reads a `data` block at all:
-  `sanity_checks.py` reads only `resource` blocks, so a run without `--validate` checks no `data`
-  block, and validate accepts a `location` sub-block the type does not declare by dropping it
-  silently.
+- Corrected by the check on 2026-10-27, and pinned by `tests/test_data_source_schema.py`: a data
+  source schema does declare required attributes. For every one of the 128 data sources `location`
+  is required, and for every data source that has a `name` attribute `name` is required (106 types
+  have both; 22 have no `name`, the settings, policy and collection shapes). The gate rule that reads
+  a `data` block is `data_blocks` (F5.5, landed 2026-10-28), because `terraform validate` accepts an
+  unknown `location` sub-block and drops it silently.
+- Provider data sources, verified against 2.0.14 with `terraform providers schema -json`: 128 data
+  sources mirror the 128 resources, and every emitted type has one. 126 types have the identical
+  attribute set and the identical `location` sub-blocks, and among those 126 no `name` flag differs.
+  The two asymmetries are set membership, not attribute shape: `panos_certificate_import` and
+  `panos_virtual_router_interface` have a resource and no data source; `panos_certificate` and
+  `panos_predefined_dlp_file_type` have a data source and no resource. Only `panos_addresses` returns
+  a collection (a map keyed by name). `panos_device_group`, `panos_template` and
+  `panos_template_stack` return the membership facts `parse_associations` builds from the export; a
+  data source resolves at plan time, so it cannot feed a generation-time report.
+  `DATA_SOURCE_SCHEMA` is written from that schema, not from memory.
+- The table is the complete declared shape, not the generator's subset: `LOCATION_SCHEMA` lists only
+  the sub-blocks the generator can use, so a gate rule that refuses a sub-block the type does not
+  declare needs every declared sub-block, per type, because the field sets differ per type. The pin
+  between the two tables is `tests/test_data_source_schema.py`.
+- Decision: the table test keeps the fixture's skip marker and writes no committed schema snapshot.
+  The `provider_schemas` fixture already skips when the terraform binary or the provider cache is
+  absent, so a snapshot would be a second copy of the same fact and could drift from the pinned
+  provider version.
+- BGP and OSPF have neither a resource nor a data source, so read-through cannot cover the
+  report-only areas.
+- Read-through is opt-in per declared scope (F5.5, landed). A plain string already applies, because
+  Panorama resolves an object name through its own inheritance at commit time, and one `data` block is
+  one plan-time API call. A `data` block for a name that does not exist fails at plan, not at
+  validate, so a read-through run is labelled in the generated `README.md`.
+- Decision for the 22 rows that declare no `name`: the gate rule is stated per row, so a settings or
+  policy data block that is correct is not refused for having no `name`. A row that declares no
+  `name` cannot be a read-through scope, because it cannot hold the entry name a reference needs.
+- Decision: the collection data source `panos_addresses` is out of scope for the emit path, because it
+  has no entry name to key and no reference names a collection.
+- Decision: no coverage matrix row covers a `data` block, so a property finding cannot name a
+  read-through name. The record of a read-through run is `read_through.tf` plus the `README.md` label,
+  and `MANUAL_SETUP_REPORT.txt` is the one report that may name one through the existing location
+  rules.
+- Open: no verified built-in name table exists, so a declared read-through scope turns every name
+  outside the run into a `data` block, including a built-in such as `any`. A built-in name table
+  verified against a live target would let the emit path skip those names; until then the run is
+  labelled.
 - Open: the provenance record names the host and the scope, never the credential. The key
   rule itself (environment only, never argv, never a generated file) is in `ARCHITECTURE.md` §3.
-- Provider data sources, verified against 2.0.14 with
-  `terraform providers schema -json`: 128 data sources mirror the 128 resources, and
-  every emitted type has one. 126 types have the identical attribute set and the
-  identical `location` sub-blocks. The two mismatches are name level:
-  `panos_certificate_import` and `panos_virtual_router_interface` have a resource and
-  no data source; `panos_certificate` and `panos_predefined_dlp_file_type` have a data
-  source and no resource. Only `panos_addresses` returns a collection (a map keyed by
-  name). `panos_device_group`, `panos_template` and `panos_template_stack` return the
-  membership facts `parse_associations` builds from the export; a data source resolves
-  at plan time, so it cannot feed a generation-time report. The check ran again on
-  2026-10-27 for F5.6 and the counts and the name-level mismatches hold, so
-  `DATA_SOURCE_SCHEMA` can be written from that schema, not from memory.
-- A data source schema declares no required attributes, so `terraform validate` cannot
-  enforce `name` and `location` on a `data` block. That rule needs its own gate check,
-  for the same reason the `location` sub-block shape is pinned by test and not by
-  validate.
-- BGP and OSPF have neither a resource nor a data source, so read-through cannot cover
-  the report-only areas.
-- Read-through is opt-in per declared scope. A plain string already applies, because
-  Panorama resolves an object name through its own inheritance at commit time, and one
-  `data` block is one plan-time API call. A `data` block for a name that does not exist
-  fails at plan, not at validate, so a read-through run must be labelled in the
-  generated `README.md`.
 - The state document is a reference source, so it reads through the same door and the same row rule
   (F5.6, landed 2026-10-27); the rules are in `ARCHITECTURE.md` §3 and §3.2. A state entry has no
   source line, because only the expat handler path records one, so its position is its resource
@@ -376,16 +388,18 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 The design record is `docs/CODEBASE_ASSEMBLY.md`. Each item below is a decision, not a rule the code
 holds.
 
-- The reference between units: the provider `data` block (F5.5), or the state of another unit through
-  a remote state data source or a platform output. The remote state route needs outputs, and the
-  generator writes no outputs today. The choice decides which gate rule the codebase needs.
+- The reference between units: the provider `data` block (F5.5, landed 2026-10-28), or the state of
+  another unit through a remote state data source or a platform output. The remote state route needs
+  outputs, and the generator writes no outputs today, so the choice is still open for a name that one
+  unit owns and another unit references. The gate rule that reads a `data` block is built; the edge
+  list is not.
 - The owner of a repeated name. Panorama resolves it through inheritance at commit time, so a repeated
   name is one object on the device and two entries in the export. `panos_address` declares
   `disable_override`, and the service parser does not extract it (the extraction gap above). Until the
   rule names the owner, two units can claim one object.
-- Import agreement: the gate reads `resource` blocks only, so an `import` block is not checked today. A
-  codebase that writes import blocks needs a rule that an import block agrees with the resource block it
-  names (the same type, the same local name, the same location).
+- Import agreement: the gate reads every block kind with one reader, so an `import` block is read by
+  `sanity_checks.blocks`. The rule that an import block agrees with the resource block it names (the
+  same type, the same local name, the same location) is not written yet.
 - The import position for the four `*_policy_rules` types must be the position the live config holds,
   not the create-time position the generator emits: a chain anchors at `where = "last"`, which is not
   the position of a rule that already exists. The F3.5 rulebase decision gates this, because the rulebase
