@@ -1,7 +1,7 @@
 """F6.1 the unit as data: one manifest row per declared scope, as `CODEBASE_MANIFEST.json`.
 
 A unit is one declared scope (`docs/CODEBASE_ASSEMBLY.md` §1). The manifest is the shape a
-codebase needs before a directory, an owner, or a reference edge can be named. Four rules,
+codebase needs before a directory, an owner, or a reference edge can be named. Five rules,
 stated once here.
 
 1. The unit. One unit is one combination of the four scope facts (`ARCHITECTURE.md` §2.2), and
@@ -26,6 +26,10 @@ stated once here.
    per-unit file would sit outside the shape it names. The set of units is a run fact, and the
    edge list (F6.3) needs the whole set, so one file holds one row per unit. The file is written
    only when it has content, following the existing rule for the report files.
+5. The unit order lives on this row, as `rank` and `after`, because this file is the place that
+   names each unit; a fourth data file that listed directories would be a second place that states
+   the unit set. This module states the row shape only. `reference_edges.order` fills the two
+   fields, because the order comes from the three rules `reference_edges.py` states.
 
 The reference names are recorded by the reference rule (`TerraformGenerator.name_ref`) at the site
 that applies it and arrive here as `references`; this module resolves no name. The sanitizing rule
@@ -35,9 +39,10 @@ argument and defines no second rule.
 Usage:
     from unit_manifest import MANIFEST_FILE, build_rows, render, parse_rows
     rows = build_rows(ledger, generator.unit_references(), generator.sanitize_name)
+    rows = reference_edges.order(rows, ownership_rows, edge_rows)    # rule 5: fills rank and after
     (output_dir / MANIFEST_FILE).write_text(render(rows), encoding='utf-8')
     for row in parse_rows((output_dir / MANIFEST_FILE).read_text(encoding='utf-8')):
-        print(row['directory'], row['references'])
+        print(row['directory'], row['rank'], row['after'])
 """
 
 import hashlib
@@ -50,8 +55,9 @@ MANIFEST_FILE = 'CODEBASE_MANIFEST.json'
 
 # Field order. Fixed, so two runs write the same bytes and a reader does not guess.
 # The field names are the printed keys, so `parse_rows` reads a row back as itself.
+# `rank` and `after` are the unit order (rule 5), so they print after the F6.1 fields.
 FIELD_ORDER = ('unit', 'device_group', 'vsys', 'template', 'vsys_device',
-               'directory', 'entry_count', 'references')
+               'directory', 'entry_count', 'references', 'rank', 'after')
 
 # The four scope facts (F3.1, F3.2), read through `container_coverage`, so the identity order is
 # the order the state scan keys on (`state_coverage.ownership_key`).
@@ -129,6 +135,10 @@ def build_rows(ledger, references: dict, sanitize: Callable[[str], str]) -> list
         row['directory'] = directory_name(facts, sanitize)
         row['entry_count'] = units[facts]
         row['references'] = sorted(references.get(facts, ()))
+        # Rule 5: `reference_edges.order` fills these two fields. They start empty so a run that
+        # applies no order rule still writes the declared shape.
+        row['rank'] = 0
+        row['after'] = []
         rows.append(row)
     return rows
 
@@ -162,12 +172,17 @@ def parse_rows(text: str) -> list:
         if missing:
             raise ValueError(f'the row does not state its fields: {missing}')
         if any(not isinstance(row[key], str) for key in FIELD_ORDER
-               if key not in ('entry_count', 'references')):
+               if key not in ('entry_count', 'references', 'rank', 'after')):
             raise ValueError(f'the name fields of a row are not names: {row}')
         if not isinstance(row['entry_count'], int):
             raise ValueError(f'entry_count is not a count: {row}')
         if not isinstance(row['references'], list) \
                 or not all(isinstance(name, str) for name in row['references']):
             raise ValueError(f'references is not a list of names: {row}')
+        if not isinstance(row['rank'], int):
+            raise ValueError(f'rank is not a position: {row}')
+        if not isinstance(row['after'], list) \
+                or not all(isinstance(unit, str) for unit in row['after']):
+            raise ValueError(f'after is not a list of directories: {row}')
         rows.append({key: row[key] for key in FIELD_ORDER})
     return sorted(rows, key=lambda row: tuple(row[key] for key in FACT_KEYS))

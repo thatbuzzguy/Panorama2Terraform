@@ -41,6 +41,7 @@ import container_coverage
 import entry_coverage
 import ownership
 import provenance
+import reference_edges
 import sanity_checks
 import shadow_coverage
 import source_fetch
@@ -4648,7 +4649,7 @@ variable "panos_password" {
             f.write('\n'.join(lines) + '\n')
 
     def generate_conversion_report(self, ledger, shadows=None, state=None,
-                                   ownership_findings=None) -> str:
+                                   ownership_findings=None, cycle_findings=None) -> str:
         """Generate CONVERSION_REPORT.txt for the entries the parse read (F4.3).
 
         One line per report row, grouped by the F3.9 scope rule so a reader can
@@ -4657,10 +4658,11 @@ variable "panos_password" {
         provenance record (`provenance.py`, F5.3).
 
         `shadows` is the F5.4 cross-source scan result. `state` is the F5.6 state scan result.
-        `ownership_findings` is the F6.2 ownership scan result. Each prints in its own section,
-        after the property section, only when it has a finding, and each is grouped by the same
-        scope rule as the other sections. Section order is fixed: header, summary, gaps, property
-        findings, shadows, repeated names, state ownership, drift.
+        `ownership_findings` is the F6.2 ownership scan result. `cycle_findings` is the F6.3 edge scan
+        result. Each prints in its own section, after the property section, only when it has a finding,
+        and each is grouped by the same scope rule as the other sections. Section order is fixed: header,
+        summary, gaps, property findings, shadows, repeated names, reference cycles, state ownership,
+        drift.
 
         Returns '' when the input has no report rows, and writes no file in that
         case (F4.3 AC-9): a run that read no entry has nothing to report.
@@ -4713,6 +4715,16 @@ variable "panos_password" {
                 lines.append(self._report_section_header(path))
                 for row in group:
                     lines.append(ownership.finding_line(row))
+
+        # F6.3: the edge scan. Two units that reference each other cannot be put in a plan order, so a
+        # cycle is an operator action, not a broken output, and it does not change the exit code (the F4.1
+        # gate does). The section prints only when it has a finding, and the console prints no cycle line.
+        if cycle_findings:
+            lines.extend(['', f'--- {reference_edges.CYCLE_HEADING} ---', reference_edges.CYCLE_RULE])
+            for path, group in self._group_by_scope(cycle_findings):
+                lines.append(self._report_section_header(path))
+                for row in group:
+                    lines.append(reference_edges.cycle_line(row))
 
         # F5.6: the state scan. Ownership and drift are operator actions, not broken output, so
         # they do not change the exit code (the F4.1 gate does). Each section prints only when it
@@ -5699,12 +5711,30 @@ def main():
         # covers a run entry is the row that covers a parent entry. A finding is an operator action, so
         # it does not change the exit code (the F4.1 gate does), and the console prints no line for it.
         ownership_rows = ownership.build_rows(panorama.ledger, parent_ledger, tf_gen.sanitize_name)
+        # F6.3: the reference between units as an edge list. The pair comes from the names `name_ref`
+        # recorded at the sites that applied the rule, joined to the ownership rows on (`type`, `entry`),
+        # so no second resolution rule and no second naming rule appears here. A cycle is an operator
+        # action, so it does not change the exit code (the F4.1 gate does), and the console prints no line
+        # for it.
+        edge_rows = reference_edges.build_rows(ownership_rows, tf_gen.unit_references(),
+                                               tf_gen.sanitize_name)
+        # F6.1: the unit as data. One row per declared scope, from the ledger the parse already
+        # writes and the names `name_ref` recorded at the sites that applied the rule. Written as
+        # data, so an orchestrator reads it (docs/CODEBASE_ASSEMBLY.md §13), and written only when
+        # it has content, following the rule for the report files. F6.1 names the directory a later
+        # feature writes; it does not write one. F6.3 fills the two order fields, because the order
+        # comes from the three rules `reference_edges.py` states. The rows are built before the
+        # report, because a cycle finding reads its grouping facts through the manifest row.
+        manifest_rows = reference_edges.order(
+            unit_manifest.build_rows(panorama.ledger, tf_gen.unit_references(), tf_gen.sanitize_name),
+            ownership_rows, edge_rows)
         # F5.6: the state scan reads the same row rule, so the matrix row that covers a run
         # entry is the row that covers the state resource. A run with no declared state source
         # has no state to read, so it reports neither fact.
         state_findings = state_coverage.state_findings(panorama.ledger, state_source)
         tf_gen.generate_conversion_report(panorama.ledger, shadows, state_findings,
-                                          ownership.findings(ownership_rows))
+                                          ownership.findings(ownership_rows),
+                                          reference_edges.findings(edge_rows, manifest_rows))
 
         # F5.3: the provenance record. Written outside the report bodies, so the report
         # byte rule still holds: a report body names the source name, and the record is
@@ -5722,13 +5752,8 @@ def main():
         record_file = Path(args.output_dir) / provenance.PROVENANCE_FILE
         record_file.write_text(provenance.render_records(records), encoding='utf-8')
 
-        # F6.1: the unit as data. One row per declared scope, from the ledger the parse already
-        # writes and the names `name_ref` recorded at the sites that applied the rule. Written as
-        # data, so an orchestrator reads it (docs/CODEBASE_ASSEMBLY.md §13), and written only when
-        # it has content, following the rule for the report files. F6.1 names the directory a later
-        # feature writes; it does not write one.
-        manifest_rows = unit_manifest.build_rows(panorama.ledger, tf_gen.unit_references(),
-                                                 tf_gen.sanitize_name)
+        # F6.1: the manifest is written as data, so an orchestrator reads it. The rows are built
+        # above, before the report, because a cycle finding reads its grouping facts through them.
         manifest_file = Path(args.output_dir) / unit_manifest.MANIFEST_FILE
         if manifest_rows:
             manifest_file.write_text(unit_manifest.render(manifest_rows), encoding='utf-8')
@@ -5740,6 +5765,13 @@ def main():
         ownership_file = Path(args.output_dir) / ownership.OWNERSHIP_FILE
         if ownership_rows:
             ownership_file.write_text(ownership.render(ownership_rows), encoding='utf-8')
+
+        # F6.3: the edge record. One row per pair the data can name, written as data, and only when it has
+        # content, following the rule for the report files and the two data files. A reader joins `referrer`
+        # and `target` to the manifest row on `directory`, and (`type`, `entry`) to the ownership row.
+        edge_file = Path(args.output_dir) / reference_edges.EDGE_FILE
+        if edge_rows:
+            edge_file.write_text(reference_edges.render(edge_rows), encoding='utf-8')
 
         print("\n✓ Successfully generated Terraform configuration!")
         print("\n📄 Generated Migration Reports:")

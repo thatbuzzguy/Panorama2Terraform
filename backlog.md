@@ -390,7 +390,7 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 ## Design Decisions (Epic 6)
 
 The design record is `docs/CODEBASE_ASSEMBLY.md`. Each item below is a decision, not a rule the code
-holds, except the F6.1 and F6.2 decisions, which the code holds and a test pins.
+holds, except the F6.1, F6.2 and F6.3 decisions, which the code holds and a test pins.
 
 - F6.1 landed three decisions (2026-10-28). The rules are in `unit_manifest.py`, and
   `docs/CODEBASE_ASSEMBLY.md` §3 and `docs/ARCHITECTURE.md` §3.4 state them:
@@ -415,19 +415,37 @@ holds, except the F6.1 and F6.2 decisions, which the code holds and a test pins.
   - the service leg is closed: the parse captures the flag for a service entry and the emitter prints it,
     so the `panos_service` row names the property. Report-only was refused, because the F4.4 rule says a
     captured field is printed or reported as unread.
+- F6.3 landed five decisions (2026-10-28). The rules are in `reference_edges.py`, and
+  `docs/CODEBASE_ASSEMBLY.md` §5 and §6 and `docs/ARCHITECTURE.md` §3.6 state them:
+  - an edge is a pair fact, so it lives in a third data file (`REFERENCE_EDGES.json`), one row per pair:
+    `referrer`, `target`, `type`, `entry`. It cannot be a manifest field, because `unit_manifest.py` rule
+    4 pins one row per unit, and it cannot be an ownership row, because `ownership.py` rule 1 pins one row
+    per entry. The record joins to the manifest on `directory` and to the ownership record on
+    (`type`, `entry`), and `parse_rows` refuses a row that names one unit instead of two;
+  - the edge set is the names `name_ref` recorded, so the module resolves no name, and a name no unit in
+    the run declares writes no row: the pair does not exist, and that name is already stated in the
+    manifest's `references` field. Self-reference is excluded, because an edge is a fact between two
+    units;
+  - the target is the ownership `owner`, not the declaring unit, so a name several units declare as
+    separate objects gives one row per owner;
+  - the reference fact stays one fact: `name_ref` records the name resolved outside the run, and the two
+    cases the earlier open item asked about are told apart by whether an edge row exists. A name the flat
+    index resolves inside the run is not an edge: its split across unit directories is the write path and
+    the import-block decision, still open below;
+  - the acyclic rule is a report finding, one line per cycle, read from its smallest unit, in its own
+    section after the repeated-names section and before the state sections. A finding is an action, so it
+    does not change the exit code, and the console prints no cycle line. The unit order is two added
+    manifest fields, `rank` and `after`, because the manifest is the file that names each unit, and three
+    bases produce `after`: the owner unit before the unit that overrides its name, the shallower scope
+    before the deeper scope inside it, and the target unit before the referrer unit. A unit in a cycle
+    states `rank` as 0, and a tie follows the identity order.
 - Open: the manifest names the directory and writes no directory, so the path that creates one
-  directory per unit is still open. The gate reads no data file, so the gate rule that reads the two data
-  files is not written yet.
-- Open: the reference names are names, not units. The edge list (F6.3) needs (referrer unit, target
-  unit). Ownership (F6.2) now names the unit that declares a name, so `kind` `override` names the target
-  unit as `owner`; what is still open is the record shape: names per unit today, pairs per edge then.
+  directory per unit is still open. The gate reads no data file, so the gate rule that reads the three
+  data files is not written yet.
 - Open: the device-group `parent` field is not captured, so the owner rule cannot name an ancestor for
   two device groups in one source (`docs/CODEBASE_ASSEMBLY.md` §4 rule 5). A device group entry is a
   bookkeeping row, so the parse keeps only its name. `panos_device_group` and `panos_device_group_parent`
   (F6.5) are where the parent fact would land.
-- Open: the ambiguous-device case (`ARCHITECTURE.md` §4.3 rule 1) is recorded as an outside reference,
-  because the reference rule returns a plain string. The name is declared inside the run, so the row
-  cannot tell "outside the run" from "ambiguous" until the edge list names the other unit.
 - Open: a declared template stack is a scope container (`container_coverage.SCOPE_CONTAINERS`), so a
   stack can be a codebase unit, but the stack is not one of the four scope facts, so the manifest names
   no stack unit today. A stack unit needs a fifth fact, or the decision to read `template` as the stack
@@ -435,11 +453,12 @@ holds, except the F6.1 and F6.2 decisions, which the code holds and a test pins.
 - Open: a unit exists only when the ledger has a row in it, so a scope with no entry has no manifest
   row. A declared scope always has the entry that defines it, so no empty-unit case is possible today.
 
-- The reference between units: the provider `data` block (F5.5, landed 2026-10-28), or the state of
-  another unit through a remote state data source or a platform output. The remote state route needs
-  outputs, and the generator writes no outputs today, so the choice is still open for a name that one
-  unit owns and another unit references. The gate rule that reads a `data` block is built; the edge
-  list is not.
+- Open: the mechanism for a name another unit in the run owns. The `data` block is the codebase rule for
+  a name outside the run (F5.5, landed 2026-10-28), and the gate rule that reads a `data` block is built.
+  A name a unit in the run owns cannot resolve through a `data` block, because that unit declares the entry
+  in its own root and one plan runs against one state, so the mechanism must be that unit's outputs,
+  through a remote state data source or a platform output, and the generator writes no outputs today. F6.3
+  states the edge and the order and leaves this choice open.
 - Import agreement: the gate reads every block kind with one reader, so an `import` block is read by
   `sanity_checks.blocks`. The rule that an import block agrees with the resource block it names (the
   same type, the same local name, the same location) is not written yet.

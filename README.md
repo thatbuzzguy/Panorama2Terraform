@@ -193,6 +193,10 @@ Data files and reports written to the output directory. Each is written only whe
   rule can say about the entry, and the `disable_override` flag as the parse read it
   ([`ownership.py`](ownership.py)). Every run writes it when it has content, and the two data files
   join on the unit directory
+- `REFERENCE_EDGES.json` - one row per reference pair, as data: the unit that uses a name resolved
+  outside the run, the unit that owns it, the coverage matrix row, and the entry name
+  ([`reference_edges.py`](reference_edges.py)). Every run writes it when it has content, and the row
+  joins to the manifest on the unit directory and to the ownership record on (`type`, `entry`)
 - `MANUAL_SETUP_REPORT.txt` - everything above that must be configured
   manually, plus a section for a container no parse method reads
   ([`container_coverage.py`](container_coverage.py))
@@ -231,6 +235,7 @@ zones.tf  interfaces.tf  virtual_routers.tf  monitor_profiles.tf
 vpn.tf
 MANUAL_SETUP_REPORT.txt  INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.txt
 CONVERSION_REPORT.txt  SANITY_REPORT.txt  SOURCE.txt  CODEBASE_MANIFEST.json
+OWNERSHIP.json  REFERENCE_EDGES.json
 ```
 
 (Only files with content are written; the list above is the union across
@@ -380,6 +385,10 @@ call that module instead of restating them. The gate is described in
   scope, the directory naming rule, the row shape read back as data, the reference names recorded by
   the reference rule, the no-change rule for the `.tf` goldens, the report bodies, the gate inputs,
   and the exit codes, and the byte rule between two runs
+- `tests/test_reference_edges.py` - the reference between units as data (`REFERENCE_EDGES.json`): one
+  row per pair, the join to the manifest and to the ownership record, the rule that the module
+  resolves no name, self-reference exclusion, the acyclic rule and the report section, the unit order
+  and its three bases, the gate inputs, the exit codes, and the byte rule between two runs
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are

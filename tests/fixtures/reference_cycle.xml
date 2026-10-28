@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<!-- F6.3: the cycle fixture for the edge list between units.
+
+     Each unit declares one interface name and references the name the other unit declares, so the edge
+     graph has one cycle. Both references stay plain strings, so both are recorded as outside the run:
+     the reference rule keeps a device-declared name inside the device that declared it
+     (`ARCHITECTURE.md` §4.3 rule 1), and each zone names its own device while asking for the other
+     device's interface.
+
+     Unit A is the device fw-a.example.com, which declares `ethernet1/1`; unit B is the device
+     fw-b.example.com, which declares `ethernet1/2`. Each device holds its own zone, so the referrer and
+     the declaring entry are in the same unit.
+
+     Every entry name is unique, so the ownership rule decides every name: this fixture writes no
+     ownership finding.
+-->
+<config version="10.1.0" urldb="paloaltonetworks">
+  <devices>
+    <entry name="fw-a.example.com">
+      <network>
+        <interface>
+          <ethernet>
+            <entry name="ethernet1/1">
+              <layer3 />
+            </entry>
+          </ethernet>
+        </interface>
+        <zone>
+          <entry name="Zone-A">
+            <network>
+              <layer3>
+                <member>ethernet1/2</member>
+              </layer3>
+            </network>
+          </entry>
+        </zone>
+      </network>
+    </entry>
+    <entry name="fw-b.example.com">
+      <network>
+        <interface>
+          <ethernet>
+            <entry name="ethernet1/2">
+              <layer3 />
+            </entry>
+          </ethernet>
+        </interface>
+        <zone>
+          <entry name="Zone-B">
+            <network>
+              <layer3>
+                <member>ethernet1/1</member>
+              </layer3>
+            </network>
+          </entry>
+        </zone>
+      </network>
+    </entry>
+  </devices>
+</config>

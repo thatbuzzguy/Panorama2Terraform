@@ -65,8 +65,8 @@ half of the codebase reference rule, so Epic 6 F6.3 follows it.
 
 A codebase is a set of directories, one per declared scope, that a platform plans and
 applies. The design record is `docs/CODEBASE_ASSEMBLY.md`. Every feature below is a rule
-to decide, then a module to write. F6.1 and F6.2 are implemented, so their rules name the module and
-the test that holds them; the rest is not implemented.
+to decide, then a module to write. F6.1, F6.2 and F6.3 are implemented, so their rules name the module
+and the test that holds them; the rest is not implemented.
 
 F6.1 (the unit boundary as data, the codebase manifest, landed 2026-10-28) is in the git
 history. A unit is one combination of the four scope facts, the manifest states one row per
@@ -79,13 +79,21 @@ F6.2 (ownership as data, landed 2026-10-28) is in the git history. Ownership is 
 `OWNERSHIP.json` states one row per entry a coverage matrix row covers, and the two data files join on
 the unit directory. The owner is the ancestor entry; the case the rule cannot decide is a report finding.
 The rules are in `docs/ARCHITECTURE.md` §3.5 and `docs/CODEBASE_ASSEMBLY.md` §4. F6.2 states the owner
-per entry and writes no directory, so the codebase gate rule and the write path are still open. The
-reference record still holds names per unit, so the edge list (F6.3) is the next gap.
+per entry and writes no directory, so the codebase gate rule and the write path are still open. F6.2
+gives the edge list the owner fact to build on.
 
-- [ ] **F6.3 Reference between units** — the plain-string names as an edge list, and the
-  mechanism that resolves a name defined by another unit. The data block half is built
-  (F5.5, `docs/ARCHITECTURE.md` §4.7); the edge list and the remote state half need the
-  data file shape and the outputs rule decided.
+F6.3 (the reference between units as data, landed 2026-10-28) is in the git history. An edge is a pair
+fact, so `REFERENCE_EDGES.json` states one row per pair: the referrer unit, the target unit, the matrix
+row, and the entry name. The edge set is the names the reference rule recorded, joined to the ownership
+row on (`type`, `entry`), so no second resolution rule appears; a name no unit declares writes no row,
+and a row that names one unit is refused. The acyclic rule is a report finding in its own section, and a
+unit in a cycle cannot be ordered. The unit order is two added manifest fields, `rank` and `after`, from
+three bases: the owner unit before the unit that overrides its name, the shallower scope before the
+deeper scope inside it, and the target unit before the referrer unit. The rules are in
+`docs/ARCHITECTURE.md` §3.6 and `docs/CODEBASE_ASSEMBLY.md` §5 and §6. F6.3 writes no `.tf` byte and no
+directory, so the codebase gate rule and the write path are still open, and the outputs rule for a name
+another unit owns stays in `backlog.md`.
+
 - [ ] **F6.4 Import blocks** — one `import` block per entry, from the same identity data
   the resource block uses, plus the gate rule that an import block agrees with the
   resource block it names. The rule types need the rulebase decision, and the position
@@ -108,8 +116,9 @@ reference record still holds names per unit, so the edge list (F6.3) is the next
 2. A state source is a reference source, so it cannot move an output fact: it writes no `.tf` byte, it
    is not an output read for the property scan, and its record references no cache entry, so it prunes
    nothing.
-3. Epic 6 is started: F6.1 landed the unit as data and F6.2 landed the owner of a repeated name, so
-   F6.3 and F6.4 read both. The order is in `docs/CODEBASE_ASSEMBLY.md` §14.
+3. Epic 6 is started: F6.1 landed the unit as data, F6.2 landed the owner of a repeated name, and F6.3
+   landed the pair and the order between units, so F6.4 reads all three. The order is in
+   `docs/CODEBASE_ASSEMBLY.md` §14.
 
 ## Out of Scope (tracked in backlog.md)
 

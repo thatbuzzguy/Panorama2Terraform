@@ -187,10 +187,11 @@ The converter writes a file only when it has content.
 | `MANUAL_SETUP_REPORT.txt` | Report-only configuration, plus a section for a container no parse method reads |
 | `INTERFACE_MIGRATION_REPORT.txt` | Interface and IP inventory |
 | `VPN_MIGRATION_REPORT.txt` | VPN inventory and the pre-shared key actions |
-| `CONVERSION_REPORT.txt` | One line per entry the parse read, plus the gap section, the property section, the shadow section for a run that declares a parent source, the repeated-name section for a name the ownership rule cannot decide, and the state ownership and drift sections for a run that declares a state source |
+| `CONVERSION_REPORT.txt` | One line per entry the parse read, plus the gap section, the property section, the shadow section for a run that declares a parent source, the repeated-name section for a name the ownership rule cannot decide, the reference-cycle section for two units that reference each other, and the state ownership and drift sections for a run that declares a state source |
 | `SANITY_REPORT.txt` | The post-run gate result |
 | `CODEBASE_MANIFEST.json` | One row per unit (one declared scope), as data: the four scope facts, the directory name, the entry count, and the names the unit references from outside itself. Written only when it has content (F6.1) |
 | `OWNERSHIP.json` | One row per entry the coverage matrix covers, as data: the matrix row, the entry name, the source, the four scope facts, the declaring unit's directory, the owning unit's directory, what the rule can say about the entry, and the `disable_override` flag as the parse read it. Written only when it has content (F6.2) |
+| `REFERENCE_EDGES.json` | One row per reference pair, as data: the referrer unit, the target unit, the matrix row, and the entry name. Written only when it has content (F6.3) |
 
 The interface report, the VPN report, and the conversion report share one grouping
 rule: one section per scope the export declares (device group, then the template or
@@ -240,8 +241,8 @@ sha256: 9b1c...
 
 `CODEBASE_MANIFEST.json` is one row per unit, where a unit is one combination of the four scope
 facts. It is written as data, in identity order, so a tool reads it and a document does not
-restate a row. Eight fields, in this order: `unit`, `device_group`, `vsys`, `template`,
-`vsys_device`, `directory`, `entry_count`, `references`.
+restate a row. Ten fields, in this order: `unit`, `device_group`, `vsys`, `template`,
+`vsys_device`, `directory`, `entry_count`, `references`, `rank`, `after`.
 
 ```json
 [
@@ -271,6 +272,13 @@ restate a row. Eight fields, in this order: `unit`, `device_group`, `vsys`, `tem
   entry inside a config-object entry is a property level, so the parent row's count covers it.
 - `references` names the names this unit references from outside itself, in sorted order. A name the
   run declares is not one.
+- `rank` is the position in the plan order, from 1, and `after` names the units this unit must be
+  planned after, in sorted order. Three bases produce `after`: the unit that owns a name before the
+  unit that overrides it, the shallower scope before the deeper scope inside it, and the target unit
+  before the referrer unit. A unit in a reference cycle cannot be ordered, so it states `rank` as 0
+  and the cycle prints in the report. `reference_edges.py` fills the two fields; the rule that
+  `rank` starts at the units with no dependency, in identity order, is the reason the order is
+  deterministic.
 - Two runs on the same bytes write the same bytes, because the rows sort by the identity, the names
   are sorted, and no field states a path or a timestamp.
 - The rule lives in `unit_manifest.py`, and `parse_rows` reads a written file back as data, so a row
@@ -324,6 +332,46 @@ this file holds one row per entry while the manifest holds one row per unit, and
 A name the rule cannot decide prints in `CONVERSION_REPORT.txt`, in its own section after the shadow
 section and before the state sections. A finding is an operator action, so it does not change the exit
 code, which the gate decides.
+
+### The reference edge record
+
+`REFERENCE_EDGES.json` is one row per reference pair. An edge is a fact between two units, so it
+cannot be a manifest field (one row per unit) or an ownership row (one row per entry), and this file
+holds one row per pair. Four fields, in this order: `referrer`, `target`, `type`, `entry`.
+
+```json
+[
+  {
+    "referrer": "fw_a_example_com_4daa3d43",
+    "target": "fw_b_example_com_f80a1db9",
+    "type": "panos_ethernet_interface",
+    "entry": "ethernet1/2"
+  }
+]
+```
+
+- `entry` is a name the reference rule resolved outside the run. `referrer` is the unit that used it.
+  A name the rule resolved inside the run is a reference inside one root, so it writes no row, and a
+  name no unit in the run declares writes no row: that name is already in the manifest's `references`
+  field.
+- `target` is the unit that owns the name, which is the `owner` field of the `OWNERSHIP.json` row for
+  (`type`, `entry`), not the unit that declared it. `type` is the same matrix row the property scan
+  and the state scan use.
+- `referrer` and `target` join to `CODEBASE_MANIFEST.json` on `directory`, and (`type`, `entry`) joins
+  to `OWNERSHIP.json`, so the record states no path and no second identity key.
+- A row whose target is the referrer writes no row, because a unit cannot come before itself.
+- Two runs on the same bytes write the same bytes, because the rows sort by the four fields in field
+  order and no field states a path or a timestamp.
+- The rule lives in `reference_edges.py`, and `parse_rows` reads a written file back as data, so a row
+  that is not the declared shape is a refusal ([ARCHITECTURE.md](ARCHITECTURE.md) §3.6). The file is
+  written only when it has content, and the CLI takes no flag for it.
+
+A pair that closes a cycle prints in `CONVERSION_REPORT.txt`, in its own section after the
+repeated-name section and before the state sections, one line per cycle, read from its smallest unit.
+Two units that reference each other cannot be put in a plan order, so the order they cannot have is
+the finding. A cycle is an operator action, so it does not change the exit code, which the gate
+decides, and the console prints no cycle line. The tool emits the order as data; the platform plans
+in that order.
 
 ## Post-run sanity gate
 
