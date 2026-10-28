@@ -94,6 +94,13 @@ so the same name under a different row is not a shadow. Pinned by
 `tests/test_shadow_coverage.py::test_the_matrix_row_is_the_key_not_the_name_alone`, and the scan
 scope is the same rule (`::test_the_scan_scope_is_the_f4_4_rule`).
 
+The row is the key of the state scan too (F5.6). A state entry has no container path, so the row is
+the one `MATRIX_BY_RESOURCE` keys by the resource type, and the property list is the list drift
+compares, on both sides. The scan scope rule holds on both sides: an entry no row covers is not a
+finding, and a state resource whose type has no row is not in the index. Pinned by
+`tests/test_state_coverage.py::test_the_matrix_row_is_the_same_table_the_property_scan_uses` and
+`::test_the_scan_scope_is_the_f4_4_rule_on_both_sides`.
+
 One row has no corpus entry to measure: `panos_aggregate_layer3_subinterface`,
 because the container table maps an aggregate subinterface to the ethernet
 subinterface row. That row is grounded by the emitter check only, and the table
