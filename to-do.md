@@ -45,3 +45,10 @@ The provider facts are verified (see `backlog.md`, Epic 5 decisions), so the fea
   feed a per-entry fact. Decide whether it is in scope at all.
 - The coverage matrix has no row for a `data` block, so a property finding cannot name one. The gate
   rule is the only check that reads a `data` block.
+
+## Related planning (not this feature)
+
+Epic 6 planning landed on 2026-10-27 in `docs/CODEBASE_ASSEMBLY.md`: the unit, ownership, the order
+between units, the import path, the site data layer, and the commit action. F5.5 is the first half of
+the reference mechanism, so the codebase rule in `docs/CODEBASE_ASSEMBLY.md` §5 depends on this feature.
+F5.5 stays the current feature; the Epic 6 pieces are not started.

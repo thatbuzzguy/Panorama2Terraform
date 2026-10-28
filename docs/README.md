@@ -10,6 +10,7 @@ that document instead of restating the rule.
 | [RESOURCE_MAPPING.md](RESOURCE_MAPPING.md) | The provider v2 decision for each type, with the reason |
 | [COVERAGE_MATRIX.md](COVERAGE_MATRIX.md) | Which XML element feeds which resource, and the test that proves it |
 | [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) | Plan and run a migration, for one device or several virtual routers |
+| [CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) | What a full codebase needs, and what the converter does not do yet. Design only, Epic 6 |
 | [DEVICE_GROUP_SPLITTING.md](DEVICE_GROUP_SPLITTING.md) | Split one export into one file per device group |
 | [ADVANCED-ROUTING-ENGINE-SUPPORT.md](ADVANCED-ROUTING-ENGINE-SUPPORT.md) | Logical routers, and the routing config the converter does not read |
 | [VPN_ROUTING_CONFIG_EXAMPLES.md](VPN_ROUTING_CONFIG_EXAMPLES.md) | The XML shapes the parser reads for VPN and routing |
@@ -30,6 +31,7 @@ that document instead of restating the rule.
 | Provider element per emitted type | `COVERAGE_MATRIX.md`, and `resource_mapping.COVERAGE_MATRIX` |
 | Migration workflow | `MIGRATION_GUIDE.md` |
 | Device group to template join | `DEVICE_GROUP_SPLITTING.md` |
+| Codebase unit, ownership, order between units, import blocks, commit | `CODEBASE_ASSEMBLY.md`. Design only: no module and no test holds these rules yet |
 
 The machine-readable tables are code, not documents:
 [`../resource_mapping.py`](../resource_mapping.py),
