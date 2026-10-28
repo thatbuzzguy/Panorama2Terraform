@@ -1,46 +1,55 @@
-# To Do — Epic 5 open features
+# To Do — F5.6 Terraform state as a source
 
-F5.1 (the read door), F5.2 (the cached API export), F5.3 (the provenance record) and F5.4 (the
-cross-source shadow report) landed; their records are in the git history. No feature is in
-progress. Write `acceptance.md` with the acceptance criteria before the code and the tests.
+F5.1 to F5.4 landed; their records are in the git history. F5.5 (read-through data blocks)
+waits for `DATA_SOURCE_SCHEMA` verified against the provider. F5.6 is in progress, with the
+acceptance criteria written in `acceptance.md`.
 
-## F5.6 Terraform state as a source (next)
+## Decisions taken
 
-Pieces to decide, then build:
+1. The state source is a **reference source**, in the same position the declared parent source
+   holds (F5.4). `--state PATH` names it, and `--workspace NAME` names the workspace it belongs
+   to. The run does not generate output from it, so no `.tf` byte changes.
+2. The door keeps its two byte checks for every source kind; the parse step is chosen by the
+   kind. A JSON document has no prolog, so the DTD check cannot refuse one. The tree rule does
+   not apply, so the state source gives the scan one shape per entry: the entry name, the matrix
+   row, the properties, and the position (the Terraform resource address, not a source line).
+3. The ownership key is §2.1 identity as the F3.9 rule reads it: the matrix row, the entry name,
+   and the four declared scope facts, read from the `location` block the state holds.
+4. The drift fact compares only a property the matrix row declares that both sides hold by the
+   same name. No name mapping rule exists, so `tags` (parse) and `tag` (provider) are not
+   compared. Recorded as a limitation below.
+5. Both facts print in `CONVERSION_REPORT.txt`, in their own sections after the shadow section.
+   No console line. Neither changes the exit code.
+6. The record shape does not change: `kind` is `state`, `scope` names the workspace, `request`
+   and `cache_entry` are `-`.
 
-1. Decide how a state document enters the door. A state file is JSON, so the size check and the DTD
-   rule still apply to its bytes, but the container table, the parent walk, and the expat line map
-   are keyed on the ElementTree tree. One rule is needed for the shape a scan can read.
-2. Decide the ownership fact: which entries another workspace already owns, and the drift fact:
-   which owned entry has a value the run does not match. Both are property-level facts, so the
-   F4.4 property scan reads them.
-3. Decide where each fact prints, and whether it changes the exit code. The gate reads `.tf` files,
-   so a new fact needs its own rule before it can fail a run.
-4. Keep `--offline` honest: a state read is a file read, so no network rule changes, and every test
-   uses a committed fixture.
-5. Extend the record: `kind` names the source kind, and `scope` names the workspace. The record
-   shape does not change, so `parse_records` reads a state record with no new field.
+## Pieces
 
-## F5.5 Read-through data blocks (after F5.6)
+- [ ] `state_input.py`: the state producer — the byte checks through the door, the JSON read,
+      the entry shape, the refusals, the resource address.
+- [ ] `state_coverage.py`: the state index (identity key), the ownership scan, the drift scan,
+      the two line shapes, the two headings and rule paragraphs.
+- [ ] `entry_coverage.py`: `value` read on the recorded object that does not count as an output
+      read, so the state scan cannot move a property finding.
+- [ ] `main()`: `--state` and `--workspace`, the state read, the scan, the two report sections,
+      the state record in read order.
+- [ ] Fixture: `tests/fixtures/state_workspace.json` — one owned entry with a differing property,
+      one owned entry with no difference, and entries the scan must not read.
+- [ ] Tests: `tests/test_state_input.py` (the shape, the checks, the refusals, the record) and
+      `tests/test_state_coverage.py` (the two facts, the sections, the console, the exit code,
+      the CLI rules, determinism).
+- [ ] Docs: `docs/ARCHITECTURE.md` §1 module table, §3 the state producer, §3.2 the two facts;
+      `docs/USAGE_GUIDE.md` CLI table and report list; `README.md` report list.
 
-1. `DATA_SOURCE_SCHEMA` in `resource_mapping.py`, verified against the provider
-   `data_source_schemas`. The provider facts are in `backlog.md`.
-2. One gate rule for a `data` block, because a data source schema declares no required attributes.
-3. Plain strings stay the default for a name outside the run; a declared upstream scope may emit a
-   `data` block instead.
+## Open items for this feature
 
-## Open items that are not in a feature
+- The ownership key does not name a scope level the state cannot state. A state `location` block
+  names one level, so a run entry the export places at a different level is a different key. The
+  backlog carries this.
+- A property the two sides name differently is not compared. A mapping rule needs the provider
+  attribute names as data (`lib_docs/` reference, recorded in the backlog).
 
-- The prune action. The rule is in `provenance.py` (F5.3), and the reference is data, but no
-  command runs the prune. Recorded in `backlog.md`.
-- Property gaps in a container no matrix row covers (report, inventory, bookkeeping, count-only,
-  nested-block): recorded in `backlog.md`, and pinned as out of scope by
-  `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers`.
-- The console prints the gap lines only; printing a property finding or a shadow needs the console
-  line shape decided first.
-- The shadow parent index key names the matrix row and the name, not the parent scope. Recorded in
-  `backlog.md`.
-- `panos_aggregate_layer3_subinterface` has no corpus entry to measure, so its declared properties
-  are grounded in the emitter source only.
-- `AGENTS.md` points to `lib_docs/` for API cheat sheets. The directory is not in the repo. Recorded
-  in `backlog.md`.
+## After F5.6
+
+F5.5 (read-through data blocks) is the next feature, with its pieces recorded above in the
+`backlog.md` provider facts.

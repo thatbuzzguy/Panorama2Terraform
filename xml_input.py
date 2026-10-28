@@ -151,7 +151,7 @@ def _format_size(count: int) -> str:
     return f"{count} bytes"
 
 
-def _origin_phrase(origin: SourceOrigin) -> str:
+def origin_phrase(origin: SourceOrigin) -> str:
     """The source as a refusal names it: the path when there is one, else the origin."""
     return f"'{origin.path}'" if origin.path is not None else f"'{origin.name}'"
 
@@ -160,7 +160,7 @@ def _too_large(origin: SourceOrigin, measured: int, limit: int, exact: bool = Tr
     """Build the refusal for an input over the size limit."""
     found = f"the input is {_format_size(measured)}" if exact else "the input is larger than the limit"
     return UnsafeInputError(
-        f"refusing to read {_origin_phrase(origin)}: {found}, which exceeds the input limit of "
+        f"refusing to read {origin_phrase(origin)}: {found}, which exceeds the input limit of "
         f"{_format_size(limit)}. Pass --max-input-bytes N to raise the limit for a trusted file."
     )
 
@@ -179,7 +179,7 @@ def read_input(path, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> bytes:
     try:
         size = origin.path.stat().st_size
     except OSError as exc:
-        raise UnsafeInputError(f"cannot read {_origin_phrase(origin)}: {exc.strerror or exc}") from exc
+        raise UnsafeInputError(f"cannot read {origin_phrase(origin)}: {exc.strerror or exc}") from exc
     if size > max_input_bytes:
         raise _too_large(origin, size, max_input_bytes)
     try:
@@ -188,7 +188,7 @@ def read_input(path, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> bytes:
     except OSError as exc:
         # A directory, a permission denial or a vanished file: a refusal
         # with the same shape as every other input fault, not a traceback.
-        raise UnsafeInputError(f"cannot read {_origin_phrase(origin)}: {exc.strerror or exc}") from exc
+        raise UnsafeInputError(f"cannot read {origin_phrase(origin)}: {exc.strerror or exc}") from exc
     if len(data) > max_input_bytes:
         raise _too_large(origin, len(data), max_input_bytes, exact=False)
     return data
@@ -226,7 +226,7 @@ def reject_dtd(data: bytes, origin: SourceOrigin) -> None:
     except _DtdFound as found:
         external = " with an external id" if found.has_external_id else ""
         raise UnsafeInputError(
-            f"refusing to parse {_origin_phrase(origin)}: the input declares a DTD for "
+            f"refusing to parse {origin_phrase(origin)}: the input declares a DTD for "
             f"'{found.doctype_name}'{external}, which a Panorama export never includes. "
             "A DTD can expand entities without bound or name a file to read."
         ) from None
@@ -362,12 +362,29 @@ def _parse_with_lines(data: bytes, origin: SourceOrigin) -> ParsedSource:
     )
 
 
+def check_bytes(data: bytes, origin: SourceOrigin,
+                max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> None:
+    """The two F3.8 checks, run on the bytes a producer handed (F5.1, F5.6).
+
+    Both checks are byte checks, so they run for every source kind. The size check is
+    kind-independent. The DTD check asks the parser, and only XML has a prolog, so a JSON
+    source reaches no DOCTYPE and is refused by it only for its size.
+
+    This is the fact F5.6 depends on: the checks are one definition, and only the parse step
+    is chosen by the source kind.
+    """
+    if max_input_bytes <= 0:
+        raise UnsafeInputError(f"the input limit must be greater than 0 bytes, got {max_input_bytes}")
+    if len(data) > max_input_bytes:
+        raise _too_large(origin, len(data), max_input_bytes, exact=False)
+    reject_dtd(data, origin)
+
+
 def parse_bytes(data: bytes, origin: SourceOrigin,
                 max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ParsedSource:
     """The producer boundary (F5.1): check the bytes a producer handed, then parse them.
 
-    Both F3.8 checks run here, so no producer can bypass them: the size check on
-    the bytes as they arrived, and the DTD refusal through the parser. The tree is
+    Both F3.8 checks run through `check_bytes`, so no producer can bypass them. The tree is
     parsed from the bytes that passed both checks.
 
     A producer that hands bytes with no file behind it is refused the same way a file
@@ -380,11 +397,7 @@ def parse_bytes(data: bytes, origin: SourceOrigin,
     Raises UnsafeInputError for a size or DTD refusal, and
     xml.etree.ElementTree.ParseError for malformed XML.
     """
-    if max_input_bytes <= 0:
-        raise UnsafeInputError(f"the input limit must be greater than 0 bytes, got {max_input_bytes}")
-    if len(data) > max_input_bytes:
-        raise _too_large(origin, len(data), max_input_bytes, exact=False)
-    reject_dtd(data, origin)
+    check_bytes(data, origin, max_input_bytes)
     return _parse_with_lines(data, origin)
 
 

@@ -2,61 +2,66 @@
 
 ## Current position
 
-F5.4 (the cross-source shadow report) is complete. Gate at the commit: `ruff check .` clean,
-`pytest` 714 passed, both golden sets byte-identical (the goldens cover `.tf` files only), report
-determinism pinned, exit codes unchanged (input refusal 1, argument error 2).
+F5.6 (Terraform state as a source) is complete. Gate at the commit: `ruff check .` clean,
+`pytest` 758 passed, both golden sets byte-identical (the goldens cover `.tf` files only), report
+and record determinism pinned, exit codes unchanged (input refusal 1, argument error 2), every test
+offline.
 
-No feature is in progress. The next feature is F5.6 (Terraform state as a source), then F5.5
-(read-through data blocks). `PLAN.md` holds the epic; `to-do.md` holds the pieces that need a
-decision. Write `acceptance.md` before the code.
+The next feature is F5.5 (read-through data blocks). It needs `DATA_SOURCE_SCHEMA` in
+`resource_mapping.py`, verified against the provider `data_source_schemas`, and one new gate rule.
+The provider facts are in `backlog.md`. Write `acceptance.md` before the code.
 
-## What F5.4 changed
+## What F5.6 changed
 
-- `shadow_coverage.py` (new, the rule owner): `SHADOW_HEADING`, `SHADOW_RULE`, `parent_index`
-  (keyed by matrix row and entry name, first row wins in report order), `shadow_findings`, and the
-  fixed `shadow_line` shape. It owns no console wording, so a shadow prints only in the report.
-- `container_coverage.py`: `ENVELOPE` (`response`, `result`), `SCOPE_PATH_ROOTS`, and
-  `container_tag` as the one source-aware place rule the scan, the entry ledger, and the parser
-  scope walk all read. `record_path` and `is_scope_path` hold the path shape the CLI checks.
-- `entry_coverage.py`: every row carries `source` as data; `matrix_row_for(section)` is the F4.4
-  scan-scope helper both the property scan and the shadow scan use; `entry_line` prints no source,
-  so the entry-line bytes are unchanged for a one-source run.
-- `xml_input.py`: `DEFAULT_SCOPE` and `ENTRY_SEGMENT` are the scope vocabulary, one definition,
-  read by `provenance.py`, `container_coverage.py` and `source_fetch.py`. The import pin lets the
-  fetch layer import only the door, so the segment cannot live in `container_coverage.py`.
-  `ParsedSource.scope` records the declared path, and `is_per_scope` and `scope_container` read it.
-- `source_fetch.py`: `ApiRequest.path`, `is_per_scope`, `segments`, `request_params` (the path is
-  part of the request identity), `unwrap_config_root(source, request)` with two branches, and
-  `fetch` passes the request. It still imports no ElementTree.
-- `provenance.py`: `parse_records` and `render_records`; `record_for` reads `source.scope`. A file
-  with one record writes the same bytes as the F5.3 rule.
-- `main()`: `--path` and `--parent` (api source only, `--parent` needs `--path`, a path must name a
-  scope path), the parent read, the parent ledger, `generate_conversion_report(ledger, shadows)`,
-  and the record file written from the list of records.
-- Fixtures: `tests/fixtures/scope_child.xml` and `tests/fixtures/scope_parent.xml`, one shared name
-  on line 10 in each. As file inputs both are finding-free, so the corpus pins still hold.
-- Tests: `tests/test_shadow_coverage.py` (18 tests, six groups), and the pins migrated in
-  `tests/test_source_fetch.py` (the wrapper refusal now has two branches, and the offline test reads
-  the second request), `tests/test_provenance.py` (the record file as data, and a printed parent
-  source is not a reference), `tests/test_container_coverage.py` (the envelope), and
-  `tests/test_entry_coverage.py` (the row source key, and the entry line prints no source).
-  `conftest.run_pipeline` takes extra arguments, so a test can pass `--path` and `--parent`.
+- `state_input.py` (new, the producer and its door): `check_bytes` runs the two byte checks, then the
+  kind chooses the parse step. `parse_state(data, origin, workspace=...)` reads the document;
+  `read_state(path, workspace=...)` is the file producer. `StateEntry` (resource type, resource name,
+  entry name, attributes, address) and `StateSource` (origin, name, size, sha256, scope, entries). The
+  document-shape refusals use the door's refusal class, so an input refusal exits 1 and writes no
+  record.
+- `state_coverage.py` (new, the rule owner): the two headings, the two rule paragraphs, `nested_block`,
+  `state_facts`, `state_properties`, `STATE_SCOPE_KEYS`, `STATE_IDENTITY_KEYS`, `state_index`,
+  `state_findings`, `drift_properties`, `value_text`, `ownership_line`, `drift_line`. It owns no
+  console wording, so a state fact prints only in the report.
+- `xml_input.py`: `check_bytes` is the two byte checks for every source kind, and `origin_phrase` is
+  the phrase a refusal uses to name a source. Only the parse step is chosen by the kind.
+- `entry_coverage.py`: `RecordingDict.value(key)` reads a captured value without recording it, so the
+  state scan is not an output read. `EMPTY_FIELD_VALUES` is the one definition of an empty value, read
+  by the property rule and by the state scan.
+- `container_coverage.py`: `PLACEHOLDER_DEVICE` is the one definition of the "this device" name, read
+  by the generator (`_LOCAL_DEVICE_PLACEHOLDER`) and by the state scan.
+- `provenance.py`: `record_for` reads the record facts from a `ParsedSource` or a `StateSource`; rule 5
+  states the read order (main, parent, state) and that a state record references nothing, so it prunes
+  nothing.
+- `main()`: `--state` and `--workspace` (`--workspace` needs `--state`, exit 2; `--state` applies to
+  both source kinds), the state read after the main and parent reads, the scan,
+  `generate_conversion_report(ledger, shadows, state_findings)`, and the state record appended in read
+  order.
+- Fixture: `tests/fixtures/state_workspace.json`, 14 resources, one rule each, so every entry the scan
+  must not key is in the file.
+- Tests: `tests/test_state_input.py` (21 tests, six groups) and `tests/test_state_coverage.py`
+  (23 tests, six groups). `conftest.run_pipeline` returns the parser, so a coverage test reads the
+  facts from the run.
 
-## Facts measured during F5.4
+## Facts measured during F5.6
 
-- `section_path` keeps the entry segment, so a per-scope child entry reads as
-  `device-group/entry/address` and the same name in the parent scope reads as `address`. Both
-  resolve to the same matrix row, which is what makes them one finding.
-- A per-scope entry takes the declared scope as its scope fact, so the shadow section prints under
-  the declared device group instead of `SHARED SECTION`. The grouping needs `container_tag`, not
-  the raw element tag.
-- The record `path` field is the path the run received, so two runs on the same bytes write the
-  same record only when they read the same cache directory. The determinism test seeds one cache
-  and runs twice against it.
-- `fetch` checks `PANOS_API_KEY` before it calls an injected producer, so an in-process test sets
-  the environment variable even when the producer is monkeypatched.
-- The line map is the response bytes, not a reparse: `result` is line 7 of each fixture, and the
-  entry the shadow names is line 10.
+- A JSON document has no prolog, so the DTD check reaches no DOCTYPE and a `<!DOCTYPE` inside a JSON
+  value is legal input. The size check still refuses a state document over the limit.
+- The corpus pins iterate `tests/fixtures/*.xml` only, so a JSON fixture cannot move
+  `test_committed_corpus_has_no_findings` or `CORPUS_FINDINGS`. A new XML fixture would.
+- `EntryLedger.scope(entry)` returns only the declared facts, so a shared run entry keys with four
+  empty facts, never the `Shared` fallback. This is why the ownership key reads declared facts.
+- `LOCATION_SCHEMA` declares no `template_stack` sub-block for the address row, so a state entry placed
+  in a template stack returns None from `state_facts` and is not keyed.
+- A nested `location` block reads as an object or as a one-element list of an object; both shapes are
+  in the fixture and both key the same entry.
+- Values compare as the two sides hold them, so `["a", "b"]` and `["b", "a"]` are two values. That is
+  the service group member-order finding in the fixture.
+- The drift line is the ownership line with the values added, so the drift section is a subset of the
+  ownership section.
+- Pinned entries: `Web-Server-1` at line 5 of `address_objects.xml` (drift), `Web-Range` at line 13
+  (ownership only), `Web-Services` at line 5 of `service_groups.xml` (member order), and
+  `North-America` in `regions.xml` as a count-only row, which the scan cannot read.
 
 ## Rules to keep when writing documents
 
@@ -73,15 +78,17 @@ decision. Write `acceptance.md` before the code.
 - A record is data, so a document describes its fields and never restates a record. The
   example in `docs/USAGE_GUIDE.md` is an illustration with a shortened hash, not a pin.
 
-## Watch during F5.6
+## Watch for F5.5
 
-- A state source is a JSON document, so the door's DTD rule and the size check still apply to its
-  bytes, but the container table, the parent walk, and the expat line map do not: they are keyed on
-  the ElementTree tree (`backlog.md`, Epic 5 decisions). A rule is needed before the property scan
-  can read a state document.
-- The record `scope` field is the hook F5.3 left and F5.4 filled for a declared path. A state
-  source names its own workspace, so the record shape does not change.
-- The prune action still needs the record directory decided, and a two-source run writes two records
-  in one file, so a prune action reads a record file, not one record.
-- A shadow test runs the pipeline in process, because the shadow fact is a run fact read from the
-  ledger. The same applies to a drift fact.
+- `DATA_SOURCE_SCHEMA` must be verified against the provider `data_source_schemas`, not from memory.
+  The provider facts recorded in `backlog.md` (128 data sources, two name-level mismatches, only
+  `panos_addresses` returns a collection) need one check against the live schema before the table is
+  written. The `provider_schema` fixture runs `terraform init` + `terraform providers schema -json`
+  and skips without the binary or registry access.
+- A data source schema declares no required attributes, so `terraform validate` cannot enforce `name`
+  and `location` on a `data` block. That rule needs its own gate check, for the same reason the
+  `location` sub-block shape is pinned by test.
+- The prune action still needs the record directory decided. A state record references nothing, so it
+  prunes nothing, and the prune rule reads a record file, not one record.
+- A coverage fact that comes from a run must be read from the run's ledger, so the scan tests run the
+  pipeline in process.

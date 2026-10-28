@@ -1,0 +1,250 @@
+{
+  "version": 4,
+  "terraform_version": "1.9.8",
+  "serial": 7,
+  "lineage": "f5-6-state-fixture-lineage",
+  "resources": [
+    {
+      "module": "root",
+      "type": "panos_address",
+      "name": "web_server_1_11f477f4",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Web-Server-1",
+            "value": "10.1.1.10/32",
+            "type": "address",
+            "description": "Web tier",
+            "tag": ["Production", "Web"],
+            "uuid": "8a2f1c3d-0000-0000-0000-000000000001",
+            "location": [{"shared": [{}]}]
+          }
+        }
+      ]
+    },
+    {
+      "module": "root",
+      "type": "panos_service_group",
+      "name": "web_services_a1b2c3d4",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Web-Services",
+            "members": ["TCP-8080", "service-http"],
+            "location": {"shared": {}}
+          }
+        }
+      ]
+    },
+    {
+      "module": "root",
+      "type": "panos_address",
+      "name": "web_range_a1b2c3d4",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Web-Range",
+            "value": "10.1.2.0-10.1.2.255",
+            "type": "ip-range",
+            "description": "Web subnet",
+            "location": {"shared": {}}
+          }
+        }
+      ]
+    },
+    {
+      "module": "root",
+      "type": "panos_service_group",
+      "name": "web_server_1_22222222",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Web-Server-1",
+            "members": ["service-http"],
+            "location": {"shared": {}}
+          }
+        }
+      ]
+    },
+    {
+      "module": "root",
+      "type": "panos_address",
+      "name": "web_range_33333333",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Web-Range",
+            "value": "10.1.2.0-10.1.2.255",
+            "type": "ip-range",
+            "location": {
+              "device_group": {"name": "Production-DG"},
+              "vsys": {"name": "Vsys2", "ngfw_device": "firewall-2"}
+            }
+          }
+        }
+      ]
+    },
+    {
+      "module": "root",
+      "type": "panos_schedule",
+      "name": "web_server_1_44444444",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Web-Server-1",
+            "location": {"shared": {}}
+          }
+        }
+      ]
+    },
+    {
+      "module": "root",
+      "type": "panos_address",
+      "name": "web_server_1_55555555",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Web-Server-1",
+            "value": "10.1.1.10/32",
+            "type": "address",
+            "location": {"template_stack": {"name": "Stack-A"}}
+          }
+        }
+      ]
+    },
+    {
+      "module": "network",
+      "type": "panos_address",
+      "name": "module_only_66666666",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Module-Only",
+            "value": "10.1.1.20/32",
+            "type": "address",
+            "location": {"shared": {}}
+          }
+        }
+      ]
+    },
+    {
+      "module": "root",
+      "type": "panos_address",
+      "name": "web_server_1_88888888",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Web-Server-1",
+            "value": "10.1.1.99/32",
+            "type": "address",
+            "description": "Web tier",
+            "location": {"shared": {}}
+          }
+        }
+      ]
+    },
+    {
+      "module": "root",
+      "type": "panos_address",
+      "name": "north_america_11111111",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "North-America",
+            "value": "10.1.1.50/32",
+            "type": "address",
+            "location": {"shared": {}}
+          }
+        }
+      ]
+    },
+    {
+      "module": "root",
+      "type": "panos_address",
+      "name": "placeholder_device_99999999",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Placeholder-Device",
+            "value": "10.1.1.40/32",
+            "type": "address",
+            "location": {"vsys": {"name": "Vsys1", "ngfw_device": "localhost.localdomain"}}
+          }
+        }
+      ]
+    },
+    {
+      "module": "root",
+      "type": "panos_aggregate_interface",
+      "name": "loopback_a1a1a1a1",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Loopback-1",
+            "ip_address": ["10.1.1.60/32"],
+            "location": {"ngfw": {"ngfw_device": "firewall-3"}}
+          }
+        }
+      ]
+    },
+    {
+      "module": "root",
+      "type": "panos_address",
+      "name": "empty_property_b2b2b2b2",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Web-Range",
+            "value": "10.1.2.0-10.1.2.255",
+            "type": "ip-range",
+            "description": "",
+            "tag": [],
+            "location": {"shared": {}}
+          }
+        }
+      ]
+    },
+    {
+      "module": "root",
+      "type": "panos_address",
+      "name": "no_name_77777777",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "value": "10.1.1.30/32",
+            "type": "address",
+            "location": {"shared": {}}
+          }
+        }
+      ]
+    }
+  ]
+}

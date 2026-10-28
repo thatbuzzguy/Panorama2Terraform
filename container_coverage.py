@@ -76,6 +76,11 @@ SCOPE_PATH_ROOTS = SCOPE_CONTAINERS | frozenset({'shared'})
 # the captured-field rule, so the facts are named in one place.
 SCOPE_FACT_KEYS = ('device_group', 'vsys', 'template', 'vsys_device')
 
+# The PAN-OS "this device" placeholder (F3.5). It names no firewall, so it is never a
+# `vsys_device` fact, never an `ngfw_device`, and never joins two scopes. One definition,
+# read by the generator and by the state scan (F5.6).
+PLACEHOLDER_DEVICE = 'localhost.localdomain'
+
 # Segments dropped from a section path: the config root and the two Panorama
 # scope markers are places, not part of a container name.
 PATH_ROOTS = frozenset({'config', 'shared', 'panorama'})

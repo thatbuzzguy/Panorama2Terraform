@@ -35,6 +35,16 @@ Split a Panorama export into one XML file per device group:
 python3 split_device_groups.py your_export.xml --output-dir split_output
 ```
 
+Read a Terraform state document as a reference source, so the report names which entries another
+workspace already owns and which owned value this run does not match:
+
+```bash
+python3 panorama_to_terraform.py your_export.xml --state production.tfstate --workspace production
+```
+
+The state document writes no output, so the generated `.tf` files are the same as without it; the
+report gains two sections. The rule is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §3.2.
+
 ## Requirements
 
 - Python 3.9+ (standard library only)
@@ -166,7 +176,9 @@ Reports written to the output directory. Each report is written only when it has
   a section for a captured field no output read, for an entry a coverage matrix
   row covers ([`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md)); a section for a child entry
   name that repeats a parent entry name, for a run that reads a declared parent source
-  ([`shadow_coverage.py`](shadow_coverage.py)); the file names the input file name, not its path
+  ([`shadow_coverage.py`](shadow_coverage.py)); two sections for an entry another workspace already
+  owns and for an owned value this run does not match, for a run that reads a declared state document
+  ([`state_coverage.py`](state_coverage.py)); the file names the input file name, not its path
   ([`entry_coverage.py`](entry_coverage.py))
 
 The three grouped reports are grouped by the scope the export declares: device
@@ -243,6 +255,12 @@ limit or carrying a DTD is refused with the same words, and a refused response i
 written to the cache. The https rules for that producer are in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §3.
 
+The state producer hands its bytes through the same boundary (F5.6), so a state document over the
+limit is refused before the read, with the same words. Only the parse step is chosen by the kind:
+a JSON document has no prolog, so the DTD check reaches no DOCTYPE and a `<!DOCTYPE` inside a JSON
+value is legal input. A state document the identity key cannot read is refused as an input refusal
+(exit 1), and a refusal writes no record.
+
 ## Deploying with Terraform
 
 1. Create `terraform.tfvars` with credentials (do not commit it):
@@ -315,6 +333,12 @@ call that module instead of restating them. The gate is described in
   read back as data, one record per source the run read, the `Source:` label for both sources,
   the rule that a cache entry is not pruned while a written record references it, and the record
   byte rule between two runs
+- `tests/test_state_input.py` - the state producer: the two byte checks on the state bytes, the entry
+  shape a scan can read, the document refusals, the record facts, the CLI argument rules, and the
+  offline run that calls no producer
+- `tests/test_state_coverage.py` - the state scan: the ownership key, the drift rule, the two report
+  sections and their line shapes, the rule that a state read is not an output read, the exit code, and
+  the record read back with no new field
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are
