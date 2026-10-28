@@ -29,6 +29,7 @@ a design rule enforced by construction.
 | `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state; one block reader serves every block kind a rule reads, so a fact about a block is reported once |
 | `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4) | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line |
 | `unit_manifest.py` | The unit as data (F6.1): one row per declared scope, as `CODEBASE_MANIFEST.json` (§3.4) | the rows come from the ledger, so the module adds no parse data; it takes the §5 naming rule as an argument, so no second naming rule exists; the reference names arrive from §4.3, so this module resolves no name |
+| `ownership.py` | The owner of a repeated name (F6.2): one row per entry a matrix row covers, as `OWNERSHIP.json` (§3.5), and the report finding for a case the rule cannot decide | the row scope is the F4.4 rule read through the report row, so no second scope rule exists; the identity key and the naming rule are read through `state_coverage` and `unit_manifest`, so no second key or naming rule exists; `disable_override` names the entry that cannot be overridden, not the owner; the scan reads a captured value without recording |
 | `conftest.py`, `tests/` | The gate | each rule in this document names the test that pins it |
 
 `tools/build_kitchen_sink.py` assembles the fixture corpus from committed files.
@@ -358,6 +359,19 @@ line, and a shadow is an operator action, so it does not change the exit code. P
 `tests/test_shadow_coverage.py`, including the fixed line shape, the row key, the scan scope, the
 grouping, and the no-parent run.
 
+**The repeated-name scan** (F6.2) prints its findings in its own section, after the shadow section and
+before the two state sections:
+
+```text
+  line <source line>  <object type>/<entry name>  <matrix row>  <reason>
+```
+
+The scan adds no fact kind of its own: it decides the owner for the entries §3.1 covers, and the
+report prints the case it cannot decide. Its rules are in §3.5. A finding is an operator action, so it
+does not change the exit code, which the F4.1 gate decides, and the console prints no line for it.
+Pinned by `tests/test_ownership.py`, including the fixed line shape, the grouping, the section order,
+and the no-console-line run.
+
 **The state scan** (F5.6) adds two fact kinds, in `state_coverage.py`, and the report prints them in
 their own two sections after the shadow section, in this order: ownership, then drift. Each section
 prints only when it has a finding, and both use one fixed shape:
@@ -517,6 +531,41 @@ Pinned by `tests/test_unit_manifest.py`, including
 `::test_a_name_is_stored_once_per_unit`, `::test_the_exit_codes_are_unchanged`, and
 `::test_the_manifest_names_no_path_and_no_timestamp`.
 
+### 3.5 Ownership record (F6.2)
+
+`main()` writes one row per entry the coverage matrix covers, as `OWNERSHIP.json` in the output
+directory. Ownership is a per-entry fact, so this file holds one row per entry while §3.4 holds one
+row per unit, and the two data files join on `directory`. The rules are in `ownership.py` and in
+[`CODEBASE_ASSEMBLY.md`](CODEBASE_ASSEMBLY.md) §4; this section states only the shape.
+
+- **The row shape.** `type`, `entry`, `source`, the four scope facts, `directory`, `owner`, `kind`,
+  `override`. `kind` is one of `declared`, `definition`, `override`, `ambiguous`; `override` is the
+  flag as the parse read it: `yes`, `no`, or `unknown`; `owner` is empty when the rule names no owner.
+- **The row order.** The §2.1 identity through `state_coverage.ownership_key`, then `source`, because
+  two sources can state the same identity. Fields print in the declared order, not alphabetically.
+- **The bytes.** `json.dumps(rows, indent=2)` with one trailing newline, ASCII output, no timestamp
+  and no path, so two runs on the same bytes write the same bytes.
+- **The refusal rule.** `parse_rows` reads a written file back as data and refuses a row that is not
+  the declared shape, the way `parse_record` refuses a line (§3.3).
+- **The content rule.** Written only when it has content, following the rule for the report files
+  (§4.5). A plain run writes it, so the CLI takes no flag for it, and the gate reads no data file.
+
+The scan result keeps `line`, `container`, and `reason` as run facts, so they are not written: the
+record states a fact, the report states a finding. The scan reads the captured flag through
+`entry_coverage.RecordingDict.value`, so it is not an output read and cannot move a property finding
+(the F5.6 rule).
+
+Pinned by `tests/test_ownership.py`, including
+`::test_the_fields_print_in_the_declared_order`,
+`::test_the_record_writes_only_the_declared_fields`,
+`::test_the_record_names_no_path_and_no_timestamp`,
+`::test_the_record_reads_back_as_the_rows_it_wrote`,
+`::test_parse_rows_refuses_a_row_that_is_not_the_declared_shape`,
+`::test_two_runs_on_the_same_bytes_write_the_same_bytes`,
+`::test_the_record_is_written_only_when_it_has_content`,
+`::test_the_gate_reads_no_data_file`, and
+`::test_no_report_names_a_field_the_record_states`.
+
 ## 4. Emit pipeline
 
 ### 4.1 Order
@@ -632,10 +681,10 @@ Pinned by `tests/test_policy_order.py` and
 Four report files, each written only when it has content:
 
 - `CONVERSION_REPORT.txt` — one line per config entry the parse pipeline read (§3.2). Section
-  order is fixed: report header, summary, gaps, property findings, shadows, then the grouped entry
-  lines. Each section prints only when it has content, and the shadow section prints only for a run
-  that declares a parent source (`--path` with `--parent`, the api source only; a path that is not
-  a scope path is an argument error, exit 2).
+  order is fixed: report header, summary, gaps, property findings, shadows, repeated names (§3.5),
+  state ownership, state drift, then the grouped entry lines. Each section prints only when it has
+  content, and the shadow section prints only for a run that declares a parent source (`--path` with
+  `--parent`, the api source only; a path that is not a scope path is an argument error, exit 2).
 - `MANUAL_SETUP_REPORT.txt` — report-only areas, the location facts a type
   cannot carry, and the placeholder template. The BGP and OSPF blocks name the scope
   and the router, because two routers in two scopes can hold the same values, and they
@@ -649,19 +698,22 @@ Four report files, each written only when it has content:
   per scope the export declares: device group first, then the template, then the
   device, then the object kind inside the section. One shared rule
   (`_report_scope_path`, `_group_by_scope`, `_report_section_header`) serves
-  both, and the conversion report uses it for the property section and the shadow section, so
-  they cannot disagree.
+  both, and the conversion report uses it for the property section, the shadow section, and the
+  repeated-name section, so they cannot disagree.
 
 The post-run gate writes `SANITY_REPORT.txt` on every run (§4.6). The generator
 also writes `read_through.tf` for a run that declares read-through scopes (§4.7),
-and `main()` adds `README.md`, the provenance record `SOURCE.txt` (§3.3), and the unit
-manifest `CODEBASE_MANIFEST.json` (§3.4). `SANITY_REPORT.txt` and `SOURCE.txt` are written on
-every completed run, and the four report files above, `read_through.tf`, and the manifest are
-written only when they have content. These files are the complete set a run writes.
+and `main()` adds `README.md`, the provenance record `SOURCE.txt` (§3.3), the unit
+manifest `CODEBASE_MANIFEST.json` (§3.4), and the ownership record `OWNERSHIP.json` (§3.5).
+`SANITY_REPORT.txt` and `SOURCE.txt` are written on every completed run, and the four report files
+above, `read_through.tf`, and the two data files are written only when they have content. These
+files are the complete set a run writes.
 
-The manifest is a data file, not a report body, so no report names it or restates a row, and the
-gate reads only `.tf` files, so the manifest is not a gate input. Pinned by
+The two data files are not report bodies, so no report names them or restates a row, and the gate
+reads only `.tf` files, so neither is a gate input. Pinned by
 `tests/test_unit_manifest.py::test_no_report_names_a_field_the_manifest_states` and
+`::test_the_gate_reads_no_data_file`, and by
+`tests/test_ownership.py::test_no_report_names_a_field_the_record_states` and
 `::test_the_gate_reads_no_data_file`.
 
 A coverage section cannot name a read-through name, because the three scans read

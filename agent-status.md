@@ -2,56 +2,57 @@
 
 ## Current position
 
-F6.1 (the unit boundary as data, the codebase manifest) is complete and committed. No feature is in
-progress. The next feature in `PLAN.md` is F6.2 (ownership as data), which is not started. F6.1 names
-the directory a codebase needs and writes no directory, so the write path and the gate rule that reads
-the manifest are still open.
+F6.2 (ownership as data, the repeated-name rule) is complete and committed. No feature is in
+progress. The next feature in `PLAN.md` is F6.3 (the reference between units as an edge list). F6.1 and
+F6.2 name the unit and the owner and write no directory, so the write path and the gate rule that reads
+the two data files are still open.
 
-State at the commit: `ruff check .` clean, `pytest` 960 passed (928 before this feature, 32 added),
-both golden sets byte-identical, report and record determinism pinned, exit codes unchanged (input
-refusal 1, argument error 2), every test offline.
+State at the commit: `ruff check .` clean, `pytest` 997 passed (961 before this feature, 36 added),
+both golden `.tf` sets byte-identical, report and record determinism pinned, exit codes unchanged (0,
+input refusal 1, argument error 2), every test offline. The report bytes changed for the three fixtures
+with a finding group; no other report body changed.
 
-## What F6.1 changed
+## What F6.2 changed
 
-- `unit_manifest.py` (new): `MANIFEST_FILE`, `FIELD_ORDER`, `FACT_KEYS` (read through
-  `container_coverage.SCOPE_FACT_KEYS`), `NAME_LEVELS`, `DIGEST_HEX`, `SHARED_UNIT`, `UNNAMED`,
-  `facts_of`, `fact`, `unit_name`, `identity_digest`, `directory_name`, `build_rows`, `render`,
-  `parse_rows`. The module defines no sanitizing rule: it takes `TerraformGenerator.sanitize_name` as
-  an argument, so the §5 rule stays one rule.
-- `panorama_to_terraform.py`: `name_ref` is now a recording wrapper around `_resolve_reference`, with
-  `_is_outside_reference`, `unit_references()`, `self._unit_references` in `__init__`, and the
-  `referrer` argument at 34 call sites. `main()` writes `CODEBASE_MANIFEST.json` after the provenance
-  record, only when the rows have content.
-- Tests: `tests/test_unit_manifest.py` (32 tests, seven groups: the unit, the naming rule, the row
-  shape, the reference names, the no-change rule, the CLI and the content rule, determinism).
-- Docs: `docs/CODEBASE_ASSEMBLY.md` §1, §3 and §14, `docs/ARCHITECTURE.md` §1, §3.4, §4.3, §4.5, §5
-  and §6, `docs/USAGE_GUIDE.md`, `README.md`.
+- `ownership.py` (new): `OWNERSHIP_FILE`, `FIELD_ORDER`, `FACT_KEYS` (read through
+  `container_coverage.SCOPE_FACT_KEYS`, the same order `unit_manifest.FACT_KEYS` holds), `KINDS`,
+  `OVERRIDE_VALUES`, `FLAG_KEY`, `FINDING_HEADING`, `FINDING_RULE`, the reason strings
+  (`NO_RELATION`, `FLAG_NOT_ANCESTOR`, `FLAG_FORBIDS_OVERRIDE`), `row_facts`, `row_key`, `in_chain`,
+  `override_value`, `scan_row`, `decide`, `is_ancestor`, `build_rows`, `render`, `parse_rows`,
+  `findings`, `finding_line`. The module defines no identity key and no naming rule: it reads
+  `state_coverage.ownership_key` and takes `TerraformGenerator.sanitize_name` as an argument.
+- `panorama_to_terraform.py`: `parse_service_objects` captures `disable_override`, and
+  `generate_service_objects` prints it after `description`, as the string the parse read.
+  `generate_conversion_report` gained the repeated-name section, after the shadow section and before the
+  two state sections. `main()` builds the rows and writes `OWNERSHIP.json` only when it has content.
+- `resource_mapping.py`: the `panos_service` row gained `disable_override`, so the declared property and
+  the emitter read agree.
+- Tests: `tests/test_ownership.py` (36 tests, seven groups: the row scope, the declaring unit and the
+  join, the owner rule, the service leg, the record shape, determinism and the content rule, the report
+  section). `tests/test_unit_manifest.py::test_the_manifest_is_one_file_for_the_codebase` now names both
+  data files. New fixture `tests/fixtures/ownership_override.xml`.
+- Docs: `docs/CODEBASE_ASSEMBLY.md` §2, §4, §5 and §14, `docs/ARCHITECTURE.md` §1, §3.5, §4.5,
+  `docs/USAGE_GUIDE.md`, `README.md`.
 
-## Facts measured during F6.1
+## Facts measured during F6.2
 
-- `tests/fixtures/report_grouping.xml` shows 11 units and 23 ledger rows, and 4 units have a recorded
-  reference name. Two units hold the same unit name (`fw-2.example.com`) in two device groups, so the
-  digest alone keeps their directory names apart.
-- The unit whose four facts are empty is `shared_be5be69f` in that fixture. The sample run's shared
-  unit carries the placeholder device, so it is `shared_0bc98741`: the digest is the identity, not the
-  name.
-- The sample run shows 2 units and 21 entries: `Shared` (4) and `Production-DG` (17, 11 recorded
-  names).
-- With `--data-blocks panos_address,panos_zone`, the sample run writes 6 blocks and records 11 names.
-  Every block name is a recorded name; the other 6 stayed plain because their type is not an opted-in
-  scope.
-- A name recorded for the shared unit comes from a referrer in the shared section, not from the shared
-  chain a contextless call site resolves through.
-- The F3.6 ambiguous-device case is recorded as an outside name, because the reference rule returns a
-  plain string. The name is declared inside the run, so the row cannot separate "outside the run" from
-  "ambiguous" until the edge list (F6.3) names the other unit.
-- The gate reads `*.tf` only, so a data file cannot change a gate result or a golden byte.
-  `SANITY_REPORT.txt` already contains the word `references` as a check name, and the generated
-  `README.md` prose contains "directory", so the no-change test names the report bodies and the fields
-  `entry_count` and `unit`, not those words generally.
-- A test that wants the reference record needs both the ledger and the generator, so the test file hooks
-  `TerraformGenerator.__init__` the way `conftest.run_pipeline` hooks the parser. The run must be in
-  process, because the record is made during emission.
+- The corpus writes 204 ownership rows. Findings come from three fixtures only:
+  `edge_dup_names_across_dgs.xml` (2), `ownership_override.xml` (4), `report_grouping.xml` (6). Seven
+  groups, twelve lines, no false positive.
+- The pinned provider schema declares `disable_override` for 25 resource types. The coverage matrix names
+  the property for two rows, `panos_address` and `panos_service`. `terraform providers schema -json`
+  against the committed provider fixture confirms the 2026-10-27 measurement.
+- A test that needs the read record must run the pipeline in process, the way the shadow and manifest
+  tests do, because `RecordingDict` records during the parse.
+- `tests/test_property_coverage.py::test_measured_reads_equal_the_declared_properties` is green for
+  `panos_service` only because the new fixture carries the flag on a service entry: the matrix row now
+  names the property, so the corpus must show a read of it.
+- A single fixture cannot print all four report sections at once, so the section-order test feeds four
+  scan results to `generate_conversion_report`.
+- `main()` builds the parent ledger from entry names and never runs the parse methods, so a parent-source
+  row states `override` as `unknown` while the owner rule still names the parent as the ancestor.
+- The CLI takes no flag for the record, so `--help` text is unchanged; the test asserts the help does not
+  name `OWNERSHIP`.
 
 ## Rules to keep when writing documents
 
@@ -70,17 +71,18 @@ refusal 1, argument error 2), every test offline.
 
 ## Watch for Epic 6
 
-- F6.2 needs the owner of a repeated name, and F6.3 needs the target unit of an edge, so both need the
-  unit F6.1 landed. `unit_manifest.facts_of` is the identity both should read, so no second identity key
-  appears.
+- F6.3 needs the target unit of an edge. `ownership.py` names the declaring unit and the owner, so the
+  edge can point at a directory the manifest already names; the reference record is names per unit today,
+  so the pair shape must be decided. `unit_manifest.facts_of` is the identity both should read, so no
+  second identity key appears.
 - F6.3 should decide whether the reference fact stays one fact (outside the run) or splits into two
-  kinds (outside the run, ambiguous inside the run). The record today is names per unit; the edge needs
-  (referrer unit, target unit).
+  kinds (outside the run, ambiguous inside the run). The ownership scan cannot settle this, because a name
+  a unit uses but does not declare writes no ownership row.
 - The block reader in `sanity_checks.py` serves every kind, so the `import` (F6.4) and `action` (F6.7)
   rules must use `blocks(files, kinds)`; no second block reader should appear.
 - A gate rule that reads a data file has no rule today, because the gate reads `.tf` files only. If a
-  codebase feature makes the manifest a gate input, the file set statement in `ARCHITECTURE.md` §4.5 and
-  the no-change test must change together.
+  codebase feature makes a data file a gate input, the file set statement in `ARCHITECTURE.md` §4.5 and
+  both no-change tests must change together.
 - The import position for the four `*_policy_rules` types must be the position the live config holds,
   and the F3.5 rulebase decision gates it.
 - Actions need Terraform 1.14 or later; the committed goldens declare no Terraform minimum.

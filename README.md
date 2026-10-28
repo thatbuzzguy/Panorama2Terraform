@@ -188,6 +188,11 @@ Data files and reports written to the output directory. Each is written only whe
 - `CODEBASE_MANIFEST.json` - one row per unit (one declared scope), as data: the four scope facts,
   the directory name, the entry count, and the names the unit references from outside itself
   ([`unit_manifest.py`](unit_manifest.py)). Every run writes it when it has content
+- `OWNERSHIP.json` - one row per entry a coverage matrix row covers, as data: the matrix row, the
+  entry name, the source, the four scope facts, the declaring unit, the owning unit, what the owner
+  rule can say about the entry, and the `disable_override` flag as the parse read it
+  ([`ownership.py`](ownership.py)). Every run writes it when it has content, and the two data files
+  join on the unit directory
 - `MANUAL_SETUP_REPORT.txt` - everything above that must be configured
   manually, plus a section for a container no parse method reads
   ([`container_coverage.py`](container_coverage.py))
@@ -199,7 +204,8 @@ Data files and reports written to the output directory. Each is written only whe
   a section for a captured field no output read, for an entry a coverage matrix
   row covers ([`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md)); a section for a child entry
   name that repeats a parent entry name, for a run that reads a declared parent source
-  ([`shadow_coverage.py`](shadow_coverage.py)); two sections for an entry another workspace already
+  ([`shadow_coverage.py`](shadow_coverage.py)); a section for a repeated name the ownership rule cannot
+  decide ([`ownership.py`](ownership.py)); two sections for an entry another workspace already
   owns and for an owned value this run does not match, for a run that reads a declared state document
   ([`state_coverage.py`](state_coverage.py)); the file names the input file name, not its path
   ([`entry_coverage.py`](entry_coverage.py))
