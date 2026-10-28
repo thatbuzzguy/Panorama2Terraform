@@ -15,8 +15,9 @@ against the pinned provider, no parse method keys by name alone, and the test ga
 covers the generated Terraform. `ADVERSARIAL_AUDIT_REPORT.md` is the audit record;
 its status table states the current state.
 
-Epic 5 (the upstream source layer) is complete. Epic 6 (codebase assembly) is planned and not
-started; its design record is `docs/CODEBASE_ASSEMBLY.md`. The open decisions are in `backlog.md`.
+Epic 5 (the upstream source layer) is complete. Epic 6 (codebase assembly) is started: F6.1
+(the unit boundary as data) landed, and its rules are in `docs/ARCHITECTURE.md` §3.4. The open
+decisions are in `backlog.md`.
 
 ## Goals
 
@@ -60,18 +61,20 @@ block per identity in `read_through.tf`, with the gate rule that reads it
 (`DATA_SOURCE_SCHEMA`, written from the provider `data_source_schemas`). This is the first
 half of the codebase reference rule, so Epic 6 F6.3 follows it.
 
-## Epic 6 — Codebase assembly (Goal 6) — planned, not started
+## Epic 6 — Codebase assembly (Goal 6) — started
 
 A codebase is a set of directories, one per declared scope, that a platform plans and
 applies. The design record is `docs/CODEBASE_ASSEMBLY.md`. Every feature below is a rule
-to decide, then a module to write. No rule in that document is implemented, so no test
-pins one yet.
+to decide, then a module to write. F6.1 is implemented, so its rules name the module and the
+test that holds them; the rest is not implemented.
 
-- [ ] **F6.1 Unit boundary as data** — the declared scopes, one directory name per scope,
-  and the manifest row (the four scope facts, the directory, the entry count, and the
-  names the unit references from outside itself). Built from the ledger
-  `entry_coverage.py` already writes. Needs the directory naming rule and the data file
-  shape decided.
+F6.1 (the unit boundary as data, the codebase manifest, landed 2026-10-28) is in the git
+history. A unit is one combination of the four scope facts, the manifest states one row per
+unit as `CODEBASE_MANIFEST.json`, and the directory name is the sanitized unit name plus the
+8-hex digest of the unit identity. The rules are in `docs/ARCHITECTURE.md` §3.4 and
+`docs/CODEBASE_ASSEMBLY.md` §3. F6.1 names the directory and writes no directory, so the codebase
+gate rule and the write path are still open.
+
 - [ ] **F6.2 Ownership as data** — which unit owns each entry, so a name a parent defines
   is not owned by a child. Needs the override decision (`disable_override`, and the
   service leg the parse does not extract).
@@ -101,7 +104,7 @@ pins one yet.
 2. A state source is a reference source, so it cannot move an output fact: it writes no `.tf` byte, it
    is not an output read for the property scan, and its record references no cache entry, so it prunes
    nothing.
-3. Epic 6 is planned and not started. F6.1 is the unit, and F6.2, F6.3 and F6.4 all need the unit.
+3. Epic 6 is started: F6.1 landed the unit as data, and F6.2, F6.3 and F6.4 all need that unit.
    F6.4 can land before F6.2 for one unit, because a single-unit run owns everything it read. The
    order is in `docs/CODEBASE_ASSEMBLY.md` §14.
 

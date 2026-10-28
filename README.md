@@ -179,12 +179,15 @@ resource — so the missing part stays in the report:
   `panos_service` accepts one leg, so the tcp leg emits and the udp leg is
   listed with its ports
 
-Reports written to the output directory. Each report is written only when it has content;
+Data files and reports written to the output directory. Each is written only when it has content;
 `SOURCE.txt` is written on every completed run, because a run always reads a source:
 
 - `SOURCE.txt` - what the run read, as `field: value` data, one record per source read: the
   source kind, the name, the path, the scope, the request identity, the cache entry, the size,
   and the SHA-256 hex of the bytes the input door parsed ([`provenance.py`](provenance.py))
+- `CODEBASE_MANIFEST.json` - one row per unit (one declared scope), as data: the four scope facts,
+  the directory name, the entry count, and the names the unit references from outside itself
+  ([`unit_manifest.py`](unit_manifest.py)). Every run writes it when it has content
 - `MANUAL_SETUP_REPORT.txt` - everything above that must be configured
   manually, plus a section for a container no parse method reads
   ([`container_coverage.py`](container_coverage.py))
@@ -221,7 +224,7 @@ security_profiles.tf  security_profile_groups.tf
 zones.tf  interfaces.tf  virtual_routers.tf  monitor_profiles.tf
 vpn.tf
 MANUAL_SETUP_REPORT.txt  INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.txt
-CONVERSION_REPORT.txt  SANITY_REPORT.txt  SOURCE.txt
+CONVERSION_REPORT.txt  SANITY_REPORT.txt  SOURCE.txt  CODEBASE_MANIFEST.json
 ```
 
 (Only files with content are written; the list above is the union across
@@ -367,6 +370,10 @@ call that module instead of restating them. The gate is described in
   the gate rule for a `data` block, the kind rule for a reference, the opt-in emit path (a run that
   declares nothing writes the golden bytes), the CLI argument rules, the report rule, the generated
   `README.md` label, and the byte rule between two runs
+- `tests/test_unit_manifest.py` - the unit as data (`CODEBASE_MANIFEST.json`): one row per declared
+  scope, the directory naming rule, the row shape read back as data, the reference names recorded by
+  the reference rule, the no-change rule for the `.tf` goldens, the report bodies, the gate inputs,
+  and the exit codes, and the byte rule between two runs
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are

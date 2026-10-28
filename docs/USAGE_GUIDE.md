@@ -189,6 +189,7 @@ The converter writes a file only when it has content.
 | `VPN_MIGRATION_REPORT.txt` | VPN inventory and the pre-shared key actions |
 | `CONVERSION_REPORT.txt` | One line per entry the parse read, plus the gap section, the property section, the shadow section for a run that declares a parent source, and the ownership and drift sections for a run that declares a state source |
 | `SANITY_REPORT.txt` | The post-run gate result |
+| `CODEBASE_MANIFEST.json` | One row per unit (one declared scope), as data: the four scope facts, the directory name, the entry count, and the names the unit references from outside itself. Written only when it has content (F6.1) |
 
 The interface report, the VPN report, and the conversion report share one grouping
 rule: one section per scope the export declares (device group, then the template or
@@ -233,6 +234,47 @@ sha256: 9b1c...
 - The rule lives in `provenance.py`, and the report bodies keep the rule that a report names
   the source name only, never the path
   ([ARCHITECTURE.md](ARCHITECTURE.md) §3.3). The label the report bodies use is `Source:`.
+
+### The unit manifest
+
+`CODEBASE_MANIFEST.json` is one row per unit, where a unit is one combination of the four scope
+facts. It is written as data, in identity order, so a tool reads it and a document does not
+restate a row. Eight fields, in this order: `unit`, `device_group`, `vsys`, `template`,
+`vsys_device`, `directory`, `entry_count`, `references`.
+
+```json
+[
+  {
+    "unit": "Production-DG",
+    "device_group": "Production-DG",
+    "vsys": "",
+    "template": "",
+    "vsys_device": "localhost.localdomain",
+    "directory": "production_dg_f7597196",
+    "entry_count": 17,
+    "references": [
+      "any",
+      "service-http"
+    ]
+  }
+]
+```
+
+- `unit` names the unit. It is the deepest scope the export declares. `Shared` names the unit whose
+  four facts are empty, and `localhost.localdomain` names no firewall, so the scope above it names
+  the unit.
+- `directory` is the sanitized unit name plus the 8-hex digest of the unit identity. The digest is
+  always in the name, so a name does not move when an unrelated scope is added. F6.1 names the
+  directory; it does not write one.
+- `entry_count` counts the ledger rows for the unit, including the entry that defines the scope. An
+  entry inside a config-object entry is a property level, so the parent row's count covers it.
+- `references` names the names this unit references from outside itself, in sorted order. A name the
+  run declares is not one.
+- Two runs on the same bytes write the same bytes, because the rows sort by the identity, the names
+  are sorted, and no field states a path or a timestamp.
+- The rule lives in `unit_manifest.py`, and `parse_rows` reads a written file back as data, so a row
+  that is not the declared shape is a refusal ([ARCHITECTURE.md](ARCHITECTURE.md) §3.4). The file is
+  written only when it has content, and the CLI takes no flag for it.
 
 ## Post-run sanity gate
 
