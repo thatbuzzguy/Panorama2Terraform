@@ -58,6 +58,20 @@ generated `README.md`, because a `data` block resolves at plan time and the plan
 entry is not present in the location the block names. The rule is in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §4.7.
 
+Write one `import` block per entry, so the first plan for a directory reads
+`N to import, 0 to add, 0 to change, 0 to destroy` for the entries the parse models:
+
+```bash
+python3 panorama_to_terraform.py your_export.xml --import-blocks
+```
+
+Off by default. A run that declares it writes `imports.tf`, one block per entry, in unit order then
+local-name order. Each block states `to` and `id`, and `id` is base64 of the location object plus the
+entry name, built from the same data the resource block uses. A gate rule reads the file and refuses a
+block that does not agree with the resource block it names. The four `*_policy_rules` types write no
+block, because their import object names the rulebase, the position, and a list of names; each rule
+entry is a WARN finding. The rule is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §4.8.
+
 ## Requirements
 
 - Python 3.9+ (standard library only)
@@ -197,6 +211,9 @@ Data files and reports written to the output directory. Each is written only whe
   outside the run, the unit that owns it, the coverage matrix row, and the entry name
   ([`reference_edges.py`](reference_edges.py)). Every run writes it when it has content, and the row
   joins to the manifest on the unit directory and to the ownership record on (`type`, `entry`)
+- `imports.tf` - one `import` block per entry the run declares, as `to` and `id`
+  ([`import_blocks.py`](import_blocks.py)). Written only for a run that declares `--import-blocks` and
+  has a block to write, and the gate rule reads it because it is a `.tf` file
 - `MANUAL_SETUP_REPORT.txt` - everything above that must be configured
   manually, plus a section for a container no parse method reads
   ([`container_coverage.py`](container_coverage.py))
@@ -236,6 +253,7 @@ vpn.tf
 MANUAL_SETUP_REPORT.txt  INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.txt
 CONVERSION_REPORT.txt  SANITY_REPORT.txt  SOURCE.txt  CODEBASE_MANIFEST.json
 OWNERSHIP.json  REFERENCE_EDGES.json
+read_through.tf  imports.tf        (opt-in: --data-blocks, --import-blocks)
 ```
 
 (Only files with content are written; the list above is the union across
@@ -324,6 +342,7 @@ what you receive, not what the generator intended.
 | `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |
 | `location_present` | every `resource` and `data` block carries `location` | FAIL |
 | `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type | FAIL |
+| `import_blocks` | every `import` block agrees with the `resource` block it names: the type, the local name, the entry name, and the location | FAIL; WARN for a rule type the shape cannot state |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
@@ -334,8 +353,9 @@ A WARN does not fail the run: a placeholder is correct output that still needs
 an action before apply. A FAIL finding exits 1. A SKIPPED check never changes
 the exit code, so a run on a machine without terraform still reports the checks
 it could not run. The rules are stated once in `sanity_checks.py`; the tests
-call that module instead of restating them. The gate is described in
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
+call that module instead of restating them. One block reader serves every block
+kind the gate reads, including `import` blocks, which it reads through `to`. The
+gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
 
 ## Testing
 
@@ -389,6 +409,10 @@ call that module instead of restating them. The gate is described in
   row per pair, the join to the manifest and to the ownership record, the rule that the module
   resolves no name, self-reference exclusion, the acyclic rule and the report section, the unit order
   and its three bases, the gate inputs, the exit codes, and the byte rule between two runs
+- `tests/test_import_blocks.py` - the import blocks (`imports.tf`): the id encoding and its inverse, the
+  agreement gate rule and each violation type, the rule that the corpus writes no finding, the decision
+  for the four `*_policy_rules` types, the rule that the block and the id come from one location rule and
+  one naming rule, the order, and the byte rules between two runs and for a run that declares nothing
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are

@@ -390,7 +390,7 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 ## Design Decisions (Epic 6)
 
 The design record is `docs/CODEBASE_ASSEMBLY.md`. Each item below is a decision, not a rule the code
-holds, except the F6.1, F6.2 and F6.3 decisions, which the code holds and a test pins.
+holds, except the F6.1, F6.2, F6.3 and F6.4 decisions, which the code holds and a test pins.
 
 - F6.1 landed three decisions (2026-10-28). The rules are in `unit_manifest.py`, and
   `docs/CODEBASE_ASSEMBLY.md` §3 and `docs/ARCHITECTURE.md` §3.4 state them:
@@ -430,8 +430,8 @@ holds, except the F6.1, F6.2 and F6.3 decisions, which the code holds and a test
     separate objects gives one row per owner;
   - the reference fact stays one fact: `name_ref` records the name resolved outside the run, and the two
     cases the earlier open item asked about are told apart by whether an edge row exists. A name the flat
-    index resolves inside the run is not an edge: its split across unit directories is the write path and
-    the import-block decision, still open below;
+    index resolves inside the run is not an edge: its split across unit directories is the write path, and
+    the block that binds an entry to the live config is F6.4;
   - the acyclic rule is a report finding, one line per cycle, read from its smallest unit, in its own
     section after the repeated-names section and before the state sections. A finding is an action, so it
     does not change the exit code, and the console prints no cycle line. The unit order is two added
@@ -439,9 +439,39 @@ holds, except the F6.1, F6.2 and F6.3 decisions, which the code holds and a test
     bases produce `after`: the owner unit before the unit that overrides its name, the shallower scope
     before the deeper scope inside it, and the target unit before the referrer unit. A unit in a cycle
     states `rank` as 0, and a tie follows the identity order.
+- F6.4 landed six decisions (2026-10-28). The rules are in `import_blocks.py`, and
+  `docs/CODEBASE_ASSEMBLY.md` §7 and `docs/ARCHITECTURE.md` §4.8 state them:
+  - the import shape is a `.tf` file (`imports.tf`), one file per codebase run and one block per entry,
+    because the gate reads `.tf` files only and a data file cannot be a gate input. F6.1 rule 4 still
+    refuses a per-unit file, because this feature writes no directory;
+  - the shape is opt-in (`--import-blocks`), off by default, following the F5.5 `--data-blocks`
+    precedent, so a run that declares nothing writes the same `.tf` bytes as before and both golden sets
+    stay byte-identical. This is the one place Epic 6 adds a CLI flag; the F6.1 to F6.3 rule that the
+    tool writes data an orchestrator reads, with no flag, still holds for the three data files;
+  - the block states two fields, `to` then `id`, and the file prints blocks in unit order then local-name
+    order, which is the order the data files already print;
+  - the id is base64 of the JSON object with the keys sorted at every level and compact separators, so the
+    provider parses the same object for the same entry. The key order is the tool's choice, because the
+    provider parses the object rather than comparing its bytes, and `ensure_ascii` keeps the file ASCII so
+    two runs write the same bytes;
+  - the block and the id state one fact: the location is the data `location_data` builds and the local
+    name is the name the naming rule recorded, so `import_blocks.py` defines no location rule, no naming
+    rule, and no identity key;
+  - the four `*_policy_rules` types write no block and each rule entry is one WARN finding, because their
+    import object names the rulebase, the position in the live rulebase, and a list of names, so no
+    per-entry object exists. The type set is the rows `LOCATION_SCHEMA` declares `rulebase` for.
+- Finding, recorded during F6.4: `location.device_group` declares a `panorama_device` field in the pinned
+  schema, and the provider docs example states one, but the generator's location rule emits no device
+  fact, so the tool writes no `panorama_device` in an id. An id states only what the block states. If the
+  device fact becomes a rule (F6.6 names the device as a variable), the id and the block must change
+  together.
 - Open: the manifest names the directory and writes no directory, so the path that creates one
   directory per unit is still open. The gate reads no data file, so the gate rule that reads the three
   data files is not written yet.
+- Finding, recorded during F6.4: the generated `README.md` does not name `imports.tf`. The F5.5 label
+  precedent says an opt-in shape labels itself, so the label should name the file and the block count. The
+  goldens pin `.tf` files only, so the label is a report-shape change, not a byte change.
+
 - Open: the device-group `parent` field is not captured, so the owner rule cannot name an ancestor for
   two device groups in one source (`docs/CODEBASE_ASSEMBLY.md` §4 rule 5). A device group entry is a
   bookkeeping row, so the parse keeps only its name. `panos_device_group` and `panos_device_group_parent`
@@ -459,13 +489,11 @@ holds, except the F6.1, F6.2 and F6.3 decisions, which the code holds and a test
   in its own root and one plan runs against one state, so the mechanism must be that unit's outputs,
   through a remote state data source or a platform output, and the generator writes no outputs today. F6.3
   states the edge and the order and leaves this choice open.
-- Import agreement: the gate reads every block kind with one reader, so an `import` block is read by
-  `sanity_checks.blocks`. The rule that an import block agrees with the resource block it names (the
-  same type, the same local name, the same location) is not written yet.
-- The import position for the four `*_policy_rules` types must be the position the live config holds,
-  not the create-time position the generator emits: a chain anchors at `where = "last"`, which is not
-  the position of a rule that already exists. The F3.5 rulebase decision gates this, because the rulebase
-  is part of the import object for those types.
+- Import agreement, landed as F6.4 (2026-10-28): the gate reads every block kind with one reader, and
+  `sanity_checks.check_import_blocks` is the rule that a block agrees with the resource block it names.
+- Open, for the four `*_policy_rules` types: the position must be the position the live config holds, not
+  the create-time position the generator emits, because a chain anchors at `where = "last"`. F6.4 writes no
+  block for a rule entry until the F3.5 rulebase decision lands and a source states the position.
 - Actions: the pinned schema declares `panos_commit` and `panos_push_to_devices`. Actions need Terraform
   1.14 or later, the committed goldens declare no Terraform minimum, and the gate reads no `action`
   block, so a codebase that emits actions needs both a minimum and a gate rule.

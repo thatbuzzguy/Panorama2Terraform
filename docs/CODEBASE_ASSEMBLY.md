@@ -1,7 +1,7 @@
 # Codebase Assembly (design record)
 
 This is the design record for Epic 6 (`PLAN.md`). It states what a full Terraform
-codebase needs and what the converter does not do yet. F6.1, F6.2 and F6.3 are
+codebase needs and what the converter does not do yet. F6.1, F6.2, F6.3 and F6.4 are
 implemented, so their sections name the module and the test that holds them. The rest of
 this document is not implemented, so no test pins it. Every statement about the converter
 names the module or the test that holds it. Provider facts come from the pinned provider
@@ -9,9 +9,10 @@ names the module or the test that holds it. Provider facts come from the pinned 
 
 ## 1. What a codebase is
 
-The converter writes one output directory per run: the `.tf` files, the five report
-files, `README.md`, `SOURCE.txt`, the unit manifest `CODEBASE_MANIFEST.json` (§3), the
-ownership record `OWNERSHIP.json` (§4), and the edge record `REFERENCE_EDGES.json` (§5).
+The converter writes one output directory per run: the `.tf` files, which include the
+import file `imports.tf` for a run that declares it (§7), the five report files,
+`README.md`, `SOURCE.txt`, the unit manifest `CODEBASE_MANIFEST.json` (§3), the ownership
+record `OWNERSHIP.json` (§4), and the edge record `REFERENCE_EDGES.json` (§5).
 A codebase is a set of directories that a platform plans and applies, one plan per
 directory. Six facts define it:
 
@@ -50,9 +51,9 @@ These parts are true today, so a codebase can be built on them.
 | The state scan | The per-unit check that the code and the state agree, offline | `state_coverage.py`, `ARCHITECTURE.md` §3.2 |
 | The api producer | One request per scope path and one cached entry per path, so a per-unit run reads one scope | `source_fetch.py`, `ARCHITECTURE.md` §3 |
 | The gate, determinism, offline CI | A codebase gate that can run on every unit with no device access | `ARCHITECTURE.md` §4.6, §6 |
+| The import block | The address that binds a written block to the object the live config already has, from the same identity data the resource block uses (§7) | `import_blocks.py`, §7 |
 
-§3, §4 and §5 are landed, and §6 is landed for the order data it can state. The gaps are
-§7 to §11.
+§3 to §7 are landed. The gaps are §8 to §11.
 
 ## 3. The unit boundary as data (F6.1, landed)
 
@@ -207,8 +208,8 @@ in `reference_edges.py`, and `main()` writes the file.
 6. **The reference fact stays one fact.** `name_ref` records one fact: the name resolved outside the
    run. It is not split into two kinds, because the edge row states the other unit when the
    ownership rule can name one, and the two cases are told apart by whether an edge row exists. A
-   name the flat index resolves is not an edge: its split across unit directories is the write path
-   and the import-block decision (§7), which is recorded in `backlog.md`.
+   name the flat index resolves is not an edge: its split across unit directories is the write path,
+   and the block that binds an entry to the live config is §7.
 
 The decision this section asked for is settled: the edge list is a data file, not a report section,
 and it is written only when it has content. `tests/test_reference_edges.py` pins it, including
@@ -264,30 +265,71 @@ Pinned by `tests/test_reference_edges.py`, including
 `::test_two_runs_write_the_same_bytes`. `tests/fixtures/reference_cycle.xml` is the fixture that
 pins a cycle; no other fixture in the corpus produces one.
 
-## 7. Gap — binding the codebase to the live config
+## 7. The import block as data (F6.4, landed)
 
-The provider import id is the base64 JSON of the location plus the name, verified in
-§12. The generator already writes the same location block, and the local name is already
-stable across runs (`ARCHITECTURE.md` §5, §6), so an import block can come from the same
-data as the resource block. The tool can write one `imports.tf` per unit with no new
-identity data.
+The converter now writes the binding as output: `imports.tf`, one `import` block per entry the run
+declares. The rules are in `import_blocks.py`, and `main()` writes the file. Every field of a block
+comes from data the resource block already states, so no second naming rule and no second location
+rule exists.
 
-Rules needed:
+1. **One file per codebase, one block per entry.** The gate reads `.tf` files only
+   (`ARCHITECTURE.md` §4.5), so the agreement rule can read only a `.tf` file: a data file is not a
+   gate input. F6.1 rule 4 still refuses a per-unit file, because this feature writes no directory.
+   The file is written only when the run declares the shape and has a row that states an id,
+   following the rule for the report files and the three data files.
+2. **The shape is opt-in: `--import-blocks`, off by default.** A run that declares nothing writes the
+   same `.tf` bytes as before, so both golden sets stay byte-identical. This is the F5.5
+   `--data-blocks` precedent (`ARCHITECTURE.md` §4.7).
+3. **The block states two fields, in this order:** `to`, then `id`. `to` is the block address
+   `<type>.<local name>`; `id` is the base64 string.
+4. **The id is base64 of the JSON object** (§12), with keys sorted at every level and compact
+   separators, so the same entry always encodes to the same bytes. `ensure_ascii` keeps the file
+   ASCII, so two runs on the same bytes write the same bytes. `decode_id` is the inverse and refuses a
+   value that is not the declared shape, the way `unit_manifest.parse_rows` refuses a row that is not
+   the declared shape.
+5. **One location rule and one naming rule.** The location object of the id is the data
+   `TerraformGenerator.location_data` builds, and the local name is the name `declare_block_name`
+   recorded at the site that applied the naming rule. The unit is the §3 identity, read through
+   `unit_manifest.facts_of`. A field the generator does not emit is not in the id, so the id states no
+   device fact (`backlog.md`).
+6. **The four `*_policy_rules` types write no block, and each rule entry is one WARN finding.** Their
+   import object names the rulebase, the position in the live rulebase, and a list of names, so no
+   per-entry object exists: the parse records no rulebase for an entry (F3.5 gates it), and `position`
+   is live-config state, because a chain anchors at `where = "last"` (`ARCHITECTURE.md` §4.4). The type
+   set is read from the `rulebase` field `LOCATION_SCHEMA` declares, so no second table names the four
+   types. The accepted `rulebase` value stays with F3.5 in `backlog.md`, so this feature writes no
+   unverified value. A WARN does not change the exit code, which the gate decides.
+7. **Order and bytes.** Rows print sorted by unit directory, then by local name, which is the order the
+   three data files already print, so a reader can reproduce it from the file. No row states a
+   timestamp or a path.
 
-1. An import block must agree with the resource block it names: the same type, the same
-   local name, and the same location. The gate reads resource blocks only
-   (`ARCHITECTURE.md` §4.6), so this is a new gate rule.
-2. For the four `*_policy_rules` types, the import object names the rulebase, the
-   position, and a list of names (§12). The position must be the position the live
-   config holds, not the create-time position the generator emits: the first rule of a
-   chain anchors at `where = "last"` (`ARCHITECTURE.md` §4.4), which is not the position
-   of a rule that already exists. So a rule import block needs the position the export
-   states, and the rulebase decision in `backlog.md` (F3.5) gates it.
-3. The first plan for a unit should read `N to import, 0 to add, 0 to change,
-   0 to destroy`. That holds only for entries the parse models. The per-entry report
-   (`ARCHITECTURE.md` §3.2) names the entries that cannot reach zero change, and the
-   property gaps in `backlog.md` are the list of what can make a plan show a change. The
-   state scan (F5.6) is the offline check for the zero-change half.
+The agreement gate rule, which this section asked for, is the second gate rule for a block kind:
+`sanity_checks.check_import_blocks` reads `import` blocks with the one block reader
+(`ARCHITECTURE.md` §4.6). An `import` block must agree with the resource block it names: `to` names a
+`resource` block this run declares, `id` decodes to the declared shape, the decoded name equals the
+block's `name`, and the decoded location equals the block's `location` sub-block.
+
+Pinned by `tests/test_import_blocks.py`, including `::test_the_id_round_trips`,
+`::test_the_id_matches_the_pinned_provider_example`,
+`::test_decode_refuses_a_shape_it_does_not_declare`, `::test_wrong_type_is_detected`,
+`::test_wrong_local_name_is_detected`, `::test_wrong_location_is_detected`,
+`::test_wrong_name_is_detected`, `::test_an_import_block_that_names_a_data_block_is_refused`,
+`::test_no_false_positive_across_the_corpus`,
+`::test_the_rule_reads_import_blocks_with_the_one_reader`,
+`::test_the_id_states_the_location_the_block_states`,
+`::test_the_module_defines_no_location_rule_and_no_naming_rule`,
+`::test_two_runs_write_the_same_bytes`, and `::test_a_run_that_declares_no_import_blocks_writes_the_golden_bytes`.
+
+Two halves of this section stay open:
+
+- **The zero-change plan.** The first plan for a unit should read `N to import, 0 to add, 0 to change,
+  0 to destroy`. That holds only for entries the parse models. The per-entry report
+  (`ARCHITECTURE.md` §3.2) names the entries that cannot reach zero change, the property gaps in
+  `backlog.md` are the list of what can make a plan show a change, and the state scan (F5.6) is the
+  offline check for this half. No test pins the plan itself, because a plan needs a device.
+- **The per-unit file, and the label.** The blocks are written in one file for the run, because the
+  write path (§14) is the step that splits the output per unit directory. The generated `README.md`
+  does not yet name `imports.tf`, which `backlog.md` records.
 
 ## 8. Gap — the scope objects
 
@@ -342,8 +384,9 @@ commit support), so an action block or an outside step is the commit path.
 Rules needed:
 
 1. One action block per unit, and no action that names a scope another unit owns.
-2. The gate reads resource blocks only (`ARCHITECTURE.md` §4.6), so an `action` block is
-   not checked today. A codebase that emits actions needs a gate rule that reads them.
+2. The gate reads `resource`, `data`, and `import` blocks (`ARCHITECTURE.md` §4.6), so an
+   `action` block is not checked today. A codebase that emits actions needs a gate rule that
+   reads them.
 3. Actions need Terraform 1.14 or later (§12), which is newer than the provider's own
    minimum. The committed goldens declare no Terraform minimum, so a codebase that emits
    actions needs one.
@@ -380,7 +423,14 @@ provider docs:
 - The import id is base64 JSON of the location plus the name. For the four
   `*_policy_rules` types the import object names the rulebase, the position, and a list
   of names. No resource schema declares an `id` attribute, so the import id is the
-  encoded object, not a stored attribute.
+  encoded object, not a stored attribute. The docs example for `panos_address` in a device
+  group states the object
+  `{"location":{"device_group":{"name":"example-device-group","panorama_device":"localhost.localdomain"}},"name":"addr1"}`;
+  the tool fixes the bytes by sorting the keys at every level and using compact separators,
+  because the provider parses the object, so the object is the fact and the key order is the
+  tool's choice. `rulebase` is a field of `location.device_group` in the pinned schema, so the
+  four rule types are the rows `LOCATION_SCHEMA` declares `rulebase` for, and no second table
+  names them. Pinned by `tests/test_import_blocks.py`.
 - Actions need Terraform 1.14 or later. The provider needs Terraform 1.8 or later.
 - Provider arguments include `api_key` (environment `PANOS_API_KEY`) and `target` (one
   NGFW serial), and the local inspection mode (`config_file`, `panos_version`), which
@@ -407,11 +457,12 @@ file, and a run with no network passes CI.
 3. The ownership assignment (§4), after the override decision. Landed as F6.2.
 4. The reference edge list (§5) and the unit order (§6), because both need the unit and the owner.
    Landed as F6.3. The outputs rule for a name another unit owns is still open in `backlog.md`.
-5. The import blocks (§7). The single-unit case does not need the ownership rule. The rule types need
-   the rulebase decision.
-5. The scope objects (§8).
-6. The site data layer (§9).
-7. The commit action (§10), last, because it needs the gate rule for an action block and
+5. The import blocks (§7), because they need the unit, the owner, and the local name. The
+   single-unit case does not need the ownership rule. The rule types need the rulebase decision.
+   Landed as F6.4.
+6. The scope objects (§8).
+7. The site data layer (§9).
+8. The commit action (§10), last, because it needs the gate rule for an action block and
    the Terraform minimum decision.
 
 The smallest useful increment is one unit: one directory, one manifest row, one set of
