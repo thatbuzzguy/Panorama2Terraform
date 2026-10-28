@@ -1,18 +1,11 @@
 # To Do
 
-No feature is in progress. Epic 5 is complete; F5.5 (read-through data blocks) landed on
-2026-10-28 and its record is in the git history.
+No task is in progress. F6.1 (the unit boundary as data, the codebase manifest) is complete and
+committed. Its rules are in `unit_manifest.py`, `docs/ARCHITECTURE.md` §3.4 and
+`docs/CODEBASE_ASSEMBLY.md` §3.
 
-## Next feature (not started)
+The next feature in `PLAN.md` is F6.2 (ownership as data). It is not started, so its piece list is not
+written here. Its open decision is the owner of a repeated name (`backlog.md`).
 
-Epic 6 (codebase assembly), `PLAN.md`. The design record is `docs/CODEBASE_ASSEMBLY.md`. F6.1
-(unit boundary as data) is the first piece, because F6.2, F6.3 and F6.4 all need the unit.
-
-The decisions F6.1 needs before code:
-
-1. The directory naming rule: one directory name per declared scope.
-2. The manifest data shape: the four scope facts, the directory, the entry count, and the names the
-   unit references from outside itself.
-3. Whether the manifest is one file per codebase or one file per unit.
-
-Write `acceptance.md` with the F6.1 criteria before the code.
+Still open for Epic 6, out of scope for F6.1: the directory write path, the edge list (F6.3), the
+ownership assignment (F6.2), the import blocks (F6.4), and the gate rule that reads a data file.

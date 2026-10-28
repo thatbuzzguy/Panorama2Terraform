@@ -1,16 +1,18 @@
 # Codebase Assembly (design record)
 
 This is the design record for Epic 6 (`PLAN.md`). It states what a full Terraform
-codebase needs and what the converter does not do yet. No rule here is implemented,
-so no test pins one. Every statement about the converter names the module or the test
-that holds it. Provider facts come from the pinned provider (2.0.14) and are listed in
-§12.
+codebase needs and what the converter does not do yet. F6.1 is implemented, so its rules
+name the module and the test that holds them. The rest of this document is not
+implemented, so no test pins it. Every statement about the converter names the module or
+the test that holds it. Provider facts come from the pinned provider (2.0.14) and are
+listed in §12.
 
 ## 1. What a codebase is
 
 The converter writes one output directory per run: the `.tf` files, the five report
-files, `README.md`, and `SOURCE.txt`. A codebase is a set of directories that a
-platform plans and applies, one plan per directory. Six facts define it:
+files, `README.md`, `SOURCE.txt`, and the unit manifest `CODEBASE_MANIFEST.json` (§3).
+A codebase is a set of directories that a platform plans and applies, one plan per
+directory. Six facts define it:
 
 1. A unit is one declared scope, as [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.2 states
    the four scope facts: a device group, a template, a template stack, or a virtual
@@ -49,27 +51,58 @@ These parts are true today, so a codebase can be built on them.
 
 The gaps are §3 to §11.
 
-## 3. Gap — the unit boundary as data
+## 3. The unit boundary as data (F6.1, landed)
 
-The converter has no unit. `main()` reads one source and writes one output directory.
-A codebase needs the unit as data: the declared scopes, one directory name per scope,
-and the entries each scope owns.
+The converter has no unit directory. `main()` reads one source and writes one output
+directory. F6.1 states the unit boundary as data: one row per declared scope in
+`CODEBASE_MANIFEST.json`. The rules are in `unit_manifest.py`, and `main()` writes the file.
 
-Two rules are needed:
+1. **The unit.** One unit is one combination of the four scope facts (§1 rule 1,
+   `ARCHITECTURE.md` §2.2). A unit exists when the ledger has a report row in it, so the
+   manifest is built from `entry_coverage.EntryLedger` and adds no parse data. An entry inside
+   a config-object entry is a property level (`ARCHITECTURE.md` §3.1), so the parent row's
+   count covers it.
+2. **The unit name.** The deepest scope the export declares names the unit, in the F3.9 level
+   order. `Shared` names the unit whose four facts are empty, because the four facts alone
+   cannot name the shared section. `localhost.localdomain` names no firewall (F3.5), so the
+   placeholder never names a unit, and `Shared` in `device_group` is the parse fallback (§2.2),
+   so it never enters an identity.
+3. **The directory name.** `sanitize(unit name) + '_' + 8-hex digest of the unit identity`, in
+   the `ARCHITECTURE.md` §5 shape, and the digest is always present. A collision-only rule
+   would make one unit's name depend on the other units in the run, so an unrelated scope would
+   move an existing directory. The module takes the §5 rule as an argument, so no second naming
+   rule exists. Pinned by
+   `tests/test_unit_manifest.py::test_the_directory_name_is_the_sanitized_name_plus_the_digest`,
+   `::test_the_manifest_defines_no_second_sanitize_or_naming_rule`,
+   `::test_a_name_that_sanitizes_to_nothing_keeps_the_shape`, and
+   `::test_a_directory_name_does_not_move_when_an_unrelated_unit_is_added`.
+4. **The row shape.** The row is data, so a document describes its fields and never restates a
+   row (the `docs/README.md` rule). Fields print in the declared order, the rows sort by the
+   identity, the reference names are sorted, and no field states a timestamp or a path.
+   `parse_rows` reads a written file back, and a row that is not the declared shape is a
+   refusal, the way `provenance.parse_record` refuses a line that is not a field.
+5. **One file per codebase run.** The edge list (§6) needs the whole set of units, and a reader
+   cannot find a per-unit file before it knows the directory name, so one file holds one row per
+   unit. `CODEBASE_MANIFEST.json` is written only when it has content, following the rule for the
+   report files, and the CLI takes no flag for it.
+6. **The reference names.** The reference rule records them (`ARCHITECTURE.md` §4.3), keyed by
+   the referrer's four scope facts, so a row states the names a unit references from outside
+   itself. This module resolves no name.
 
-1. The directory name comes from the sanitized scope name, the same rule
-   `ARCHITECTURE.md` §5 uses for a local name. Two scopes with the same name in two
-   parents collide, so the directory name needs the parent, the way a local name needs
-   the identity digest.
-2. The manifest holds one row per unit: the four scope facts, the directory, the entry
-   count, and the names the unit references from outside itself.
+The manifest names the directory; F6.1 writes no directory. A data file cannot change an
+existing output byte, so the `.tf` goldens, the report bodies, the gate inputs, and the exit
+codes are unchanged. Pinned by `tests/test_unit_manifest.py`, including
+`::test_one_row_per_combination_of_the_four_facts`,
+`::test_the_rows_are_sorted_by_the_identity_not_by_document_order`,
+`::test_the_manifest_round_trips_as_data`,
+`::test_a_row_that_is_not_the_declared_shape_is_refused`,
+`::test_the_reference_names_are_recorded_for_the_referrers_facts`,
+`::test_the_gate_reads_no_data_file`, and `::test_two_runs_write_the_same_bytes`.
 
-`entry_coverage.EntryLedger` already holds each entry with its four scope facts, so the
-manifest can be built from the ledger the parse writes. No new parse data is needed.
-
-Decision needed: the manifest as a data file, or as a section of the conversion report.
-A document cannot restate a machine-readable table (`docs/README.md` rule), so the
-manifest must be data, and a report section can only explain it.
+The decision this section asked for is settled: the manifest is a data file, not a section of
+the conversion report. Ownership (§4) and the edge list (§6) follow. The template stack is a
+scope container (`container_coverage.SCOPE_CONTAINERS`), but it is not one of the four facts, so
+no stack unit is named today; this is recorded in `backlog.md`.
 
 ## 4. Gap — ownership as data
 
@@ -273,7 +306,7 @@ file, and a run with no network passes CI.
    mechanism a codebase can use, and the gate rule for a `data` block is the gate rule
    the codebase needs.
 2. The unit manifest (§3), because ownership, edges, and import blocks all need the unit.
-   No new parse data is needed.
+   No new parse data is needed. Landed as F6.1.
 3. The ownership assignment (§4), after the override decision.
 4. The import blocks (§7). The single-unit case does not need the ownership rule, so this
    can land before §4. The rule types need the rulebase decision.

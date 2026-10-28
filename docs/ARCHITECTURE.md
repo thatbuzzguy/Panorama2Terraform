@@ -28,6 +28,7 @@ a design rule enforced by construction.
 | `state_coverage.py` | The state scan (§3.2): the ownership fact and the drift fact | the matrix row is the same table the property scan uses, keyed by the resource type; the ownership key is §2.1 identity with the declared facts, never the `Shared` fallback; the scan is not an output, so it reads captured values without recording |
 | `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state; one block reader serves every block kind a rule reads, so a fact about a block is reported once |
 | `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4) | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line |
+| `unit_manifest.py` | The unit as data (F6.1): one row per declared scope, as `CODEBASE_MANIFEST.json` (§3.4) | the rows come from the ledger, so the module adds no parse data; it takes the §5 naming rule as an argument, so no second naming rule exists; the reference names arrive from §4.3, so this module resolves no name |
 | `conftest.py`, `tests/` | The gate | each rule in this document names the test that pins it |
 
 `tools/build_kitchen_sink.py` assembles the fixture corpus from committed files.
@@ -463,6 +464,59 @@ with no change; this is pinned by
 `tests/test_state_input.py::test_the_producer_states_the_record_facts` and
 `tests/test_state_coverage.py::test_the_state_record_reads_back_with_no_new_field`.
 
+### 3.4 Unit manifest (F6.1)
+
+`main()` writes one row per unit, as `CODEBASE_MANIFEST.json` in the output directory. A unit is
+one combination of the four scope facts (§2.2), and a unit exists when the ledger has a report
+row in it (§3.2), so the manifest is built from `entry_coverage.EntryLedger` and adds no parse
+data. An entry inside a config-object entry is a property level (§3.1), so the parent row's count
+covers it.
+
+The rule lives in `unit_manifest.py`, and it holds six facts:
+
+- **The unit name.** The deepest scope the export declares names the unit, in the F3.9 level
+  order, read innermost first: `vsys`, `vsys_device`, `template`, `device_group`. `Shared` names
+  the unit whose four facts are empty, because the four facts alone cannot name the shared
+  section. The placeholder device names no unit (§2.2), so the scope above it names the unit.
+- **The identity.** `facts_of` reads a ledger row or a parsed object through one function, so both
+  land on the same unit: it drops the `Shared` parse fallback from `device_group` (§2.2 rule).
+- **The directory name.** `sanitize(unit name) + '_' + 8-hex digest of the identity`, in the §5
+  shape. The digest is always present, not only on a collision, so a name never depends on the
+  other units in the run. The module takes the §5 rule as an argument, so it defines no second
+  naming rule. It names the directory; it writes no directory.
+- **The row shape.** `unit`, `device_group`, `vsys`, `template`, `vsys_device`, `directory`,
+  `entry_count`, `references`. Fields print in the declared order, the rows sort by the identity,
+  and the reference names are sorted. `parse_rows` reads a written file back, and a row that is
+  not the declared shape is a refusal, the way `parse_record` refuses a line (§3.3 rule).
+- **One file per codebase run.** The edge list needs the whole set of units, so one file holds one
+  row per unit. A manifest row for a unit with no ledger row adds nothing, so every recorded name
+  belongs to a unit the ledger shows.
+- **The content rule.** The file is written only when it has content, following the rule for the
+  report files (§4.5). A run that reads no entry writes no manifest, and the record is still
+  written. A plain run writes it, so the CLI takes no flag for it.
+
+The `references` field holds the names the reference rule resolved outside the run (§4.3), keyed
+by the referrer's four facts. The record is made at the site that applies the rule, so no second
+resolution rule exists. The ambiguous-device case (§4.3 rule 1) is recorded as an outside name,
+because the row cannot name the other unit until the edge list exists.
+
+Pinned by `tests/test_unit_manifest.py`, including
+`::test_the_shared_unit_is_the_unit_with_empty_facts_and_is_named_shared`,
+`::test_shared_in_device_group_is_not_a_fact_value`,
+`::test_the_deepest_declared_scope_names_the_unit`,
+`::test_the_placeholder_device_names_no_unit`,
+`::test_the_property_level_is_counted_on_the_parent_row`,
+`::test_the_manifest_is_one_file_for_the_codebase`,
+`::test_the_manifest_is_written_only_when_it_has_content`,
+`::test_a_plain_run_writes_the_manifest_without_a_flag`,
+`::test_a_contextless_call_site_records_the_name_for_the_referrers_unit`,
+`::test_a_name_the_run_declares_is_not_recorded`,
+`::test_the_ambiguous_device_name_is_recorded_as_an_outside_name`,
+`::test_a_read_through_name_is_recorded`,
+`::test_every_recorded_name_belongs_to_a_unit_the_ledger_shows`,
+`::test_a_name_is_stored_once_per_unit`, `::test_the_exit_codes_are_unchanged`, and
+`::test_the_manifest_names_no_path_and_no_timestamp`.
+
 ## 4. Emit pipeline
 
 ### 4.1 Order
@@ -537,6 +591,13 @@ A `data` block is the only block `name_ref` creates, and only for a scope the ru
 declares. A name that resolves inside the run, or that stays ambiguous under
 rule 1, stays a plain string.
 
+The rule also records what it resolved outside the run (F6.1). `name_ref` takes the object
+the reference site belongs to and records each outside name against that object's four scope
+facts, so the manifest row can state the names a unit references from outside itself (§3.4).
+The record is made here, at the site that applies the rule, so no second resolution rule
+exists. Pinned by `tests/test_unit_manifest.py::test_the_reference_names_are_recorded_for_the_referrers_facts`
+and `::test_a_name_the_run_declares_is_not_recorded`.
+
 Pinned by `tests/test_robustness.py::test_name_ref_never_dangles`,
 `::test_name_ref_prefers_referrers_own_context`,
 `::test_name_ref_falls_back_to_shared_then_contextless`,
@@ -593,9 +654,15 @@ Four report files, each written only when it has content:
 
 The post-run gate writes `SANITY_REPORT.txt` on every run (§4.6). The generator
 also writes `read_through.tf` for a run that declares read-through scopes (§4.7),
-and `main()` adds `README.md` and the provenance record `SOURCE.txt` (§3.3), which
-every completed run writes. The four report files above, plus those four files, are
-the complete set a run writes.
+and `main()` adds `README.md`, the provenance record `SOURCE.txt` (§3.3), and the unit
+manifest `CODEBASE_MANIFEST.json` (§3.4). `SANITY_REPORT.txt` and `SOURCE.txt` are written on
+every completed run, and the four report files above, `read_through.tf`, and the manifest are
+written only when they have content. These files are the complete set a run writes.
+
+The manifest is a data file, not a report body, so no report names it or restates a row, and the
+gate reads only `.tf` files, so the manifest is not a gate input. Pinned by
+`tests/test_unit_manifest.py::test_no_report_names_a_field_the_manifest_states` and
+`::test_the_gate_reads_no_data_file`.
 
 A coverage section cannot name a read-through name, because the three scans read
 entries the parse captured and a read-through name is not one of them (§4.7). The
@@ -730,6 +797,10 @@ local = sanitize(name) + '_' + sha256('scope|context|vsys|name')[:8]
   names that sanitize to the same base (`a-b` and `a_b`) stay apart.
 - The digest makes the name independent of emission order and run count. The
   same object always gets the same local name.
+- The unit directory name (F6.1) reads through this one rule as an argument, so the rule it owns
+  is the digest input: the four scope facts, joined by `|`, in `SCOPE_FACT_KEYS` order
+  (`unit_manifest.py`, §3.4). No second naming rule exists, and the test pins that the module
+  defines none.
 - Taken names are tracked per type (one domain per `scope`), for both block kinds.
   A true duplicate gets a numeric suffix (`_2`), so the output is always valid HCL.
   The suffix is a validity guard, not the identity mechanism: two different
@@ -780,6 +851,13 @@ Two runs on the same input produce identical bytes.
   `tests/test_provenance.py::test_two_runs_on_the_same_bytes_write_the_same_record` and
   `::test_a_cache_derived_name_repeats_across_cache_dirs`.
   Determinism is pinned by test, not paid in the CLI.
+- The manifest sorts rows by the unit identity and sorts the reference names, and no field states
+  a timestamp or a path, so two runs on the same bytes write the same bytes from two different
+  output directories
+  (`tests/test_unit_manifest.py::test_two_runs_write_the_same_bytes` and
+  `::test_the_manifest_names_no_path_and_no_timestamp`). A directory name comes from the unit
+  identity digest and not from the set of units in the run, so a name does not move when an
+  unrelated scope is added (`::test_a_directory_name_does_not_move_when_an_unrelated_unit_is_added`).
 - The shadow scan sorts findings by line, then object type, then name, and the parent index keeps
   the first parent row for a key, so two runs on the same two sources write the same bytes
   (`tests/test_shadow_coverage.py::test_two_runs_on_the_same_sources_write_the_same_bytes`).

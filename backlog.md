@@ -383,10 +383,36 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   not compared. A comparison table would have to be verified per type against the provider schema, the
   way `LOCATION_SCHEMA` is, so the scan keeps the same-name rule until such a table exists.
 
-## Design Decisions (Epic 6, planned)
+## Design Decisions (Epic 6)
 
 The design record is `docs/CODEBASE_ASSEMBLY.md`. Each item below is a decision, not a rule the code
-holds.
+holds, except the F6.1 decisions, which the code holds and a test pins.
+
+- F6.1 landed three decisions (2026-10-28). The rules are in `unit_manifest.py`, and
+  `docs/CODEBASE_ASSEMBLY.md` §3 and `docs/ARCHITECTURE.md` §3.4 state them:
+  - the directory name is `sanitize(unit name) + '_' + 8-hex digest of the unit identity`, always.
+    A collision-only rule would make one unit's name depend on the other units in the run, so an
+    unrelated scope would move an existing directory;
+  - the row is data: eight fields in the declared order, rows sorted by the identity, names sorted,
+    no timestamp and no path, and `parse_rows` refuses a row that is not the declared shape;
+  - one file per codebase run (`CODEBASE_MANIFEST.json`), one row per unit, written only when it has
+    content, because a per-unit file cannot state the set of units and a reader cannot find a
+    per-unit file before it knows the directory name.
+- Open: the manifest names the directory and writes no directory, so the path that creates one
+  directory per unit is still open. The gate reads no data file, so the gate rule that reads the
+  manifest is not written yet.
+- Open: the reference names are names, not units. The edge list (F6.3) needs (referrer unit, target
+  unit), and the target unit cannot be named until ownership (F6.2) decides which unit declares the
+  name.
+- Open: the ambiguous-device case (`ARCHITECTURE.md` §4.3 rule 1) is recorded as an outside reference,
+  because the reference rule returns a plain string. The name is declared inside the run, so the row
+  cannot tell "outside the run" from "ambiguous" until the edge list names the other unit.
+- Open: a declared template stack is a scope container (`container_coverage.SCOPE_CONTAINERS`), so a
+  stack can be a codebase unit, but the stack is not one of the four scope facts, so the manifest names
+  no stack unit today. A stack unit needs a fifth fact, or the decision to read `template` as the stack
+  name.
+- Open: a unit exists only when the ledger has a row in it, so a scope with no entry has no manifest
+  row. A declared scope always has the entry that defines it, so no empty-unit case is possible today.
 
 - The reference between units: the provider `data` block (F5.5, landed 2026-10-28), or the state of
   another unit through a remote state data source or a platform output. The remote state route needs
