@@ -1,5 +1,7 @@
 # Acceptance Criteria — F6.2 Ownership as data
 
+Status: complete and committed (`44496dd`). The criteria below are the record of what F6.2 accepted.
+
 `docs/CODEBASE_ASSEMBLY.md` §1 rule 2 states the fact a codebase needs: one unit owns each entry.
 F5.4 (`shadow_coverage.py`) reports the case where a child entry repeats a parent entry name, but it
 reports a naming collision, not an owner. F6.2 turns that fact into data and decides the owner rule
