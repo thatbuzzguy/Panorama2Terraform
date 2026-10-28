@@ -87,8 +87,9 @@ source it came from.
 
 ## Sequencing
 
-1. F5.1, F5.2, F5.3, F5.4 and F5.6 landed. F5.5 is the only open feature in Epic 5: it needs
-   `DATA_SOURCE_SCHEMA` verified against the provider `data_source_schemas`, and one new gate rule.
+1. F5.1, F5.2, F5.3, F5.4 and F5.6 landed. F5.5 is the only open feature in Epic 5. The provider data
+   source facts were checked again on 2026-10-27, so `DATA_SOURCE_SCHEMA` can be written from the schema;
+   one new gate rule is needed with it.
 2. A state source is a reference source, so it cannot move an output fact: it writes no `.tf` byte, it
    is not an output read for the property scan, and its record references no cache entry, so it prunes
    nothing.
