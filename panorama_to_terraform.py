@@ -39,6 +39,7 @@ from typing import Any, Optional
 
 import container_coverage
 import entry_coverage
+import ownership
 import provenance
 import sanity_checks
 import shadow_coverage
@@ -724,6 +725,10 @@ class PanoramaParser:
         object keeps tcp AND udp. Multi-port values ("80,443") stay one
         string, which is the v2 destination_port shape. source-port, the
         override timeouts, and tag members are captured (the F1.2 gaps).
+
+        F6.2: `disable-override` is captured, so the ownership rule can read the flag for a
+        service entry (`ownership.py` rule 4). The emitter reads it, so the coverage matrix row
+        names it.
         """
         services = []
 
@@ -782,6 +787,10 @@ class PanoramaParser:
                     service_obj['tags'].append(tag_elem.text.strip())
 
             service_obj['description'] = (self._get_text(svc, 'description') or '').strip()
+            # F6.2: the parse keeps the flag here, as the address parser does (F3.4), because the
+            # ownership rule reads it (`ownership.py` rule 4). An entry with no value keeps the
+            # cleared default, so no property finding appears for it.
+            service_obj['disable_override'] = (self._get_text(svc, 'disable-override') or '').strip()
             services.append(service_obj)
 
         return services
@@ -3099,6 +3108,12 @@ variable "panos_password" {
             if svc.get('description'):
                 content += f'  description = {self.escape_string(svc["description"])}\n'
 
+            disable = (svc.get('disable_override') or '').strip().lower()
+            if disable in ('yes', 'no'):
+                # F6.2: the same shape panos_address writes (F3.4). v2 takes the "yes"/"no" string,
+                # not a bool (verified 2.0.14).
+                content += f'  disable_override = "{disable}"\n'
+
             # v2 protocol is a nested object: protocol = { tcp = { ... } }
             protocols = svc.get('protocols') or {}
             emitted = self.primary_service_protocol(protocols)
@@ -4632,7 +4647,8 @@ variable "panos_password" {
         with open(self.output_dir / 'MANUAL_SETUP_REPORT.txt', 'w') as f:
             f.write('\n'.join(lines) + '\n')
 
-    def generate_conversion_report(self, ledger, shadows=None, state=None) -> str:
+    def generate_conversion_report(self, ledger, shadows=None, state=None,
+                                   ownership_findings=None) -> str:
         """Generate CONVERSION_REPORT.txt for the entries the parse read (F4.3).
 
         One line per report row, grouped by the F3.9 scope rule so a reader can
@@ -4641,8 +4657,10 @@ variable "panos_password" {
         provenance record (`provenance.py`, F5.3).
 
         `shadows` is the F5.4 cross-source scan result. `state` is the F5.6 state scan result.
-        Both print in their own section, after the property section, only when there is a
-        finding, and both are grouped by the same scope rule as the other sections.
+        `ownership_findings` is the F6.2 ownership scan result. Each prints in its own section,
+        after the property section, only when it has a finding, and each is grouped by the same
+        scope rule as the other sections. Section order is fixed: header, summary, gaps, property
+        findings, shadows, repeated names, state ownership, drift.
 
         Returns '' when the input has no report rows, and writes no file in that
         case (F4.3 AC-9): a run that read no entry has nothing to report.
@@ -4685,6 +4703,16 @@ variable "panos_password" {
                 lines.append(self._report_section_header(path))
                 for row in group:
                     lines.append(shadow_coverage.shadow_line(row))
+
+        # F6.2: the ownership scan. A repeated name the rule cannot decide is an operator action, not
+        # a broken output, so it does not change the exit code (the F4.1 gate does). The section prints
+        # only when it has a finding, and the console prints no ownership line.
+        if ownership_findings:
+            lines.extend(['', f'--- {ownership.FINDING_HEADING} ---', ownership.FINDING_RULE])
+            for path, group in self._group_by_scope(ownership_findings):
+                lines.append(self._report_section_header(path))
+                for row in group:
+                    lines.append(ownership.finding_line(row))
 
         # F5.6: the state scan. Ownership and drift are operator actions, not broken output, so
         # they do not change the exit code (the F4.1 gate does). Each section prints only when it
@@ -5667,11 +5695,16 @@ def main():
         # declared parent has no shadow to report.
         parent_ledger = entry_coverage.EntryLedger(parent_source) if parent_source is not None else None
         shadows = shadow_coverage.shadow_findings(panorama.ledger, parent_ledger)
+        # F6.2: ownership as data. Both sources are read with the same row rule, so the matrix row that
+        # covers a run entry is the row that covers a parent entry. A finding is an operator action, so
+        # it does not change the exit code (the F4.1 gate does), and the console prints no line for it.
+        ownership_rows = ownership.build_rows(panorama.ledger, parent_ledger, tf_gen.sanitize_name)
         # F5.6: the state scan reads the same row rule, so the matrix row that covers a run
         # entry is the row that covers the state resource. A run with no declared state source
         # has no state to read, so it reports neither fact.
         state_findings = state_coverage.state_findings(panorama.ledger, state_source)
-        tf_gen.generate_conversion_report(panorama.ledger, shadows, state_findings)
+        tf_gen.generate_conversion_report(panorama.ledger, shadows, state_findings,
+                                          ownership.findings(ownership_rows))
 
         # F5.3: the provenance record. Written outside the report bodies, so the report
         # byte rule still holds: a report body names the source name, and the record is
@@ -5699,6 +5732,14 @@ def main():
         manifest_file = Path(args.output_dir) / unit_manifest.MANIFEST_FILE
         if manifest_rows:
             manifest_file.write_text(unit_manifest.render(manifest_rows), encoding='utf-8')
+
+        # F6.2: the ownership record. One row per entry the coverage matrix covers, written as data,
+        # and only when it has content, following the rule for the report files and the manifest. It
+        # names the unit that declares each entry and the unit that owns its name, so a reader joins it
+        # to the manifest row on `directory`.
+        ownership_file = Path(args.output_dir) / ownership.OWNERSHIP_FILE
+        if ownership_rows:
+            ownership_file.write_text(ownership.render(ownership_rows), encoding='utf-8')
 
         print("\n✓ Successfully generated Terraform configuration!")
         print("\n📄 Generated Migration Reports:")

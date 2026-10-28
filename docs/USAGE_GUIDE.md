@@ -187,9 +187,10 @@ The converter writes a file only when it has content.
 | `MANUAL_SETUP_REPORT.txt` | Report-only configuration, plus a section for a container no parse method reads |
 | `INTERFACE_MIGRATION_REPORT.txt` | Interface and IP inventory |
 | `VPN_MIGRATION_REPORT.txt` | VPN inventory and the pre-shared key actions |
-| `CONVERSION_REPORT.txt` | One line per entry the parse read, plus the gap section, the property section, the shadow section for a run that declares a parent source, and the ownership and drift sections for a run that declares a state source |
+| `CONVERSION_REPORT.txt` | One line per entry the parse read, plus the gap section, the property section, the shadow section for a run that declares a parent source, the repeated-name section for a name the ownership rule cannot decide, and the state ownership and drift sections for a run that declares a state source |
 | `SANITY_REPORT.txt` | The post-run gate result |
 | `CODEBASE_MANIFEST.json` | One row per unit (one declared scope), as data: the four scope facts, the directory name, the entry count, and the names the unit references from outside itself. Written only when it has content (F6.1) |
+| `OWNERSHIP.json` | One row per entry the coverage matrix covers, as data: the matrix row, the entry name, the source, the four scope facts, the declaring unit's directory, the owning unit's directory, what the rule can say about the entry, and the `disable_override` flag as the parse read it. Written only when it has content (F6.2) |
 
 The interface report, the VPN report, and the conversion report share one grouping
 rule: one section per scope the export declares (device group, then the template or
@@ -275,6 +276,54 @@ restate a row. Eight fields, in this order: `unit`, `device_group`, `vsys`, `tem
 - The rule lives in `unit_manifest.py`, and `parse_rows` reads a written file back as data, so a row
   that is not the declared shape is a refusal ([ARCHITECTURE.md](ARCHITECTURE.md) §3.4). The file is
   written only when it has content, and the CLI takes no flag for it.
+
+### The ownership record
+
+`OWNERSHIP.json` is one row per entry the coverage matrix covers. Ownership is a per-entry fact, so
+this file holds one row per entry while the manifest holds one row per unit, and the two join on
+`directory`. Eleven fields, in this order: `type`, `entry`, `source`, `device_group`, `vsys`,
+`template`, `vsys_device`, `directory`, `owner`, `kind`, `override`.
+
+```json
+[
+  {
+    "type": "panos_address",
+    "entry": "Printer-Pool",
+    "source": "ownership_override.xml",
+    "device_group": "Branch-DG",
+    "vsys": "",
+    "template": "",
+    "vsys_device": "localhost.localdomain",
+    "directory": "branch_dg_ddec9c8a",
+    "owner": "shared_be5be69f",
+    "kind": "override",
+    "override": "no"
+  }
+]
+```
+
+- `type` is the matrix row that covers the entry, the same key the property scan and the state scan
+  use.
+- `source` is the report value of the source the entry sits in, never its path.
+- `directory` names the unit the export declares the entry inside, and `owner` names the unit that
+  owns the name. The two are the same value for an entry that is not an override. `owner` is empty
+  when the rule names no owner.
+- `kind` is what the rule can say about an entry: `declared` (one entry, or units that cannot sit in
+  one inheritance chain), `definition` (this entry owns the name), `override` (this entry repeats a
+  name another entry owns, so the codebase resolves it as a reference to `owner`), `ambiguous` (the
+  rule names no owner).
+- `override` is the `disable_override` flag as the parse read it: `yes`, `no`, or `unknown` when the
+  matrix row does not declare the property. The flag names the entry no descendant may override, so it
+  does not choose the owner; it makes a repeated name an operator decision.
+- Two runs on the same bytes write the same bytes, because the rows sort by the identity and then by
+  the source, and no field states a path or a timestamp.
+- The rule lives in `ownership.py`, and `parse_rows` reads a written file back as data, so a row that
+  is not the declared shape is a refusal ([ARCHITECTURE.md](ARCHITECTURE.md) §3.5). The file is written
+  only when it has content, and the CLI takes no flag for it.
+
+A name the rule cannot decide prints in `CONVERSION_REPORT.txt`, in its own section after the shadow
+section and before the state sections. A finding is an operator action, so it does not change the exit
+code, which the gate decides.
 
 ## Post-run sanity gate
 

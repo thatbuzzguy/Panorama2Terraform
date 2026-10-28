@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<!-- F6.2 ownership fixture: a repeated name the export can place in one inheritance chain, so the
+     rule can name the ancestor. The shared section is the unit whose four facts are empty, and the
+     device group is the unit that inherits from it.
+
+  App-Server    the shared entry names disable-override, so the device-group entry cannot be an
+                override: a finding.
+  Printer-Pool  no entry names the flag, so the shared entry owns the name and the device-group
+                entry is an override. Not a finding: the rule decides it.
+  Desk-Phone    the flag is on the device-group entry, which cannot be the ancestor, so the rule
+                names no owner: a finding.
+
+The service pair pins the leg F6.2 closes: the service parse captures `disable-override`, and the
+emitter reads it, so the coverage matrix row can name it. The description on the service entry pins
+the order the emitter prints the two fields in. Every entry is in a covered container, so the corpus
+pins hold: no container finding and no property finding. -->
+<config version="10.0.0" urldb="paloaltonetworks">
+  <shared>
+    <address>
+      <entry name="App-Server">
+        <ip-netmask>10.40.0.7/32</ip-netmask>
+        <disable-override>yes</disable-override>
+      </entry>
+      <entry name="Printer-Pool">
+        <ip-netmask>10.40.0.20/32</ip-netmask>
+      </entry>
+      <entry name="Desk-Phone">
+        <ip-netmask>10.40.0.31/32</ip-netmask>
+      </entry>
+    </address>
+    <service>
+      <entry name="app-https">
+        <description>https service</description>
+        <protocol>
+          <tcp>
+            <port>443</port>
+          </tcp>
+        </protocol>
+        <disable-override>yes</disable-override>
+      </entry>
+    </service>
+  </shared>
+  <devices>
+    <entry name="localhost.localdomain">
+      <device-group>
+        <entry name="Branch-DG">
+          <address>
+            <entry name="App-Server">
+              <ip-netmask>10.40.0.9/32</ip-netmask>
+            </entry>
+            <entry name="Printer-Pool">
+              <ip-netmask>10.40.0.21/32</ip-netmask>
+            </entry>
+            <entry name="Desk-Phone">
+              <ip-netmask>10.40.0.32/32</ip-netmask>
+              <disable-override>yes</disable-override>
+            </entry>
+          </address>
+          <service>
+            <entry name="app-https">
+              <protocol>
+                <tcp>
+                  <port>8443</port>
+                </tcp>
+              </protocol>
+            </entry>
+          </service>
+        </entry>
+      </device-group>
+    </entry>
+  </devices>
+</config>

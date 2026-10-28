@@ -10,9 +10,9 @@ listed in §12.
 ## 1. What a codebase is
 
 The converter writes one output directory per run: the `.tf` files, the five report
-files, `README.md`, `SOURCE.txt`, and the unit manifest `CODEBASE_MANIFEST.json` (§3).
-A codebase is a set of directories that a platform plans and applies, one plan per
-directory. Six facts define it:
+files, `README.md`, `SOURCE.txt`, the unit manifest `CODEBASE_MANIFEST.json` (§3), and the
+ownership record `OWNERSHIP.json` (§4). A codebase is a set of directories that a platform
+plans and applies, one plan per directory. Six facts define it:
 
 1. A unit is one declared scope, as [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.2 states
    the four scope facts: a device group, a template, a template stack, or a virtual
@@ -42,14 +42,15 @@ These parts are true today, so a codebase can be built on them.
 |---|---|---|
 | Identity: (device group, vsys, type, name) | The key the state scan uses, and the same data a provider import id holds (§7) | `ARCHITECTURE.md` §2.1 |
 | Local name: sanitized name plus the 8-hex identity digest | A resource address that does not move when a unit is regenerated, so a Git diff and an import block stay stable across runs | `ARCHITECTURE.md` §5 and §6 |
-| The reference rule | A name defined outside the run stays a plain string. The set of those names is the reference edge list between units (§6) | `ARCHITECTURE.md` §4.3 |
+| The reference rule | A name defined outside the run stays a plain string. The set of those names is the reference edge list between units (§5) | `ARCHITECTURE.md` §4.3 |
 | The policy chain rule | Order inside a unit, and no rule depends on a rule in another unit, so the graph between units stays coarse | `ARCHITECTURE.md` §4.4 |
 | The shadow scan | The naming-collision check between a parent scope and a child scope, which is the pre-flight check a codebase needs | `shadow_coverage.py`, `ARCHITECTURE.md` §3.2 |
+| The ownership record | The unit that owns a name, so one plan holds one entry and an override resolves through its owner | `ownership.py`, §4 |
 | The state scan | The per-unit check that the code and the state agree, offline | `state_coverage.py`, `ARCHITECTURE.md` §3.2 |
 | The api producer | One request per scope path and one cached entry per path, so a per-unit run reads one scope | `source_fetch.py`, `ARCHITECTURE.md` §3 |
 | The gate, determinism, offline CI | A codebase gate that can run on every unit with no device access | `ARCHITECTURE.md` §4.6, §6 |
 
-The gaps are §3 to §11.
+§3 and §4 are landed. The gaps are §5 to §11.
 
 ## 3. The unit boundary as data (F6.1, landed)
 
@@ -81,7 +82,7 @@ directory. F6.1 states the unit boundary as data: one row per declared scope in
    identity, the reference names are sorted, and no field states a timestamp or a path.
    `parse_rows` reads a written file back, and a row that is not the declared shape is a
    refusal, the way `provenance.parse_record` refuses a line that is not a field.
-5. **One file per codebase run.** The edge list (§6) needs the whole set of units, and a reader
+5. **One file per codebase run.** The edge list (§5) needs the whole set of units, and a reader
    cannot find a per-unit file before it knows the directory name, so one file holds one row per
    unit. `CODEBASE_MANIFEST.json` is written only when it has content, following the rule for the
    report files, and the CLI takes no flag for it.
@@ -100,29 +101,64 @@ codes are unchanged. Pinned by `tests/test_unit_manifest.py`, including
 `::test_the_gate_reads_no_data_file`, and `::test_two_runs_write_the_same_bytes`.
 
 The decision this section asked for is settled: the manifest is a data file, not a section of
-the conversion report. Ownership (§4) and the edge list (§6) follow. The template stack is a
+the conversion report. §4 is landed; the edge list (§5) follows. The template stack is a
 scope container (`container_coverage.SCOPE_CONTAINERS`), but it is not one of the four facts, so
 no stack unit is named today; this is recorded in `backlog.md`.
 
-## 4. Gap — ownership as data
+## 4. Ownership as data (F6.2, landed)
 
-Today the ownership fact is a report fact: `state_coverage.py` reports which entries
-another workspace already owns. A codebase needs the ownership stated before the run, so
-one unit owns one entry.
+The converter now states the ownership fact as data: `OWNERSHIP.json`, one row per entry the
+coverage matrix covers. `state_coverage.py` still reports which entries another workspace already
+owns; that is a state fact, not this fact. The rules are in `ownership.py`, and `main()` writes the
+file.
 
-Rules needed:
+1. **The declaring unit, and no second naming rule.** An entry the export declares inside a unit
+   belongs to that unit (§1 rule 2). The row names the unit by its directory, so `OWNERSHIP.json`
+   and `CODEBASE_MANIFEST.json` join on `directory`. The identity is `state_coverage.ownership_key`
+   read through `unit_manifest.facts_of`, and the module takes `TerraformGenerator.sanitize_name` as
+   an argument, the way `unit_manifest.build_rows` does.
+2. **A name a unit uses but does not declare is not owned by that unit.** A member list, a
+   reference string, and a reference pointer (`<entry>` with only `<id>`) hold a name without
+   declaring an object, so they write no row. `ARCHITECTURE.md` §4.3 stays the only place that names
+   a use.
+3. **The row scope is the F4.4 rule, read through the report row**, so the scan adds no second
+   scope rule: an entry a matrix row covers whose destination writes an object. A property level, a
+   skipped entry, and a report-only entry write no row.
+4. **Two entries are one object only when the export can place them in one inheritance chain:** the
+   shared unit, and the units whose declared fact is a device group. A name in a template, a virtual
+   system, or a device is a different object in each unit (`ARCHITECTURE.md` §2.1), so each unit
+   owns its own entry.
+5. **The owner is the ancestor entry** (§1 rule 2). The export states the relation in two cases
+   only: the shared unit, and the parent source the run declares with `--parent` (the F5.4 rule).
+   The device-group `parent` field is not captured (the bookkeeping gap in `backlog.md`), so the
+   rule cannot name an ancestor for two device groups in one source.
+6. **`disable_override` does not choose the owner.** It names the entry no descendant may override,
+   so a second entry with the same name contradicts the flag and is an operator decision. The value
+   is the string the parse read, and the row states `unknown` for a matrix row that does not name the
+   property (`backlog.md`), and for a declared parent source, which the run reads as entry names and not
+   as objects.
+7. **What the rule can say per entry** is `kind`: `declared`, `definition`, `override`, `ambiguous`.
+   The case the rule cannot decide is a report finding, in its own section after the shadow section
+   and before the state sections. A finding is an operator action, so it does not change the exit
+   code, which the F4.1 gate decides, and the console prints no ownership line.
 
-1. An entry the export declares inside a unit belongs to that unit.
-2. A name the export does not declare inside the unit is not owned by the unit, even
-   when the unit uses it. `shadow_coverage.py` states the fact for the case where a
-   child entry repeats a parent entry name.
+Pinned by `tests/test_ownership.py`, including
+`::test_one_row_per_entry_the_matrix_row_covers`,
+`::test_a_name_a_unit_uses_but_does_not_declare_writes_no_row`,
+`::test_the_ancestor_entry_owns_the_name`,
+`::test_two_device_groups_have_no_stated_relation`,
+`::test_a_name_in_two_units_that_cannot_be_one_chain_is_two_objects`,
+`::test_the_declared_parent_source_is_the_ancestor`,
+`::test_the_flag_on_the_definition_makes_the_repeat_a_finding`,
+`::test_the_flag_on_a_descendant_names_no_owner`,
+`::test_the_findings_are_grouped_by_the_f3_9_scope_rule`, and
+`::test_a_finding_does_not_change_the_exit_code_and_the_console_prints_no_line`.
 
-The open decision is the override case. Panorama resolves a repeated name through
-inheritance at commit time, so a repeated name is one object on the device and two
-entries in the export. `panos_address` declares `disable_override`, and the parse
-extracts it for an address but not for a service (`backlog.md`, F3.4). Until the rule
-names the owner, two units can both claim the same object, and two states can both try
-to change it.
+The decision this section asked for is settled. The service leg is closed: the parse captures
+`disable-override` for a service entry and the emitter prints it, so the `panos_service` matrix row
+names the property
+(`tests/test_ownership.py::test_the_service_row_names_the_property_the_emitter_reads`). The edge list
+(§5) is the next gap, and it now has the owner fact to build on.
 
 ## 5. Gap — the reference between units
 
@@ -144,6 +180,11 @@ today.
 
 A reference is also a dependency. A `data` block does not order two units, so the order
 comes from §6.
+
+The target unit is now knowable: `ownership.py` names the unit that declares each entry (§4 rule 1), and
+`owner` names the unit that owns a repeated name, so an edge can point at a directory the manifest
+already names. What is still open is the record shape, because the reference fact today is names per unit
+and an edge needs a pair.
 
 ## 6. Gap — order between units
 
@@ -307,9 +348,9 @@ file, and a run with no network passes CI.
    the codebase needs.
 2. The unit manifest (§3), because ownership, edges, and import blocks all need the unit.
    No new parse data is needed. Landed as F6.1.
-3. The ownership assignment (§4), after the override decision.
-4. The import blocks (§7). The single-unit case does not need the ownership rule, so this
-   can land before §4. The rule types need the rulebase decision.
+3. The ownership assignment (§4), after the override decision. Landed as F6.2.
+4. The import blocks (§7). The single-unit case does not need the ownership rule. The rule types need
+   the rulebase decision.
 5. The scope objects (§8).
 6. The site data layer (§9).
 7. The commit action (§10), last, because it needs the gate rule for an action block and

@@ -16,8 +16,8 @@ covers the generated Terraform. `ADVERSARIAL_AUDIT_REPORT.md` is the audit recor
 its status table states the current state.
 
 Epic 5 (the upstream source layer) is complete. Epic 6 (codebase assembly) is started: F6.1
-(the unit boundary as data) landed, and its rules are in `docs/ARCHITECTURE.md` §3.4. The open
-decisions are in `backlog.md`.
+(the unit boundary as data) and F6.2 (ownership as data) landed, and their rules are in
+`docs/ARCHITECTURE.md` §3.4 and §3.5. The open decisions are in `backlog.md`.
 
 ## Goals
 
@@ -65,8 +65,8 @@ half of the codebase reference rule, so Epic 6 F6.3 follows it.
 
 A codebase is a set of directories, one per declared scope, that a platform plans and
 applies. The design record is `docs/CODEBASE_ASSEMBLY.md`. Every feature below is a rule
-to decide, then a module to write. F6.1 is implemented, so its rules name the module and the
-test that holds them; the rest is not implemented.
+to decide, then a module to write. F6.1 and F6.2 are implemented, so their rules name the module and
+the test that holds them; the rest is not implemented.
 
 F6.1 (the unit boundary as data, the codebase manifest, landed 2026-10-28) is in the git
 history. A unit is one combination of the four scope facts, the manifest states one row per
@@ -75,9 +75,13 @@ unit as `CODEBASE_MANIFEST.json`, and the directory name is the sanitized unit n
 `docs/CODEBASE_ASSEMBLY.md` §3. F6.1 names the directory and writes no directory, so the codebase
 gate rule and the write path are still open.
 
-- [ ] **F6.2 Ownership as data** — which unit owns each entry, so a name a parent defines
-  is not owned by a child. Needs the override decision (`disable_override`, and the
-  service leg the parse does not extract).
+F6.2 (ownership as data, landed 2026-10-28) is in the git history. Ownership is a per-entry fact, so
+`OWNERSHIP.json` states one row per entry a coverage matrix row covers, and the two data files join on
+the unit directory. The owner is the ancestor entry; the case the rule cannot decide is a report finding.
+The rules are in `docs/ARCHITECTURE.md` §3.5 and `docs/CODEBASE_ASSEMBLY.md` §4. F6.2 states the owner
+per entry and writes no directory, so the codebase gate rule and the write path are still open. The
+reference record still holds names per unit, so the edge list (F6.3) is the next gap.
+
 - [ ] **F6.3 Reference between units** — the plain-string names as an edge list, and the
   mechanism that resolves a name defined by another unit. The data block half is built
   (F5.5, `docs/ARCHITECTURE.md` §4.7); the edge list and the remote state half need the
@@ -104,9 +108,8 @@ gate rule and the write path are still open.
 2. A state source is a reference source, so it cannot move an output fact: it writes no `.tf` byte, it
    is not an output read for the property scan, and its record references no cache entry, so it prunes
    nothing.
-3. Epic 6 is started: F6.1 landed the unit as data, and F6.2, F6.3 and F6.4 all need that unit.
-   F6.4 can land before F6.2 for one unit, because a single-unit run owns everything it read. The
-   order is in `docs/CODEBASE_ASSEMBLY.md` §14.
+3. Epic 6 is started: F6.1 landed the unit as data and F6.2 landed the owner of a repeated name, so
+   F6.3 and F6.4 read both. The order is in `docs/CODEBASE_ASSEMBLY.md` §14.
 
 ## Out of Scope (tracked in backlog.md)
 

@@ -51,8 +51,12 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
   - Schedule `description` is not extracted.
   - Security rule profile group references are not extracted.
   - NAT rule `service` in member-list form is captured as whitespace text; only text form works.
-  - Service object `disable-override` is not extracted (the address parser
-    extracts it since F3.4; the service parser does not).
+  - `disable-override` is extracted for `panos_address` (since F3.4) and for `panos_service` (since
+    F6.2). The pinned schema declares the flag for 25 types, so a matrix row that does not name the
+    property states `unknown` in `OWNERSHIP.json`. The parsed types that can carry the flag are not
+    extracted: `panos_address_group`, `panos_administrative_tag`, `panos_application_group`,
+    `panos_custom_url_category`, `panos_external_dynamic_list`, `panos_security_profile_group`,
+    `panos_service_group`.
   - Regions are parsed but reach no output: `parse_regions` returns objects
     that only the console count uses. Recorded by F3.10 (`docs/ARCHITECTURE.md`
     §2.4). The per-entry report lists each region row as a gap, so the operator sees
@@ -386,7 +390,7 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 ## Design Decisions (Epic 6)
 
 The design record is `docs/CODEBASE_ASSEMBLY.md`. Each item below is a decision, not a rule the code
-holds, except the F6.1 decisions, which the code holds and a test pins.
+holds, except the F6.1 and F6.2 decisions, which the code holds and a test pins.
 
 - F6.1 landed three decisions (2026-10-28). The rules are in `unit_manifest.py`, and
   `docs/CODEBASE_ASSEMBLY.md` §3 and `docs/ARCHITECTURE.md` §3.4 state them:
@@ -398,12 +402,29 @@ holds, except the F6.1 decisions, which the code holds and a test pins.
   - one file per codebase run (`CODEBASE_MANIFEST.json`), one row per unit, written only when it has
     content, because a per-unit file cannot state the set of units and a reader cannot find a
     per-unit file before it knows the directory name.
+- F6.2 landed four decisions (2026-10-28). The rules are in `ownership.py`, and
+  `docs/CODEBASE_ASSEMBLY.md` §4 and `docs/ARCHITECTURE.md` §3.5 state them:
+  - ownership is a per-entry fact, so it lives in a second data file (`OWNERSHIP.json`), one row per
+    entry a matrix row covers. It cannot be a manifest field, because `unit_manifest.py` rule 4 pins one
+    row per unit, and it cannot be a per-unit file, because F6.1 names the directory and writes none;
+  - the owner is the ancestor entry. The export states the relation only for the shared unit and for a
+    declared parent source, so a repeated name between two device groups in one source stays undecided;
+  - `disable_override` names the entry that no descendant may override, not the owner, so a repeated name
+    against a flagged entry is a contradiction and an operator decision. A finding is an action, so it
+    does not change the exit code, and the console prints no line for it;
+  - the service leg is closed: the parse captures the flag for a service entry and the emitter prints it,
+    so the `panos_service` row names the property. Report-only was refused, because the F4.4 rule says a
+    captured field is printed or reported as unread.
 - Open: the manifest names the directory and writes no directory, so the path that creates one
-  directory per unit is still open. The gate reads no data file, so the gate rule that reads the
-  manifest is not written yet.
+  directory per unit is still open. The gate reads no data file, so the gate rule that reads the two data
+  files is not written yet.
 - Open: the reference names are names, not units. The edge list (F6.3) needs (referrer unit, target
-  unit), and the target unit cannot be named until ownership (F6.2) decides which unit declares the
-  name.
+  unit). Ownership (F6.2) now names the unit that declares a name, so `kind` `override` names the target
+  unit as `owner`; what is still open is the record shape: names per unit today, pairs per edge then.
+- Open: the device-group `parent` field is not captured, so the owner rule cannot name an ancestor for
+  two device groups in one source (`docs/CODEBASE_ASSEMBLY.md` §4 rule 5). A device group entry is a
+  bookkeeping row, so the parse keeps only its name. `panos_device_group` and `panos_device_group_parent`
+  (F6.5) are where the parent fact would land.
 - Open: the ambiguous-device case (`ARCHITECTURE.md` §4.3 rule 1) is recorded as an outside reference,
   because the reference rule returns a plain string. The name is declared inside the run, so the row
   cannot tell "outside the run" from "ambiguous" until the edge list names the other unit.
@@ -419,10 +440,6 @@ holds, except the F6.1 decisions, which the code holds and a test pins.
   outputs, and the generator writes no outputs today, so the choice is still open for a name that one
   unit owns and another unit references. The gate rule that reads a `data` block is built; the edge
   list is not.
-- The owner of a repeated name. Panorama resolves it through inheritance at commit time, so a repeated
-  name is one object on the device and two entries in the export. `panos_address` declares
-  `disable_override`, and the service parser does not extract it (the extraction gap above). Until the
-  rule names the owner, two units can claim one object.
 - Import agreement: the gate reads every block kind with one reader, so an `import` block is read by
   `sanity_checks.blocks`. The rule that an import block agrees with the resource block it names (the
   same type, the same local name, the same location) is not written yet.

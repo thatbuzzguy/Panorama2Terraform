@@ -1110,7 +1110,7 @@ COVERAGE_MATRIX = (
         'fixture': 'service_objects.xml',
         'output_file': 'service_objects.tf',
         'emitter': ('generate_service_objects',),
-        'properties': ('description', 'other_protocol', 'protocols', 'tags',),
+        'properties': ('description', 'disable_override', 'other_protocol', 'protocols', 'tags',),
     }, {
         'resource': 'panos_service_group',
         'xml_element': 'service-group/entry',
