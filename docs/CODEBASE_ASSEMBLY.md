@@ -52,8 +52,9 @@ These parts are true today, so a codebase can be built on them.
 | The api producer | One request per scope path and one cached entry per path, so a per-unit run reads one scope | `source_fetch.py`, `ARCHITECTURE.md` §3 |
 | The gate, determinism, offline CI | A codebase gate that can run on every unit with no device access | `ARCHITECTURE.md` §4.6, §6 |
 | The import block | The address that binds a written block to the object the live config already has, from the same identity data the resource block uses (§7) | `import_blocks.py`, §7 |
+| The scope object | The unit as a block in the run, so a new site is created by an apply and a name inside a location can be checked against the run (§8) | `resource_mapping.py`, §8 |
 
-§3 to §7 are landed. The gaps are §8 to §11.
+§3 to §8 are landed. The gaps are §9 to §11.
 
 ## 3. The unit boundary as data (F6.1, landed)
 
@@ -134,10 +135,14 @@ file.
    shared unit, and the units whose declared fact is a device group. A name in a template, a virtual
    system, or a device is a different object in each unit (`ARCHITECTURE.md` §2.1), so each unit
    owns its own entry.
-5. **The owner is the ancestor entry** (§1 rule 2). The export states the relation in two cases
-   only: the shared unit, and the parent source the run declares with `--parent` (the F5.4 rule).
-   The device-group `parent` field is not captured (the bookkeeping gap in `backlog.md`), so the
-   rule cannot name an ancestor for two device groups in one source.
+5. **The owner is the ancestor entry** (§1 rule 2). The export states the relation in three cases:
+   the shared unit, the parent source the run declares with `--parent` (the F5.4 rule), and the
+   device-group `parent` the parse captures (F6.5), read through `ownership.parent_map` and
+   `chain_of`. A group that states no parent is a top-level group, so it is not the ancestor of
+   another top-level group: two top-level groups that repeat a name are peers, and the rule names no
+   owner for them. The parent read is the non-recording read, so the scan does not count it as a
+   property an output used (the F5.6 rule), and a ledger built from a declared parent source runs no
+   parse method, so it has no chain to add: the parent source is already the ancestor.
 6. **`disable_override` does not choose the owner.** It names the entry no descendant may override,
    so a second entry with the same name contradicts the flag and is an operator decision. The value
    is the string the parse read, and the row states `unknown` for a matrix row that does not name the
@@ -153,6 +158,7 @@ Pinned by `tests/test_ownership.py`, including
 `::test_a_name_a_unit_uses_but_does_not_declare_writes_no_row`,
 `::test_the_ancestor_entry_owns_the_name`,
 `::test_two_device_groups_have_no_stated_relation`,
+`::test_a_stated_parent_names_the_ancestor`,
 `::test_a_name_in_two_units_that_cannot_be_one_chain_is_two_objects`,
 `::test_the_declared_parent_source_is_the_ancestor`,
 `::test_the_flag_on_the_definition_makes_the_repeat_a_finding`,
@@ -238,7 +244,10 @@ manifest row, because the manifest is the file that names each unit (§3 rule 5)
      object a resource needs): the device group unit before the template unit inside it, before the
      device unit inside it, in the F3.9 level order. A container the manifest does not name adds no
      dependency, and a declared parent source names no unit, because a unit exists when the run's
-     ledger has a row in it;
+     ledger has a row in it; the same order is what the run writes, so `scope.tf` follows
+     `provider.tf` and `variables.tf` and comes before the object files
+     (`tests/test_scope_objects.py::test_the_scope_file_is_written_before_the_config_inside_it`), and
+     the blocks inside the file print in that order (`::test_blocks_print_in_the_level_order_the_table_states`);
    - **the reference edge**: the target unit before the referrer unit.
 3. **Ties, and the acyclic rule.** A unit with no dependency is ranked in the identity order, which
    is the order the manifest rows already print, so `rank` is deterministic. A cycle is a finding:
@@ -331,23 +340,89 @@ Two halves of this section stay open:
   write path (§14) is the step that splits the output per unit directory. The generated `README.md`
   does not yet name `imports.tf`, which `backlog.md` records.
 
-## 8. Gap — the scope objects
+## 8. The scope objects as data (F6.5, landed)
 
-The pinned schema has a resource for each scope a codebase needs:
-`panos_device_group`, `panos_device_group_parent`, `panos_template`,
-`panos_template_stack`, `panos_template_variable`, `panos_vsys` (§12). The container
-table marks `parse_device_groups` and `parse_associations` as `bookkeeping` rows, so no
-scope is emitted, and a new site cannot be created by an apply.
+The six scope objects the pinned schema declares for the scopes a codebase needs are output now:
+`panos_device_group`, `panos_device_group_parent`, `panos_template`, `panos_template_stack`,
+`panos_template_variable`, `panos_vsys` (§12). A new site can be created by an apply, because the
+scope is a block in the run. The emitter is `TerraformGenerator.generate_scope_objects`, the tables
+are in `resource_mapping.py`, and `main()` calls the emitter for every run.
 
-Rule needed: emit the scope objects, or state that the platform creates them by hand. A
-codebase that creates a new site must emit them. This needs new `EMITTED_TYPES` entries,
-new coverage matrix rows, and an emitter, all written from the schema, not from memory
-(`resource_mapping.py` rule).
+1. **Emission is default, not a flag.** Three facts force it: `EMITTED_TYPES` is the set the
+   committed goldens emit, so a type a run emits only when a flag is on cannot be pinned; the
+   destination of a report row comes from the container table for every run (`ARCHITECTURE.md` §3.2),
+   so a container that becomes an `emitted` row must be written by every run; and rule 2 below puts
+   the scope object before the config inside it, which an optional extra cannot do. No flag names the
+   shape, so no new argument error path appears.
+2. **One file for the run, written first.** `scope.tf` follows the `imports.tf` (§7) and
+   `read_through.tf` (§4.7) precedent, because the per-unit write path (§14) is still open. `main()`
+   writes it after `provider.tf` and `variables.tf` and before the object files. Inside the file,
+   blocks print in the F3.9 level order `SCOPE_LEVEL_ORDER` states — device group, parent record,
+   template, template stack, template variable, virtual system — and within a type in document order,
+   so the file is byte-identical between runs. The file is written only when it has content, the rule
+   the report and data files use.
+3. **The entry name is the row identity, not a property.** The entry name and the four scope facts
+   are `entry_coverage.NON_FIELD_KEYS`. For `panos_device_group_parent` the provider declares no
+   `name`, so the block carries the entry name through `entry_coverage.name_field`: `DATA_SOURCE_SCHEMA`
+   says whether the type declares a `name`, and `REPORT_SCOPE_KEYS` is the one mapping from a scope
+   container to the field its entry name reaches the output through. The emitter, the import agreement
+   gate (§7 rule 4), and `tests/test_coverage_matrix.py` read that one rule. One device-group entry can
+   feed two blocks — the scope object and the parent record — so the property scan measures the entry
+   against the row that covers its container, and the parent row has no read of its own to measure.
+4. **The value shape is a provider fact.** `SCOPE_SHAPE` states the shape the emitter prints for each
+   property at the block's own level. The provider takes `devices` for `panos_device_group` and
+   `panos_template_stack` as a list of objects, not a list of strings, and `terraform validate` refuses
+   a string there, so the shape is a table and not a style choice. The object carries the field the
+   provider requires (`name`); the vsys list a device can carry is not a fact a device-group membership
+   states, so the block states no vsys. The template variable `type` prints as the nested object the
+   provider takes, as a literal: the value-to-variable mapping is §9.
+5. **The device member rule (F3.5).** `container_coverage.PLACEHOLDER_DEVICE` is the PAN-OS "this
+   device" placeholder and names no firewall, so it never enters a printed membership list, and a list
+   that held only the placeholder writes no line, because the provider field is optional and the
+   codebase states no device fact it cannot name.
+6. **A scope object is emitted only when the export places it.** `SCOPE_PLACEMENT` is the parsed key
+   that names the scope each type places itself inside; the key is the location sub-block, so the block
+   and the key agree (`ARCHITECTURE.md` §4.2 branch 0). The four Panorama scopes place themselves at the
+   top of their own chain, so `location` prints the empty sub-block, the `shared = {}` shape, and
+   `panorama_device` is never emitted: the codebase states no device fact in a location (§9). A
+   variable or a virtual system the export places in no template and no template stack has no place the
+   provider can put it, so the parse reports it as `skipped` with the reason and the run writes no block:
+   the converter does not guess a place (the F3.6 rule). A template entry's device members are not a
+   provider field for `panos_template`, so `parse_templates` captures no device list.
+7. **One entry, one mark.** The membership entries inside a scope entry are marked by `_list_names`,
+   the method that reads them, and the scope entry keeps the one mark its scope method gave it, so
+   `parse_associations` marks nothing itself (F4.3 rule 1). The membership containers keep their
+   `bookkeeping` rows, so no matrix row covers them and the property scan does not report them. The
+   scope containers are `emitted` rows, so `EntryLedger.destination` needs no scope exception.
+8. **The gate rule.** `sanity_checks.check_scope_blocks` is the third gate rule for a block kind, and
+   it reads the blocks with the one block reader (`ARCHITECTURE.md` §4.6): for a `resource` block of one
+   of the six types, every name inside its `location` must match the name of a block this run declares
+   for that scope, through `SCOPE_ANSWER`. A `data` block cannot answer. `panorama_device` names a
+   device, not a scope, so it is not checked, and an empty sub-block states no name to resolve.
+   `CHECK_ORDER` names `scope_blocks` after `import_blocks`.
 
-`panos_template_variable` is the provider shape for the template variables a codebase
-wants as Terraform variables. The export holds the defaults, so a generated module
-cannot take a template variable as a `var.` value until the value-to-variable mapping is
-data (§9).
+Pinned by `tests/test_scope_objects.py`, including
+`::test_one_block_per_scope_entry`,
+`::test_blocks_print_in_the_level_order_the_table_states`,
+`::test_entries_print_in_document_order_within_a_type`,
+`::test_the_scope_file_is_written_before_the_config_inside_it`,
+`::test_the_file_is_written_only_when_it_has_content`,
+`::test_emission_is_default_and_no_flag_names_it`,
+`::test_the_parent_record_carries_the_entry_name_through_the_field_the_rule_states`,
+`::test_the_device_group_block_prints_no_parent`,
+`::test_scope_shape_is_the_provider_shape` (against the live provider schema),
+`::test_scope_shape_covers_the_properties_the_rows_declare`,
+`::test_a_device_membership_prints_as_the_objects_the_provider_takes`,
+`::test_the_placeholder_device_never_enters_a_printed_list`,
+`::test_the_four_panorama_scopes_print_the_empty_sub_block`,
+`::test_a_scope_entry_the_export_places_nowhere_writes_no_block`, one test per violation type of the
+gate rule, and `::test_no_false_positive_across_the_corpus`. The goldens gain `scope.tf` for both
+cases (`tests/golden/sample/` and `tests/golden/kitchen_sink/`), and every existing golden `.tf` byte
+is unchanged. `tests/fixtures/scope_objects.xml` is the fixture that carries one entry of each of the
+six types.
+
+The open half stays open: a generated module cannot take a template variable as a `var.` value until
+the value-to-variable mapping is data (§9).
 
 ## 9. Gap — the site data layer and the device name
 
@@ -384,9 +459,9 @@ commit support), so an action block or an outside step is the commit path.
 Rules needed:
 
 1. One action block per unit, and no action that names a scope another unit owns.
-2. The gate reads `resource`, `data`, and `import` blocks (`ARCHITECTURE.md` §4.6), so an
-   `action` block is not checked today. A codebase that emits actions needs a gate rule that
-   reads them.
+2. The gate reads `resource`, `data`, and `import` blocks (`ARCHITECTURE.md` §4.6), and the scope rule
+   reads the six scope blocks, which are `resource` blocks (§8 rule 8), so an `action` block is not
+   checked today. A codebase that emits actions needs a gate rule that reads them.
 3. Actions need Terraform 1.14 or later (§12), which is newer than the provider's own
    minimum. The committed goldens declare no Terraform minimum, so a codebase that emits
    actions needs one.
@@ -460,7 +535,7 @@ file, and a run with no network passes CI.
 5. The import blocks (§7), because they need the unit, the owner, and the local name. The
    single-unit case does not need the ownership rule. The rule types need the rulebase decision.
    Landed as F6.4.
-6. The scope objects (§8).
+6. The scope objects (§8). Landed as F6.5.
 7. The site data layer (§9).
 8. The commit action (§10), last, because it needs the gate rule for an action block and
    the Terraform minimum decision.

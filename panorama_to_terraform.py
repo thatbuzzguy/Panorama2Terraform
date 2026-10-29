@@ -49,7 +49,15 @@ import source_fetch
 import state_coverage
 import state_input
 import unit_manifest
-from resource_mapping import DATA_SOURCE_SCHEMA, INTERFACE_RESOURCE_TYPES, LOCATION_SCHEMA
+from resource_mapping import (
+    DATA_SOURCE_SCHEMA,
+    INTERFACE_RESOURCE_TYPES,
+    LOCATION_SCHEMA,
+    SCOPE_LEVEL_ORDER,
+    SCOPE_PLACEMENT,
+    SCOPE_SHAPE,
+    SCOPE_TYPES,
+)
 from xml_input import (
     DEFAULT_SCOPE,
     ParsedSource,
@@ -144,19 +152,164 @@ class PanoramaParser:
         self.ledger.mark_skipped(entry, reason)
 
     def parse_device_groups(self) -> list[dict]:
-        """Parse device groups from Panorama config"""
-        device_groups = []
+        """Parse the device group entries (F6.5: a scope entry is an object the output writes).
 
-        # Find device-group elements
+        The entry name is the scope, so the block writes it as `name`. The properties are the
+        fields the scope block prints: the description, the parent group, the device members,
+        and the template members. The parent is what `ownership.py` rule 4 needs to name an
+        ancestor, so a repeated name between a parent group and a child group is no longer an
+        operator decision.
+
+        `parse_associations` reads the same membership for its tables and marks the membership
+        entries, not this entry, so the entry keeps one mark (F4.3 rule 1).
+        """
+        device_groups = []
         for dg in self.root.findall(".//device-group/entry"):
             name = dg.get('name')
-            if name:
-                device_groups.append(self.mark(dg, {
-                    'name': name,
-                    'description': self._get_text(dg, 'description')
-                }))
+            if not name:
+                self.mark_skipped(dg, 'entry has no name attribute')
+                continue
+            device_groups.append(self.mark(dg, {
+                'name': name,
+                'description': self._get_text(dg, 'description'),
+                'parent': self._get_text(dg, 'parent'),
+                'devices': self._list_names(dg, 'devices'),
+                'templates': self._list_names(dg, 'templates'),
+                **self.identity_of(dg),
+            }))
 
         return device_groups
+
+    def parse_templates(self) -> list[dict]:
+        """Parse the template entries (F6.5).
+
+        The properties are the fields the block prints. A template's device members are not a
+        provider field for `panos_template`, so they are read by `parse_associations` for the
+        association table and are not captured here.
+        """
+        templates = []
+        for entry in self.root.findall('.//templates/entry'):
+            name = entry.get('name')
+            if not name:
+                self.mark_skipped(entry, 'entry has no name attribute')
+                continue
+            templates.append(self.mark(entry, {
+                'name': name,
+                'description': self._get_text(entry, 'description'),
+                'default_vsys': self._get_text(entry, 'default_vsys'),
+                **self.identity_of(entry),
+            }))
+
+        return templates
+
+    def parse_template_stacks(self) -> list[dict]:
+        """Parse the template stack entries (F6.5).
+
+        A stack is the only scope that lists members instead of holding config, so its device
+        and template lists are fields the block prints.
+        """
+        stacks = []
+        for entry in self.root.findall('.//template-stack/entry'):
+            name = entry.get('name')
+            if not name:
+                self.mark_skipped(entry, 'entry has no name attribute')
+                continue
+            stacks.append(self.mark(entry, {
+                'name': name,
+                'description': self._get_text(entry, 'description'),
+                'default_vsys': self._get_text(entry, 'default_vsys'),
+                'devices': self._list_names(entry, 'devices'),
+                'templates': self._list_names(entry, 'templates'),
+                **self.identity_of(entry),
+            }))
+
+        return stacks
+
+    def parse_template_variables(self) -> list[dict]:
+        """Parse the template variable entries (F6.5).
+
+        `template_stack` names the scope the entry sits in, which is the location sub-block the
+        emitter chooses. The value stays a literal: the value-to-variable mapping is F6.6. An
+        entry the export places in no template and no template stack has no place the provider
+        can put it, so the run writes no block for it.
+        """
+        variables = []
+        for entry in self.root.findall('.//variable/entry'):
+            name = entry.get('name')
+            if not name:
+                self.mark_skipped(entry, 'entry has no name attribute')
+                continue
+            container = self._scope_container_of(entry, ('templates', 'template-stack'))
+            if not container:
+                self.mark_skipped(
+                    entry,
+                    'no template or template stack holds this variable, so the provider has no '
+                    'location for it')
+                continue
+            variables.append(self.mark(entry, {
+                'name': name,
+                'description': self._get_text(entry, 'description'),
+                'type': self._variable_type(entry),
+                'template_stack': (self._scope_container_of(entry, ('template-stack',)) or ''),
+                **self.identity_of(entry),
+            }))
+
+        return variables
+
+    def parse_vsys(self) -> list[dict]:
+        """Parse the virtual system entries (F6.5).
+
+        A virtual system is a scope. The provider places it inside a template or a template
+        stack, but the export holds a virtual system only inside a template: a template stack
+        lists devices and templates and holds no virtual system. So an entry the export places on
+        a device alone has no place the provider can put it, and the run writes no block and
+        reports the entry as skipped. This row declares no property, so the block carries the
+        entry name and the location only.
+        """
+        systems = []
+        for entry in self.root.findall('.//vsys/entry'):
+            name = entry.get('name')
+            if not name:
+                self.mark_skipped(entry, 'entry has no name attribute')
+                continue
+            if not self._scope_container_of(entry, ('templates',)):
+                self.mark_skipped(
+                    entry,
+                    'no template holds this virtual system, so the provider has no location for '
+                    'it: a template stack lists templates and devices and holds no virtual system')
+                continue
+            systems.append(self.mark(entry, {'name': name, **self.identity_of(entry)}))
+
+        return systems
+
+    def _scope_container_of(self, elem: ET.Element, containers: tuple) -> str:
+        """The name of the scope entry whose container is one of `containers` (F6.5).
+
+        Walks up through the parent map, so the scope is the one the export declares, never a
+        guess. The container name comes from `container_coverage.container_tag`, the one place
+        the per-scope shape is stated.
+        """
+        node = elem
+        while node is not None:
+            if node.tag == 'entry' and \
+                    container_coverage.container_tag(node, self.parent_map, self.source) in containers:
+                return node.get('name') or ''
+            node = self.parent_map.get(node)
+        return ''
+
+    def _variable_type(self, entry: ET.Element) -> dict:
+        """The variable's `type` shape as one dict: the kind the entry states and its value.
+
+        A template variable entry writes the value inside `<type>`, in the field that names the
+        kind (`ip-netmask`, `fqdn`, ...), and the provider takes the same shape as a nested
+        block. A field name is the provider spelling, so the underscore is the provider's.
+        """
+        shape = entry.find('type')
+        if shape is None:
+            return {}
+        for node in list(shape):
+            return {node.tag.replace('-', '_'): (node.text or '').strip()}
+        return {}
 
     def device_group_of(self, elem: ET.Element) -> str:
         """Return the name of the device group that defines elem (F2.3).
@@ -265,13 +418,17 @@ class PanoramaParser:
             'vsys_device': self.device_of(elem),
         }
 
-    @staticmethod
-    def _list_names(container: ET.Element, child_tag: str) -> list:
-        """Return the names a container lists, in document order.
+    def _list_names(self, container: ET.Element, child_tag: str) -> list:
+        """Return the names a container lists, in document order, and mark the entries it holds.
 
         A Panorama export lists members two ways: the long form
         `<devices><entry name="fw-1.example.com">` and the short form
         `<templates><member>T1</member>`. Both mean the same thing.
+
+        A member is not an entry, so it has nothing to mark. An entry inside a membership
+        container is marked here, because this is the method that reads it (F4.3 rule 1): the
+        scope entry itself is marked by the parse method that reads the scope, so one entry has
+        one mark (F6.5).
         """
         names = []
         listing = container.find(child_tag)
@@ -280,6 +437,7 @@ class PanoramaParser:
         for node in list(listing):
             if node.tag == 'entry':
                 name = node.get('name')
+                self.mark(node, {})
             elif node.tag == 'member':
                 name = (node.text or '').strip()
             else:
@@ -314,30 +472,25 @@ class PanoramaParser:
 
         tables = {'device_groups': {}, 'templates': {}, 'template_stacks': {},
                   'stack_templates': {}}
+        # F6.5: the scope entry is marked by the parse method that reads it as an object, so
+        # this method marks only the membership entries inside it (`_list_names`). One entry,
+        # one mark.
         for entry in self.root.findall('.//device-group/entry'):
             name = entry.get('name')
             if name:
-                # F4.3: the membership an association entry states is the whole
-                # fact the parser takes, so the mark records it.
-                devices = self._list_names(entry, 'devices')
-                self.mark(entry, {'devices': devices})
-                for device in devices:
+                for device in self._list_names(entry, 'devices'):
                     tables['device_groups'].setdefault(device, []).append(name)
         for entry in self.root.findall('.//templates/entry'):
             name = entry.get('name')
             if name:
-                devices = self._list_names(entry, 'devices')
-                self.mark(entry, {'devices': devices})
-                for device in devices:
+                for device in self._list_names(entry, 'devices'):
                     tables['templates'].setdefault(device, []).append(name)
         for entry in self.root.findall('.//template-stack/entry'):
             name = entry.get('name')
             if not name:
-                self.mark_skipped(entry, "entry has no name attribute")
                 continue
             devices = self._list_names(entry, 'devices')
             templates = self._list_names(entry, 'templates')
-            self.mark(entry, {'devices': devices, 'templates': templates})
             for device in devices:
                 tables['template_stacks'].setdefault(device, []).append(name)
             for template in templates:
@@ -2574,11 +2727,13 @@ class TerraformGenerator:
         value = ''.join(ch for ch in value if ch >= ' ' and ch != '\x7f')
         return f'"{value}"'
 
-    # Provider v2 requires a location block on every resource. A type is
-    # template-scoped when its schema location declares no device_group
-    # sub-block (F3.5: derived from LOCATION_SCHEMA, not a hand-kept list).
+    # Provider v2 requires a location block on every resource. A type is template-scoped when its
+    # schema location declares no device_group sub-block (F3.5: derived from LOCATION_SCHEMA, not a
+    # hand-kept list). The six scope types are not scoped objects: they are the scopes, so they are
+    # not template-scoped, and the `panorama` sub-block is their own place (F6.5).
     _TEMPLATE_SCOPED_TYPES = frozenset(
-        t for t, scopes in LOCATION_SCHEMA.items() if 'device_group' not in scopes)
+        t for t, scopes in LOCATION_SCHEMA.items()
+        if 'device_group' not in scopes and t not in SCOPE_TYPES)
 
     # Template-scoped resource the export places in no template and on no
     # named device (F3.6). The name is a guess, so location_block reports
@@ -2759,6 +2914,19 @@ class TerraformGenerator:
         def keep(scope: str, fields: dict) -> dict:
             """Keep only the fields the sub-block declares, in the order it was given."""
             return {k: v for k, v in fields.items() if k in scopes[scope]}
+
+        # 0. Scope placement (F6.5): a scope object is placed in the scope the export puts it in,
+        #    or at the top of its own chain. The four Panorama scopes place themselves, and the
+        #    codebase states no device fact in a location, so the sub-block prints empty, the shape
+        #    `shared = {}` already uses. A variable and a virtual system place inside a template or
+        #    a template stack, and an entry the export places in neither is reported by the parse
+        #    as skipped, so it reaches no block here. Branch 4 would report a device group as
+        #    "device group dropped", which is wrong for the object that defines the group.
+        if resource_type in SCOPE_TYPES:
+            key = next((k for k in SCOPE_PLACEMENT[resource_type] if obj.get(k)), '')
+            if not key:
+                return {'panorama': {}}
+            return {key: keep(key, {'name': obj.get(key)})}
 
         # 1. Virtual-system placement (F3.5).
         if vsys and not template and 'vsys' in scopes:
@@ -2993,6 +3161,119 @@ variable "panos_password" {
 
         with open(self.output_dir / 'variables.tf', 'w') as f:
             f.write(content)
+
+    # F6.5: the scope objects are one file for the run, the way `imports.tf` (F6.4) and
+    # `read_through.tf` (F5.5) are one file. Written only when the run has a block.
+    SCOPE_FILE = 'scope.tf'
+
+    def generate_scope_objects(self, device_groups: list[dict], templates: list[dict],
+                               stacks: list[dict], variables: list[dict],
+                               systems: list[dict]) -> None:
+        """Write the scope objects, one `resource` block per scope entry (F6.5).
+
+        The file is written before the config inside the scopes it names, which is the order rule
+        `docs/CODEBASE_ASSEMBLY.md` §6 states. Blocks print in the F3.9 level order, and within a
+        type in document order, so the file is byte-identical between runs.
+
+        A block prints the field that carries the entry name, then the properties its matrix row
+        declares, in the row order, so the read record the property scan measures is the list the
+        row states. The entry name is the row identity, not a property, so it is not in the list.
+
+        The device group block prints no `parent`: the provider has no `parent` attribute for
+        `panos_device_group`, so the parent is the field of the parent record the same entry feeds.
+        The row still declares `parent`, because the scan measures one entry against the row that
+        covers its container, and this method reads it for the record. A record that would state no
+        fact is not written, so a device group that states no parent writes no parent record.
+
+        An entry the provider cannot place reaches no block here: the parse reported it as skipped,
+        so the run writes no block for a virtual system no template holds, and for a variable no
+        template or template stack holds.
+        """
+        # The type, the entries its blocks come from, the properties its matrix row declares, in the
+        # order the block prints them, and the property the provider needs for the block to state a
+        # fact. One device-group entry feeds two blocks: the scope object and the parent record. The
+        # device group block prints no `parent`, because `DATA_SOURCE_SCHEMA` shows the provider has
+        # no `parent` attribute for `panos_device_group`; the parent is the parent record's field, and
+        # the row still declares it, because the property scan measures one entry against the row that
+        # covers its container and this method reads it there.
+        # The entry name is the row identity, so it is not a property.
+        levels = (
+            ('panos_device_group', device_groups, ('description', 'devices', 'templates'), ''),
+            ('panos_device_group_parent', device_groups, ('parent',), 'parent'),
+            ('panos_template', templates, ('default_vsys', 'description'), ''),
+            ('panos_template_stack', stacks,
+             ('default_vsys', 'description', 'devices', 'templates'), ''),
+            ('panos_template_variable', variables,
+             ('description', 'template_stack', 'type'), ''),
+            ('panos_vsys', systems, (), ''),
+        )
+        content = ''
+        # The print order is `SCOPE_LEVEL_ORDER`, the F3.9 level order the file states, and not the
+        # order this method lists the levels in.
+        levels_in_order = sorted(levels, key=lambda level: SCOPE_LEVEL_ORDER.index(level[0]))
+        for resource_type, entries, properties, needs in levels_in_order:
+            for entry in entries:
+                if needs and not entry.get(needs):
+                    continue
+                # The naming context is the placement key the emitter uses, so the name and the
+                # location state the same scope. An entry that defines its own scope has no context
+                # above it.
+                placement = next((key for key in SCOPE_PLACEMENT[resource_type] if entry.get(key)), '')
+                local = self.declare_resource_name(entry['name'], resource_type, context=placement)
+                content += f'resource "{resource_type}" "{local}" {{\n'
+                content += self.location_block(resource_type, entry, local)
+                content += self._scope_name_field(resource_type, entry)
+                for key in properties:
+                    value = entry.get(key)
+                    # A property that names the location sub-block is the location's field, not the
+                    # block's own field (the same distinction `import_blocks.block_value` reads), so
+                    # it prints inside `location` and not here. The read still counts, because the row
+                    # declares it as a property this method reads.
+                    if key in SCOPE_PLACEMENT[resource_type]:
+                        continue
+                    content += self._scope_property(resource_type, key, value)
+                content += '}\n\n'
+        if not content:
+            return
+        with open(self.output_dir / self.SCOPE_FILE, 'w') as f:
+            f.write(content)
+
+    def _scope_name_field(self, resource_type: str, entry: dict) -> str:
+        """The field that carries the entry name, in the shape the provider declares it (F6.5).
+
+        `entry_coverage.name_field` is the one rule for that field, so the emitter, the import
+        agreement gate, and the coverage matrix test state the same thing.
+        """
+        return f'  {entry_coverage.name_field(resource_type)} = {self.escape_string(entry.get("name"))}\n'
+
+    def _scope_property(self, resource_type: str, key: str, value) -> str:
+        """One property line, in the shape the provider declares it as (F6.5).
+
+        `SCOPE_SHAPE` states the shape for each property this method prints, and the shape is a
+        provider fact: a membership the provider takes as a list of objects prints as a list of
+        objects, because `terraform validate` refuses a string there. A membership the provider takes
+        as a list of strings prints inline, the template variable `type` prints as the nested object
+        the provider takes, and every other property is a string. A property with no value is not a
+        field the export states, so the block writes no line for it.
+
+        The device object carries the field the provider requires (`name`). The vsys list a device can
+        carry is not a fact a device-group membership states, so the object states no vsys.
+
+        The device member rule (F3.5): `localhost.localdomain` is the PAN-OS "this device"
+        placeholder and names no firewall, so it never enters a printed membership list, and a list
+        that held only the placeholder writes no line, because the provider field is optional.
+        """
+        shape = SCOPE_SHAPE[resource_type][key]
+        if value in entry_coverage.EMPTY_FIELD_VALUES:
+            return ''
+        if isinstance(value, (list, tuple)):
+            members = [item for item in value if item != container_coverage.PLACEHOLDER_DEVICE]
+            if not members:
+                return ''
+            if shape == 'object_list':
+                return f'  {key} = {self.hcl_value([{"name": item} for item in members])}\n'
+            return f'  {key} = {self.hcl_value(members)}\n'
+        return f'  {key} = {self.hcl_value(value)}\n'
 
     def generate_address_objects(self, addresses: list[dict]):
         """Generate address object Terraform configuration (v2: panos_address)
@@ -5265,6 +5546,8 @@ Terraform configuration:
 
 - `provider.tf` - Provider configuration
 - `variables.tf` - Variable definitions
+- `scope.tf` - The scope objects (device group, template, template stack, template variable,
+  virtual system), one block per scope entry, written before the config inside them
 - `address_objects.tf`, `address_groups.tf` - Address objects and groups
 - `service_objects.tf`, `service_groups.tf` - Service objects and groups
 - `tags.tf` - Administrative tags
@@ -5539,6 +5822,13 @@ def main():
         print("Extracting configuration elements...")
         device_groups = panorama.parse_device_groups()
 
+        # F6.5: the scopes are objects the output writes, so the other scope containers have a
+        # parse method each, and the emitter writes them before the config inside them.
+        templates = panorama.parse_templates()
+        template_stacks = panorama.parse_template_stacks()
+        template_variables = panorama.parse_template_variables()
+        virtual_systems = panorama.parse_vsys()
+
         # New: Tags and Regions
         tags = panorama.parse_tags()
         regions = panorama.parse_regions()
@@ -5595,6 +5885,10 @@ def main():
 
         print("\nFound:")
         print(f"  - {len(device_groups)} device groups")
+        print(f"  - {len(templates)} templates")
+        print(f"  - {len(template_stacks)} template stacks")
+        print(f"  - {len(template_variables)} template variables")
+        print(f"  - {len(virtual_systems)} virtual systems")
         print(f"  - {len(tags)} tags")
         print(f"  - {len(regions)} regions")
         print(f"  - {len(custom_url_categories)} custom URL categories")
@@ -5658,6 +5952,11 @@ def main():
         # Core configuration
         tf_gen.generate_provider_config()
         tf_gen.generate_variables()
+
+        # F6.5: the scope objects come before the config inside them (`docs/CODEBASE_ASSEMBLY.md`
+        # §6), so `scope.tf` is the first object file the run writes.
+        tf_gen.generate_scope_objects(device_groups, templates, template_stacks,
+                                      template_variables, virtual_systems)
 
         # New: Tags and URL/App objects
         tf_gen.generate_tags(tags)

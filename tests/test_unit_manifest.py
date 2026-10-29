@@ -132,12 +132,15 @@ def test_one_row_per_combination_of_the_four_facts(converter_module, tmp_path):
 
 
 def test_the_scope_entry_is_one_of_its_rows(converter_module, tmp_path):
-    """A declared scope is a ledger row, so the entry that defines a unit counts inside it."""
+    """A declared scope is a ledger row, so the entry that defines a unit counts inside it.
+
+    F6.5: a scope entry is an object, so the row that defines the unit is an `emitted` row.
+    """
     parser, _gen = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
     defining = [row for row in parser.ledger.rows()
                 if unit_manifest.facts_of(row) == ('Datacenter-FW', '', '', '')]
     assert [row for row in defining if row['name'] == 'Datacenter-FW']
-    assert [row for row in defining if row['destination'] == 'bookkeeping']
+    assert [row for row in defining if row['destination'] == 'emitted']
     assert _row(_manifest(tmp_path), ('Datacenter-FW', '', '', ''))['entry_count'] == len(defining)
 
 
@@ -440,8 +443,8 @@ def test_the_generated_tf_bytes_are_unchanged(tmp_path):
 
 
 def test_the_gate_reads_no_data_file(tmp_path):
-    """The gate reads `.tf` files, so a data file in the output directory is not a gate input, and
-    `CHECK_ORDER` is unchanged.
+    """The gate reads `.tf` files, so a data file in the output directory is not a gate input, and the
+    report prints the checks in `CHECK_ORDER` order.
     """
     _run(SAMPLE_CONFIG, tmp_path)
     files = sanity_checks.read_tf_files(tmp_path)

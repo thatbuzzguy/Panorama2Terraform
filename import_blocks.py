@@ -12,8 +12,10 @@ An import block binds a resource block to the object the provider already has. S
 3. **One location rule.** The location object of the id is the same data `TerraformGenerator.location_data`
    builds for the resource block, so the block and the id cannot state two different locations.
 4. **One naming rule.** The local name is the name `declare_block_name` recorded at the site that applied the
-   rule, and the entry name is the name the block states. This module defines no sanitizing rule and resolves
-   no name.
+   rule, and the entry name is the name the block states through `entry_coverage.name_field`, the one rule for
+   the field that carries it: `name` for a type that declares one, and the field that names the scope for a type
+   that declares none (`device_group` for `panos_device_group_parent`, F6.5). The gate reads the block through
+   the same rule. This module defines no sanitizing rule and resolves no name.
 5. **The four `*_policy_rules` types write no block.** Their import object names the rulebase, the position in
    the live rulebase, and a list of names, so no per-entry object exists (the rule, and the reason, are stated
    in `acceptance.md` Decision 3 and pinned by `tests/test_import_blocks.py`). The type set is read from the

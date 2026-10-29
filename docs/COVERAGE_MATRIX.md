@@ -21,7 +21,8 @@ The document index is in [README.md](README.md).
 
 ## The matrix
 
-One row per emitted provider resource type (28 rows). The table below shows the
+One row per emitted provider resource type (34 rows, including the six scope rows F6.5
+added). The table below shows the
 six identity fields; the Row schema section names the other two, which are too
 long to read in a table. Read a whole row from the command at the top of this
 document.
@@ -56,6 +57,12 @@ document.
 | `panos_ike_gateway` | `ike/gateway/entry` | `IKE-GW-Branch` | `IKE-GW-Branch` | `ike_gateways.xml` | `vpn.tf` |
 | `panos_ipsec_crypto_profile` | `crypto-profiles/ipsec-crypto-profiles/entry` | `IPSEC-DEFAULT` | `IPSEC-DEFAULT` | `ipsec_crypto_profiles.xml` | `vpn.tf` |
 | `panos_ipsec_tunnel` | `tunnel/ipsec/entry` | `TUN-Branch` | `TUN-Branch` | `ipsec_tunnels.xml` | `vpn.tf` |
+| `panos_device_group` | `device-group/entry` | `Edge-FW` | `Edge-FW` | `scope_objects.xml` | `scope.tf` |
+| `panos_device_group_parent` | `device-group/entry` | `Edge-FW` | `Edge-FW` | `scope_objects.xml` | `scope.tf` |
+| `panos_template` | `templates/entry` | `Edge-Networks` | `Edge-Networks` | `scope_objects.xml` | `scope.tf` |
+| `panos_template_stack` | `template-stack/entry` | `Edge-Stack` | `Edge-Stack` | `scope_objects.xml` | `scope.tf` |
+| `panos_template_variable` | `variable/entry` | `edge-tag` | `edge-tag` | `scope_objects.xml` | `scope.tf` |
+| `panos_vsys` | `vsys/entry` | `edge-vsys` | `edge-vsys` | `scope_objects.xml` | `scope.tf` |
 
 Report-only types (`REPORT_ONLY_TYPES`) have no row and can never gain
 one without first leaving the report-only set and entering
@@ -70,7 +77,7 @@ Each row is a dict with exactly eight fields:
 | `resource` | The provider v2 resource type the generator emits. Must be in `EMITTED_TYPES`. |
 | `xml_element` | The tag path of the Panorama XML element whose `<entry>` feeds the resource. Scope prefixes (`shared/`, `device-group/entry/`, `vsys/entry/`, `templates/entry/`) vary per export and are not part of the element identity; the tests search the fixture at any scope. |
 | `xml_name` | The `<entry name=...>` in the row's fixture that feeds the resource. |
-| `emitted_name` | The `name` attribute the emitted resource must carry. Equals `xml_name` except where the converter derives a name: the `.0` layer-3 subinterface is emitted as `ethernet1/1.0` from the `ethernet1/1` entry. |
+| `emitted_name` | The `name` attribute the emitted resource must carry. Equals `xml_name` except where the converter derives a name: the `.0` layer-3 subinterface is emitted as `ethernet1/1.0` from the `ethernet1/1` entry. For `panos_device_group_parent` the provider declares no `name`, so the value is the entry name carried by the field `entry_coverage.name_field` states. |
 | `fixture` | The XML fixture under `tests/fixtures/` whose pipeline run exercises the row. |
 | `output_file` | The `.tf` file (relative to the output directory) that must contain the resource block. |
 | `emitter` | The `TerraformGenerator` method names that read this row's properties. Usually one method. Two names appear when a report writer reads a property the `.tf` emitter does not, which is the case for `panos_address`: the manual setup report prints a report-only address row from the same parsed object. |
@@ -87,6 +94,21 @@ keep it honest:
   measures the keys the corpus outputs read from the entries each row covers, and
   fails when a row declares a property no output reads. A property captured but not
   read is a finding, not a declaration: the report prints it (§3.2).
+
+The six scope rows (F6.5) add three facts the other rows do not state:
+
+- A row that prints a property inside `location` declares the placement key it reads, so
+  `panos_template_variable` declares `template_stack` even though the block prints the name
+  inside `location` rather than as its own attribute.
+- The device-group row declares `parent`, and the device-group block prints none: the provider has
+  no `parent` attribute for `panos_device_group`, so the value reaches the output through the parent
+  record the same entry feeds. The shape test excludes that property, because it is printed by another
+  block (`tests/test_scope_objects.py::PRINTED_BY_ANOTHER_BLOCK`).
+- `resource_mapping.SCOPE_SHAPE` states the provider shape of each property the row prints at
+  the block's own level (`devices` is a list of objects, `templates` a list of strings, `type` an
+  object), so the emitter cannot print a string where the provider takes an object. Pinned by
+  `tests/test_scope_objects.py::test_scope_shape_is_the_provider_shape` against the live provider
+  schema, and `::test_scope_shape_covers_the_properties_the_rows_declare` against the rows.
 
 The row is also the key of the cross-source shadow scan (F5.4): a child entry name that
 repeats a parent entry name is a finding only when both entries are covered by the same row,

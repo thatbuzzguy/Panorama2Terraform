@@ -16,6 +16,7 @@ Checks, in report order:
 | `location_present` | every `resource` and `data` block carries a `location` block | FAIL |
 | `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type | FAIL |
 | `import_blocks` | every `import` block agrees with the `resource` block it names | FAIL, WARN |
+| `scope_blocks` | a name inside a scope block's `location` names a scope this run declares | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
@@ -39,6 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import entry_coverage
 import import_blocks
 import resource_mapping
 
@@ -53,6 +55,7 @@ CHECK_ORDER = (
     'location_present',
     'data_blocks',
     'import_blocks',
+    'scope_blocks',
     'references',
     'variables',
     'control_chars',
@@ -454,7 +457,7 @@ def check_import_blocks(files: dict[str, str]) -> list[Finding]:
                 f'import {block.address} names no resource block in this run',
             ))
             continue
-        name = target.attribute('name')
+        name = target.attribute(entry_coverage.name_field(block.rtype))
         if decoded['name'] != name:
             findings.append(Finding(
                 'import_blocks', FAIL, block.file, block.line,
@@ -474,6 +477,46 @@ def check_import_blocks(files: dict[str, str]) -> list[Finding]:
                 findings.append(Finding(
                     'import_blocks', WARN, block.file, block.line,
                     f'resource {block.address}: no import id, because {import_blocks.RULE_DECISION}',
+                ))
+    return findings
+
+
+def check_scope_blocks(files: dict[str, str]) -> list[Finding]:
+    """A name inside a scope block's `location` must name a scope this run declares (F6.5).
+
+    A `.name` reference is the `references` rule, but a name written inside a `location` is not a
+    reference: it names the scope the block sits in, so the reference rule cannot reach it. This
+    rule reads that name against the block that declares the scope, through `SCOPE_ANSWER`. Only a
+    `resource` block answers, because a `data` block is a read-through, not a declaration, and the
+    rule that a `data` block answers a reference is the `references` rule.
+
+    Two shapes state no name to resolve, so they are not checked: an empty sub-block (the
+    `panorama = {}` shape the four Panorama scopes write), and a field that names a device rather
+    than a scope (`panorama_device`, `ngfw_device`).
+    """
+    answering = set(resource_mapping.SCOPE_ANSWER.values())
+    declared = set()
+    for block in resource_blocks(files):
+        if block.rtype in answering:
+            name = block.attribute('name')
+            if name:
+                declared.add((block.rtype, name))
+    findings = []
+    for block in sorted(resource_blocks(files), key=lambda b: (b.file, b.line)):
+        if block.rtype not in resource_mapping.SCOPE_TYPES:
+            continue
+        for sub_block, fields in block.location_values().items():
+            scope_type = resource_mapping.SCOPE_ANSWER.get(sub_block)
+            if scope_type is None:
+                continue
+            name = fields.get('name', '')
+            if not name:
+                continue
+            if (scope_type, name) not in declared:
+                findings.append(Finding(
+                    'scope_blocks', FAIL, block.file, block.line,
+                    f'{block.address} location.{sub_block}.name = "{name}" names no '
+                    f'{scope_type} block this run declares',
                 ))
     return findings
 
@@ -614,6 +657,7 @@ def run_checks(output_dir: Path, run_terraform: bool = False,
         CheckResult('location_present', tuple(check_location_present(files))),
         CheckResult('data_blocks', tuple(check_data_blocks(files))),
         CheckResult('import_blocks', tuple(check_import_blocks(files))),
+        CheckResult('scope_blocks', tuple(check_scope_blocks(files))),
         CheckResult('references', tuple(check_references(files))),
         CheckResult('variables', tuple(check_variables(files))),
         CheckResult('control_chars', tuple(check_control_chars(files))),

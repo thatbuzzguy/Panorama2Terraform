@@ -86,6 +86,27 @@ PROPERTY_HEADING = 'Captured Properties No Output Read'
 MATRIX_BY_RESOURCE = {row['resource']: row for row in resource_mapping.COVERAGE_MATRIX}
 
 
+def name_field(resource_type: str) -> str:
+    """The field a block of this type carries the entry name in (F6.5 decision 4).
+
+    `DATA_SOURCE_SCHEMA` is the one place that says whether a type declares a `name` attribute. When
+    it does not, the entry name reaches the block through the field that names the scope the type
+    defines, and `REPORT_SCOPE_KEYS` is the one mapping from a scope container to that field:
+    `device_group` for `panos_device_group_parent`. A type with neither fact keeps `name`, because
+    the four `*_policy_rules` types state the name inside `location` and have no name field at the
+    block's own level.
+
+    The emitter prints the name through this rule, the import agreement gate (F6.4) reads it through
+    this rule, and `tests/test_coverage_matrix.py` checks a block against it, so no second naming
+    rule exists.
+    """
+    declares_name, _shape = resource_mapping.DATA_SOURCE_SCHEMA[resource_type]
+    if declares_name:
+        return 'name'
+    return REPORT_SCOPE_KEYS.get(
+        MATRIX_BY_RESOURCE[resource_type]['xml_element'].split('/')[0], 'name')
+
+
 class RecordingDict(dict):
     """A captured entry object that records which keys an output reads from it (F4.4).
 
@@ -255,14 +276,15 @@ class EntryLedger:
         return container_coverage.is_section(container, self.parents, self.source)
 
     def destination(self, entry: ET.Element) -> str:
-        """Destination for one entry: the mark wins over the table row (F4.3 AC-2.4)."""
+        """Destination for one entry: the mark wins over the table row (F4.3 AC-2.4).
+
+        F6.5: a scope entry is an object the output writes, so the table row alone decides. The
+        `devices` entry stays `bookkeeping`, because no provider resource exists for a device.
+        """
         mark = self.mark_for(entry)
         if mark and mark['destination']:
             return mark['destination']
         container = self.parents.get(entry)
-        if container_coverage.is_scope_entry(entry, self.parents, self.source):
-            # A scope entry defines a scope, so it is not an object inside one.
-            return 'bookkeeping'
         row = covering_row(container_coverage.section_path(container, self.parents, self.source))
         if row:
             return row.destination

@@ -390,7 +390,7 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 ## Design Decisions (Epic 6)
 
 The design record is `docs/CODEBASE_ASSEMBLY.md`. Each item below is a decision, not a rule the code
-holds, except the F6.1, F6.2, F6.3 and F6.4 decisions, which the code holds and a test pins.
+holds, except the F6.1, F6.2, F6.3, F6.4 and F6.5 decisions, which the code holds and a test pins.
 
 - F6.1 landed three decisions (2026-10-28). The rules are in `unit_manifest.py`, and
   `docs/CODEBASE_ASSEMBLY.md` §3 and `docs/ARCHITECTURE.md` §3.4 state them:
@@ -460,6 +460,33 @@ holds, except the F6.1, F6.2, F6.3 and F6.4 decisions, which the code holds and 
   - the four `*_policy_rules` types write no block and each rule entry is one WARN finding, because their
     import object names the rulebase, the position in the live rulebase, and a list of names, so no
     per-entry object exists. The type set is the rows `LOCATION_SCHEMA` declares `rulebase` for.
+- F6.5 landed eight decisions (2026-10-28). The tables are in `resource_mapping.py`, the emitter is
+  `TerraformGenerator.generate_scope_objects`, and `docs/CODEBASE_ASSEMBLY.md` §8 and
+  `docs/ARCHITECTURE.md` §4.1, §4.2 and §4.6 state the rules:
+  - emission is the default, not a flag, because `EMITTED_TYPES` is the set the committed goldens emit, the
+    destination of a report row comes from the container table for every run, and the order rule (§6) puts
+    the scope object before the config inside it. Epic 6 adds no new CLI flag here;
+  - the scope shape is one file for the run (`scope.tf`), written after `provider.tf` and `variables.tf`
+    and before the object files, because the per-unit write path (§14) is still open and a per-unit file
+    cannot state the unit before the config inside it;
+  - the entry name is the row identity, not a property, so `entry_coverage.name_field` is the one rule for
+    the field that carries it into a block. `panos_device_group_parent` declares no `name`, so the emitter,
+    the import agreement gate, and the coverage matrix test read the same rule rather than three lists;
+  - the value shape is a provider fact (`SCOPE_SHAPE`), because `terraform validate` refuses a string where
+    the provider takes a list of objects. A property the block prints at its own level must have a shape
+    entry, so a row cannot grow a printed property without stating its shape;
+  - the device object carries only `name`. The provider allows a `vsys` field per device, but the membership
+    entry states no vsys fact, so the block states none: an output states only what the source states;
+  - the placeholder device (`localhost.localdomain`, F3.5) never enters a printed membership list, and a
+    list that held only the placeholder writes no line, because the provider field is optional and the
+    codebase states no device fact it cannot name;
+  - a scope object is emitted only when the export places it, and the location sub-block is the placement
+    key, so an entry the export places in no template and no template stack is `skipped` with the reason:
+    the converter does not guess a place (the F3.6 rule). `panorama_device` is not emitted, because the
+    codebase states no device fact in a location today;
+  - the gate rule for a scope block reads the name inside `location`, because the reference rule cannot
+    reach it, and it reads blocks with the one block reader. A `data` block cannot answer a scope name, the
+    same way an import names a resource.
 - Finding, recorded during F6.4: `location.device_group` declares a `panorama_device` field in the pinned
   schema, and the provider docs example states one, but the generator's location rule emits no device
   fact, so the tool writes no `panorama_device` in an id. An id states only what the block states. If the
@@ -467,15 +494,16 @@ holds, except the F6.1, F6.2, F6.3 and F6.4 decisions, which the code holds and 
   together.
 - Open: the manifest names the directory and writes no directory, so the path that creates one
   directory per unit is still open. The gate reads no data file, so the gate rule that reads the three
-  data files is not written yet.
+  data files is not written yet. `scope.tf` (F6.5) is one file for the run, so a codebase run writes the
+  scope blocks of every unit in one file until the write path lands.
 - Finding, recorded during F6.4: the generated `README.md` does not name `imports.tf`. The F5.5 label
   precedent says an opt-in shape labels itself, so the label should name the file and the block count. The
   goldens pin `.tf` files only, so the label is a report-shape change, not a byte change.
 
-- Open: the device-group `parent` field is not captured, so the owner rule cannot name an ancestor for
-  two device groups in one source (`docs/CODEBASE_ASSEMBLY.md` §4 rule 5). A device group entry is a
-  bookkeeping row, so the parse keeps only its name. `panos_device_group` and `panos_device_group_parent`
-  (F6.5) are where the parent fact would land.
+- Landed as F6.5 (2026-10-28): the parse captures the device-group `parent`, so the owner rule names the
+  ancestor for two device groups in one source, through `ownership.parent_map` and `chain_of`. A group that
+  states no parent is a top-level group, so two top-level groups that repeat a name are peers and the rule
+  names no owner for them.
 - Open: a declared template stack is a scope container (`container_coverage.SCOPE_CONTAINERS`), so a
   stack can be a codebase unit, but the stack is not one of the four scope facts, so the manifest names
   no stack unit today. A stack unit needs a fifth fact, or the decision to read `template` as the stack
