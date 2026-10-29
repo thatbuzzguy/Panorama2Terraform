@@ -8,8 +8,8 @@ stated once here.
    a unit exists when the ledger has a report row in it. The rows come from
    `entry_coverage.EntryLedger`, so the manifest adds no parse data. An entry inside a
    config-object entry is a property level (§3.1), so the parent row's count covers it.
-2. The directory name. `sanitize(unit name) + '_' + 8-hex digest of the unit identity`, in the
-   `ARCHITECTURE.md` §5 shape. The digest is always present, not only on a collision: a
+2. The directory name. `sanitize(unit name) + '_' + 8-hex digest of the unit identity`, read through
+   the §5 rule in `naming.py` (F6.6). The digest is always present, not only on a collision: a
    collision-only rule makes one unit's name depend on the other units in the run, so adding an
    unrelated scope would move an existing directory. The name depends on the unit alone, which is
    the same reason §5 puts the digest in a local name. The unit name is the deepest scope the
@@ -32,9 +32,9 @@ stated once here.
    fields, because the order comes from the three rules `reference_edges.py` states.
 
 The reference names are recorded by the reference rule (`TerraformGenerator.name_ref`) at the site
-that applies it and arrive here as `references`; this module resolves no name. The sanitizing rule
-is `TerraformGenerator.sanitize_name` (`ARCHITECTURE.md` §5), so this module takes it as an
-argument and defines no second rule.
+that applies it and arrive here as `references`; this module resolves no name. The sanitizing rule is
+`naming.py` (`ARCHITECTURE.md` §5, F6.6), which `TerraformGenerator.sanitize_name` delegates to, so this
+module takes it as an argument and defines no second rule.
 
 Usage:
     from unit_manifest import MANIFEST_FILE, build_rows, render, parse_rows

@@ -32,7 +32,6 @@ See docs/USAGE_GUIDE.md for the flags, the report files, and the post-run gate.
 import argparse
 import hashlib
 import os
-import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Optional
@@ -40,11 +39,13 @@ from typing import Any, Optional
 import container_coverage
 import entry_coverage
 import import_blocks
+import naming
 import ownership
 import provenance
 import reference_edges
 import sanity_checks
 import shadow_coverage
+import site_data
 import source_fetch
 import state_coverage
 import state_input
@@ -57,6 +58,8 @@ from resource_mapping import (
     SCOPE_PLACEMENT,
     SCOPE_SHAPE,
     SCOPE_TYPES,
+    VALUE_VARIABLES,
+    VARIABLE,
 )
 from xml_input import (
     DEFAULT_SCOPE,
@@ -2451,6 +2454,10 @@ class TerraformGenerator:
         # F6.4: one import row per entry a `resource` block declares, recorded at the site that applied the
         # naming rule (`import_blocks.row`). `render` prints them in the order a reader can reproduce.
         self.import_rows: list[dict] = []
+        # F6.6: the site values the value-to-variable table mapped, keyed by the unit's four scope facts
+        # (`unit_manifest.facts_of`) and recorded at the site that applied the table, so `site_data.py` states
+        # them without resolving a name. One value is stored once per unit.
+        self._value_variables: dict[tuple, dict] = {}
         # F3.5: declarations that name a target device, keyed
         # (scope, device, name). An interface belongs to one device, and two
         # devices can declare the same interface name, so a reference from a
@@ -2472,15 +2479,12 @@ class TerraformGenerator:
         self._associations: dict = associations or {}
 
     def sanitize_name(self, name: str) -> str:
-        """Sanitize names for Terraform resource names"""
-        # Replace spaces and special characters with underscores
-        sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', name)
-        # Remove leading/trailing underscores
-        sanitized = sanitized.strip('_')
-        # Ensure it doesn't start with a number
-        if sanitized and sanitized[0].isdigit():
-            sanitized = f'_{sanitized}'
-        return sanitized.lower()
+        """Sanitize names for Terraform resource names.
+
+        The rule is `naming.py` (F6.6), because the post-run gate reads it without the generator, so no
+        module defines a second shape. Every caller takes this method as the argument the data modules use.
+        """
+        return naming.sanitize(name)
 
     def declare_resource_name(self, name: str, scope: str, context: str = '',
                               vsys: str = '', device: str = '') -> str:
@@ -2584,6 +2588,15 @@ class TerraformGenerator:
     def unit_references(self) -> dict:
         """The recorded reference names, keyed by the referrer's four scope facts, in sorted order."""
         return {facts: tuple(sorted(names)) for facts, names in self._unit_references.items()}
+
+    def value_variables(self) -> dict:
+        """The recorded site values, keyed by the unit's four scope facts, in name order (F6.6).
+
+        Recorded at the site that applied the value-to-variable table, so `site_data.py` can state the row
+        without resolving a name, and `generate_variables` declares exactly the values the run printed.
+        """
+        return {facts: {name: values[name] for name in sorted(values)}
+                for facts, values in self._value_variables.items()}
 
     def record_import_row(self, resource_type: str, obj: dict, local_name: str, location: dict) -> None:
         """Record the import row for one entry, at the site that applied the naming rule (F6.4).
@@ -3022,6 +3035,24 @@ class TerraformGenerator:
             f'template; {self._device_template_text(device)}')
         return {'template': {'name': self._TEMPLATE_PLACEHOLDER}}
 
+    def location_field(self, key: str, value: str, obj: dict) -> str:
+        """Print one location field as the value-to-variable table says, and record the pair (F6.6).
+
+        `VALUE_VARIABLES` is the only place that decides the shape, so the emitter has no per-type branch. The
+        pair is recorded at the site that applies the rule, the way `name_ref` records a reference name, so the
+        site data states the values the run printed and the gate rule `variables` cannot see a declaration with
+        no consumer. `localhost.localdomain` never reaches a location (F3.5), so it never reaches this method
+        and names no variable.
+
+        The value stays the fact in `location_data`: the import id encodes it, because the provider parses the
+        id and a variable name is not a device name.
+        """
+        if VALUE_VARIABLES.get(key) != VARIABLE:
+            return self.escape_string(value)
+        name = naming.variable_name(value)
+        self._value_variables.setdefault(unit_manifest.facts_of(obj), {})[name] = value
+        return naming.variable_text(value)
+
     def location_block(self, resource_type: str, obj: dict, local_name: str = '') -> str:
         """Required location object for a generated resource (F2.3, F3.5).
 
@@ -3053,7 +3084,9 @@ class TerraformGenerator:
         drops it, so a wrong sub-block fails at apply, not at validate.
 
         The block renders from `location_data` and records the import row at the site that applied the naming
-        rule (F6.4), so the block and the block's id state one location and one name.
+        rule (F6.4), so the block and the block's id state one location and one name. Each field prints as the
+        value-to-variable table says (F6.6), so the block prints a site value as a `var.` reference while the
+        id states the value.
         """
         data = self.location_data(resource_type, obj)
         if local_name:
@@ -3064,7 +3097,7 @@ class TerraformGenerator:
         if not fields:
             # An empty sub-block is the `shared = {}` shape.
             return f'  location = {{\n    {scope} = {{}}\n  }}\n'
-        body = ''.join(f'      {k} = {self.escape_string(v)}\n' for k, v in fields.items())
+        body = ''.join(f'      {k} = {self.location_field(k, v, obj)}\n' for k, v in fields.items())
         return f'  location = {{\n    {scope} = {{\n{body}    }}\n  }}\n'
 
     def hcl_value(self, value: Any, indent: str = '  ') -> str:
@@ -3133,11 +3166,17 @@ provider "panos" {
             f.write(content)
 
     def generate_variables(self):
-        """Generate variables.tf file"""
-        # F2.10: every emitted variable is consumed. The three credential
-        # variables are consumed by the provider block in provider.tf.
-        # The old dead `device_group` variable is gone: v2 location is
-        # derived per resource from the source XML.
+        """Generate variables.tf file.
+
+        F2.10: every emitted variable is consumed. The three credential variables are consumed by the
+        provider block in provider.tf. The old dead `device_group` variable is gone: v2 location is
+        derived per resource from the source XML.
+
+        F6.6: the rest of the declaration set is the site values the value-to-variable table mapped,
+        so the file declares exactly what the run printed. This is why `main()` calls it after the
+        emitters: the file cannot state a variable the run has not consumed. The type is the kind the
+        site data row declares, so a declaration agrees with the value the `.tfvars` prints.
+        """
         content = '''# Variables for Palo Alto Configuration
 # Set the values in terraform.tfvars (do not commit it) or via the
 # TF_VAR_panos_hostname / TF_VAR_panos_username / TF_VAR_panos_password
@@ -3158,6 +3197,19 @@ variable "panos_password" {
   sensitive   = true
 }
 '''
+        values: dict[str, object] = {}
+        for recorded in self._value_variables.values():
+            for name, value in recorded.items():
+                values[name] = value
+        if values:
+            content += (f'# Site values (F6.6): one variable per value `resource_mapping.VALUE_VARIABLES` maps.\n'
+                        f'# The values are in {site_data.TFVARS_FILE}, which Terraform loads automatically.\n\n')
+            for name in sorted(values):
+                kind = 'list(string)' if isinstance(values[name], list) else 'string'
+                content += (f'variable "{name}" {{\n'
+                            f'  description = "Site value (F6.6), read from {site_data.TFVARS_FILE}"\n'
+                            f'  type        = {kind}\n'
+                            '}\n\n')
 
         with open(self.output_dir / 'variables.tf', 'w') as f:
             f.write(content)
@@ -5951,7 +6003,6 @@ def main():
 
         # Core configuration
         tf_gen.generate_provider_config()
-        tf_gen.generate_variables()
 
         # F6.5: the scope objects come before the config inside them (`docs/CODEBASE_ASSEMBLY.md`
         # §6), so `scope.tf` is the first object file the run writes.
@@ -6034,6 +6085,11 @@ def main():
         # reports so the label can state the count and the gate can read the file.
         tf_gen.generate_read_through()
 
+        # F6.6: `variables.tf` is written after the emitters, because the declaration set is the site
+        # values the value-to-variable table mapped at the print sites (`generate_variables`). A file
+        # written before the emitters could not state what the run consumed.
+        tf_gen.generate_variables()
+
         # Reports
         tf_gen.generate_interface_report(interfaces)
         tf_gen.generate_readme()
@@ -6111,6 +6167,18 @@ def main():
         edge_file = Path(args.output_dir) / reference_edges.EDGE_FILE
         if edge_rows:
             edge_file.write_text(reference_edges.render(edge_rows), encoding='utf-8')
+
+        # F6.6: the site data. One row per site that names a value, written as data, and only when it has
+        # content, following the rule for the report files and the other data files. A reader joins
+        # `directory` to the manifest row. The `.tfvars` is written from the rows, not from the generator's
+        # state, and the gate reads no data file (`ARCHITECTURE.md` §4.5), so these two files are not gate
+        # inputs.
+        site_rows = site_data.build_rows(panorama.ledger, tf_gen.value_variables(), tf_gen.sanitize_name)
+        if site_rows:
+            site_file = Path(args.output_dir) / site_data.SITE_DATA_FILE
+            site_file.write_text(site_data.render(site_rows), encoding='utf-8')
+            tfvars_file = Path(args.output_dir) / site_data.TFVARS_FILE
+            tfvars_file.write_text(site_data.render_tfvars(site_rows), encoding='utf-8')
 
         # F6.4: the import blocks. A `.tf` file, because the gate rule that checks an import block reads the
         # files the operator receives (`ARCHITECTURE.md` §4.5), and written only when the run declares them and

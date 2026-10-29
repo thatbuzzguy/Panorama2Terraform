@@ -23,6 +23,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
+import naming
 from conftest import FIXTURES_DIR
 from panorama_to_terraform import TerraformGenerator
 
@@ -144,11 +145,12 @@ def test_device_specific_config_uses_ngfw(bare_gen):
     """An entry under devices/entry/<device> is that device's own config.
 
     The old emitter had no ngfw branch, so it wrote the "Shared" template
-    placeholder, which names a template no Panorama has.
+    placeholder, which names a template no Panorama has. The device name prints
+    as `VALUE_VARIABLES` says, so the block states the variable name (F6.6).
     """
     text = bare_gen.location_block('panos_virtual_router',
                                    {'name': 'vr', 'vsys_device': FW1})
-    assert _location(text) == {'ngfw': {'ngfw_device': FW1}}
+    assert _location(text) == {'ngfw': {'ngfw_device': naming.variable_text(FW1)}}
 
 
 def test_object_types_never_emit_ngfw(bare_gen):
@@ -166,11 +168,16 @@ def test_object_types_never_emit_ngfw(bare_gen):
 
 
 def test_placeholder_device_never_becomes_ngfw(bare_gen):
-    """localhost.localdomain names no firewall, so it is never ngfw_device."""
+    """localhost.localdomain names no firewall, so it is never ngfw_device.
+
+    F6.6: a value that reaches no location names no variable, so the placeholder cannot enter the
+    value-to-variable mapping.
+    """
     text = bare_gen.location_block('panos_ethernet_interface',
                                    {'name': 'ethernet1/1',
                                     'vsys_device': 'localhost.localdomain'})
     assert 'localhost' not in text
+    assert 'var.' not in text, 'the placeholder names no device, so it names no variable'
     assert _location(text) == {'template': {'name': 'Shared'}}
 
 
@@ -184,7 +191,7 @@ def test_template_override_inside_a_template_names_the_device(bare_gen):
                                    {'name': 'trust', 'template': 'HQ-Networks',
                                     'vsys_device': FW1})
     assert _location(text) == {'template': {'name': 'HQ-Networks',
-                                            'ngfw_device': FW1}}
+                                            'ngfw_device': naming.variable_text(FW1)}}
 
 
 def test_zone_with_a_device_and_no_vsys_is_reported(gen):
@@ -253,8 +260,8 @@ def test_same_interface_name_on_two_devices(tmp_path):
     locals_ = [header.split('"')[3] for header in blocks]
     assert len(set(locals_)) == 2, locals_
     locations = [_location(block) for block in blocks.values()]
-    assert {'ngfw': {'ngfw_device': FW1}} in locations
-    assert {'ngfw': {'ngfw_device': FW2}} in locations
+    assert {'ngfw': {'ngfw_device': naming.variable_text(FW1)}} in locations
+    assert {'ngfw': {'ngfw_device': naming.variable_text(FW2)}} in locations
 
 
 def test_reference_resolves_inside_the_template_target_device(tmp_path):
@@ -333,8 +340,8 @@ def test_multi_device_fixture_places_everything_it_can(tmp_path, make_parser):
     assert 'name = "HQ-Networks"' in routers
     assert 'name = "DC-Networks"' in routers
     interfaces = (out / 'interfaces.tf').read_text()
-    assert f'ngfw_device = "{FW1}"' in interfaces
-    assert f'ngfw_device = "{FW2}"' in interfaces
+    assert f'ngfw_device = {naming.variable_text(FW1)}' in interfaces
+    assert f'ngfw_device = {naming.variable_text(FW2)}' in interfaces
 
 
 # --- splitter: the association replaces the name convention ----------------

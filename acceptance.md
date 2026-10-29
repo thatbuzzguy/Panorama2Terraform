@@ -1,225 +1,211 @@
-# Acceptance criteria — F6.5 Scope objects as output
+# Acceptance criteria — F6.6 The site data layer
 
-F6.5 (Epic 6, Goal 6) emits the six scope objects the pinned provider schema has for
-the scopes a codebase needs: `panos_device_group`, `panos_device_group_parent`,
-`panos_template`, `panos_template_stack`, `panos_template_variable`, `panos_vsys`.
-The design record is `docs/CODEBASE_ASSEMBLY.md` §8; the order rule is §6.
+F6.6 (Epic 6, Goal 6) separates the standard from the site: the device name a resource block
+prints becomes a variable, the site values become a data file, and the `.tfvars` the platform
+reads is written from that data. The design record is `docs/CODEBASE_ASSEMBLY.md` §9.
+
+F6.6 writes no directory, so the write path (§14) stays open, and no feature after F6.6 is
+started here.
 
 ## Decisions
 
-### 1. Emission is default, not opt-in
+### 1. The mapping is default output, not a flag
 
-F6.5 changes the default output. It is not a flag. Three facts force this:
+The value-to-variable mapping applies to every run. It is not an opt-in shape.
 
-1. `test_resource_mapping.py::test_emitted_types_match_goldens` pins that `EMITTED_TYPES`
-   equals the types the committed goldens emit. A type a run only emits when a flag is on
-   cannot be in `EMITTED_TYPES` without a golden that has it.
-2. The property scan (F4.4) measures what an output reads, and the destination of a report
-   row comes from the container table for every run. If a scope container becomes an
-   `emitted` row, a run that writes no scope block states a destination it did not write,
-   and the scan reports every captured scope field as unread. The report, the scan, and the
-   bytes must agree, so the emitter runs in every run.
-3. `docs/CODEBASE_ASSEMBLY.md` §6 states the order rule: the scope object comes before the
-   config inside it. A unit that has config inside it needs the scope object first, so the
-   scope object cannot be an optional extra.
+1. A table that only applies when a flag is on is not a rule: the same input fact would print two
+   ways from one table, so the tool would have two rules for one value.
+2. The gate rule `variables` (F2.10) already refuses a declaration with no consumer, so the only
+   way to keep a run clean is to declare exactly what the run prints. A flag would create a
+   declaration set that depends on the flag, and the report and the gate could not agree with the
+   bytes.
+3. `docs/CODEBASE_ASSEMBLY.md` §9 rule 1 states the problem as a codebase rule, not as a style: a
+   literal device name makes a site change a code change, because it appears in every resource in
+   the template.
 
-Consequence for the goldens: each golden case gains one file, `scope.tf`. Every existing
-golden `.tf` byte stays identical, because no existing emitter changes. The new file is the
-behaviour change, and it is reviewed as such. `tests/golden/sample/scope.tf` and
-`tests/golden/kitchen_sink/scope.tf` are the pinned output.
+Consequence for the goldens: the golden files that carry a device location change. For the
+kitchen-sink case, `address_objects.tf`, `service_objects.tf`, `zones.tf` and
+`virtual_routers.tf` print `ngfw_device = var.<name>` instead of the literal, and `variables.tf`
+gains the device variable. The sample set is byte-identical, because the sample names no device:
+its only device entry is the "this device" placeholder, which names no device (F3.5). That is the
+proof that the change is the mapping and not a style: the rule prints a reference only for a value
+the table maps, and a run that reads no mapped value writes the same bytes as before.
 
-`kitchen_sink.xml` gains four scope entries (a device-group `parent`, a template stack, a
-template variable, and a vsys entry inside the template) so the golden set carries all six
-types. No existing entry in the fixture changes.
+No other golden byte changes, because no other emitter changes.
 
-### 2. One file for the run, written first
+### 2. The site data file, and how a site row joins to a unit
 
-`scope.tf` is one file per codebase, following the `imports.tf` (F6.4) and `read_through.tf`
-(F5.5) precedent: the scope object belongs to the unit, and the per-unit write path (§14) is
-still open, so a per-type or per-unit file would sit outside the shape it names. `main()`
-writes it after `provider.tf` and `variables.tf` and before the object files, so the reader
-sees the unit before the config inside it. Inside the file, blocks print in the level order
-the F3.9 rule states: device group, then the parent record, then template, then template
-stack, then template variable, then virtual system. Within a type, entries print in parse
-order (document order), so the file is byte-identical between runs.
+`SITE_DATA.json`, one file per codebase run, one row per site. F6.1 rule 4 still refuses a
+per-unit file, because F6.6 writes no directory: a per-site file would sit outside the shape it
+names, and a reader cannot find it before it knows the directory name. The row is written for a
+unit that names at least one site value, following the rule that a file is written only when it has
+content, so a run that names no value writes no file.
 
-### 3. `panos_template_variable` emits as literals
+A site is a unit (the device group and the template the export joins through one device, §1), so
+the row joins to `CODEBASE_MANIFEST.json` on `directory`, the same join `OWNERSHIP.json` (F6.2) and
+`REFERENCE_EDGES.json` (F6.3) use. No second unit rule and no second place that states the unit set
+appears here: the identity and the directory name are read through `unit_manifest.facts_of` and
+`unit_manifest.directory_name`.
 
-F6.5 emits the template variable with the values the export states. F6.6 (the site data
-layer) replaces the literal with a `var.` reference, because the value-to-variable mapping
-is not data yet (§9). F6.5 therefore parses only what an emitter can print as a literal:
-the entry name, the description, and the `type` object. It writes no `var.` value, so it does
-not half-implement F6.6.
-
-### 4. The entry name is the identity, not a property
-
-The entry name and the four scope facts stay the row identity (`entry_coverage.NON_FIELD_KEYS`),
-so the parent row declares only the properties its emitter reads. For
-`panos_device_group_parent` the provider declares no `name` attribute, so the coverage matrix
-test reads the entry name through the field that carries it: `device_group`. Which field carries
-it is not a second naming rule: `DATA_SOURCE_SCHEMA` says whether the type declares `name`
-(`test_data_source_schema.py`), and `entry_coverage.REPORT_SCOPE_KEYS` is the one place that maps
-a scope container to the field its entry name reaches the output through, so the pipeline test
-reads `device_group` from those two tables.
-
-One entry can feed two blocks — the scope object and the parent record — so the property scan
-measures an entry against the matrix row that covers its container, and that row is
-`panos_device_group`. The parent row therefore has no read of its own to measure, and
-`panos_vsys` has none either, because its block carries the entry name and the location only and
-the emitter reads no property from it. Both rows are grounded by the emitter source test, so
-`test_property_coverage.py` pins the unmeasured set as `panos_aggregate_layer3_subinterface`,
-`panos_device_group_parent`, and `panos_vsys`, and `test_coverage_matrix.py` states that a row
-whose block carries the entry name and the location only declares no property.
-
-### 5. The device member rule
-
-`localhost.localdomain` is the PAN-OS "this device" placeholder (F3.5). It names no firewall,
-so it never enters a `devices` list in a scope block, and it is never written as a device
-member. A device group whose export lists only the placeholder writes no `devices` list,
-because the provider field is optional and the codebase states no device fact it cannot name
-(`backlog.md`). The placeholder stays one definition in `container_coverage.py`.
-
-### 6. A scope object is emitted only when the export places it
-
-The provider places each scope object in one kind of scope:
-
-| Type | Placement the schema declares |
+| Field | Value |
 |---|---|
-| `panos_device_group`, `panos_device_group_parent`, `panos_template`, `panos_template_stack` | `location.panorama` |
-| `panos_template_variable` | `location.template` or `location.template_stack` |
-| `panos_vsys` | `location.template` or `location.template_stack` |
+| `directory` | the unit this row joins to, the `CODEBASE_MANIFEST.json` `directory` |
+| `variables` | `{the variable name: the value}`, sorted by name. Empty for a site that names no value |
 
-A virtual system entry that the export places outside a template or a template stack has no
-place the provider can put it, so the parse records the entry as `skipped` with the reason,
-and the run writes no block for it. The converter does not guess a template for it, the way
-it does not guess a template for an object (F3.6). `panorama_device` is not emitted: the codebase
-states no device fact in a location today (`backlog.md`), so `location` prints the empty
-`panorama = {}` sub-block, the shape `shared = {}` already uses.
+The name is the value read through the §5 naming rule, so `variables` is the mapping result and the
+row states no value twice. `parse_rows` reads a written file back as data and refuses a row that is
+not the declared shape, the way `unit_manifest.parse_rows` does. Rows print in identity order.
 
-### 7. Gate rule: a scope block names a scope this run declares
+The reports do not name a site field, and the gate reads no data file, so this file is not a gate
+input (`ARCHITECTURE.md` §4.5).
 
-The gate needs one new rule, because a scope block places itself inside another scope by
-name, and the reference rule does not reach a name inside `location`:
+### 3. The value-to-variable mapping is a pinned table
 
-`sanity_checks.check_scope_blocks` — for a `resource` block of one of the six scope types,
-every name inside its `location` must match the `name` of a block this run declares for that
-scope. A `data` block cannot answer. `panorama_device` is not a scope name, so it is not
-checked, and an empty `location` sub-block states no name to resolve. The rule reads blocks
-with the one block reader (`ARCHITECTURE.md` §4.6), so no second reader appears. Every
-violation type the rule states is pinned by a test, and the corpus produces no finding.
+`resource_mapping.VALUE_VARIABLES` is the table. One row per location field the emitter prints — the
+five fields `LOCATION_SCHEMA` declares — and each row states what the block prints for it:
 
-The existing checks (`emitted_types`, `location_present`) already cover the new blocks, so no
-other gate rule changes. `CHECK_ORDER` gains `scope_blocks` after `import_blocks`, and the check
-table in `sanity_checks.py` gains its row, because the report order is pinned by the tests that
-compare the report's check names with `CHECK_ORDER`. Reports are not in the golden set, so this
-does not change a golden byte.
+| Field | Prints as | Reason |
+|---|---|---|
+| `ngfw_device` | variable | the device the site names. Hardware replacement changes the serial, so this is the value a codebase changes per site (§9 rule 1) |
+| `name` | literal | the entry name is the row identity, not a site value (§8 rule 3) |
+| `vsys` | literal | a virtual system is a scope name, not a site value |
+| `panorama_device` | literal | the Panorama host is the credential gap (§11), and the codebase states no device fact in a location (§8 rule 6) |
+| `rulebase` | literal | the parse records no rulebase (F3.5) |
 
-### 8. The template membership, and one mark per entry
+The table covers the location fields only, because `location` is the part of a block that names the
+scope a site is in. A property at the block's own level is the entry's content, not a site value, so
+it is not in the table (decision 4).
 
-`panos_template` declares no device field, so a template entry's device members are not a
-property the emitter can print. `parse_templates` captures only the fields the block prints, and
-`parse_associations` reads the membership for its tables. F4.3 rule 1 says a parse method marks
-the entries it reads, so the membership entries inside a scope entry are marked by `_list_names`,
-the method that reads them, and the scope entry keeps the one mark its scope method gave it. The
-membership containers keep their `bookkeeping` rows, so no matrix row covers them and the property
-scan does not report them. The test that pins the mark rule
-(`tests/test_entry_coverage.py::test_every_parse_method_that_reads_entries_marks_them`) follows
-`self.` calls, so it reads through `_list_names` and needs no change.
+`ngfw_device` is the only row that maps to a variable. The test pins that the table covers every
+field `LOCATION_SCHEMA` declares, so the rule is complete and cannot gain a field without a row.
 
-The scope types are not template-scoped objects: they are the scopes. `_TEMPLATE_SCOPED_TYPES` is
-derived from `LOCATION_SCHEMA`, so it excludes the six scope rows; otherwise the pinned `ngfw`
-test in `tests/test_multi_vsys_location.py` reads a scope as an object.
+The variable name is the §5 naming rule applied to the value. The rule moves to `naming.py`,
+because the gate must read it without the generator (decision 7) and no module may define a second
+one. `TerraformGenerator.sanitize_name` calls `naming.sanitize`; the modules that take the rule as an
+argument keep taking it, so no second naming rule exists. A device name that names no device names
+no variable: `localhost.localdomain` (`container_coverage.PLACEHOLDER_DEVICE`) never enters a
+location (F3.5), so it never enters the table's mapping, and no site row states it.
 
-### 9. The destination for a scope entry
+The provider fact for `target` (§12) is not implemented here: the tool writes no provider `target`
+argument today, and the per-unit `.tfvars` that names one belongs to the write path (§14), which is
+still open. Recorded in `backlog.md`.
 
-F4.3 rule 3 says the container table row gives the destination. F6.5 makes a scope container
-an `emitted` row, so a scope entry is an object, and the `is_scope_entry` exception in
-`EntryLedger.destination` is no longer needed: the table row alone decides. The `devices`
-entry stays `bookkeeping`, because no provider resource exists for a device. `parse_associations`
-keeps its `bookkeeping` rows for the membership it reads through the scope parse methods, so
-one entry has one mark.
+### 4. `panos_template_variable` stays a literal
 
-The ownership record (F6.2) gains the rows for the scope entries, because an entry that writes
-an object can own a name. F6.2 rule 4's gap closes: the parse now captures the device-group
-`parent`, so a repeated name between a parent group and a child group has a stated ancestor,
-and `ownership.py` reads the parent relation instead of calling it `ambiguous`. `NO_RELATION`
-stays for a group the export does not place under another group.
+`panos_template_variable` prints the value the export states, as F6.5 chose. It does not become a
+`var.` reference, for two reasons:
 
-### 10. The emitter prints the properties its row declares
+1. In PAN-OS the block *is* the variable. A `var.` reference for its own value would make the
+   resource a pass-through that prints a value the `.tfvars` supplies, which states the fact twice.
+2. The tool cannot know which values a module takes as parameters: §9 says a module is a standard a
+   person writes, so a value the tool turns into a variable is a choice the tool cannot make for the
+   entry content.
 
-The emitter is one method, `generate_scope_objects`, because one file is one write and the six
-types share the block shape. It prints the entry name field, then the properties its matrix row
-declares, in the row order, so the read record the property scan measures is the same list the
-row states. The property names appear in the method as literals, which is what
-`test_coverage_matrix.py::test_declared_property_is_a_key_the_emitter_reads` grounds a row
-against. `main()` calls it for every run, because decision 1 states emission is default.
+The decision is recorded in `backlog.md` as the follow-up for the write path. No variable is
+declared for a template variable value, so the gate rule `variables` cannot be tripped by it, and
+the emitter prints what it reads.
 
-### 11. The value shape is the provider shape
+### 5. The `.tfvars` writer
 
-A printed value is not a style choice: the provider takes a list of objects for `devices` on
-`panos_device_group` and `panos_template_stack`, a list of strings for `templates`, and an object for
-the template variable `type`, and `terraform validate` refuses a string where it takes an object. So
-the shape is a table, `resource_mapping.SCOPE_SHAPE`, and the emitter prints through it
-(`TerraformGenerator._scope_property`), with no per-type branch in the emitter.
+The tool writes `site.auto.tfvars` from the site data rows, not from the generator's state: the data
+is the fact, and the `.tfvars` is its printed form.
 
-- Each entry names the shape the provider declares, and the test reads it against the live provider
-  schema through the `provider_schemas` fixture.
-- Every property a scope row declares at the block's own level has a shape entry, so a row cannot add
-  a property the emitter prints without stating its shape. The placement keys are the `location`
-  fields, not the block's own, so they are not shape entries, and `parent` is not one for
-  `panos_device_group`, because the provider has no `parent` attribute for that type and the value
-  reaches the output through the parent record the same entry feeds.
-- A device object carries the field the provider requires (`name`). The vsys list a device can carry
-  is not a fact the membership entry states, so the block states no vsys, and the shape entry is the
-  object with one field rather than the two the provider allows.
+1. The file name is `site.auto.tfvars`, not `terraform.tfvars`. Terraform loads
+   `terraform.tfvars` as the operator's own file, which holds the credentials, and the tool never
+   writes a credential (§11). Terraform loads a `*.auto.tfvars` file automatically, so the
+   generated values sit in a file the operator does not own and the run cannot overwrite their
+   credentials.
+2. One line per variable, sorted by name: `<name> = <value>`. A name that two site rows state
+   prints one line, because the name is the §5 shape of the value, so one value cannot produce two
+   names.
+3. A string prints as `json.dumps(value)`, which is the same escape set `import_blocks.unescape`
+   reads back, so no second escape rule appears.
+4. A list prints inline as `[ "a", "b" ]`, with each item through the same rule. An empty list
+   prints `[]`.
+5. A value that is neither a string nor a list of strings is a refusal, because the row shape
+   declares no other kind.
+6. The file is written only when it has content, following the rule for the report files and the
+   three existing data files.
 
-Pinned by `tests/test_scope_objects.py::test_scope_shape_is_the_provider_shape` and
-`::test_scope_shape_covers_the_properties_the_rows_declare`.
+### 6. Which emitter prints the reference, and what it records
 
-### 12. Quality gates
+`TerraformGenerator.location_field`, called by `location_block`, prints one location field as the table
+says: `var.<name>` through `naming.variable_text` for a field the table maps to a variable, and the escaped
+value through the existing escape rule for every other field. The printed text is the mapping result, not a
+block reference, so no `HclRef` and no change to the dependency wiring rule (§4.3): a location field is a
+value, and a reference is a name that resolves to a block.
+
+`location_data` keeps the value, because the value is the fact the import id encodes (decision 7).
+The mapping is applied at the print site, and the print site records the pair — the unit facts, the
+variable name, and the value — the way `name_ref` records a reference name for the manifest
+(F6.1). `site_data.build_rows` resolves nothing and names no value the run did not print, so the
+declaration set is the set the run consumed, and the gate rule `variables` cannot be tripped.
+
+`generate_variables()` therefore runs after the emitters: the file cannot state a variable the run
+has not consumed. The order rule for `scope.tf` (before the object files) is unchanged; only the
+position of `variables.tf` moves. `tests/test_scope_objects.py` is updated to pin the new position,
+and `docs/CODEBASE_ASSEMBLY.md` §6 and `docs/ARCHITECTURE.md` §4.1 name it.
+
+### 7. The gate rules
+
+No new check, so `CHECK_ORDER` is unchanged. Two rules change, and each violation type is pinned.
+
+1. **`import_blocks`** (F6.4). The agreement rule reads the block's location through the one block
+   reader, which now reads a field as the block states it: the unescaped value for a quoted field,
+   and the reference text `var.<name>` for a field the table maps. For a field the table maps, the
+   rule compares the printed name against the §5 name of the value the id states; for every other
+   field it compares the value. The id keeps the value, because the provider parses the id and a
+   variable name is not a device name. The rule reads the table and the one naming rule, so no second
+   location rule and no second naming rule appear.
+   The rule compares names, so it cannot detect an id that states the mapping result instead of the
+   value: `naming.variable_name` is idempotent, so the §5 name of `fw_2_example_com` is
+   `fw_2_example_com`. The writer always states the value in the id, so an id built by the tool cannot
+   carry the name. What the rule can detect is pinned: a block that prints a literal for a mapped
+   field, and a value for an unmapped field that does not agree with the id. This is a limit of
+   comparing a mapping result, not a gap in the test.
+2. **`variables`** (F2.10). The rule now reads both directions: every declared variable has a
+   `var.` consumer, and every `var.` consumer names a variable this run declares. The second
+   direction is what makes a generated declaration set checkable when the declaration set comes
+   from the mapping.
+
+The corpus produces no finding for either rule.
+
+### 8. Quality gates
 
 - `ruff check .` is clean, and `pytest` is green. Every test runs offline.
-- The provider shape tests use the `provider_schemas` fixture and skip without the terraform
-  binary, the same way `DATA_SOURCE_SCHEMA` and `LOCATION_SCHEMA` are checked today. Each new
-  `LOCATION_SCHEMA` row equals its `DATA_SOURCE_SCHEMA` row exactly
-  (`test_data_source_schema.py::test_location_schema_stays_inside_the_data_shape`).
-- Every existing golden `.tf` file is byte-identical. The two golden sets gain `scope.tf`, as
-  decision 1 states.
-- Exit codes are unchanged: 0 for a run, 1 for an input refusal, 2 for an argument error. A
-  gate FAIL exits 1; a WARN exits 0. No new flag, so no new argument error path.
-- Report, manifest, ownership, edge, and provenance files stay byte-identical between two runs
-  on the same bytes, and no data file names a path or a timestamp.
-- `main()` writes `scope.tf` only when it has content, following the rule for the other files.
+- The goldens change only as decision 1 states: the four kitchen-sink files that carry a device
+  location, and `variables.tf` for that case. The sample set is byte-identical.
+- Exit codes are unchanged: 0 for a run, 1 for an input refusal, 2 for an argument error. No new
+  flag, so no new argument error path.
+- Two runs on the same bytes write the same bytes for `SITE_DATA.json` and `site.auto.tfvars`, and
+  neither file names a path or a timestamp.
+- No report names a field the site data states, and the gate reads no data file.
+- No second naming rule, no second location rule, no second block reader, and no second unit rule
+  appears in any module.
 
 ## Acceptance criteria
 
-1. **Rows.** `COVERAGE_MATRIX` has one row per emitted type, so the six scope types gain rows,
-   and `EMITTED_TYPES` gains them. Each row names its emitter and the properties that emitter
-   reads. `tests/test_coverage_matrix.py` passes for the new rows, including the pipeline test
-   that reads the emitted name through `DATA_SOURCE_SCHEMA` for `panos_device_group_parent`.
-2. **Container table.** `parse_device_groups` gains the `parent` fact, and the parse methods for
-   the template, template stack, template variable, and virtual system entries exist, each with
-   a row. The scope rows read `emitted`; the `devices` row stays `bookkeeping`. One entry, one
-   mark: `parse_associations` builds its tables from the objects the scope methods return.
-3. **Output.** Running the converter on a fixture that declares a scope writes one `resource`
-   block per scope entry, in `scope.tf`, in the level order decision 2 states, with the location
-   the provider declares. The device member rule (decision 5) holds: no block names the
-   placeholder device.
-4. **Placement.** A vsys entry outside a template or template stack writes no block and is
-   reported as `skipped` with the reason.
-5. **Gate.** `check_scope_blocks` detects a scope block that names a scope no block in the same
-   run declares, reads blocks with the one block reader, and reports no finding on the corpus.
-6. **Report.** A scope entry in an emitted container prints as `emitted`, and the report bytes
-   stay identical between two runs.
-7. **Ownership.** A device group and a child device group that repeat a name have a stated
-   ancestor from the captured `parent`, and the test that pins it uses a fixture with a parent
-   relation.
-8. **Shape.** Each printed value matches the shape the provider declares, and every property a row
-   prints at the block's own level has a `SCOPE_SHAPE` entry. A membership the provider takes as a
-   list of objects prints as a list of objects, so `terraform validate` accepts the file.
-9. **Determinism.** `scope.tf` is byte-identical between two runs on the same bytes, and the
-   goldens pin it.
-10. **Docs.** `docs/CODEBASE_ASSEMBLY.md` §8 names the module and the test for each rule, §6 names
-   the file order, `docs/ARCHITECTURE.md` §4.1, §4.2, §4.6, and §3.2 state the changed rules, and
-   `docs/COVERAGE_MATRIX.md` counts the rows. `README.md` and `docs/USAGE_GUIDE.md` name
-   `scope.tf`.
+1. **The table.** `VALUE_VARIABLES` covers every field `LOCATION_SCHEMA` declares, states what the
+   emitter prints for each, and maps only `ngfw_device` to a variable. Pinned by
+   `tests/test_site_data.py`.
+2. **The site row.** One row per site that names a value, the declared fields in the declared
+   order, rows in identity order, the join to the manifest on `directory`, read back as data, and a
+   row that is not the declared shape is refused.
+3. **The `.tfvars` bytes.** The writer rule is pinned for a string and for a list, the lines are
+   sorted and deduped, and a run that names no value writes no file.
+4. **The device name as a variable.** The emitter prints `var.<name>` for a mapped field, and the
+   golden bytes pin it for the kitchen-sink case. A field the table does not map still prints as a
+   literal. The placeholder device names no device and no variable.
+5. **The declaration set.** `variables.tf` declares the credentials plus the values the run
+   consumed, and the test reads the site set through `site_data.parse_rows`, so the file and the
+   data cannot disagree.
+6. **Gate.** `check_import_blocks` detects a variable field that does not agree with the id, and
+   `check_variables` detects a consumer that names no declaration. No fixture trips a false
+   positive.
+7. **Determinism.** Two runs on the same bytes write the same bytes for both new files.
+8. **No change elsewhere.** Reports, the manifest, the ownership record, the edge record, the
+   provenance record, `scope.tf`, `imports.tf`, and `read_through.tf` are unchanged for the corpus,
+   except the goldens decision 1 pins.
+9. **Docs.** `docs/CODEBASE_ASSEMBLY.md` §9 names the module and the test for each rule, §14 moves
+   the step, `docs/ARCHITECTURE.md` §1, §3.7, §4.1, §4.2, §4.5, §4.6 and §5 state the changed rules,
+   and `README.md` and `docs/USAGE_GUIDE.md` name `SITE_DATA.json` and `site.auto.tfvars`.

@@ -90,9 +90,10 @@ directory. F6.1 states the unit boundary as data: one row per declared scope in
 5. **One file per codebase run.** The edge list (§5) needs the whole set of units, and a reader
    cannot find a per-unit file before it knows the directory name, so one file holds one row per
    unit. `CODEBASE_MANIFEST.json` is written only when it has content, following the rule for the
-   report files, and the CLI takes no flag for it. The three data files are the manifest (one row
-   per unit), the ownership record (one row per entry), and the edge record (one row per pair), so
-   no file states the unit set twice, which is why the order lives on the manifest row.
+   report files, and the CLI takes no flag for it. The data files are the manifest (one row per
+   unit), the ownership record (one row per entry), the edge record (one row per pair), and the site record
+   (one row per site that names a value, §9 rule 3), so no file states the unit set twice, which is why the
+   order lives on the manifest row.
 6. **The reference names.** The reference rule records them (`ARCHITECTURE.md` §4.3), keyed by
    the referrer's four scope facts, so a row states the names a unit references from outside
    itself. This module resolves no name.
@@ -244,8 +245,9 @@ manifest row, because the manifest is the file that names each unit (§3 rule 5)
      object a resource needs): the device group unit before the template unit inside it, before the
      device unit inside it, in the F3.9 level order. A container the manifest does not name adds no
      dependency, and a declared parent source names no unit, because a unit exists when the run's
-     ledger has a row in it; the same order is what the run writes, so `scope.tf` follows
-     `provider.tf` and `variables.tf` and comes before the object files
+     ledger has a row in it; the same order is what the run writes, so `scope.tf` follows `provider.tf`
+     and comes before the object files, and `variables.tf` is written after the emitters (F6.6, §9 rule 5),
+     because the declaration set is the values the emitters printed
      (`tests/test_scope_objects.py::test_the_scope_file_is_written_before_the_config_inside_it`), and
      the blocks inside the file print in that order (`::test_blocks_print_in_the_level_order_the_table_states`);
    - **the reference edge**: the target unit before the referrer unit.
@@ -285,7 +287,7 @@ rule exists.
    (`ARCHITECTURE.md` §4.5), so the agreement rule can read only a `.tf` file: a data file is not a
    gate input. F6.1 rule 4 still refuses a per-unit file, because this feature writes no directory.
    The file is written only when the run declares the shape and has a row that states an id,
-   following the rule for the report files and the three data files.
+   following the rule for the report files and the four data files.
 2. **The shape is opt-in: `--import-blocks`, off by default.** A run that declares nothing writes the
    same `.tf` bytes as before, so both golden sets stay byte-identical. This is the F5.5
    `--data-blocks` precedent (`ARCHITECTURE.md` §4.7).
@@ -300,7 +302,9 @@ rule exists.
    `TerraformGenerator.location_data` builds, and the local name is the name `declare_block_name`
    recorded at the site that applied the naming rule. The unit is the §3 identity, read through
    `unit_manifest.facts_of`. A field the generator does not emit is not in the id, so the id states no
-   device fact (`backlog.md`).
+   device fact (`backlog.md`). For a field the value-to-variable table maps (F6.6, §9 rule 5), the id states
+   the value and the block states the name this rule gives the value, so one fact keeps the two forms each
+   reader needs: the provider parses the id, and the plan reads the variable.
 6. **The four `*_policy_rules` types write no block, and each rule entry is one WARN finding.** Their
    import object names the rulebase, the position in the live rulebase, and a list of names, so no
    per-entry object exists: the parse records no rulebase for an entry (F3.5 gates it), and `position`
@@ -309,7 +313,7 @@ rule exists.
    types. The accepted `rulebase` value stays with F3.5 in `backlog.md`, so this feature writes no
    unverified value. A WARN does not change the exit code, which the gate decides.
 7. **Order and bytes.** Rows print sorted by unit directory, then by local name, which is the order the
-   three data files already print, so a reader can reproduce it from the file. No row states a
+   four data files already print, so a reader can reproduce it from the file. No row states a
    timestamp or a path.
 
 The agreement gate rule, which this section asked for, is the second gate rule for a block kind:
@@ -356,7 +360,8 @@ are in `resource_mapping.py`, and `main()` calls the emitter for every run.
    shape, so no new argument error path appears.
 2. **One file for the run, written first.** `scope.tf` follows the `imports.tf` (§7) and
    `read_through.tf` (§4.7) precedent, because the per-unit write path (§14) is still open. `main()`
-   writes it after `provider.tf` and `variables.tf` and before the object files. Inside the file,
+   writes it after `provider.tf` and before the object files; `variables.tf` is written after the
+   emitters, because F6.6 made the declaration set the values the run consumed (§9 rule 5). Inside the file,
    blocks print in the F3.9 level order `SCOPE_LEVEL_ORDER` states — device group, parent record,
    template, template stack, template variable, virtual system — and within a type in document order,
    so the file is byte-identical between runs. The file is written only when it has content, the rule
@@ -421,32 +426,80 @@ cases (`tests/golden/sample/` and `tests/golden/kitchen_sink/`), and every exist
 is unchanged. `tests/fixtures/scope_objects.xml` is the fixture that carries one entry of each of the
 six types.
 
-The open half stays open: a generated module cannot take a template variable as a `var.` value until
-the value-to-variable mapping is data (§9).
+The value-to-variable mapping is now data (§9), so this closes for a location field: the emitter has no
+per-type branch to decide. What §9 does not decide is a template variable value, because the block *is* the
+PAN-OS variable and the tool cannot know which values a module takes as parameters, so the emitter prints it
+as the export states it. Recorded in `backlog.md`.
 
-## 9. Gap — the site data layer and the device name
+## 9. The site data layer and the device name (F6.6, landed)
 
-A codebase separates the standard from the site. The tool writes values inline, so a
-site change is a code change.
+A codebase separates the standard from the site. The tool writes the site values as data and the
+`.tfvars` the platform reads from it, and the device name a resource block prints is a variable
+reference instead of a literal. The module is `site_data.py`, the table is
+`resource_mapping.VALUE_VARIABLES`, the naming rule is `naming.py`, and `main()` writes the two
+files for every run that has content.
 
-Rules needed:
+1. **The mapping is default output, not a flag.** A table that applies only when a flag is on gives
+   one value two shapes from one table, so the tool would hold two rules for one value. The gate rule
+   `variables` (§4.6) already refuses a declaration with no consumer, so a declaration set that depends
+   on a flag cannot agree with the bytes. The rule the mapping serves is the one that made a site change
+   a code change: a literal device name appears in every resource inside the template, so hardware
+   replacement changes every file (`tests/golden/kitchen_sink/zones.tf` held the literal before F6.6).
+   No new flag, so no new argument error path and no change to the exit codes.
+2. **The table is data, one row per location field the emitter prints** — the five fields
+   `LOCATION_SCHEMA` declares — and it states what the block prints for each. Only `ngfw_device` maps to
+   a variable: the device is the value a codebase changes per site. `name` is the row identity (§8 rule 3),
+   `vsys` is a scope name, `panorama_device` is the credential gap (§11) and is never emitted (§8 rule 6),
+   and `rulebase` is not recorded (F3.5). Pinned by
+   `tests/test_site_data.py::test_the_table_covers_every_field_the_location_can_state` and
+   `::test_only_the_device_field_maps_to_a_variable`.
+   A property at the block's own level is the entry's content, not a site value, so it is not in the
+   table: `panos_template_variable` prints its value as the export states it, because the block *is* the
+   PAN-OS variable and the tool cannot know which values a module takes as parameters (the tool cannot
+   derive a module: a module is a standard a person writes). Recorded in `backlog.md`.
+   Membership lists in `scope.tf` stay literals for the same reason.
+3. **`SITE_DATA.json`, one file for the run, one row per site.** §3 rule 4 still refuses a per-unit
+   file, because F6.6 writes no directory (§14): a per-site file would sit outside the shape it names. A
+   site is a unit, so the row joins to the manifest on `directory` — the join `OWNERSHIP.json` (§4) and
+   `REFERENCE_EDGES.json` (§5) use — and the identity and the directory name are read through
+   `unit_manifest.facts_of` and `unit_manifest.directory_name`, so no second unit rule appears. A row is
+   written for a site that names a value, in identity order; `parse_rows` refuses a row that is not the
+   declared shape, including a variable name that is not the §5 shape of its value. The file is written
+   only when it has content.
+4. **The `.tfvars` is written from the data**, not from the generator's state: the data is the fact and
+   the `.tfvars` is its printed form. The file is `site.auto.tfvars`, because Terraform loads
+   `*.auto.tfvars` automatically and keeps `terraform.tfvars` as the operator's own file for the
+   credentials, which the tool never writes (§11). One line per variable, in name order across the file,
+   one line for a name two rows state, and a name two rows state with two values is a refusal. A string
+   prints as `json.dumps(value)`, the same escape set `import_blocks.unescape` reads back (§7 rule 5), so
+   no second escape rule appears; a list prints inline. Pinned by
+   `tests/test_site_data.py::test_the_tfvars_bytes_for_a_string_value` and
+   `::test_a_list_prints_inline_and_an_empty_list_prints_empty`.
+5. **The print site is the only place the shape is decided.** `TerraformGenerator.location_field`, called
+   by `location_block`, prints a mapped field as `var.<name>` and every other field as the quoted value.
+   `location_data` keeps the value, because the import id encodes the value (§7 rule 3) and a variable
+   name is not a device name. The pair is recorded at the print site, keyed by `unit_manifest.facts_of`,
+   the way `name_ref` records a reference name for the manifest (§3 rule 4), so `site_data.build_rows`
+   resolves nothing and names no value the run did not print. `generate_variables()` declares the
+   credentials plus what the run consumed, so `main()` calls it after the emitters (§6).
+6. **The gate reads a location field as the block states it.** `Block.location_values` reads the quoted
+   value or the `var.` reference through the one block reader, and `check_import_blocks` compares the
+   printed name against the §5 name of the value the id states for a mapped field, and the value for every
+   other field. `check_variables` now reads both directions: a declaration with no consumer, and a
+   consumer that names no declaration. `CHECK_ORDER` is unchanged, and the corpus produces no finding for
+   either rule. The §5 rule lives in `naming.py`, because the gate must read it without the generator.
+7. **The golden change is the mapping, not a style.** Four kitchen-sink files that carry a device
+   location print `ngfw_device = var.<name>`, and `variables.tf` gains the device variable for that case.
+   The sample set is byte-identical, because its only device entry is the "this device" placeholder, which
+   names no device and no variable (F3.5). A run that reads no mapped value writes the same bytes as before.
+   `target`, which names one NGFW serial (§12), is not emitted today, so the per-unit `.tfvars` that names
+   one stays with the write path (§14) and is recorded in `backlog.md`.
 
-1. The device name comes from a variable, not a literal.
-   `tests/golden/kitchen_sink/zones.tf` writes `ngfw_device = "fw-2.example.com"` as a
-   literal. When hardware is replaced, the serial changes, and a literal changes every
-   resource in that template. A variable reference keeps the change to one line. The
-   provider's `target` argument names one NGFW serial (§12), so a unit that owns one
-   firewall needs it as a variable too.
-2. One data file per site, and the tool writes the `.tfvars` for it. The format stays
-   JSON, because the project keeps the standard library only (`backlog.md`, F5.2); YAML
-   needs a third-party package.
-3. The value-to-variable mapping is a table, so it must be data and pinned the way
-   `LOCATION_SCHEMA` is. Today the mapping is a choice inside each emitter.
-
-The tool cannot derive a module from an export: a module is a standard a person writes.
-The tool can write the data file a module consumes. The gate rule that every declared
-variable has a `var.` consumer (`ARCHITECTURE.md` §4.6) already stops a generated file
-from declaring a variable it does not use.
+Pinned by `tests/test_site_data.py`, including `::test_the_corpus_rows_are_pinned`,
+`::test_the_row_joins_to_the_manifest_on_directory`, `::test_the_import_rule_compares_a_mapped_field_by_name`,
+`::test_the_variable_rule_reads_both_directions`, `::test_the_corpus_trips_neither_rule`,
+`::test_two_runs_on_the_same_bytes_write_the_same_bytes`, and `::test_the_gate_reads_no_data_file`.
+The `.tf` bytes and the report bytes of the corpus are otherwise unchanged.
 
 ## 10. Gap — commit and push
 
@@ -515,12 +568,12 @@ provider docs:
 
 ## 13. The tool and the platform boundary
 
-The tool stays a generator. It writes data an orchestrator reads: the manifest, the edge
-list, the import blocks, and the `.tfvars`. It runs no plan, no apply, and no commit, and
-it manages no secrets. The orchestrator (Terragrunt, Terraform Cloud, GitHub) is the
-platform, and the platform is not this repository's job. This keeps the rules the project
-already holds: standard library only, no network in a test, no credential in a generated
-file, and a run with no network passes CI.
+The tool stays a generator. It writes data an orchestrator reads: the manifest, the ownership record,
+the edge list, the site record, the import blocks, and the `.tfvars` written from the site record. It
+runs no plan, no apply, and no commit, and it manages no secrets. The orchestrator (Terragrunt, Terraform
+Cloud, GitHub) is the platform, and the platform is not this repository's job. This keeps the rules the
+project already holds: standard library only, no network in a test, no credential in a generated file, and
+a run with no network passes CI.
 
 ## 14. What it would take, in order
 
@@ -536,7 +589,9 @@ file, and a run with no network passes CI.
    single-unit case does not need the ownership rule. The rule types need the rulebase decision.
    Landed as F6.4.
 6. The scope objects (§8). Landed as F6.5.
-7. The site data layer (§9).
+7. The site data layer (§9). Landed as F6.6. The per-unit `.tfvars` that names one `target` serial
+   stays with the step that splits the output per unit directory, because F6.6 names the unit and writes
+   no directory.
 8. The commit action (§10), last, because it needs the gate rule for an action block and
    the Terraform minimum decision.
 

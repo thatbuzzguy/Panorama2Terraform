@@ -1072,6 +1072,29 @@ SCOPE_SHAPE = {
     'panos_vsys': {},
 }
 
+# F6.6: the value-to-variable mapping (`docs/CODEBASE_ASSEMBLY.md` §9). One row per location field the
+# emitter prints — the fields `LOCATION_SCHEMA` declares — and what `TerraformGenerator.location_block`
+# prints for it. The mapping is a table, so the emitter reads it and the gate reads it, and no emitter
+# branch decides the shape for one type. A property at the block's own level is the entry's content, not a
+# site value, so it is not in this table: `panos_template_variable` prints its value as a literal (F6.5
+# decision 3, recorded in `backlog.md`). `variable` names the value through the §5 rule in `naming.py`.
+VARIABLE = 'variable'
+LITERAL = 'literal'
+VALUE_VARIABLES = {
+    # The device the site names. Hardware replacement changes the serial, and a literal prints in every
+    # resource inside the template, so this is the value a codebase changes per site (§9 rule 1).
+    'ngfw_device': VARIABLE,
+    # The entry name is the row identity (F6.5 rule 3), not a site value.
+    'name': LITERAL,
+    # A virtual system is a scope name, not a site value.
+    'vsys': LITERAL,
+    # The codebase states no device fact in a location (§8 rule 6), and the Panorama host is the credential
+    # gap (§11), so this row states the decision for a field the tool never prints.
+    'panorama_device': LITERAL,
+    # The parse records no rulebase (F3.5), so no value reaches the block.
+    'rulebase': LITERAL,
+}
+
 # PAN-OS config types with no v2 provider resource. The converter keeps
 # the data visible in the manual setup report instead of emitting it.
 REPORT_ONLY_TYPES = frozenset({

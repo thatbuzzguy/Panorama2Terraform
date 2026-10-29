@@ -567,8 +567,11 @@ def test_the_section_prints_only_when_it_has_a_finding(tmp_path):
     assert _run(FIXTURES_DIR / CYCLE_FIXTURE, out).returncode == 0
     assert reference_edges.CYCLE_HEADING in (out / entry_coverage.REPORT_FILE).read_text(encoding='utf-8')
     for fixture in (GROUPING, SAMPLE_CONFIG.name):
-        out = tmp_path / 'no_finding'
-        assert _run(FIXTURES_DIR / fixture if fixture != SAMPLE_CONFIG.name else SAMPLE_CONFIG, out).returncode == 0
+        # One directory per fixture: the gate reads the files that are there, so two runs that shared a
+        # directory would read the first run's `.tf` files as part of the second run's output.
+        source = FIXTURES_DIR / fixture if fixture != SAMPLE_CONFIG.name else SAMPLE_CONFIG
+        out = tmp_path / fixture
+        assert _run(source, out).returncode == 0
         report = (out / entry_coverage.REPORT_FILE).read_text(encoding='utf-8')
         assert reference_edges.CYCLE_HEADING not in report, fixture
         assert reference_edges.CYCLE_RULE not in report, fixture

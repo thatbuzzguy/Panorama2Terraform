@@ -13,6 +13,9 @@ that has no v2 resource.
    `location` argument.
 3. Writes reports for configuration with no v2 resource so nothing is
    silently dropped.
+4. Writes the site values as data and the `.tfvars` the platform reads from it, so a site change is a
+   `.tfvars` change and not a code change. The device name a resource block prints is a variable
+   reference, and the tool names no value the run did not print (F6.6).
 
 ## Quick start
 
@@ -211,6 +214,14 @@ Data files and reports written to the output directory. Each is written only whe
   outside the run, the unit that owns it, the coverage matrix row, and the entry name
   ([`reference_edges.py`](reference_edges.py)). Every run writes it when it has content, and the row
   joins to the manifest on the unit directory and to the ownership record on (`type`, `entry`)
+- `SITE_DATA.json` - one row per site that names a value, as data: the unit directory and the variable
+  names with their values ([`site_data.py`](site_data.py)). Every run writes it when it has content, and the
+  row joins to the manifest on the unit directory. The values are the pairs the emitter recorded when it
+  applied the value-to-variable table ([`resource_mapping.py`](resource_mapping.py) `VALUE_VARIABLES`)
+- `site.auto.tfvars` - the `.tfvars` written from the site data rows, one line per variable in name order
+  ([`site_data.py`](site_data.py)). Terraform loads a `*.auto.tfvars` file automatically, so
+  `terraform.tfvars` stays the operator's own file for the credentials, which the tool never writes. Written
+  only when it has content, and the gate does not read it, because the gate reads `.tf` files
 - `scope.tf` - The scope objects the export declares: one `resource` block per scope entry for
   `panos_device_group`, `panos_device_group_parent`, `panos_template`, `panos_template_stack`,
   `panos_template_variable`, and `panos_vsys`, written by every run that has a scope entry, before the
@@ -249,7 +260,7 @@ section, named `Shared`. The rule is in
 ## Typical outputs
 
 ```
-provider.tf  variables.tf  README.md
+provider.tf  README.md
 scope.tf
 address_objects.tf  address_groups.tf
 service_objects.tf  service_groups.tf
@@ -258,9 +269,10 @@ security_rules.tf  nat_rules.tf  decryption_rules.tf  pbf_rules.tf
 security_profiles.tf  security_profile_groups.tf
 zones.tf  interfaces.tf  virtual_routers.tf  monitor_profiles.tf
 vpn.tf
+variables.tf                    (written after the emitters: the values the run printed, F6.6)
 MANUAL_SETUP_REPORT.txt  INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.txt
 CONVERSION_REPORT.txt  SANITY_REPORT.txt  SOURCE.txt  CODEBASE_MANIFEST.json
-OWNERSHIP.json  REFERENCE_EDGES.json
+OWNERSHIP.json  REFERENCE_EDGES.json  SITE_DATA.json  site.auto.tfvars
 read_through.tf  imports.tf        (opt-in: --data-blocks, --import-blocks)
 ```
 
@@ -352,7 +364,7 @@ what you receive, not what the generator intended.
 | `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type | FAIL |
 | `import_blocks` | every `import` block agrees with the `resource` block it names: the type, the local name, the entry name, and the location | FAIL; WARN for a rule type the shape cannot state |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
-| `variables` | every declared variable has a `var.` consumer | FAIL |
+| `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable the run declares | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
@@ -427,6 +439,12 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   shape against the live provider schema and against the rows that declare it, the device membership as
   the objects the provider takes, the placeholder device never entering a printed list, the placement rule
   and the skipped entry, each violation type of the gate rule, and the byte rule between two runs
+- `tests/test_site_data.py` - the site as data (`SITE_DATA.json`) and the `.tfvars` written from it: the
+  value-to-variable table against `LOCATION_SCHEMA`, the row shape read back as data, the join to the manifest
+  on the unit directory, the `.tfvars` bytes for a string and for a list, the device-name rule at the print
+  site, the declaration set, both directions of the variable gate rule, the corpus rows, the rule that the
+  corpus trips neither, the gate inputs, the report bodies, the rule that the module defines no second naming
+  rule, and the byte rule between two runs
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are

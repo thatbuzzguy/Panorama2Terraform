@@ -17,3 +17,11 @@ variable "panos_password" {
   type        = string
   sensitive   = true
 }
+# Site values (F6.6): one variable per value `resource_mapping.VALUE_VARIABLES` maps.
+# The values are in site.auto.tfvars, which Terraform loads automatically.
+
+variable "fw_2_example_com" {
+  description = "Site value (F6.6), read from site.auto.tfvars"
+  type        = string
+}
+
