@@ -1,6 +1,6 @@
 """F6.5 scope objects: the emitter, the placement rule, the device member rule, and the gate rule.
 
-`acceptance.md` states the decisions; these tests pin them:
+`docs/CODEBASE_ASSEMBLY.md` §8 states the decisions; these tests pin them:
 
 1. Emission and order. One `resource` block per scope entry, in the level order `SCOPE_LEVEL_ORDER`
    states and in document order inside a type, in one file for the run. The file is written only
@@ -190,7 +190,7 @@ PROVIDER_TYPES = {'string': 'string', 'string_list': ['list', 'string']}
 
 # The property a row declares but another block prints: the device-group entry feeds the scope block
 # and the parent record, and the provider has no `parent` attribute for the scope type, so the record
-# prints it (`acceptance.md` decision 11).
+# prints it (`docs/CODEBASE_ASSEMBLY.md` §8 rule 3).
 PRINTED_BY_ANOTHER_BLOCK = {'panos_device_group': ('parent',)}
 
 

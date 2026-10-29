@@ -1,7 +1,7 @@
 """Smoke tests: both scripts run end to end without crashing.
 
-These tests are the baseline gate. Deeper parser and generator tests
-land in later tasks (see to-do.md F1.2-F1.4).
+These tests are the baseline gate. The deeper parser and generator tests
+are the rest of the suite.
 """
 
 from conftest import SAMPLE_CONFIG, run_script

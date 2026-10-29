@@ -10,18 +10,17 @@ provider cannot model, and runs a post-run gate on the output it wrote. Every te
 runs offline against fixtures and the live provider schema. CI runs `ruff check .`
 and `pytest`, plus a job that runs `terraform init` and `terraform validate`.
 
-The three problems the adversarial audit found are closed: the output validates
-against the pinned provider, no parse method keys by name alone, and the test gate
-covers the generated Terraform. `ADVERSARIAL_AUDIT_REPORT.md` is the audit record;
-its status table states the current state.
+The work before Epic 6 is complete: the output validates against the pinned
+provider, no parse method keys by name alone, the test gate covers the generated
+Terraform, the input comes from a declared source with a provenance record, and the
+per-entry report accounts for every entry. The rules that came from that work are in
+`docs/ARCHITECTURE.md` §2 to §5 and `docs/COVERAGE_MATRIX.md`.
 
-Epic 5 (the upstream source layer) is complete. Epic 6 (codebase assembly) is started: F6.1
-(the unit boundary as data), F6.2 (ownership as data), F6.3 (the reference between units and the
-unit order), F6.4 (import blocks), F6.5 (the scope objects as output) and F6.6 (the site data layer and
-the device name as a variable) landed, and their rules are in
-`docs/ARCHITECTURE.md` §3.4, §3.5, §3.6, §3.7, §4.1, §4.2, §4.5, §4.6, §4.8 and §5, and in
-`docs/CODEBASE_ASSEMBLY.md` §3 to §9. The open decisions are in
-`backlog.md`.
+Epic 6 (codebase assembly) is open. F6.1 to F6.6 landed: the unit boundary as data,
+ownership as data, the reference edge and the unit order, the import block, the scope
+objects, and the site data layer. Their rules are in `docs/ARCHITECTURE.md` §3.4 to
+§3.7, §4.1, §4.2, §4.5, §4.6, §4.8, and §5, and in `docs/CODEBASE_ASSEMBLY.md` §3 to
+§9. The open decisions are in `backlog.md`; the open pieces are in `to-do.md`.
 
 ## Goals
 
@@ -37,100 +36,14 @@ the device name as a variable) landed, and their rules are in
 A brown-field config is an existing production config: mixed shared objects,
 per-device-group overrides, template stacks, and multiple virtual systems.
 
-## Epic 4 — Full Traceability and Verification (Goal 4) — complete
-
-F4.1 (sanity gate), F4.2 (container table and line tracking), F4.3 (per-entry
-report) and F4.4 (property-level coverage) landed. Their rules are in
-`docs/ARCHITECTURE.md` §2.4, §3.1, §3.2 and §4.6, and in `docs/COVERAGE_MATRIX.md`.
-
-F4.4 gave each matrix row the emitter method and the property list that emitter reads,
-and the report prints a captured property no output read. Goal 4 is met: every input
-entry is classified, every property a row declares is grounded in the emitter that reads
-it, and the output passes the sanity gate.
-
-## Epic 5 — Upstream Data Sources (Goal 5) — complete
-
-The tool reads three kinds of source: a file, a cached Panorama API response through
-`source_fetch.py`, and a Terraform state document as a reference source through
-`state_input.py`. Epic 5 made the source a declared thing, so a run can read the same
-config from a file, from the API export, or from Terraform state, and an entry can name
-which source it came from. F5.1 (source read boundary), F5.2 (cached API export),
-F5.3 (provenance record), F5.4 (cross-source shadow report), F5.5 (read-through data
-blocks, landed 2026-10-28) and F5.6 (Terraform state as a source) are in the git history.
-Their rules are in `docs/ARCHITECTURE.md` §3, §3.2, §3.3, §4.5, §4.6 and §4.7.
-
-F5.5 made the read-through reference opt-in: a name a reference site cannot resolve stays
-a plain string by default, and a run that declares read-through scopes writes one `data`
-block per identity in `read_through.tf`, with the gate rule that reads it
-(`DATA_SOURCE_SCHEMA`, written from the provider `data_source_schemas`). This is the first
-half of the codebase reference rule, so Epic 6 F6.3 follows it.
-
-## Epic 6 — Codebase assembly (Goal 6) — started
+## Epic 6 — Codebase assembly (Goal 6) — open
 
 A codebase is a set of directories, one per declared scope, that a platform plans and
-applies. The design record is `docs/CODEBASE_ASSEMBLY.md`. Every feature below is a rule
-to decide, then a module to write. F6.1 to F6.6 are implemented, so their rules name the module
-and the test that holds them; F6.7 is not implemented.
-
-F6.1 (the unit boundary as data, the codebase manifest, landed 2026-10-28) is in the git
-history. A unit is one combination of the four scope facts, the manifest states one row per
-unit as `CODEBASE_MANIFEST.json`, and the directory name is the sanitized unit name plus the
-8-hex digest of the unit identity. The rules are in `docs/ARCHITECTURE.md` §3.4 and
-`docs/CODEBASE_ASSEMBLY.md` §3. F6.1 names the directory and writes no directory, so the codebase
-gate rule and the write path are still open.
-
-F6.2 (ownership as data, landed 2026-10-28) is in the git history. Ownership is a per-entry fact, so
-`OWNERSHIP.json` states one row per entry a coverage matrix row covers, and the two data files join on
-the unit directory. The owner is the ancestor entry; the case the rule cannot decide is a report finding.
-The rules are in `docs/ARCHITECTURE.md` §3.5 and `docs/CODEBASE_ASSEMBLY.md` §4. F6.2 states the owner
-per entry and writes no directory, so the codebase gate rule and the write path are still open. F6.2
-gives the edge list the owner fact to build on.
-
-F6.3 (the reference between units as data, landed 2026-10-28) is in the git history. An edge is a pair
-fact, so `REFERENCE_EDGES.json` states one row per pair: the referrer unit, the target unit, the matrix
-row, and the entry name. The edge set is the names the reference rule recorded, joined to the ownership
-row on (`type`, `entry`), so no second resolution rule appears; a name no unit declares writes no row,
-and a row that names one unit is refused. The acyclic rule is a report finding in its own section, and a
-unit in a cycle cannot be ordered. The unit order is two added manifest fields, `rank` and `after`, from
-three bases: the owner unit before the unit that overrides its name, the shallower scope before the
-deeper scope inside it, and the target unit before the referrer unit. The rules are in
-`docs/ARCHITECTURE.md` §3.6 and `docs/CODEBASE_ASSEMBLY.md` §5 and §6. F6.3 writes no `.tf` byte and no
-directory, so the codebase gate rule and the write path are still open, and the outputs rule for a name
-another unit owns stays in `backlog.md`.
-
-F6.4 (import blocks, landed 2026-10-28) is in the git history. `imports.tf` states one `import` block per
-entry the run declares, as `to` and `id`, and `id` is base64 of the location object plus the entry name,
-built from the same data the resource block uses, so no second naming rule and no second location rule
-exists. The shape is opt-in (`--import-blocks`), so a run that declares nothing writes the same `.tf` bytes
-as before. The gate rule that reads an `import` block is the second gate rule for a block kind, and it uses
-the one block reader. The four `*_policy_rules` types write no block, because their import object names the
-rulebase, the position in the live rulebase, and a list of names, so each rule entry is a WARN finding. The
-rules are in `docs/ARCHITECTURE.md` §4.8 and `docs/CODEBASE_ASSEMBLY.md` §7. F6.4 writes no directory, so
-the write path stays open.
-
-F6.5 (the scope objects as output, landed 2026-10-28) is in the git history. `scope.tf` states one
-`resource` block per scope entry for the six types the pinned schema declares for the scopes a codebase
-needs: `panos_device_group`, `panos_device_group_parent`, `panos_template`, `panos_template_stack`,
-`panos_template_variable`, `panos_vsys`. Emission is the default, so no flag names it, and the file is
-written before the config inside it, with the blocks in the F3.9 level order. `SCOPE_SHAPE` is the value
-shape the provider takes, so a device membership prints as a list of objects. The gate rule that reads a
-scope block is the third gate rule for a block kind and uses the one block reader. The device-group
-`parent` is captured, so the ownership rule names an ancestor for two device groups in one source, and
-the container table now marks the scope containers as `emitted` rows. The rules are in
-`docs/ARCHITECTURE.md` §3.2, §4.1, §4.2, §4.6 and `docs/CODEBASE_ASSEMBLY.md` §8. F6.5 writes no
-directory, so the write path stays open. A template variable value prints as the export states it: the block
-is the PAN-OS variable, so the tool cannot know which values a module takes as parameters. That decision is
-in `backlog.md`.
-
-F6.6 (the site data layer and the device name as a variable, landed 2026-10-28) is in the git history.
-`SITE_DATA.json` states one row per site that names a value, and `site.auto.tfvars` is the same data in the
-form Terraform reads. `resource_mapping.VALUE_VARIABLES` is the pinned table over the five fields
-`LOCATION_SCHEMA` declares, and it is default output: only `ngfw_device` maps to a variable, because the
-device is the value a codebase changes per site. A print site is the only place the shape is decided, so the
-record names no value the run did not print, and `variables.tf` declares what the run consumed. The §5 naming
-rule lives in `naming.py`, because the gate must read it without the generator. The rules are in
-`docs/ARCHITECTURE.md` §3.7, §4.2, §5 and `docs/CODEBASE_ASSEMBLY.md` §9. F6.6 writes no directory, so the
-write path stays open, and the per-unit `.tfvars` that names one `target` serial stays with the write path.
+applies. The design record is `docs/CODEBASE_ASSEMBLY.md`. Every feature in the record
+is a rule to decide, then a module to write. F6.1 to F6.6 are implemented, so their
+rules name the module and the test that holds them. Each landed feature names its unit
+and writes no directory, so the write path (§14) and the gate rule that reads a data
+file are the shared open steps.
 
 - [ ] **F6.7 Commit and push per unit** — one `panos_commit` action block per unit, the rule
   that no action names a scope another unit owns, and the gate rule that reads an `action`
@@ -138,16 +51,9 @@ write path stays open, and the per-unit `.tfvars` that names one `target` serial
 
 ## Sequencing
 
-1. Epic 5 is complete: F5.1, F5.2, F5.3, F5.4, F5.5 and F5.6 landed. F5.5 decided the
-   reference mechanism for a name outside the run, so F6.3 follows it.
-2. A state source is a reference source, so it cannot move an output fact: it writes no `.tf` byte, it
-   is not an output read for the property scan, and its record references no cache entry, so it prunes
-   nothing.
-3. Epic 6 is started: F6.1 landed the unit as data, F6.2 landed the owner of a repeated name, F6.3 landed
-   the pair and the order between units, F6.4 landed the block that binds an entry to the live config,
-   F6.5 landed the scope object for each unit, and F6.6 landed the site values as data and the device name
-   as a variable. F6.7 needs the write path that §14 step 7 and step 8 share, because F6.6 names the unit
-   and writes no directory. The order is in `docs/CODEBASE_ASSEMBLY.md` §14.
+F6.7 needs the write path that `docs/CODEBASE_ASSEMBLY.md` §14 step 7 and step 8 share,
+because the site feature names the unit and writes no directory. The order of the open
+pieces is in §14, and the pieces held until the next feature takes them are in `to-do.md`.
 
 ## Out of Scope (tracked in backlog.md)
 

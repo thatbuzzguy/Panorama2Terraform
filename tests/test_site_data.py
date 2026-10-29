@@ -1,7 +1,7 @@
 """F6.6 the site data layer: the pinned table, the site row, and the `.tfvars` written from it.
 
 Seven groups, one per rule in `site_data.py`, `resource_mapping.VALUE_VARIABLES`, and
-`acceptance.md`:
+`docs/CODEBASE_ASSEMBLY.md` §9:
 
 1. The pinned table: one row per location field `LOCATION_SCHEMA` declares, and only the device
    field maps to a variable.
@@ -115,7 +115,7 @@ def test_only_the_device_field_maps_to_a_variable():
 
 def test_the_table_holds_no_property():
     """A property at the block's own level is the entry's content, not a site value, so the table
-    holds location fields only (acceptance decision 4). `panos_template_variable` prints its value as
+    holds location fields only (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2). `panos_template_variable` prints its value as
     the export states it, and no variable is declared for it.
     """
     assert all(field in {'name', 'ngfw_device', 'panorama_device', 'rulebase', 'vsys'}
