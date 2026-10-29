@@ -19,7 +19,7 @@ a design rule enforced by construction.
 | `panorama_to_terraform.py` | The converter: `PanoramaParser` (model), `TerraformGenerator` (model and write), `main()` (order) | the parser consumes only the producer contract (`ParsedSource`); it reads no file and opens no connection itself, so a source is either the file producer or the api producer |
 | `xml_input.py` | The only input read, shared by every entry point, through one producer boundary (F5.1), and the scope vocabulary a source states (F5.4) | the two byte checks are one function (`check_bytes`) every source kind runs, so the size cap and the DTD refusal are kind-independent and only the parse step is chosen by the kind; one definition of the scope a source holds (`DEFAULT_SCOPE`) and of the path segment that names an entry (`ENTRY_SEGMENT`) |
 | `source_fetch.py` | The api producer (F5.2): the https request, the cached copy, the response wrapper, and the per-scope request shape (F5.4) | https only; a redirect that changes the scheme is refused; the cache holds exactly the bytes the boundary parsed; the key comes from the environment only; the declared path is part of the request identity, so each scope gets its own entry |
-| `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `DATA_SOURCE_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX`, and the scope tables `SCOPE_TYPES`, `SCOPE_PLACEMENT`, `SCOPE_ANSWER`, `SCOPE_LEVEL_ORDER` and `SCOPE_SHAPE` (F6.5) | the single source of truth; no resource name or attribute from memory; `SCOPE_SHAPE` is the shape the provider takes, so a membership cannot be printed as a string where the provider takes an object |
+| `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `DATA_SOURCE_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX`, and the scope tables `SCOPE_TYPES`, `SCOPE_PLACEMENT`, `SCOPE_ANSWER`, `SCOPE_LEVEL_ORDER` and `SCOPE_SHAPE` (F6.5), plus the value-to-variable table `VALUE_VARIABLES` (F6.6) | the single source of truth; no resource name or attribute from memory; `SCOPE_SHAPE` is the shape the provider takes, so a membership cannot be printed as a string where the provider takes an object; `VALUE_VARIABLES` covers every field `LOCATION_SCHEMA` declares, so the emitter and the gate read one table and no emitter branch decides the shape for one type |
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy` |
 | `container_coverage.py` | The container table (§3.1) and the section rule | the table is data, so a parse method cannot exist without a row |
 | `entry_coverage.py` | The per-entry report (§3.2) | a destination comes from the table row, or from the mark when the method knows better; `name_field` is the one rule for the field that carries an entry name into a block, so the emitter, the gate, and the matrix test read the same rule |
@@ -28,9 +28,11 @@ a design rule enforced by construction.
 | `state_coverage.py` | The state scan (§3.2): the ownership fact and the drift fact | the matrix row is the same table the property scan uses, keyed by the resource type; the ownership key is §2.1 identity with the declared facts, never the `Shared` fallback; the scan is not an output, so it reads captured values without recording |
 | `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state; one block reader serves every block kind a rule reads, so a fact about a block is reported once |
 | `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4) | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line |
+| `naming.py` | The §5 sanitizing rule, stated in one module (F6.6): the shape a PAN-OS name takes when it becomes a Terraform name, and the `var.` text a block prints for a site value | one rule, three callers: the local name of a block, the unit directory name, and the variable name of a site value. The gate reads it without the generator, so `TerraformGenerator.sanitize_name` is a delegate and every other module takes the rule as an argument or reads it here |
 | `unit_manifest.py` | The unit as data (F6.1): one row per declared scope, as `CODEBASE_MANIFEST.json` (§3.4) | the rows come from the ledger, so the module adds no parse data; it takes the §5 naming rule as an argument, so no second naming rule exists; the reference names arrive from §4.3, so this module resolves no name |
 | `ownership.py` | The owner of a repeated name (F6.2): one row per entry a matrix row covers, as `OWNERSHIP.json` (§3.5), and the report finding for a case the rule cannot decide | the row scope is the F4.4 rule read through the report row, so no second scope rule exists; the identity key and the naming rule are read through `state_coverage` and `unit_manifest`, so no second key or naming rule exists; `disable_override` names the entry that cannot be overridden, not the owner; the scan reads a captured value without recording |
 | `reference_edges.py` | The reference between units (F6.3): one row per pair, as `REFERENCE_EDGES.json` (§3.6), the acyclic rule, and the unit order on the manifest row | the edge set is the names §4.3 recorded, so this module records no name and resolves no name; the target is the ownership `owner`, so the pair joins to §3.4 on `directory` and to §3.5 on (`type`, `entry`); a row that names one unit is refused; the order comes from the three bases §6 of `CODEBASE_ASSEMBLY.md` states, read through the module that holds each fact |
+| `site_data.py` | The site as data (F6.6): one row per site that names a value, as `SITE_DATA.json` (§3.7), and the `.tfvars` written from the rows | the row joins to §3.4 on `directory`, so no second unit rule exists; the module resolves no name and names no value the run did not print; the `.tfvars` is the printed form of the data, not the generator's state; `parse_rows` refuses a shape it does not declare; the name is the §5 rule read through `naming.py` |
 | `import_blocks.py` | The import block (F6.4): one block per entry, as `imports.tf` (§4.8), and the id shape | the block is built from the same data the resource block uses, so this module states no location rule and no naming rule; the id is the base64 JSON object the provider documents, and `decode_id` refuses a shape it does not declare; the four `*_policy_rules` types are the rows `LOCATION_SCHEMA` declares `rulebase` for, so no second table names them |
 | `conftest.py`, `tests/` | The gate | each rule in this document names the test that pins it |
 
@@ -614,6 +616,49 @@ Pinned by `tests/test_reference_edges.py`, including
 `::test_no_report_names_the_record_or_a_field_it_states`,
 `::test_the_cycle_line_shape_is_fixed`, and `::test_two_runs_write_the_same_bytes`.
 
+### 3.7 Site data record (F6.6)
+
+`main()` writes one row per site that names a value, as `SITE_DATA.json` in the output directory, and the
+`.tfvars` the platform reads from those rows. A site is a unit, so the row joins to §3.4 on `directory`,
+the join §3.5 and §3.6 use. The rules are in `site_data.py` and in
+[`CODEBASE_ASSEMBLY.md`](CODEBASE_ASSEMBLY.md) §9; this section states only the shape.
+
+- **The row shape.** `directory`, `variables`. `directory` is the §3.4 join; `variables` is
+  `{the variable name: the value}`, sorted by name. The name is the §5 rule read through `naming.py`, so
+  the row states no value twice: the value is the fact and the name is the mapping result.
+- **The join.** `directory` joins to §3.4, so the record states no path and no second unit rule: the
+  identity and the directory name are read through `unit_manifest.facts_of` and
+  `unit_manifest.directory_name`.
+- **The row order.** The two fields in field order, one row per site that names a value, no repeated row,
+  rows in identity order.
+- **The bytes.** `json.dumps(rows, indent=2)` with one trailing newline, ASCII output, no timestamp and no
+  path, so two runs on the same bytes write the same bytes.
+- **The refusal rule.** `parse_rows` reads a written file back as data and refuses a row that is not the
+  declared shape, including a variable name that is not the §5 shape of its string value, the way
+  `parse_record` refuses a line (§3.3).
+- **The content rule.** Written only when it has content, following the rule for the report files (§4.5),
+  so a run that names no site value writes neither file, and the gate reads no data file.
+- **The printed form.** `site.auto.tfvars` is written from the rows, not from the generator's state, one
+  line per variable in name order across the file. Terraform loads a `*.auto.tfvars` file automatically, so
+  `terraform.tfvars` stays the operator's own file for the credentials (`CODEBASE_ASSEMBLY.md` §11), and the
+  tool writes no credential. A string prints as `json.dumps(value)`, the same escape set
+  `import_blocks.unescape` reads back (§4.8); a list prints inline as `[ "a", "b" ]` and an empty list as
+  `[]`. A value that is neither, and a name two rows state with two different values, are refusals. The
+  file is not a gate input, because the gate reads `.tf` files (§4.5).
+
+The values the rows state are the pairs `TerraformGenerator.location_field` recorded at the site that
+applied the value-to-variable table, keyed by the referrer's four facts, the way §4.3 records a reference
+name. This record resolves nothing, so `variables.tf` declares exactly what the run consumed and the gate
+rule `variables` (§4.6) cannot see a declaration with no consumer.
+
+Pinned by `tests/test_site_data.py`, including `::test_the_fields_print_in_the_declared_order`,
+`::test_the_row_joins_to_the_manifest_on_directory`, `::test_parse_rows_refuses_a_row_that_is_not_the_declared_shape`,
+`::test_the_tfvars_bytes_for_a_string_value`, `::test_a_list_prints_inline_and_an_empty_list_prints_empty`,
+`::test_a_value_that_is_neither_a_string_nor_a_list_is_a_refusal`,
+`::test_the_tfvars_file_is_written_only_when_it_has_content`,
+`::test_the_gate_reads_no_data_file`, `::test_no_report_names_a_field_the_site_data_states`, and
+`::test_two_runs_on_the_same_bytes_write_the_same_bytes`.
+
 ## 4. Emit pipeline
 
 ### 4.1 Order
@@ -632,10 +677,14 @@ content is not written. Pinned by
 `tests/test_real_or_report.py::test_no_report_when_no_report_only_items`.
 
 The scope objects (F6.5) are one file for the run, `scope.tf`, written after
-`provider.tf` and `variables.tf` and before the object files, so the reader sees
+`provider.tf` and before the object files, so the reader sees
 the unit before the config inside it (`docs/CODEBASE_ASSEMBLY.md` §6 and §8 rule 2).
 Inside the file, blocks print in the F3.9 level order that
 `resource_mapping.SCOPE_LEVEL_ORDER` states, and within a type in document order.
+`variables.tf` (F2.10) is written after the emitters, because F6.6 made its declaration set the values
+the run consumed: the file cannot state a variable the run has not printed. Pinned by
+`tests/test_scope_objects.py::test_the_scope_file_is_written_before_the_config_inside_it` and
+`tests/test_site_data.py::test_the_declaration_file_is_written_after_the_emitters`.
 Pinned by `tests/test_scope_objects.py::test_the_scope_file_is_written_before_the_config_inside_it`,
 `::test_blocks_print_in_the_level_order_the_table_states`,
 `::test_entries_print_in_document_order_within_a_type`, and
@@ -670,6 +719,14 @@ sub-block or field is emitted that `LOCATION_SCHEMA` does not declare, because
 `terraform validate` accepts an unknown `location` sub-block and drops it
 silently: a wrong sub-block fails at apply, not at validate.
 
+A location field prints as `VALUE_VARIABLES` says (F6.6): `var.<name>` for a field the table maps to a
+variable, and the quoted value for every other field, so no emitter branch decides the shape for one type.
+The value stays the fact in `location_data`, because the import id (§4.8) encodes the value and a variable
+name is not a device name. The pair is recorded at the print site, keyed by the referrer's four facts
+(§3.4), the way `name_ref` records a reference name, so the site record (§3.7) states what the run printed.
+`localhost.localdomain` never enters a location (F3.5), so it never enters the mapping and names no
+variable.
+
 Pinned by `tests/test_multi_vsys_location.py`: `::test_schema_table_matches_provider_shape`
 (against the live provider schema), `::test_schema_table_covers_every_emitted_type`,
 `::test_location_choice`, `::test_shared_is_not_a_device_group`,
@@ -677,7 +734,9 @@ Pinned by `tests/test_multi_vsys_location.py`: `::test_schema_table_matches_prov
 (the six scope types are the scopes, not objects inside one, so they are not in
 `_TEMPLATE_SCOPED_TYPES`), `::test_template_scoped_types_derive_from_schema`,
 `::test_object_types_never_emit_ngfw`, `::test_placeholder_device_never_becomes_ngfw`,
-the four report tests, `tests/test_schema_conformance.py::test_every_block_has_location`, and
+the four report tests, `tests/test_schema_conformance.py::test_every_block_has_location`,
+`tests/test_site_data.py::test_the_emitter_prints_a_mapped_field_as_the_table_says` and
+`::test_a_field_the_table_does_not_map_still_prints_as_a_literal`, and
 `tests/test_scope_objects.py::test_the_four_panorama_scopes_print_the_empty_sub_block` and
 `::test_a_variable_and_a_vsys_place_in_the_scope_the_export_declares`.
 
@@ -775,17 +834,21 @@ The post-run gate writes `SANITY_REPORT.txt` on every run (§4.6). The generator
 also writes `read_through.tf` for a run that declares read-through scopes (§4.7), and
 `imports.tf` for a run that declares import blocks (§4.8), and `main()` adds
 `README.md`, the provenance record `SOURCE.txt` (§3.3), the unit manifest
-`CODEBASE_MANIFEST.json` (§3.4), and the ownership record `OWNERSHIP.json` (§3.5).
+`CODEBASE_MANIFEST.json` (§3.4), the ownership record `OWNERSHIP.json` (§3.5), the edge record
+`REFERENCE_EDGES.json` (§3.6), the site record `SITE_DATA.json` (§3.7), and the `.tfvars` written from
+the site record, `site.auto.tfvars`.
 `SANITY_REPORT.txt` and `SOURCE.txt` are written on every completed run, and the four report files
-above, `scope.tf` (§4.1), `read_through.tf`, `imports.tf`, and the three data files are written only
+above, `scope.tf` (§4.1), `read_through.tf`, `imports.tf`, and the four data files are written only
 when they have content. These files are the complete set a run writes.
 
-The three data files are not report bodies, so no report names them or restates a row, and the gate
-reads only `.tf` files, so none is a gate input. `imports.tf` is a `.tf` file, so the gate reads it
-(§4.6). Pinned by
+The four data files are not report bodies, so no report names them or restates a row, and the gate
+reads only `.tf` files, so none is a gate input. `site.auto.tfvars` is not a `.tf` file, so the gate does
+not read it either. `imports.tf` is a `.tf` file, so the gate reads it (§4.6). Pinned by
 `tests/test_unit_manifest.py::test_no_report_names_a_field_the_manifest_states` and
-`::test_the_gate_reads_no_data_file`, and by
+`::test_the_gate_reads_no_data_file`, by
 `tests/test_ownership.py::test_no_report_names_a_field_the_record_states` and
+`::test_the_gate_reads_no_data_file`, and by
+`tests/test_site_data.py::test_no_report_names_a_field_the_site_data_states` and
 `::test_the_gate_reads_no_data_file`.
 
 A coverage section cannot name a read-through name, because the three scans read
@@ -819,7 +882,7 @@ conversion. The splitter writes XML, so it has no `.tf` to check.
 | `import_blocks` | every `import` block agrees with the `resource` block it names: the type, the local name, the entry name, and the location | FAIL for a violation; WARN for a rule type the shape cannot state (§4.8) |
 | `scope_blocks` | a name written inside a scope block's `location` names a scope this run declares, by the type that defines that scope | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
-| `variables` | every declared variable has a `var.` consumer | FAIL |
+| `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a variable this run declares (F6.6) | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder, such as the VPN key `***CHANGE_ME***`, is listed | WARN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
@@ -850,6 +913,22 @@ field that names the scope for a type that declares none (`device_group` for
 `panos_device_group_parent`, F6.5). A rule entry of the four `*_policy_rules` types writes no
 block, so the rule reports it as WARN with the reason (§4.8). The finding names the file
 and the line the one reader read.
+
+The location is read as the block states it (F6.6): the unescaped value for a quoted field, and the
+reference text `var.<name>` for a field `VALUE_VARIABLES` maps to a variable. For a mapped field the rule
+compares the printed name against the §5 name of the value the id states, through `naming.py` and the table,
+so no second location rule and no second naming rule appear. The id keeps the value, because the provider
+parses the id and a variable name is not a device name. Pinned by
+`tests/test_site_data.py::test_the_import_rule_compares_a_mapped_field_by_name`, including a block that
+prints the literal for a mapped field and an unmapped field whose value does not agree with the id.
+
+`variables` now reads both directions (F6.6): every declared variable has a `var.` consumer, and every
+`var.` consumer names a variable this run declares. The second direction is what makes a generated
+declaration set checkable, because the set comes from the site record (§3.7) and the run declares exactly
+what it consumed. Pinned by `tests/test_sanity_gate.py::test_variable_check_detects_an_unconsumed_variable`
+and `::test_variable_check_detects_a_consumer_with_no_declaration`, and by
+`tests/test_site_data.py::test_the_variable_rule_reads_both_directions` and `::test_the_corpus_trips_neither_rule`.
+`CHECK_ORDER` is unchanged, because F6.6 added no check.
 
 `scope_blocks` reads the name inside a scope block's `location`, because the reference rule
 cannot reach it: a name inside `location` names the scope the block sits in, not a reference.
@@ -993,6 +1072,14 @@ local = sanitize(name) + '_' + sha256('scope|context|vsys|name')[:8]
   is the digest input: the four scope facts, joined by `|`, in `SCOPE_FACT_KEYS` order
   (`unit_manifest.py`, §3.4). No second naming rule exists, and the test pins that the module
   defines none.
+- **The rule lives in `naming.py`** (F6.6), because the post-run gate must read it without the generator:
+  the `import_blocks` rule compares the variable name a block prints against the value an id states, so the
+  gate and the emitter read one rule. `TerraformGenerator.sanitize_name` is a delegate, and the data modules
+  keep taking the rule as an argument. A site value read through the rule is the variable name
+  (`naming.variable_name`), and the text a block prints for it is `var.` plus that name
+  (`naming.variable_text`), so the emitter, the gate, and the tests cannot give one value two shapes. The rule
+  is idempotent, so an id that states the mapping result instead of the value cannot be detected: the writer
+  keeps the value in the id, and the gate reads the id as the value.
 - Taken names are tracked per type (one domain per `scope`), for both block kinds.
   A true duplicate gets a numeric suffix (`_2`), so the output is always valid HCL.
   The suffix is a validity guard, not the identity mechanism: two different
@@ -1064,6 +1151,12 @@ Two runs on the same input produce identical bytes.
   bytes write the same bytes
   (`tests/test_state_coverage.py::test_two_runs_on_the_same_bytes_write_the_same_bytes`). A state
   read is a file read, so no cache-derived value enters its record.
+- The site record (§3.7) keeps the rows in identity order and sorts the names inside a row, the `.tfvars`
+  prints in name order across the file, and no field states a timestamp or a path, so two runs on the same
+  bytes write the same bytes from two different output directories
+  (`tests/test_site_data.py::test_the_fields_print_in_the_declared_order` and
+  `::test_two_runs_on_the_same_bytes_write_the_same_bytes`). A name comes from the value through `naming.py`,
+  so it is the mapping result and not a second rule (`::test_site_data_defines_no_second_naming_rule`).
 
 ## 7. What this document does not claim
 

@@ -49,7 +49,7 @@ resource "panos_address" "vsys_duplicate_a082f4ca" {
   location = {
     vsys = {
       name = "vsys1"
-      ngfw_device = "fw-2.example.com"
+      ngfw_device = var.fw_2_example_com
     }
   }
   name = "Vsys-Duplicate"
@@ -61,7 +61,7 @@ resource "panos_address" "vsys_duplicate_e8ae6906" {
   location = {
     vsys = {
       name = "vsys2"
-      ngfw_device = "fw-2.example.com"
+      ngfw_device = var.fw_2_example_com
     }
   }
   name = "Vsys-Duplicate"

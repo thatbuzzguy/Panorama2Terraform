@@ -18,7 +18,7 @@ Checks, in report order:
 | `import_blocks` | every `import` block agrees with the `resource` block it names | FAIL, WARN |
 | `scope_blocks` | a name inside a scope block's `location` names a scope this run declares | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
-| `variables` | every declared variable has a `var.` consumer | FAIL |
+| `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a declared variable | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder is listed so the operator replaces it | WARN |
 | `terraform` | `terraform init` + `terraform validate` (`--validate` only) | FAIL or SKIPPED |
@@ -42,6 +42,7 @@ from typing import Optional
 
 import entry_coverage
 import import_blocks
+import naming
 import resource_mapping
 
 FAIL = 'FAIL'
@@ -76,6 +77,11 @@ BLOCK_KINDS = ('resource', 'data', 'import', 'action')
 IMPORT_BLOCK_RE = re.compile(r'\bimport\s*\{')
 TO_RE = re.compile(r'\bto\s*=\s*([a-z0-9_]+)\.([A-Za-z0-9_]+)')
 VARIABLE_RE = re.compile(r'^variable\s+"([A-Za-z0-9_]+)"', re.M)
+# A location field as the block states it: the quoted value, or the `var.` reference the
+# value-to-variable table prints (F6.6).
+LOCATION_FIELD_RE = re.compile(r'([A-Za-z0-9_]+)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|(var\.[A-Za-z0-9_]+))')
+# A `var.` consumer, which is the second direction of the `variables` rule (F6.6).
+CONSUMER_RE = re.compile(r'\bvar\.([A-Za-z0-9_]+)')
 # A `.name` reference, with the kind the reference names. A `data.` reference
 # resolves to a data block and a plain reference to a resource block, so the
 # kind is part of the identity (F5.5).
@@ -149,6 +155,10 @@ class Block:
 
         The shape the import id states (`import_blocks.decode_id`), so the agreement rule compares
         the block and the id through one reader. A sub-block with no field is the `{}` shape.
+
+        A field is read as the block states it (F6.6): the unescaped value for a quoted field, and the
+        reference text `var.<name>` for a field the value-to-variable table maps. The rule that decides
+        which shape a field has is `resource_mapping.VALUE_VARIABLES`, so the reader does not guess.
         """
         text = self.location_body()
         found: dict[str, dict[str, str]] = {}
@@ -167,8 +177,13 @@ class Block:
                         end = index
                         break
             inner = text[start + 1:end]
-            fields = {m.group(1): import_blocks.unescape(m.group(2))
-                      for m in re.finditer(r'([A-Za-z0-9_]+)\s*=\s*"((?:[^"\\]|\\.)*)"', inner)}
+            fields = {}
+            for match in LOCATION_FIELD_RE.finditer(inner):
+                field = match.group(1)
+                quoted, reference = match.group(2), match.group(3)
+                # F6.6: a mapped field prints the §5 name of the value, so the reader keeps the text
+                # the block states and the agreement rule compares the name for it.
+                fields[field] = reference if reference else import_blocks.unescape(quoted or '')
             found[name] = dict(sorted(fields.items()))
         return dict(sorted(found.items()))
 
@@ -429,13 +444,37 @@ def check_data_blocks(files: dict[str, str]) -> list[Finding]:
     return findings
 
 
+def location_agrees(id_location: dict, printed: dict) -> bool:
+    """Compare the location an import id states with the location the block prints (F6.6).
+
+    A field the value-to-variable table maps prints as the §5 name of the value, so this rule compares
+    the name for that field and the value for every other field. The id keeps the value, because the
+    provider parses the id and a variable name is not a device name, so a run that prints `var.<name>`
+    still agrees with its own id. A block that prints the literal for a mapped field is a finding,
+    because then the block and the id are not the same location.
+    """
+    if set(id_location) != set(printed):
+        return False
+    for sub_block, fields in printed.items():
+        id_fields = id_location[sub_block]
+        for field, text in fields.items():
+            value = id_fields.get(field, '')
+            if resource_mapping.VALUE_VARIABLES.get(field) == resource_mapping.VARIABLE:
+                if text != naming.variable_text(value):
+                    return False
+            elif value != text:
+                return False
+    return True
+
+
 def check_import_blocks(files: dict[str, str]) -> list[Finding]:
     """Every `import` block must agree with the `resource` block it names (F6.4).
 
     Four facts, each read through one rule: the address (`to`, read by `blocks`), the entry name, the
     location, and the id shape (`import_blocks.decode_id`). A wrong type and a wrong local name are both
     "the address names no resource block", and a `data` block cannot answer, because an import object names
-    a resource.
+    a resource. The location is compared through `VALUE_VARIABLES`, so a field the table maps to a variable
+    is compared by its §5 name (F6.6).
 
     A `*_policy_rules` entry writes no block: its import object names the rulebase, the position, and a
     list (`import_blocks` rule 5). The run reports the entry as an operator action, so the finding is WARN
@@ -465,7 +504,7 @@ def check_import_blocks(files: dict[str, str]) -> list[Finding]:
                 f'the block states ({name!r})',
             ))
         location = target.location_values()
-        if decoded['location'] != location:
+        if not location_agrees(decoded['location'], location):
             findings.append(Finding(
                 'import_blocks', FAIL, block.file, block.line,
                 f'import {block.address} id location is not the location the block states '
@@ -543,19 +582,34 @@ def check_references(files: dict[str, str]) -> list[Finding]:
 
 
 def check_variables(files: dict[str, str]) -> list[Finding]:
-    """Every declared variable must be consumed as `var.<name>` (F2.10).
+    """Every declared variable must have a `var.` consumer, and every `var.` consumer must name a
+    variable this run declares (F2.10, F6.6).
 
-    A declaration is not a consumer: the consumer text is the whole output, but
-    only a `var.` reference counts, so a variable cannot consume itself.
+    A declaration is not a consumer: the consumer text is the whole output, but only a `var.` reference
+    counts, so a variable cannot consume itself.
+
+    The second direction is what makes a generated declaration set checkable. F6.6 declares the site
+    values the emitter printed, so the run declares exactly what it consumed, and a `var.` reference
+    that names no declaration means the two sets disagree.
     """
     consumers = '\n'.join(files[name] for name in sorted(files))
+    declared = {(file_name, name, line) for file_name, name, line in variables(files)}
     findings = []
-    for file_name, name, line in variables(files):
+    for file_name, name, line in sorted(declared):
         if not re.search(rf'\bvar\.{re.escape(name)}\b', consumers):
             findings.append(Finding(
                 'variables', FAIL, file_name, line,
                 f'variable {name} is declared but never consumed as var.{name}',
             ))
+    names = {name for _, name, _ in declared}
+    for file_name in sorted(files):
+        for line, text in enumerate(files[file_name].split('\n'), start=1):
+            for name in CONSUMER_RE.findall(text):
+                if name not in names:
+                    findings.append(Finding(
+                        'variables', FAIL, file_name, line,
+                        f'var.{name} names no variable this run declares',
+                    ))
     return findings
 
 

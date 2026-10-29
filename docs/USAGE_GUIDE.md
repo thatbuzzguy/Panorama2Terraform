@@ -197,7 +197,7 @@ The converter writes a file only when it has content.
 | File | Content |
 |---|---|
 | `provider.tf` | Provider block, wired to the three credential variables |
-| `variables.tf` | `panos_hostname`, `panos_username`, `panos_password` |
+| `variables.tf` | The three credential variables (`panos_hostname`, `panos_username`, `panos_password`) plus the site variables the run printed (F6.6). Written after the emitters, so it declares only what the run consumed |
 | `scope.tf` | The six scope objects the export declares: device group, the device-group parent record, template, template stack, template variable, and virtual system. Written by every run that has a scope entry, before the object files, in the F3.9 level order (F6.5) |
 | `address_objects.tf`, `address_groups.tf`, `service_objects.tf`, `service_groups.tf`, `tags.tf`, `custom_url_categories.tf`, `application_groups.tf`, `external_lists.tf` | Object resources |
 | `security_rules.tf`, `nat_rules.tf`, `decryption_rules.tf`, `pbf_rules.tf` | Policy rules, one resource per rule, chained in XML order |
@@ -216,6 +216,8 @@ The converter writes a file only when it has content.
 | `CODEBASE_MANIFEST.json` | One row per unit (one declared scope), as data: the four scope facts, the directory name, the entry count, and the names the unit references from outside itself. Written only when it has content (F6.1) |
 | `OWNERSHIP.json` | One row per entry the coverage matrix covers, as data: the matrix row, the entry name, the source, the four scope facts, the declaring unit's directory, the owning unit's directory, what the rule can say about the entry, and the `disable_override` flag as the parse read it. Written only when it has content (F6.2) |
 | `REFERENCE_EDGES.json` | One row per reference pair, as data: the referrer unit, the target unit, the matrix row, and the entry name. Written only when it has content (F6.3) |
+| `SITE_DATA.json` | One row per site that names a value, as data: the unit directory and the variable names with their values. Written only when it has content (F6.6) |
+| `site.auto.tfvars` | The `.tfvars` written from the site data rows, one line per variable in name order (F6.6). Terraform loads a `*.auto.tfvars` file automatically, so `terraform.tfvars` stays the operator's own file for the credentials |
 
 The interface report, the VPN report, and the conversion report share one grouping
 rule: one section per scope the export declares (device group, then the template or
@@ -397,6 +399,49 @@ the finding. A cycle is an operator action, so it does not change the exit code,
 decides, and the console prints no cycle line. The tool emits the order as data; the platform plans
 in that order.
 
+### The site data record
+
+`SITE_DATA.json` is one row per site that names a value, and `site.auto.tfvars` is the same data in the
+form Terraform reads. A site is a unit, so the record joins to the manifest and holds one row per site. Two
+fields, in this order: `directory`, `variables`.
+
+```json
+[
+  {
+    "directory": "fw_2_example_com_5cef6fb6",
+    "variables": {
+      "fw_2_example_com": "fw-2.example.com"
+    }
+  }
+]
+```
+
+```
+# site.auto.tfvars, written from the row above
+fw_2_example_com = "fw-2.example.com"
+```
+
+- `variables` is the variable name with its value. The name is the naming rule applied to the value
+  ([ARCHITECTURE.md](ARCHITECTURE.md) §5), so the row states the value once: `fw-2.example.com` becomes
+  `fw_2_example_com`. A name is the mapping result, so a row cannot state a name the run did not print.
+- `directory` joins to `CODEBASE_MANIFEST.json`, so the record states no path and no second unit rule, and
+  `variables` cannot be a manifest field, because a manifest row holds one unit and names no value.
+- A value comes from the table `resource_mapping.VALUE_VARIABLES`, which states what the emitter prints for
+  each location field. Only `ngfw_device` prints as `var.<name>`, because the device is the value a codebase
+  changes per site ([CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) §9). A run that names no value writes neither
+  file, so the sample output is unchanged.
+- `site.auto.tfvars` prints one line per variable, in name order across the file, and one line for a name two
+  rows state. Terraform loads a `*.auto.tfvars` file automatically, so `terraform.tfvars` stays your own file
+  for the credentials, which the tool never writes.
+- `parse_rows` reads a written file back as data and refuses a row that is not the declared shape, including a
+  variable name that is not the naming-rule shape of its string value
+  ([ARCHITECTURE.md](ARCHITECTURE.md) §3.7). A value that is neither a string nor a list is a refusal, and so
+  is a name two rows state with two different values.
+- The rows keep the identity order, the names inside a row sort, and no field states a path or a timestamp, so
+  two runs on the same bytes write the same bytes.
+- Neither file is a gate input, because the gate reads `.tf` files, and both are written only when they have
+  content. The CLI takes no flag for them: the table is the default output.
+
 ## Post-run sanity gate
 
 Every conversion runs the gate on the files it wrote, prints a summary, and
@@ -409,7 +454,7 @@ receive, not what the generator intended.
 | `location_present` | every `resource` and `data` block carries `location` | FAIL |
 | `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type (the type, the `location` sub-block and its fields, and `name` when the row declares one) | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
-| `variables` | every declared variable has a `var.` consumer | FAIL |
+| `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable this run declares (F6.6) | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
@@ -429,7 +474,7 @@ action, so it does not change the exit code.
 
 ## Reading the generated Terraform
 
-Three things explain the shape of the output:
+Four things explain the shape of the output:
 
 - **Naming.** A local resource name is the sanitized PAN-OS name plus an 8-hex
   digest of the source identity, so the same name in two device groups, virtual
@@ -444,10 +489,16 @@ Three things explain the shape of the output:
   it becomes one `data` block the plan reads
   ([ARCHITECTURE.md](ARCHITECTURE.md) §4.7). The resolution order is in
   [ARCHITECTURE.md](ARCHITECTURE.md) §4.3.
+- **Site values.** The device name in a `location` block prints as `var.<name>`, because the table
+  `resource_mapping.VALUE_VARIABLES` maps that field to a variable (F6.6). A site change is a `.tfvars`
+  change, not a code change, so replacing hardware changes one line in `site.auto.tfvars` instead of every
+  resource inside the template. Every other location field prints as the value the source states.
 
 ## Deploying the generated configuration
 
-1. Create `terraform.tfvars` with the credentials. Do not commit it.
+1. Create `terraform.tfvars` with the credentials. Do not commit it. The tool writes `site.auto.tfvars`
+   from `SITE_DATA.json`, and Terraform loads it automatically, so put the credentials in
+   `terraform.tfvars` and leave the site values in the file the tool wrote.
 2. Replace the placeholder VPN pre-shared keys.
 3. Read `MANUAL_SETUP_REPORT.txt` and configure those items by hand.
 4. Check interface names against the target platform
@@ -463,7 +514,7 @@ Three things explain the shape of the output:
 | `Error: ... larger than the limit` | The input exceeds `--max-input-bytes`. Raise the limit only for a trusted file. |
 | `Refused: input declares a DTD` | The file is not a Panorama export. Do not disable the check; obtain the export again. |
 | Gate FAIL on `references` | A `.name` reference points at a resource this run did not declare. Read `SANITY_REPORT.txt`; the converter never declares a resource to make a reference work. |
-| Gate FAIL on `variables` | A declared variable has no `var.` consumer. Only the three credential variables are declared. |
+| Gate FAIL on `variables` | A declared variable has no `var.` consumer, or a `var.` consumer names a variable this run does not declare. The run declares the three credential variables plus the site variables it printed (F6.6). Read `SANITY_REPORT.txt` |
 | Gate WARN on `placeholders` | Expected. A VPN pre-shared key is a placeholder, and you must set it before apply. |
 | Duplicate local resource names | A true duplicate of the same identity. The generator adds a numeric suffix so the output stays valid HCL. Two different identities never need it. |
 | `terraform validate` reports an unknown `location` sub-block | The gate checks presence only, not shape. Read `LOCATION_SCHEMA` in `resource_mapping.py`; `terraform validate` accepts an unknown sub-block and drops it silently. |

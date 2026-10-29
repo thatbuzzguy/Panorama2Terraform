@@ -40,7 +40,7 @@ resource "panos_virtual_router" "vr_dmz_abd4195a" {
 resource "panos_virtual_router" "vr_device_level_7cfc3546" {
   location = {
     ngfw = {
-      ngfw_device = "fw-2.example.com"
+      ngfw_device = var.fw_2_example_com
     }
   }
   name = "vr-device-level"

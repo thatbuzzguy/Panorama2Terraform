@@ -124,8 +124,9 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 ## Out of Scope
 
 - The orchestrator is not this tool's job. The tool writes data an orchestrator reads: the unit
-  manifest, the reference edges, the import blocks, and the `.tfvars`. It runs no plan, no apply,
-  and no commit, and it manages no secrets. The rule is in `docs/CODEBASE_ASSEMBLY.md` §13.
+  manifest, the ownership record, the reference edges, the site record, the import blocks, and the
+  `.tfvars` written from the site record. It runs no plan, no apply, and no commit, and it manages
+  no secrets. The rule is in `docs/CODEBASE_ASSEMBLY.md` §13.
 - The Day 1 device bootstrap cannot be expressed in the pinned provider schema: no resource
   registers a device, defines an HA pair, sets a management interface, or holds an auth key. Serial
   registration, HA grouping, management IP, DNS, NTP, and the admin account stay outside the
@@ -390,7 +391,7 @@ Tech debt, out-of-scope items, and nice-to-haves. Promote items to `PLAN.md` whe
 ## Design Decisions (Epic 6)
 
 The design record is `docs/CODEBASE_ASSEMBLY.md`. Each item below is a decision, not a rule the code
-holds, except the F6.1, F6.2, F6.3, F6.4 and F6.5 decisions, which the code holds and a test pins.
+holds, except the F6.1 to F6.6 decisions, which the code holds and a test pins.
 
 - F6.1 landed three decisions (2026-10-28). The rules are in `unit_manifest.py`, and
   `docs/CODEBASE_ASSEMBLY.md` §3 and `docs/ARCHITECTURE.md` §3.4 state them:
@@ -447,7 +448,7 @@ holds, except the F6.1, F6.2, F6.3, F6.4 and F6.5 decisions, which the code hold
   - the shape is opt-in (`--import-blocks`), off by default, following the F5.5 `--data-blocks`
     precedent, so a run that declares nothing writes the same `.tf` bytes as before and both golden sets
     stay byte-identical. This is the one place Epic 6 adds a CLI flag; the F6.1 to F6.3 rule that the
-    tool writes data an orchestrator reads, with no flag, still holds for the three data files;
+    tool writes data an orchestrator reads, with no flag, still holds for the four data files;
   - the block states two fields, `to` then `id`, and the file prints blocks in unit order then local-name
     order, which is the order the data files already print;
   - the id is base64 of the JSON object with the keys sorted at every level and compact separators, so the
@@ -487,13 +488,44 @@ holds, except the F6.1, F6.2, F6.3, F6.4 and F6.5 decisions, which the code hold
   - the gate rule for a scope block reads the name inside `location`, because the reference rule cannot
     reach it, and it reads blocks with the one block reader. A `data` block cannot answer a scope name, the
     same way an import names a resource.
+- F6.6 landed seven decisions (2026-10-28). The rules are in `site_data.py` and `naming.py`, the table is
+  `resource_mapping.VALUE_VARIABLES`, and `docs/CODEBASE_ASSEMBLY.md` §9 and `docs/ARCHITECTURE.md` §3.7,
+  §4.2, §4.5, §4.6 and §5 state them:
+  - the mapping is default output, not a flag: a table that applies only when a flag is on gives one value two
+    shapes from one table, so the tool would hold two rules for one value, and the gate rule `variables`
+    cannot agree with a declaration set that depends on a flag. The F6.5 precedent is the same case;
+  - the table is data, one row per location field `LOCATION_SCHEMA` declares, and it states what the block
+    prints for each. Only `ngfw_device` maps to a variable, because the device is the value a codebase changes
+    per site;
+  - a property at the block's own level is the entry content, not a site value, so it is not in the table. A
+    membership list in `scope.tf` stays a literal, and a `panos_template_variable` prints its value as the
+    export states it, because the block *is* the PAN-OS variable and the tool cannot know which values a module
+    takes as parameters;
+  - one file for the run, one row per site that names a value, and the row joins to the manifest on
+    `directory`, so no second unit rule appears. The file is written only when it has content, and a row that is
+    not the declared shape is refused;
+  - the `.tfvars` is written from the rows, not from the generator's state, and is named `site.auto.tfvars`, so
+    Terraform loads it and `terraform.tfvars` stays the operator's credential file, which the tool never writes.
+    A string prints through the same escape set `import_blocks.unescape` reads back, so no second escape rule
+    appears;
+  - the print site is the only place the shape is decided, so the record names no value the run did not print,
+    and `variables.tf` is written after the emitters because its declaration set is what the run consumed;
+  - the §5 naming rule lives in `naming.py`, because the gate must read it without the generator, and the gate
+    rule `variables` reads both directions: a declaration with no consumer, and a consumer with no declaration.
+- Open (F6.6): `check_import_blocks` compares a mapping result, so it cannot detect an id that states the name
+  instead of the value, because the naming rule is idempotent. The writer keeps the value in the id, so an id the
+  tool builds cannot carry the name.
+- Open (F6.6): the per-unit `.tfvars` that names one `target` serial stays with the write path, because F6.6
+  names the unit and writes no directory.
+- Open (F6.6): a module parameter is a standard a person writes, so a template variable value stays a literal
+  until the write path decides what a module takes.
 - Finding, recorded during F6.4: `location.device_group` declares a `panorama_device` field in the pinned
   schema, and the provider docs example states one, but the generator's location rule emits no device
-  fact, so the tool writes no `panorama_device` in an id. An id states only what the block states. If the
-  device fact becomes a rule (F6.6 names the device as a variable), the id and the block must change
-  together.
+  fact, so the tool writes no `panorama_device` in an id. An id states only what the block states. F6.6 records
+  the field as a literal, so the block and the id print the same text for it. If a device fact becomes a rule,
+  the id and the block change together.
 - Open: the manifest names the directory and writes no directory, so the path that creates one
-  directory per unit is still open. The gate reads no data file, so the gate rule that reads the three
+  directory per unit is still open. The gate reads no data file, so the gate rule that reads the four
   data files is not written yet. `scope.tf` (F6.5) is one file for the run, so a codebase run writes the
   scope blocks of every unit in one file until the write path lands.
 - Finding, recorded during F6.4: the generated `README.md` does not name `imports.tf`. The F5.5 label
@@ -529,9 +561,6 @@ holds, except the F6.1, F6.2, F6.3, F6.4 and F6.5 decisions, which the code hold
   only, never a generated file) and the generated provider block, which declares `panos_username` and
   `panos_password` variables. The provider reads `PANOS_API_KEY` from the environment, so the codebase
   shape is a host variable plus the key, not a credential pair.
-- The value-to-variable mapping must be a pinned table, the way `LOCATION_SCHEMA` is, not a choice
-  inside an emitter. The site data format stays JSON, because the project keeps the standard library
-  only (F5.2).
 - Local inspection mode (`config_file`, `panos_version`) exists in the pinned provider schema and could
   let CI plan against a committed export with no server. It is not a rule in this project, and a plan in
   that mode cannot show drift, so it is not a replacement for the state scan.

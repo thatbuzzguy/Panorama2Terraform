@@ -147,20 +147,36 @@ def test_reference_check_reads_only_the_written_files():
 
 
 def test_variable_check_detects_an_unconsumed_variable():
+    """F2.10, the first direction: a declaration with no consumer."""
     files = {
-        'variables.tf': 'variable "dead" {\n  description = "no consumer"\n}\n',
-        'provider.tf': 'provider "panos" {\n  hostname = var.other\n}\n',
+        'variables.tf': 'variable "dead" {\n  description = "no consumer"\n}\n\n'
+                        'variable "used" {\n  description = "consumed"\n}\n',
+        'provider.tf': 'provider "panos" {\n  hostname = var.used\n}\n',
     }
     findings = sanity_checks.check_variables(files)
     assert len(findings) == 1
     assert findings[0].file == 'variables.tf'
     assert findings[0].line == 1
     assert 'never consumed as var.dead' in findings[0].detail
-    consumed = {
+
+
+def test_variable_check_detects_a_consumer_with_no_declaration():
+    """F6.6, the second direction: a `var.` reference that names no declaration this run writes.
+
+    The declaration set comes from the value-to-variable table, so the two directions are what make a
+    generated declaration set checkable.
+    """
+    files = {'provider.tf': 'provider "panos" {\n  hostname = var.other\n}\n'}
+    findings = sanity_checks.check_variables(files)
+    assert len(findings) == 1
+    assert findings[0].file == 'provider.tf'
+    assert findings[0].line == 2
+    assert 'var.other names no variable this run declares' in findings[0].detail
+    both = {
         'variables.tf': 'variable "used" {\n  description = "consumed"\n}\n',
         'provider.tf': 'provider "panos" {\n  hostname = var.used\n}\n',
     }
-    assert sanity_checks.check_variables(consumed) == []
+    assert sanity_checks.check_variables(both) == []
 
 
 def test_control_char_check_detects_a_raw_control_character():

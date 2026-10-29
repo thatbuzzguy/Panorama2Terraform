@@ -11,15 +11,21 @@ Three contracts:
 1. The parser records the source scope an export declares, with no
    defaults: `vsys`, `template`, `vsys_device`, and the device group.
 2. The emitter picks the sub-block the type accepts and the source identity
-   allows, and reports a scope it cannot carry.
+   allows, and reports a scope it cannot carry. A field the value-to-variable
+   table maps prints as the variable name, not as the value (F6.6).
 3. A name that repeats in two virtual systems produces two resources with
    two digests.
 """
 
 import pytest
 
+import naming
 from panorama_to_terraform import TerraformGenerator
 from resource_mapping import EMITTED_TYPES, LOCATION_SCHEMA
+
+# A device the export names. The value-to-variable table maps `ngfw_device`, so the block prints the
+# §5 name of this value (F6.6).
+FW = 'fw-2.example.com'
 
 
 @pytest.fixture
@@ -233,7 +239,7 @@ def test_parser_finds_device_level_routers(make_parser):
     # A declared vsys with a real device name.
     ('panos_address', {'name': 'a', 'device_group': 'Shared', 'vsys': 'vsys2',
                        'vsys_device': 'fw-2.example.com'},
-     {'vsys': {'name': 'vsys2', 'ngfw_device': 'fw-2.example.com'}}),
+     {'vsys': {'name': 'vsys2', 'ngfw_device': naming.variable_text(FW)}}),
     # The shared section is `shared = {}`, not a device group named Shared.
     ('panos_address', {'name': 'a', 'device_group': 'Shared'}, {'shared': {}}),
     # A device group is a device group.
@@ -432,8 +438,8 @@ def test_same_name_in_two_vsys_emits_two_resources(tmp_path):
     names = [header.split('"')[3] for header in blocks]
     assert len(set(names)) == 2, names
     locations = [_location(block) for block in blocks.values()]
-    assert {'vsys': {'name': 'vsys1', 'ngfw_device': 'fw-2.example.com'}} in locations
-    assert {'vsys': {'name': 'vsys2', 'ngfw_device': 'fw-2.example.com'}} in locations
+    assert {'vsys': {'name': 'vsys1', 'ngfw_device': naming.variable_text(FW)}} in locations
+    assert {'vsys': {'name': 'vsys2', 'ngfw_device': naming.variable_text(FW)}} in locations
 
 
 def test_same_name_in_two_vsys_references_resolve_per_vsys(tmp_path):

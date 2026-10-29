@@ -17,8 +17,10 @@ its status table states the current state.
 
 Epic 5 (the upstream source layer) is complete. Epic 6 (codebase assembly) is started: F6.1
 (the unit boundary as data), F6.2 (ownership as data), F6.3 (the reference between units and the
-unit order), F6.4 (import blocks) and F6.5 (the scope objects as output) landed, and their rules are in
-`docs/ARCHITECTURE.md` §3.4, §3.5, §3.6, §4.1, §4.2, §4.6 and §4.8. The open decisions are in
+unit order), F6.4 (import blocks), F6.5 (the scope objects as output) and F6.6 (the site data layer and
+the device name as a variable) landed, and their rules are in
+`docs/ARCHITECTURE.md` §3.4, §3.5, §3.6, §3.7, §4.1, §4.2, §4.5, §4.6, §4.8 and §5, and in
+`docs/CODEBASE_ASSEMBLY.md` §3 to §9. The open decisions are in
 `backlog.md`.
 
 ## Goals
@@ -30,7 +32,7 @@ unit order), F6.4 (import blocks) and F6.5 (the scope objects as output) landed,
 | 3 | Architectural support for complex, multi-device, real-life brown-field device configs | Multi-device-group and multi-vsys fixtures generate output with no silent drops and preserved policy order. |
 | 4 | Full traceability and verification of the conversion | Every input entry is classified converted, report-only, or unaccounted in a per-entry report with line numbers. Every output passes the sanity gate. No silent drops, no unverified output. |
 | 5 | Input comes from a declared source, and the run records which source it used | The parse boundary returns the same contract for every source. The F3.8 size and DTD checks apply to the bytes a source returns. A run with no network passes CI. The provenance record names the source, the scope, and the cache entry it read. |
-| 6 | The output is a codebase, not one directory: one unit per declared scope, one owner per entry, and the path that binds each entry to the live config | A codebase run writes one directory per declared scope, a manifest that names each unit and the entries it owns, one scope object per declared scope, an import block per entry, and the reference edges between units. The gate reads the manifest, the import blocks, the scope blocks, and the action blocks. Every rule stays offline and deterministic. |
+| 6 | The output is a codebase, not one directory: one unit per declared scope, one owner per entry, and the path that binds each entry to the live config | A codebase run writes one directory per declared scope, a manifest that names each unit and the entries it owns, one scope object per declared scope, an import block per entry, the reference edges between units, and the site values as data with the `.tfvars` written from them. The gate reads the manifest, the import blocks, the scope blocks, and the action blocks. Every rule stays offline and deterministic. |
 
 A brown-field config is an existing production config: mixed shared objects,
 per-device-group overrides, template stacks, and multiple virtual systems.
@@ -67,8 +69,8 @@ half of the codebase reference rule, so Epic 6 F6.3 follows it.
 
 A codebase is a set of directories, one per declared scope, that a platform plans and
 applies. The design record is `docs/CODEBASE_ASSEMBLY.md`. Every feature below is a rule
-to decide, then a module to write. F6.1, F6.2, F6.3 and F6.4 are implemented, so their rules name the module
-and the test that holds them; the rest is not implemented.
+to decide, then a module to write. F6.1 to F6.6 are implemented, so their rules name the module
+and the test that holds them; F6.7 is not implemented.
 
 F6.1 (the unit boundary as data, the codebase manifest, landed 2026-10-28) is in the git
 history. A unit is one combination of the four scope facts, the manifest states one row per
@@ -116,12 +118,20 @@ scope block is the third gate rule for a block kind and uses the one block reade
 `parent` is captured, so the ownership rule names an ancestor for two device groups in one source, and
 the container table now marks the scope containers as `emitted` rows. The rules are in
 `docs/ARCHITECTURE.md` §3.2, §4.1, §4.2, §4.6 and `docs/CODEBASE_ASSEMBLY.md` §8. F6.5 writes no
-directory, so the write path stays open, and the template variable still prints as a literal until the
-value-to-variable mapping is data.
+directory, so the write path stays open. A template variable value prints as the export states it: the block
+is the PAN-OS variable, so the tool cannot know which values a module takes as parameters. That decision is
+in `backlog.md`.
 
-- [ ] **F6.6 Site data layer** — one JSON data file per site, the `.tfvars` the tool writes
-  for it, and the device name as a variable instead of a literal. Needs the
-  value-to-variable mapping as a pinned table.
+F6.6 (the site data layer and the device name as a variable, landed 2026-10-28) is in the git history.
+`SITE_DATA.json` states one row per site that names a value, and `site.auto.tfvars` is the same data in the
+form Terraform reads. `resource_mapping.VALUE_VARIABLES` is the pinned table over the five fields
+`LOCATION_SCHEMA` declares, and it is default output: only `ngfw_device` maps to a variable, because the
+device is the value a codebase changes per site. A print site is the only place the shape is decided, so the
+record names no value the run did not print, and `variables.tf` declares what the run consumed. The §5 naming
+rule lives in `naming.py`, because the gate must read it without the generator. The rules are in
+`docs/ARCHITECTURE.md` §3.7, §4.2, §5 and `docs/CODEBASE_ASSEMBLY.md` §9. F6.6 writes no directory, so the
+write path stays open, and the per-unit `.tfvars` that names one `target` serial stays with the write path.
+
 - [ ] **F6.7 Commit and push per unit** — one `panos_commit` action block per unit, the rule
   that no action names a scope another unit owns, and the gate rule that reads an `action`
   block. Needs the Terraform minimum decision (actions need 1.14 or later).
@@ -134,9 +144,10 @@ value-to-variable mapping is data.
    is not an output read for the property scan, and its record references no cache entry, so it prunes
    nothing.
 3. Epic 6 is started: F6.1 landed the unit as data, F6.2 landed the owner of a repeated name, F6.3 landed
-   the pair and the order between units, F6.4 landed the block that binds an entry to the live config, and
-   F6.5 landed the scope object for each unit, so F6.6 reads the unit, the owner, the pair, the block and
-   the scope. The order is in `docs/CODEBASE_ASSEMBLY.md` §14.
+   the pair and the order between units, F6.4 landed the block that binds an entry to the live config,
+   F6.5 landed the scope object for each unit, and F6.6 landed the site values as data and the device name
+   as a variable. F6.7 needs the write path that §14 step 7 and step 8 share, because F6.6 names the unit
+   and writes no directory. The order is in `docs/CODEBASE_ASSEMBLY.md` §14.
 
 ## Out of Scope (tracked in backlog.md)
 

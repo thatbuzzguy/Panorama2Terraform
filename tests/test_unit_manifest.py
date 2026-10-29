@@ -30,6 +30,7 @@ import entry_coverage
 import ownership
 import reference_edges
 import sanity_checks
+import site_data
 import unit_manifest
 from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, run_script
 
@@ -322,14 +323,16 @@ def test_the_manifest_is_one_file_for_the_codebase(tmp_path):
 
     F6.2: the two data files are the manifest (one row per unit) and the ownership record (one row
     per entry). F6.3 adds the edge record (one row per pair), which states neither a unit set nor an
-    entry set, so the assertion names the three. A fourth `.json` that listed units or entries would be
-    a second place that states them, which is why the unit order lives on this row instead (rule 5).
+    entry set, so the assertion names them. F6.6 adds the site record, which names only the units that
+    state a value and joins to this row on `directory`, so the manifest stays the only place that states
+    the unit set — which is why the unit order lives on this row instead (rule 5).
     """
     _run(FIXTURES_DIR / GROUPING, tmp_path)
     rows = _manifest(tmp_path)
     assert len(rows) == len(GROUPING_UNITS)
     assert (tmp_path / MANIFEST).is_file()
-    data_files = {MANIFEST, ownership.OWNERSHIP_FILE, reference_edges.EDGE_FILE}
+    data_files = {MANIFEST, ownership.OWNERSHIP_FILE, reference_edges.EDGE_FILE,
+                  site_data.SITE_DATA_FILE}
     assert not any(p.name.endswith('.json') and p.name not in data_files for p in tmp_path.iterdir())
     assert not [p for p in tmp_path.iterdir() if p.is_dir()], 'F6.1 names the directory, it writes none'
 

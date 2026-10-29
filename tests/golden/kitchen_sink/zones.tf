@@ -29,7 +29,7 @@ resource "panos_zone" "vsys_zone1_9fb942fb" {
   location = {
     vsys = {
       name = "vsys1"
-      ngfw_device = "fw-2.example.com"
+      ngfw_device = var.fw_2_example_com
     }
   }
   name = "vsys-zone1"
@@ -42,7 +42,7 @@ resource "panos_zone" "vsys_zone2_f258359b" {
   location = {
     vsys = {
       name = "vsys2"
-      ngfw_device = "fw-2.example.com"
+      ngfw_device = var.fw_2_example_com
     }
   }
   name = "vsys-zone2"
