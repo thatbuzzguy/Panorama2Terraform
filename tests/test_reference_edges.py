@@ -1,6 +1,6 @@
 """F6.3 the reference between units: the edge record, the acyclic rule, and the unit order.
 
-Six groups, one per rule in `reference_edges.py` and `acceptance.md`:
+Six groups, one per rule in `reference_edges.py` (`docs/CODEBASE_ASSEMBLY.md` §5 and §6):
 
 1. The edge row and the join: one row per pair the data can name, joined to the manifest on
    `directory` and to the ownership record on (`type`, `entry`).

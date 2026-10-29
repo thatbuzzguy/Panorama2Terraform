@@ -1,6 +1,6 @@
 """F6.2 ownership as data: one row per entry a coverage matrix row covers.
 
-Seven groups, one per rule in `ownership.py` and `acceptance.md`:
+Seven groups, one per rule in `ownership.py` (`docs/CODEBASE_ASSEMBLY.md` §4):
 
 1. The row scope. The F4.4 rule read through the report row, so the scan adds no second
    scope rule: a property level, a skipped entry, and a name a unit only uses write no row.

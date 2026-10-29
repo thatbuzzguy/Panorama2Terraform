@@ -18,7 +18,7 @@ An import block binds a resource block to the object the provider already has. S
    the same rule. This module defines no sanitizing rule and resolves no name.
 5. **The four `*_policy_rules` types write no block.** Their import object names the rulebase, the position in
    the live rulebase, and a list of names, so no per-entry object exists (the rule, and the reason, are stated
-   in `acceptance.md` Decision 3 and pinned by `tests/test_import_blocks.py`). The type set is read from the
+   in `docs/CODEBASE_ASSEMBLY.md` §7 rule 6 and pinned by `tests/test_import_blocks.py`). The type set is read from the
    `rulebase` field `LOCATION_SCHEMA` declares, so no second table names the four types.
 6. **Shape, order, and bytes.** One block states two fields, `to` then `id`. Rows print sorted by unit
    directory, then by local name, which a reader can reproduce from the file. No row states a timestamp or a

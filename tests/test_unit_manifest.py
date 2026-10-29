@@ -1,6 +1,6 @@
 """F6.1: the unit boundary as data, the codebase manifest.
 
-Seven groups, one per rule in `unit_manifest.py` and `acceptance.md`:
+Seven groups, one per rule in `unit_manifest.py` (`docs/CODEBASE_ASSEMBLY.md` §3):
 
 1. The unit. One row per combination of the four scope facts, built from the ledger
    `entry_coverage.py` already writes, so F6.1 adds no parse data.
