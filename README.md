@@ -95,7 +95,7 @@ The mapping and rationale are in
 The provider-resource <-> Panorama-XML-element coverage matrix — one
 row per emitted type with the XML element, fixture, and expected name,
 enforced by `tests/test_coverage_matrix.py` — is in
-[`COVERAGE_MATRIX`](resource_mapping.py) (machine-readable, 28 rows) and
+[`COVERAGE_MATRIX`](resource_mapping.py) (machine-readable, 34 rows) and
 [`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md) (table + method).
 
 ## Dependency wiring
@@ -211,6 +211,13 @@ Data files and reports written to the output directory. Each is written only whe
   outside the run, the unit that owns it, the coverage matrix row, and the entry name
   ([`reference_edges.py`](reference_edges.py)). Every run writes it when it has content, and the row
   joins to the manifest on the unit directory and to the ownership record on (`type`, `entry`)
+- `scope.tf` - The scope objects the export declares: one `resource` block per scope entry for
+  `panos_device_group`, `panos_device_group_parent`, `panos_template`, `panos_template_stack`,
+  `panos_template_variable`, and `panos_vsys`, written by every run that has a scope entry, before the
+  object files, and in the F3.9 level order ([`resource_mapping.py`](resource_mapping.py)
+  `SCOPE_LEVEL_ORDER`). A device membership prints as the list of objects the provider takes, and the
+  PAN-OS "this device" placeholder names no firewall, so it never enters a printed list
+  ([`docs/CODEBASE_ASSEMBLY.md`](docs/CODEBASE_ASSEMBLY.md) §8)
 - `imports.tf` - one `import` block per entry the run declares, as `to` and `id`
   ([`import_blocks.py`](import_blocks.py)). Written only for a run that declares `--import-blocks` and
   has a block to write, and the gate rule reads it because it is a `.tf` file
@@ -243,6 +250,7 @@ section, named `Shared`. The rule is in
 
 ```
 provider.tf  variables.tf  README.md
+scope.tf
 address_objects.tf  address_groups.tf
 service_objects.tf  service_groups.tf
 tags.tf  custom_url_categories.tf  application_groups.tf  external_lists.tf
@@ -413,6 +421,12 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   agreement gate rule and each violation type, the rule that the corpus writes no finding, the decision
   for the four `*_policy_rules` types, the rule that the block and the id come from one location rule and
   one naming rule, the order, and the byte rules between two runs and for a run that declares nothing
+- `tests/test_scope_objects.py` - the scope objects (`scope.tf`): one block per scope entry, the level
+  order and the document order, the file written before the config inside it, the file written only when
+  it has content, emission as the default with no flag, the name field for the parent record, the value
+  shape against the live provider schema and against the rows that declare it, the device membership as
+  the objects the provider takes, the placeholder device never entering a printed list, the placement rule
+  and the skipped entry, each violation type of the gate rule, and the byte rule between two runs
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are

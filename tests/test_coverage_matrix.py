@@ -11,7 +11,9 @@ Panorama-XML-element matrix. These tests enforce it in three directions:
   its output file and the properties that emitter reads. The declared
   properties are grounded in the emitter source (or the generator helper it
   calls), and the measured read sets are pinned by
-  tests/test_property_coverage.py.
+  tests/test_property_coverage.py. A row whose type declares no `name` is checked
+  against the field that carries it (F6.5 decision 4), and the one row whose block
+  carries the entry name and the location only declares no property.
 - element grounding: every row's fixture actually contains the row's
   Panorama XML element with the named entry.
 - pipeline: running the converter on the row's fixture emits the
@@ -32,6 +34,7 @@ from pathlib import Path
 
 import pytest
 
+import entry_coverage
 from conftest import FIXTURES_DIR, run_script
 from resource_mapping import COVERAGE_MATRIX, EMITTED_TYPES
 
@@ -122,12 +125,23 @@ def test_fixture_contains_the_row_element(row):
         f'(found: {names})')
 
 
+def _name_field(row: dict) -> str:
+    """The field the block carries the entry name in (F6.5 decision 4).
+
+    `entry_coverage.name_field` is the one rule for that field, read from `DATA_SOURCE_SCHEMA` and
+    `REPORT_SCOPE_KEYS`, so this test checks a block against the same rule the emitter prints and
+    the import agreement gate reads. `panos_device_group_parent` is the row in the shape that names
+    the scope instead of a name: `device_group`.
+    """
+    return entry_coverage.name_field(row['resource'])
+
+
 @pytest.mark.parametrize('row', ROWS, ids=_row_id)
 def test_row_emits_the_provider_resource(row):
     """The full pipeline maps the row's element to the provider resource.
 
     Converting the row's fixture must emit a `resource "<type>"` block in
-    the row's output file whose body carries name = "<emitted_name>".
+    the row's output file whose body carries the name field with the emitted name.
     """
     outputs = _generate(row['fixture'])
     assert row['output_file'] in outputs, (
@@ -138,7 +152,7 @@ def test_row_emits_the_provider_resource(row):
     assert blocks, (
         f"row for {row['resource']}: no resource block of this type in "
         f"{row['output_file']!r}")
-    expected = f'name = "{row["emitted_name"]}"'
+    expected = f'{_name_field(row)} = "{row["emitted_name"]}"'
     assert any(expected in block for block in blocks), (
         f"row for {row['resource']}: no block in {row['output_file']!r} carries "
         f'{expected!r}')
@@ -150,6 +164,10 @@ def test_row_emits_the_provider_resource(row):
 # `output_file`; `properties` is what that method reads from the entry.
 ROW_FIELDS = ('resource', 'xml_element', 'xml_name', 'emitted_name', 'fixture',
              'output_file', 'emitter', 'properties')
+
+# F6.5 decision 4: the row whose block carries the entry name and the location only, so it declares
+# no property and the property scan has nothing to measure for it.
+NAME_ONLY_ROWS = {'panos_vsys'}
 
 
 def _literal_keys(generator, method_name: str) -> set[str]:
@@ -180,13 +198,21 @@ def _literal_keys(generator, method_name: str) -> set[str]:
 
 @pytest.mark.parametrize('row', ROWS, ids=_row_id)
 def test_row_names_its_emitter_and_properties(row, converter_module):
-    """Eight fields, a real generator method, and at least one property."""
+    """Eight fields, a real generator method, and the properties that emitter reads.
+
+    A row whose block carries the entry name and the location only declares no property: the entry
+    name is the row identity, not a property, and the emitter reads nothing else from the entry
+    (F6.5 decision 4). That is the one exception.
+    """
     assert sorted(row) == sorted(ROW_FIELDS), row['resource']
     assert row['emitter'], f"row for {row['resource']} names no emitter"
     generator = converter_module.TerraformGenerator
     for method in row['emitter']:
         assert hasattr(generator, method), f"{row['resource']}: {method} is not a generator method"
-    assert row['properties'], f"row for {row['resource']} declares no properties"
+    if row['resource'] in NAME_ONLY_ROWS:
+        assert row['properties'] == (), row['resource']
+    else:
+        assert row['properties'], f"row for {row['resource']} declares no properties"
 
 
 @pytest.mark.parametrize('row', ROWS, ids=_row_id)

@@ -183,13 +183,16 @@ def _state_args(extra: tuple = ()) -> tuple:
 def test_one_row_per_entry_the_matrix_row_covers(converter_module, tmp_path):
     """AC-1.1: one row per entry the coverage matrix covers, so two rows can name the same unit.
     `unit_manifest.py` rule 4 pins the per-unit shape, and the two data files join on `directory`.
+
+    Nine rows, because F6.5 makes the device group entry an object: the fixture's `Branch-DG` entry
+    writes a row of its own now.
     """
     out = tmp_path / 'out'
     parser, _generator, code = _pipeline(converter_module, FIXTURES_DIR / FIXTURE, out)
     assert code == 0
     rows = _record(out)
     emitted = [row for row in parser.ledger.rows() if row['destination'] == 'emitted']
-    assert len(rows) == len(emitted) == 8
+    assert len(rows) == len(emitted) == 9
     measured = {(row['name'], unit_manifest.facts_of(row)) for row in emitted}
     assert {(row['entry'], _facts(row)) for row in rows} == measured
     for name in (FLAGGED, DECIDED, REVERSED, SERVICE):
@@ -210,13 +213,17 @@ def test_an_entry_inside_a_config_object_entry_writes_no_row(converter_module, t
 def test_a_reference_pointer_writes_no_row(converter_module, tmp_path):
     """AC-1.2: the export declared no object for an entry that carries only `<id>`, so the scan has
     nothing to own there.
+
+    The record has two rows now: the address entry the fixture declares and the device group row F6.5
+    adds, because a scope entry writes an object.
     """
     out = tmp_path / 'out'
     parser, _generator, _code = _pipeline(converter_module, FIXTURES_DIR / POINTERS, out)
     assert [row for row in parser.ledger.rows() if row['destination'] == 'skipped']
     rows = _record(out)
-    assert len(rows) == 1
-    assert rows[0]['entry'] == 'Web-Server-1' and rows[0]['kind'] == 'declared'
+    assert sorted(row['entry'] for row in rows) == ['Production-DG', 'Web-Server-1'], rows
+    pointer = [row for row in rows if row['type'] == 'panos_address']
+    assert len(pointer) == 1 and pointer[0]['kind'] == 'declared', rows
 
 
 def test_a_name_a_unit_uses_but_does_not_declare_writes_no_row(converter_module, tmp_path):
@@ -297,13 +304,38 @@ def test_the_ancestor_entry_owns_the_name(converter_module, tmp_path):
 
 
 def test_two_device_groups_have_no_stated_relation(converter_module, tmp_path):
-    """AC-3.1: the device-group `parent` field is not captured, so the rule names no owner for two
-    device groups in one source.
+    """AC-3.1: two top-level groups that repeat a name are peers, so the rule names no owner for them.
+
+    The export states no `parent` for either group, so the chain is empty and each group is its own
+    object. The two groups write rows now (F6.5), because a scope entry is an object.
     """
     rows = _scan(converter_module, FIXTURES_DIR / 'edge_dup_names_across_dgs.xml', tmp_path / 'out')
-    assert [row['kind'] for row in rows] == ['ambiguous', 'ambiguous']
-    assert all(row['owner'] == '' for row in rows), rows
-    assert all(row['reason'] == ownership.NO_RELATION for row in rows), rows
+    group = [row for row in rows if row['entry'] == 'web']
+    assert [row['kind'] for row in group] == ['ambiguous', 'ambiguous']
+    assert all(row['owner'] == '' for row in group), group
+    assert all(row['reason'] == ownership.NO_RELATION for row in group), group
+    scopes = [row for row in rows if row['type'] == 'panos_device_group']
+    assert sorted(row['entry'] for row in scopes) == ['DG-A', 'DG-B'], scopes
+    assert all(row['kind'] == 'declared' for row in scopes), scopes
+    assert all(row['chain'] == () for row in scopes), 'the export states no parent for either group'
+
+
+def test_a_stated_parent_names_the_ancestor(converter_module, tmp_path):
+    """F6.2 rule 4, closed by F6.5: the parse captures the device-group `parent`, so a repeated name
+    between a parent group and a child group has a stated ancestor and is not a finding.
+
+    The parent relation is read through `RecordingDict.value`, the non-recording read, so the property
+    scan does not count it as a property an output used (the F5.6 rule).
+    """
+    rows = _scan(converter_module, FIXTURES_DIR / 'ownership_parent.xml', tmp_path / 'out')
+    device = container_coverage.PLACEHOLDER_DEVICE
+    ancestor = _row(rows, 'Printer-Pool', ('Parent-DG', '', '', device))
+    descendant = _row(rows, 'Printer-Pool', ('Child-DG', '', '', device))
+    assert ancestor['kind'] == 'definition' and ancestor['owner'] == ancestor['directory']
+    assert descendant['kind'] == 'override' and descendant['owner'] == ancestor['directory']
+    assert not ownership.findings(rows), 'the export states the relation, so it is not a finding'
+    assert descendant['chain'] == ('Parent-DG',), descendant
+    assert ancestor['chain'] == (), 'a group that states no parent is a top-level group'
 
 
 def test_a_name_in_two_units_that_cannot_be_one_chain_is_two_objects(converter_module, tmp_path):
@@ -334,9 +366,15 @@ def test_the_declared_parent_source_is_the_ancestor(converter_module, fetch_modu
                                 converter_module.TerraformGenerator(str(out)).sanitize_name)
     parent = [row for row in rows if row['source'] != parser.source.name]
     child = [row for row in rows if row['source'] == parser.source.name]
-    assert len(parent) == 1 and len(child) == 1, rows
+    # F6.5: the declared scope entry writes its own row, so the child side holds the device group row
+    # and the address row. The address row is the one the rule decides.
+    assert len(parent) == 1, rows
+    scope = [row for row in child if row['type'] == 'panos_device_group']
+    address = [row for row in child if row['type'] == 'panos_address']
+    assert len(scope) == 1 and len(address) == 1, rows
+    assert scope[0]['kind'] == 'declared', scope
     assert parent[0]['kind'] == 'definition' and parent[0]['override'] == 'unknown'
-    assert child[0]['kind'] == 'override' and child[0]['owner'] == parent[0]['directory']
+    assert address[0]['kind'] == 'override' and address[0]['owner'] == parent[0]['directory']
     assert not ownership.findings(rows), 'the export states this relation, so it is not a finding'
 
 
@@ -536,7 +574,7 @@ def test_a_plain_run_writes_the_record_without_a_flag(tmp_path):
 
 def test_the_gate_reads_no_data_file(tmp_path):
     """Decision 1 rule 5: the gate reads `.tf` files only, so a data file cannot change a gate result
-    or a golden byte, and `CHECK_ORDER` is unchanged.
+    or a golden byte, and the report prints the checks in `CHECK_ORDER` order.
     """
     _run(SAMPLE_CONFIG, tmp_path)
     files = sanity_checks.read_tf_files(tmp_path)

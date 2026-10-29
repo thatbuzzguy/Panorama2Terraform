@@ -19,10 +19,10 @@ a design rule enforced by construction.
 | `panorama_to_terraform.py` | The converter: `PanoramaParser` (model), `TerraformGenerator` (model and write), `main()` (order) | the parser consumes only the producer contract (`ParsedSource`); it reads no file and opens no connection itself, so a source is either the file producer or the api producer |
 | `xml_input.py` | The only input read, shared by every entry point, through one producer boundary (F5.1), and the scope vocabulary a source states (F5.4) | the two byte checks are one function (`check_bytes`) every source kind runs, so the size cap and the DTD refusal are kind-independent and only the parse step is chosen by the kind; one definition of the scope a source holds (`DEFAULT_SCOPE`) and of the path segment that names an entry (`ENTRY_SEGMENT`) |
 | `source_fetch.py` | The api producer (F5.2): the https request, the cached copy, the response wrapper, and the per-scope request shape (F5.4) | https only; a redirect that changes the scheme is refused; the cache holds exactly the bytes the boundary parsed; the key comes from the environment only; the declared path is part of the request identity, so each scope gets its own entry |
-| `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `DATA_SOURCE_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX` | the single source of truth; no resource name or attribute from memory |
+| `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `DATA_SOURCE_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX`, and the scope tables `SCOPE_TYPES`, `SCOPE_PLACEMENT`, `SCOPE_ANSWER`, `SCOPE_LEVEL_ORDER` and `SCOPE_SHAPE` (F6.5) | the single source of truth; no resource name or attribute from memory; `SCOPE_SHAPE` is the shape the provider takes, so a membership cannot be printed as a string where the provider takes an object |
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy` |
 | `container_coverage.py` | The container table (§3.1) and the section rule | the table is data, so a parse method cannot exist without a row |
-| `entry_coverage.py` | The per-entry report (§3.2) | a destination comes from the table row, or from the mark when the method knows better |
+| `entry_coverage.py` | The per-entry report (§3.2) | a destination comes from the table row, or from the mark when the method knows better; `name_field` is the one rule for the field that carries an entry name into a block, so the emitter, the gate, and the matrix test read the same rule |
 | `shadow_coverage.py` | The cross-source shadow scan (§3.2): a child entry name that repeats a parent entry name | the key is the matrix row, not the name alone; both sources are read with the same row rule, so no second naming rule exists; a run with no declared parent has no parent to read |
 | `state_input.py` | The state producer (F5.6): a Terraform state document read as a reference source, through the same door | the two byte checks run on the state bytes, and only the parse step is chosen by the kind, so a `<!DOCTYPE` inside a JSON value is not a refusal; a document the identity key cannot read is an input refusal; the state source writes no output, so no `.tf` byte changes |
 | `state_coverage.py` | The state scan (§3.2): the ownership fact and the drift fact | the matrix row is the same table the property scan uses, keyed by the resource type; the ownership key is §2.1 identity with the declared facts, never the `Shared` fallback; the scan is not an output, so it reads captured values without recording |
@@ -314,8 +314,11 @@ Six rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
 - **Destination comes from the table row that covers the container**, longest
   matching row wins, so a sub-shape row beats the general row for its container.
   A per-entry mark overrides the row when the method knows better: `report_only`
-  content is `report`, and a skipped entry is `skipped`. A scope entry is
-  `bookkeeping`: it defines a scope, so it is not an object inside one.
+  content is `report`, and a skipped entry is `skipped`. A scope entry takes the
+  destination its table row states (F6.5): the four scope containers and `variable`
+  are `emitted` rows, so a scope entry is an object the output writes, and the
+  membership lists inside a scope entry stay `bookkeeping`, because no provider
+  resource exists for a device.
 - **Captured fields** are the keys of the object the method built, minus the entry
   name and the four scope facts (§2.2), minus keys with no value, in sorted order.
   An entry with nothing but its name says `captured: name only`. A field the
@@ -552,10 +555,11 @@ row per unit, and the two data files join on `directory`. The rules are in `owne
 - **The content rule.** Written only when it has content, following the rule for the report files
   (§4.5). A plain run writes it, so the CLI takes no flag for it, and the gate reads no data file.
 
-The scan result keeps `line`, `container`, and `reason` as run facts, so they are not written: the
-record states a fact, the report states a finding. The scan reads the captured flag through
+The scan result keeps `line`, `container`, `reason`, and the device-group `chain` as run facts, so they
+are not written: the record states a fact, the report states a finding. `chain` is the device-group
+ancestors the export states for a row's unit (F6.5), and the scan reads the `parent` field through
 `entry_coverage.RecordingDict.value`, so it is not an output read and cannot move a property finding
-(the F5.6 rule).
+(the F5.6 rule). The scan reads the captured flag through the same non-recording read.
 
 Pinned by `tests/test_ownership.py`, including
 `::test_the_fields_print_in_the_declared_order`,
@@ -627,11 +631,28 @@ content is not written. Pinned by
 `tests/test_golden_files.py::test_golden_file_set_matches` and
 `tests/test_real_or_report.py::test_no_report_when_no_report_only_items`.
 
+The scope objects (F6.5) are one file for the run, `scope.tf`, written after
+`provider.tf` and `variables.tf` and before the object files, so the reader sees
+the unit before the config inside it (`docs/CODEBASE_ASSEMBLY.md` §6 and §8 rule 2).
+Inside the file, blocks print in the F3.9 level order that
+`resource_mapping.SCOPE_LEVEL_ORDER` states, and within a type in document order.
+Pinned by `tests/test_scope_objects.py::test_the_scope_file_is_written_before_the_config_inside_it`,
+`::test_blocks_print_in_the_level_order_the_table_states`,
+`::test_entries_print_in_document_order_within_a_type`, and
+`::test_the_file_is_written_only_when_it_has_content`.
+
 ### 4.2 Location
 
 Provider v2 requires `location` on every resource. The choice comes from
-`LOCATION_SCHEMA`, never from the resource name, in four branches:
+`LOCATION_SCHEMA`, never from the resource name, in five branches:
 
+0. **A scope object places itself in the scope the export puts it in** (F6.5), read through
+   `SCOPE_PLACEMENT`. The four Panorama scopes place themselves, so the sub-block prints empty,
+   the `shared = {}` shape. A template variable and a virtual system place inside a template or a
+   template stack, and an entry the export places in neither reaches no block: the parse reports it
+   as `skipped`, because the converter does not guess a place (the F3.6 rule). Branch 4 would
+   report a device group as "device group dropped", which is wrong for the object that defines the
+   group.
 1. A declared vsys, with no declared template, on a type that accepts `vsys` →
    `vsys { name, ngfw_device }`.
 2. A declared template, on a type that accepts `template` → `template { name }`,
@@ -652,10 +673,13 @@ silently: a wrong sub-block fails at apply, not at validate.
 Pinned by `tests/test_multi_vsys_location.py`: `::test_schema_table_matches_provider_shape`
 (against the live provider schema), `::test_schema_table_covers_every_emitted_type`,
 `::test_location_choice`, `::test_shared_is_not_a_device_group`,
-`::test_no_sub_block_outside_the_schema`, `::test_only_template_scoped_types_declare_ngfw`,
-`::test_template_scoped_types_derive_from_schema`,
+`::test_no_sub_block_outside_the_schema`, `::test_only_template_scoped_types_declare_ngfw`
+(the six scope types are the scopes, not objects inside one, so they are not in
+`_TEMPLATE_SCOPED_TYPES`), `::test_template_scoped_types_derive_from_schema`,
 `::test_object_types_never_emit_ngfw`, `::test_placeholder_device_never_becomes_ngfw`,
-the four report tests, and `tests/test_schema_conformance.py::test_every_block_has_location`.
+the four report tests, `tests/test_schema_conformance.py::test_every_block_has_location`, and
+`tests/test_scope_objects.py::test_the_four_panorama_scopes_print_the_empty_sub_block` and
+`::test_a_variable_and_a_vsys_place_in_the_scope_the_export_declares`.
 
 ### 4.3 Reference resolution
 
@@ -753,8 +777,8 @@ also writes `read_through.tf` for a run that declares read-through scopes (§4.7
 `README.md`, the provenance record `SOURCE.txt` (§3.3), the unit manifest
 `CODEBASE_MANIFEST.json` (§3.4), and the ownership record `OWNERSHIP.json` (§3.5).
 `SANITY_REPORT.txt` and `SOURCE.txt` are written on every completed run, and the four report files
-above, `read_through.tf`, `imports.tf`, and the three data files are written only when they have
-content. These files are the complete set a run writes.
+above, `scope.tf` (§4.1), `read_through.tf`, `imports.tf`, and the three data files are written only
+when they have content. These files are the complete set a run writes.
 
 The three data files are not report bodies, so no report names them or restates a row, and the gate
 reads only `.tf` files, so none is a gate input. `imports.tf` is a `.tf` file, so the gate reads it
@@ -793,6 +817,7 @@ conversion. The splitter writes XML, so it has no `.tf` to check.
 | `location_present` | every `resource` and `data` block carries a `location` block | FAIL |
 | `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type | FAIL |
 | `import_blocks` | every `import` block agrees with the `resource` block it names: the type, the local name, the entry name, and the location | FAIL for a violation; WARN for a rule type the shape cannot state (§4.8) |
+| `scope_blocks` | a name written inside a scope block's `location` names a scope this run declares, by the type that defines that scope | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
@@ -801,7 +826,8 @@ conversion. The splitter writes XML, so it has no `.tf` to check.
 
 One block reader serves every block kind the gate reads: `resource`, `data`,
 `import`, and `action`. F5.5 added the `data` rule and F6.4 added the `import` rule
-with the same reader (§4.8), so no second reader appears. A block is read up to the
+with the same reader (§4.8), so no second reader appears; F6.5 reads the scope blocks
+with the same reader too. A block is read up to the
 first column-0 brace, which is how the generator writes one and how the tests read
 one. A block is reported once for a fact: `location_present` reads both kinds, so
 the `data_blocks` rule reports the shape inside the block, not the missing block.
@@ -818,9 +844,21 @@ reference answers to a `data` block and a plain reference to a `resource` block.
 `resource` block this run declares (a `data` block cannot answer, because an import
 object names a resource), `id` must decode to the declared shape, the decoded name must
 equal the block's `name`, and the decoded location must equal the block's `location`
-sub-block, field for field. A rule entry of the four `*_policy_rules` types writes no
+sub-block, field for field. The name is read through `entry_coverage.name_field`, the one
+rule for the field that carries the entry name: `name` for a type that declares one, and the
+field that names the scope for a type that declares none (`device_group` for
+`panos_device_group_parent`, F6.5). A rule entry of the four `*_policy_rules` types writes no
 block, so the rule reports it as WARN with the reason (§4.8). The finding names the file
 and the line the one reader read.
+
+`scope_blocks` reads the name inside a scope block's `location`, because the reference rule
+cannot reach it: a name inside `location` names the scope the block sits in, not a reference.
+The answering type is `resource_mapping.SCOPE_ANSWER`, and only a `resource` block answers, the
+same way an import names a resource. Two shapes state no name to resolve, so the rule reads
+neither: an empty sub-block (the `panorama = {}` shape), and a field that names a device rather
+than a scope (`panorama_device`, `ngfw_device`). Pinned by `tests/test_scope_objects.py`: one
+test per violation type, the `data` block that cannot answer, the two shapes that state nothing
+to resolve, the one-reader pin, and `::test_no_false_positive_across_the_corpus`.
 
 - A WARN does not fail the gate: a placeholder is correct output that still needs
   an operator action, so the run exits 0.

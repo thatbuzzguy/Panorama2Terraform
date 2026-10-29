@@ -1,0 +1,82 @@
+<?xml version="1.0"?>
+<!-- F6.5 scope fixture: one entry for each of the six scope types the coverage matrix names, so
+     every scope row has a fixture that carries its element and a block the pipeline test can read.
+
+  Edge-FW        the device group. It states a parent, so the run writes the scope object and the
+                 parent record for the same entry. The `parent` field is not an attribute of
+                 `panos_device_group`, so the scope block prints no parent and the record prints it.
+  Edge-Networks  the template. `panos_template` declares no device field, so the block carries the
+                 description and the default virtual system only.
+  edge-vsys      a virtual system inside the template. A virtual system is a scope, and the export
+                 places it inside a template, so the block places itself there.
+  Edge-Stack     a template stack. A stack lists members instead of holding config, so its device
+                 and template lists are fields the block prints.
+  edge-tag       a template variable inside the stack. The export states the value inside `type`, in
+                 the field that names the kind, so the value prints as a literal: the
+                 value-to-variable mapping is F6.6. `template_stack` is the placement fact the emitter
+                 reads to choose the location sub-block, so the row declares it.
+
+A device member that names the PAN-OS "this device" placeholder is never printed, so the placeholder
+member below is not in the block. -->
+<config version="10.0.0" urldb="paloaltonetworks">
+  <devices>
+    <entry name="localhost.localdomain">
+      <device-group>
+        <entry name="Shared-Parent">
+          <description>Top-level group the edge group inherits from</description>
+        </entry>
+        <entry name="Edge-FW">
+          <description>Edge device group</description>
+          <parent>Shared-Parent</parent>
+          <devices>
+            <entry name="edge-firewall">
+            </entry>
+            <entry name="localhost.localdomain">
+            </entry>
+          </devices>
+          <templates>
+            <member>Edge-Networks</member>
+          </templates>
+        </entry>
+        <entry name="Placeholder-Only">
+          <description>Group that lists only the placeholder device</description>
+          <devices>
+            <entry name="localhost.localdomain">
+            </entry>
+          </devices>
+        </entry>
+      </device-group>
+    </entry>
+  </devices>
+  <templates>
+    <entry name="Edge-Networks">
+      <description>Edge template</description>
+      <default_vsys>vsys1</default_vsys>
+      <vsys>
+        <entry name="edge-vsys">
+        </entry>
+      </vsys>
+    </entry>
+  </templates>
+  <template-stack>
+    <entry name="Edge-Stack">
+      <description>Edge stack</description>
+      <default_vsys>vsys1</default_vsys>
+      <devices>
+        <entry name="edge-firewall">
+        </entry>
+      </devices>
+      <templates>
+        <member>Edge-Networks</member>
+      </templates>
+      <variable>
+        <entry name="edge-tag">
+          <description>Edge tag</description>
+          <type>
+            <ip-netmask>10.0.0.50/32</ip-netmask>
+          </type>
+        </entry>
+      </variable>
+    </entry>
+  </template-stack>
+</config>

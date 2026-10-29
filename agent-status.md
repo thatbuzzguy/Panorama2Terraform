@@ -2,72 +2,83 @@
 
 ## Current position
 
-F6.4 (import blocks: one block per entry, and the gate rule that a block agrees with the resource block it
-names) is complete and committed as `F6.4: import blocks per entry, the import agreement gate rule`. No
-feature is in progress. The next feature in `PLAN.md` is F6.5 (scope objects as output). F6.1, F6.2, F6.3
-and F6.4 name the unit, the owner, the pair, the order and the block, and write no directory, so the write
-path and the gate rule that reads the three data files are still open. The outputs rule for a name another
-unit owns is still open in `backlog.md`.
+F6.5 (scope objects as output: one `resource` block per scope entry for the six types the pinned schema
+declares for the scopes, in `scope.tf`, and the gate rule that a name inside a scope block's `location`
+names a scope the run declares) is complete and committed as `F6.5: scope objects as output`. No feature
+is in progress. The next feature in `PLAN.md` is F6.6 (the site data layer), which takes the template
+variable literal F6.5 prints. F6.1 to F6.5 name the unit, the owner, the pair, the order, the block and
+the scope object, and write no directory, so the write path and the gate rule that reads the three data
+files are still open. The outputs rule for a name another unit owns is still open in `backlog.md`.
 
-State at the commit: `ruff check .` clean, `pytest` 1062 passed (1030 before this feature: 32 added in
-`tests/test_import_blocks.py`), both golden `.tf` sets byte-identical, the report and record determinism
-rules unchanged, exit codes unchanged (0, input refusal 1, argument error 2), `--help` gained
-`--import-blocks`, `CHECK_ORDER` gained `import_blocks` after `data_blocks`, and every test runs offline.
-The goldens compare `.tf` files only, so `imports.tf` is compared when the flag is on; it is off by
-default, so no golden byte changed.
+State at the commit: `ruff check .` clean, `pytest` 1141 passed (1062 before this feature: 79 added),
+every existing golden `.tf` byte identical, and the two golden sets each gained one file, `scope.tf`. The
+report, manifest, ownership, edge and provenance determinism rules are unchanged, exit codes are
+unchanged (0, input refusal 1, argument error 2), no CLI flag changed, `CHECK_ORDER` gained
+`scope_blocks` after `import_blocks`, and every test runs offline.
 
-## What F6.4 changed
+Test count by file, before → after: `tests/test_coverage_matrix.py` 141 → 171,
+`tests/test_schema_conformance.py` 57 → 69, `tests/test_scope_objects.py` 0 → 26,
+`tests/test_resource_mapping.py` 42 → 48, `tests/test_golden_files.py` 31 → 33,
+`tests/test_sanity_gate.py` 78 → 80, `tests/test_ownership.py` 36 → 37.
 
-- `import_blocks.py` (new): `IMPORT_FILE`, `ROW_FIELDS`, `RULE_DECISION`, `rule_types()`, `build_id`,
-  `decode_id`, `row`, `render`, `read_block`, `block_value`, `unescape`. The module states the id shape, the
-  row shape, and the order; it defines no naming rule, no location rule, and no identity key.
-- `panorama_to_terraform.py`: `location_data()` is the single location rule and returns
-  `{sub-block: {field: value}}` in the print order; `location_block()` renders from it and records the row
-  when a local name is passed; `self.import_rows` in `__init__`; `record_import_row()` after
-  `unit_references()`; 25 emitter call sites pass the local name, and the read-through site at
-  `panorama_to_terraform.py:2552` does not, because a `data` block is not an import target;
-  `--import-blocks` after `--data-blocks`;
-  `main()` writes `imports.tf` only when the run declares it and a row states an id.
-- `sanity_checks.py`: `import_blocks` in `CHECK_ORDER` after `data_blocks`; `IMPORT_BLOCK_RE` and `TO_RE`
-  read the `import {` shape in the one pass `blocks()` already makes; `Block.attribute()` reads a field at
-  the block's own level through `import_blocks.block_value`; `Block.location_values()` returns the sub-block
-  as the shape `decode_id` states; `check_import_blocks()` added to `run_checks()`.
-- Tests: `tests/test_import_blocks.py`, 32 tests in seven groups: the id encoding, the agreement rule, the
-  no-false-positive run across the corpus, the rule types, the one location rule and the one naming rule,
-  order and bytes, and the file shape, the reader and the opt-in.
-- Docs: `docs/CODEBASE_ASSEMBLY.md` §1, §2, §5, §7, §10, §12 and §14, `docs/ARCHITECTURE.md` §1, §4.5, §4.6,
-  §4.8 and §6, `docs/USAGE_GUIDE.md` (the flags table, the outputs table, and the opt-in section), and
-  `README.md` (the flag, the gate table, the outputs list, and the test list).
+## What F6.5 changed
 
-## Facts measured during F6.4
+- `resource_mapping.py`: six `COVERAGE_MATRIX` rows with `output_file` `scope.tf` and the emitter
+  `generate_scope_objects`; `EMITTED_TYPES` and `LOCATION_SCHEMA` gained the six types, and each new
+  `LOCATION_SCHEMA` row equals its `DATA_SOURCE_SCHEMA` row. New tables: `SCOPE_TYPES`,
+  `SCOPE_PLACEMENT` (the parsed key that names the scope each type places itself in), `SCOPE_ANSWER` (the
+  type that answers a name inside a `location`), `SCOPE_LEVEL_ORDER` (the block order inside the file),
+  and `SCOPE_SHAPE` (the provider shape of each property the block prints at its own level).
+- `panorama_to_terraform.py`: `SCOPE_FILE`, `generate_scope_objects`, `_scope_name_field`,
+  `_scope_property`; `parse_device_groups` now captures `parent`, `devices` and `templates`, and
+  `parse_templates`, `parse_template_stacks`, `parse_template_variables` and `parse_vsys` are new.
+  `_scope_container_of` walks the parent map for the placement, `_variable_type` returns the
+  `{kind: value}` object, `_list_names` marks the membership entries it reads, `location_data` gained the
+  scope branch (branch 0), and `main()` calls the emitter after `generate_variables`.
+- `entry_coverage.py`: `name_field(resource_type)` is the one rule for the field that carries an entry
+  name into a block, read from `DATA_SOURCE_SCHEMA` and `REPORT_SCOPE_KEYS`. `EntryLedger.destination`
+  lost the `is_scope_entry` exception, because the container table row now decides the destination.
+- `container_coverage.py`: the five scope container rows read `emitted`; the membership rows stay
+  `bookkeeping`, and `parse_associations` marks nothing itself.
+- `sanity_checks.py`: `check_scope_blocks` and `CHECK_ORDER`, read through the one block reader;
+  `check_import_blocks` now reads the name through `entry_coverage.name_field`.
+- `ownership.py`: `parent_map`, `chain_of`, and the `chain` run fact on the scan row, so rule 4 can name
+  an ancestor for two device groups in one source.
+- `import_blocks.py` rule 4 states the name-field rule.
+- Tests: `tests/test_scope_objects.py` (26 tests: emission and order, the name field, the value shape,
+  the device member rule, placement and the skipped entry, the gate rule, determinism),
+  `tests/fixtures/scope_objects.xml`, `tests/fixtures/ownership_parent.xml`, four scope entries added to
+  `tests/fixtures/kitchen_sink.xml`, and `scope.tf` in both golden sets.
+- Docs: `docs/CODEBASE_ASSEMBLY.md` §2, §4, §6, §8, §10 and §14, `docs/ARCHITECTURE.md` §1, §3.2, §3.5,
+  §4.1, §4.2, §4.5 and §4.6, `docs/COVERAGE_MATRIX.md` (the row count and the six rows),
+  `docs/USAGE_GUIDE.md` (the outputs table), `README.md` (the outputs list, the typical outputs, the row
+  count, and the test list), and `acceptance.md`.
 
-- The corpus writes no FAIL finding for the agreement rule with `--import-blocks`. The rule types are the
-  four `*_policy_rules` types `LOCATION_SCHEMA` declares `rulebase` for, and each rule entry is a WARN
-  finding, so the corpus check compares FAIL findings only.
-- The pinned provider docs object for `panos_address` round-trips through `build_id` and `decode_id`. The
-  provider parses the JSON, so the object is the fact; the byte form is the tool's choice, fixed by sorting
-  the keys at every level with compact separators.
-- `panorama_device` is a field of `location.device_group` in the pinned schema and the docs example states
-  one, but the generator's location rule emits no device fact, so no id states one. Recorded in
-  `backlog.md`.
-- `block_value` must read at the block's own level. A first version read any indent, so `name = "DG-A"`
-  inside `location` answered for the block's `name` and the rule reported a wrong name for a block that
-  agreed with its id.
-- A quoted value may carry an escaped quote, so the field reader must stop at the closing quote.
-  `tests/fixtures/edge_quoted_dg_names.xml` is the fixture that showed it: a greedy `[^"]*` mis-read the
-  name and produced a finding on a run that writes no finding.
-- The gate console prints one line per check, then each finding under it, so a WARN finding prints under
-  `import_blocks`. The earlier statement that the console prints no line for a WARN was wrong; the finding
-  prints, and the exit code stays 0.
-- `import_blocks.py` cannot import `sanity_checks` (that would be a cycle), so a written block is read back
-  through `read_block(block)`, not through a `parse_rows`-style reader.
-- `tests/test_sanity_gate.py` iterates `CHECK_ORDER` rather than pinning its length, so adding a check does
-  not break it. `tests/test_ownership.py::test_the_gate_reads_no_data_file` pins that the check list equals
-  `CHECK_ORDER`, so the new name is covered by that test.
-- The data-block call site is deliberately not recorded: an import object names a resource, so a `data`
-  block cannot answer a `to` address, and the rule reports it as FAIL.
-- `render([])` writes the header only, so `main()` writes no file for a run that declares the shape and has
-  no entry.
+## Facts measured during F6.5
+
+- Provider 2.0.14, read from the schema the `provider_schemas` fixture writes: `devices` is a list of
+  objects for `panos_device_group` (`{name, vsys}`) and for `panos_template_stack` (`{name}`), `templates`
+  is a list of strings, and `type` is one nested object. `terraform validate` refuses a string where the
+  provider takes an object, which is why the shape is a table. `panos_device_group_parent` declares no
+  `name`: its fields are `device_group`, `parent` and `location`.
+- `test_data_source_schema.py::test_the_shared_types_mirror_the_resource_shape` pins that a row declares
+  `name` only when the provider declares it, so `name_field` falls back to the scope field for
+  `panos_device_group_parent`, and to `name` for the four `*_policy_rules` types, which print the name
+  inside `location`.
+- The property scan measures a row through the entries its container covers, so the two rows whose block
+  carries the entry name and the location only have no read of their own to measure:
+  `panos_device_group_parent` and `panos_vsys`. `test_property_coverage.py` pins the unmeasured set.
+- `tests/test_coverage_matrix.py` allows an empty property list only for `panos_vsys`
+  (`NAME_ONLY_ROWS`).
+- Corpus facts re-measured after the change: `report_grouping.xml` has a vsys entry inside a device-group
+  entry, so that entry is now `skipped` with the reason that no template holds it; the sample and
+  kitchen-sink device groups list only the placeholder device, so their blocks print no `devices` line.
+  `CORPUS_FINDINGS`, `GROUPING_UNITS`, `EXPECTED_FINDINGS`, `ASSOCIATIONS` and the gate console summary
+  (`9 .tf files, 20 resources` for `tests/test_sanity_gate.py`) were re-read from the runs, not assumed.
+- The goldens compare `.tf` files, so the new file is pinned by
+  `tests/test_golden_files.py::test_golden_file_set_matches` for both cases.
+- `scope.tf` is written only when it has content, so a run with no scope entry writes no file and the
+  golden file set for such a run is unchanged.
 
 ## Rules to keep when writing documents
 
@@ -86,28 +97,34 @@ default, so no golden byte changed.
 
 ## Watch for Epic 6
 
-- F6.5, F6.6 and F6.7 still write no directory. The three data files name the unit, the entry and the pair,
-  so the write path is the step that turns a `directory` field into a real directory, and `imports.tf` is
-  one file for the run.
+- F6.5, F6.6 and F6.7 still write no directory. The three data files name the unit, the entry and the
+  pair, so the write path is the step that turns a `directory` field into a real directory, and `scope.tf`
+  is one file for the run.
 - The block reader in `sanity_checks.py` serves every kind, so the `action` rule (F6.7) must use
   `blocks(files, kinds)`; no second block reader should appear.
-- The gate reads `.tf` files only, so no data file is a gate input today. `imports.tf` is a `.tf` file and
-  is a gate input. If a codebase feature makes a data file a gate input, the file set statement in
-  `ARCHITECTURE.md` §4.5 and the no-change tests must change together.
-- A field reader must read at the block's own level and stop at the closing quote, or a sub-block field or an
-  escaped quote answers for the block's field. Both are pinned in `tests/test_import_blocks.py`.
+- The gate reads `.tf` files only, so no data file is a gate input today. `scope.tf` and `imports.tf` are
+  `.tf` files and are gate inputs. If a codebase feature makes a data file a gate input, the file set
+  statement in `ARCHITECTURE.md` §4.5 and the no-change tests must change together.
+- A field reader must read at the block's own level and stop at the closing quote, or a sub-block field or
+  an escaped quote answers for the block's field. Both are pinned in `tests/test_import_blocks.py`, and the
+  scope rule reads at the block's own level through the same reader.
+- `SCOPE_PLACEMENT` and the location sub-block are one fact: a new scope type needs both the placement key
+  and the `SCOPE_ANSWER` entry, and the emitter reads the placement key as the location, so a new row
+  cannot place itself in a scope it does not name.
+- The entry name is never a property. A row whose provider type declares no `name` reaches the block
+  through `entry_coverage.name_field`; no emitter, gate rule, or test should state the field again.
 - The import position for the four `*_policy_rules` types must be the position the live config holds, and
   the F3.5 rulebase decision gates it. F6.4 writes no block for a rule entry until both land.
-- The generated `README.md` does not name `imports.tf`; the F5.5 label precedent says an opt-in shape labels
-  itself.
+- The generated `README.md` does not name `imports.tf`; the F5.5 label precedent says an opt-in shape
+  labels itself.
 - Actions need Terraform 1.14 or later; the committed goldens declare no Terraform minimum.
 - The credential rule needs one statement that covers both the fetch layer and the generated provider
   block.
 - The value-to-variable mapping must be a pinned table, the way `LOCATION_SCHEMA` and
-  `DATA_SOURCE_SCHEMA` are.
+  `DATA_SOURCE_SCHEMA` are. F6.5 prints the template variable value as a literal until it lands.
 - The prune action still needs the record directory decided. A state record references nothing, so it
   prunes nothing, and the prune rule reads a record file, not one record.
 - A coverage fact that comes from a run must be read from the run's ledger, so the scan tests run the
   pipeline in process.
-- A cycle test needs the referrer entry and the declaring entry in the same unit, for the reason recorded in
-  the git history for F6.3.
+- A cycle test needs the referrer entry and the declaring entry in the same unit, for the reason recorded
+  in the git history for F6.3.

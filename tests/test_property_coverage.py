@@ -160,11 +160,17 @@ def test_parse_time_read_is_not_a_property_use(converter_module):
 def test_measured_reads_equal_the_declared_properties(converter_module, tmp_path):
     """For each matrix row, the properties the outputs read equal the row's declared list.
 
-    A row whose shape the corpus never exercises has no read to measure. That is
-    `panos_aggregate_layer3_subinterface`: the container table maps an aggregate
-    subinterface to the ethernet subinterface row, so no corpus entry reaches it. Its
-    declared properties are grounded by the emitter test in tests/test_coverage_matrix.py,
-    and the table limit is recorded in backlog.md.
+    Two rows have no read of their own to measure:
+    `panos_aggregate_layer3_subinterface`, because the container table maps an aggregate
+    subinterface to the ethernet subinterface row, so no corpus entry reaches it; and
+    `panos_device_group_parent`, because the entry that feeds the parent record is covered by the
+    device group row (F6.5 decision 4: one entry can feed two blocks, and the scan measures an
+    entry against the row that covers its container). Both are grounded by the emitter test in
+    tests/test_coverage_matrix.py, and the table limit is recorded in backlog.md.
+
+    `panos_vsys` is measured with the empty set: its block carries the entry name and the location
+    only, so the row declares no property and parity holds only while a fixture places a virtual
+    system inside a template (`scope_objects.xml`).
     """
     measured = {}
     for _fixture, ledger in _corpus_ledgers(converter_module, tmp_path):
@@ -172,7 +178,8 @@ def test_measured_reads_equal_the_declared_properties(converter_module, tmp_path
             measured.setdefault(resource, set()).update(keys)
 
     unmeasured = sorted({row['resource'] for row in ROWS} - set(measured))
-    assert unmeasured == ['panos_aggregate_layer3_subinterface'], unmeasured
+    assert unmeasured == ['panos_aggregate_layer3_subinterface', 'panos_device_group_parent'], \
+        unmeasured
 
     drift = {row['resource']: (sorted(row['properties']), sorted(measured[row['resource']]))
              for row in ROWS

@@ -198,6 +198,7 @@ The converter writes a file only when it has content.
 |---|---|
 | `provider.tf` | Provider block, wired to the three credential variables |
 | `variables.tf` | `panos_hostname`, `panos_username`, `panos_password` |
+| `scope.tf` | The six scope objects the export declares: device group, the device-group parent record, template, template stack, template variable, and virtual system. Written by every run that has a scope entry, before the object files, in the F3.9 level order (F6.5) |
 | `address_objects.tf`, `address_groups.tf`, `service_objects.tf`, `service_groups.tf`, `tags.tf`, `custom_url_categories.tf`, `application_groups.tf`, `external_lists.tf` | Object resources |
 | `security_rules.tf`, `nat_rules.tf`, `decryption_rules.tf`, `pbf_rules.tf` | Policy rules, one resource per rule, chained in XML order |
 | `security_profile_groups.tf` | Profile group resources |

@@ -11,8 +11,9 @@ Four groups of checks:
    parse methods, so it checks the marks the parse actually made.
 3. The row rules. Object type is the F4.2 `section_path`, destination is the
    longest matching table row, a per-entry mark wins for `report_only` and a
-   skipped entry, a scope entry is bookkeeping, a property entry is counted on
-   the parent row, and a `predefined` entry is not a row.
+   skipped entry, a scope entry takes the destination its table row states (F6.5),
+   a property entry is counted on the parent row, and a `predefined` entry is not
+   a row.
 4. The report. One line per row, the gap section, file name only, byte-identical
    between runs, and no file when the input has no entries. A gap does not change
    the exit code.
@@ -279,21 +280,28 @@ def test_skipped_entry_destination_beats_the_table_row():
     assert ledger.destination(entry) == 'skipped'
 
 
-def test_scope_entry_is_bookkeeping():
-    """An entry that defines a scope is not an object inside one (AC-2.7)."""
+def test_scope_entry_destination_comes_from_the_table_row():
+    """F6.5: a scope entry is an object, so its destination is the table row's.
+
+    F4.3 rule 3 says the container table row gives the destination. F6.5 makes the scope
+    containers `emitted` rows, so `EntryLedger.destination` has no scope exception left and the row
+    alone decides. `is_scope_entry` stays, because the report row still names the scope an entry
+    reaches the output through.
+    """
     ledger = _ledger(GAP_FIXTURE)
     scope_entry = next(e for e in ledger.entries() if e.get('name') == 'Edge')
     assert container_coverage.is_scope_entry(scope_entry, ledger.parents)
-    assert ledger.destination(scope_entry) == 'bookkeeping'
+    assert ledger.destination(scope_entry) == 'emitted'
+    assert entry_coverage.covering_row('device-group').destination == 'emitted'
 
 
-def test_parse_device_groups_row_is_bookkeeping():
-    """A device group name reaches the output through location, not as a resource."""
+def test_parse_device_groups_row_is_emitted():
+    """A device group name reaches the output as a resource, and not only through location."""
     row = entry_coverage.covering_row('device-group')
-    assert row.destination == 'bookkeeping', row
+    assert row.destination == 'emitted', row
     ledger = _ledger('multi_device_templates.xml')
     dg_rows = [r for r in ledger.rows() if r['container'] == 'device-group']
-    assert dg_rows and all(r['destination'] == 'bookkeeping' for r in dg_rows)
+    assert dg_rows and all(r['destination'] == 'emitted' for r in dg_rows)
 
 
 def test_property_entries_are_counted_on_the_parent_row():

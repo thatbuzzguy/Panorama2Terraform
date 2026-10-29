@@ -309,6 +309,10 @@
     <entry name="localhost.localdomain">
       <device-group>
         <entry name="Production-DG">
+          <!-- F6.5: the parent relation the export states, so the run writes the parent record for
+               this entry and ownership can name the ancestor. The parent group is not in this file:
+               a per-scope export names the parent it inherits from, which is the F5.4 shape. -->
+          <parent>Corporate-DG</parent>
           <pre-rulebase>
             <application-override>
               <rules>
@@ -923,6 +927,29 @@
           </entry>
         </virtual-router>
       </network>
+      <!-- F6.5: the four scope entries this fixture carries, so the golden set shows all six scope
+           types. A virtual system and a template variable are entries inside the template entry, and
+           the template stack is the fourth. -->
+      <vsys>
+        <entry name="template-vsys">
+        </entry>
+      </vsys>
+      <variable>
+        <entry name="template-tag">
+          <description>Template variable the golden set carries</description>
+          <type>
+            <ip-netmask>10.9.9.9/32</ip-netmask>
+          </type>
+        </entry>
+      </variable>
     </entry>
   </templates>
+  <template-stack>
+    <entry name="Branch-Stack">
+      <description>Template stack the golden set carries</description>
+      <templates>
+        <member>FW-Template</member>
+      </templates>
+    </entry>
+  </template-stack>
 </config>

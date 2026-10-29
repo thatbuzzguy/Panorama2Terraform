@@ -1,23 +1,23 @@
 # To Do
 
-No feature in progress. F6.4 (import blocks, one block per entry, and the import agreement gate rule) is
-complete; its pieces are recorded in the git history and in `agent-status.md`.
+No feature is in progress. F6.5 (scope objects as output, Epic 6 Goal 6) is complete and committed as
+`F6.5: scope objects as output`. Its rules are in `docs/CODEBASE_ASSEMBLY.md` §8 and §6,
+`docs/ARCHITECTURE.md` §3.2, §4.1, §4.2, §4.6 and `docs/COVERAGE_MATRIX.md`, and its tests are in
+`tests/test_scope_objects.py`.
 
-The next feature in `PLAN.md` is **F6.5 — scope objects as output**. Its acceptance criteria are not
-written yet.
+The next feature in `PLAN.md` is F6.6 (the site data layer). It takes the template variable literal
+F6.5 prints, so the value-to-variable mapping has to become a pinned table first.
 
 Open pieces for Epic 6, held here until the next feature takes them:
 
-- The directory write path: F6.1, F6.2, F6.3 and F6.4 name the unit, the owner, the pair, the order and
-  the block, and write no directory. `imports.tf` is one file for the run; the step that splits the output
-  per unit directory is still open.
-- The gate rule that reads a data file: the gate reads `.tf` files only, so no data file is a gate input
-  today. `imports.tf` is a `.tf` file, so the agreement rule reads it.
-- The outputs rule for a name another unit owns, which F6.3 left open: the generator writes no outputs, so
-  the edge record states the pair and the order and cannot resolve the name.
-- The rule types: F6.4 writes no import block for the four `*_policy_rules` types and reports each rule
-  entry as a WARN. The position must be the position the live config holds, and the F3.5 rulebase decision
-  gates it.
-- The generated `README.md` does not name `imports.tf`. The F5.5 label precedent says an opt-in shape
-  labels itself.
-- F6.5 scope objects, the site data layer (F6.6), and the commit action (F6.7).
+- The directory write path: F6.1, F6.2, F6.3, F6.4 and F6.5 name the unit, the owner, the pair, the
+  order, the block and the scope object, and write no directory. `scope.tf` is one file for the run; the
+  step that splits the output per unit directory is still open.
+- The gate rule that reads a data file: the gate reads `.tf` files only, so no data file is a gate
+  input today. `imports.tf` and `scope.tf` are `.tf` files, so the gate rules read them.
+- The outputs rule for a name another unit owns, which F6.3 left open.
+- The rule types: F6.4 writes no import block for the four `*_policy_rules` types.
+- The generated `README.md` does not name `imports.tf`; it names `scope.tf`.
+- A template stack is a scope container but not one of the four scope facts, so the manifest names no
+  stack unit. A stack unit needs a fifth fact, or the decision to read `template` as the stack name.
+- F6.6 (the site data layer and the device name as a variable) and F6.7 (the commit action).

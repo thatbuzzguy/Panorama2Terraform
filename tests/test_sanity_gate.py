@@ -68,7 +68,7 @@ def test_console_summary_reports_the_result(tmp_path):
     """The console summary states the result, not only the file list."""
     result = _generate(SAMPLE_CONFIG, tmp_path)
     summary = [line for line in result.stdout.split('\n') if line.startswith('Sanity gate:')]
-    assert summary == ['Sanity gate: PASS (0 FAIL, 0 WARN) - 8 .tf files, 19 resources']
+    assert summary == ['Sanity gate: PASS (0 FAIL, 0 WARN) - 9 .tf files, 20 resources']
     assert 'Sanity report: ' in result.stdout
 
 

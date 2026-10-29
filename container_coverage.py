@@ -101,14 +101,24 @@ class ContainerRow:
 # One row per parse method. A new parse method needs a row here, and
 # tests/test_container_coverage.py fails when it does not have one.
 CONTAINER_TABLE: tuple[ContainerRow, ...] = (
-    ContainerRow('parse_device_groups', 'device-group', 'bookkeeping',
-                 'the name reaches the output through location'),
-    ContainerRow('parse_associations', 'device-group', 'bookkeeping',
-                 'association table'),
-    ContainerRow('parse_associations', 'templates', 'bookkeeping',
-                 'association table'),
-    ContainerRow('parse_associations', 'template-stack', 'bookkeeping',
-                 'association table'),
+    # F6.5: the scope entries are objects now, so their rows read `emitted` and name the
+    # resource the scope block writes. The row that reads the entries comes first, so the
+    # destination for a scope entry comes from it and not from the association rows below.
+    ContainerRow('parse_device_groups', 'device-group', 'emitted', 'panos_device_group'),
+    ContainerRow('parse_templates', 'templates', 'emitted', 'panos_template'),
+    ContainerRow('parse_template_stacks', 'template-stack', 'emitted', 'panos_template_stack'),
+    ContainerRow('parse_template_variables', 'variable', 'emitted', 'panos_template_variable'),
+    ContainerRow('parse_vsys', 'vsys', 'emitted', 'panos_vsys'),
+    # The association rows describe the membership containers inside a scope entry: the entries
+    # there name a device, and no provider resource exists for a device.
+    ContainerRow('parse_associations', 'device-group/entry/devices', 'bookkeeping',
+                  'association table'),
+    ContainerRow('parse_associations', 'templates/entry/devices', 'bookkeeping',
+                  'association table'),
+    ContainerRow('parse_associations', 'template-stack/entry/devices', 'bookkeeping',
+                  'association table'),
+    ContainerRow('parse_associations', 'template-stack/entry/templates', 'bookkeeping',
+                  'association table'),
     ContainerRow('device_group_of', 'device-group', 'bookkeeping',
                  'device_group scope fact', level='section', read_via='scope walk'),
     ContainerRow('vsys_of', 'vsys', 'bookkeeping', 'vsys scope fact',

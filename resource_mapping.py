@@ -102,6 +102,17 @@ LOCATION_SCHEMA = {
         'shared': ('rulebase',),
         'vsys': ('name', 'ngfw_device'),
     },
+    # F6.5: the six scope objects, one row each. A scope block places itself inside the scope
+    # the export names, so the four Panorama scopes take `panorama` and the two that sit inside
+    # a template take `template` or `template_stack`. The generator writes no `panorama_device`
+    # field, because the codebase states no device fact for a scope (backlog.md), but the row
+    # states the verified shape so it stays equal to `DATA_SOURCE_SCHEMA`.
+    'panos_device_group': {
+        'panorama': ('panorama_device',),
+    },
+    'panos_device_group_parent': {
+        'panorama': ('panorama_device',),
+    },
     'panos_ethernet_interface': {
         'ngfw': ('ngfw_device',),
         'shared': (),
@@ -170,6 +181,18 @@ LOCATION_SCHEMA = {
         'shared': (),
         'vsys': ('name', 'ngfw_device'),
     },
+    'panos_template': {
+        'panorama': ('panorama_device',),
+    },
+    'panos_template_stack': {
+        'panorama': ('panorama_device',),
+    },
+    # A template variable sits inside a template or inside a template stack, so the two
+    # sub-blocks are the two the emitter can choose between (F6.5).
+    'panos_template_variable': {
+        'template': ('name', 'panorama_device'),
+        'template_stack': ('name', 'panorama_device'),
+    },
     'panos_tunnel_interface': {
         'ngfw': ('ngfw_device',),
         'shared': (),
@@ -188,6 +211,12 @@ LOCATION_SCHEMA = {
         'ngfw': ('ngfw_device',),
         'shared': (),
         'template': ('name', 'ngfw_device', 'panorama_device'),
+    },
+    # A virtual system is the scope itself, and the export can only place it inside a template
+    # or a template stack, so this row has no `vsys` sub-block (F6.5).
+    'panos_vsys': {
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
     },
     'panos_zone': {
         'vsys': ('name', 'ngfw_device'),
@@ -953,7 +982,95 @@ EMITTED_TYPES = frozenset({
     'panos_ike_gateway',
     'panos_ipsec_crypto_profile',
     'panos_ipsec_tunnel',
+    # F6.5: the scope objects. One resource per scope entry, in `scope.tf`, before the config
+    # inside the scope (`docs/CODEBASE_ASSEMBLY.md` §6).
+    'panos_device_group',
+    'panos_device_group_parent',
+    'panos_template',
+    'panos_template_stack',
+    'panos_template_variable',
+    'panos_vsys',
 })
+
+# F6.5: the six scope object types, and the parsed key that names the scope each one places
+# itself inside. The key is the location sub-block name, so the block and the key agree. An empty
+# value is a scope that places itself at the top of its own chain (`panorama`), so `location`
+# prints the empty sub-block, the shape `shared = {}` already uses. A variable and a virtual
+# system can only be placed inside a template or a template stack, so a scope entry the export
+# places nowhere writes no block: the converter does not guess a place.
+SCOPE_TYPES = frozenset({
+    'panos_device_group',
+    'panos_device_group_parent',
+    'panos_template',
+    'panos_template_stack',
+    'panos_template_variable',
+    'panos_vsys',
+})
+
+# The order the scope file prints its blocks in: the F3.9 level order (device group, then
+# template), with the parent record read as part of the device group level, because it names the
+# relation between two device groups and not an object. `generate_scope_objects` prints in this
+# order, and within a type the entries print in document order.
+SCOPE_LEVEL_ORDER = (
+    'panos_device_group',
+    'panos_device_group_parent',
+    'panos_template',
+    'panos_template_stack',
+    'panos_template_variable',
+    'panos_vsys',
+)
+
+# The key the parse method records for the scope a scope entry sits in, in the order the emitter
+# tries it. `template` is one of the four scope facts; `template_stack` is the property the
+# template variable row declares, because the emitter reads it to choose the sub-block.
+SCOPE_PLACEMENT = {
+    'panos_device_group': (),
+    'panos_device_group_parent': (),
+    'panos_template': (),
+    'panos_template_stack': (),
+    'panos_template_variable': ('template', 'template_stack'),
+    'panos_vsys': ('template',),
+}
+
+# The block that answers a name written inside a scope block's `location`: the type that defines
+# that scope. A name inside a location is not a `.name` reference, so the reference rule cannot
+# reach it; `sanity_checks.check_scope_blocks` reads this table (F6.5).
+SCOPE_ANSWER = {
+    'template': 'panos_template',
+    'template_stack': 'panos_template_stack',
+}
+
+# The value shape the provider takes for each property a scope block prints at its own level,
+# written from the provider 2.0.14 schema for the six scope types and pinned against the live schema
+# by `tests/test_scope_objects.py`. A membership the provider takes as a list of objects is not a
+# list of strings: `terraform validate` refuses a string there, so the shape is a fact and not a
+# style choice. The entry name field and the location fields are not here, because the name field is
+# `entry_coverage.name_field` and the location shape is `DATA_SOURCE_SCHEMA`.
+SCOPE_SHAPE = {
+    'panos_device_group': {
+        'description': 'string',
+        'devices': 'object_list',
+        'templates': 'string_list',
+    },
+    'panos_device_group_parent': {
+        'parent': 'string',
+    },
+    'panos_template': {
+        'default_vsys': 'string',
+        'description': 'string',
+    },
+    'panos_template_stack': {
+        'default_vsys': 'string',
+        'description': 'string',
+        'devices': 'object_list',
+        'templates': 'string_list',
+    },
+    'panos_template_variable': {
+        'description': 'string',
+        'type': 'object',
+    },
+    'panos_vsys': {},
+}
 
 # PAN-OS config types with no v2 provider resource. The converter keeps
 # the data visible in the manual setup report instead of emitting it.
@@ -1442,6 +1559,72 @@ COVERAGE_MATRIX = (
             'tunnel_interface',
             'type',
         ),
+    }, {
+        # F6.5: the scope objects. One file for the run (`scope.tf`), written before the config
+        # inside the scope. The entry name is the row identity, so it is not a property.
+        # `parent` is on this row because the emitter reads it for the parent record below, and the
+        # property scan measures one entry against the row that covers its container. The device group
+        # block itself prints no parent: the provider declares no `parent` attribute for this type.
+        'resource': 'panos_device_group',
+        'xml_element': 'device-group/entry',
+        'xml_name': 'Edge-FW',
+        'emitted_name': 'Edge-FW',
+        'fixture': 'scope_objects.xml',
+        'output_file': 'scope.tf',
+        'emitter': ('generate_scope_objects',),
+        'properties': ('description', 'devices', 'parent', 'templates'),
+    }, {
+        # The provider declares no `name` for this type, so the entry name reaches the block
+        # through `device_group` (`DATA_SOURCE_SCHEMA`). One device-group entry can feed two
+        # blocks: the scope object above and this record.
+        'resource': 'panos_device_group_parent',
+        'xml_element': 'device-group/entry',
+        'xml_name': 'Edge-FW',
+        'emitted_name': 'Edge-FW',
+        'fixture': 'scope_objects.xml',
+        'output_file': 'scope.tf',
+        'emitter': ('generate_scope_objects',),
+        'properties': ('parent',),
+    }, {
+        'resource': 'panos_template',
+        'xml_element': 'templates/entry',
+        'xml_name': 'Edge-Networks',
+        'emitted_name': 'Edge-Networks',
+        'fixture': 'scope_objects.xml',
+        'output_file': 'scope.tf',
+        'emitter': ('generate_scope_objects',),
+        'properties': ('default_vsys', 'description'),
+    }, {
+        'resource': 'panos_template_stack',
+        'xml_element': 'template-stack/entry',
+        'xml_name': 'Edge-Stack',
+        'emitted_name': 'Edge-Stack',
+        'fixture': 'scope_objects.xml',
+        'output_file': 'scope.tf',
+        'emitter': ('generate_scope_objects',),
+        'properties': ('default_vsys', 'description', 'devices', 'templates'),
+    }, {
+        # `template_stack` is the placement fact the emitter reads to choose the location
+        # sub-block. The value prints as a literal until F6.6 makes it a `var.` reference.
+        'resource': 'panos_template_variable',
+        'xml_element': 'variable/entry',
+        'xml_name': 'edge-tag',
+        'emitted_name': 'edge-tag',
+        'fixture': 'scope_objects.xml',
+        'output_file': 'scope.tf',
+        'emitter': ('generate_scope_objects',),
+        'properties': ('description', 'template_stack', 'type'),
+    }, {
+        # A virtual system block carries the entry name and the location only, so this row
+        # declares no property.
+        'resource': 'panos_vsys',
+        'xml_element': 'vsys/entry',
+        'xml_name': 'edge-vsys',
+        'emitted_name': 'edge-vsys',
+        'fixture': 'scope_objects.xml',
+        'output_file': 'scope.tf',
+        'emitter': ('generate_scope_objects',),
+        'properties': (),
     }
 )
 

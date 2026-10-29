@@ -20,9 +20,11 @@ Ownership is a per-entry fact, so the file holds one row per entry, not one row 
    a template, a virtual system, or a device is a different object in each unit (`ARCHITECTURE.md`
    §2.1), so each unit owns its own entry.
 4. The owner rule. The ancestor entry owns the name, as `docs/CODEBASE_ASSEMBLY.md` §1 rule 2 states
-   it. The export states the relation in two cases: the shared unit, and the parent source the run
-   declares with `--parent` (the F5.4 rule). The device-group `parent` field is not captured, so the
-   rule cannot name an ancestor for two device groups in one source, and the case is `ambiguous`.
+   it. The export states the relation in three cases: the shared unit, the parent source the run
+   declares with `--parent` (the F5.4 rule), and the device-group `parent` field, which the parse
+   captures from F6.5 and which orders two device groups inside one source. A device group with no
+   `parent` is a top-level group, so it is not the ancestor of another top-level group: two
+   top-level groups that repeat a name are peers, and the case stays `ambiguous`.
    `disable_override` does not choose the owner: it names the entry that no descendant may override
    (verified against provider 2.0.14 and the provider docs), so a second entry with the same name is
    a contradiction, not an override.
@@ -39,7 +41,8 @@ Ownership is a per-entry fact, so the file holds one row per entry, not one row 
    an output read and cannot move a property finding (the F5.6 rule).
 
 The scan result holds the declared fields plus the facts the report line reads (`line`,
-`container`, `reason`). `render` writes only the declared fields, and `parse_rows` refuses a file that
+`container`, `reason`) and the unit fact the owner rule reads (`chain`, the device group chain the
+export states, F6.5). `render` writes only the declared fields, and `parse_rows` refuses a file that
 states anything else. Report order is fixed: findings are sorted by line, then object type, then name,
 so the same sources produce the same bytes.
 
@@ -127,7 +130,44 @@ def override_value(matrix_row: dict, captured) -> str:
     return value if value in ('yes', 'no') else 'no'
 
 
-def scan_row(ledger, entry, matrix_row: dict) -> dict:
+def parent_map(ledger) -> dict:
+    """{device group: the parent group the export states}, for the groups this ledger read (rule 4).
+
+    The parse captures the field, so the relation is a fact and not a guess. The read is the
+    non-recording read, so the scan does not count it as a property an output used (the F5.6 rule).
+    A ledger built from a declared parent source runs no parse method, so it has no marks and this
+    map is empty there: the parent source is already the ancestor, and the chain adds nothing.
+    """
+    groups = {}
+    for entry in ledger.entries():
+        if entry.tag != 'entry':
+            continue
+        if container_coverage.container_tag(entry, ledger.parents, ledger.source) != 'device-group':
+            continue
+        mark = ledger.mark_for(entry)
+        captured = mark['captured'] if mark else None
+        if isinstance(captured, entry_coverage.RecordingDict):
+            groups[entry.get('name') or ''] = (captured.value('parent') or '').strip()
+    return groups
+
+
+def chain_of(groups: dict, unit: str) -> tuple:
+    """The device group chain one unit states, from that unit upward, in order (rule 4).
+
+    The chain is the captured `parent` names, so a group that states no parent ends it. The export
+    calls a group with no parent a top-level group, so this states no ancestor above it, which is
+    not the same as being an ancestor: two top-level groups are peers.
+    """
+    chain = []
+    node = unit
+    while node and node in groups and node not in chain:
+        node = groups[node]
+        if node:
+            chain.append(node)
+    return tuple(chain)
+
+
+def scan_row(ledger, entry, matrix_row: dict, groups: dict) -> dict:
     """One row for an entry the scan scope covers, or None when the entry is not in scope.
 
     `is_report_entry` is the F4.3 row rule, and `matrix_row_for` is the F4.4 row rule, so the scan
@@ -141,6 +181,7 @@ def scan_row(ledger, entry, matrix_row: dict) -> dict:
         return None
     mark = ledger.mark_for(entry)
     facts = unit_manifest.facts_of(row)
+    unit = dict(zip(FACT_KEYS, facts))
     return {
         'type': matrix_row['resource'],
         'entry': row['name'],
@@ -154,6 +195,9 @@ def scan_row(ledger, entry, matrix_row: dict) -> dict:
         'line': row['line'],
         'container': row['container'],
         'reason': '',
+        # The device group chain the export states for this row's unit (rule 4, F6.5). A fact the
+        # owner rule reads, not a data field, so it is not written.
+        'chain': chain_of(groups, unit['device_group']),
     }
 
 
@@ -182,9 +226,9 @@ def decide(rows: list) -> list:
     if flagged:
         # The flag names the entry that no descendant may override. It can only own the name when it
         # can be the ancestor, so a flag on a descendant names no owner for the name.
-        definition = flagged[0] if len(flagged) == 1 and is_ancestor(flagged[0]) else None
+        definition = flagged[0] if len(flagged) == 1 and is_ancestor(flagged[0], group) else None
     else:
-        ancestors = [row for row in group if is_ancestor(row)]
+        ancestors = [row for row in group if is_ancestor(row, group)]
         definition = ancestors[0] if len(ancestors) == 1 else None
 
     for row in group:
@@ -204,10 +248,20 @@ def decide(rows: list) -> list:
     return single + group
 
 
-def is_ancestor(row: dict) -> bool:
-    """True when the export states that this entry's unit is the ancestor: the shared unit, or the
-    parent source the run declares (rule 4)."""
-    return all(value == '' for value in row_facts(row)) or row.get('from_parent', False)
+def is_ancestor(row: dict, group: list) -> bool:
+    """True when the export states that this entry's unit is the ancestor of the others (rule 4).
+
+    Three cases state the relation: the shared unit, the parent source the run declares, and the
+    device-group `parent` chain the parse captures (F6.5). A group that states no parent is a
+    top-level group, so it is not the ancestor of another top-level group: two top-level groups that
+    repeat a name are peers, and the rule names no owner for them.
+    """
+    if all(value == '' for value in row_facts(row)) or row.get('from_parent', False):
+        return True
+    unit = unit_manifest.fact(row_facts(row), 'device_group')
+    if not unit:
+        return False
+    return any(unit in other.get('chain', ()) for other in group if other is not row)
 
 
 def build_rows(ledger, parent_ledger, sanitize: Callable[[str], str]) -> list:
@@ -219,13 +273,14 @@ def build_rows(ledger, parent_ledger, sanitize: Callable[[str], str]) -> list:
     """
     rows = []
     for current, is_parent in ([(ledger, False)] + ([(parent_ledger, True)] if parent_ledger else [])):
+        stated = parent_map(current)
         for entry in current.entries():
             container = current.parents.get(entry)
             if container is None:
                 continue
             matrix_row = entry_coverage.matrix_row_for(
                 container_coverage.section_path(container, current.parents, current.source))
-            row = scan_row(current, entry, matrix_row) if matrix_row else None
+            row = scan_row(current, entry, matrix_row, stated) if matrix_row else None
             if row is None:
                 continue
             row['from_parent'] = is_parent
