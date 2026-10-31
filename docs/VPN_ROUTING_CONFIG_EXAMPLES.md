@@ -56,8 +56,10 @@ Example shape:
 </protocol>
 ```
 
-What the run produces: no `.tf` file. The provider has no BGP resource that
-accepts a router ID, an AS number, or peer data, so the captured values go to
+What the run produces: no `.tf` file. The provider has no BGP resource of its own
+that accepts a router ID, an AS number, or peer data; it carries them as the
+`protocol` object attribute on `panos_virtual_router`, which the generator does not
+print yet (F7.1 in `PLAN.md`), so the captured values go to
 `MANUAL_SETUP_REPORT.txt` with the router ID, the AS, the peer groups and the
 peers. The parser reads `redist-rules` into the model, but the report prints
 only the router, peer groups and peers. That gap is recorded in

@@ -546,7 +546,9 @@ The limits are recorded in [`../backlog.md`](../backlog.md) and in
 [RESOURCE_MAPPING.md](RESOURCE_MAPPING.md). The main ones:
 
 - BGP, OSPF, application filters, application override rules, QoS profiles, and
-  IPsec tunnel monitor profiles have no v2 resource.
+  IPsec tunnel monitor profiles have no v2 resource of their own. BGP and OSPF are
+  carried as the `protocol` object attribute on `panos_virtual_router`; the generator
+  does not print it yet (F7.1 in `PLAN.md`).
 - Security profile bodies, log forwarding profiles, and schedules are captured
   only as name and description, so they are reported, not emitted.
 - Address types with no `panos_address` attribute (country, region, continent,

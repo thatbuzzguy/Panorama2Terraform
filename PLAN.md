@@ -22,6 +22,11 @@ objects, and the site data layer. Their rules are in `docs/ARCHITECTURE.md` §3.
 §3.7, §4.1, §4.2, §4.5, §4.6, §4.8, and §5, and in `docs/CODEBASE_ASSEMBLY.md` §3 to
 §9. The open decisions are in `backlog.md`; the open pieces are in `to-do.md`.
 
+Two facts changed on the 2026-10-31 re-measurement of the pinned provider. Routing is
+reachable through an object attribute, so the BGP and OSPF rows are an emitter gap and not
+a provider gap (Epic 7). And a value the parse cannot carry has one shape: the block prints
+the variable reference, never the value. Both rules are in `backlog.md`.
+
 ## Goals
 
 | Goal | Description | Definition of Done |
@@ -47,13 +52,41 @@ file are the shared open steps.
 
 - [ ] **F6.7 Commit and push per unit** — one `panos_commit` action block per unit, the rule
   that no action names a scope another unit owns, and the gate rule that reads an `action`
-  block. Needs the Terraform minimum decision (actions need 1.14 or later).
+  block. Decided 2026-10-31: the minimum is Terraform 1.14, and the committed goldens declare
+  it. The gate rule is the open piece.
+
+## Epic 7 — Routing output through the protocol object (Goal 2) — open
+
+The pinned provider (2.0.14, re-measured 2026-10-31) has no standalone BGP or OSPF resource,
+but `panos_virtual_router` declares `protocol` as an object attribute that carries `bgp`,
+`ospf`, `ospfv3`, `rip`, and the two redistribution profile lists. `protocol.bgp` carries
+`local_as`, `router_id`, `enable`, `peer_group`, `auth_profile`, `policy` and `redist_rules`,
+and `peer_group` carries the `peer` list. `terraform validate` accepts the shape. So the data
+`parse_bgp` and `parse_ospf` already read can reach output, and their container rows move from
+`report` to `emitted`.
+
+- [ ] **F7.1 Protocol object as output** — the BGP and OSPF rows become `emitted`. Rules to
+  decide: the object shape, since `protocol` prints as an object value and `terraform validate`
+  refuses `protocol { ... }` as a block; the one-of `type` choice inside `peer_group` and inside
+  `area`, because the provider requires exactly one sub-shape; a peer belongs to the peer group
+  entry the export holds it in, not to a flat peer list; the value the parse cannot carry prints
+  as the variable reference (`backlog.md`), so no auth key reaches a generated file; and the gate
+  rule that reads an object attribute, which the block reader does not serve today.
+
+Routing profiles and filter containers (route maps, prefix lists, community lists, access lists,
+timers, auth profiles as objects) have no parse method, so they stay in `backlog.md` until a row
+covers them.
 
 ## Sequencing
 
 F6.7 needs the write path that `docs/CODEBASE_ASSEMBLY.md` §14 step 7 and step 8 share,
 because the site feature names the unit and writes no directory. The order of the open
 pieces is in §14, and the pieces held until the next feature takes them are in `to-do.md`.
+
+F7.1 can run before F6.7. It names no unit and writes inside a file the emitter already
+writes, so it does not need the write path, but it changes the `.tf` goldens and it needs the
+gate rule for an object attribute. That rule and the `action` rule both read through the one
+block reader (`ARCHITECTURE.md` §4.6), so the reader shape is decided once for both.
 
 ## Out of Scope (tracked in backlog.md)
 

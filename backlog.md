@@ -74,10 +74,11 @@ Completed work is not recorded here; the git history and the owner document hold
   A future release could offer a two-object split as an opt-in.
 
 - External dynamic list `auth` (username/password) is not parsed. Writing
-  credential material into generated HCL is not acceptable (F3.4). An EDL
-  that authenticates to its fetch URL needs the credentials configured by
-  hand; the converter cannot express them safely. Revisit only with an
-  explicit secret-manager design (e.g. a `var.` reference, never a literal).
+  credential material into generated HCL is not acceptable (F3.4). The rule decided
+  2026-10-31 (`backlog.md`, the value the parse cannot carry) is the shape the emitter uses when
+  the parse reaches this field: the block prints `var.<name>` and the run declares the variable. The
+  report entry stays until a parse method reads the container, because the value itself cannot come
+  from an export.
 
 - Policy rules do not record which rulebase (pre, post, or shared) they came from. F2.5 chains are
   ordered per device group across all rulebases, which matches PAN-OS evaluation order for a single
@@ -156,16 +157,48 @@ Completed work is not recorded here; the git history and the owner document hold
   the device group as context and no device group is declared. Give
   device-level objects their own context when a fixture shows the collision.
 
+- Certificate entries have no coverage matrix row, so a certificate entry is an
+  `unaccounted` finding today (`device-group/entry/certificate`, pinned in
+  `tests/test_container_coverage.py::EXPECTED_FINDINGS`). `panos_certificate_import`
+  is a resource with no data source, and `panos_certificate_profile` is a resource
+  that is in `LOCATION_SCHEMA` but in neither `EMITTED_TYPES` nor
+  `NOT_EMITTED_TYPES`. The open work is: a `certificate` container row, an emitter
+  that prints `local.pem.certificate` as the value and the key as the variable
+  reference, and a decision for the profile row (emit, or state it in
+  `NOT_EMITTED_TYPES` with the reason). A certificate the run writes no block for
+  cannot be read through a data source, because the certificate entry has no name
+  a reference resolves.
+
+- The write path must force LF. `open(..., 'w')` writes `os.linesep`, so a run on a
+  Windows desktop writes CRLF and the `.tf` goldens no longer match byte for byte.
+  Decided 2026-10-31: the rule is in the write path, not in an operator note, because
+  the golden byte rule and the determinism rule (`ARCHITECTURE.md` §6) are the same
+  rule. It lands with the step that splits the output per unit directory.
+
+- A per-device template variable override has no place the provider can put it:
+  `panos_template_variable.location` declares `template` and `template_stack` only,
+  and neither sub-block has a device field. So the tool cannot generate the
+  per-serial value the Panorama GUI holds. The parse must report a variable entry
+  whose value is stated for one device instead of taking the stack value as the
+  entry value. Not built: the corpus holds no such entry, so the rule needs a
+  fixture that shows how an export states a device-level value.
+
 ## Out of Scope
 
 - The orchestrator is not this tool's job. The tool writes data an orchestrator reads: the unit
   manifest, the ownership record, the reference edges, the site record, the import blocks, and the
   `.tfvars` written from the site record. It runs no plan, no apply, and no commit, and it manages
-  no secrets. The rule is in `docs/CODEBASE_ASSEMBLY.md` §13.
+  no secrets. The parts a platform discussion reaches that stay out of scope: the key and
+  certificate signing pipeline, a lifecycle block (`create_before_destroy` or
+  `ignore_changes`), the state backend, the workspace layout, and the hosted platform.
+  The tool writes the block shape and the variable reference; the platform supplies the
+  value and runs the plan. The rule is in `docs/CODEBASE_ASSEMBLY.md` §13.
 - The Day 1 device bootstrap cannot be expressed in the pinned provider schema: no resource
   registers a device, defines an HA pair, sets a management interface, or holds an auth key. Serial
   registration, HA grouping, management IP, DNS, NTP, and the admin account stay outside the
-  codebase. The fact is in `docs/CODEBASE_ASSEMBLY.md` §12.
+  codebase. A hardware replacement is therefore one `.tfvars` value change plus the
+  operator's re-registration: the tool changes the site row, and no plan changes the Panorama
+  device entry. The fact is in `docs/CODEBASE_ASSEMBLY.md` §12.
 - PAN-OS version matrix testing.
 - Dual-license legal review.
 - The state source has no write path (F5.6). A run reports what a state document holds and never
@@ -351,8 +384,9 @@ Completed work is not recorded here; the git history and the owner document hold
   The `provider_schemas` fixture already skips when the terraform binary or the provider cache is
   absent, so a snapshot would be a second copy of the same fact and could drift from the pinned
   provider version.
-- BGP and OSPF have neither a resource nor a data source, so read-through cannot cover the
-  report-only areas.
+- BGP and OSPF have neither a resource nor a data source of their own, so read-through cannot cover
+  them. Their data reaches output through the `panos_virtual_router` row once Epic 7 lands, and until
+  then the two container rows stay `report`.
 - Read-through is opt-in per declared scope (F5.5). A plain string already applies, because
   Panorama resolves an object name through its own inheritance at commit time, and one `data` block
   is one plan-time API call. A `data` block for a name that does not exist fails at plan, not at
@@ -383,6 +417,53 @@ Completed work is not recorded here; the git history and the owner document hold
   `tag` are not compared. A comparison table would have to be verified per type against the
   provider schema, the way `LOCATION_SCHEMA` is, so the scan keeps the same-name rule until such a
   table exists.
+
+## Design Decisions (the value the parse cannot carry)
+
+- Decided 2026-10-31: a value the parse cannot carry prints as the variable reference, never as a
+  literal. The provider marks these attributes `sensitive`: `panos_certificate_import`
+  `local.pem.private_key` and `local.pem.passphrase`, the BGP, OSPF and RIP auth profile keys, the
+  external dynamic list credentials, and the VPN pre-shared key. One table decides the shape, so the
+  emitter, the gate and the `.tfvars` writer read `resource_mapping.VALUE_VARIABLES`; the literal half
+  is held by `tests/test_robustness.py` (no generated file may contain the secret).
+- A FIPS-mode export carries no private key and no recoverable password hash, so the value cannot come
+  from the source. The tool names the variable; the operator or the platform supplies the value. The
+  placeholder check should read the same table that names the sensitive fields, so one table decides
+  both the shape and the report line.
+- Open: the site record row states a variable with its value, so a reference to a value the run does
+  not have needs a decision — a row that names a variable with no value, or a separate record. The
+  `variables` gate rule is the other half of the rule: it refuses a declaration with no consumer, so a
+  declaration whose only consumer is a reference to an outside value is read through the same rule.
+
+## Design Decisions (provider facts, re-measured 2026-10-31)
+
+Measured against provider 2.0.14 through `terraform providers schema -json` and `terraform validate`.
+These are the facts a provider discussion contradicts:
+
+- No raw XML or xpath resource exists, so there is no in-provider fallback for a feature the matrix
+  does not cover. The report path is the only output for an uncovered entry.
+- `panos_virtual_router.protocol` is an object attribute, not a block: `terraform validate` refuses
+  `protocol { ... }`. It carries `bgp`, `ospf`, `ospfv3`, `rip` and the two redistribution profile
+  lists, and `protocol.bgp` carries `peer_group`, which carries the `peer` list. This is the fact Epic 7
+  builds on, so the BGP and OSPF wording in `README.md`, `docs/README.md` and
+  `resource_mapping.REPORT_ONLY_TYPES` changes when F7.1 lands.
+- `panos_template_variable.location` declares `template` and `template_stack` only, and neither
+  sub-block has a device field, so a per-device override is not expressible.
+- The provider argument is `hostname`, not `host`. `location.shared` is a sub-block, so the emitted
+  shape is `shared = {}` and a boolean is refused. `panos_virtual_router` accepts no `device_group`
+  location, which `LOCATION_SCHEMA` already states.
+- The import id is base64 JSON of the location plus the name, so a colon-delimited id is the v1 shape
+  and fails. The provider also declares the function `generate_import_id`; the tool builds the object
+  itself, because the tool must be deterministic offline and the function resolves at plan time.
+- The pinned schema has 128 resources, 128 data sources, 2 actions, 2 ephemeral resources
+  (`panos_api_key`, `panos_vm_auth_key`), and the functions `address_value` and `generate_import_id`.
+  `docs/CODEBASE_ASSEMBLY.md` §12 names the first three counts only. The last two are facts the tool
+  does not use, because a run writes no secret and a run with no network must pass CI.
+- `panos_certificate_profile` declares `certificate`, `block_expired_certificate`,
+  `block_unknown_certificate`, `block_timeout_certificate`, `block_unauthenticated_certificate`,
+  `use_crl`, `use_ocsp`, `certificate_status_timeout`, `crl_receive_timeout`, `domain` and
+  `username_field`. The v1 names (`certificate_profile_certificates`, `block_expired_cert`) are not in
+  the pinned schema, so an emitter for the profile row must use the v2 names.
 
 ## Design Decisions (codebase assembly, open items)
 
@@ -426,9 +507,10 @@ restated here; they are in the record and the git history. Only the open items a
   holds, not the create-time position the generator emits, because a chain anchors at
   `where = "last"`. No import block is written for a rule entry until the F3.5 rulebase decision
   lands and a source states the position.
-- Actions: the pinned schema declares `panos_commit` and `panos_push_to_devices`. Actions need
-  Terraform 1.14 or later, the committed goldens declare no Terraform minimum, and the gate reads no
-  `action` block, so a codebase that emits actions needs both a minimum and a gate rule.
+- Actions: the pinned schema declares `panos_commit` and `panos_push_to_devices`. Decided
+  2026-10-31: the codebase declares Terraform 1.14 as the minimum, because actions need it, so the
+  committed goldens state it. The gate rule that reads an `action` block is still open, and it reads
+  through the one block reader.
 - The credential rule needs one statement that covers both the fetch layer (the key from the
   environment only, never a generated file) and the generated provider block, which declares
   `panos_username` and `panos_password` variables. The provider reads `PANOS_API_KEY` from the
