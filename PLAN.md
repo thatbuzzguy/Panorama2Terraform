@@ -16,11 +16,13 @@ Terraform, the input comes from a declared source with a provenance record, and 
 per-entry report accounts for every entry. The rules that came from that work are in
 `docs/ARCHITECTURE.md` §2 to §5 and `docs/COVERAGE_MATRIX.md`.
 
-Epic 6 (codebase assembly) is open. F6.1 to F6.6 landed: the unit boundary as data,
+Epic 6 (codebase assembly) is open. F6.1 to F6.7 landed: the unit boundary as data,
 ownership as data, the reference edge and the unit order, the import block, the scope
-objects, and the site data layer. Their rules are in `docs/ARCHITECTURE.md` §3.4 to
-§3.7, §4.1, §4.2, §4.5, §4.6, §4.8, and §5, and in `docs/CODEBASE_ASSEMBLY.md` §3 to
-§9. The open decisions are in `backlog.md`; the open pieces are in `to-do.md`.
+objects, the site data layer, and the commit action per unit. Their rules are in
+`docs/ARCHITECTURE.md` §3.4 to §3.7, §4.1, §4.2, §4.5, §4.6, §4.8, and §5, and in
+`docs/CODEBASE_ASSEMBLY.md` §3 to §10. Each landed feature names its unit and writes no
+directory, so the write path that splits the output per unit directory and the gate rule
+that reads a data file are the shared open steps, in `to-do.md` and `backlog.md`.
 
 Two facts changed on the 2026-10-31 re-measurement of the pinned provider. Routing is
 reachable through an object attribute, so the BGP and OSPF rows are an emitter gap and not
@@ -45,15 +47,10 @@ per-device-group overrides, template stacks, and multiple virtual systems.
 
 A codebase is a set of directories, one per declared scope, that a platform plans and
 applies. The design record is `docs/CODEBASE_ASSEMBLY.md`. Every feature in the record
-is a rule to decide, then a module to write. F6.1 to F6.6 are implemented, so their
+is a rule to decide, then a module to write. F6.1 to F6.7 are implemented, so their
 rules name the module and the test that holds them. Each landed feature names its unit
 and writes no directory, so the write path (§14) and the gate rule that reads a data
-file are the shared open steps.
-
-- [ ] **F6.7 Commit and push per unit** — one `panos_commit` action block per unit, the rule
-  that no action names a scope another unit owns, and the gate rule that reads an `action`
-  block. Decided 2026-10-31: the minimum is Terraform 1.14, and the committed goldens declare
-  it. The gate rule is the open piece.
+file are the shared open steps, and they are the open pieces of Epic 6.
 
 ## Epic 7 — Routing output through the protocol object (Goal 2) — open
 
@@ -79,14 +76,14 @@ covers them.
 
 ## Sequencing
 
-F6.7 needs the write path that `docs/CODEBASE_ASSEMBLY.md` §14 step 7 and step 8 share,
-because the site feature names the unit and writes no directory. The order of the open
-pieces is in §14, and the pieces held until the next feature takes them are in `to-do.md`.
-
-F7.1 can run before F6.7. It names no unit and writes inside a file the emitter already
+F7.1 is the next feature. It names no unit and writes inside a file the emitter already
 writes, so it does not need the write path, but it changes the `.tf` goldens and it needs the
-gate rule for an object attribute. That rule and the `action` rule both read through the one
-block reader (`ARCHITECTURE.md` §4.6), so the reader shape is decided once for both.
+gate rule for an object attribute. The one field reader already takes the sub-block it reads as
+an argument (F6.7), so an object attribute is a new shape of the same reader, not a second reader.
+
+The open Epic 6 pieces are the write path that splits the output per unit directory and the gate
+rule that reads a data file. Their order is in `docs/CODEBASE_ASSEMBLY.md` §14, and the pieces
+held until the next feature takes them are in `to-do.md`.
 
 ## Out of Scope (tracked in backlog.md)
 

@@ -881,6 +881,7 @@ conversion. The splitter writes XML, so it has no `.tf` to check.
 | `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type | FAIL |
 | `import_blocks` | every `import` block agrees with the `resource` block it names: the type, the local name, the entry name, and the location | FAIL for a violation; WARN for a rule type the shape cannot state (§4.8) |
 | `scope_blocks` | a name written inside a scope block's `location` names a scope this run declares, by the type that defines that scope | FAIL |
+| `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a variable this run declares (F6.6) | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
@@ -890,7 +891,8 @@ conversion. The splitter writes XML, so it has no `.tf` to check.
 One block reader serves every block kind the gate reads: `resource`, `data`,
 `import`, and `action`. F5.5 added the `data` rule and F6.4 added the `import` rule
 with the same reader (§4.8), so no second reader appears; F6.5 reads the scope blocks
-with the same reader too. A block is read up to the
+with the same reader too, and F6.7 reads the action blocks with the same reader and the
+same field reader, given the sub-block it reads (`config`). A block is read up to the
 first column-0 brace, which is how the generator writes one and how the tests read
 one. A block is reported once for a fact: `location_present` reads both kinds, so
 the `data_blocks` rule reports the shape inside the block, not the missing block.
@@ -938,6 +940,16 @@ neither: an empty sub-block (the `panorama = {}` shape), and a field that names 
 than a scope (`panorama_device`, `ngfw_device`). Pinned by `tests/test_scope_objects.py`: one
 test per violation type, the `data` block that cannot answer, the two shapes that state nothing
 to resolve, the one-reader pin, and `::test_no_false_positive_across_the_corpus`.
+
+`actions` (F6.7) reads an `action` block against `resource_mapping.ACTION_SCHEMA`, the two rows
+the pinned schema declares. Measured: the action grammar keeps its fields inside `config`, because
+`terraform validate` refuses a field at the block's own level, so the one field reader takes the
+sub-block it reads as an argument and no second reader appears. The rule answers the fact a filter
+names through `SCOPE_ANSWER`, not against a block this run declares, because a run scoped to an API
+scope writes no block for the scope it read. What makes an action a unit action is the address: the
+local name is the §5 name plus the digest of the identity the names inside the block build, so the
+block answers its own address. Pinned by `tests/test_commit_actions.py`: one test per violation
+type, the one-reader pin, and `::test_no_false_positive_across_the_corpus`.
 
 - A WARN does not fail the gate: a placeholder is correct output that still needs
   an operator action, so the run exits 0.

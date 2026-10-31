@@ -36,6 +36,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Optional
 
+import commit_actions
 import container_coverage
 import entry_coverage
 import import_blocks
@@ -3143,7 +3144,9 @@ class TerraformGenerator:
         content = '''# Palo Alto Networks PAN-OS Provider Configuration
 # Supported provider range: v2 series, baseline 2.0.14 (the latest 2.x
 # release and the version the conformance and validate gates verify).
+# Terraform 1.14 minimum: an `action` block is 1.14 syntax (F6.7).
 terraform {
+  required_version = ">= 1.14"
   required_providers {
     panos = {
       source  = "PaloAltoNetworks/panos"
@@ -5553,7 +5556,8 @@ This directory contains Terraform configuration files generated from Palo Alto P
 
 ## Prerequisites
 
-1. Install Terraform (>= 1.0)
+1. Install Terraform (>= 1.14, the minimum the `terraform` block declares,
+   because an `action` block is 1.14 syntax)
 2. Install the Palo Alto Networks PAN-OS provider
 
 ## Configuration
@@ -5614,6 +5618,8 @@ Terraform configuration:
   parse does not capture the profile body
 - `security_profile_groups.tf` - Security profile groups
 - `vpn.tf` - IKE and IPsec crypto profiles, IKE gateways, IPsec tunnels
+- `actions.tf` - the commit action, one `panos_commit` block per unit the manifest names,
+  written last
 
 Reports:
 
@@ -6187,6 +6193,16 @@ def main():
         import_rows = [row for row in tf_gen.import_rows if row['import_id']]
         if args.import_blocks and import_rows:
             import_file.write_text(import_blocks.render(import_rows), encoding='utf-8')
+
+        # F6.7: the commit actions. One block per unit the manifest names, written as the last `.tf`
+        # file so the gate rule reads the action against the completed unit, and only when it has
+        # content, following the rule for the report files and the four data files. Emission is default:
+        # the committed goldens pin what a default run emits, so a shape written only behind a flag could
+        # not be pinned (the F6.5 rule 1 argument).
+        action_rows = commit_actions.build_rows(manifest_rows, tf_gen.sanitize_name)
+        if action_rows:
+            action_file = Path(args.output_dir) / commit_actions.ACTIONS_FILE
+            action_file.write_text(commit_actions.render(action_rows), encoding='utf-8')
 
         print("\n✓ Successfully generated Terraform configuration!")
         print("\n📄 Generated Migration Reports:")

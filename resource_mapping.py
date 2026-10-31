@@ -23,6 +23,14 @@ panos provider v2:
                          tests/test_data_source_schema.py against the live
                          schema, and read by the gate rule for a `data`
                          block (tests/test_data_blocks.py).
+    ACTION_SCHEMA      - one row per provider action type (F6.7): the fields
+                         it declares, each field's value shape, and the fields
+                         the row requires. Enforced by
+                         tests/test_commit_actions.py against the live schema,
+                         and read by the gate rule for an `action` block.
+    ACTION_FILTERS     - the one mapping from an action field to the scope
+                         fact it names (F6.7). The emitter reads it and the
+                         gate reads it, so no branch names the fields again.
 
 The generator emits the v2 types directly; the old v1 names
 (panos_address_object, panos_security_rule_group, ...) no longer exist
@@ -1032,12 +1040,63 @@ SCOPE_PLACEMENT = {
     'panos_vsys': ('template',),
 }
 
-# The block that answers a name written inside a scope block's `location`: the type that defines
-# that scope. A name inside a location is not a `.name` reference, so the reference rule cannot
-# reach it; `sanity_checks.check_scope_blocks` reads this table (F6.5).
+# The block that answers a name written inside a scope block's `location`, or inside an `action`
+# block (F6.7): the type that defines that scope. A name inside a location or a filter list is not
+# a `.name` reference, so the reference rule cannot reach it; `sanity_checks.check_scope_blocks` and
+# `sanity_checks.check_actions` read this table (F6.5, F6.7). The `device_group` row is read by the
+# action rule: the scope rule never sees it, because the six scope types place themselves and print
+# no device-group name inside a location.
 SCOPE_ANSWER = {
+    'device_group': 'panos_device_group',
     'template': 'panos_template',
     'template_stack': 'panos_template_stack',
+}
+
+# F6.7: the one mapping from an `action` field to the scope fact it names. The emitter reads it
+# (fact to field) and the gate reads it (field to fact), so no branch names the fields again. The
+# `name` field of a push shape names the fact its `type` states, so its row states the field that
+# carries the fact key rather than a fact. A fact the provider cannot name in a commit filter
+# (`vsys`, `vsys_device`) has no row, so no field can state it, and a unit whose selected fact is one
+# of those writes no action. `commit_actions.field_fact` and `commit_actions.filter_field` are the
+# two readers of this table; neither adds a fact.
+ACTION_FILTERS = {
+    'device_groups': 'device_group',
+    'templates': 'template',
+    'template_stacks': 'template_stack',
+    'name': 'type',
+}
+
+# F6.7: the two action types the pinned schema declares (2.0.14), written from
+# `terraform providers schema -json` and pinned against the live schema by
+# `tests/test_commit_actions.py`. One row: the fields the action declares with their value shapes,
+# and the fields the row requires. An action declares no `location`, so the `location_present` rule
+# does not read it, and an action names no entry, so no coverage matrix row covers an `action`
+# block (the decision F5.5 made for a `data` block).
+ACTION_SCHEMA = {
+    'panos_commit': ((), {
+        'admins': 'string_list',
+        'description': 'string',
+        'device_groups': 'string_list',
+        'exclude_device_and_network': 'bool',
+        'exclude_policy_and_objects': 'bool',
+        'exclude_shared_objects': 'bool',
+        'force': 'bool',
+        'log_collector_groups': 'string_list',
+        'log_collectors': 'string_list',
+        'push_configuration': 'object',
+        'template_stacks': 'string_list',
+        'templates': 'string_list',
+        'wildfire_appliances': 'string_list',
+        'wildfire_clusters': 'string_list',
+    }),
+    'panos_push_to_devices': (('name', 'type'), {
+        'description': 'string',
+        'devices': 'string_list',
+        'force_template_values': 'bool',
+        'include_template': 'bool',
+        'name': 'string',
+        'type': 'string',
+    }),
 }
 
 # The value shape the provider takes for each property a scope block prints at its own level,

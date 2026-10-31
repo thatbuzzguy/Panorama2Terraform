@@ -14,7 +14,9 @@ stated once here.
    unrelated scope would move an existing directory. The name depends on the unit alone, which is
    the same reason §5 puts the digest in a local name. The unit name is the deepest scope the
    export declares, in the level order the F3.9 rule states; `Shared` names the shared section,
-   and `localhost.localdomain` names no device (F3.5), so the placeholder never names a unit.
+   and `localhost.localdomain` names no device (F3.5), so the placeholder never names a unit. The level rule is read as
+   `(fact key, name)` through `named_fact`, so the commit action (F6.7) takes the fact
+   without stating the level order a second time.
 3. The row shape. The row is data, so a document describes its fields and never restates a row
    (`docs/README.md` rule). The fields print in the declared order, the rows are in identity
    order, the reference names are sorted, and no field states a timestamp or a path, so two runs
@@ -96,13 +98,26 @@ def fact(facts: tuple, key: str) -> str:
     return facts[FACT_KEYS.index(key)]
 
 
-def unit_name(facts: tuple) -> str:
-    """The name a unit is called by: the deepest scope the export declares."""
+def named_fact(facts: tuple) -> tuple:
+    """The fact the deepest declared scope names, as (fact key, name) (F6.7).
+
+    The same rule `unit_name` states: the deepest scope the export declares, in the F3.9 level
+    order, and the placeholder device never names anything (F3.5). The commit action needs the key
+    as well as the name, so the rule is read through this one function and `unit_name` is a
+    delegate; no module states the level order a second time. A unit whose four facts are empty
+    names no fact, so the pair is empty, and `Shared` is the name of the shared section, not a fact.
+    """
     for key in NAME_LEVELS:
         value = fact(facts, key)
         if value and not (key == 'vsys_device' and value == container_coverage.PLACEHOLDER_DEVICE):
-            return value
-    return SHARED_UNIT
+            return (key, value)
+    return ('', '')
+
+
+def unit_name(facts: tuple) -> str:
+    """The name a unit is called by: the deepest scope the export declares."""
+    key, value = named_fact(facts)
+    return value or SHARED_UNIT
 
 
 def identity_digest(facts: tuple) -> str:

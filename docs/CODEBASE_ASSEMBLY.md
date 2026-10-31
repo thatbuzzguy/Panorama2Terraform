@@ -501,23 +501,71 @@ Pinned by `tests/test_site_data.py`, including `::test_the_corpus_rows_are_pinne
 `::test_two_runs_on_the_same_bytes_write_the_same_bytes`, and `::test_the_gate_reads_no_data_file`.
 The `.tf` bytes and the report bytes of the corpus are otherwise unchanged.
 
-## 10. Gap — commit and push
+## 10. The commit action per unit (F6.7, landed)
 
-The pinned schema declares two actions: `panos_commit` and `panos_push_to_devices`
-(§12). `panos_commit` can commit one device group, one template, or one template stack,
-so a commit can stay inside one unit. The provider does not commit as part of a resource
-change: the commit is out of band (the provider docs state that Terraform has no native
-commit support), so an action block or an outside step is the commit path.
+The pinned schema declares two actions: `panos_commit` and `panos_push_to_devices` (§12).
+`panos_commit` can commit one device group, one template, or one template stack, so a commit stays
+inside one unit. The provider does not commit as part of a resource change: the commit is out of band
+(the provider docs state that Terraform has no native commit support), so an action block is the commit
+path. The emitter is `commit_actions.py`, the file is `actions.tf`, and `main()` writes it.
 
-Rules needed:
+1. **Emission is default, not a flag.** §8 rule 1 still forces it, because the committed goldens pin
+   what a default run emits, so a shape a run writes only when a flag is on cannot be pinned.
+   `main()` writes `actions.tf` as the last `.tf` file, so the rule reads the action against the
+   completed unit, and the file is written only when it has content, the rule for the report files and
+   the four data files. Blocks print in the identity order the manifest rows already print, and no
+   block states a timestamp or a path.
+2. **One block per unit, and the block names the fact its own unit declares.** The fact is the one
+   `unit_manifest.named_fact` selects for the row — the level rule read as (fact key, name), with
+   `unit_name` as a delegate so no module states the level order a second time — when that fact is one
+   the provider can name in a commit filter. `ACTION_FILTERS` in `resource_mapping.py` is the one
+   mapping from a filter field to the fact it names, and both the emitter and the rule read it, so no
+   branch names the four fields again. A fact the unit declares but an ancestor owns is not its own
+   fact, so the block never names it. A `vsys` fact and a `vsys_device` fact name no filter, so such a
+   unit writes no action and commits through the parent unit's action; the shared unit names no fact,
+   so it writes no action, because a commit that names no filter commits the whole config.
+   `container_coverage.PLACEHOLDER_DEVICE` names no firewall (F3.5), so it never names a filter and
+   never selects a fact.
+3. **The address names the identity the block states.** The local name is the §5 rule applied to the
+   fact the block states, plus the identity digest of the identity as the block states it: the single
+   fact in its `FACT_KEYS` position, the other facts empty. So the block is data the rule can read back
+   on its own through `commit_actions.read_block`, and the address agrees with the names inside it. This
+   is the gate form of "no action names a scope another unit owns", and it needs no data file. The block
+   digest is not the unit's directory digest.
+4. **The gate rule `actions`.** The fifth gate rule for a block kind, read through the one block reader
+   (`ARCHITECTURE.md` §4.6) against the `ACTION_SCHEMA` row. Measured: the action grammar keeps its
+   fields inside `config`, which `terraform validate` enforces, so the one field reader reads inside
+   `config` for this rule — a new shape of the same reader, not a second reader. Five findings, each a
+   FAIL: the type is not in `ACTION_SCHEMA`, or a field is not one the row declares, or a value is not
+   the shape the row declares; the block states no fact, since `panos_commit` declares no required field
+   so the codebase rule is what makes an action a unit action; a filter field does not name its fact
+   through `ACTION_FILTERS`, or names a fact `SCOPE_ANSWER` does not answer; the block states more than
+   one name; the local name does not answer the names inside the block. The fact a filter names is not
+   resolved against a scope block this run declares, because a run scoped to an API scope writes no block
+   for it. `CHECK_ORDER` names `actions` after `scope_blocks`. The rule reads no data file: it reads the
+   block text, the tables, and `naming.py`.
 
-1. One action block per unit, and no action that names a scope another unit owns.
-2. The gate reads `resource`, `data`, and `import` blocks (`ARCHITECTURE.md` §4.6), and the scope rule
-   reads the six scope blocks, which are `resource` blocks (§8 rule 8), so an `action` block is not
-   checked today. A codebase that emits actions needs a gate rule that reads them.
-3. Actions need Terraform 1.14 or later (§12), which is newer than the provider's own
-   minimum. The committed goldens declare no Terraform minimum, so a codebase that emits
-   actions needs one.
+Pinned by `tests/test_commit_actions.py`, including
+`::test_one_action_block_per_unit_the_manifest_names`,
+`::test_the_blocks_print_in_the_identity_order_the_manifest_rows_print`,
+`::test_an_action_names_the_fact_its_own_unit_declares`,
+`::test_an_action_states_no_fact_an_ancestor_declares`,
+`::test_a_shared_unit_and_a_vsys_unit_and_a_device_unit_write_no_action`,
+`::test_the_placeholder_device_never_names_a_filter`,
+`::test_the_block_address_names_the_identity_the_block_states`,
+`::test_the_file_is_written_only_when_it_has_content`, one test per violation type,
+`::test_the_rule_reads_action_blocks_with_the_one_reader`,
+`::test_the_field_mapping_is_the_one_mapping`, `::test_the_answer_table_is_the_one_answer`,
+`::test_named_fact_is_the_one_level_rule`, `::test_no_module_defines_a_second_naming_rule`,
+`::test_the_action_rule_reads_no_data_file`, `::test_action_schema_is_pinned_against_the_live_schema`,
+`::test_check_order_names_actions_after_scope_blocks`, `::test_no_false_positive_across_the_corpus`, and
+`::test_the_goldens_pass_the_rule`. Both committed goldens gain `actions.tf` and declare Terraform 1.14;
+every other golden byte is unchanged.
+
+The push half stays open: `panos_push_to_devices` is not emitted, because `devices` names site serials,
+which is the `.tfvars` decision the write path holds (§14). No coverage matrix row covers an `action`
+block, the decision F5.5 made for a `data` block, because an action names no entry. Both are recorded in
+`backlog.md`.
 
 ## 11. Gap — credentials and the provider block
 
@@ -593,7 +641,8 @@ a run with no network passes CI.
    stays with the step that splits the output per unit directory, because F6.6 names the unit and writes
    no directory.
 8. The commit action (§10), last, because it needs the gate rule for an action block and
-   the Terraform minimum decision.
+   the Terraform minimum decision. Landed as F6.7. The push half stays with the write path,
+   because `devices` names site serials.
 
 The smallest useful increment is one unit: one directory, one manifest row, one set of
 import blocks, and a plan that shows zero change. A codebase is that shape repeated across
