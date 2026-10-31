@@ -1105,12 +1105,15 @@ REPORT_ONLY_TYPES = frozenset({
     # v2 exposes only six specialized BGP routing profiles (timer, auth,
     # dampening, filtering, redistribution, address family). None accepts
     # AS number, router ID, or peer data, so the captured BGP data has
-    # nowhere to go.
+    # nowhere to go through a profile row. The provider does carry it as the
+    # object attribute `protocol` on `panos_virtual_router`; F7.1 (`PLAN.md`)
+    # takes that route, so these rows move to `emitted` with it.
     'panos_bgp',
     'panos_bgp_peer',
     'panos_bgp_peer_group',
     # Same shape as BGP: v2 has only auth/interface-timer/SPF-timer/
-    # redistribution profiles for OSPF. No area or router-ID resource.
+    # redistribution profiles for OSPF. No area or router-ID resource, and
+    # the same `protocol` object attribute route as BGP (F7.1).
     'panos_ospf',
     'panos_ospf_area',
     'panos_ospf_area_interface',

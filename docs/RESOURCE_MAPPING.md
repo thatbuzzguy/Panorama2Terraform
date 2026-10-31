@@ -96,6 +96,10 @@ parent resource block, so they have no resource type of their own.
 The captured data goes to `MANUAL_SETUP_REPORT.txt` (or the VPN/interface
 migration reports) so nothing is silently dropped.
 
+Routing has no resource of its own, but the provider carries BGP and OSPF as the
+object attribute `protocol` on `panos_virtual_router`. The generator does not print
+that attribute yet, so the routing rows stay report-only until F7.1 (`PLAN.md`).
+
 | Type | Why there is no v2 target |
 |---|---|
 | `panos_application_filter` | v2 `panos_application` is a single static application object (category, risk, signature, ...). An application filter (category/subcategory/technology/risk *lists*) is a different concept |

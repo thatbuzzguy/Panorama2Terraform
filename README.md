@@ -173,8 +173,11 @@ guess, which is listed with the templates the entry's own device takes.
 The following have no v2 provider resource. The converter keeps their
 data visible in `MANUAL_SETUP_REPORT.txt` instead of emitting it:
 
-- BGP (router, peer groups, peers)
-- OSPF (router, areas, interfaces)
+- BGP (router, peer groups, peers): no resource of its own, but the provider
+  carries the data inside `panos_virtual_router.protocol`, which the generator
+  does not emit yet (Epic 7)
+- OSPF (router, areas, interfaces): the same case, through `protocol.ospf` and
+  `protocol.ospfv3`
 - Application filters
 - Application override rules
 - QoS profiles
