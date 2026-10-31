@@ -1,73 +1,123 @@
-# Acceptance criteria — housekeeping: clean the root markdown
+# Acceptance criteria — F6.7: the commit action per unit
 
-This is a documentation cleanup task. No converter behavior changes. The scope is the markdown
-files in the repository root; `docs/` is not changed. The user confirmed three rules for this task:
-
-1. Only the root markdown files are cleaned.
-2. Completed work is removed strictly per `AGENTS.md`: completed epic, phase, feature and task
-   detail comes out of the markdown, and the git history holds it.
-3. `ADVERSARIAL_AUDIT_REPORT.md` is removed, because the audit is complete.
+Feature record: `docs/CODEBASE_ASSEMBLY.md` §10. The module is `commit_actions.py`, the file is
+`actions.tf`, and `main()` writes it. The Terraform minimum decision is taken (1.14); this task
+lands it in the generator and the goldens. The gate rule for an `action` block is the open piece.
 
 ## Decisions
 
-### 1. What "completed work" means for each file
+### 1. One action block per unit, one file for the run
 
-- `PLAN.md`: remove the Epic 4 and Epic 5 sections (both epics are complete) and the
-  per-feature paragraphs for F6.1 to F6.6 (features complete inside an open epic). Keep the
-  goals table, a short current state, and the open Epic 6 work (F6.7 plus the open pieces).
-  Every rule reference points to its owner document (`docs/ARCHITECTURE.md`,
-  `docs/CODEBASE_ASSEMBLY.md`) or to `backlog.md`.
-- `backlog.md`: remove items that state completed work (the "Notes on Already-Completed Work"
-  section, the per-feature landed decision summaries, items worded as "landed as Fx.y", the
-  audit reference). Keep open items, tech debt, out-of-scope items, nice-to-haves, and design
-  decisions that are still live rules, because a test or a module still holds them.
-- `agent-status.md`: keep the current position, the rules for writing documents, and the open
-  watch items. Remove the completed-feature change lists and the measured facts, because the
-  git history holds them.
-- `acceptance.md`: holds only the acceptance record for the current task, as the house rule
-  states. This file is that record.
-- `README.md`: user-facing documentation, not a tracking board. Keep it, and fix only stale
-  references.
+- `actions.tf` holds one `panos_commit` action block per unit the manifest row names. It is a `.tf`
+  file, so it is a gate input (`ARCHITECTURE.md` §4.5), and it is written only when it has content,
+  following the rule for the report files and the four data files.
+- Emission is default, not a flag. The committed goldens pin what a default run emits, so a shape a
+  run writes only when a flag is on cannot be pinned (the F6.5 rule 1 argument). The goldens gain
+  `actions.tf` for both cases, and `main()` writes `actions.tf` as the last `.tf` file, so the reader
+  reads the action against the completed unit.
+- Blocks print in the identity order the manifest rows already print. No block states a timestamp or
+  a path. The LF rule stays with the write path (`backlog.md`).
 
-### 2. The audit report
+### 2. The action names the fact its own unit declares, and no fact another unit owns
 
-`ADVERSARIAL_AUDIT_REPORT.md` is removed. The house rule that a historical record keeps its
-findings applies while the record is open work; this audit is closed, and the git history holds
-the report. `PLAN.md` states the three closed problems in one sentence without naming the file.
+- The action names the fact `unit_manifest` already selects for the row (the `unit_name` rule,
+  read through a `named_fact` helper so `unit_name` is a delegate and no second level rule appears),
+  when that fact is one the provider can name in a commit filter: `device_group`, `template`,
+  `template_stack`. The provider fact is measured: `panos_commit` declares `device_groups`,
+  `templates`, `template_stacks` as filter lists and no vsys or device filter.
+- A `vsys` fact and a `vsys_device` fact name no filter, so a unit whose selected fact is one of them
+  writes no action; the unit commits through the parent unit's action, through the platform. The
+  shared unit names no fact, so it writes no action: a commit that names no filter commits the whole
+  config, not a unit. `localhost.localdomain` names no firewall (F3.5), so it never names a filter
+  and never selects a fact, and a device-group unit whose only other fact is the placeholder still
+  names its device group.
+- An action states exactly one fact: its own unit's selected fact. A fact the unit declares but an
+  ancestor unit owns is not its own fact, so the action never names it. The block cannot state a fact
+  it cannot name, so the row join is the fact the block states.
+- `ACTION_FILTERS` in `resource_mapping.py` is the one mapping from a filter field to the fact it
+  names (`device_groups` → `device_group`, `templates` → `template`, `template_stacks` →
+  `template_stack`; the `name` field names the fact its `type` states). The emitter reads it and the
+  gate reads it, so no branch names the four fields again. `SCOPE_ANSWER` gains the `device_group`
+  row so one table answers a scope name for both the scope rule and the action rule.
 
-### 3. Pointers the cleanup would leave dangling
+### 3. The block address names the identity the block states
 
-A test or module docstring that names a removed markdown section must point to the owner
-document instead. Only the specific pointers are changed, and no test asserts a markdown file:
+The local name is the §5 rule (`naming.py`, taken as an argument, no second naming rule) applied to
+the fact the block states, with the identity digest of the identity as the block states it — the
+single fact in `FACT_KEYS` position, the other facts empty. So the block is data the gate can read
+back on its own: the address and the names inside agree, and an action that states a second fact
+cannot agree with its own address. This is the gate form of "no action names a scope another unit
+owns", and it needs no data file.
 
-- `import_blocks.py` rule 5 names `acceptance.md` Decision 3; it changes to
-  `docs/CODEBASE_ASSEMBLY.md` §7, which is the owner document for the rule.
-- `tests/test_scope_objects.py` names `acceptance.md` decision 11; it changes to
-  `docs/CODEBASE_ASSEMBLY.md` §8.
-- `tests/test_smoke.py` names `to-do.md` F1.2-F1.4, tasks completed long ago; it changes to the
-  git history.
-- The data-module test docstrings that say "and `acceptance.md`" name a record that changes with
-  every feature; they name the module, which is the owner, instead.
+### 4. The gate rule `actions`
 
-### 4. Quality gates
+The fifth gate rule for a block kind, read through the one block reader (`ARCHITECTURE.md` §4.6,
+`blocks(files, ('action',))`). `CHECK_ORDER` names `actions` after `scope_blocks`. The action grammar
+keeps its fields inside `config`: `terraform validate` refuses a field at the action's own level, so the
+one field reader reads inside `config` for this rule, which is a new shape of the same reader, not a
+second reader. Five findings, each a FAIL:
 
-- `ruff check .` is clean and `pytest` is green after the change. No test logic changes; only
-  docstring text changes.
-- Every markdown link still resolves to a file that exists.
-- No file states a fact that no module, test, or owner document holds.
+1. The action type is not in `ACTION_SCHEMA`, the data table written from the pinned provider schema
+   and verified against the live schema the way `DATA_SOURCE_SCHEMA` is. A field inside `config` is not
+   one the row declares, or a value is not the shape the row declares. `panos_push_to_devices` requires
+   `name` and `type`.
+2. The block states no fact. `panos_commit` declares no required field, so the codebase rule is what
+   makes an action a unit action: a block that names no fact commits the whole config, not a unit.
+3. A filter field does not name its fact through `ACTION_FILTERS`, or names a fact `SCOPE_ANSWER` does
+   not answer. The name is not resolved against a scope block this run declares, because an API scope run
+   writes no block for the scope it read (measured: the sample golden names `Production-DG` in a filter
+   and declares no `panos_device_group` block). A name inside a filter is not a `.name` reference the
+   `references` rule can reach, so `SCOPE_ANSWER` is the answer.
+4. The block states more than one name. A second name is a second fact, so the block cannot name one
+   unit.
+5. The block's local name does not answer the names inside the block: it must equal the §5 name plus the
+   digest of the identity the names inside build, which is the gate form of "no action names a scope
+   another unit owns".
+
+The gate still reads no data file: the rule reads the block text, the tables, and `naming.py`.
+
+### 5. The Terraform minimum is in the generator and the goldens
+
+The generated `terraform` block declares `required_version = ">= 1.14"` (actions need 1.14; the
+provider needs 1.8). Both committed goldens change, deliberately. The CI validate job runs Terraform
+1.16.1, and the local gate runs 1.16.2, so `terraform validate` accepts the action blocks. The
+generated `README.md` names `actions.tf` and states the 1.14 minimum; `README.md` and
+`docs/USAGE_GUIDE.md` state 1.14 instead of 1.0. These are report-shape changes, not golden bytes.
+
+### 6. The push half stays open
+
+`panos_push_to_devices` is not emitted. Its `name` and `type` are expressible, but `devices` names
+site serials, which is the `.tfvars` decision the write path holds (`backlog.md`). The gate rule
+reads a hand-written push block through `ACTION_SCHEMA` today; the emitted shape stays in
+`backlog.md`. No coverage matrix row covers an `action` block, the decision F5.5 made for a `data`
+block: an action names no entry, so the per-entry report cannot name one.
 
 ## Acceptance criteria
 
-1. `ADVERSARIAL_AUDIT_REPORT.md` is gone, and no markdown or Python file references it.
-2. `PLAN.md` holds no completed epic or feature detail; it states the current state, the goals,
-   and the open Epic 6 work, and each rule points to its owner document.
-3. `backlog.md` holds no completed-work item: no "landed as" item, no already-completed-work
-   notes, no audit reference. Every remaining item is open work, tech debt, out of scope, a
-   nice-to-have, or a still-live design decision.
-4. `agent-status.md` states where the work stands and what to watch; it carries no
-   completed-feature change list.
-5. `to-do.md` tracks this task's pieces and the open Epic 6 pieces, and no completed task stays
-   in it after the commit.
-6. `acceptance.md` is this record.
-7. `README.md` has no stale reference, and every link resolves.
-8. `ruff check .` is clean, `pytest` is green, and the change is committed.
+1. `commit_actions.py` states the rules and `main()` writes `actions.tf` only when it has content,
+   as the last `.tf` file. Pinned by `tests/test_commit_actions.py`, including
+   `::test_one_action_block_per_unit_the_manifest_names`,
+   `::test_an_action_names_the_fact_its_own_unit_declares`,
+   `::test_an_action_states_no_fact_an_ancestor_declares`,
+   `::test_a_shared_unit_and_a_vsys_unit_and_a_device_unit_write_no_action`,
+   `::test_the_placeholder_device_never_names_a_filter`,
+   `::test_the_block_address_names_the_identity_the_block_states`, and
+   `::test_the_file_is_written_only_when_it_has_content`.
+2. The gate rule reads `action` blocks with the one block reader; `CHECK_ORDER` names `actions` after
+   `scope_blocks`. Pinned by `tests/test_commit_actions.py`, including one test per violation type and
+   `::test_the_rule_reads_action_blocks_with_the_one_reader` and
+   `::test_no_false_positive_across_the_corpus`.
+3. `ACTION_SCHEMA` is data the gate reads and the test pins against the live provider schema;
+   `ACTION_FILTERS` is the one field mapping, `SCOPE_ANSWER` the one answer table, `naming.py` the one
+   naming rule, `unit_manifest.named_fact` the one level rule. `tests/test_commit_actions.py` pins that
+   no module defines a second one.
+4. The committed goldens declare Terraform 1.14 and gain `actions.tf`; every other golden byte is
+   unchanged. `terraform validate` accepts the new blocks.
+5. The generated `README.md` names `actions.tf` and states the minimum; the root `README.md` and
+   `docs/USAGE_GUIDE.md` state 1.14.
+6. `docs/CODEBASE_ASSEMBLY.md` §10 states the landed rules and names the module and the tests; the
+   open push half stays recorded in `backlog.md`.
+7. Two runs on the same source write the same action bytes, pinned by
+   `tests/test_commit_actions.py::test_two_runs_write_the_same_bytes`.
+8. `ruff check .` is clean, `pytest` is green, the gate reports no finding on the goldens, and the
+   change is committed. The tracking markdown loses the F6.7 detail, and the next feature is F7.1.

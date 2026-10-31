@@ -78,7 +78,7 @@ entry is a WARN finding. The rule is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 ## Requirements
 
 - Python 3.9+ (standard library only)
-- Terraform 1.0+ for the validate gate
+- Terraform 1.14+ for the validate gate (an `action` block is 1.14 syntax)
 - A Panorama XML export
 
 ## Generated resources (provider v2)
@@ -235,6 +235,10 @@ Data files and reports written to the output directory. Each is written only whe
 - `imports.tf` - one `import` block per entry the run declares, as `to` and `id`
   ([`import_blocks.py`](import_blocks.py)). Written only for a run that declares `--import-blocks` and
   has a block to write, and the gate rule reads it because it is a `.tf` file
+- `actions.tf` - the commit action: one `panos_commit` block per unit the manifest names, and each block
+  names the fact its own unit selects ([`commit_actions.py`](commit_actions.py)). Written by every run that
+  has such a unit, as the last `.tf` file. A unit whose fact no commit filter can name writes no block, and
+  the file is written only when it has content ([`docs/CODEBASE_ASSEMBLY.md`](docs/CODEBASE_ASSEMBLY.md) §10)
 - `MANUAL_SETUP_REPORT.txt` - everything above that must be configured
   manually, plus a section for a container no parse method reads
   ([`container_coverage.py`](container_coverage.py))
@@ -277,6 +281,7 @@ MANUAL_SETUP_REPORT.txt  INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.tx
 CONVERSION_REPORT.txt  SANITY_REPORT.txt  SOURCE.txt  CODEBASE_MANIFEST.json
 OWNERSHIP.json  REFERENCE_EDGES.json  SITE_DATA.json  site.auto.tfvars
 read_through.tf  imports.tf        (opt-in: --data-blocks, --import-blocks)
+actions.tf                        (the commit action per unit, the last .tf file written)
 ```
 
 (Only files with content are written; the list above is the union across
@@ -366,6 +371,8 @@ what you receive, not what the generator intended.
 | `location_present` | every `resource` and `data` block carries `location` | FAIL |
 | `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type | FAIL |
 | `import_blocks` | every `import` block agrees with the `resource` block it names: the type, the local name, the entry name, and the location | FAIL; WARN for a rule type the shape cannot state |
+| `scope_blocks` | a name inside a scope block's `location` names a scope the run declares, by the type that defines it | FAIL |
+| `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable the run declares | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
@@ -448,6 +455,12 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   site, the declaration set, both directions of the variable gate rule, the corpus rows, the rule that the
   corpus trips neither, the gate inputs, the report bodies, the rule that the module defines no second naming
   rule, and the byte rule between two runs
+- `tests/test_commit_actions.py` - the commit action per unit (`actions.tf`): one block per unit the
+  manifest names, the fact its own unit selects, the unit that writes no action, the address that answers
+  the names inside the block, the order, the file written only when it has content, each violation type of
+  the gate rule, the field inside `config`, the one field mapping and the one answer table and the one level
+  rule, `ACTION_SCHEMA` against the live provider schema, the Terraform minimum, and the byte rule between
+  two runs
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are

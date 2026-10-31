@@ -509,8 +509,12 @@ restated here; they are in the record and the git history. Only the open items a
   lands and a source states the position.
 - Actions: the pinned schema declares `panos_commit` and `panos_push_to_devices`. Decided
   2026-10-31: the codebase declares Terraform 1.14 as the minimum, because actions need it, so the
-  committed goldens state it. The gate rule that reads an `action` block is still open, and it reads
-  through the one block reader.
+  committed goldens state it. `panos_commit` is emitted per unit (`docs/CODEBASE_ASSEMBLY.md` §10).
+  Open for `panos_push_to_devices`: the emitted shape needs the `devices` decision, which is the
+  `.tfvars` `target` fact the write path holds, so the gate rule reads a hand-written push block
+  through `ACTION_SCHEMA` today and the emitter writes no push block.
+- Open: no coverage matrix row covers an `action` block, the decision F5.5 made for a `data` block,
+  because an action names no entry, so a property finding cannot name one.
 - The credential rule needs one statement that covers both the fetch layer (the key from the
   environment only, never a generated file) and the generated provider block, which declares
   `panos_username` and `panos_password` variables. The provider reads `PANOS_API_KEY` from the

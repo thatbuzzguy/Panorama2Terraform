@@ -17,6 +17,7 @@ Checks, in report order:
 | `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type | FAIL |
 | `import_blocks` | every `import` block agrees with the `resource` block it names | FAIL, WARN |
 | `scope_blocks` | a name inside a scope block's `location` names a scope this run declares | FAIL |
+| `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a declared variable | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
@@ -40,6 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import commit_actions
 import entry_coverage
 import import_blocks
 import naming
@@ -57,6 +59,7 @@ CHECK_ORDER = (
     'data_blocks',
     'import_blocks',
     'scope_blocks',
+    'actions',
     'references',
     'variables',
     'control_chars',
@@ -131,24 +134,27 @@ class Block:
 
     def location_body(self) -> str:
         """The text inside this block's `location` block, or '' when it has none."""
-        match = re.search(r'\blocation\s*=\s*\{', self.body)
-        if match is None:
-            return ''
-        start = match.end() - 1
-        depth = 0
-        for index in range(start, len(self.body)):
-            char = self.body[index]
-            if char == '{':
-                depth += 1
-            elif char == '}':
-                depth -= 1
-                if depth == 0:
-                    return self.body[start + 1:index]
-        return self.body[start + 1:]
+        return import_blocks.sub_block_body(self, 'location')
 
-    def attribute(self, key: str) -> str:
+    def config_body(self) -> str:
+        """The text inside this block's `config` block, or '' when it has none (F6.7).
+
+        An action's fields live inside `config`: that is the grammar Terraform 1.14 requires for an
+        action block, measured with `terraform validate`.
+        """
+        return import_blocks.sub_block_body(self, 'config')
+
+    def attribute(self, key: str, sub_block: str = '') -> str:
         """One quoted field of this block, as the gate reads it (the one field reader)."""
-        return import_blocks.block_value(self, key)
+        return import_blocks.block_value(self, key, sub_block)
+
+    def list_values(self, key: str, sub_block: str = '') -> tuple:
+        """One list field of this block, element by element, through the same field reader (F6.7)."""
+        return import_blocks.block_list(self, key, sub_block)
+
+    def fields(self, sub_block: str = '') -> dict[str, str]:
+        """Every field of this block, as the raw value text, in the block's order (F6.7)."""
+        return import_blocks.fields(self, sub_block)
 
     def location_values(self) -> dict[str, dict[str, str]]:
         """The `location` sub-block as {sub-block: {field: value}}, in sorted order.
@@ -520,6 +526,24 @@ def check_import_blocks(files: dict[str, str]) -> list[Finding]:
     return findings
 
 
+def value_shape(raw: str) -> str:
+    """The value shape a field states, as the one field reader read it (F6.7).
+
+    The shapes `ACTION_SCHEMA` declares: `string`, `string_list`, `bool`, `object`. The reader keeps the
+    raw text so the opening character states the shape, which makes this the reader's own inverse and no
+    second table names the shapes.
+    """
+    if raw.startswith('['):
+        return 'string_list'
+    if raw.startswith('{'):
+        return 'object'
+    if raw.startswith('"'):
+        return 'string'
+    if raw in ('true', 'false'):
+        return 'bool'
+    return ''
+
+
 def check_scope_blocks(files: dict[str, str]) -> list[Finding]:
     """A name inside a scope block's `location` must name a scope this run declares (F6.5).
 
@@ -532,6 +556,11 @@ def check_scope_blocks(files: dict[str, str]) -> list[Finding]:
     Two shapes state no name to resolve, so they are not checked: an empty sub-block (the
     `panorama = {}` shape the four Panorama scopes write), and a field that names a device rather
     than a scope (`panorama_device`, `ngfw_device`).
+
+    The `device_group` row of `SCOPE_ANSWER` is read by the action rule, not here: a scope block
+    states its own device group at its own level (the `name_field` rule), and the six scope types
+    place an empty `device_group` sub-block or none, so the scope rule has no device-group name to
+    resolve.
     """
     answering = set(resource_mapping.SCOPE_ANSWER.values())
     declared = set()
@@ -557,6 +586,85 @@ def check_scope_blocks(files: dict[str, str]) -> list[Finding]:
                     f'{block.address} location.{sub_block}.name = "{name}" names no '
                     f'{scope_type} block this run declares',
                 ))
+    return findings
+
+
+def check_actions(files: dict[str, str]) -> list[Finding]:
+    """Every `action` block must match its `ACTION_SCHEMA` row and name one unit (F6.7).
+
+    Four findings, each a FAIL, and each read through one rule:
+
+    1. The type is not in `ACTION_SCHEMA`, a field is not in the row, a required field is missing, or
+       a field is stated at the block's own level instead of inside `config`, which is the level the
+       Terraform 1.14 action grammar requires.
+    2. The block states no scope name, so it commits the whole config and not a unit: the `panos_commit`
+       row declares no required field, so the codebase rule is what makes an action a unit action.
+    3. The fact a filter field names must be a scope fact `SCOPE_ANSWER` answers, the F6.5 rule shape,
+       because a name inside a filter is not a `.name` reference the `references` rule can reach. The
+       name is not resolved against a block this run declares: a run scoped to a scope writes no block
+       for the scope it read (measured on an API scope run), so the block text alone cannot resolve it,
+       and the address rule below is what makes the action name its own unit.
+    4. The block states one name, and its address is the §5 name plus the digest of the identity the
+       names inside the block build, so the address and the names agree. This is the gate form of "no
+       action names a scope another unit owns", and it needs no data file.
+
+    The block is read through the one block reader and the one field reader. This rule reads no data
+    file, so the gate input is the block text, the tables, and `naming.py`.
+    """
+    findings = []
+    for block in sorted(blocks(files, ('action',)), key=lambda b: (b.file, b.line)):
+        row = resource_mapping.ACTION_SCHEMA.get(block.rtype)
+        if row is None:
+            findings.append(Finding(
+                'actions', FAIL, block.file, block.line,
+                f'action {block.address} is not in ACTION_SCHEMA',
+            ))
+            continue
+        required, shape = row
+        outside = block.fields()
+        for field in sorted(outside):
+            findings.append(Finding(
+                'actions', FAIL, block.file, block.line,
+                f'action {block.address} states {field} at its own level, which the action grammar '
+                f'does not allow: the fields are inside `config`',
+            ))
+        fields = block.fields(commit_actions.CONFIG_BLOCK)
+        for field in sorted(required):
+            if field not in fields:
+                findings.append(Finding(
+                    'actions', FAIL, block.file, block.line,
+                    f'action {block.address} has no {field}, which {block.rtype} requires',
+                ))
+        for field in sorted(fields):
+            declares = shape.get(field)
+            if declares is None:
+                findings.append(Finding(
+                    'actions', FAIL, block.file, block.line,
+                    f'action {block.address} {field} is not a field {block.rtype} declares',
+                ))
+            elif value_shape(fields[field]) != declares:
+                findings.append(Finding(
+                    'actions', FAIL, block.file, block.line,
+                    f'action {block.address} {field} is not a {declares} value',
+                ))
+        try:
+            read = commit_actions.read_block(block)
+        except ValueError as exc:
+            findings.append(Finding('actions', FAIL, block.file, block.line, str(exc)))
+            continue
+        fact = read['fact']
+        if resource_mapping.SCOPE_ANSWER.get(fact) is None:
+            findings.append(Finding(
+                'actions', FAIL, block.file, block.line,
+                f'action {block.address} names a fact SCOPE_ANSWER does not answer ({fact})',
+            ))
+        expected = commit_actions.local_name(fact, read['entry_name'], naming.sanitize)
+        if block.local != expected:
+            findings.append(Finding(
+                'actions', FAIL, block.file, block.line,
+                f'action {block.address} is not the §5 name plus the identity digest the block states '
+                f'({expected})',
+            ))
     return findings
 
 
@@ -712,6 +820,7 @@ def run_checks(output_dir: Path, run_terraform: bool = False,
         CheckResult('data_blocks', tuple(check_data_blocks(files))),
         CheckResult('import_blocks', tuple(check_import_blocks(files))),
         CheckResult('scope_blocks', tuple(check_scope_blocks(files))),
+        CheckResult('actions', tuple(check_actions(files))),
         CheckResult('references', tuple(check_references(files))),
         CheckResult('variables', tuple(check_variables(files))),
         CheckResult('control_chars', tuple(check_control_chars(files))),

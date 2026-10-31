@@ -2,29 +2,30 @@
 
 ## Current position
 
-Planning session (2026-10-31): a provider discussion was reviewed against the pinned provider
-(2.0.14, re-measured with `terraform providers schema -json` and `terraform validate`). Two facts
-changed the plan, and four decisions were taken.
+F6.7 (the commit action per unit) is complete and committed: `commit_actions.py` writes one
+`panos_commit` action block per unit as `actions.tf`, and the gate rule `actions` reads those blocks
+against `ACTION_SCHEMA` through the one block reader. The rules are in `docs/CODEBASE_ASSEMBLY.md` §10,
+the tests are in `tests/test_commit_actions.py`. The push half stays open in `backlog.md`.
 
-Changed facts:
+Facts measured while the work landed, and the rules that follow from them:
 
-- `panos_virtual_router.protocol` is an object attribute that carries `bgp`, `ospf`, `ospfv3`, `rip`
-  and the two redistribution profile lists, and `protocol.bgp` carries `peer_group` with its `peer`
-  list. So BGP and OSPF are an emitter gap, not a provider gap, and Epic 7 is open for it.
-- No raw XML or xpath resource exists, so there is no in-provider fallback for an uncovered feature.
-  `panos_template_variable.location` has no device field, so a per-device variable override is not
-  expressible. The provider argument is `hostname`, not `host`. The import id is base64 JSON, so the
-  colon form is the v1 shape. The facts are in `backlog.md`.
+- An action keeps its fields inside `config`: `terraform validate` refuses a field at the action's own
+  level. So the one field reader takes the sub-block it reads as an argument, and no second reader
+  appears.
+- The fact a filter names is answered by `SCOPE_ANSWER`, not resolved against a declared block, because
+  an API scope run writes no block for the scope it read.
+- The action's local name carries the digest of the identity as the block states it, so the gate reads a
+  block back on its own and the address answers the names inside it. That digest is not the unit's
+  directory digest.
+- Emission is default, not a flag, so the goldens pin what a default run emits; `actions.tf` is the last
+  `.tf` file `main()` writes.
 
-Decisions taken:
+Decisions taken on 2026-10-31 that the work confirms: the Terraform minimum is 1.14 and both committed
+goldens declare it; a value the parse cannot carry prints as the variable reference; the write path
+forces LF.
 
-1. Epic 7 (routing output through the protocol object) is promoted to `PLAN.md`.
-2. A value the parse cannot carry prints as the variable reference, never as a literal.
-3. The Terraform minimum is 1.14, and the committed goldens declare it.
-4. The write path forces LF.
-
-No code feature is in progress. The open features are F6.7 and F7.1, and the open pieces are in
-`to-do.md`. The housekeeping commit before this session is `37ea7d5`.
+The next feature is F7.1 (the protocol object as output, Epic 7). Its pieces are in `to-do.md`, and its
+acceptance criteria go in `acceptance.md` before code or tests.
 
 ## Rules to keep when writing documents
 
@@ -49,16 +50,18 @@ No code feature is in progress. The open features are F6.7 and F7.1, and the ope
   object and the site, and write no directory. The write path is the step that turns a
   `directory` field into a real directory, and `scope.tf`, `imports.tf` and `site.auto.tfvars`
   are one file for the run until it lands.
-- The block reader in `sanity_checks.py` serves every kind, so the `action` rule (F6.7) must use
-  `blocks(files, kinds)`; no second block reader should appear.
-- The gate reads `.tf` files only, so no data file is a gate input today. `scope.tf` and
-  `imports.tf` are `.tf` files and are gate inputs. If a codebase feature makes a data file a
+- The block reader in `sanity_checks.py` serves every kind, so the F7.1 rule for an object attribute
+  must use `blocks(files, kinds)` and the same field reader, given the sub-block it reads; no second
+  block reader should appear.
+- The gate reads `.tf` files only, so no data file is a gate input today. `scope.tf`, `imports.tf` and
+  `actions.tf` are `.tf` files and are gate inputs. If a codebase feature makes a data file a
   gate input, the file set statement in `ARCHITECTURE.md` §4.5, the `.tfvars` statement in §4.5,
   and the no-change tests must change together.
 - A field reader must read at the block's own level and stop at the closing quote, or a
   sub-block field or an escaped quote answers for the block's field. Both are pinned in
   `tests/test_import_blocks.py`, and the scope rule reads at the block's own level through the
-  same reader. The same reader also tells a quoted value from a `var.` reference, so no second
+  same reader, which takes the sub-block it reads as an argument (the action rule reads inside
+  `config`). The same reader also tells a quoted value from a `var.` reference, so no second
   rule decides the shape of a field.
 - `SCOPE_PLACEMENT` and the location sub-block are one fact: a new scope type needs both the
   placement key and the `SCOPE_ANSWER` entry, and the emitter reads the placement key as the
@@ -88,7 +91,7 @@ No code feature is in progress. The open features are F6.7 and F7.1, and the ope
 - A cycle test needs the referrer entry and the declaring entry in the same unit, for the reason
   recorded in the git history for F6.3.
 - An object attribute (`protocol`) is a field whose value is an object, not a block, so the gate rule
-  for it is a new shape of the one block reader. No second reader should appear for F7.1 or F6.7.
+  for it is a new shape of the one block reader. No second reader should appear for F7.1.
 - The sensitive field rule needs one table that the emitter, the gate and the report all read, so the
   placeholder check and `tests/test_robustness.py` state the same fact once.
 - A container row that moves from `report` to `emitted` changes the property scan scope, the per-entry

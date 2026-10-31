@@ -20,7 +20,9 @@ key and connects to no server.
 ## Requirements
 
 - Python 3.9 or later. Standard library only.
-- Terraform 1.0 or later, only for the optional `--validate` check.
+- Terraform 1.14 or later, only for the optional `--validate` check. An `action`
+  block is 1.14 syntax, so the generated `terraform` block declares 1.14 as the
+  minimum.
 - A Panorama XML export.
 
 No installation step. Run the script from the repository. The API source needs no
