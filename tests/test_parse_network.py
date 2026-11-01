@@ -1,4 +1,11 @@
-"""Unit tests for PanoramaParser network parse methods (zones, interfaces, routers, BGP, OSPF)."""
+"""Unit tests for PanoramaParser network parse methods (zones, interfaces, routers, BGP, OSPF).
+
+F7.1: `parse_bgp` and `parse_ospf` build one router's levels, so the protocol entries are captured
+fields of the router record and the router keeps one mark. The two entries the `.tf` cannot express are
+marked for the report, and `entry_coverage.protocol_report_rows` is the one list of them.
+"""
+
+import entry_coverage
 
 
 def _parser(make_parser, fixture_name):
@@ -175,77 +182,126 @@ def test_parse_logical_routers(make_parser):
 
 
 def test_parse_bgp_enabled(make_parser):
-    """BGP returns one record per router with BGP enabled (F4.4)."""
+    """`parse_bgp` builds the `protocol/bgp` level of one router (F7.1).
+
+    The router entry is the object the emitter places, so the level is a captured field of that entry
+    instead of a record of its own, and the router keeps one mark.
+    """
     p = _parser(make_parser, "bgp.xml")
-    routers = p.parse_bgp()
-    # The fixture puts the router under a device. One path reads it once, so the
-    # report prints one block for it.
-    assert len(routers) == 1, routers
-    bgp = routers[0]
-    assert bgp["name"] == "default"
-    # The record carries the four scope facts the report groups by (F3.9).
-    assert bgp["vsys_device"] == "localhost.localdomain"
-    assert bgp["vsys"] == "vsys1"
-    assert bgp["template"] == ""
+    routers = p.parse_virtual_routers()
+    # The fixture puts the router under a device and names a second router with no BGP, so the
+    # assertion names the one that has it. One path reads it once, so the report prints one block.
+    assert len(routers) == 2, routers
+    router = [entry for entry in routers if entry["name"] == "default"][0]
+    assert router["vsys_device"] == "localhost.localdomain"
+    assert router["vsys"] == "vsys1"
+    assert router["template"] == ""
+
+    bgp = router["protocol"]["bgp"]
+    assert bgp["enable"] is True
+    assert bgp["local_as"] == "65001"
     assert bgp["router_id"] == "10.0.0.1"
-    assert bgp["as_number"] == "65001"
 
-    assert len(bgp["peer_groups"]) == 1
-    pg = bgp["peer_groups"][0]
-    assert pg["name"] == "PG-Branch"
-    assert pg["type"] == "external"
-    assert pg["export_nexthop"] == "self"
-    assert pg["import_nexthop"] == "self"
+    assert len(bgp["peer_group"]) == 1
+    group = bgp["peer_group"][0]
+    assert group["name"] == "PG-Branch"
+    # A `one_of` level holds the value the export states as the key, so the report prints what the
+    # operator types in the GUI and the emitter maps it to the provider key.
+    assert group["type"] == {"external": {"export_nexthop": "self", "import_nexthop": "self",
+                                          "remove_private_as": ""}}
+    # The four facts belong to the entry the ledger marks, so the choice body holds none of them.
+    assert not set(group["type"]["external"]) & entry_coverage.NON_FIELD_KEYS, group["type"]
 
-    assert len(bgp["peers"]) == 1
-    peer = bgp["peers"][0]
+    # The peer the export puts inside the peer-group element is captured on that entry, so the
+    # membership is the parent entry and `peer_group` is not a captured field (F7.1).
+    assert len(group["peer"]) == 1
+    peer = group["peer"][0]
     assert peer["name"] == "10.55.0.2"
     assert peer["peer_as"] == "65002"
-    assert peer["local_address_ip"] == "10.55.0.1"
-    assert peer["peer_address_ip"] == "10.55.0.2"
+    assert peer["local_address"] == {"interface": "", "ip": "10.55.0.1"}
+    assert peer["peer_address"] == {"fqdn": "", "ip": "10.55.0.2"}
     assert peer["enable"] is True
-    assert peer["peer_group"] == "PG-Branch"
+    assert "peer_group" not in peer
 
-    assert len(bgp["redistribution_rules"]) == 1
-    redist = bgp["redistribution_rules"][0]
+    assert len(bgp["redist_rules"]) == 1
+    redist = bgp["redist_rules"][0]
     assert redist["name"] == "redist-static"
     assert redist["enable"] is True
-    assert redist["address_family"] == "ipv4-unicast"
+    assert redist["address_family_identifier"] == "ipv4-unicast"
+    # The export states no metric, so a number field with no value is empty and prints nothing (F7.1).
+    assert redist["metric"] == ""
+
+
+def test_parse_bgp_keeps_a_peer_no_group_names_for_the_report(make_parser):
+    """A peer at the `bgp` level that no peer group names is marked for the report (F7.1).
+
+    `PROTOCOL_SHAPE` states no provider field for it, so the emitter cannot express it and the manual
+    report prints it. `entry_coverage.protocol_report_rows` is the one list these entries come from.
+    """
+    p = _parser(make_parser, "bgp.xml")
+    p.parse_virtual_routers()
+    rows = entry_coverage.protocol_report_rows(p.ledger)
+    assert [(row["router"], row["level"], row["name"]) for row in rows] == [
+        ("default", "peer", "10.55.0.9")], rows
+    # The captured object is the same object the parse marked, so the report and the scan read one record.
+    assert rows[0]["captured"]["peer_as"] == "65003"
 
 
 def test_parse_bgp_absent(make_parser):
-    """BGP returns no record when no virtual router has BGP enabled."""
+    """A router with no BGP element has no `bgp` level, so nothing prints for it (F7.1)."""
     p = _parser(make_parser, "zones.xml")
-    assert p.parse_bgp() == []
+    for router in p.parse_virtual_routers():
+        assert router["protocol"]["bgp"] == {}, router
 
 
 def test_parse_ospf(make_parser):
-    """OSPF returns one record per router with OSPF enabled (F4.4)."""
+    """`parse_ospf` builds the `protocol/ospf` level of one router (F7.1).
+
+    `ospf.xml` puts one interface inside an area and one at the OSPF level, which is the case the
+    `.tf` cannot express.
+    """
     p = _parser(make_parser, "ospf.xml")
-    routers = p.parse_ospf()
-    assert len(routers) == 1, routers
-    ospf = routers[0]
-    assert ospf["name"] == "default"
-    assert ospf["vsys_device"] == "localhost.localdomain"
-    assert ospf["vsys"] == "vsys1"
+    router = p.parse_virtual_routers()[0]
+    assert router["name"] == "default"
+    assert router["vsys_device"] == "localhost.localdomain"
+    assert router["vsys"] == "vsys1"
+
+    ospf = router["protocol"]["ospf"]
+    assert ospf["enable"] is True
     assert ospf["router_id"] == "10.0.0.1"
 
-    assert len(ospf["areas"]) == 1
-    area = ospf["areas"][0]
-    assert area["area_id"] == "0.0.0.0"
-    assert area["type"] == "stub"
-    assert area["ranges"] == ["10.0.0.0/8"]
+    assert len(ospf["area"]) == 1
+    area = ospf["area"][0]
+    assert area["name"] == "0.0.0.0"
+    # A `one_of` area type is the value itself: the provider key is `stub`, and the export states it.
+    assert area["type"] == {"stub": {"accept_summary": ""}}
+    # A range entry prints inside the area, with the choice block the provider requires. The entry that
+    # states neither has no `.tf` shape, so it is not in the printed list (F7.1).
+    assert len(area["range"]) == 1, area["range"]
+    assert area["range"][0]["name"] == "10.0.0.0/8"
+    assert str(area["range"][0]["advertise"]) == "{}"
+    # An interface inside an area is captured inside that area, because the provider field is there.
+    assert len(area["interface"]) == 1
+    inner = area["interface"][0]
+    assert inner["name"] == "ethernet1/2"
+    assert inner["link_type"] == {"broadcast": {}}
+    assert inner["metric"] == 10
+    assert inner["passive"] is False
 
-    assert len(ospf["interfaces"]) == 1
-    iface = ospf["interfaces"][0]
-    assert iface["interface"] == "ethernet1/1"
-    assert iface["enable"] is True
-    assert iface["passive"] is True
-    assert iface["link_type"] == "point-to-point"
-    assert iface["metric"] == "10"
+    # The three entries the `.tf` cannot express: the range entry with no choice, the interface whose
+    # link-type value the mapping cannot state, and the interface the export places outside an area.
+    # The rows come from the ledger in report order.
+    rows = entry_coverage.protocol_report_rows(p.ledger)
+    assert [(row["router"], row["level"], row["name"]) for row in rows] == [
+        ("default", "range", "10.60.0.0/16"),
+        ("default", "interface", "ethernet1/3"),
+        ("default", "interface", "ethernet1/1")], rows
+    assert rows[1]["detail"] == ('link_type multicast is not a value PROTOCOL_SHAPE states')
+    assert rows[2]["captured"]["link_type"] == {"point-to-point": {}}
 
 
 def test_parse_ospf_absent(make_parser):
-    """OSPF returns no record when no virtual router has OSPF enabled."""
+    """A router with no OSPF element has no `ospf` level, so nothing prints for it (F7.1)."""
     p = _parser(make_parser, "zones.xml")
-    assert p.parse_ospf() == []
+    for router in p.parse_virtual_routers():
+        assert router["protocol"]["ospf"] == {}, router

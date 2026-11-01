@@ -29,7 +29,9 @@ Example shape:
     <local-as>65001</local-as>
     <peer-group>
       <entry name="ISP-Peers">
-        <type>ebgp</type>
+        <type>external</type>
+        <export-nexthop>self</export-nexthop>
+        <import-nexthop>self</import-nexthop>
       </entry>
     </peer-group>
     <peer>
@@ -56,14 +58,65 @@ Example shape:
 </protocol>
 ```
 
-What the run produces: no `.tf` file. The provider has no BGP resource of its own
-that accepts a router ID, an AS number, or peer data; it carries them as the
-`protocol` object attribute on `panos_virtual_router`, which the generator does not
-print yet (F7.1 in `PLAN.md`), so the captured values go to
-`MANUAL_SETUP_REPORT.txt` with the router ID, the AS, the peer groups and the
-peers. The parser reads `redist-rules` into the model, but the report prints
-only the router, peer groups and peers. That gap is recorded in
-[`../backlog.md`](../backlog.md).
+What the run produces: a `panos_virtual_router` resource in `virtual_routers.tf`, with the values inside the
+`protocol` object ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9). The peer group entry holds its peers, so the peer
+prints inside the peer-group element. `<type>external</type>` maps to the provider key `ebgp`, and the two
+nexthops print inside that key, because `import_nexthop` exists only under it. Field order is the order the
+shape table states. The block below is an illustration with a shortened hash, not a pin.
+
+```hcl
+resource "panos_virtual_router" "default_4b617d92" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
+  name = "default"
+  protocol = {
+    bgp = {
+      enable = true
+      local_as = "65001"
+      router_id = "1.1.1.1"
+      peer_group = [
+        {
+          name = "ISP-Peers"
+          type = {
+            ebgp = {
+              export_nexthop = "self"
+              import_nexthop = "self"
+            }
+          }
+          peer = [
+            {
+              name = "ISP1"
+              enable = true
+              peer_as = "65000"
+              local_address = {
+                interface = "ethernet1/2"
+                ip = "203.0.113.1/30"
+              }
+              peer_address = {
+                ip = "203.0.113.2"
+              }
+            }
+          ]
+        }
+      ]
+      redist_rules = [
+        {
+          name = "redist-static"
+          enable = true
+          address_family_identifier = "ip"
+        }
+      ]
+    }
+  }
+}
+```
+
+An entry the object cannot express is named in `MANUAL_SETUP_REPORT.txt` instead, so the file holds no half
+of it: a peer the export places at the `bgp` level that no peer group names is one of those entries. A routing
+level the shape table does not state is not read, so a policy, a timer, or an auth profile body prints nothing.
 
 ## OSPF
 
@@ -100,9 +153,45 @@ Example shape:
 </protocol>
 ```
 
-What the run produces: no `.tf` file. The captured router ID, areas and
-interfaces go to `MANUAL_SETUP_REPORT.txt`. Configure OSPF on the target after
-the apply, and use a different router ID for each virtual router.
+What the run produces: the router ID and the area print inside the `protocol` object
+([ARCHITECTURE.md](ARCHITECTURE.md) §4.9). The area type is the identity mapping, so `<normal/>` prints as the
+`normal` key with no fields. The interface the export places at the `ospf` level is named in
+`MANUAL_SETUP_REPORT.txt`, because the shape table declares no interface outside an area. The block below is an
+illustration with a shortened hash, not a pin.
+
+```hcl
+resource "panos_virtual_router" "default_4b617d92" {
+  location = {
+    template = {
+      name = "Shared"
+    }
+  }
+  name = "default"
+  protocol = {
+    ospf = {
+      enable = true
+      router_id = "1.1.1.1"
+      area = [
+        {
+          name = "0.0.0.0"
+          type = {
+            normal = {}
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+The report names the interface the object cannot hold:
+
+```text
+  router default: interface ethernet1/1 (no provider field for an interface outside an area)
+```
+
+An interface inside an area prints inside the area element, and a `range` entry must state exactly one of
+`advertise` or `suppress`, because the provider requires one.
 
 ## IKE crypto profile
 

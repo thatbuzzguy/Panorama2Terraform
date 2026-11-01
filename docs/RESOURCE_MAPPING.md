@@ -73,7 +73,7 @@ not record which rulebase an entry came from. See
 | `panos_vlan_interface` | identity | `layer3` block; the entry name is the VLAN id, and the emitted name is `vlan.<id>` |
 | `panos_loopback_interface` | identity | emitted name is `loopback.<unit>` |
 | `panos_tunnel_interface` | identity | emitted name is `tunnel.<unit>`. These are the interface layers, not the IPsec tunnel resource |
-| `panos_virtual_router` | identity | required: `location`, `name`. Logical routers (Advanced Routing Engine) emit as this type; see [ADVANCED-ROUTING-ENGINE-SUPPORT.md](ADVANCED-ROUTING-ENGINE-SUPPORT.md) |
+| `panos_virtual_router` | identity | required: `location`, `name`. `protocol` is the object attribute that carries BGP and OSPF, so a routing entry prints inside the router block (`docs/ARCHITECTURE.md` §4.9). Logical routers (Advanced Routing Engine) emit as this type; see [ADVANCED-ROUTING-ENGINE-SUPPORT.md](ADVANCED-ROUTING-ENGINE-SUPPORT.md) |
 | `panos_virtual_router_static_route_ipv4` | `panos_static_route_ipv4` | static routes belong to the virtual router; `nexthop = { ip_address = "..." }`. A next-VR route has no v2 attribute, so it is configured on the target |
 | `panos_zone` | identity | `network = { layer3 = [...] }` |
 | `panos_monitor_profile` | identity (no v1 equivalent) | PBF path monitoring profiles (`network/profiles/monitor-profile`), referenced by PBF rule path monitoring. `action` is an enum (`wait-recover`/`fail-over`); no `description` attribute |
@@ -97,18 +97,20 @@ The captured data goes to `MANUAL_SETUP_REPORT.txt` (or the VPN/interface
 migration reports) so nothing is silently dropped.
 
 Routing has no resource of its own, but the provider carries BGP and OSPF as the
-object attribute `protocol` on `panos_virtual_router`. The generator does not print
-that attribute yet, so the routing rows stay report-only until F7.1 (`PLAN.md`).
+object attribute `protocol` on `panos_virtual_router`, so a routing entry prints inside the router block
+(`docs/ARCHITECTURE.md` §4.9). The routing types therefore have no row here: no provider resource exists
+for a peer group, a peer, an area, or an area interface, and each one prints inside the entry that holds it.
+The report names the entries the object cannot express (§4.9 rule 4). `container_coverage.CONTAINER_TABLE`
+states which level prints and which one reports, and `tests/test_container_coverage.py` keeps the table and
+the test in step.
+
+The parser reads only the levels `PROTOCOL_SHAPE` states, so a routing profile, a policy, a timer, an auth
+profile, `ospfv3` and `rip` bodies are not captured. Those gaps are recorded in
+[`../backlog.md`](../backlog.md).
 
 | Type | Why there is no v2 target |
 |---|---|
 | `panos_application_filter` | v2 `panos_application` is a single static application object (category, risk, signature, ...). An application filter (category/subcategory/technology/risk *lists*) is a different concept |
-| `panos_bgp` | v2 exposes only six specialized BGP routing profiles (timer, auth, dampening, filtering, redistribution, address family). None accepts AS number, router ID, or peer data |
-| `panos_bgp_peer` | no v2 peer resource |
-| `panos_bgp_peer_group` | no v2 peer-group resource |
-| `panos_ospf` | v2 exposes only four specialized OSPF routing profiles (auth, interface timer, SPF timer, redistribution). No router-ID resource |
-| `panos_ospf_area` | no v2 area resource |
-| `panos_ospf_area_interface` | no v2 area-interface resource |
 | `panos_application_override` | no v2 resource for application override rules |
 | `panos_qos_profile` | no v2 resource for QoS profiles |
 | `panos_tunnel_monitor_profile` | no v2 resource for IPsec tunnel monitor profiles. `panos_monitor_profile` is a different PAN-OS object (PBF path monitoring) — verified in the provider/pango source |

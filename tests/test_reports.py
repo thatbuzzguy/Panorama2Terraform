@@ -8,6 +8,9 @@ group for an entry whose scope is a template or a device.
 
 The fixture (tests/fixtures/report_grouping.xml) puts the same names in two
 device groups, which is the case a flat report cannot tell apart.
+
+The manual setup report's routing section (F7.1) names only the protocol entries the
+`.tf` cannot hold, and its rows come from the ledger, so it uses the same grouping rule.
 """
 
 import re
@@ -223,7 +226,10 @@ def test_no_report_when_there_is_nothing_to_report(tmp_path):
     assert 'VPN_MIGRATION_REPORT.txt' not in files
 
 
-# --- manual setup report: BGP and OSPF (F4.4) -----------------------------
+# --- manual setup report: the routing entries the file cannot express (F7.1) --
+
+PROTOCOL_SECTION = '--- Routing protocol entries the generated file cannot express (F7.1) ---'
+
 
 def _manual_sections(text: str) -> dict[str, str]:
     """{scope section title: body} for the grouped manual report sections."""
@@ -238,33 +244,53 @@ def _manual_sections(text: str) -> dict[str, str]:
     return {title: '\n'.join(body) for title, body in blocks.items()}
 
 
-def test_bgp_and_ospf_sections_name_the_scope_and_the_router(tmp_path):
-    """The router sections use the same grouping rule as the other reports.
+def test_protocol_report_sections_name_the_scope_and_the_router(tmp_path):
+    """The protocol rows use the same grouping rule as the other report sections (F3.9).
 
-    tests/fixtures/router_scopes.xml puts two routers in two scopes, so a flat section
-    cannot tell them apart.
+    tests/fixtures/router_scopes.xml puts one entry the `.tf` cannot express in each of the
+    two scopes, so a flat section cannot tell them apart.
     """
     report = _generate(tmp_path, 'router_scopes.xml')['MANUAL_SETUP_REPORT.txt']
+    assert PROTOCOL_SECTION in report
     sections = _manual_sections(report)
     assert set(sections) == {'DEVICE GROUP: Router-Group', 'TEMPLATE: Router-Template'}, sections
-    assert 'router: R1' in sections['DEVICE GROUP: Router-Group']
-    assert 'router: R2' in sections['TEMPLATE: Router-Template']
-    # One router is one block: the parse keeps one path, so a router under a device is
-    # not read twice.
-    assert report.count('router: R1') == 1
-    assert report.count('router: R2') == 1
+    assert ('router R1: interface ethernet1/1 '
+            '(no provider field for an interface outside an area)') in sections['DEVICE GROUP: Router-Group']
+    assert ('router R2: peer 10.2.0.1 (panos_virtual_router - no peer group names it)') in \
+        sections['TEMPLATE: Router-Template']
+    # One entry is one row: the parse keeps one path, so an entry is not named twice.
+    assert report.count('router R1') == 1
+    assert report.count('router R2') == 1
 
 
 def test_device_router_section_names_the_device(tmp_path):
     """A router in a device's own config is printed under the device, not a device group."""
     report = _generate(tmp_path, 'bgp.xml')['MANUAL_SETUP_REPORT.txt']
     assert 'DEVICE (this device placeholder): localhost.localdomain' in report
-    assert report.count('router: default') == 1
+    assert report.count('router default') == 1
     assert 'Vsys: vsys1' in report
 
 
-def test_bgp_section_prints_what_the_parse_captured(tmp_path):
-    """The capture decision is the print decision: peer-group nexthops and redist rules print."""
+def test_protocol_report_prints_only_what_the_file_cannot_hold(tmp_path):
+    """The capture decision is the print decision, for the entries the `.tf` cannot hold (F7.1).
+
+    The report names the entry the shape table states no provider field for, with the fields
+    the table declares for that level, read through the captured object. An entry the emitter
+    printed is not named here, so the report holds no duplicate of the `.tf`.
+    """
     report = _generate(tmp_path, 'bgp.xml')['MANUAL_SETUP_REPORT.txt']
-    assert 'peer_group: PG-Branch (type: external, export-nexthop: self, import-nexthop: self)' in report
-    assert 'redist_rule: redist-static (family: ipv4-unicast, enable: True)' in report
+    assert 'router default: peer 10.55.0.9 (panos_virtual_router - no peer group names it)' in report
+    assert '    enable: True' in report
+    assert '    peer_as: 65003' in report
+    assert '    peer_address: ip=10.55.0.9' in report
+    # The peer inside the peer group and the peer group itself are printed in the `.tf`, so the
+    # report names neither.
+    assert '10.55.0.2' not in report
+    assert 'PG-Branch' not in report
+
+
+def test_protocol_report_is_byte_identical_between_runs(tmp_path):
+    """The rows come from the ledger in report order, so the section cannot drift (F4.2 rule)."""
+    first = _generate(tmp_path, 'bgp.xml')
+    second = _generate(tmp_path / 'again', 'bgp.xml')
+    assert first['MANUAL_SETUP_REPORT.txt'] == second['MANUAL_SETUP_REPORT.txt']

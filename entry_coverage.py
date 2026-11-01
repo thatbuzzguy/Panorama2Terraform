@@ -86,6 +86,39 @@ PROPERTY_HEADING = 'Captured Properties No Output Read'
 MATRIX_BY_RESOURCE = {row['resource']: row for row in resource_mapping.COVERAGE_MATRIX}
 
 
+def protocol_report_rows(ledger: 'EntryLedger') -> list:
+    """The protocol entries the emitter cannot express (F7.1), in report order.
+
+    A peer no peer group names, and an interface at the OSPF level: `PROTOCOL_SHAPE` states no provider
+    field for either, so the parse marks them for the report. The destination comes from the ledger, which
+    is the one record, so no second list names these entries. The row carries the captured object, and the
+    report reads the fields it prints, so the property scan counts those reads as an output use.
+    """
+    rows = []
+    for entry in ledger.entries():
+        mark = ledger.mark_for(entry)
+        container = ledger.parents.get(entry)
+        if not mark or container is None or ledger.destination(entry) != 'report':
+            continue
+        path = container_coverage.section_path(container, ledger.parents, ledger.source)
+        if '/protocol/' not in '/' + path:
+            continue
+        row = ledger.row_for(entry)
+        row['captured'] = mark['captured']
+        # The entry is a property level of a router, so the report names the router it belongs to: the
+        # ancestor entry the router container holds, which is the block the `.tf` writes.
+        node = entry
+        while node is not None:
+            parent = ledger.parents.get(node)
+            if parent is not None and parent.tag.endswith('router'):
+                break
+            node = parent
+        row['router'] = node.get('name') if node is not None else ''
+        row['level'] = path.rsplit('/', 1)[-1]
+        rows.append(row)
+    return sorted(rows, key=lambda row: (row['line'] or 0, row['container'], row['name']))
+
+
 def name_field(resource_type: str) -> str:
     """The field a block of this type carries the entry name in (F6.5 decision 4).
 

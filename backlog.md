@@ -330,9 +330,11 @@ Completed work is not recorded here; the git history and the owner document hold
   name the properties an emitter reads. A finding is an operator action, so it does not
   change the exit code. The console prints the gap lines only.
 - A manual report section prints what the parse captured for it, so a captured field is
-  either printed or reported as unread. The BGP and OSPF sections now name the scope and
-  the router, print the peer-group nexthops and the redist rules, and read the routers
-  through one path.
+  either printed or reported as unread. The routing section prints only the entries the `protocol` object
+  cannot express, read through `entry_coverage.protocol_report_rows`, so the destination comes from the
+  ledger and no second list names these entries. A row names the router, the level and the entry name, then
+  the fields in the order the ledger's row declares, so the report reads every field it prints through the
+  captured object and the property scan counts that read as an output use.
 - The conversion report reads a scope name from the scope `<entry>`, not from the container
   element, so a run inside a declared scope prints its device-group, template, and device
   sections instead of a blank scope.
@@ -385,8 +387,15 @@ Completed work is not recorded here; the git history and the owner document hold
   absent, so a snapshot would be a second copy of the same fact and could drift from the pinned
   provider version.
 - BGP and OSPF have neither a resource nor a data source of their own, so read-through cannot cover
-  them. Their data reaches output through the `panos_virtual_router` row once Epic 7 lands, and until
-  then the two container rows stay `report`.
+  them. Their data reaches output as the `protocol` object inside the `panos_virtual_router` block, so the
+  property scan measures the routing levels through that row (`PROTOCOL_SHAPE`), and a level the table does
+  not state is not read.
+- Routing levels `PROTOCOL_SHAPE` does not state are not read, so they reach no output and no report row:
+  `ospfv3`, `rip`, the BGP `policy`, the timer levels, and the filter containers (route maps, prefix lists,
+  community lists, access lists). The `auth_profile` rows exist for the `sensitive` decision only, because
+  no parse method reads an auth profile entry, so a run prints no value for one. A level becomes printable
+  when a parse method reads it and the table has a row for it, because the emitter, the gate and the report
+  all read that table. Epic 7 keeps the list.
 - Read-through is opt-in per declared scope (F5.5). A plain string already applies, because
   Panorama resolves an object name through its own inheritance at commit time, and one `data` block
   is one plan-time API call. A `data` block for a name that does not exist fails at plan, not at
@@ -430,10 +439,12 @@ Completed work is not recorded here; the git history and the owner document hold
   from the source. The tool names the variable; the operator or the platform supplies the value. The
   placeholder check should read the same table that names the sensitive fields, so one table decides
   both the shape and the report line.
-- Open: the site record row states a variable with its value, so a reference to a value the run does
-  not have needs a decision — a row that names a variable with no value, or a separate record. The
-  `variables` gate rule is the other half of the rule: it refuses a declaration with no consumer, so a
-  declaration whose only consumer is a reference to an outside value is read through the same rule.
+- Decided 2026-10-31 (F7.1): a reference-only name records no value, so the site row skips it
+  (`site_data.build_rows` filters the names with no value) and the run writes no `.tfvars` line for it.
+  The declaration is written by the generator with `sensitive = true` and no value, so the operator
+  supplies the value in `terraform.tfvars`, which the tool never writes. The `variables` gate rule is the
+  other half of the rule: it refuses a declaration with no consumer, so a declaration whose only consumer
+  is a reference to an outside value is read through the same rule.
 
 ## Design Decisions (provider facts, re-measured 2026-10-31)
 
@@ -444,9 +455,11 @@ These are the facts a provider discussion contradicts:
   does not cover. The report path is the only output for an uncovered entry.
 - `panos_virtual_router.protocol` is an object attribute, not a block: `terraform validate` refuses
   `protocol { ... }`. It carries `bgp`, `ospf`, `ospfv3`, `rip` and the two redistribution profile
-  lists, and `protocol.bgp` carries `peer_group`, which carries the `peer` list. This is the fact Epic 7
-  builds on, so the BGP and OSPF wording in `README.md`, `docs/README.md` and
-  `resource_mapping.REPORT_ONLY_TYPES` changes when F7.1 lands.
+  lists, and `protocol.bgp` carries `peer_group`, which carries the `peer` list.
+  `resource_mapping.PROTOCOL_SHAPE` is the table that states the levels the tool prints, and
+  `tests/test_protocol_object.py` pins it against this schema. The provider requires exactly one of
+  `advertise` or `suppress` on a `range` element, and a `one_of` level can state exactly one key, so those
+  two facts are gate findings rather than something `terraform validate` reports.
 - `panos_template_variable.location` declares `template` and `template_stack` only, and neither
   sub-block has a device field, so a per-device override is not expressible.
 - The provider argument is `hostname`, not `host`. `location.shared` is a sub-block, so the emitted

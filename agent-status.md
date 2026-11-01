@@ -2,30 +2,30 @@
 
 ## Current position
 
-F6.7 (the commit action per unit) is complete and committed: `commit_actions.py` writes one
-`panos_commit` action block per unit as `actions.tf`, and the gate rule `actions` reads those blocks
-against `ACTION_SCHEMA` through the one block reader. The rules are in `docs/CODEBASE_ASSEMBLY.md` §10,
-the tests are in `tests/test_commit_actions.py`. The push half stays open in `backlog.md`.
+F7.1 (the `protocol` object as output on `panos_virtual_router`) is complete and committed. The BGP and
+OSPF container rows moved from `report` to `emitted`, so a routing entry prints inside the router block as
+the `protocol` object. `resource_mapping.PROTOCOL_SHAPE` is the table that states the shape,
+`panorama_to_terraform.generate_virtual_routers` prints it, `sanity_checks.check_protocol_object` checks a
+printed object against it, and the manual report names the entries the object cannot express. The rules are
+in `docs/ARCHITECTURE.md` §4.9, the tests are in `tests/test_protocol_object.py` (17), and the suite is 1215
+tests.
 
 Facts measured while the work landed, and the rules that follow from them:
 
-- An action keeps its fields inside `config`: `terraform validate` refuses a field at the action's own
-  level. So the one field reader takes the sub-block it reads as an argument, and no second reader
-  appears.
-- The fact a filter names is answered by `SCOPE_ANSWER`, not resolved against a declared block, because
-  an API scope run writes no block for the scope it read.
-- The action's local name carries the digest of the identity as the block states it, so the gate reads a
-  block back on its own and the address answers the names inside it. That digest is not the unit's
-  directory digest.
-- Emission is default, not a flag, so the goldens pin what a default run emits; `actions.tf` is the last
-  `.tf` file `main()` writes.
+- `terraform validate` accepts `protocol = { ... }` and refuses `protocol { ... }`, so the field reader is
+  the one place that states the difference, and the gate rule reports a `protocol` it cannot read as a field.
+- `terraform validate` accepts any number of keys on a `one_of` level, so the gate is the rule that keeps it
+  to the one key the provider can read.
+- A provider block that declares no attributes prints for its presence, so `block` is a shape word and its
+  value is the empty object.
+- A provider `sensitive` field cannot reach a generated file as a literal, so the shape is
+  `reference_only`: the block prints the variable reference and the run holds no value for it.
+- A `range` element must state exactly one of `advertise` or `suppress`, because the provider requires one.
+- Goldens pin `.tf` bytes only, so the routing section of `MANUAL_SETUP_REPORT.txt` is not a pin, and the
+  gate reports no finding on the committed goldens.
 
-Decisions taken on 2026-10-31 that the work confirms: the Terraform minimum is 1.14 and both committed
-goldens declare it; a value the parse cannot carry prints as the variable reference; the write path
-forces LF.
-
-The next feature is F7.1 (the protocol object as output, Epic 7). Its pieces are in `to-do.md`, and its
-acceptance criteria go in `acceptance.md` before code or tests.
+The next feature is not chosen. The open pieces are in `to-do.md`, and the rules they must keep are in the
+watch list below.
 
 ## Rules to keep when writing documents
 
@@ -50,9 +50,9 @@ acceptance criteria go in `acceptance.md` before code or tests.
   object and the site, and write no directory. The write path is the step that turns a
   `directory` field into a real directory, and `scope.tf`, `imports.tf` and `site.auto.tfvars`
   are one file for the run until it lands.
-- The block reader in `sanity_checks.py` serves every kind, so the F7.1 rule for an object attribute
-  must use `blocks(files, kinds)` and the same field reader, given the sub-block it reads; no second
-  block reader should appear.
+- The block reader in `sanity_checks.py` serves every kind, and the same field reader serves the
+  fields inside a container value and the elements of a list value, so a new block shape uses them
+  rather than writing a second reader.
 - The gate reads `.tf` files only, so no data file is a gate input today. `scope.tf`, `imports.tf` and
   `actions.tf` are `.tf` files and are gate inputs. If a codebase feature makes a data file a
   gate input, the file set statement in `ARCHITECTURE.md` §4.5, the `.tfvars` statement in §4.5,
@@ -63,6 +63,13 @@ acceptance criteria go in `acceptance.md` before code or tests.
   same reader, which takes the sub-block it reads as an argument (the action rule reads inside
   `config`). The same reader also tells a quoted value from a `var.` reference, so no second
   rule decides the shape of a field.
+- `PROTOCOL_SHAPE` is the one table for the protocol object, and a level it does not state is not read.
+  A new routing level needs a table row before an emitter, a gate rule or a report can read it, and
+  `WORD_TO_SCHEMA` is the pin between a table word and the schema word. A parse method states a path and
+  never spells a field name: `_protocol_xml_name` and `_protocol_field_name` are the two rules.
+- A container row that moves from `report` to `emitted` changes the property scan scope, the per-entry
+  report, and the `.tf` goldens together, so it cannot be a print-only change. A moved row must be
+  `emitted` with the provider type in its note, because the matrix row and the report both read the note.
 - `SCOPE_PLACEMENT` and the location sub-block are one fact: a new scope type needs both the
   placement key and the `SCOPE_ANSWER` entry, and the emitter reads the placement key as the
   location, so a new row cannot place itself in a scope it does not name.
@@ -90,10 +97,4 @@ acceptance criteria go in `acceptance.md` before code or tests.
   the pipeline in process.
 - A cycle test needs the referrer entry and the declaring entry in the same unit, for the reason
   recorded in the git history for F6.3.
-- An object attribute (`protocol`) is a field whose value is an object, not a block, so the gate rule
-  for it is a new shape of the one block reader. No second reader should appear for F7.1.
-- The sensitive field rule needs one table that the emitter, the gate and the report all read, so the
-  placeholder check and `tests/test_robustness.py` state the same fact once.
-- A container row that moves from `report` to `emitted` changes the property scan scope, the per-entry
-  report, and the `.tf` goldens together, so it cannot be a print-only change.
 - The LF rule is a byte rule, so the goldens and the no-change tests change with the write path.

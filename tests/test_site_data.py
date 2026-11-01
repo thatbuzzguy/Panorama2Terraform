@@ -3,8 +3,8 @@
 Seven groups, one per rule in `site_data.py`, `resource_mapping.VALUE_VARIABLES`, and
 `docs/CODEBASE_ASSEMBLY.md` §9:
 
-1. The pinned table: one row per location field `LOCATION_SCHEMA` declares, and only the device
-   field maps to a variable.
+1. The pinned table: one row per location field `LOCATION_SCHEMA` declares, plus one row per
+   reference-only name (F7.1), and only the device field maps to a variable.
 2. The site row: the declared shape, the identity order, the join to the manifest on `directory`,
    and the refusals `parse_rows` states.
 3. The `.tfvars` writer: the bytes for a string and for a list, the sort, the dedupe, and the
@@ -90,36 +90,60 @@ def _tfvars_lines(out_dir: Path) -> list:
 
 # --- 1. the pinned table ------------------------------------------------------
 
+# The names the provider schema marks `sensitive` inside the protocol object (F7.1).
+# tests/test_protocol_object.py pins this against the live provider schema.
+REFERENCE_ONLY_NAMES = {'secret', 'key', 'password'}
+
+
 def test_the_table_covers_every_field_the_location_can_state():
-    """The table is complete: one row per field `LOCATION_SCHEMA` declares, so a field cannot gain a
-    row without the test naming it.
+    """The table is complete: one row per field `LOCATION_SCHEMA` declares, plus one row per
+    reference-only name (F7.1), so a field cannot gain a row without the test naming it.
     """
     fields = {field for scopes in resource_mapping.LOCATION_SCHEMA.values()
               for sub_block in scopes.values() for field in sub_block}
-    assert set(resource_mapping.VALUE_VARIABLES) == fields, fields
+    assert set(resource_mapping.VALUE_VARIABLES) == fields | REFERENCE_ONLY_NAMES, fields
 
 
 def test_only_the_device_field_maps_to_a_variable():
     """The table states what the block prints for each field, and only `ngfw_device` prints as a
-    variable (§9 rule 1).
+    variable (§9 rule 1). A reference-only name is the other case: the block prints the reference to a
+    variable the run declares, and the value itself is never in the table (F7.1).
     """
-    variable, literal = resource_mapping.VARIABLE, resource_mapping.LITERAL
+    variable, literal, reference = (
+        resource_mapping.VARIABLE, resource_mapping.LITERAL, resource_mapping.REFERENCE_ONLY)
     assert {
         'ngfw_device': variable,
         'name': literal,
         'vsys': literal,
         'panorama_device': literal,
         'rulebase': literal,
+        'secret': reference,
+        'key': reference,
+        'password': reference,
     } == resource_mapping.VALUE_VARIABLES
+
+
+def test_the_generator_prints_a_value_through_the_table(converter_module):
+    """One shape rule: `location_field` delegates to `printed_value`, so a printed value's shape
+    cannot be decided in two places (F7.1).
+    """
+    source = inspect.getsource(converter_module.TerraformGenerator.location_field)
+    assert 'self.printed_value(' in source, source
+    assert 'VALUE_VARIABLES' not in source, source
 
 
 def test_the_table_holds_no_property():
     """A property at the block's own level is the entry's content, not a site value, so the table
-    holds location fields only (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2). `panos_template_variable` prints its value as
+    holds location fields and the reference-only names only (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2).
+    A reference-only name is not a property either: the block prints the reference to a variable, and
+    no `.tf` holds the value (F7.1). `panos_template_variable` prints its value as
     the export states it, and no variable is declared for it.
     """
-    assert all(field in {'name', 'ngfw_device', 'panorama_device', 'rulebase', 'vsys'}
-               for field in resource_mapping.VALUE_VARIABLES), resource_mapping.VALUE_VARIABLES
+    allowed = {'name', 'ngfw_device', 'panorama_device', 'rulebase', 'vsys'} | REFERENCE_ONLY_NAMES
+    assert all(field in allowed for field in resource_mapping.VALUE_VARIABLES), resource_mapping.VALUE_VARIABLES
+    assert not REFERENCE_ONLY_NAMES & {prop for row in resource_mapping.COVERAGE_MATRIX
+                                       for prop in row['properties']}, \
+        'a reference-only name is printed as a reference, not as a property'
     scope = (GOLDEN_DIR / 'kitchen_sink' / 'scope.tf').read_text(encoding='utf-8')
     assert 'panos_template_variable' in scope, 'the kitchen-sink case declares a template variable'
     assert 'var.' not in scope, scope

@@ -25,6 +25,7 @@ that document instead of restating the rule.
 | Per-scope source shape, the envelope rule, the scope path shape | `ARCHITECTURE.md` §3.1, and `container_coverage.py` |
 | Cross-source shadow scan (the fact, the line shape, the heading) | `ARCHITECTURE.md` §3.2, and `shadow_coverage.py` |
 | Emit order, location, reference resolution, policy chains, reports, gate | `ARCHITECTURE.md` §4 |
+| The protocol object shape, the one-of mapping, and what prints | `ARCHITECTURE.md` §4.9, and `resource_mapping.PROTOCOL_SHAPE` |
 | Local resource naming | `ARCHITECTURE.md` §5 |
 | Determinism | `ARCHITECTURE.md` §6 |
 | Provider type per object kind | `RESOURCE_MAPPING.md`, and `resource_mapping.py` |
