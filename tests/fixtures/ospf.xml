@@ -13,8 +13,12 @@
                     <router-id>10.0.0.1</router-id>
                     <area>
                       <entry name="0.0.0.0">
+                        <!-- F7.2: the fields of the chosen body live inside the chosen element, so this flag
+                             prints inside the `stub` body -->
                         <type>
-                          <stub/>
+                          <stub>
+                            <accept-summary>yes</accept-summary>
+                          </stub>
                         </type>
                         <range>
                           <entry name="10.0.0.0/8">

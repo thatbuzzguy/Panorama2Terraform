@@ -89,8 +89,9 @@ def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
     """Every row, field, shape word, `selects` key, and `sensitive` flag is a fact the provider declares.
 
     The table states the levels this converter prints, so it is a subset of the schema: `protocol` also
-    declares `ospfv3`, `rip`, and the two redist profile lists, which the converter does not print and the
-    gate does not check.
+    declares `rip` and the two redist profile lists, which the converter does not print and the gate does not
+    check. A row states only the fields the parse method that reaches the level reads, so the `ospfv3` timer,
+    BFD, graceful-restart, export-rule and auth-profile levels are outside the table (`backlog.md`).
     """
     for path, row in sorted(resource_mapping.PROTOCOL_SHAPE.items()):
         node = _schema_node(provider_schema, path)
@@ -152,8 +153,9 @@ def test_the_table_is_the_only_shape_owner(converter_module):
     parser = converter_module.PanoramaParser
     owners += [getattr(generator, name) for name in ('generate_virtual_routers', '_protocol_fields', 'printed_value')]
     owners += [getattr(parser, name) for name in
-               ('parse_bgp', 'parse_ospf', '_protocol_level', '_protocol_field', '_protocol_choice',
-                '_protocol_interface', '_protocol_field_name', '_protocol_xml_name')]
+               ('parse_bgp', 'parse_ospf', 'parse_ospfv3', '_protocol_areas', '_protocol_level',
+                '_protocol_field', '_protocol_choice', '_protocol_interface', '_protocol_field_name',
+                '_protocol_xml_name')]
     offenders = {}
     for owner in owners:
         for node in ast.walk(ast.parse(textwrap.dedent(inspect.getsource(owner)))):
@@ -191,6 +193,12 @@ def test_the_one_of_mapping_is_the_decision_the_report_prints():
     assert resource_mapping.protocol_row('protocol/ospf/area/type')['selects'] == {
         'normal': 'normal', 'nssa': 'nssa', 'stub': 'stub'}
     assert resource_mapping.protocol_row('protocol/ospf/area/interface/link_type')['selects'] == {
+        'point-to-point': 'p2p', 'broadcast': 'broadcast', 'p2mp': 'p2mp'}
+    # F7.2: the `ospfv3` choice levels state the same values, because the export spells the provider key there
+    # too. The two rows are the same shape read by two parse methods, so one value maps to one key in both.
+    assert resource_mapping.protocol_row('protocol/ospfv3/area/type')['selects'] == {
+        'normal': 'normal', 'nssa': 'nssa', 'stub': 'stub'}
+    assert resource_mapping.protocol_row('protocol/ospfv3/area/interface/link_type')['selects'] == {
         'point-to-point': 'p2p', 'broadcast': 'broadcast', 'p2mp': 'p2mp'}
     # A nexthop belongs to the chosen sub-shape, and two of them exist only under `ebgp`.
     assert resource_mapping.protocol_row('protocol/bgp/peer_group/type/ebgp')['fields'] == {
@@ -278,6 +286,41 @@ def test_an_ospf_interface_inside_an_area_prints_inside_the_area(tmp_path):
     assert 'ethernet1/3' not in block and '10.60.0.0/16' not in block, block
 
 
+def test_an_ospfv3_area_prints_the_shape_the_table_states(tmp_path):
+    """The `ospfv3` subtree prints as the rows `PROTOCOL_SHAPE` states for it (F7.2).
+
+    Field order is the table order, a `one_of` level states the one key its mapping selects, and a `block`
+    field prints `{}` because the export states it by presence.
+    """
+    expected = ('  protocol = {\n    ospfv3 = {\n      enable = true\n      router_id = "10.0.0.1"\n'
+                '      area = [\n        {\n          name = "0.0.0.0"\n          type = {\n'
+                '            nssa = {\n              accept_summary = true\n            }\n          }\n'
+                '          range = [\n            {\n              name = "10.0.0.0/8"\n'
+                '              suppress = {}\n            }\n          ]\n          interface = [\n'
+                '            {\n              name = "ethernet1/2"\n              enable = true\n'
+                '              passive = false\n              metric = 10\n              link_type = {\n'
+                '                p2p = {}\n              }\n            }\n          ]\n        }\n      ]\n'
+                '    }\n  }\n')
+    block = _run('ospfv3.xml', tmp_path)['virtual_routers.tf']
+    assert expected in block, block
+    # The gate reads the same table, so the block the run wrote reports no finding.
+    findings = _findings(expected)
+    assert findings == [], findings
+
+
+def test_a_choice_body_prints_the_fields_it_declares(tmp_path):
+    """The fields of a `one_of` body live inside the chosen element, so the parse reads them there (F7.2).
+
+    The export puts the flag's fields inside the chosen element, not inside `type`. The rule is one rule for
+    both routing levels, so the same test pins the `ospf` area and the `ospfv3` area.
+    """
+    body = 'type = {\n            stub = {\n              accept_summary = true\n            }\n          }'
+    ospf = _run('ospf.xml', tmp_path / 'ospf')['virtual_routers.tf']
+    ospfv3 = _run('ospfv3.xml', tmp_path / 'ospfv3')['virtual_routers.tf']
+    assert body in ospf, ospf
+    assert body.replace('stub', 'nssa') in ospfv3, ospfv3
+
+
 def test_an_unmapped_one_of_value_prints_nothing_and_is_reported(make_parser):
     """The mapping is the one lookup, and the entry it cannot state is the entry the report names.
 
@@ -304,6 +347,17 @@ def test_an_ospf_interface_at_the_router_level_is_reported(make_parser):
     outside = [row for row in rows if row['name'] == 'ethernet1/1']
     assert len(outside) == 1, rows
     # The mark states no detail, because the container row's note is the reason.
+    assert outside[0]['detail'] == 'no provider field for an interface outside an area', outside[0]
+    assert outside[0]['level'] == 'interface', outside[0]
+
+
+def test_an_ospfv3_interface_at_the_level_is_reported(make_parser):
+    """The same rule serves both routing levels: the container row's note is the reason (F7.2)."""
+    parser = make_parser('ospfv3.xml')
+    parser.parse_virtual_routers()
+    rows = entry_coverage.protocol_report_rows(parser.ledger)
+    outside = [row for row in rows if row['name'] == 'ethernet1/1']
+    assert len(outside) == 1, rows
     assert outside[0]['detail'] == 'no provider field for an interface outside an area', outside[0]
     assert outside[0]['level'] == 'interface', outside[0]
 

@@ -1174,8 +1174,9 @@ VALUE_VARIABLES = {
     'password': REFERENCE_ONLY,
 }
 
-# F7.1: the shape of the `protocol` object attribute on `panos_virtual_router`, written from the live
-# provider schema measured 2026-10-31 (`tests/test_protocol_object.py` pins every row against it). One
+# F7.1, F7.2: the shape of the `protocol` object attribute on `panos_virtual_router`, written from the live
+# provider schema measured 2026-10-31, and the `ospfv3` levels measured 2026-11-01
+# (`tests/test_protocol_object.py` pins every row against it). One
 # row per level the converter prints, plus the `sensitive` decision rows the emitter uses when a parse
 # method reaches the field. The emitter prints from this table, the gate rule `protocol_object` reads
 # this table, and no second table states a shape: `sanity_checks.value_shape` is the reader's own inverse
@@ -1198,7 +1199,7 @@ PROTOCOL_FIELD = 'protocol'
 PROTOCOL_SHAPE: dict[str, dict] = {
     'protocol': {
         'shape': 'object',
-        'fields': {'bgp': 'object', 'ospf': 'object'},
+        'fields': {'bgp': 'object', 'ospf': 'object', 'ospfv3': 'object'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1372,6 +1373,86 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'fields': {'name': 'string', 'key': 'string'},
         'selects': {},
         'sensitive': frozenset({'key'}),
+    },
+    # F7.2: the `ospfv3` levels `parse_ospfv3` reads, measured 2026-11-01 against the pinned provider. The
+    # area subtree states the same shape the `ospf` rows state, field for field, because the provider
+    # declares the same fields for both levels; the rows stay separate because the levels are separate. A
+    # level the parse does not read has no row, so the gate refuses it: the `ospfv3` timer, BFD,
+    # graceful-restart, export-rule and auth-profile levels, `area/virtual_link`,
+    # `area/interface/neighbor`, and `area/type/default_route` are in `backlog.md`.
+    'protocol/ospfv3': {
+        'shape': 'object',
+        'fields': {'enable': 'bool', 'router_id': 'string', 'area': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'type': 'one_of', 'range': 'string_list',
+                   'interface': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/type': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'normal': 'normal', 'nssa': 'nssa', 'stub': 'stub'},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/type/normal': {
+        'shape': 'object',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/type/nssa': {
+        'shape': 'object',
+        'fields': {'accept_summary': 'bool'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/type/stub': {
+        'shape': 'object',
+        'fields': {'accept_summary': 'bool'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/range': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'advertise': 'block', 'suppress': 'block'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/interface': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'enable': 'bool', 'passive': 'bool',
+                   'metric': 'number', 'link_type': 'one_of'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/interface/link_type': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'point-to-point': 'p2p', 'broadcast': 'broadcast', 'p2mp': 'p2mp'},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/interface/link_type/p2p': {
+        'shape': 'object',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/interface/link_type/broadcast': {
+        'shape': 'object',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/interface/link_type/p2mp': {
+        'shape': 'object',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
     },
 }
 

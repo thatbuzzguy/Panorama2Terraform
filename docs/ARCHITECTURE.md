@@ -1130,7 +1130,10 @@ byte equality between two runs, and the golden no-change rule. The provider exam
 that states its shape: one row per level this converter prints, with the nesting mode or the leaf shape, the
 fields the level declares, the value that selects a `one_of` key, and the `sensitive` flag. The emitter
 (`TerraformGenerator._protocol_fields`), the gate rule (§4.6) and the test read that table, so no second
-table names a shape.
+table names a shape. A level is printable only when a parse method reads it and the table has a row for it:
+`parse_bgp`, `parse_ospf` and `parse_ospfv3` read the levels, and `_protocol_areas` is the area rule the two
+OSPF levels share. A level the table states no row for is read by no method, so it prints nothing and the gate
+refuses it in a hand-written file.
 
 1. **`protocol` prints as one field of the block**: `protocol = { ... }`. `terraform validate` accepts the
    value and refuses the block shape, so the gate rule reports a `protocol` the field reader cannot read as
@@ -1149,16 +1152,22 @@ table names a shape.
    entry for the report with that reason and does not put it in the printed list, so the report names the
    whole entry and the file holds no half of it (§3.2). The same rule covers a peer no peer group names, an
    interface outside an area, a link type the mapping does not state, and a `range` entry that states neither
-   choice.
-5. **A choice level states one key.** `peer_group.type` maps the four export values to the four provider
-   sub-shapes; `area.type` and `area.interface.link_type` are the identity, because the export states the
-   provider key. `import_nexthop` and `remove_private_as` exist only under `ebgp`, so each sub-shape row
-   states its own fields. Pinned by
-   `tests/test_protocol_object.py::test_the_one_of_mapping_is_the_decision_the_report_prints`.
-6. **Membership is the parent entry.** A peer prints inside the peer-group element that holds it, and an OSPF
-   interface prints inside the area element that holds it, because the table states no peer outside a peer
-   group and no interface outside an area. A peer group name is not a field the block prints, because the
-   entry it names is the parent.
+   choice, for either OSPF level, because `_protocol_areas` is one reader. Pinned by
+   `tests/test_protocol_object.py::test_an_unmapped_one_of_value_prints_nothing_and_is_reported` and
+   `tests/test_protocol_object.py::test_an_ospfv3_interface_at_the_level_is_reported`.
+5. **A choice level states one key, and one element holds its body.** `peer_group.type` maps the four export
+   values to the four provider sub-shapes; `area.type` and `area.interface.link_type` are the identity for the
+   `ospf` and the `ospfv3` level, because the export states the provider key. `import_nexthop` and
+   `remove_private_as` exist only under `ebgp`, so each sub-shape row states its own fields. The fields of a
+   chosen body live inside the element the export puts them in: the chosen flag element for an area type, and
+   the entry's own level for a BGP peer group, which is the holder `_protocol_choice` reads. Pinned by
+   `tests/test_protocol_object.py::test_the_one_of_mapping_is_the_decision_the_report_prints` and
+   `tests/test_protocol_object.py::test_a_choice_body_prints_the_fields_it_declares`.
+6. **Membership is the parent entry.** A peer prints inside the peer-group element that holds it, and an
+   interface prints inside the area element that holds it, for either OSPF level, because the table states no
+   peer outside a peer group and no interface outside an area. A peer group name is not a field the block
+   prints, because the entry it names is the parent. Pinned by
+   `tests/test_protocol_object.py::test_an_ospfv3_area_prints_the_shape_the_table_states`.
 7. **An OSPF `range` element must state exactly one of `advertise` or `suppress`**, so the row declares both
    as `block` fields and an element that states neither is a report row.
 8. **A sensitive field prints as the variable reference**, through `VALUE_VARIABLES`

@@ -390,9 +390,11 @@ Completed work is not recorded here; the git history and the owner document hold
   them. Their data reaches output as the `protocol` object inside the `panos_virtual_router` block, so the
   property scan measures the routing levels through that row (`PROTOCOL_SHAPE`), and a level the table does
   not state is not read.
-- Routing levels `PROTOCOL_SHAPE` does not state are not read, so they reach no output and no report row:
-  `ospfv3`, `rip`, the BGP `policy`, the timer levels, and the filter containers (route maps, prefix lists,
-  community lists, access lists). The `auth_profile` rows exist for the `sensitive` decision only, because
+- Routing levels `PROTOCOL_SHAPE` does not state are not read, so they reach no output and no report row: the
+  `ospfv3` timer, BFD, graceful-restart, export-rule and auth-profile levels, `area/virtual_link`,
+  `area/interface/neighbor`, `area/type/default_route` and `area/type/nssa_ext_range`, `rip`, the BGP `policy`,
+  and the filter containers (route maps, prefix lists, community lists, access lists). The `auth_profile` rows
+  exist for the `sensitive` decision only, because
   no parse method reads an auth profile entry, so a run prints no value for one. A level becomes printable
   when a parse method reads it and the table has a row for it, because the emitter, the gate and the report
   all read that table. Epic 7 keeps the list.

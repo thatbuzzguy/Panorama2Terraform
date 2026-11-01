@@ -2,33 +2,36 @@
 
 ## Current position
 
-F6.8 (the gate rule that reads the data files) is complete and committed. `sanity_checks.check_data_files`
-is the sixth gate rule for a file set: it reads the four data files, each row shape through the module that
-owns it, and reports a data file that does not read as its declared rows, a field `naming.py` decides stated
-as a row, a join that names no unit or no row, an order that is not what `reference_edges.order` produces,
-and a printed form that is not `site_data.render_tfvars` of the rows. The tests are
-`tests/test_data_file_gate.py` (21), one negative test per finding, plus the rewritten file-set tests in
-`tests/test_unit_manifest.py`, `tests/test_ownership.py`, `tests/test_reference_edges.py`,
-`tests/test_site_data.py`, `tests/test_provenance.py` and the new negative test in
-`tests/test_sanity_gate.py`. The suite is 1238 tests.
+F7.2 (the `ospfv3` level of the protocol object) is complete and committed. `PanoramaParser.parse_ospfv3`
+reads the level and its area subtree, `_protocol_areas` is the area rule it shares with `parse_ospf`,
+`resource_mapping.PROTOCOL_SHAPE` states a row for each level the method reads, and the emitter, the gate rule
+`protocol_object` and the report read that table. The pins are
+`tests/test_protocol_object.py` (the table against the live schema, the printed shape for
+`tests/fixtures/ospfv3.xml`, the mapping for the two choice levels, the choice-body rule, and the interface the
+file cannot express) and `tests/test_parse_network.py::test_parse_ospfv3`. The suite is 1244 tests.
+
+The next feature is not chosen. The open pieces are in `to-do.md`, and the rules they must keep are in the
+watch list below.
 
 Facts measured while the work landed, and the rules that follow from them:
 
-- The gate reads `.tf` files for the block rules and the four data files for the data rule, so the report
-  names both counts: `Files checked: N .tf files, M data files.` The console line names both, then the
-  resource count.
-- `site.auto.tfvars` is the printed form of the site record, so the data rule compares it with
-  `render_tfvars` and does not count it as a data file. `SOURCE.txt` names paths and is read by no rule.
-- The position of a data finding is the row ordinal in the declared order, because a data row spans many
-  lines; a whole-file finding states no row, and `Finding.render` prints `file  detail` for it.
-- Bug fix: `reference_edges.dependencies` now guards the inheritance rule with the node set, so `after`
-  names only manifest units. Before the guard, an override row whose owner is a parent-source unit put a
-  directory the manifest does not name into `after`, and the rule could not read the order back.
-- `parse_rows` re-sorts the rows in the declared identity order, so the row ordinal is that order, not the
-  file order.
-- The rule reports a refusal as a finding, because a data file a person hand-wrote is an input; the gate
-  cannot assume the writer used the module. A data file that reads as no rows is a finding, because the
-  content rule writes the file only when it has content.
+- The provider declares the same fields for the `ospf` and the `ospfv3` area subtrees, so one area reader
+  (`_protocol_areas`) serves both, and the table keeps one row per level. A row states only the fields the
+  method that reaches that level reads.
+- The fields of a `one_of` body live inside the chosen flag element, not inside `type`. Before the fix the
+  parse read them from the wrong element, so a flag field printed nothing: measured `type = { nssa = {} }` for
+  an area whose export stated `accept-summary` inside `nssa`. Both fixtures state one, and
+  `tests/test_protocol_object.py::test_a_choice_body_prints_the_fields_it_declares` pins the print.
+- `protocol/ospfv3/area/name` is a `string`, the way the `ospf` area name is, so the entry name prints as the
+  name field and not as a list.
+- A property-level entry is counted on the parent row, so an entry inside an area entry is not measured by the
+  property scan, and a `range` entry is a nested block row, so the scan reads nothing for it. The area entry
+  itself is measured through the router row.
+- The parse method that takes the router element is named in the test helpers that call it for each router:
+  `tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py`. A new level method
+  must be added there, or the corpus checks run no method for it.
+- A container row path is read from the method's own string constants plus the constants of the helpers it
+  calls, so a helper that takes the level path as an argument keeps the pin true.
 
 The next feature is not chosen. The open pieces are in `to-do.md`, and the rules they must keep are in the
 watch list below.
@@ -76,6 +79,8 @@ watch list below.
   A new routing level needs a table row before an emitter, a gate rule or a report can read it, and
   `WORD_TO_SCHEMA` is the pin between a table word and the schema word. A parse method states a path and
   never spells a field name: `_protocol_xml_name` and `_protocol_field_name` are the two rules.
+  `_protocol_areas` is the area rule the two OSPF levels share, and `_protocol_choice` takes the element that
+  holds the chosen body: the flag element for an area type, the entry's own level for a BGP peer group.
 - A container row that moves from `report` to `emitted` changes the property scan scope, the per-entry
   report, and the `.tf` goldens together, so it cannot be a print-only change. A moved row must be
   `emitted` with the provider type in its note, because the matrix row and the report both read the note.
