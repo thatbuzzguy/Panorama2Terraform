@@ -1,179 +1,104 @@
-# Acceptance criteria — F7.1: the protocol object as output
+# Acceptance criteria — F6.8: the gate rule that reads the data files
 
-Feature record: `PLAN.md` Epic 7. The emitter is `TerraformGenerator.generate_virtual_routers`, the
-parse methods are `parse_bgp` and `parse_ospf`, the shape table is `resource_mapping.PROTOCOL_SHAPE`,
-and the gate rule is `sanity_checks.check_protocol_object`. The tests are
-`tests/test_protocol_object.py`, with the pinned sets in `tests/test_container_coverage.py`,
-`tests/test_property_coverage.py`, `tests/test_coverage_matrix.py`, `tests/test_reports.py` and
-`tests/test_parse_network.py`.
-
-Facts measured 2026-10-31 against provider 2.0.14 (`terraform providers schema -json`, saved at
-`/tmp/opencode/panos_schema/schema.json`): `panos_virtual_router.protocol` is an object attribute with
-`nesting_mode` single; `bgp` and `ospf` are single; `peer_group`, `peer`, `redist_rules`, `area`,
-`range`, `interface`, `auth_profile`, `md5` are lists; `peer_group.type`, `area.type` and
-`area.interface.link_type` are single one-of objects; `ospf.auth_profile.md5.key`,
-`ospf.auth_profile.password` and `bgp.auth_profile.secret` are `sensitive`; `metric` is a number.
-`ospf.area.type.normal` has no attributes, so a one-of key can state nothing. `terraform validate`
-accepts `protocol = { ... }` and refuses `protocol { ... }`. The provider requires exactly one of
-`advertise` or `suppress` on a `range` element.
+Feature record: `PLAN.md` Epic 6. The rule is `sanity_checks.check_data_files`, the sixth gate rule
+for a file set. The four data files are `CODEBASE_MANIFEST.json` (F6.1), `OWNERSHIP.json` (F6.2),
+`REFERENCE_EDGES.json` (F6.3), and `SITE_DATA.json` (F6.6); the rule also reads `site.auto.tfvars`
+as the printed form of the site record. The tests are `tests/test_data_file_gate.py`, the four
+rewritten file-set tests in `tests/test_unit_manifest.py`, `tests/test_ownership.py`,
+`tests/test_reference_edges.py` and `tests/test_site_data.py`, and the new negative test in
+`tests/test_sanity_gate.py`.
 
 ## Decisions
 
-### 1. The print shape: an object value, not a block
+### 1. The gate reads the data files, and the file-set statement changes
 
-- `protocol` prints as one field of the `panos_virtual_router` block: `protocol = { ... }`. A block
-  shape (`protocol { ... }`) is refused by the provider, so the gate rule reports a `protocol` the
-  field reader cannot read as a field.
-- One level of the object is one nesting level of the table row: a `single` level prints as an object,
-  a `list` level prints as one object per element, a `one_of` level prints as the one chosen key.
-- The entry name inside a list element prints as the `name` field, the same rule
-  `entry_coverage.name_field` states for `panos_virtual_router`.
-- Field order is the table order, and `hcl_value` is the only printer, so two runs on the same bytes
-  write the same bytes.
-- A value the parse captured with no value prints nothing. A field the table declares `number` prints
-  as a number when the value is one.
+The gate reads `.tf` files plus the four data files. `site.auto.tfvars` is the printed form of the
+site record, so the rule reads it through the record and does not count it as a data file.
+`SANITY_REPORT.txt` names the data-file count, and the console summary names both sets. The file-set
+statement in `docs/ARCHITECTURE.md` §4.5, the `.tfvars` statement in §4.5, the check table in §4.6,
+and the tests that pinned the file set change together (the `agent-status.md` watch rule).
 
-### 2. One table states the shape of the protocol object
+`CHECK_ORDER` gains `data_files` after `variables`: the block rules, then the run-level text rules,
+then the data rule, then the byte rules. The position is pinned by the rewritten edge test.
 
-`resource_mapping.PROTOCOL_SHAPE` is the one table. One row states the provider path, the nesting mode
-(`single`, `list`, `one_of`) or the leaf shape (`string`, `bool`, `number`), the fields the level
-declares, the report value that selects a `one_of` key, and the `sensitive` flag. `SHAPE_WORDS` is the
-word list the table uses, and `block` is one of the words: a `block` field is a `single` level that
-declares no attributes, so the reader prints `{}` for it when the export states it and prints nothing
-when the export does not. `WORD_TO_SCHEMA` is the one mapping from a table word to the schema word the
-test pins. The emitter reads the table to print, the gate reads it to check, and
-`tests/test_protocol_object.py` pins every row against the live provider schema the way
-`DATA_SOURCE_SCHEMA` is pinned.
+### 2. The rule reads each row through the module that owns the row shape
 
-The table states the provider spelling. `PanoramaParser._protocol_xml_name` is the one rule that turns a
-field into the XML element the export writes, and `PanoramaParser._protocol_field_name` is the one rule
-that turns a provider path into the key the captured dict holds, so `parse_bgp`, `parse_ospf` and
-`_protocol_interface` state a path and never spell a field name. Both are named in
-`tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner`.
+The rule calls `parse_rows` on each data file that is present, so no second shape rule appears. The
+rule reports a refusal as a finding, because the gate reads the files the operator receives: a data
+file a person hand-wrote is an input, and the gate cannot assume the writer used the module. A data
+file that reads as no rows is a finding, because the content rule says the tool writes the file only
+when it has content, so a data file cannot be empty. The rule does not crash on a file that is not
+readable JSON; it reports it.
 
-The table covers the levels this converter prints, plus the `sensitive` decision rows the emitter uses
-when a parse method reaches the field. A level the table does not state is not read by the parser and is
-not checked by the gate. No second table names a shape: `sanity_checks.value_shape` stays the reader's own
-inverse, and it gains the `number` shape.
+### 3. The findings, each a FAIL
 
-### 3. The one-of `type` choice
+The rule states one fact: the data files must agree with the rules that produced them and with each
+other. Six findings:
 
-- `peer_group.type`: `external` → `ebgp`, `internal` → `ibgp`, `external-confederation` →
-  `ebgp_confed`, `internal-confederation` → `ibgp_confed`. A nexthop belongs to the chosen sub-shape,
-  and `import_nexthop` and `remove_private_as` exist only under `ebgp`.
-- `area.type`: `normal`, `nssa`, `stub`. The report value is the sub-shape key.
-- `area.interface.link_type`: `point-to-point` → `p2p`, `broadcast`, `p2mp`.
-- A value the mapping cannot state prints nothing for that field and the report names the entry, so the
-  operator sees the choice the tool could not make. The emitter reads the captured field to look up the
-  mapping, so the property scan still records the read.
-- The report value is the export spelling, so `external` maps to `ebgp` and `point-to-point` maps to
-  `p2p`; `area.type` and `area.interface.link_type` are the identity, because the export states the
-  provider key. `tests/test_protocol_object.py::test_the_one_of_mapping_is_the_decision_the_report_prints`
-  pins both, including the `VPN_ROUTING_CONFIG_EXAMPLES.md` example, which reads `<type>external</type>`.
-- An OSPF `range` element must state exactly one of `advertise` or `suppress`, so the row declares both as
-  `block` fields and an element that states neither is a report entry. The choice detail is built from the
-  row's own choice fields, so no module spells the words.
+1. A data file that does not read as its declared rows, or a data file with no rows.
+2. A row field that `naming.py` decides must be stated as the rule states it: the manifest `unit`
+   and `directory`, and the ownership `directory`, each read through `unit_manifest`.
+3. A join: every `directory` a data file names must name a unit the manifest names, or a row of
+   `OWNERSHIP.json` itself — the declared parent source names no manifest unit (F5.4). An edge row
+   must join on (`type`, `entry`) to an ownership row whose `owner` names the `target`. A row whose
+   `kind` is `ambiguous` states no owner, so a `kind` with no owner cannot name one.
+4. An order: the manifest `rank` and `after` must be what `reference_edges.order` produces from the
+   three records read back, so `after` names only units the manifest names.
+5. A printed form: `site.auto.tfvars` must equal `site_data.render_tfvars` of the site rows, and the
+   two files stand or fall together on the content rule.
+6. The position of a data-file finding is its row ordinal in the declared order, because a data row
+   spans many lines in the file. A file-level finding states no line.
 
-### 4. A peer belongs to the peer group entry that holds it
+### 4. The order graph reads only manifest units (a bug fix the rule forces)
 
-- `parse_bgp` nests the peer inside the peer group entry it read it in, so the record states the
-  membership as the parent, not as a `peer_group` text field. The peer prints inside the peer group
-  element.
-- A peer the export holds in `bgp.peer` with no peer group cannot be expressed: the provider has no
-  peer outside a peer group. The parse marks it `report_only` with the reason, and the manual report
-  names the whole entry, so the file holds no half of it. The same rule covers an out-of-area interface,
-  an unmappable `one_of` value, and a `range` entry with no choice.
-- `parse_bgp` and `parse_ospf` fill the `protocol` part of the router object that `_parse_router`
-  marked, so one entry keeps one mark. `protocol` is a captured field of the router entry, so the
-  matrix row declares it as a property the emitter reads.
+`reference_edges.py` rule 7 states that the order graph reads only the units the manifest names, but
+the inheritance rule in `dependencies` was not guarded, so an override row whose owner is a
+parent-source unit put a directory the manifest does not name into `after`, and the rule could not
+read the order back. Measured: `order` returned `rank` 0 and `after = [parent]` for that row. Fix:
+guard the inheritance rule with the node set, the way the edge rule is guarded. Pinned by
+`tests/test_reference_edges.py::test_a_declared_parent_source_adds_no_dependency`, extended with the
+override row.
 
-### 5. An OSPF interface lives inside the area
+### 5. The reports and the exit code
 
-The provider declares an interface only inside `area`, so an interface inside an area prints inside the
-area element. An interface at the `protocol/ospf` level has no provider field, so its container row
-stays `report` and the manual report prints it.
+No report names the data files or restates a row, so the four "no report names a field" tests are
+unchanged, and the rule reports a violation on the file, not a restated row. The exit code rule is
+unchanged: the F4.1 gate decides it, a data-file FAIL exits 1. A WARN is not a data-file finding.
 
-### 6. A sensitive field prints as the variable reference
+### 6. Truth across the corpus
 
-- `VALUE_VARIABLES` is the one table that decides the shape of a printed field, so it gains the rows for
-  the three provider `sensitive` facts: `secret`, `key` and `password`. The shape is `reference_only`: the
-  block prints `var.<name>`, the run declares the variable with `sensitive = true` and no value, and no
-  generated file states the value.
-- The name is `naming.py` applied to the entry name, because a value cannot name itself. `naming.py`
-  stays the one naming rule. `TerraformGenerator.printed_value` is the one print site that reads it.
-- A reference-only name records no value, so `site_data.py` rule 2 writes no `.tfvars` line for it and the
-  operator supplies the value in `terraform.tfvars`, which the tool never writes. A report row is only an
-  entry the file cannot express, so a sensitive field writes no report line: the variable is the rule that
-  carries it.
-- The completeness test for `VALUE_VARIABLES` covers the leaf fields `PROTOCOL_SHAPE` states, so the
-  table is complete for every field the emitter prints.
-
-### 7. The container rows move, and the gate rule for an object attribute
-
-- `container_coverage.CONTAINER_TABLE`: `protocol/bgp` and `protocol/ospf` move from `report` to
-  `emitted` with the note `panos_virtual_router`. The sub-shape rows for the entries the emitter prints
-  (`peer-group`, `peer`, `redist-rules`, `area`, `area/interface`) move to `emitted` with the same note,
-  because the property scan reads an entry only through an `emitted` row. `protocol/ospf/range` becomes
-  `nested-block` (the element prints inside the area), and `protocol/ospf/interface` stays `report` with
-  the reason.
-- The gate rule `protocol_object` reads the object through the one block reader and the one field
-  reader. `import_blocks.py` gains two shapes of the same reader: the fields inside a container value
-  and the elements of a list value. `CHECK_ORDER` names `protocol_object` after `actions`. Five findings,
-  each a FAIL:
-  1. A `protocol` the field reader can read as a name but not as a field, which is the block shape the
-     provider refuses.
-  2. A level the shape table states no row for, a field the row does not declare, or a value whose shape
-     the reader reads differently from the shape the row states. `one_of` and `block` are read as
-     `object`, because a one-of level is an object that states one key and a `block` field is an object
-     that states nothing but its presence.
-  3. A `one_of` level states no key, or more than one key, or a key the row's mapping does not state, or
-     a field inside a sub-shape the row for that sub-shape does not state.
-  4. A field the table marks `sensitive` states a literal value instead of a `var.` reference.
-  5. An element inside a `list` level states no `name`.
-- The gate still reads no data file: the rule reads the block text, `PROTOCOL_SHAPE`, and `naming.py`.
-
-### 8. The report prints what the emitter cannot express
-
-The manual setup report prints only the rows the ledger marks `report`, read through
-`entry_coverage.protocol_report_rows`, so a router whose whole protocol is expressed writes no report
-line and the section prints only when it has content, following the rule for the report files. A row
-names the router, the level and the entry name, then the fields in the order the ledger's row declares,
-then the Vsys line. Rows are sorted by line, container and name, so two runs print the same lines. The
-pinned details are `no peer group names it`, `no advertise or suppress`, `no provider field for an
-interface outside an area`, and a `link_type` value the shape table does not state.
-`tests/test_reports.py` pins the line shape.
+The rule reports no finding on the files the tool itself writes, for every fixture, because the tool
+writes the data through the same rules the rule reads. The committed goldens are unchanged, the gate
+reports no finding on them, and two runs on the same source write the same bytes and report the same
+findings.
 
 ## Acceptance criteria
 
-1. `tests/test_protocol_object.py` pins the print shape, the one-of mapping, the peer membership, the
-   OSPF interface placement, the sensitive reference, and the gate rule, including
-   `::test_the_shape_table_is_the_measured_provider_shape`, `::test_the_table_is_the_only_shape_owner`,
-   `::test_a_peer_prints_inside_its_peer_group`, `::test_a_one_of_level_prints_one_key`,
-   `::test_an_unmapped_one_of_value_prints_nothing_and_is_reported`,
-   `::test_an_ospf_interface_at_the_router_level_is_reported`,
-   `::test_a_sensitive_field_prints_as_the_variable_reference`, and one test per gate finding.
-2. `PROTOCOL_SHAPE` is data the gate reads and the test pins against the live provider schema;
-   `VALUE_VARIABLES` is the one shape table for a printed field; `naming.py` is the one naming rule;
-   `import_blocks.py` is the one reader, with the container shapes added to it; `SHAPE_WORDS` is the one
-   word list. No module defines a second one, and `tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner`
-   keeps the parse methods from spelling a field name.
-3. The property scan measures the moved rows against `panos_virtual_router`, so the matrix row declares
-   every field the emitter reads, and its `emitter` names the report writer for the fields only the
-   report reads.
-4. The manual report prints only the rows the ledger marks `report`, and `tests/test_reports.py` pins the
-   line shape, the router name, the field order and the four detail strings.
-5. `CHECK_ORDER` names `protocol_object` after `actions`, and the gate reports no finding on the
-   committed goldens.
-6. `tests/golden/kitchen_sink/virtual_routers.tf` gains the `protocol` object. Every other golden byte
-   is unchanged. Report files are not goldens.
-7. `docs/RESOURCE_MAPPING.md`, `README.md`, `docs/README.md`, `docs/USAGE_GUIDE.md`,
-   `docs/MIGRATION_GUIDE.md`, `docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md`,
-   `docs/VPN_ROUTING_CONFIG_EXAMPLES.md`, `docs/ARCHITECTURE.md` §4.6 and §4.9, and
-   `docs/CODEBASE_ASSEMBLY.md` §9 state the landed rules and name the module or the test that holds them.
-   `REPORT_ONLY_TYPES` loses the six routing rows, and the BGP example in
-   `VPN_ROUTING_CONFIG_EXAMPLES.md` reads `<type>external</type>`, because that is the value the mapping
-   turns into the provider key.
-8. Two runs on the same source write the same bytes, pinned by
-   `tests/test_protocol_object.py::test_two_runs_write_the_same_bytes`.
-9. `ruff check .` is clean, `pytest` is green, the gate reports no finding on the goldens, and the
-   change is committed. The tracking markdown loses the F7.1 detail.
+1. `tests/test_data_file_gate.py` pins the file-set rule, the shape refusal, the content rule, the
+   naming agreement, the joins, the order read-back, the printed form, the row-ordinal position, the
+   `CHECK_ORDER` position, the corpus truth, and the determinism, including one negative test per
+   finding.
+2. `tests/test_sanity_gate.py` gains the negative test for the rule (the "each check detects its own
+   violation" pin), the report-shape pin for the data-file count, and the console-summary pin for the
+   new line shape.
+3. The tests that pinned the file set name the rule through their own module, and
+   `tests/test_reference_edges.py` pins the order-graph guard.
+4. `sanity_checks.py` states the rule once, imports the four data modules, and reads nothing else;
+   `check_data_files` takes the output directory, not the `.tf` file set, so no block rule reads a
+   data file and no data rule reads a `.tf` file.
+5. `docs/ARCHITECTURE.md` §4.5 and §4.6, `docs/CODEBASE_ASSEMBLY.md` §7 rule 1, §5 rule 4, §6 rule
+   7, and §9 rule 6, the docstrings of `sanity_checks.py`, `site_data.py`, `reference_edges.py`,
+   `ownership.py` and `unit_manifest.py`, the `main()` comment in `panorama_to_terraform.py`, the
+   `README.md` and `docs/USAGE_GUIDE.md` gate sections, and the `agent-status.md` watch rule state
+   the landed rule and name the test that holds it.
+6. `ruff check .` is clean, `pytest` is green, the gate reports no finding on the goldens, and the
+   change is committed. The tracking markdown loses the F6.8 detail, and `PLAN.md` keeps the open
+   Epic 6 half: the write path.
+
+## Results
+
+All criteria are met. Measured: the sample run writes 10 `.tf` files and 2 data files, and the console
+line reads `Sanity gate: PASS (0 FAIL, 0 WARN) - 10 .tf files, 2 data files, 20 resources`.
+`reference_cycle.xml` and `kitchen_sink.xml` each write 4 data files; `scope_child.xml` writes none, so
+the corpus test does not assert a count above 0. `ruff check .` is clean, `pytest` is green (1238),
+and the rule reports no finding on every fixture and on both golden sets.

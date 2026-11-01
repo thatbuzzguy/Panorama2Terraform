@@ -441,14 +441,17 @@ fw_2_example_com = "fw-2.example.com"
   is a name two rows state with two different values.
 - The rows keep the identity order, the names inside a row sort, and no field states a path or a timestamp, so
   two runs on the same bytes write the same bytes.
-- Neither file is a gate input, because the gate reads `.tf` files, and both are written only when they have
+- The record and its printed form are gate inputs for the data rule: the rule reads the record through
+  `parse_rows` and compares the printed form with `render_tfvars`. The printed form is not one of the four
+  data files, so the report count names only the records. Both files are written only when they have
   content. The CLI takes no flag for them: the table is the default output.
 
 ## Post-run sanity gate
 
 Every conversion runs the gate on the files it wrote, prints a summary, and
 writes `SANITY_REPORT.txt`. The gate reads the files, so it reports what you
-receive, not what the generator intended.
+receive, not what the generator intended. It reads the `.tf` files for the block
+rules and the four data files for the data rule, and the summary names both counts.
 
 | Check | Rule | Severity |
 |---|---|---|
@@ -457,6 +460,7 @@ receive, not what the generator intended.
 | `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type (the type, the `location` sub-block and its fields, and `name` when the row declares one) | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable this run declares (F6.6) | FAIL |
+| `data_files` | every data file reads as its declared rows, and the data agrees with the naming rule, the joins, the order rule, and its printed form (F6.8) | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |

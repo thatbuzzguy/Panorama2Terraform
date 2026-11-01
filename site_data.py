@@ -29,8 +29,10 @@ here.
    the same rule. A value that is neither a string nor a list of strings is a refusal, because the row shape
    declares no other kind. No table row maps a field to a list today, so a corpus run writes only strings; the
    writer prints a list because the row shape declares one.
-6. **No timestamp and no path**, so two runs on the same bytes write the same bytes. The file is a data file,
-   so the gate reads no data file (`ARCHITECTURE.md` §4.5) and no report names a field this module states.
+6. **No timestamp and no path**, so two runs on the same bytes write the same bytes. The record is one of
+   the four data files the gate rule `data_files` reads (`ARCHITECTURE.md` §4.5, F6.8), and no report names
+   a field this module states. The `.tfvars` is its printed form, so the same rule reads the printed form
+   and does not count it as a data file.
 
 Usage:
     from site_data import ROW_FIELDS, SITE_DATA_FILE, TFVARS_FILE, build_rows, parse_rows, render, render_tfvars

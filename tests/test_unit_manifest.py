@@ -445,17 +445,23 @@ def test_the_generated_tf_bytes_are_unchanged(tmp_path):
         assert generated == goldens, case
 
 
-def test_the_gate_reads_no_data_file(tmp_path):
-    """The gate reads `.tf` files, so a data file in the output directory is not a gate input, and the
-    report prints the checks in `CHECK_ORDER` order.
+def test_the_gate_reads_the_manifest_through_unit_manifest(tmp_path):
+    """F6.8 changed the file set: the block rules read the `.tf` files, and the data rule reads the four
+    data files, each through the module that owns the row shape, so no second shape rule appears. The
+    report counts the two sets separately, and the data rule reports no finding on a manifest the tool
+    wrote.
     """
     _run(SAMPLE_CONFIG, tmp_path)
     files = sanity_checks.read_tf_files(tmp_path)
-    assert files and all(not name.endswith('.json') for name in files)
+    assert files and all(name.endswith('.tf') for name in files), 'the block reader is .tf-only'
+    assert dict(sanity_checks.DATA_FILES)[MANIFEST] is unit_manifest
+    assert not hasattr(unit_manifest, 'check'), 'the manifest owns no gate check'
     report = sanity_checks.run_checks(tmp_path)
     assert [result.check for result in report.checks] == list(sanity_checks.CHECK_ORDER)
     assert report.file_count == len(files)
-    assert report.fail_count == 0
+    assert report.data_file_count == 2, 'the sample run writes the manifest and the ownership record'
+    assert report.findings('data_files') == []
+    assert 'Files checked: 10 .tf files, 2 data files.' in report.render(), report.render()
 
 
 def test_no_report_names_a_field_the_manifest_states(tmp_path):

@@ -572,15 +572,20 @@ def test_a_plain_run_writes_the_record_without_a_flag(tmp_path):
     assert (tmp_path / RECORD).is_file() and _record(tmp_path)
 
 
-def test_the_gate_reads_no_data_file(tmp_path):
-    """Decision 1 rule 5: the gate reads `.tf` files only, so a data file cannot change a gate result
-    or a golden byte, and the report prints the checks in `CHECK_ORDER` order.
+def test_the_gate_reads_the_record_through_ownership(tmp_path):
+    """F6.8 changed the file set: the data rule reads this record through `ownership.parse_rows`, so no
+    second shape rule appears, and the block reader stays `.tf`-only. The data rule reports no finding on
+    a record the tool wrote, and the report prints the checks in `CHECK_ORDER` order.
     """
     _run(SAMPLE_CONFIG, tmp_path)
     files = sanity_checks.read_tf_files(tmp_path)
-    assert files and all(not name.endswith('.json') for name in files)
+    assert files and all(name.endswith('.tf') for name in files), 'the block reader is .tf-only'
+    assert dict(sanity_checks.DATA_FILES)[RECORD] is ownership
+    assert not hasattr(ownership, 'check'), 'the record owns no gate check'
     report = sanity_checks.run_checks(tmp_path)
     assert [result.check for result in report.checks] == list(sanity_checks.CHECK_ORDER)
+    assert report.data_file_count == 2
+    assert report.findings('data_files') == []
     assert report.fail_count == 0
 
 

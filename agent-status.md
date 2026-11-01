@@ -2,27 +2,33 @@
 
 ## Current position
 
-F7.1 (the `protocol` object as output on `panos_virtual_router`) is complete and committed. The BGP and
-OSPF container rows moved from `report` to `emitted`, so a routing entry prints inside the router block as
-the `protocol` object. `resource_mapping.PROTOCOL_SHAPE` is the table that states the shape,
-`panorama_to_terraform.generate_virtual_routers` prints it, `sanity_checks.check_protocol_object` checks a
-printed object against it, and the manual report names the entries the object cannot express. The rules are
-in `docs/ARCHITECTURE.md` §4.9, the tests are in `tests/test_protocol_object.py` (17), and the suite is 1215
-tests.
+F6.8 (the gate rule that reads the data files) is complete and committed. `sanity_checks.check_data_files`
+is the sixth gate rule for a file set: it reads the four data files, each row shape through the module that
+owns it, and reports a data file that does not read as its declared rows, a field `naming.py` decides stated
+as a row, a join that names no unit or no row, an order that is not what `reference_edges.order` produces,
+and a printed form that is not `site_data.render_tfvars` of the rows. The tests are
+`tests/test_data_file_gate.py` (21), one negative test per finding, plus the rewritten file-set tests in
+`tests/test_unit_manifest.py`, `tests/test_ownership.py`, `tests/test_reference_edges.py`,
+`tests/test_site_data.py`, `tests/test_provenance.py` and the new negative test in
+`tests/test_sanity_gate.py`. The suite is 1238 tests.
 
 Facts measured while the work landed, and the rules that follow from them:
 
-- `terraform validate` accepts `protocol = { ... }` and refuses `protocol { ... }`, so the field reader is
-  the one place that states the difference, and the gate rule reports a `protocol` it cannot read as a field.
-- `terraform validate` accepts any number of keys on a `one_of` level, so the gate is the rule that keeps it
-  to the one key the provider can read.
-- A provider block that declares no attributes prints for its presence, so `block` is a shape word and its
-  value is the empty object.
-- A provider `sensitive` field cannot reach a generated file as a literal, so the shape is
-  `reference_only`: the block prints the variable reference and the run holds no value for it.
-- A `range` element must state exactly one of `advertise` or `suppress`, because the provider requires one.
-- Goldens pin `.tf` bytes only, so the routing section of `MANUAL_SETUP_REPORT.txt` is not a pin, and the
-  gate reports no finding on the committed goldens.
+- The gate reads `.tf` files for the block rules and the four data files for the data rule, so the report
+  names both counts: `Files checked: N .tf files, M data files.` The console line names both, then the
+  resource count.
+- `site.auto.tfvars` is the printed form of the site record, so the data rule compares it with
+  `render_tfvars` and does not count it as a data file. `SOURCE.txt` names paths and is read by no rule.
+- The position of a data finding is the row ordinal in the declared order, because a data row spans many
+  lines; a whole-file finding states no row, and `Finding.render` prints `file  detail` for it.
+- Bug fix: `reference_edges.dependencies` now guards the inheritance rule with the node set, so `after`
+  names only manifest units. Before the guard, an override row whose owner is a parent-source unit put a
+  directory the manifest does not name into `after`, and the rule could not read the order back.
+- `parse_rows` re-sorts the rows in the declared identity order, so the row ordinal is that order, not the
+  file order.
+- The rule reports a refusal as a finding, because a data file a person hand-wrote is an input; the gate
+  cannot assume the writer used the module. A data file that reads as no rows is a finding, because the
+  content rule writes the file only when it has content.
 
 The next feature is not chosen. The open pieces are in `to-do.md`, and the rules they must keep are in the
 watch list below.
@@ -53,10 +59,13 @@ watch list below.
 - The block reader in `sanity_checks.py` serves every kind, and the same field reader serves the
   fields inside a container value and the elements of a list value, so a new block shape uses them
   rather than writing a second reader.
-- The gate reads `.tf` files only, so no data file is a gate input today. `scope.tf`, `imports.tf` and
-  `actions.tf` are `.tf` files and are gate inputs. If a codebase feature makes a data file a
-  gate input, the file set statement in `ARCHITECTURE.md` §4.5, the `.tfvars` statement in §4.5,
-  and the no-change tests must change together.
+- The gate reads the `.tf` files for the block rules and the four data files for the data rule, so the two
+  file sets are distinct: a block rule reads a `.tf` file, and the data rule reads a record through the
+  module that owns its row shape. `scope.tf`, `imports.tf` and `actions.tf` are `.tf` files, so the block
+  rules read them. `site.auto.tfvars` is the printed form of the site record, so the data rule compares it
+  and does not count it as a data file, and `SOURCE.txt` is read by no rule. A new file shape must name
+  which of the two sets it belongs to, and the report counts, the console line and the tests that pin the
+  file set change with it. No data rule reads a `.tf` file, and no block rule reads a data file.
 - A field reader must read at the block's own level and stop at the closing quote, or a
   sub-block field or an escaped quote answers for the block's field. Both are pinned in
   `tests/test_import_blocks.py`, and the scope rule reads at the block's own level through the

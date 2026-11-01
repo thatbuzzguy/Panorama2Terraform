@@ -1,17 +1,13 @@
 # To Do
 
-F7.1 (the `protocol` object as output on `panos_virtual_router`) is complete and committed. The next
-feature is not chosen, so this file holds only the open pieces that a later feature takes.
+F6.8 (the gate rule that reads the data files) is complete and committed. The next feature is not chosen.
 
-## Open pieces for Epic 6
+## Open pieces for Epic 6 (held until the next feature takes them)
 
 - The directory write path: the codebase modules name the unit, the owner, the pair, the order,
   the block, the scope object and the site, and write no directory. The step that splits the
   output per unit directory is still open, and the per-unit `.tfvars` that names one `target`
   serial is part of it, with the LF rule.
-- The gate rule that reads a data file: the gate reads `.tf` files only, so no data file is a
-  gate input today. `imports.tf`, `scope.tf` and `actions.tf` are `.tf` files, so the gate rules
-  read them.
 - The outputs rule for a name another unit owns, which the reference edge rule left open.
 - The rule types: the import shape writes no block for the four `*_policy_rules` types.
 - The generated `README.md` does not name `imports.tf`, `SITE_DATA.json` or `site.auto.tfvars`; it
@@ -24,6 +20,9 @@ feature is not chosen, so this file holds only the open pieces that a later feat
 - The `panos_push_to_devices` shape: the gate reads a push block through `ACTION_SCHEMA`, but the
   emitted shape needs the `devices` decision, which is the `.tfvars` `target` fact the write path
   holds (`backlog.md`).
+- The data rule reads the four records, so the write path must keep the rule reading through
+  `parse_rows`: a per-unit file set needs one rule that reads the records of every unit, not one
+  rule per unit.
 
 ## Open pieces for Epic 7
 

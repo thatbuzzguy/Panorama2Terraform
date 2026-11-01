@@ -6357,8 +6357,8 @@ def main():
         # F6.6: the site data. One row per site that names a value, written as data, and only when it has
         # content, following the rule for the report files and the other data files. A reader joins
         # `directory` to the manifest row. The `.tfvars` is written from the rows, not from the generator's
-        # state, and the gate reads no data file (`ARCHITECTURE.md` §4.5), so these two files are not gate
-        # inputs.
+        # state. The gate rule `data_files` (F6.8) reads the record through `parse_rows` and compares the
+        # printed form with `render_tfvars` (`ARCHITECTURE.md` §4.5), so the run writes both or neither.
         site_rows = site_data.build_rows(panorama.ledger, tf_gen.value_variables(), tf_gen.sanitize_name)
         if site_rows:
             site_file = Path(args.output_dir) / site_data.SITE_DATA_FILE
@@ -6414,6 +6414,7 @@ def main():
 
         # F4.1: the gate reads the files that were written, so it reports what
         # the operator receives. A WARN does not fail the gate; a FAIL does.
+        # The four data files are written above, so the data rule (F6.8) reads the records the run wrote.
         report = sanity_checks.run_checks(args.output_dir, run_terraform=args.validate)
         report_path = Path(args.output_dir) / 'SANITY_REPORT.txt'
         report_path.write_text(report.render(), encoding='utf-8')

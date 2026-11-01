@@ -376,8 +376,9 @@ def test_no_module_defines_a_second_naming_rule():
 
 
 def test_the_action_rule_reads_no_data_file():
-    """The rule reads the block text, the tables, and `naming.py`, so no data file is a gate input and the
-    action rule reads no manifest row.
+    """The rule reads the block text, the tables, and `naming.py`, so the action rule reads no manifest
+    row. F6.8 added the data rule for the four data files, so the two file sets are separate: a block rule
+    reads a `.tf` file, and the data rule reads a record.
     """
     source = Path('sanity_checks.py').read_text(encoding='utf-8')
     check = source[source.index('def check_actions'):source.index('def check_references')]

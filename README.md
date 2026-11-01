@@ -227,7 +227,9 @@ Data files and reports written to the output directory. Each is written only whe
 - `site.auto.tfvars` - the `.tfvars` written from the site data rows, one line per variable in name order
   ([`site_data.py`](site_data.py)). Terraform loads a `*.auto.tfvars` file automatically, so
   `terraform.tfvars` stays the operator's own file for the credentials, which the tool never writes. Written
-  only when it has content, and the gate does not read it, because the gate reads `.tf` files
+  only when it has content. The gate rule `data_files` reads the record through `parse_rows` and compares
+  the printed form with `render_tfvars`; the printed form is not one of the four data files, so the report
+  count names only the records
 - `scope.tf` - The scope objects the export declares: one `resource` block per scope entry for
   `panos_device_group`, `panos_device_group_parent`, `panos_template`, `panos_template_stack`,
   `panos_template_variable`, and `panos_vsys`, written by every run that has a scope entry, before the
@@ -366,7 +368,9 @@ platform (see `INTERFACE_MIGRATION_REPORT.txt`).
 
 Every conversion runs a static gate on the output it wrote, then prints a
 summary and writes `SANITY_REPORT.txt`. The gate reads the files, so it reports
-what you receive, not what the generator intended.
+what you receive, not what the generator intended. It reads the `.tf` files for
+the block rules and the four data files for the data rule, and the summary names
+both counts.
 
 | Check | Rule | Severity |
 |---|---|---|
@@ -379,6 +383,7 @@ what you receive, not what the generator intended.
 | `protocol_object` | every `protocol` object on a `panos_virtual_router` block matches the `PROTOCOL_SHAPE` row for its level, prints as a field, and states the one key a choice level declares | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable the run declares | FAIL |
+| `data_files` | every data file reads as its declared rows, and the data agrees with the naming rule, the joins, the order rule, and its printed form | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
@@ -459,6 +464,10 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   site, the declaration set, both directions of the variable gate rule, the corpus rows, the rule that the
   corpus trips neither, the gate inputs, the report bodies, the rule that the module defines no second naming
   rule, and the byte rule between two runs
+- `tests/test_data_file_gate.py` - the gate rule that reads the four data files (`data_files`): the file set
+  the gate reads, the `CHECK_ORDER` position, each finding, the row ordinal as the finding position, the rule
+  that each row shape is read through its own module, the truth across the corpus, and the byte rule between
+  two runs
 - `tests/test_commit_actions.py` - the commit action per unit (`actions.tf`): one block per unit the
   manifest names, the fact its own unit selects, the unit that writes no action, the address that answers
   the names inside the block, the order, the file written only when it has content, each violation type of

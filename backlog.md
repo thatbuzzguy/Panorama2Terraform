@@ -497,8 +497,7 @@ restated here; they are in the record and the git history. Only the open items a
   records the field as a literal, so the block and the id print the same text for it. If a device
   fact becomes a rule, the id and the block change together.
 - Open: the manifest names the directory and writes no directory, so the path that creates one
-  directory per unit is still open. The gate reads no data file, so the gate rule that reads the four
-  data files is not written yet. `scope.tf` is one file for the run, so a codebase run writes the
+  directory per unit is still open. `scope.tf` is one file for the run, so a codebase run writes the
   scope blocks of every unit in one file until the write path lands.
 - Finding: the generated `README.md` does not name `imports.tf`. The F5.5 label precedent says an
   opt-in shape labels itself, so the label should name the file and the block count. The goldens pin

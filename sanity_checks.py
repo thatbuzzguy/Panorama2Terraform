@@ -6,7 +6,9 @@ conversion and the gate that runs during a test cannot disagree.
 
 The checks read what the operator receives: the files written to the output
 directory. A rule is satisfied by a file, not by a bookkeeping value that
-never reached one.
+never reached one. The block rules read the `.tf` files; the data rule (F6.8)
+reads the four data files, and the site record's printed form, through the
+module that owns each row shape, so no second shape rule appears.
 
 Checks, in report order:
 
@@ -21,6 +23,7 @@ Checks, in report order:
 | `protocol_object` | a `protocol` object on a `panos_virtual_router` block matches its `PROTOCOL_SHAPE` row | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a declared variable | FAIL |
+| `data_files` | every data file reads as its declared rows and agrees with the rules that produced it (F6.8) | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder is listed so the operator replaces it | WARN |
 | `terraform` | `terraform init` + `terraform validate` (`--validate` only) | FAIL or SKIPPED |
@@ -46,7 +49,11 @@ import commit_actions
 import entry_coverage
 import import_blocks
 import naming
+import ownership
+import reference_edges
 import resource_mapping
+import site_data
+import unit_manifest
 
 FAIL = 'FAIL'
 WARN = 'WARN'
@@ -64,6 +71,7 @@ CHECK_ORDER = (
     'protocol_object',
     'references',
     'variables',
+    'data_files',
     'control_chars',
     'placeholders',
     'terraform',
@@ -100,7 +108,11 @@ EXPECTED_PLACEHOLDERS = ('***CHANGE_ME***',)
 
 @dataclass(frozen=True)
 class Finding:
-    """One rule violation, or one reported fact, at one line of one file."""
+    """One rule violation, or one reported fact, at one position of one file.
+
+    The position is a line for a `.tf` file, and a row ordinal for a data file (F6.8), because a data
+    row spans many lines. `line` 0 means the finding is about the file as a whole.
+    """
 
     check: str
     severity: str
@@ -109,7 +121,12 @@ class Finding:
     detail: str
 
     def render(self) -> str:
-        location = f'{self.file}:{self.line}' if self.file else '(run)'
+        if not self.file:
+            location = '(run)'
+        elif not self.line:
+            location = self.file
+        else:
+            location = f'{self.file}:{self.line}'
         return f'{location}  {self.detail}'
 
 
@@ -249,7 +266,8 @@ class SanityReport:
 
     checks: tuple[CheckResult, ...]
     file_count: int
-    resource_count: int
+    data_file_count: int = 0
+    resource_count: int = 0
 
     def findings(self, check: str) -> list[Finding]:
         """Findings for one check, in report order."""
@@ -280,7 +298,7 @@ class SanityReport:
         lines = [REPORT_RULE, 'SANITY REPORT', REPORT_RULE]
         lines.append(f'Result: {"FAIL" if self.failed else "PASS"} '
                      f'({self.fail_count} FAIL, {self.warn_count} WARN)')
-        lines.append(f'Files checked: {self.file_count} .tf files.')
+        lines.append(f'Files checked: {self.file_count} .tf files, {self.data_file_count} data files.')
         lines.append(f'Resources checked: {self.resource_count}.')
         lines.append('')
         lines.append('CHECK RESULTS')
@@ -314,7 +332,8 @@ class SanityReport:
         lines = [
             f'Sanity gate: {"FAIL" if self.failed else "PASS"} '
             f'({self.fail_count} FAIL, {self.warn_count} WARN) - '
-            f'{self.file_count} .tf files, {self.resource_count} resources'
+            f'{self.file_count} .tf files, {self.data_file_count} data files, '
+            f'{self.resource_count} resources'
         ]
         for name in CHECK_ORDER:
             result = next((r for r in self.checks if r.check == name), None)
@@ -338,6 +357,28 @@ def read_tf_files(output_dir: Path) -> dict[str, str]:
     for path in sorted(Path(output_dir).glob('*.tf')):
         files[path.name] = path.read_text(encoding='utf-8', errors='surrogateescape')
     return files
+
+
+# The four data files, each read through the module that owns the row shape (F6.8). The rule
+# reports a `parse_rows` refusal as a finding, because the gate reads the files the operator
+# receives, and a data file a person hand-wrote is an input. No second shape rule appears, and the
+# rule reads no `.tf` file, so no block rule reads a data file.
+DATA_FILES = (
+    (unit_manifest.MANIFEST_FILE, unit_manifest),
+    (ownership.OWNERSHIP_FILE, ownership),
+    (reference_edges.EDGE_FILE, reference_edges),
+    (site_data.SITE_DATA_FILE, site_data),
+)
+
+
+def count_data_files(output_dir: Path) -> int:
+    """How many of the four data files the output holds: the count the report names.
+
+    `site.auto.tfvars` is not counted, because it is the printed form of the site record and not a
+    data file (F6.8).
+    """
+    out = Path(output_dir)
+    return sum(1 for name, _ in DATA_FILES if (out / name).is_file())
 
 
 def blocks(files: dict[str, str], kinds: tuple[str, ...] = BLOCK_KINDS) -> list[Block]:
@@ -856,6 +897,171 @@ def check_variables(files: dict[str, str]) -> list[Finding]:
     return findings
 
 
+def check_data_files(output_dir: Path) -> list[Finding]:
+    """Every data file must read as the data it declares, and the data must agree with each other (F6.8).
+
+    Six findings, each a FAIL, and each read through the module that owns the fact:
+
+    1. A data file that does not read as its declared rows (`parse_rows` refuses), or a data file with
+       no rows. The content rule says the tool writes a data file only when it has content, so a data
+       file cannot hold no rows. The rule reports a refusal instead of raising, because the gate reads
+       the files the operator receives and a data file a person hand-wrote is an input.
+    2. A field `naming.py` decides must be stated as the rule states it: the manifest `unit` and
+       `directory`, and the ownership `directory`, each read through `unit_manifest`. The site record
+       variable name is refused by `parse_rows`, so no second naming rule appears.
+    3. A join. The manifest is the file that states the units, so a `directory` another data file names
+       must name a manifest unit, or a directory the ownership record names: the tool writes an
+       ownership row for an entry from a declared parent source, and the manifest names no unit for it
+       (F5.4). An edge row must join on (`type`, `entry`) to an ownership row whose `owner` names the
+       `target`. A `kind` `ambiguous` row states no owner, so it cannot name one.
+    4. An order. The manifest `rank` and `after` must be what `reference_edges.order` produces from the
+       three records read back, so `after` names only units the manifest names.
+    5. A printed form. `site.auto.tfvars` must equal `site_data.render_tfvars` of the site rows, and the
+       two files stand or fall together on the content rule.
+    6. A position. A data-file finding is stated at its row ordinal, because a data row spans many
+       lines, and a finding about the whole file states no row.
+
+    Findings sort by (file, row), so the report is byte-identical between runs on the same files.
+    """
+    out = Path(output_dir)
+    findings: list[Finding] = []
+    parsed: dict[str, list] = {}
+
+    # Finding 1, read through each module's `parse_rows`.
+    for name, module in DATA_FILES:
+        path = out / name
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding='utf-8', errors='surrogateescape')
+        try:
+            rows = module.parse_rows(text)
+        except ValueError as exc:
+            findings.append(Finding('data_files', FAIL, name, 0, str(exc)))
+            continue
+        if not rows:
+            findings.append(Finding(
+                'data_files', FAIL, name, 0,
+                'a data file is written only when it has content, so it cannot hold no rows',
+            ))
+            continue
+        parsed[name] = rows
+
+    manifest = parsed.get(unit_manifest.MANIFEST_FILE, [])
+    ownership_rows = parsed.get(ownership.OWNERSHIP_FILE, [])
+    edge_rows = parsed.get(reference_edges.EDGE_FILE, [])
+    site_rows = parsed.get(site_data.SITE_DATA_FILE, [])
+    units = {row['directory'] for row in manifest}
+    record_units = {row['directory'] for row in ownership_rows}
+
+    def facts_of(row: dict) -> tuple:
+        return tuple(row[key] for key in unit_manifest.FACT_KEYS)
+
+    # Finding 2: the fields `naming.py` decides.
+    for ordinal, row in enumerate(manifest, start=1):
+        row_facts = facts_of(row)
+        unit = unit_manifest.unit_name(row_facts)
+        if row['unit'] != unit:
+            findings.append(Finding(
+                'data_files', FAIL, unit_manifest.MANIFEST_FILE, ordinal,
+                f'row {ordinal}: unit {row["unit"]} is not the name the level rule states ({unit})',
+            ))
+        directory = unit_manifest.directory_name(row_facts, naming.sanitize)
+        if row['directory'] != directory:
+            findings.append(Finding(
+                'data_files', FAIL, unit_manifest.MANIFEST_FILE, ordinal,
+                f'row {ordinal}: directory {row["directory"]} is not the naming rule shape of the '
+                f'facts the row states ({directory})',
+            ))
+    for ordinal, row in enumerate(ownership_rows, start=1):
+        directory = unit_manifest.directory_name(facts_of(row), naming.sanitize)
+        if row['directory'] != directory:
+            findings.append(Finding(
+                'data_files', FAIL, ownership.OWNERSHIP_FILE, ordinal,
+                f'row {ordinal}: directory {row["directory"]} is not the naming rule shape of the '
+                f'facts the row states ({directory})',
+            ))
+
+    # Finding 3: the joins, through `directory`.
+    for ordinal, row in enumerate(ownership_rows, start=1):
+        if not row['owner']:
+            continue    # an `ambiguous` row states no owner, so the join reads nothing
+        if row['kind'] == 'ambiguous':
+            findings.append(Finding(
+                'data_files', FAIL, ownership.OWNERSHIP_FILE, ordinal,
+                f'row {ordinal}: a kind {row["kind"]} row states no owner, so it cannot name one',
+            ))
+        elif row['owner'] != row['directory'] and row['owner'] not in units and row['owner'] not in record_units:
+            findings.append(Finding(
+                'data_files', FAIL, ownership.OWNERSHIP_FILE, ordinal,
+                f'row {ordinal}: owner {row["owner"]} names no unit the manifest names or a row of the '
+                f'ownership record',
+            ))
+    for ordinal, row in enumerate(edge_rows, start=1):
+        if row['referrer'] not in units:
+            findings.append(Finding(
+                'data_files', FAIL, reference_edges.EDGE_FILE, ordinal,
+                f'row {ordinal}: referrer {row["referrer"]} names no unit the manifest names',
+            ))
+        if row['target'] not in units and row['target'] not in record_units:
+            findings.append(Finding(
+                'data_files', FAIL, reference_edges.EDGE_FILE, ordinal,
+                f'row {ordinal}: target {row["target"]} names no unit the manifest names or a row of '
+                f'the ownership record',
+            ))
+        if not any(owner['type'] == row['type'] and owner['entry'] == row['entry']
+                   and owner['owner'] == row['target'] for owner in ownership_rows):
+            findings.append(Finding(
+                'data_files', FAIL, reference_edges.EDGE_FILE, ordinal,
+                f'row {ordinal}: ({row["type"]}, {row["entry"]}) joins no ownership row whose owner '
+                f'names the target',
+            ))
+    for ordinal, row in enumerate(site_rows, start=1):
+        if row['directory'] not in units:
+            findings.append(Finding(
+                'data_files', FAIL, site_data.SITE_DATA_FILE, ordinal,
+                f'row {ordinal}: directory {row["directory"]!r} names no unit the manifest names',
+            ))
+
+    # Finding 4: the order, read through `reference_edges.order`.
+    if manifest:
+        filled = reference_edges.order(manifest, ownership_rows, edge_rows)
+        for ordinal, (written, expected) in enumerate(zip(manifest, filled), start=1):
+            if written['rank'] != expected['rank'] or written['after'] != expected['after']:
+                findings.append(Finding(
+                    'data_files', FAIL, unit_manifest.MANIFEST_FILE, ordinal,
+                    f'row {ordinal}: rank {written["rank"]} and after {written["after"]} are not what '
+                    f'the order rule produces ({expected["rank"]}, {expected["after"]})',
+                ))
+
+    # Finding 5: the site record and its printed form. A printed form is not one of the four data
+    # files, so a finding about it names the printed file and the count names only the records.
+    tfvars = out / site_data.TFVARS_FILE
+    if site_rows and not tfvars.is_file():
+        findings.append(Finding(
+            'data_files', FAIL, site_data.TFVARS_FILE, 0,
+            'the site record has content, so its printed form must be written',
+        ))
+    elif tfvars.is_file() and not site_rows:
+        findings.append(Finding(
+            'data_files', FAIL, site_data.TFVARS_FILE, 0,
+            'the printed form stands with the site record, and the record holds no rows',
+        ))
+    elif tfvars.is_file():
+        try:
+            expected = site_data.render_tfvars(site_rows)
+        except ValueError as exc:
+            findings.append(Finding('data_files', FAIL, site_data.SITE_DATA_FILE, 0, str(exc)))
+        else:
+            if tfvars.read_text(encoding='utf-8', errors='surrogateescape') != expected:
+                findings.append(Finding(
+                    'data_files', FAIL, site_data.TFVARS_FILE, 0,
+                    'the printed form is not the site record rendered by the rule that prints it',
+                ))
+
+    # Finding 6: the position is the row ordinal, and a finding about a whole file states row 0.
+    return sorted(findings, key=lambda finding: (finding.file, finding.line, finding.detail))
+
+
 def check_control_chars(files: dict[str, str]) -> list[Finding]:
     """No raw control character or DEL may reach a `.tf` file (F1.7).
 
@@ -959,6 +1165,7 @@ def run_checks(output_dir: Path, run_terraform: bool = False,
         CheckResult('protocol_object', tuple(check_protocol_object(files))),
         CheckResult('references', tuple(check_references(files))),
         CheckResult('variables', tuple(check_variables(files))),
+        CheckResult('data_files', tuple(check_data_files(Path(output_dir)))),
         CheckResult('control_chars', tuple(check_control_chars(files))),
         CheckResult('placeholders', tuple(check_placeholders(files))),
     ]
@@ -971,5 +1178,6 @@ def run_checks(output_dir: Path, run_terraform: bool = False,
     return SanityReport(
         checks=tuple(checks),
         file_count=len(files),
+        data_file_count=count_data_files(Path(output_dir)),
         resource_count=len(resource_blocks(files)),
     )

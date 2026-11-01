@@ -38,6 +38,11 @@ that applies it and arrive here as `references`; this module resolves no name. T
 `naming.py` (`ARCHITECTURE.md` §5, F6.6), which `TerraformGenerator.sanitize_name` delegates to, so this
 module takes it as an argument and defines no second rule.
 
+The gate rule `data_files` (F6.8, `ARCHITECTURE.md` §4.6) reads the written file back through `parse_rows`
+here, so no second shape rule appears, and reports a `unit` or `directory` that is not the name the rules
+above state, or a `rank` and `after` that are not what the order rule produces. Pinned by
+`tests/test_unit_manifest.py::test_the_gate_reads_the_manifest_through_unit_manifest`.
+
 Usage:
     from unit_manifest import MANIFEST_FILE, build_rows, render, parse_rows
     rows = build_rows(ledger, generator.unit_references(), generator.sanitize_name)

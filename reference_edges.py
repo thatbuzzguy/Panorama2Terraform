@@ -42,7 +42,9 @@ Seven rules, stated once here.
    and the target unit before the referrer unit, from the edge. A tie follows the identity order, which is
    the order the manifest rows print, so `rank` is deterministic. A unit in a cycle cannot be ordered, so
    it states 0. `after` names only units the manifest names: a declared parent source names no unit, so the
-   order graph reads only manifest units.
+   order graph reads only manifest units. The guard is in `dependencies`, so an override whose owner is
+   a parent-source unit adds no dependency, and the gate rule can read the order back. Pinned by
+   `tests/test_reference_edges.py::test_a_declared_parent_source_adds_no_dependency`.
 
 Usage:
     from reference_edges import EDGE_FILE, build_rows, render, parse_rows, findings, cycle_line, order
@@ -251,8 +253,13 @@ def dependencies(manifest_rows: list, ownership_rows: list, edge_rows: list) -> 
                 deps[row['directory']].add(container)
 
     # The inheritance rule: the ancestor unit before the unit that carries an override of a name it owns.
+    # The graph reads only manifest units (the rule 7 sentence), so an override whose owner is a
+    # parent-source unit — a unit the manifest does not name — adds no dependency. Without the guard,
+    # `after` would name a directory the manifest does not state, and the gate rule `data_files` (F6.8)
+    # could not read the order back.
     for row in ownership_rows:
-        if row['owner'] and row['owner'] != row['directory']:
+        if row['owner'] and row['owner'] != row['directory'] \
+                and row['directory'] in nodes and row['owner'] in nodes:
             deps[row['directory']].add(row['owner'])
 
     # The edge rule: the target unit before the referrer unit.
