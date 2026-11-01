@@ -70,14 +70,12 @@ dampening, filtering), access lists, prefix lists, AS path lists, community
 lists, route maps, MP-BGP address families, BFD, and multicast. Configure them
 on the target after migration.
 
-BGP, OSPF and their redistribution rules have no v2 resource of their own. The
-provider carries them as the object attribute `protocol` on
-`panos_virtual_router`, which the generator does not print yet (F7.1 in
-`PLAN.md`). The parser reads
-them, and `MANUAL_SETUP_REPORT.txt` carries the router ID, AS number, peer
-groups, peers, areas and interfaces. The report does not print the BGP
-redistribution rules it captured; that gap is recorded in
-[`../backlog.md`](../backlog.md).
+BGP, OSPF and their redistribution rules print as the object attribute `protocol` on
+`panos_virtual_router` ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9). The parser reads only the levels
+`resource_mapping.PROTOCOL_SHAPE` states, so the features listed above are not read, and the report names
+only the routing entries the object cannot express (§4.9 rule 4): a peer no peer group names it, an
+interface outside an area, a choice value the mapping does not state, and a `range` entry that states
+neither choice.
 
 ## References
 

@@ -202,8 +202,12 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                  'no v2 resource'),
     ContainerRow('parse_pbf_monitor_profiles', 'network/profiles/monitor-profile',
                  'emitted', 'panos_monitor_profile'),
-    ContainerRow('parse_bgp', 'protocol/bgp', 'report', 'router settings, no v2 resource'),
-    ContainerRow('parse_ospf', 'protocol/ospf', 'report', 'router settings, no v2 resource'),
+    # F7.1: the routing levels are printed as the `protocol` object attribute on `panos_virtual_router`, so
+    # every row that holds an entry the emitter prints is an emitted row naming that type. A row must be
+    # emitted for the property scan to read it, because `matrix_row_for` returns a matrix row only for an
+    # emitted row.
+    ContainerRow('parse_bgp', 'protocol/bgp', 'emitted', 'panos_virtual_router'),
+    ContainerRow('parse_ospf', 'protocol/ospf', 'emitted', 'panos_virtual_router'),
     ContainerRow('parse_ipsec_tunnels', 'network/tunnel/ipsec', 'emitted',
                  'panos_ipsec_tunnel; a manual-key tunnel is reported'),
     ContainerRow('parse_ike_gateways', 'network/ike/gateway', 'emitted',
@@ -228,18 +232,28 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                  'nested block; parent type from INTERFACE_RESOURCE_TYPES', level='sub-shape'),
     ContainerRow('parse_qos_profiles', 'class', 'report', 'no v2 resource',
                  level='sub-shape'),
-    ContainerRow('parse_bgp', 'protocol/bgp/peer-group', 'report', 'no v2 resource',
+    # F7.1: the routing sub-shape rows name the same type as the level that holds them, because the entries
+    # inside them are printed inside the router's `protocol` object. `PROTOCOL_SHAPE` states these levels
+    # with the provider field spelling (`peer_group`), which is the spelling the `.tf` file states; this
+    # table names the same level with the XML tag spelling, which is what the scan reads off the input.
+    # A range entry prints inside the area, so it is a nested block: the parent row records it, and the
+    # entry itself states the name plus the `advertise` or `suppress` block the provider requires (F7.1).
+    # An interface the export places outside an area has no provider field, so it stays a report row.
+    ContainerRow('parse_bgp', 'protocol/bgp/peer-group', 'emitted', 'panos_virtual_router',
                  level='sub-shape'),
-    ContainerRow('parse_bgp', 'protocol/bgp/peer', 'report', 'no v2 resource',
+    ContainerRow('parse_bgp', 'protocol/bgp/peer', 'emitted', 'panos_virtual_router',
                  level='sub-shape'),
-    ContainerRow('parse_bgp', 'protocol/bgp/redist-rules', 'report', 'no v2 resource',
+    ContainerRow('parse_bgp', 'protocol/bgp/redist-rules', 'emitted', 'panos_virtual_router',
                  level='sub-shape'),
-    ContainerRow('parse_ospf', 'protocol/ospf/area', 'report', 'no v2 resource',
+    ContainerRow('parse_ospf', 'protocol/ospf/area', 'emitted', 'panos_virtual_router',
                  level='sub-shape'),
-    ContainerRow('parse_ospf', 'protocol/ospf/range', 'report', 'no v2 resource',
+    ContainerRow('parse_ospf', 'protocol/ospf/range', 'nested-block',
+                 'nested block inside panos_virtual_router; name plus the required choice block',
                  level='sub-shape'),
-    ContainerRow('parse_ospf', 'protocol/ospf/interface', 'report', 'no v2 resource',
+    ContainerRow('parse_ospf', 'protocol/ospf/area/interface', 'emitted', 'panos_virtual_router',
                  level='sub-shape'),
+    ContainerRow('parse_ospf', 'protocol/ospf/interface', 'report',
+                 'no provider field for an interface outside an area', level='sub-shape'),
     ContainerRow('parse_virtual_routers', 'routing-table/ip/static-route', 'emitted',
                  'panos_virtual_router_static_route_ipv4', level='sub-shape'),
     ContainerRow('parse_ipsec_tunnels', 'auto-key/proxy-id', 'nested-block',

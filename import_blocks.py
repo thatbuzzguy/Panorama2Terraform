@@ -19,7 +19,10 @@ An import block binds a resource block to the object the provider already has. S
    the action rule (F6.7): `sub_block_body` is the one reader for the level a field is read at
    (`location` for a resource, `config` for an action), `block_list` reads a list field element by
    element with the same stop-at-the-quote rule, `fields` reads every field at a level, and
-   `unescape` is the one escape set.
+   `unescape` is the one escape set. F7.1 adds two shapes of these same readers, and no new reader:
+   `sub_block_body` takes a level path, so a field inside an object value is read at that object's level,
+   and `container_elements` reads the elements of a `[` value with the same stop-at-the-close rule.
+   `field_at` is the one match all of them share.
 5. **The four `*_policy_rules` types write no block.** Their import object names the rulebase, the position in
    the live rulebase, and a list of names, so no per-entry object exists (the rule, and the reason, are stated
    in `docs/CODEBASE_ASSEMBLY.md` §7 rule 6 and pinned by `tests/test_import_blocks.py`). The type set is read from the
@@ -151,21 +154,90 @@ def sub_block_body(block, name: str) -> str:
     Terraform 1.14 grammar uses for an action's `config`. One reader serves both, so a rule that reads
     a field inside a sub-block reads the same text the block states. A block with no such sub-block is
     read as `''`, because a reader cannot guess a level that is not there.
+
+    F7.1: `name` may be a level path (`protocol.bgp.peer_group`), which the same reader walks one level
+    at a time. Each level is read at the indent the level before it states, so a field inside an object
+    value is not read at the block's own level. A `[` container is walked too: its elements are read by
+    `container_elements`.
     """
-    match = re.search(rf'\b{re.escape(name)}\s*(?:=\s*)?\{{', block.body)
-    if match is None:
-        return ''
-    start = match.end() - 1
-    depth = 0
-    for index in range(start, len(block.body)):
-        char = block.body[index]
-        if char == '{':
-            depth += 1
-        elif char == '}':
-            depth -= 1
-            if depth == 0:
-                return block.body[start + 1:index]
-    return block.body[start + 1:]
+    body = block.body
+    for level in level_path(name):
+        body = container_body(field_at(body, level))
+    return body
+
+
+def level_path(name: str) -> tuple:
+    """The level names a path states, in order (F7.1).
+
+    A path is the level names joined by `/`, which is the form `PROTOCOL_SHAPE` and `CONTAINER_TABLE`
+    use, or by `.`, which is the form the reader's callers have used. One rule reads both, so a rule that
+    walks a level and a rule that names one sub-block read the same text.
+    """
+    return tuple(part for part in re.split(r'[./]', name) if part)
+
+
+def field_at(text: str, key: str) -> str:
+    """The one match every field reader shares: the value of `key` at the level `text` states.
+
+    `text` is the block body or the text inside one container, so the level is the smallest indent in
+    the text the reader was given. This is the single rule the path walk, `field_value` and `fields`
+    all read.
+
+    The value may follow an `=`, which is the shape a container value and a leaf value take, or it may
+    follow the name directly, which is the shape the Terraform 1.14 action grammar requires for `config`.
+    A name is read as a name, so a key that is a prefix of a longer key on the same line is not a match.
+    """
+    match = re.search(rf'(?m)^ {{{level_of(text)}}}{re.escape(key)}(?=[^\w])\s*(?:=\s*)?(\S)', text)
+    return read_value(text, match.end() - 1) if match else ''
+
+
+def container_body(raw: str) -> str:
+    """The text inside one container value, without the braces or brackets that hold it (F7.1).
+
+    A leaf value is not a container, so it is returned as it was read. This is the one place the
+    reader steps down one level, so a path walk and a single sub-block name read the same text.
+    """
+    if raw[:1] in ('{', '[') and raw[-1:] in ('}', ']'):
+        return raw[1:-1]
+    return raw
+
+
+def container_elements(block, name: str) -> tuple:
+    """The elements of a `[` container value, element by element, through the same reader (F7.1).
+
+    The same stop-at-the-close rule as `block_list`, so an object element and a quoted name are read by
+    one rule. A `[` value the reader cannot walk is read as no elements, the way `sub_block_body` reads
+    a level that is not there as `''`.
+    """
+    levels = level_path(name)
+    parent = '/'.join(levels[:-1])
+    value = field_value(block, levels[-1], parent) if levels else ''
+    return elements_of(value)
+
+
+def elements_of(value: str) -> tuple:
+    """The elements of a `[` value, as the one value reader reads them (F7.1).
+
+    This is the rule `block_list` and `container_elements` share, so a rule that walks a level and a rule
+    that reads a list field count the same elements. The walk reads an element inside a list from the text
+    the reader was given, because a path cannot name the second element of a list.
+    """
+    if not value.startswith('['):
+        return ()
+    found = []
+    inner = container_body(value)
+    index = 0
+    while index < len(inner):
+        if inner[index] in ' \n\t,':
+            index += 1
+            continue
+        element = read_value(inner, index)
+        if not element:
+            break
+        # A plain element inside a list ends at its comma, so the separator stays out of the value.
+        found.append(element.rstrip(',').rstrip())
+        index += len(element)
+    return tuple(found)
 
 
 def block_value(block, key: str, sub_block: str = '') -> str:
@@ -199,22 +271,30 @@ def fields(block, sub_block: str = '') -> dict:
 
     `sub_block` names the level the fields are read at: the action rule reads the fields inside
     `config`, which is the grammar Terraform 1.14 requires for an action block (measured with
-    `terraform validate`: a field at the block's own level is refused). Without it the reader reads the
+    `terraform validate`: a field at the block's own level is refused), and the protocol rule (F7.1) reads
+    the fields inside a level path such as `protocol.bgp.peer_group`. Without it the reader reads the
     block's own level, so the value shapes the row declares can be checked against the value the block
-    states: quoted string, `true` or `false`, `[ ... ]`, or `{ ... }`.
+    states: quoted string, `true` or `false`, a number, `[ ... ]`, or `{ ... }`.
     """
-    body = sub_block_body(block, sub_block) if sub_block else block.body
+    return fields_at(sub_block_body(block, sub_block) if sub_block else block.body)
+
+
+def fields_at(text: str) -> dict:
+    """Every field at the level `text` states, as the raw value text, in the file's order (F7.1).
+
+    One rule for a block's own level and for the level inside a container, so the action rule and the
+    protocol rule read fields the same way. A field of an inline container is not at a level, so it is
+    not read here: the reader reads what the file states as a level.
+    """
     found = {}
-    for match in re.finditer(rf'(?m)^ {{{level_of(body)}}}([A-Za-z0-9_]+)\s*=\s*', body):
-        found[match.group(1)] = read_value(body, match.end())
+    for match in re.finditer(rf'(?m)^ {{{level_of(text)}}}([A-Za-z0-9_]+)\s*=\s*', text):
+        found[match.group(1)] = read_value(text, match.end())
     return found
 
 
 def field_value(block, key: str, sub_block: str = '') -> str:
     """The one match the field readers share: the value of `key` at the level `sub_block` names."""
-    body = sub_block_body(block, sub_block) if sub_block else block.body
-    match = re.search(rf'(?m)^ {{{level_of(body)}}}{re.escape(key)}\s*=\s*', body)
-    return read_value(body, match.end()) if match else ''
+    return field_at(sub_block_body(block, sub_block) if sub_block else block.body, key)
 
 
 def read_value(text: str, start: int) -> str:

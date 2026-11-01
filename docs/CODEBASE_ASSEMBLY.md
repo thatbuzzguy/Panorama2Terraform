@@ -447,12 +447,17 @@ files for every run that has content.
    replacement changes every file (`tests/golden/kitchen_sink/zones.tf` held the literal before F6.6).
    No new flag, so no new argument error path and no change to the exit codes.
 2. **The table is data, one row per location field the emitter prints** — the five fields
-   `LOCATION_SCHEMA` declares — and it states what the block prints for each. Only `ngfw_device` maps to
+   `LOCATION_SCHEMA` declares — plus one row per reference-only name, which is a field the provider marks
+   `sensitive` (F7.1), and it states what the block prints for each. Only `ngfw_device` maps to
    a variable: the device is the value a codebase changes per site. `name` is the row identity (§8 rule 3),
    `vsys` is a scope name, `panorama_device` is the credential gap (§11) and is never emitted (§8 rule 6),
-   and `rulebase` is not recorded (F3.5). Pinned by
-   `tests/test_site_data.py::test_the_table_covers_every_field_the_location_can_state` and
-   `::test_only_the_device_field_maps_to_a_variable`.
+   and `rulebase` is not recorded (F3.5). A reference-only row holds no value, because the value must never
+   reach a generated file: the block prints the reference to a variable the run declares with
+   `sensitive = true`, and no `.tfvars` line and no site row is written for it, because rule 3 writes a row
+   only for a site that names a value. The operator supplies the value in `terraform.tfvars` (§11). Pinned by
+   `tests/test_site_data.py::test_the_table_covers_every_field_the_location_can_state`,
+   `::test_only_the_device_field_maps_to_a_variable`, `::test_the_table_holds_no_property`, and
+   `tests/test_variables.py::test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_only`.
    A property at the block's own level is the entry's content, not a site value, so it is not in the
    table: `panos_template_variable` prints its value as the export states it, because the block *is* the
    PAN-OS variable and the tool cannot know which values a module takes as parameters (the tool cannot
@@ -475,13 +480,16 @@ files for every run that has content.
    no second escape rule appears; a list prints inline. Pinned by
    `tests/test_site_data.py::test_the_tfvars_bytes_for_a_string_value` and
    `::test_a_list_prints_inline_and_an_empty_list_prints_empty`.
-5. **The print site is the only place the shape is decided.** `TerraformGenerator.location_field`, called
-   by `location_block`, prints a mapped field as `var.<name>` and every other field as the quoted value.
-   `location_data` keeps the value, because the import id encodes the value (§7 rule 3) and a variable
-   name is not a device name. The pair is recorded at the print site, keyed by `unit_manifest.facts_of`,
-   the way `name_ref` records a reference name for the manifest (§3 rule 4), so `site_data.build_rows`
-   resolves nothing and names no value the run did not print. `generate_variables()` declares the
-   credentials plus what the run consumed, so `main()` calls it after the emitters (§6).
+5. **The print site is the only place the shape is decided.** `TerraformGenerator.printed_value` is the one
+   site that applies the table, and `location_field`, called by `location_block`, delegates to it (F7.1), so
+   a printed value's shape cannot be decided in two places: a mapped field prints as `var.<name>`, a
+   reference-only field prints as the reference to a name the entry states, and every other field prints as
+   the quoted value. `location_data` keeps the value, because the import id encodes the value (§7 rule 3) and a
+   variable name is not a device name. The pair is recorded at the print site, keyed by
+   `unit_manifest.facts_of`, the way `name_ref` records a reference name for the manifest (§3 rule 4), so
+   `site_data.build_rows` resolves nothing and names no value the run did not print. `generate_variables()`
+   declares the credentials plus what the run consumed, so `main()` calls it after the emitters (§6). Pinned
+   by `tests/test_site_data.py::test_the_generator_prints_a_value_through_the_table`.
 6. **The gate reads a location field as the block states it.** `Block.location_values` reads the quoted
    value or the `var.` reference through the one block reader, and `check_import_blocks` compares the
    printed name against the §5 name of the value the id states for a mapped field, and the value for every

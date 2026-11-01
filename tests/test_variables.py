@@ -9,6 +9,9 @@ no global device-group variable has a consumer.)
 F6.6 adds the second half of the declaration set: the site values the
 value-to-variable table mapped. The set is read through `site_data.parse_rows`,
 so the file and the data cannot disagree.
+
+F7.1 adds the sensitive rule: `sensitive = true` is the table's `reference_only` row, so a name
+that is not in the table is never a secret.
 """
 
 import re
@@ -17,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+import resource_mapping
 import sanity_checks
 import site_data
 from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_script
@@ -108,14 +112,22 @@ def test_provider_block_consumes_the_credentials(case):
 
 
 @pytest.mark.parametrize('case', list(CASES))
-def test_password_is_the_only_sensitive_variable(case):
-    """Only the password is a secret; hostname and username are not."""
+def test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_only(case):
+    """F7.1: `sensitive = true` follows `VALUE_VARIABLES`, not a name list.
+
+    `password` is the only reference-only name a run has a value for, so it is the only sensitive
+    block today. A protocol secret has no value in the export, so no block is declared for it: the
+    name is declared by the operator, and no generated file states the value.
+    """
     files = _generate(case)
     text = files['variables.tf']
     blocks = re.findall(
         r'variable\s+"([A-Za-z0-9_]+)"\s*\{(.*?)\n\}', text, re.S)
+    reference_only = {field for field, row in resource_mapping.VALUE_VARIABLES.items()
+                      if row == resource_mapping.REFERENCE_ONLY}
     for name, body in blocks:
-        expected = 'sensitive' in body
-        assert expected == (name == 'panos_password'), (
-            f'{case}: variable {name!r} sensitive marking is unexpected: '
-            f'{"sensitive" if expected else "not sensitive"}')
+        # A variable name is the §5 name of a field: `panos_password` is the credential field `password`.
+        field = name[len('panos_'):] if name.startswith('panos_') else name
+        marking = 'sensitive' if 'sensitive' in body else 'not sensitive'
+        assert ('sensitive' in body) == (field in reference_only), (
+            f'{case}: variable {name!r} sensitive marking is unexpected: {marking}')

@@ -44,6 +44,7 @@ import naming
 import ownership
 import provenance
 import reference_edges
+import resource_mapping
 import sanity_checks
 import shadow_coverage
 import site_data
@@ -59,8 +60,6 @@ from resource_mapping import (
     SCOPE_PLACEMENT,
     SCOPE_SHAPE,
     SCOPE_TYPES,
-    VALUE_VARIABLES,
-    VARIABLE,
 )
 from xml_input import (
     DEFAULT_SCOPE,
@@ -1693,11 +1692,18 @@ class PanoramaParser:
                 'nexthop_interface': self._get_text(route, f'nexthop/{next_hop_tag}'),
                 'metric': self._get_text(route, 'metric'),
             }))
+        # F7.1: `protocol` is a captured field of the router entry, so the entry keeps one mark and the
+        # protocol levels are the properties of that one entry. `parse_bgp` and `parse_ospf` build the
+        # levels, and each entry inside a level is marked by them.
         return {
             'name': router.get('name'),
             **self.identity_of(router),
             'interfaces': interfaces,
             'static_routes': static_routes,
+            'protocol': {
+                'bgp': self.parse_bgp(router),
+                'ospf': self.parse_ospf(router),
+            },
         }
 
     def _parse_routers(self, container_tag: str, next_hop_tag: str,
@@ -2004,139 +2010,241 @@ class PanoramaParser:
 
         return profiles
 
-    def parse_bgp(self) -> list[dict]:
-        """Parse BGP configuration: one record per virtual router that has BGP enabled.
+    def parse_bgp(self, router: ET.Element) -> dict:
+        """Build the `bgp` level of one router's protocol object (F7.1).
 
-        F4.4 keeps one path. `.//` already reaches a router under a device, so the
-        second path this method used read every device router twice. The record is
-        the router, and it carries the four scope facts, so the report can name the
-        scope the export places the router in (F3.9) instead of a single flat block.
+        The router entry is marked once by `_parse_router`, so this method fills the `protocol` field of
+        that mark instead of keeping a record of its own. Every captured field is a field
+        `PROTOCOL_SHAPE` declares for the level, so the emitter, the gate and the property scan read the
+        same names. A field's element name is the field name with `_` as `-`, which is how a PAN-OS export
+        spells it, and that rule lives here in the reader, not in a second table.
 
-        A router row belongs to `panos_virtual_router`, which `parse_virtual_routers`
-        marks. The entries under the router are property level, so the marks here are
-        the property entries the report counts on the router row.
+        A peer nests inside the peer-group entry that holds it, because the shape table states no peer
+        outside a peer group: the membership is the parent entry, not a text field. A peer the export
+        places at the `bgp` level that no peer group names cannot be expressed, so it is marked for the
+        report and the manual report prints it. The same rule holds for every entry this method reads:
+        an entry the `.tf` cannot express is marked for the report and is not put in the printed list, so
+        the report names it and the file holds no half of it.
         """
-        routers = []
-
-        for router in self.root.findall('.//network/virtual-router/entry'):
-            bgp = router.find('protocol/bgp')
-            if bgp is None or self._get_text(bgp, 'enable') != 'yes':
+        bgp_path = 'protocol/bgp'
+        bgp = router.find(bgp_path)
+        if bgp is None:
+            return {}
+        level = self._protocol_level(bgp, bgp_path)
+        groups = {}
+        # The key a level dict holds is the field the table path names, so the parse methods state a path and
+        # never spell a field name: `PROTOCOL_SHAPE` stays the one owner of the names.
+        group_path, peer_path = 'protocol/bgp/peer_group', 'protocol/bgp/peer_group/peer'
+        for group in bgp.findall('.//peer-group/entry'):
+            name = group.get('name')
+            if not name:
                 continue
+            captured = self._protocol_level(group, group_path)
+            choice_path = 'protocol/bgp/peer_group/type'
+            field = self._protocol_field_name(choice_path)
+            choice, detail = self._protocol_choice(choice_path,
+                                                   self._get_text(group, self._protocol_xml_name(field)), group)
+            captured[field] = choice
+            entry = self.mark(group, captured, detail, destination='report' if detail else None)
+            if detail:
+                continue
+            level[self._protocol_field_name(group_path)].append(entry)
+            groups[name] = entry
+            # A peer inside the peer-group element belongs to that entry, so the shape table states `peer`
+            # as a field of the peer-group level.
+            for peer in group.findall('./peer/entry'):
+                if peer.get('name'):
+                    entry[self._protocol_field_name(peer_path)].append(
+                        self.mark(peer, self._protocol_level(peer, peer_path)))
 
-            record = {
-                'name': router.get('name'),
-                **self.identity_of(router),
-                'router_id': self._get_text(bgp, 'router-id'),
-                'as_number': self._get_text(bgp, 'local-as'),
-                'peer_groups': [],
-                'peers': [],
-                'redistribution_rules': [],
-            }
+        for peer in bgp.findall('./peer/entry'):
+            name = peer.get('name')
+            if not name:
+                continue
+            captured = self._protocol_level(peer, peer_path)
+            group = self._get_text(peer, 'peer-group')
+            if group in groups:
+                # The name reference is recorded on the parent entry, which is the peer group that
+                # holds it, so the entry keeps one mark (F4.3 rule 3).
+                groups[group][self._protocol_field_name(peer_path)].append(self.mark(peer, captured))
+            else:
+                # The provider has no peer outside a peer group, so this one cannot be expressed.
+                self.mark(peer, captured, 'no peer group names it', destination='report')
+        redist_path = 'protocol/bgp/redist_rules'
+        for rule in bgp.findall('.//redist-rules/entry'):
+            if rule.get('name'):
+                level[self._protocol_field_name(redist_path)].append(
+                    self.mark(rule, self._protocol_level(rule, redist_path)))
+        # The auth profile rows state the shape for a level this parse method does not read, so the run
+        # prints no value for it and the gate rule still refuses a literal secret there (`backlog.md`).
+        return level
 
-            # Peer Groups
-            for pg in bgp.findall('.//peer-group/entry'):
-                pg_name = pg.get('name')
-                if pg_name:
-                    record['peer_groups'].append(self.mark(pg, {
-                        'name': pg_name,
-                        'type': self._get_text(pg, 'type'),
-                        'export_nexthop': self._get_text(pg, 'export-nexthop'),
-                        'import_nexthop': self._get_text(pg, 'import-nexthop')
-                    }))
+    def parse_ospf(self, router: ET.Element) -> dict:
+        """Build the `ospf` level of one router's protocol object (F7.1).
 
-            # BGP Peers
-            for peer in bgp.findall('.//peer/entry'):
-                peer_name = peer.get('name')
-                if peer_name:
-                    record['peers'].append(self.mark(peer, {
-                        'name': peer_name,
-                        'peer_as': self._get_text(peer, 'peer-as'),
-                        'local_address_interface': self._get_text(peer, 'local-address/interface'),
-                        'local_address_ip': self._get_text(peer, 'local-address/ip'),
-                        'peer_address_ip': self._get_text(peer, 'peer-address/ip'),
-                        'enable': self._get_text(peer, 'enable') == 'yes',
-                        'peer_group': self._get_text(peer, 'peer-group')
-                    }))
-
-            # Redistribution rules
-            for redist in bgp.findall('.//redist-rules/entry'):
-                rule_name = redist.get('name')
-                if rule_name:
-                    record['redistribution_rules'].append(self.mark(redist, {
-                        'name': rule_name,
-                        'enable': self._get_text(redist, 'enable') == 'yes',
-                        'address_family': self._get_text(redist, 'address-family-identifier')
-                    }))
-
-            routers.append(record)
-
-        return routers
-
-    def parse_ospf(self) -> list[dict]:
-        """Parse OSPF configuration: one record per virtual router that has OSPF enabled.
-
-        F4.4 keeps one path, the same rule as `parse_bgp`. The record is the router,
-        with the four scope facts, so the report names the scope and the router.
+        The shape table states an interface only inside an area, so an interface inside an area is
+        captured there and prints inside the area element. An interface at the `protocol/ospf` level has
+        no provider field, so it is marked for the report and the manual report prints it. A `range` entry
+        prints inside the area, and the provider requires exactly one of its `advertise` or `suppress`
+        blocks, so an entry that states neither cannot be expressed. The same rule as `parse_bgp`: an entry
+        the `.tf` cannot express is marked for the report and is not put in the printed list.
         """
-        routers = []
-
-        for router in self.root.findall('.//network/virtual-router/entry'):
-            ospf = router.find('protocol/ospf')
-            if ospf is None or self._get_text(ospf, 'enable') != 'yes':
+        ospf_path = 'protocol/ospf'
+        ospf = router.find(ospf_path)
+        if ospf is None:
+            return {}
+        level = self._protocol_level(ospf, ospf_path)
+        # The key a level dict holds is the field the table path names, the same rule as `parse_bgp`.
+        area_path, range_path, interface_path = ('protocol/ospf/area', 'protocol/ospf/area/range',
+                                                  'protocol/ospf/area/interface')
+        for area in ospf.findall('.//area/entry'):
+            name = area.get('name')
+            if not name:
                 continue
+            captured = self._protocol_level(area, area_path)
+            # A PAN-OS export states the area type as a flag element inside `type`, so the report value is
+            # the flag's tag, and the mapping for this level is the identity.
+            area_type_path = 'protocol/ospf/area/type'
+            field = self._protocol_field_name(area_type_path)
+            type_element = area.find(self._protocol_xml_name(field))
+            value = type_element[0].tag if type_element is not None and len(type_element) else ''
+            choice, detail = self._protocol_choice(area_type_path, value, type_element)
+            captured[field] = choice
+            entry = self.mark(area, captured, detail, destination='report' if detail else None)
+            if detail:
+                continue
+            level[self._protocol_field_name(area_path)].append(entry)
+            for range_entry in area.findall('.//range/entry'):
+                if not range_entry.get('name'):
+                    continue
+                captured_range = self._protocol_level(range_entry, range_path)
+                # The provider requires exactly one of the row's choice fields, so the choice is every field
+                # but the entry name, and the reason names them as the table states them.
+                choice_fields = [f for f in resource_mapping.protocol_row(range_path)['fields'] if f != 'name']
+                reason = '' if any(captured_range[f] for f in choice_fields) else 'no ' + ' or '.join(choice_fields)
+                marked = self.mark(range_entry, captured_range, reason,
+                                   destination='report' if reason else None)
+                if not reason:
+                    entry[self._protocol_field_name(range_path)].append(marked)
+            for iface in area.findall('./interface/entry'):
+                if not iface.get('name'):
+                    continue
+                captured_iface, reason = self._protocol_interface(iface)
+                marked = self.mark(iface, captured_iface, reason, destination='report' if reason else None)
+                if not reason:
+                    entry[self._protocol_field_name(interface_path)].append(marked)
 
-            record = {
-                'name': router.get('name'),
-                **self.identity_of(router),
-                'router_id': self._get_text(ospf, 'router-id'),
-                'areas': [],
-                'interfaces': [],
-            }
+        for iface in ospf.findall('./interface/entry'):
+            if not iface.get('name'):
+                continue
+            # The provider declares an interface only inside an area, so an interface at the OSPF level
+            # cannot be expressed and the manual report prints it. The row note is the reason, so the mark
+            # states no detail of its own.
+            captured, _ = self._protocol_interface(iface)
+            self.mark(iface, captured, destination='report')
+        return level
 
-            # OSPF Areas
-            for area in ospf.findall('.//area/entry'):
-                area_id = area.get('name')
-                if area_id:
-                    area_config = self.mark(area, {
-                        'area_id': area_id,
-                        'type': 'normal'
-                    })
+    def _protocol_interface(self, iface: ET.Element) -> tuple:
+        """One OSPF interface entry, read as the shape table names its fields (F7.1).
 
-                    # Check for stub/nssa
-                    if area.find('type/stub') is not None:
-                        area_config['type'] = 'stub'
-                    elif area.find('type/nssa') is not None:
-                        area_config['type'] = 'nssa'
+        `protocol/ospf/area/interface` is the only interface row the table states, because the provider
+        declares an interface only inside an area. `detail` is the reason the entry cannot be printed, which
+        is empty for a link type the mapping states.
+        """
+        path = 'protocol/ospf/area/interface'
+        field = self._protocol_field_name(f'{path}/link_type')
+        captured = self._protocol_level(iface, path)
+        choice, detail = self._protocol_choice(f'{path}/{field}',
+                                               self._get_text(iface, self._protocol_xml_name(field)), iface)
+        captured[field] = choice
+        return captured, detail
 
-                    # Area ranges
-                    ranges = []
-                    for range_entry in area.findall('.//range/entry'):
-                        range_name = range_entry.get('name')
-                        if range_name:
-                            # F4.3: the range entry is a name reference, so the
-                            # parent row records it through the field it fills.
-                            self.mark(range_entry, {'name': range_name},
-                                      'name reference in field ranges')
-                            ranges.append(range_name)
-                    area_config['ranges'] = ranges
+    @staticmethod
+    def _protocol_field_name(path: str) -> str:
+        """The field name a `PROTOCOL_SHAPE` path names, which is the last part of the path (F7.1).
 
-                    record['areas'].append(area_config)
+        The parse methods state a level as a path, so the key they write is the field the path names: the
+        captured dict and the printed dict hold the table's names, not a spelling of their own.
+        """
+        return path.rsplit('/', 1)[-1]
 
-            # OSPF Interfaces
-            for iface in ospf.findall('.//interface/entry'):
-                iface_name = iface.get('name')
-                if iface_name:
-                    record['interfaces'].append(self.mark(iface, {
-                        'interface': iface_name,
-                        'enable': self._get_text(iface, 'enable') == 'yes',
-                        'passive': self._get_text(iface, 'passive') == 'yes',
-                        'link_type': self._get_text(iface, 'link-type'),
-                        'metric': self._get_text(iface, 'metric')
-                    }))
+    def _protocol_choice(self, path: str, report_value: str, holder: Optional[ET.Element]) -> tuple:
+        """The one key a `one_of` level states, as `({the report value: the sub-shape's fields}, detail)` (F7.1).
 
-            routers.append(record)
+        `holder` is the element the sub-shape's fields live in, because the export puts them at the entry's
+        own level for a BGP peer group and inside the chosen element for an OSPF area type. `detail` is the
+        reason the mapping cannot state the value, which is empty for a value it can state: the caller marks
+        the entry for the report with it, because a one-of level with no key prints nothing.
+        """
+        row = resource_mapping.protocol_row(path)
+        chosen = row['selects'].get(report_value, '')
+        if not chosen:
+            return {report_value: {}}, (
+                f'{self._protocol_field_name(path)} {report_value} is not a value PROTOCOL_SHAPE states')
+        return ({report_value: self._protocol_level(holder, f'{path}/{chosen}', facts=False)}, '')
 
-        return routers
+    def _protocol_level(self, entry: Optional[ET.Element], path: str, facts: bool = True) -> dict:
+        """Read one protocol level as `PROTOCOL_SHAPE` names its fields (F7.1).
+
+        The shape table is the only thing that states a level's fields and shapes, so the emitter, the gate
+        rule and the property scan read the same names. A `string_list` level and a `one_of` level are
+        filled by the caller, because the entries they hold and the key they select are decided there.
+
+        `facts` is the four scope facts. They belong to the object the ledger marks, which is the entry
+        level, so a level read for a choice body or for a child element is read without them.
+        """
+        row = resource_mapping.protocol_row(path)
+        level = {}
+        for field, shape in row['fields'].items():
+            if shape == 'string_list':
+                level[field] = []
+            elif shape == 'one_of':
+                level[field] = {}
+            elif shape == 'object':
+                child = entry.find(self._protocol_xml_name(field)) if entry is not None else None
+                level[field] = self._protocol_level(child, f'{path}/{field}')
+            else:
+                level[field] = self._protocol_field(entry, field, self._protocol_xml_name(field), shape)
+        if facts and entry is not None and entry.tag == 'entry':
+            # F3.10: a protocol entry is an object the ledger records, so it carries the four scope facts
+            # of the router that holds it. A container level (`bgp`, `ospf`) is not an entry, and the
+            # emitter places only the router, so that level holds no facts.
+            level.update(self.identity_of(entry))
+        return level
+
+    @staticmethod
+    def _protocol_xml_name(field: str) -> str:
+        """The XML element name for a `PROTOCOL_SHAPE` field name (F7.1).
+
+        A PAN-OS export spells a field with `-` where the provider schema spells it with `_`, so the shape
+        table states the provider spelling and this is the one rule that turns it into the element name.
+        """
+        return field.replace('_', '-')
+
+    def _protocol_field(self, entry: ET.Element, field: str, xml_name: str, shape: str):
+        """One protocol field, read as the shape table states it (F7.1)."""
+        if entry is None:
+            return ''
+        if field == 'name':
+            # The entry name inside a list element is the entry's own `name` (F7.1 rule 1).
+            return entry.get('name') or ''
+        node = entry.find(xml_name)
+        text = (node.text or '') if node is not None else ''
+        if shape == 'bool':
+            if node is None:
+                # The export states a flag by its presence, so an element that is not there is no value:
+                # the field prints nothing, and the gate sees no field to check.
+                return ''
+            # A presence element with no text is the flag being set, which is the shape a PAN-OS export
+            # uses for `accept-summary`.
+            return text == 'yes' or not text
+        if shape == 'number':
+            return int(text) if text.isdigit() else ''
+        if shape == 'block':
+            # Presence is the value: the provider reads an empty block as the export having stated it, so
+            # the field prints `{}` when the element is there and prints nothing when it is not (F7.1).
+            return HclRef('{}') if node is not None else ''
+        return text
 
     def parse_ipsec_tunnels(self) -> list[dict]:
         """Parse IPsec VPN tunnel configurations"""
@@ -2596,7 +2704,7 @@ class TerraformGenerator:
         Recorded at the site that applied the value-to-variable table, so `site_data.py` can state the row
         without resolving a name, and `generate_variables` declares exactly the values the run printed.
         """
-        return {facts: {name: values[name] for name in sorted(values)}
+        return {facts: {name: values[name] for name in sorted(values) if values[name] is not None}
                 for facts, values in self._value_variables.items()}
 
     def record_import_row(self, resource_type: str, obj: dict, local_name: str, location: dict) -> None:
@@ -3036,23 +3144,37 @@ class TerraformGenerator:
             f'template; {self._device_template_text(device)}')
         return {'template': {'name': self._TEMPLATE_PLACEHOLDER}}
 
-    def location_field(self, key: str, value: str, obj: dict) -> str:
-        """Print one location field as the value-to-variable table says, and record the pair (F6.6).
+    def printed_value(self, key: str, value: str, obj: dict) -> str:
+        """Print one field as `VALUE_VARIABLES` says, and record the pair (F6.6, F7.1).
 
-        `VALUE_VARIABLES` is the only place that decides the shape, so the emitter has no per-type branch. The
-        pair is recorded at the site that applies the rule, the way `name_ref` records a reference name, so the
-        site data states the values the run printed and the gate rule `variables` cannot see a declaration with
-        no consumer. `localhost.localdomain` never reaches a location (F3.5), so it never reaches this method
-        and names no variable.
+        `VALUE_VARIABLES` is the only place that decides the shape, so the emitter has no per-type branch.
+        The pair is recorded at the site that applies the rule, the way `name_ref` records a reference
+        name, so the site data states the values the run printed and the gate rule `variables` cannot see
+        a declaration with no consumer. `localhost.localdomain` never reaches a location (F3.5), so it
+        never reaches this method and names no variable.
 
-        The value stays the fact in `location_data`: the import id encodes it, because the provider parses the
-        id and a variable name is not a device name.
+        A field the table states as `reference_only` is a value the provider marks `sensitive`: no
+        generated file may state it, so the run records the name with no value, and the `.tfvars` writer
+        writes no line for it. The name is the §5 name of the entry, because a secret cannot name itself.
         """
-        if VALUE_VARIABLES.get(key) != VARIABLE:
+        shape = resource_mapping.VALUE_VARIABLES.get(key)
+        if shape == resource_mapping.REFERENCE_ONLY:
+            name = naming.variable_name(value)
+            self._value_variables.setdefault(unit_manifest.facts_of(obj), {})[name] = None
+            return naming.variable_text(value)
+        if shape != resource_mapping.VARIABLE:
             return self.escape_string(value)
         name = naming.variable_name(value)
         self._value_variables.setdefault(unit_manifest.facts_of(obj), {})[name] = value
         return naming.variable_text(value)
+
+    def location_field(self, key: str, value: str, obj: dict) -> str:
+        """Print one location field as the value-to-variable table says, and record the pair (F6.6).
+
+        The value stays the fact in `location_data`: the import id encodes it, because the provider parses
+        the id and a variable name is not a device name.
+        """
+        return self.printed_value(key, value, obj)
 
     def location_block(self, resource_type: str, obj: dict, local_name: str = '') -> str:
         """Required location object for a generated resource (F2.3, F3.5).
@@ -3139,6 +3261,42 @@ class TerraformGenerator:
             return '[\n' + ',\n'.join(parts) + f'\n{indent}]'
         raise TypeError(f'Cannot render {type(value)} as HCL')
 
+    def _protocol_fields(self, path: str, level: dict, router: dict) -> dict:
+        """One level of the protocol object, printed in the shape table's order (F7.1).
+
+        `PROTOCOL_SHAPE` is the only thing that states a level's fields and shapes, so the emitter prints
+        from it and the gate rule `protocol_object` checks against it. A field with no value prints
+        nothing, a `list` level prints one object per element, and a `one_of` level prints the one key the
+        mapping states. A field the table marks `sensitive` prints as the variable reference, because no
+        generated file may state the value.
+        """
+        row = resource_mapping.protocol_row(path)
+        printed = {}
+        for field, shape in row['fields'].items():
+            value = level.get(field)
+            if value in entry_coverage.EMPTY_FIELD_VALUES:
+                continue
+            if shape == 'string_list':
+                out = [self._protocol_fields(f'{path}/{field}', element, router) for element in value]
+            elif shape == 'one_of':
+                # The mapping lives on the one_of row for this field, not on the level that holds it.
+                sub = resource_mapping.protocol_row(f'{path}/{field}')
+                report_value = next(iter(value), '')
+                key = sub['selects'].get(report_value, '')
+                out = ({key: self._protocol_fields(f'{path}/{field}/{key}', value[report_value], router)}
+                       if key else {})
+            elif shape == 'object':
+                out = self._protocol_fields(f'{path}/{field}', value, router)
+            elif resource_mapping.VALUE_VARIABLES.get(field) == resource_mapping.REFERENCE_ONLY:
+                out = HclRef(self.printed_value(field, level.get('name') or '', router))
+            else:
+                out = value
+            # A level that printed nothing prints nothing, so the block states no empty field.
+            if out in entry_coverage.EMPTY_FIELD_VALUES:
+                continue
+            printed[field] = out
+        return printed
+
     def generate_provider_config(self):
         """Generate provider.tf file"""
         content = '''# Palo Alto Networks PAN-OS Provider Configuration
@@ -3203,6 +3361,8 @@ variable "panos_password" {
         values: dict[str, object] = {}
         for recorded in self._value_variables.values():
             for name, value in recorded.items():
+                if value is None:
+                    continue  # F7.1: a reference-only name is declared, but no value is held for it
                 values[name] = value
         if values:
             content += (f'# Site values (F6.6): one variable per value `resource_mapping.VALUE_VARIABLES` maps.\n'
@@ -3213,6 +3373,15 @@ variable "panos_password" {
                             f'  description = "Site value (F6.6), read from {site_data.TFVARS_FILE}"\n'
                             f'  type        = {kind}\n'
                             '}\n\n')
+        # F7.1: a field the provider marks `sensitive` is declared with no value, so the operator supplies
+        # it in `terraform.tfvars`, which the tool never writes.
+        held = {name for recorded in self._value_variables.values() for name in recorded if name not in values}
+        for name in sorted(held):
+            content += (f'variable "{name}" {{\n'
+                        f'  description = "Sensitive protocol value (F7.1): the run holds no value for it"\n'
+                        f'  type        = string\n'
+                        f'  sensitive   = true\n'
+                        '}\n\n')
 
         with open(self.output_dir / 'variables.tf', 'w') as f:
             f.write(content)
@@ -4295,6 +4464,14 @@ variable "panos_password" {
                 ])
                 content += f'  interfaces = [{ifaces_str}]\n'
 
+            # F7.1: the protocol object is one field of the block, printed from `PROTOCOL_SHAPE`. A block
+            # shape (`protocol { ... }`) is refused by the provider, so the object value is the only shape
+            # the gate rule accepts.
+            protocol = self._protocol_fields(resource_mapping.PROTOCOL_FIELD, router.get('protocol') or {},
+                                             router)
+            if protocol:
+                content += f'  protocol = {self.hcl_value(protocol, "  ")}\n'
+
             content += '}\n\n'
 
             # Generate static routes (v2: panos_virtual_router_static_route_ipv4)
@@ -4740,8 +4917,29 @@ variable "panos_password" {
             f.write(content)
 
 
-    def generate_manual_setup_report(self, bgp_routers: list[dict],
-                                     ospf_routers: list[dict],
+    @staticmethod
+    def _protocol_report_value(value) -> str:
+        """One captured protocol value as the report prints it (F7.1).
+
+        The report prints the fields the `.tf` cannot hold, in the order `captured_fields` states them,
+        which is the field list the ledger holds for the entry. A `one_of` value prints the value the export
+        states, which is what the operator types in the GUI, not the provider key the `.tf` prints. A field
+        with nothing in it prints nothing, the same rule the emitter follows.
+        """
+        if isinstance(value, dict):
+            if len(value) == 1 and all(item in entry_coverage.EMPTY_FIELD_VALUES for item in value.values()):
+                # The one key a `one_of` level states is the value itself when the choice has no field
+                # with a value, which is what the operator types in the GUI.
+                return next(iter(value))
+            return ', '.join(f'{key}={TerraformGenerator._protocol_report_value(item)}'
+                             for key, item in value.items()
+                             if item not in entry_coverage.EMPTY_FIELD_VALUES)
+        if isinstance(value, list):
+            return ', '.join(TerraformGenerator._protocol_report_value(item) for item in value
+                             if item not in entry_coverage.EMPTY_FIELD_VALUES)
+        return '' if value in entry_coverage.EMPTY_FIELD_VALUES else str(value)
+
+    def generate_manual_setup_report(self, protocol_report: list[dict],
                                      application_filters: list[dict],
                                      manual_key_tunnels: list[dict],
                                      application_override_rules: Optional[list[dict]] = None,
@@ -4756,8 +4954,9 @@ variable "panos_password" {
         """Write MANUAL_SETUP_REPORT.txt for items that are not emitted (F2.9)
 
         Two buckets, one report:
-        - no v2 resource exists (BGP, OSPF, application filters, manual-key
-          IPsec tunnels, application override rules, QoS profiles);
+        - the generated file cannot express them: the routing protocol entries no provider field
+          reaches (F7.1), the application filter, the manual-key IPsec tunnel, the application
+          override rule, the QoS profile;
         - a v2 resource exists but the converter intentionally does not emit
           it, because only the name and description were parsed and an empty
           object would be a misconfiguration (log forwarding and zone
@@ -4766,7 +4965,7 @@ variable "panos_password" {
         The parsed data is preserved here instead of being emitted as .tf
         resources, so nothing is silently dropped (see resource_mapping.py).
         """
-        if not (bgp_routers or ospf_routers or application_filters or manual_key_tunnels
+        if not (protocol_report or application_filters or manual_key_tunnels
                 or application_override_rules or qos_profiles
                 or tunnel_monitor_profiles or schedules or log_settings
                 or zone_protection_profiles or report_only_addresses
@@ -4780,51 +4979,26 @@ variable "panos_password" {
         lines.append('against this report.')
         lines.append('')
 
-        # BGP and OSPF name the scope (F3.9), because a router is an object the export
-        # places: the parse returns one record per router with the four scope facts, so
-        # the shared grouping rule applies to it like it applies to any other object.
-        if bgp_routers:
-            lines.append('--- BGP (no v2 resource: panos_bgp, panos_bgp_peer_group, panos_bgp_peer) ---')
-            for path, routers in self._group_by_scope(bgp_routers):
+        # F7.1: the emitter prints the protocol object, so this section names only what no provider field
+        # can express: a peer no peer group names, and an interface the export places outside an area. The
+        # fields come from the captured object, which the parse fills from `PROTOCOL_SHAPE`, so the report
+        # cannot state a field the shape table does not declare. The entry is a property level, so the
+        # coverage rows count it on the router row (F4.2 AC-3.2); the reason it is named here is the mark
+        # detail, which is the same record the gate reads.
+        if protocol_report:
+            lines.append('--- Routing protocol entries the generated file cannot express (F7.1) ---')
+            for path, rows in self._group_by_scope(protocol_report):
                 lines.append(self._report_section_header(path))
-                for router in routers:
-                    lines.append(f"  router: {router['name']} "
-                                 f"(router_id: {router.get('router_id')}, "
-                                 f"as_number: {router.get('as_number')})")
-                    for pg in router['peer_groups']:
-                        lines.append(f"    peer_group: {pg['name']} (type: {pg.get('type')}, "
-                                     f"export-nexthop: {pg.get('export_nexthop')}, "
-                                     f"import-nexthop: {pg.get('import_nexthop')})")
-                    for peer in router['peers']:
-                        lines.append(f"    peer: {peer['name']} (peer_as: {peer.get('peer_as')}, "
-                                     f"local: {peer.get('local_address_ip') or peer.get('local_address_interface')}, "
-                                     f"remote: {peer.get('peer_address_ip')}, "
-                                     f"group: {peer.get('peer_group')}, enable: {peer.get('enable')})")
-                    # The capture decision is now the print decision: a redist rule the
-                    # parse keeps is printed here, so it is not a silent drop.
-                    for rule in router['redistribution_rules']:
-                        lines.append(f"    redist_rule: {rule['name']} "
-                                     f"(family: {rule.get('address_family')}, "
-                                     f"enable: {rule.get('enable')})")
-                    vsys_line = self._report_vsys_line(router).rstrip()
-                    if vsys_line:
-                        lines.append(vsys_line)
-            lines.append('')
-
-        if ospf_routers:
-            lines.append('--- OSPF (no v2 resource: panos_ospf, panos_ospf_area, panos_ospf_area_interface) ---')
-            for path, routers in self._group_by_scope(ospf_routers):
-                lines.append(self._report_section_header(path))
-                for router in routers:
-                    lines.append(f"  router: {router['name']} (router_id: {router.get('router_id')})")
-                    for area in router['areas']:
-                        ranges = f", ranges: {', '.join(area['ranges'])}" if area['ranges'] else ''
-                        lines.append(f"    area: {area['area_id']} (type: {area.get('type')}{ranges})")
-                    for iface in router['interfaces']:
-                        lines.append(f"    interface: {iface['interface']} "
-                                     f"(enable: {iface.get('enable')}, passive: {iface.get('passive')}, "
-                                     f"link type: {iface.get('link_type')}, metric: {iface.get('metric')})")
-                    vsys_line = self._report_vsys_line(router).rstrip()
+                for row in rows:
+                    lines.append(f"  router {row['router']}: {row['level']} {row['name']} "
+                                 f"({row['detail']})")
+                    # `row['fields']` is the field list the ledger states for the entry, so the report reads
+                    # every field through the captured object: the read is the property the scan counts.
+                    for field in row['fields']:
+                        text = self._protocol_report_value(row['captured'].get(field))
+                        if text:
+                            lines.append(f'    {field}: {text}')
+                    vsys_line = self._report_vsys_line(row).rstrip()
                     if vsys_line:
                         lines.append(vsys_line)
             lines.append('')
@@ -5931,9 +6105,10 @@ def main():
         # provider manages them as panos_monitor_profile)
         pbf_monitor_profiles = panorama.parse_pbf_monitor_profiles()
 
-        # Dynamic routing (one record per router, F4.4)
-        bgp_routers = panorama.parse_bgp()
-        ospf_routers = panorama.parse_ospf()
+        # Dynamic routing (F7.1): the protocol levels belong to the router record, so no separate parse
+        # call builds a routing record any more. `_parse_router` fills the `protocol` field, and the
+        # entries inside a level are marked there.
+        protocol_routers = [r for r in all_routers if any((r.get('protocol') or {}).values())]
 
         # VPN configurations
         ike_gateways = panorama.parse_ike_gateways()
@@ -5982,18 +6157,23 @@ def main():
         print(f"  - {len(tunnel_monitor_profiles)} IPsec tunnel monitor profiles")
         print(f"  - {len(pbf_monitor_profiles)} PBF path monitoring profiles")
 
-        # Dynamic routing
-        if bgp_routers:
-            print(f"  - BGP enabled on {len(bgp_routers)} router(s)")
-            for router in bgp_routers:
-                print(f"    {router['name']}: AS {router.get('as_number')}, "
-                      f"{len(router['peers'])} peers, {len(router['peer_groups'])} peer groups, "
-                      f"{len(router['redistribution_rules'])} redistribution rules")
-        if ospf_routers:
-            print(f"  - OSPF enabled on {len(ospf_routers)} router(s)")
-            for router in ospf_routers:
-                print(f"    {router['name']}: {len(router['areas'])} areas, "
-                      f"{len(router['interfaces'])} interfaces")
+        # Dynamic routing (F7.1): the counts come from the protocol levels of the router record, so the
+        # summary names the same entries the `.tf` file prints.
+        if protocol_routers:
+            print(f"  - {len(protocol_routers)} router(s) with a routing protocol")
+            for router in protocol_routers:
+                parts = []
+                bgp = (router.get('protocol') or {}).get('bgp') or {}
+                if bgp:
+                    groups = bgp.get('peer_group') or []
+                    parts.append(
+                        f"bgp: AS {bgp.get('local_as')}, {len(groups)} peer groups, "
+                        f"{sum(len(group.get('peer') or []) for group in groups)} peers, "
+                        f"{len(bgp.get('redist_rules') or [])} redistribution rules")
+                ospf = (router.get('protocol') or {}).get('ospf') or {}
+                if ospf:
+                    parts.append(f"ospf: {len(ospf.get('area') or [])} areas")
+                print(f"    {router['name']}: " + ', '.join(parts))
 
         # VPN
         print(f"  - {len(ike_gateways)} IKE gateways")
@@ -6062,17 +6242,17 @@ def main():
         if ike_gateways or ipsec_tunnels:
             tf_gen.generate_vpn_report(ike_gateways, ipsec_tunnels)
 
-        # Items that are not emitted (F2.9): BGP, OSPF, app filters, manual-key
-        # tunnels, app override, QoS, IPsec tunnel monitor (no v2 resource),
-        # and log forwarding + zone protection + schedules (v2 resource
-        # exists, profile body not parsed). See resource_mapping.py.
+        # Items that are not emitted (F2.9): the routing protocol entries no provider field reaches
+        # (F7.1), app filters, manual-key tunnels, app override, QoS, IPsec tunnel monitor, and log
+        # forwarding + zone protection + schedules (v2 resource exists, profile body not parsed). See
+        # resource_mapping.py.
         manual_key_tunnels = [t for t in ipsec_tunnels if t.get('type') != 'auto-key']
         # F4.2: scan the parsed input for a section container the container
         # table does not cover. A finding is an operator action, not a broken
         # output, so it does not change the exit code (the F4.1 gate does).
         coverage_findings = container_coverage.scan(panorama.source, panorama.parent_map)
         tf_gen.generate_manual_setup_report(
-            bgp_routers, ospf_routers, application_filters, manual_key_tunnels,
+            entry_coverage.protocol_report_rows(panorama.ledger), application_filters, manual_key_tunnels,
             application_override_rules=app_override_rules,
             qos_profiles=qos_profiles,
             tunnel_monitor_profiles=tunnel_monitor_profiles,

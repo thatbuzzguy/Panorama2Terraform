@@ -23,8 +23,12 @@ Real Terraform resources for:
 
 Report-only, because the provider has no v2 resource or the body is not parsed:
 
-- BGP, OSPF, application filters, application override rules, QoS profiles, IPsec
+- Application filters, application override rules, QoS profiles, IPsec
   tunnel monitor profiles
+- Routing levels the shape table does not state: timers, policy, `ospfv3`, `rip`, and the
+  auth profile bodies. BGP and OSPF themselves print as the `protocol` object on
+  `panos_virtual_router` ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9), so only the entries that object
+  cannot express are reported.
 - Security profile bodies, log forwarding profiles, schedules
 - Address types with no `panos_address` attribute, and the second protocol leg of
   a dual-protocol service
@@ -181,9 +185,12 @@ Keep one Terraform directory per device group, or merge the `.tf` files into one
 directory. When two device groups emit the same file name, rename the files on
 the merge. Do not merge two `provider.tf` files.
 
-Routing protocols are report-only. BGP and OSPF settings go to
-`MANUAL_SETUP_REPORT.txt`; use a different router ID per virtual router on the
-merged device.
+Routing prints as the `protocol` object on `panos_virtual_router`
+([ARCHITECTURE.md](ARCHITECTURE.md) §4.9), so the merged device needs no manual routing work for what the
+block prints. Read the routing section of `MANUAL_SETUP_REPORT.txt` for the entries that object cannot
+express: a peer no peer group names it, an OSPF interface outside an area, a choice value the mapping does
+not state, and a `range` entry that states neither choice. Use a different router ID per virtual router on
+the merged device.
 
 ## Policy order
 

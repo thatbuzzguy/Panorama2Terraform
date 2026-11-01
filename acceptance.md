@@ -1,123 +1,179 @@
-# Acceptance criteria — F6.7: the commit action per unit
+# Acceptance criteria — F7.1: the protocol object as output
 
-Feature record: `docs/CODEBASE_ASSEMBLY.md` §10. The module is `commit_actions.py`, the file is
-`actions.tf`, and `main()` writes it. The Terraform minimum decision is taken (1.14); this task
-lands it in the generator and the goldens. The gate rule for an `action` block is the open piece.
+Feature record: `PLAN.md` Epic 7. The emitter is `TerraformGenerator.generate_virtual_routers`, the
+parse methods are `parse_bgp` and `parse_ospf`, the shape table is `resource_mapping.PROTOCOL_SHAPE`,
+and the gate rule is `sanity_checks.check_protocol_object`. The tests are
+`tests/test_protocol_object.py`, with the pinned sets in `tests/test_container_coverage.py`,
+`tests/test_property_coverage.py`, `tests/test_coverage_matrix.py`, `tests/test_reports.py` and
+`tests/test_parse_network.py`.
+
+Facts measured 2026-10-31 against provider 2.0.14 (`terraform providers schema -json`, saved at
+`/tmp/opencode/panos_schema/schema.json`): `panos_virtual_router.protocol` is an object attribute with
+`nesting_mode` single; `bgp` and `ospf` are single; `peer_group`, `peer`, `redist_rules`, `area`,
+`range`, `interface`, `auth_profile`, `md5` are lists; `peer_group.type`, `area.type` and
+`area.interface.link_type` are single one-of objects; `ospf.auth_profile.md5.key`,
+`ospf.auth_profile.password` and `bgp.auth_profile.secret` are `sensitive`; `metric` is a number.
+`ospf.area.type.normal` has no attributes, so a one-of key can state nothing. `terraform validate`
+accepts `protocol = { ... }` and refuses `protocol { ... }`. The provider requires exactly one of
+`advertise` or `suppress` on a `range` element.
 
 ## Decisions
 
-### 1. One action block per unit, one file for the run
+### 1. The print shape: an object value, not a block
 
-- `actions.tf` holds one `panos_commit` action block per unit the manifest row names. It is a `.tf`
-  file, so it is a gate input (`ARCHITECTURE.md` §4.5), and it is written only when it has content,
-  following the rule for the report files and the four data files.
-- Emission is default, not a flag. The committed goldens pin what a default run emits, so a shape a
-  run writes only when a flag is on cannot be pinned (the F6.5 rule 1 argument). The goldens gain
-  `actions.tf` for both cases, and `main()` writes `actions.tf` as the last `.tf` file, so the reader
-  reads the action against the completed unit.
-- Blocks print in the identity order the manifest rows already print. No block states a timestamp or
-  a path. The LF rule stays with the write path (`backlog.md`).
+- `protocol` prints as one field of the `panos_virtual_router` block: `protocol = { ... }`. A block
+  shape (`protocol { ... }`) is refused by the provider, so the gate rule reports a `protocol` the
+  field reader cannot read as a field.
+- One level of the object is one nesting level of the table row: a `single` level prints as an object,
+  a `list` level prints as one object per element, a `one_of` level prints as the one chosen key.
+- The entry name inside a list element prints as the `name` field, the same rule
+  `entry_coverage.name_field` states for `panos_virtual_router`.
+- Field order is the table order, and `hcl_value` is the only printer, so two runs on the same bytes
+  write the same bytes.
+- A value the parse captured with no value prints nothing. A field the table declares `number` prints
+  as a number when the value is one.
 
-### 2. The action names the fact its own unit declares, and no fact another unit owns
+### 2. One table states the shape of the protocol object
 
-- The action names the fact `unit_manifest` already selects for the row (the `unit_name` rule,
-  read through a `named_fact` helper so `unit_name` is a delegate and no second level rule appears),
-  when that fact is one the provider can name in a commit filter: `device_group`, `template`,
-  `template_stack`. The provider fact is measured: `panos_commit` declares `device_groups`,
-  `templates`, `template_stacks` as filter lists and no vsys or device filter.
-- A `vsys` fact and a `vsys_device` fact name no filter, so a unit whose selected fact is one of them
-  writes no action; the unit commits through the parent unit's action, through the platform. The
-  shared unit names no fact, so it writes no action: a commit that names no filter commits the whole
-  config, not a unit. `localhost.localdomain` names no firewall (F3.5), so it never names a filter
-  and never selects a fact, and a device-group unit whose only other fact is the placeholder still
-  names its device group.
-- An action states exactly one fact: its own unit's selected fact. A fact the unit declares but an
-  ancestor unit owns is not its own fact, so the action never names it. The block cannot state a fact
-  it cannot name, so the row join is the fact the block states.
-- `ACTION_FILTERS` in `resource_mapping.py` is the one mapping from a filter field to the fact it
-  names (`device_groups` → `device_group`, `templates` → `template`, `template_stacks` →
-  `template_stack`; the `name` field names the fact its `type` states). The emitter reads it and the
-  gate reads it, so no branch names the four fields again. `SCOPE_ANSWER` gains the `device_group`
-  row so one table answers a scope name for both the scope rule and the action rule.
+`resource_mapping.PROTOCOL_SHAPE` is the one table. One row states the provider path, the nesting mode
+(`single`, `list`, `one_of`) or the leaf shape (`string`, `bool`, `number`), the fields the level
+declares, the report value that selects a `one_of` key, and the `sensitive` flag. `SHAPE_WORDS` is the
+word list the table uses, and `block` is one of the words: a `block` field is a `single` level that
+declares no attributes, so the reader prints `{}` for it when the export states it and prints nothing
+when the export does not. `WORD_TO_SCHEMA` is the one mapping from a table word to the schema word the
+test pins. The emitter reads the table to print, the gate reads it to check, and
+`tests/test_protocol_object.py` pins every row against the live provider schema the way
+`DATA_SOURCE_SCHEMA` is pinned.
 
-### 3. The block address names the identity the block states
+The table states the provider spelling. `PanoramaParser._protocol_xml_name` is the one rule that turns a
+field into the XML element the export writes, and `PanoramaParser._protocol_field_name` is the one rule
+that turns a provider path into the key the captured dict holds, so `parse_bgp`, `parse_ospf` and
+`_protocol_interface` state a path and never spell a field name. Both are named in
+`tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner`.
 
-The local name is the §5 rule (`naming.py`, taken as an argument, no second naming rule) applied to
-the fact the block states, with the identity digest of the identity as the block states it — the
-single fact in `FACT_KEYS` position, the other facts empty. So the block is data the gate can read
-back on its own: the address and the names inside agree, and an action that states a second fact
-cannot agree with its own address. This is the gate form of "no action names a scope another unit
-owns", and it needs no data file.
+The table covers the levels this converter prints, plus the `sensitive` decision rows the emitter uses
+when a parse method reaches the field. A level the table does not state is not read by the parser and is
+not checked by the gate. No second table names a shape: `sanity_checks.value_shape` stays the reader's own
+inverse, and it gains the `number` shape.
 
-### 4. The gate rule `actions`
+### 3. The one-of `type` choice
 
-The fifth gate rule for a block kind, read through the one block reader (`ARCHITECTURE.md` §4.6,
-`blocks(files, ('action',))`). `CHECK_ORDER` names `actions` after `scope_blocks`. The action grammar
-keeps its fields inside `config`: `terraform validate` refuses a field at the action's own level, so the
-one field reader reads inside `config` for this rule, which is a new shape of the same reader, not a
-second reader. Five findings, each a FAIL:
+- `peer_group.type`: `external` → `ebgp`, `internal` → `ibgp`, `external-confederation` →
+  `ebgp_confed`, `internal-confederation` → `ibgp_confed`. A nexthop belongs to the chosen sub-shape,
+  and `import_nexthop` and `remove_private_as` exist only under `ebgp`.
+- `area.type`: `normal`, `nssa`, `stub`. The report value is the sub-shape key.
+- `area.interface.link_type`: `point-to-point` → `p2p`, `broadcast`, `p2mp`.
+- A value the mapping cannot state prints nothing for that field and the report names the entry, so the
+  operator sees the choice the tool could not make. The emitter reads the captured field to look up the
+  mapping, so the property scan still records the read.
+- The report value is the export spelling, so `external` maps to `ebgp` and `point-to-point` maps to
+  `p2p`; `area.type` and `area.interface.link_type` are the identity, because the export states the
+  provider key. `tests/test_protocol_object.py::test_the_one_of_mapping_is_the_decision_the_report_prints`
+  pins both, including the `VPN_ROUTING_CONFIG_EXAMPLES.md` example, which reads `<type>external</type>`.
+- An OSPF `range` element must state exactly one of `advertise` or `suppress`, so the row declares both as
+  `block` fields and an element that states neither is a report entry. The choice detail is built from the
+  row's own choice fields, so no module spells the words.
 
-1. The action type is not in `ACTION_SCHEMA`, the data table written from the pinned provider schema
-   and verified against the live schema the way `DATA_SOURCE_SCHEMA` is. A field inside `config` is not
-   one the row declares, or a value is not the shape the row declares. `panos_push_to_devices` requires
-   `name` and `type`.
-2. The block states no fact. `panos_commit` declares no required field, so the codebase rule is what
-   makes an action a unit action: a block that names no fact commits the whole config, not a unit.
-3. A filter field does not name its fact through `ACTION_FILTERS`, or names a fact `SCOPE_ANSWER` does
-   not answer. The name is not resolved against a scope block this run declares, because an API scope run
-   writes no block for the scope it read (measured: the sample golden names `Production-DG` in a filter
-   and declares no `panos_device_group` block). A name inside a filter is not a `.name` reference the
-   `references` rule can reach, so `SCOPE_ANSWER` is the answer.
-4. The block states more than one name. A second name is a second fact, so the block cannot name one
-   unit.
-5. The block's local name does not answer the names inside the block: it must equal the §5 name plus the
-   digest of the identity the names inside build, which is the gate form of "no action names a scope
-   another unit owns".
+### 4. A peer belongs to the peer group entry that holds it
 
-The gate still reads no data file: the rule reads the block text, the tables, and `naming.py`.
+- `parse_bgp` nests the peer inside the peer group entry it read it in, so the record states the
+  membership as the parent, not as a `peer_group` text field. The peer prints inside the peer group
+  element.
+- A peer the export holds in `bgp.peer` with no peer group cannot be expressed: the provider has no
+  peer outside a peer group. The parse marks it `report_only` with the reason, and the manual report
+  names the whole entry, so the file holds no half of it. The same rule covers an out-of-area interface,
+  an unmappable `one_of` value, and a `range` entry with no choice.
+- `parse_bgp` and `parse_ospf` fill the `protocol` part of the router object that `_parse_router`
+  marked, so one entry keeps one mark. `protocol` is a captured field of the router entry, so the
+  matrix row declares it as a property the emitter reads.
 
-### 5. The Terraform minimum is in the generator and the goldens
+### 5. An OSPF interface lives inside the area
 
-The generated `terraform` block declares `required_version = ">= 1.14"` (actions need 1.14; the
-provider needs 1.8). Both committed goldens change, deliberately. The CI validate job runs Terraform
-1.16.1, and the local gate runs 1.16.2, so `terraform validate` accepts the action blocks. The
-generated `README.md` names `actions.tf` and states the 1.14 minimum; `README.md` and
-`docs/USAGE_GUIDE.md` state 1.14 instead of 1.0. These are report-shape changes, not golden bytes.
+The provider declares an interface only inside `area`, so an interface inside an area prints inside the
+area element. An interface at the `protocol/ospf` level has no provider field, so its container row
+stays `report` and the manual report prints it.
 
-### 6. The push half stays open
+### 6. A sensitive field prints as the variable reference
 
-`panos_push_to_devices` is not emitted. Its `name` and `type` are expressible, but `devices` names
-site serials, which is the `.tfvars` decision the write path holds (`backlog.md`). The gate rule
-reads a hand-written push block through `ACTION_SCHEMA` today; the emitted shape stays in
-`backlog.md`. No coverage matrix row covers an `action` block, the decision F5.5 made for a `data`
-block: an action names no entry, so the per-entry report cannot name one.
+- `VALUE_VARIABLES` is the one table that decides the shape of a printed field, so it gains the rows for
+  the three provider `sensitive` facts: `secret`, `key` and `password`. The shape is `reference_only`: the
+  block prints `var.<name>`, the run declares the variable with `sensitive = true` and no value, and no
+  generated file states the value.
+- The name is `naming.py` applied to the entry name, because a value cannot name itself. `naming.py`
+  stays the one naming rule. `TerraformGenerator.printed_value` is the one print site that reads it.
+- A reference-only name records no value, so `site_data.py` rule 2 writes no `.tfvars` line for it and the
+  operator supplies the value in `terraform.tfvars`, which the tool never writes. A report row is only an
+  entry the file cannot express, so a sensitive field writes no report line: the variable is the rule that
+  carries it.
+- The completeness test for `VALUE_VARIABLES` covers the leaf fields `PROTOCOL_SHAPE` states, so the
+  table is complete for every field the emitter prints.
+
+### 7. The container rows move, and the gate rule for an object attribute
+
+- `container_coverage.CONTAINER_TABLE`: `protocol/bgp` and `protocol/ospf` move from `report` to
+  `emitted` with the note `panos_virtual_router`. The sub-shape rows for the entries the emitter prints
+  (`peer-group`, `peer`, `redist-rules`, `area`, `area/interface`) move to `emitted` with the same note,
+  because the property scan reads an entry only through an `emitted` row. `protocol/ospf/range` becomes
+  `nested-block` (the element prints inside the area), and `protocol/ospf/interface` stays `report` with
+  the reason.
+- The gate rule `protocol_object` reads the object through the one block reader and the one field
+  reader. `import_blocks.py` gains two shapes of the same reader: the fields inside a container value
+  and the elements of a list value. `CHECK_ORDER` names `protocol_object` after `actions`. Five findings,
+  each a FAIL:
+  1. A `protocol` the field reader can read as a name but not as a field, which is the block shape the
+     provider refuses.
+  2. A level the shape table states no row for, a field the row does not declare, or a value whose shape
+     the reader reads differently from the shape the row states. `one_of` and `block` are read as
+     `object`, because a one-of level is an object that states one key and a `block` field is an object
+     that states nothing but its presence.
+  3. A `one_of` level states no key, or more than one key, or a key the row's mapping does not state, or
+     a field inside a sub-shape the row for that sub-shape does not state.
+  4. A field the table marks `sensitive` states a literal value instead of a `var.` reference.
+  5. An element inside a `list` level states no `name`.
+- The gate still reads no data file: the rule reads the block text, `PROTOCOL_SHAPE`, and `naming.py`.
+
+### 8. The report prints what the emitter cannot express
+
+The manual setup report prints only the rows the ledger marks `report`, read through
+`entry_coverage.protocol_report_rows`, so a router whose whole protocol is expressed writes no report
+line and the section prints only when it has content, following the rule for the report files. A row
+names the router, the level and the entry name, then the fields in the order the ledger's row declares,
+then the Vsys line. Rows are sorted by line, container and name, so two runs print the same lines. The
+pinned details are `no peer group names it`, `no advertise or suppress`, `no provider field for an
+interface outside an area`, and a `link_type` value the shape table does not state.
+`tests/test_reports.py` pins the line shape.
 
 ## Acceptance criteria
 
-1. `commit_actions.py` states the rules and `main()` writes `actions.tf` only when it has content,
-   as the last `.tf` file. Pinned by `tests/test_commit_actions.py`, including
-   `::test_one_action_block_per_unit_the_manifest_names`,
-   `::test_an_action_names_the_fact_its_own_unit_declares`,
-   `::test_an_action_states_no_fact_an_ancestor_declares`,
-   `::test_a_shared_unit_and_a_vsys_unit_and_a_device_unit_write_no_action`,
-   `::test_the_placeholder_device_never_names_a_filter`,
-   `::test_the_block_address_names_the_identity_the_block_states`, and
-   `::test_the_file_is_written_only_when_it_has_content`.
-2. The gate rule reads `action` blocks with the one block reader; `CHECK_ORDER` names `actions` after
-   `scope_blocks`. Pinned by `tests/test_commit_actions.py`, including one test per violation type and
-   `::test_the_rule_reads_action_blocks_with_the_one_reader` and
-   `::test_no_false_positive_across_the_corpus`.
-3. `ACTION_SCHEMA` is data the gate reads and the test pins against the live provider schema;
-   `ACTION_FILTERS` is the one field mapping, `SCOPE_ANSWER` the one answer table, `naming.py` the one
-   naming rule, `unit_manifest.named_fact` the one level rule. `tests/test_commit_actions.py` pins that
-   no module defines a second one.
-4. The committed goldens declare Terraform 1.14 and gain `actions.tf`; every other golden byte is
-   unchanged. `terraform validate` accepts the new blocks.
-5. The generated `README.md` names `actions.tf` and states the minimum; the root `README.md` and
-   `docs/USAGE_GUIDE.md` state 1.14.
-6. `docs/CODEBASE_ASSEMBLY.md` §10 states the landed rules and names the module and the tests; the
-   open push half stays recorded in `backlog.md`.
-7. Two runs on the same source write the same action bytes, pinned by
-   `tests/test_commit_actions.py::test_two_runs_write_the_same_bytes`.
-8. `ruff check .` is clean, `pytest` is green, the gate reports no finding on the goldens, and the
-   change is committed. The tracking markdown loses the F6.7 detail, and the next feature is F7.1.
+1. `tests/test_protocol_object.py` pins the print shape, the one-of mapping, the peer membership, the
+   OSPF interface placement, the sensitive reference, and the gate rule, including
+   `::test_the_shape_table_is_the_measured_provider_shape`, `::test_the_table_is_the_only_shape_owner`,
+   `::test_a_peer_prints_inside_its_peer_group`, `::test_a_one_of_level_prints_one_key`,
+   `::test_an_unmapped_one_of_value_prints_nothing_and_is_reported`,
+   `::test_an_ospf_interface_at_the_router_level_is_reported`,
+   `::test_a_sensitive_field_prints_as_the_variable_reference`, and one test per gate finding.
+2. `PROTOCOL_SHAPE` is data the gate reads and the test pins against the live provider schema;
+   `VALUE_VARIABLES` is the one shape table for a printed field; `naming.py` is the one naming rule;
+   `import_blocks.py` is the one reader, with the container shapes added to it; `SHAPE_WORDS` is the one
+   word list. No module defines a second one, and `tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner`
+   keeps the parse methods from spelling a field name.
+3. The property scan measures the moved rows against `panos_virtual_router`, so the matrix row declares
+   every field the emitter reads, and its `emitter` names the report writer for the fields only the
+   report reads.
+4. The manual report prints only the rows the ledger marks `report`, and `tests/test_reports.py` pins the
+   line shape, the router name, the field order and the four detail strings.
+5. `CHECK_ORDER` names `protocol_object` after `actions`, and the gate reports no finding on the
+   committed goldens.
+6. `tests/golden/kitchen_sink/virtual_routers.tf` gains the `protocol` object. Every other golden byte
+   is unchanged. Report files are not goldens.
+7. `docs/RESOURCE_MAPPING.md`, `README.md`, `docs/README.md`, `docs/USAGE_GUIDE.md`,
+   `docs/MIGRATION_GUIDE.md`, `docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md`,
+   `docs/VPN_ROUTING_CONFIG_EXAMPLES.md`, `docs/ARCHITECTURE.md` §4.6 and §4.9, and
+   `docs/CODEBASE_ASSEMBLY.md` §9 state the landed rules and name the module or the test that holds them.
+   `REPORT_ONLY_TYPES` loses the six routing rows, and the BGP example in
+   `VPN_ROUTING_CONFIG_EXAMPLES.md` reads `<type>external</type>`, because that is the value the mapping
+   turns into the provider key.
+8. Two runs on the same source write the same bytes, pinned by
+   `tests/test_protocol_object.py::test_two_runs_write_the_same_bytes`.
+9. `ruff check .` is clean, `pytest` is green, the gate reports no finding on the goldens, and the
+   change is committed. The tracking markdown loses the F7.1 detail.

@@ -85,9 +85,11 @@ Pinned by `tests/test_robustness.py::test_entry_without_name_is_skipped`,
 `tests/test_edge_cases.py::test_address_emit_covers_v2_types_and_reports_the_rest`,
 and the duplicate-name tests above.
 
-Two parse methods return tables instead of objects: `parse_associations` (the
-membership the export declares) and `parse_bgp` / `parse_ospf` (settings with no
-v2 resource).
+One parse method returns a table instead of an object: `parse_associations` (the
+membership the export declares). `parse_bgp` and `parse_ospf` return one level of
+the router's `protocol` object (§4.9), and the router entry is marked once by
+`_parse_router`, so they fill the `protocol` field of that mark instead of keeping
+a record of their own.
 
 ### 2.4 Where each parsed entry goes
 
@@ -321,6 +323,12 @@ Six rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
   are `emitted` rows, so a scope entry is an object the output writes, and the
   membership lists inside a scope entry stay `bookkeeping`, because no provider
   resource exists for a device.
+- **An entry the output cannot express is a report row, and the file holds no half of it** (F7.1): a
+  peer no peer group names, an OSPF interface outside an area, a `one_of` value the mapping cannot state,
+  and an OSPF `range` entry that states neither choice are marked `report` with the reason, and the parse
+  does not put them in the printed list. The report names the whole entry, so an operator sees the choice
+  the tool could not make. Pinned by `tests/test_parse_network.py` and
+  `tests/test_protocol_object.py::test_an_unmapped_one_of_value_prints_nothing_and_is_reported`.
 - **Captured fields** are the keys of the object the method built, minus the entry
   name and the four scope facts (§2.2), minus keys with no value, in sorted order.
   An entry with nothing but its name says `captured: name only`. A field the
@@ -815,14 +823,18 @@ Four report files, each written only when it has content:
   parent source (`--path` with `--parent`, the api source only; a path that is not a scope path is
   an argument error, exit 2).
 - `MANUAL_SETUP_REPORT.txt` — report-only areas, the location facts a type
-  cannot carry, and the placeholder template. The BGP and OSPF blocks name the scope
-  and the router, because two routers in two scopes can hold the same values, and they
-  use the same grouping rule as the other two reports. A field the parse captures for
-  these sections is either printed or reported as a property no output read (§3.2),
-  so it cannot be held and left out. Pinned by
-  `tests/test_reports.py::test_bgp_and_ospf_sections_name_the_scope_and_the_router`,
-  `::test_device_router_section_names_the_device`, and
-  `::test_bgp_section_prints_what_the_parse_captured`.
+  cannot carry, and the placeholder template. The routing section prints only the rows the ledger marks
+  `report` (`entry_coverage.protocol_report_rows`), so it holds no duplicate of the `.tf`: an entry the
+  emitter printed is not named here. Each row names the scope and the router, because two routers in two
+  scopes can hold the same values, and it uses the same grouping rule as the other two reports. The row's
+  level is the last part of the shape table's path, and its reason is the mark detail; a row whose reason is
+  the container row's note states no detail of its own. The fields are the ledger's field list, read through
+  the captured object, so the report cannot state a field the shape table does not declare, and the property
+  scan counts the report's read as an output use. Pinned by
+  `tests/test_reports.py::test_protocol_report_sections_name_the_scope_and_the_router`,
+  `::test_protocol_report_prints_only_what_the_file_cannot_hold`,
+  `::test_protocol_report_is_byte_identical_between_runs`, and
+  `::test_device_router_section_names_the_device`.
 - `INTERFACE_MIGRATION_REPORT.txt` and `VPN_MIGRATION_REPORT.txt` — one section
   per scope the export declares: device group first, then the template, then the
   device, then the object kind inside the section. One shared rule
@@ -882,6 +894,7 @@ conversion. The splitter writes XML, so it has no `.tf` to check.
 | `import_blocks` | every `import` block agrees with the `resource` block it names: the type, the local name, the entry name, and the location | FAIL for a violation; WARN for a rule type the shape cannot state (§4.8) |
 | `scope_blocks` | a name written inside a scope block's `location` names a scope this run declares, by the type that defines that scope | FAIL |
 | `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
+| `protocol_object` | every `protocol` object on a `panos_virtual_router` block matches its `PROTOCOL_SHAPE` row (§4.9) | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a variable this run declares (F6.6) | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
@@ -892,7 +905,11 @@ One block reader serves every block kind the gate reads: `resource`, `data`,
 `import`, and `action`. F5.5 added the `data` rule and F6.4 added the `import` rule
 with the same reader (§4.8), so no second reader appears; F6.5 reads the scope blocks
 with the same reader too, and F6.7 reads the action blocks with the same reader and the
-same field reader, given the sub-block it reads (`config`). A block is read up to the
+same field reader, given the sub-block it reads (`config`). F7.1 reads the `protocol` object
+with the same two readers, and the field reader gained the two shapes of a value an object
+holds: the fields inside a container value (`import_blocks.fields_at`) and the elements of a
+list value (`import_blocks.elements_of`), so the action rule and the protocol rule read fields
+the same way. A block is read up to the
 first column-0 brace, which is how the generator writes one and how the tests read
 one. A block is reported once for a fact: `location_present` reads both kinds, so
 the `data_blocks` rule reports the shape inside the block, not the missing block.
@@ -950,6 +967,19 @@ scope writes no block for the scope it read. What makes an action a unit action 
 local name is the §5 name plus the digest of the identity the names inside the block build, so the
 block answers its own address. Pinned by `tests/test_commit_actions.py`: one test per violation
 type, the one-reader pin, and `::test_no_false_positive_across_the_corpus`.
+
+`protocol_object` (F7.1) reads the `protocol` object of a `panos_virtual_router` block against
+`resource_mapping.PROTOCOL_SHAPE` (§4.9), through the same block reader and the same field reader. Five
+findings, each read from the file text: `protocol` must be a field, because the provider reads
+`protocol = { ... }` and refuses `protocol { ... }`; a level, a field, or a value must be the shape the row
+states, where `one_of` and `block` are read as `object` because a choice level states one key and a `block`
+field states nothing but its presence; a choice level states exactly one key that the row's mapping names; a
+field the row marks `sensitive` prints as the variable reference, never as a literal; and an element inside
+a `[` container states the name the row reads as the entry name. The rule reads no data file: the block text
+and the tables are the whole input. Pinned by `tests/test_protocol_object.py`, one test per finding, and
+`::test_the_shape_table_is_the_measured_provider_shape` for the table itself. The gate order is pinned by
+`::test_the_rule_runs_after_actions_in_the_gate_order`, and the goldens by the run inside
+`::test_a_one_of_level_prints_one_key`.
 
 - A WARN does not fail the gate: a placeholder is correct output that still needs
   an operator action, so the run exits 0.
@@ -1060,6 +1090,52 @@ Pinned by `tests/test_import_blocks.py`, including the id round trip, each viola
 detects, the rule-types decision, the no-false-positive run across the fixture corpus, the order, the
 byte equality between two runs, and the golden no-change rule. The provider example is pinned in
 `docs/CODEBASE_ASSEMBLY.md` §12.
+
+### 4.9 The protocol object (F7.1)
+
+`panos_virtual_router.protocol` is an object attribute. `resource_mapping.PROTOCOL_SHAPE` is the one table
+that states its shape: one row per level this converter prints, with the nesting mode or the leaf shape, the
+fields the level declares, the value that selects a `one_of` key, and the `sensitive` flag. The emitter
+(`TerraformGenerator._protocol_fields`), the gate rule (§4.6) and the test read that table, so no second
+table names a shape.
+
+1. **`protocol` prints as one field of the block**: `protocol = { ... }`. `terraform validate` accepts the
+   value and refuses the block shape, so the gate rule reports a `protocol` the field reader cannot read as
+   a field. Pinned by `tests/test_protocol_object.py::test_protocol_prints_as_an_object_field_not_a_block`.
+2. **One table path is one nesting level of the printed value.** A `single` level prints as an object, a
+   `list` level prints one object per element, a `one_of` level prints the one key the row's mapping states,
+   and a `block` field prints `{}`, because the export states it by presence. Field order is the table order
+   and `hcl_value` is the only printer, so two runs on the same bytes write the same bytes.
+3. **One rule names a field.** The entry name inside a list element prints as the `name` field, the rule
+   `entry_coverage.name_field` states (§3.2). The table states the provider spelling, the export spells it
+   with `-`, and `PanoramaParser._protocol_xml_name` is the one rule that turns one into the other. The key a
+   parse method writes is the field the table path names (`_protocol_field_name`), so no parse method spells
+   a field name of its own. Pinned by `tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner`.
+4. **The mapping is the one lookup, and the entry it cannot state is the entry the report names.**
+   `_protocol_choice` returns the printed value and the reason it cannot be printed; the parse marks the
+   entry for the report with that reason and does not put it in the printed list, so the report names the
+   whole entry and the file holds no half of it (§3.2). The same rule covers a peer no peer group names, an
+   interface outside an area, a link type the mapping does not state, and a `range` entry that states neither
+   choice.
+5. **A choice level states one key.** `peer_group.type` maps the four export values to the four provider
+   sub-shapes; `area.type` and `area.interface.link_type` are the identity, because the export states the
+   provider key. `import_nexthop` and `remove_private_as` exist only under `ebgp`, so each sub-shape row
+   states its own fields. Pinned by
+   `tests/test_protocol_object.py::test_the_one_of_mapping_is_the_decision_the_report_prints`.
+6. **Membership is the parent entry.** A peer prints inside the peer-group element that holds it, and an OSPF
+   interface prints inside the area element that holds it, because the table states no peer outside a peer
+   group and no interface outside an area. A peer group name is not a field the block prints, because the
+   entry it names is the parent.
+7. **An OSPF `range` element must state exactly one of `advertise` or `suppress`**, so the row declares both
+   as `block` fields and an element that states neither is a report row.
+8. **A sensitive field prints as the variable reference**, through `VALUE_VARIABLES`
+   (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2), and the run holds no value for it, so no generated file states
+   one. `SHAPE_WORDS` is the word list the table uses, and `sanity_checks.value_shape` is its reader inverse.
+
+The container rows for the levels this converter prints are `emitted` with the note
+`panos_virtual_router` (`container_coverage.CONTAINER_TABLE`), so the property scan measures them against the
+router row. Pinned by `tests/test_container_coverage.py`, `tests/test_coverage_matrix.py` and
+`tests/test_property_coverage.py`.
 
 ## 5. Naming rules
 

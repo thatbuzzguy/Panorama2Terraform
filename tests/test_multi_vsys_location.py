@@ -196,24 +196,33 @@ def test_every_parse_method_records_the_four_scope_facts(make_parser):
     without them cannot be placed. The rule holds for every parse method that
     returns objects. parse_device_groups is the one exception: it returns the
     device groups themselves, which are the scope, not an object inside a
-    scope. Tables (associations) and settings (BGP, OSPF) are not objects.
+    scope. Tables (associations) are not objects.
+
+    `parse_bgp` and `parse_ospf` take the router element (F7.1), so they are called with each router
+    the fixture names. A level is not an object: the entries inside it are, and they carry the facts of
+    the router that holds them.
     """
     parser = make_parser('kitchen_sink.xml')
     facts = {'device_group', 'vsys', 'template', 'vsys_device'}
+    routers = [entry for entry in parser.root.findall('.//virtual-router/entry')
+               if entry.find('protocol') is not None]
+    assert routers, 'the fixture names no router with a protocol'
     checked = 0
     for name in sorted(dir(parser)):
         if not name.startswith('parse_') or name == 'parse_device_groups':
             continue
-        result = getattr(parser, name)()
-        if isinstance(result, dict) and all(isinstance(v, list) for v in result.values()):
-            items = [item for values in result.values() for item in values]
-        elif isinstance(result, list):
-            items = result
+        if name in ('parse_bgp', 'parse_ospf'):
+            results = [getattr(parser, name)(router) for router in routers]
         else:
-            continue
-        for item in items:
-            assert facts <= set(item), f'{name} returned an object without the four facts: {item}'
-            checked += 1
+            results = [getattr(parser, name)()]
+        for result in results:
+            if not isinstance(result, (dict, list)):
+                continue
+            values = result.values() if isinstance(result, dict) else [result]
+            items = [item for value in values if isinstance(value, list) for item in value]
+            for item in items:
+                assert facts <= set(item), f'{name} returned an object without the four facts: {item}'
+                checked += 1
     assert checked > 40, f'only {checked} objects checked: the fixture does not exercise the rule'
 
 

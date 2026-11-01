@@ -1,12 +1,13 @@
 <?xml version="1.0"?>
-<!-- F4.4: the BGP and OSPF manual report sections name the scope and the router.
+<!-- F7.1: the protocol report section names the scope and the router.
 
      Two routers, in two scopes, so a flat report cannot tell them apart:
 
-       device group Router-Group   R1, OSPF enabled
-       template Router-Template    R2, BGP enabled
+       device group Router-Group   R1, OSPF enabled, interface outside an area
+       template Router-Template    R2, BGP enabled, peer no peer group names
 
-     Each router is read once, because the parse keeps one path.
+     Each router is read once, because the parse keeps one path. The two entries the
+     report prints are the two `PROTOCOL_SHAPE` states no provider field for.
 -->
 <config version="10.1.0" urldb="paloaltonetworks">
   <device-group>
@@ -23,6 +24,11 @@
                     <type><stub/></type>
                   </entry>
                 </area>
+                <interface>
+                  <entry name="ethernet1/1">
+                    <enable>yes</enable>
+                  </entry>
+                </interface>
               </ospf>
             </protocol>
           </entry>
@@ -47,6 +53,12 @@
                     <import-nexthop>non-default</import-nexthop>
                   </entry>
                 </peer-group>
+                <peer>
+                  <entry name="10.2.0.1">
+                    <peer-as>65003</peer-as>
+                    <enable>yes</enable>
+                  </entry>
+                </peer>
                 <redist-rules>
                   <entry name="redist-connected">
                     <enable>yes</enable>

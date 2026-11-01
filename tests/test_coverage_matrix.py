@@ -10,8 +10,8 @@ Panorama-XML-element matrix. These tests enforce it in three directions:
 - row shape (F4.4): eight fields. A row names the emitter method that writes
   its output file and the properties that emitter reads. The declared
   properties are grounded in the emitter source (or the generator helper it
-  calls), and the measured read sets are pinned by
-  tests/test_property_coverage.py. A row whose type declares no `name` is checked
+  calls), or in the shape table the emitter prints from (F7.1), and the measured
+  read sets are pinned by tests/test_property_coverage.py. A row whose type declares no `name` is checked
   against the field that carries it (F6.5 decision 4), and the one row whose block
   carries the entry name and the location only declares no property.
 - element grounding: every row's fixture actually contains the row's
@@ -35,6 +35,7 @@ from pathlib import Path
 import pytest
 
 import entry_coverage
+import resource_mapping
 from conftest import FIXTURES_DIR, run_script
 from resource_mapping import COVERAGE_MATRIX, EMITTED_TYPES
 
@@ -215,11 +216,24 @@ def test_row_names_its_emitter_and_properties(row, converter_module):
         assert row['properties'], f"row for {row['resource']} declares no properties"
 
 
+def _shape_table_grounding(row: dict) -> set:
+    """The properties the row's emitter prints through `PROTOCOL_SHAPE` (F7.1).
+
+    `generate_virtual_routers` has no per-field branch: it prints the fields the shape table declares for
+    each level of the `protocol` object. So a field the table states is grounded by the table, and
+    tests/test_protocol_object.py is what keeps the table against the live provider schema.
+    """
+    if 'generate_virtual_routers' not in row['emitter']:
+        return set()
+    return {field for shape_row in resource_mapping.PROTOCOL_SHAPE.values() for field in shape_row['fields']}
+
+
 @pytest.mark.parametrize('row', ROWS, ids=_row_id)
 def test_declared_property_is_a_key_the_emitter_reads(row, converter_module):
     """Each declared property appears as a key read inside the row's emitter."""
     literals = set()
     for method in row['emitter']:
         literals |= _literal_keys(converter_module.TerraformGenerator, method)
+    literals |= _shape_table_grounding(row)
     missing = [prop for prop in row['properties'] if prop not in literals]
     assert missing == [], (row['resource'], missing)

@@ -31,6 +31,15 @@
                         <enable>yes</enable>
                         <peer-group>PG-Branch</peer-group>
                       </entry>
+                      <!-- F7.1: no provider field holds a peer outside a peer group, so this entry is
+                           named in the manual setup report -->
+                      <entry name="10.55.0.9">
+                        <peer-as>65003</peer-as>
+                        <peer-address>
+                          <ip>10.55.0.9</ip>
+                        </peer-address>
+                        <enable>yes</enable>
+                      </entry>
                     </peer>
                     <redist-rules>
                       <entry name="redist-static">

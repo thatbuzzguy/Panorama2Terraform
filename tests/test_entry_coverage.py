@@ -46,11 +46,25 @@ def _ledger(fixture_name: str, folder: Path = FIXTURES_DIR) -> entry_coverage.En
     return entry_coverage.EntryLedger(source, container_coverage.parent_map(source.root))
 
 
+def _parse_every(parser) -> None:
+    """Run every parse method, so the ledger holds the marks the parse made.
+
+    `parse_bgp` and `parse_ospf` take the router element (F7.1), so they are called for each router the
+    fixture names; every other parse method takes no argument.
+    """
+    for name in [n for n in dir(parser) if n.startswith('parse_')]:
+        method = getattr(parser, name)
+        if name in ('parse_bgp', 'parse_ospf'):
+            for router in parser.root.findall('.//virtual-router/entry'):
+                method(router)
+        else:
+            method()
+
+
 def _parsed_ledger(converter_module, fixture_name: str) -> entry_coverage.EntryLedger:
     """Run every parse method, so the ledger holds the marks the parse made."""
     parser = converter_module.PanoramaParser(xml_input.parse_xml(FIXTURES_DIR / fixture_name))
-    for name in [n for n in dir(parser) if n.startswith('parse_')]:
-        getattr(parser, name)()
+    _parse_every(parser)
     return parser.ledger
 
 
@@ -189,8 +203,7 @@ def test_corpus_entries_in_a_covered_container_are_all_marked(converter_module):
             parser = converter_module.PanoramaParser(xml_input.parse_xml(path))
         except (ET.ParseError, xml_input.UnsafeInputError):
             continue  # the hostile fixtures are refused before the parse
-        for name in [n for n in dir(parser) if n.startswith('parse_')]:
-            getattr(parser, name)()
+        _parse_every(parser)
         ledger = parser.ledger
         for entry in ledger.entries():
             container = ledger.parents.get(entry)

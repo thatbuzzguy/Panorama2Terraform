@@ -210,7 +210,7 @@ The converter writes a file only when it has content.
 | `imports.tf` | One `import` block per entry the run declares, as `to` and `id`: the block address, and base64 of the location object plus the entry name. Written only for a run that declares `--import-blocks` and has a block to write (F6.4) |
 | `README.md` | Deployment steps for the generated directory |
 | `SOURCE.txt` | One record per source the run read, as `field: value` data: kind, name, path, scope, request, cache_entry, size, and the SHA-256 hex of the parsed bytes |
-| `MANUAL_SETUP_REPORT.txt` | Report-only configuration, plus a section for a container no parse method reads |
+| `MANUAL_SETUP_REPORT.txt` | Report-only configuration, plus a section for a container no parse method reads, and the routing entries the `protocol` object cannot express ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9) |
 | `INTERFACE_MIGRATION_REPORT.txt` | Interface and IP inventory |
 | `VPN_MIGRATION_REPORT.txt` | VPN inventory and the pre-shared key actions |
 | `CONVERSION_REPORT.txt` | One line per entry the parse read, plus the gap section, the property section, the shadow section for a run that declares a parent source, the repeated-name section for a name the ownership rule cannot decide, the reference-cycle section for two units that reference each other, and the state ownership and drift sections for a run that declares a state source |
@@ -547,10 +547,11 @@ parse method that reads entries without marking them fails
 The limits are recorded in [`../backlog.md`](../backlog.md) and in
 [RESOURCE_MAPPING.md](RESOURCE_MAPPING.md). The main ones:
 
-- BGP, OSPF, application filters, application override rules, QoS profiles, and
-  IPsec tunnel monitor profiles have no v2 resource of their own. BGP and OSPF are
-  carried as the `protocol` object attribute on `panos_virtual_router`; the generator
-  does not print it yet (F7.1 in `PLAN.md`).
+- Application filters, application override rules, QoS profiles, and
+  IPsec tunnel monitor profiles have no v2 resource of their own. BGP and OSPF are not
+  report-only areas: they print as the `protocol` object attribute on
+  `panos_virtual_router` ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9), and the report names the
+  routing entries that object cannot express.
 - Security profile bodies, log forwarding profiles, and schedules are captured
   only as name and description, so they are reported, not emitted.
 - Address types with no `panos_address` attribute (country, region, continent,

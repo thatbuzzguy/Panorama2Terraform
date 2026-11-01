@@ -24,10 +24,10 @@ objects, the site data layer, and the commit action per unit. Their rules are in
 directory, so the write path that splits the output per unit directory and the gate rule
 that reads a data file are the shared open steps, in `to-do.md` and `backlog.md`.
 
-Two facts changed on the 2026-10-31 re-measurement of the pinned provider. Routing is
-reachable through an object attribute, so the BGP and OSPF rows are an emitter gap and not
-a provider gap (Epic 7). And a value the parse cannot carry has one shape: the block prints
-the variable reference, never the value. Both rules are in `backlog.md`.
+Two facts from the 2026-10-31 re-measurement of the pinned provider hold. Routing is reachable through an
+object attribute, so the BGP and OSPF levels are an emitter shape and not a provider gap, and the tool
+prints them (`docs/ARCHITECTURE.md` §4.9). And a value the parse cannot carry has one shape: the block
+prints the variable reference, never the value. Both rules are in `backlog.md`.
 
 ## Goals
 
@@ -54,36 +54,23 @@ file are the shared open steps, and they are the open pieces of Epic 6.
 
 ## Epic 7 — Routing output through the protocol object (Goal 2) — open
 
-The pinned provider (2.0.14, re-measured 2026-10-31) has no standalone BGP or OSPF resource,
-but `panos_virtual_router` declares `protocol` as an object attribute that carries `bgp`,
-`ospf`, `ospfv3`, `rip`, and the two redistribution profile lists. `protocol.bgp` carries
-`local_as`, `router_id`, `enable`, `peer_group`, `auth_profile`, `policy` and `redist_rules`,
-and `peer_group` carries the `peer` list. `terraform validate` accepts the shape. So the data
-`parse_bgp` and `parse_ospf` already read can reach output, and their container rows move from
-`report` to `emitted`.
+The pinned provider (2.0.14) has no standalone BGP or OSPF resource, but `panos_virtual_router` declares
+`protocol` as an object attribute that carries `bgp`, `ospf`, `ospfv3`, `rip`, and the two redistribution
+profile lists. F7.1 landed: `resource_mapping.PROTOCOL_SHAPE` states the levels the tool prints, the emitter
+prints them inside the router block, the gate rule `protocol_object` reads a printed object against the
+table, and `MANUAL_SETUP_REPORT.txt` names the entries the object cannot express. The rules are in
+`docs/ARCHITECTURE.md` §4.9.
 
-- [ ] **F7.1 Protocol object as output** — the BGP and OSPF rows become `emitted`. Rules to
-  decide: the object shape, since `protocol` prints as an object value and `terraform validate`
-  refuses `protocol { ... }` as a block; the one-of `type` choice inside `peer_group` and inside
-  `area`, because the provider requires exactly one sub-shape; a peer belongs to the peer group
-  entry the export holds it in, not to a flat peer list; the value the parse cannot carry prints
-  as the variable reference (`backlog.md`), so no auth key reaches a generated file; and the gate
-  rule that reads an object attribute, which the block reader does not serve today.
-
-Routing profiles and filter containers (route maps, prefix lists, community lists, access lists,
-timers, auth profiles as objects) have no parse method, so they stay in `backlog.md` until a row
-covers them.
+Open for Epic 7: the levels `PROTOCOL_SHAPE` does not state, which no parse method reads — `ospfv3`, `rip`,
+the BGP `policy`, the timer levels, the auth profile bodies, and the filter containers (route maps, prefix
+lists, community lists, access lists). They are in `backlog.md`.
 
 ## Sequencing
 
-F7.1 is the next feature. It names no unit and writes inside a file the emitter already
-writes, so it does not need the write path, but it changes the `.tf` goldens and it needs the
-gate rule for an object attribute. The one field reader already takes the sub-block it reads as
-an argument (F6.7), so an object attribute is a new shape of the same reader, not a second reader.
-
-The open Epic 6 pieces are the write path that splits the output per unit directory and the gate
-rule that reads a data file. Their order is in `docs/CODEBASE_ASSEMBLY.md` §14, and the pieces
-held until the next feature takes them are in `to-do.md`.
+The open Epic 6 pieces are the write path that splits the output per unit directory and the gate rule that
+reads a data file. Their order is in `docs/CODEBASE_ASSEMBLY.md` §14, and the pieces held until the next
+feature takes them are in `to-do.md`. The open Epic 7 piece is a parse method for a routing level the shape
+table does not state: it needs a table row before an emitter or a gate rule can read it.
 
 ## Out of Scope (tracked in backlog.md)
 

@@ -571,6 +571,8 @@
                     <range>
                       <entry name="10.0.0.0/8">
                         <name>10.0.0.0/8</name>
+                        <!-- F7.1: the provider requires exactly one of advertise or suppress -->
+                        <advertise/>
                       </entry>
                     </range>
                   </entry>

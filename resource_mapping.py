@@ -31,6 +31,13 @@ panos provider v2:
     ACTION_FILTERS     - the one mapping from an action field to the scope
                          fact it names (F6.7). The emitter reads it and the
                          gate reads it, so no branch names the fields again.
+    PROTOCOL_SHAPE     - one row per level of the `protocol` object attribute on
+                         `panos_virtual_router` (F7.1): the nesting mode or the
+                         leaf value shape, the fields the level declares, the
+                         report value that selects a `one_of` key, and the fields
+                         the provider marks `sensitive`. The emitter prints from it,
+                         the gate rule `protocol_object` reads it, and
+                         tests/test_protocol_object.py pins it against the live schema.
 
 The generator emits the v2 types directly; the old v1 names
 (panos_address_object, panos_security_rule_group, ...) no longer exist
@@ -40,6 +47,8 @@ docs/RESOURCE_MAPPING.md.
 Verified against provider v2.0.14 (128 resource types) with
 `terraform providers schema -json`.
 """
+
+from typing import Optional
 
 # F3.3: parsed interface kind -> provider resource type. The generator uses
 # this table to pick the resource type for each interface entry.
@@ -1131,14 +1140,20 @@ SCOPE_SHAPE = {
     'panos_vsys': {},
 }
 
-# F6.6: the value-to-variable mapping (`docs/CODEBASE_ASSEMBLY.md` §9). One row per location field the
-# emitter prints — the fields `LOCATION_SCHEMA` declares — and what `TerraformGenerator.location_block`
-# prints for it. The mapping is a table, so the emitter reads it and the gate reads it, and no emitter
-# branch decides the shape for one type. A property at the block's own level is the entry's content, not a
-# site value, so it is not in this table: `panos_template_variable` prints its value as a literal (F6.5
-# decision 3, recorded in `backlog.md`). `variable` names the value through the §5 rule in `naming.py`.
+# F6.6: the value-to-variable mapping (`docs/CODEBASE_ASSEMBLY.md` §9). One row per field the emitter
+# prints — the fields `LOCATION_SCHEMA` declares, and the leaf fields `PROTOCOL_SHAPE` states — and what
+# the block prints for it. The mapping is a table, so the emitter reads it and the gate reads it, and no
+# emitter branch decides the shape for one type. A property is the entry's content, not a site value, so
+# the table holds no property row except the two `sensitive` rows: a field the provider marks sensitive
+# cannot reach a generated file as a literal, so the block prints the reference for it even when the
+# value is the entry's content. `panos_template_variable` prints its value as a literal (F6.5 decision 3,
+# recorded in `backlog.md`). `variable` names the value through the §5 rule in `naming.py`.
 VARIABLE = 'variable'
 LITERAL = 'literal'
+# A field the provider marks `sensitive`: the run names the variable and holds no value, so the block
+# prints the reference and no generated file states the value. The name is `naming.py` applied to the
+# entry name, because a value cannot name itself (`backlog.md`, the value the parse cannot carry).
+REFERENCE_ONLY = 'reference_only'
 VALUE_VARIABLES = {
     # The device the site names. Hardware replacement changes the serial, and a literal prints in every
     # resource inside the template, so this is the value a codebase changes per site (§9 rule 1).
@@ -1152,7 +1167,218 @@ VALUE_VARIABLES = {
     'panorama_device': LITERAL,
     # The parse records no rulebase (F3.5), so no value reaches the block.
     'rulebase': LITERAL,
+    # The three provider `sensitive` facts in the protocol object (F7.1): the block prints the reference,
+    # the run declares the variable, and no generated file states the value.
+    'secret': REFERENCE_ONLY,
+    'key': REFERENCE_ONLY,
+    'password': REFERENCE_ONLY,
 }
+
+# F7.1: the shape of the `protocol` object attribute on `panos_virtual_router`, written from the live
+# provider schema measured 2026-10-31 (`tests/test_protocol_object.py` pins every row against it). One
+# row per level the converter prints, plus the `sensitive` decision rows the emitter uses when a parse
+# method reaches the field. The emitter prints from this table, the gate rule `protocol_object` reads
+# this table, and no second table states a shape: `sanity_checks.value_shape` is the reader's own inverse
+# for the leaf words.
+#
+# `shape` is one of `SHAPE_WORDS`. `fields` states the field name -> the shape word, in the print order.
+# `selects` is the mapping from the report value to the key a `one_of` level prints; an empty `selects`
+# means the level is not a one-of choice. `sensitive` names the fields the provider marks sensitive.
+SHAPE_WORDS = ('string', 'bool', 'number', 'object', 'string_list', 'one_of', 'block')
+
+# The reader states a `[` container as `string_list`, so that word covers a list of objects as well as a
+# list of strings; `one_of` is the `object` shape with the extra rule that it states exactly one key.
+# `block` is the `object` shape for a provider block that has no attributes of its own: the export states
+# it by presence, so the value is the empty object and the block prints it (`value_shape` reads `{}` as an
+# object, which is why the gate treats `block` as `object`). A field the export does not state has no value,
+# so presence is the whole shape rule.
+PROTOCOL_TYPE = 'panos_virtual_router'
+PROTOCOL_FIELD = 'protocol'
+
+PROTOCOL_SHAPE: dict[str, dict] = {
+    'protocol': {
+        'shape': 'object',
+        'fields': {'bgp': 'object', 'ospf': 'object'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp': {
+        'shape': 'object',
+        'fields': {'enable': 'bool', 'local_as': 'string', 'router_id': 'string',
+                   'peer_group': 'string_list', 'redist_rules': 'string_list',
+                   'auth_profile': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/peer_group': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'enable': 'bool', 'type': 'one_of', 'peer': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/peer_group/type': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'external': 'ebgp', 'internal': 'ibgp',
+                    'external-confederation': 'ebgp_confed',
+                    'internal-confederation': 'ibgp_confed'},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/peer_group/type/ebgp': {
+        'shape': 'object',
+        'fields': {'export_nexthop': 'string', 'import_nexthop': 'string',
+                   'remove_private_as': 'bool'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/peer_group/type/ebgp_confed': {
+        'shape': 'object',
+        'fields': {'export_nexthop': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/peer_group/type/ibgp': {
+        'shape': 'object',
+        'fields': {'export_nexthop': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/peer_group/type/ibgp_confed': {
+        'shape': 'object',
+        'fields': {'export_nexthop': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/peer_group/peer': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'enable': 'bool', 'peer_as': 'string',
+                   'local_address': 'object', 'peer_address': 'object'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/peer_group/peer/local_address': {
+        'shape': 'object',
+        'fields': {'interface': 'string', 'ip': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/peer_group/peer/peer_address': {
+        'shape': 'object',
+        'fields': {'fqdn': 'string', 'ip': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/redist_rules': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'enable': 'bool',
+                   'address_family_identifier': 'string', 'metric': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # The auth profile rows state the shape for a field no parse method reads yet (`backlog.md`), so the
+    # gate can refuse a literal secret inside a hand-written protocol object.
+    'protocol/bgp/auth_profile': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'secret': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'secret'}),
+    },
+    'protocol/ospf': {
+        'shape': 'object',
+        'fields': {'enable': 'bool', 'router_id': 'string',
+                   'area': 'string_list', 'auth_profile': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'type': 'one_of', 'range': 'string_list',
+                   'interface': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/type': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'normal': 'normal', 'nssa': 'nssa', 'stub': 'stub'},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/type/normal': {
+        'shape': 'object',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/type/nssa': {
+        'shape': 'object',
+        'fields': {'accept_summary': 'bool'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/type/stub': {
+        'shape': 'object',
+        'fields': {'accept_summary': 'bool'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # A range entry is the entry name plus the choice the provider requires: `terraform validate` refuses a
+    # range element with no `advertise` or `suppress`, so the shape table states both as `block` fields and
+    # the export's presence is the value (F7.1).
+    'protocol/ospf/area/range': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'advertise': 'block', 'suppress': 'block'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/interface': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'enable': 'bool', 'passive': 'bool',
+                   'metric': 'number', 'link_type': 'one_of'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/interface/link_type': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'point-to-point': 'p2p', 'broadcast': 'broadcast', 'p2mp': 'p2mp'},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/interface/link_type/p2p': {
+        'shape': 'object',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/interface/link_type/broadcast': {
+        'shape': 'object',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/interface/link_type/p2mp': {
+        'shape': 'object',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/auth_profile': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'password': 'string', 'md5': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset({'password'}),
+    },
+    'protocol/ospf/auth_profile/md5': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'key'}),
+    },
+}
+
+
+def protocol_row(path: str) -> Optional[dict]:
+    """The shape row for one protocol path. None when the table states no shape for the level."""
+    return PROTOCOL_SHAPE.get(path)
 
 # PAN-OS config types with no v2 provider resource. The converter keeps
 # the data visible in the manual setup report instead of emitting it.
@@ -1161,21 +1387,11 @@ REPORT_ONLY_TYPES = frozenset({
     # application filter (category/subcategory/technology/risk lists) is
     # a different concept with no v2 resource.
     'panos_application_filter',
-    # v2 exposes only six specialized BGP routing profiles (timer, auth,
-    # dampening, filtering, redistribution, address family). None accepts
-    # AS number, router ID, or peer data, so the captured BGP data has
-    # nowhere to go through a profile row. The provider does carry it as the
-    # object attribute `protocol` on `panos_virtual_router`; F7.1 (`PLAN.md`)
-    # takes that route, so these rows move to `emitted` with it.
-    'panos_bgp',
-    'panos_bgp_peer',
-    'panos_bgp_peer_group',
-    # Same shape as BGP: v2 has only auth/interface-timer/SPF-timer/
-    # redistribution profiles for OSPF. No area or router-ID resource, and
-    # the same `protocol` object attribute route as BGP (F7.1).
-    'panos_ospf',
-    'panos_ospf_area',
-    'panos_ospf_area_interface',
+    # F7.1: BGP and OSPF data is printed as the `protocol` object attribute on `panos_virtual_router`, so
+    # these six types no longer have a report row. The provider has no separate resource for a peer group,
+    # a peer, an area, or an area interface, and an OSPF interface outside an area has no field, so F4.3
+    # rule 3 keeps a name reference on its parent row and the manual report names what no field can
+    # express.
     # F2.9: no v2 resource for application override rules or QoS profiles;
     # the captured rule/profile data goes to MANUAL_SETUP_REPORT.txt.
     'panos_application_override',
@@ -1569,7 +1785,14 @@ COVERAGE_MATRIX = (
         'fixture': 'virtual_routers.xml',
         'output_file': 'virtual_routers.tf',
         'emitter': ('generate_virtual_routers',),
-        'properties': ('interfaces', 'router_type', 'static_routes',),
+        # F7.1: the emitter reads the protocol fields through `PROTOCOL_SHAPE`, so the measured set is the
+        # fields the table declares for the levels this row covers plus the reads `generate_virtual_routers`
+        # states on its own. A level dict the parse builds is not a recorded object, so a field the table
+        # declares for the `bgp` and `ospf` levels is grounded by the table, not by the measurement: the
+        # emitter test in tests/test_coverage_matrix.py covers those, and the limit is in backlog.md.
+        'properties': ('address_family_identifier', 'enable', 'interface', 'interfaces',
+                       'local_address', 'metric', 'peer', 'peer_address', 'peer_as', 'protocol',
+                       'range', 'router_type', 'static_routes', 'type',),
     }, {
         'resource': 'panos_virtual_router_static_route_ipv4',
         'xml_element': 'static-route/entry',

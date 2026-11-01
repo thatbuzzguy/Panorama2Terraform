@@ -18,6 +18,7 @@ Checks, in report order:
 | `import_blocks` | every `import` block agrees with the `resource` block it names | FAIL, WARN |
 | `scope_blocks` | a name inside a scope block's `location` names a scope this run declares | FAIL |
 | `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
+| `protocol_object` | a `protocol` object on a `panos_virtual_router` block matches its `PROTOCOL_SHAPE` row | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a declared variable | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
@@ -60,6 +61,7 @@ CHECK_ORDER = (
     'import_blocks',
     'scope_blocks',
     'actions',
+    'protocol_object',
     'references',
     'variables',
     'control_chars',
@@ -529,9 +531,11 @@ def check_import_blocks(files: dict[str, str]) -> list[Finding]:
 def value_shape(raw: str) -> str:
     """The value shape a field states, as the one field reader read it (F6.7).
 
-    The shapes `ACTION_SCHEMA` declares: `string`, `string_list`, `bool`, `object`. The reader keeps the
-    raw text so the opening character states the shape, which makes this the reader's own inverse and no
-    second table names the shapes.
+    The shapes `ACTION_SCHEMA` and `PROTOCOL_SHAPE` declare: `string`, `number`, `string_list`, `bool`,
+    `object`, and the `one_of` and `block` shapes as `object`, because a one-of level is an object value
+    that states one key and a `block` field is an object value that states none. The reader keeps the raw
+    text so the opening character states the shape, which makes this the reader's own inverse and no second
+    table names the shapes.
     """
     if raw.startswith('['):
         return 'string_list'
@@ -541,6 +545,10 @@ def value_shape(raw: str) -> str:
         return 'string'
     if raw in ('true', 'false'):
         return 'bool'
+    if raw.isdigit():
+        # F7.1: a number is the shape the reader reads for `metric`, which the shape table states as a
+        # `number` field, so the reader's inverse states it as its own word.
+        return 'number'
     return ''
 
 
@@ -666,6 +674,133 @@ def check_actions(files: dict[str, str]) -> list[Finding]:
                 f'({expected})',
             ))
     return findings
+
+
+def check_protocol_object(files: dict[str, str]) -> list[Finding]:
+    """Every `protocol` object on a `panos_virtual_router` block must match its `PROTOCOL_SHAPE` row (F7.1).
+
+    Five findings, each a FAIL, and each read through the one block reader and the one field reader:
+
+    0. A `protocol` the field reader can read as a name but not as a field, which is the block shape the
+       provider refuses.
+    1. A level the shape table states no row for, a field the row does not declare, or a value whose shape
+       the reader reads differently from the shape the row states. `one_of` and `block` are read as `object`,
+       because a one-of level is an object that states one key and a `block` field is an object that states
+       nothing but its presence.
+    2. A `one_of` level that states no key, or more than one key, or a key the row's mapping does not
+       state. `terraform validate` accepts a `{ ... }` value for `protocol`, so the gate is the rule that
+       keeps a one-of level to the one key the provider can read.
+    3. A field the row marks `sensitive` printed as a literal. No generated file may state the value, so
+       the block prints the variable reference for it.
+    4. An element inside a `[` container that states no `name`, which is the field the row reads as the
+       entry name.
+
+    The walk reads one level at a time, so a field inside an object value is not read at the block's own
+    level. The rule reads no data file: the block text and the tables are the whole input.
+    """
+    findings = []
+    for block in sorted(blocks(files, ('resource',)), key=lambda b: (b.file, b.line)):
+        if block.rtype != resource_mapping.PROTOCOL_TYPE:
+            continue
+        raw = import_blocks.field_value(block, resource_mapping.PROTOCOL_FIELD)
+        if not raw:
+            continue
+        # Rule 0: `protocol` is a field of the block. `field_at` reads a name followed by `{` the way the
+        # action grammar requires, so this is the one place that states the difference `terraform validate`
+        # refuses: a `protocol { ... }` block is not the shape the provider reads.
+        body = block.body
+        if not re.search(rf'(?m)^ {{{import_blocks.level_of(body)}}}{resource_mapping.PROTOCOL_FIELD}\s*=', body):
+            findings.append(Finding(
+                'protocol_object', FAIL, block.file, block.line,
+                f'protocol {block.address} is a block, not the field PROTOCOL_SHAPE states',
+            ))
+            continue
+        _protocol_level_findings(block, resource_mapping.PROTOCOL_FIELD, raw, findings)
+    return findings
+
+
+def _protocol_level_findings(block, path: str, raw: str, findings: list) -> None:
+    """One level of a `protocol` value, walked from the text the one field reader read."""
+    row = resource_mapping.protocol_row(path)
+    if row is None:
+        findings.append(Finding(
+            'protocol_object', FAIL, block.file, block.line,
+            f'protocol level {path} is not a level PROTOCOL_SHAPE states ({block.address})',
+        ))
+        return
+    shape = row['shape']
+    if shape == 'string_list':
+        if not raw.startswith('['):
+            findings.append(Finding(
+                'protocol_object', FAIL, block.file, block.line,
+                f'protocol {block.address} {path} is not a string_list value',
+            ))
+            return
+        for element in import_blocks.elements_of(raw):
+            fields = import_blocks.fields_at(import_blocks.container_body(element))
+            # Rule 4: an element inside a container is an entry, and the entry name is the field the row
+            # reads for it.
+            if 'name' not in fields:
+                findings.append(Finding(
+                    'protocol_object', FAIL, block.file, block.line,
+                    f'protocol {block.address} {path} element states no name',
+                ))
+            _protocol_field_findings(block, path, fields, findings)
+        return
+    if not raw.startswith('{'):
+        findings.append(Finding(
+            'protocol_object', FAIL, block.file, block.line,
+            f'protocol {block.address} {path} is not an object value',
+        ))
+        return
+    fields = import_blocks.fields_at(import_blocks.container_body(raw))
+    if shape == 'one_of':
+        # Rule 2: the level states exactly one key, and that key is one the row's mapping states.
+        if len(fields) != 1:
+            findings.append(Finding(
+                'protocol_object', FAIL, block.file, block.line,
+                f'protocol {block.address} {path} states {len(fields)} keys, which a one_of level cannot',
+            ))
+            return
+        key = next(iter(fields))
+        if key not in row['selects'].values():
+            findings.append(Finding(
+                'protocol_object', FAIL, block.file, block.line,
+                f'protocol {block.address} {path} key {key} is not a key PROTOCOL_SHAPE selects',
+            ))
+            return
+        _protocol_level_findings(block, f'{path}/{key}', fields[key], findings)
+        return
+    _protocol_field_findings(block, path, fields, findings)
+
+
+def _protocol_field_findings(block, path: str, fields: dict, findings: list) -> None:
+    """The fields at one protocol level, checked against the row that states them."""
+    row = resource_mapping.protocol_row(path)
+    for field, value in fields.items():
+        declares = row['fields'].get(field)
+        if declares is None:
+            findings.append(Finding(
+                'protocol_object', FAIL, block.file, block.line,
+                f'protocol {block.address} {path} {field} is not a field PROTOCOL_SHAPE declares',
+            ))
+            continue
+        if field in row['sensitive']:
+            # Rule 3: a value the provider marks sensitive reaches the block only as a variable reference.
+            if not value.startswith('var.'):
+                findings.append(Finding(
+                    'protocol_object', FAIL, block.file, block.line,
+                    f'protocol {block.address} {path} {field} prints a sensitive value as a literal',
+                ))
+            continue
+        word = 'object' if declares in ('one_of', 'block') else declares
+        if value_shape(value) != word:
+            findings.append(Finding(
+                'protocol_object', FAIL, block.file, block.line,
+                f'protocol {block.address} {path} {field} is not a {declares} value',
+            ))
+        elif declares in ('object', 'one_of', 'string_list'):
+            _protocol_level_findings(block, f'{path}/{field}', value, findings)
 
 
 def check_references(files: dict[str, str]) -> list[Finding]:
@@ -821,6 +956,7 @@ def run_checks(output_dir: Path, run_terraform: bool = False,
         CheckResult('import_blocks', tuple(check_import_blocks(files))),
         CheckResult('scope_blocks', tuple(check_scope_blocks(files))),
         CheckResult('actions', tuple(check_actions(files))),
+        CheckResult('protocol_object', tuple(check_protocol_object(files))),
         CheckResult('references', tuple(check_references(files))),
         CheckResult('variables', tuple(check_variables(files))),
         CheckResult('control_chars', tuple(check_control_chars(files))),

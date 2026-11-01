@@ -173,16 +173,19 @@ guess, which is listed with the templates the entry's own device takes.
 The following have no v2 provider resource. The converter keeps their
 data visible in `MANUAL_SETUP_REPORT.txt` instead of emitting it:
 
-- BGP (router, peer groups, peers): no resource of its own, but the provider
-  carries the data inside `panos_virtual_router.protocol`, which the generator
-  does not emit yet (Epic 7)
-- OSPF (router, areas, interfaces): the same case, through `protocol.ospf` and
-  `protocol.ospfv3`
 - Application filters
 - Application override rules
 - QoS profiles
 - IPsec tunnel monitor profiles (note: `panos_monitor_profile` is the
   PBF path monitoring profile, a different PAN-OS object)
+
+Routing is not in that list, because BGP and OSPF print as the `protocol` object on
+`panos_virtual_router` (`docs/ARCHITECTURE.md` §4.9). The report names only the routing entries the object
+cannot express: a peer no peer group names it, an OSPF interface outside an area, a choice value the mapping
+does not state, and a `range` entry that states neither `advertise` nor `suppress`. A routing level the shape
+table does not state is not read, so timers, policy, `ospfv3` and `rip` bodies stay out of the output, and an
+auth profile entry is not parsed, so a run prints no value for it. Those are recorded in
+[`backlog.md`](backlog.md).
 
 The following have a v2 provider resource, but the converter cannot emit
 the whole object — emitting a partial one would create a misconfigured
@@ -373,6 +376,7 @@ what you receive, not what the generator intended.
 | `import_blocks` | every `import` block agrees with the `resource` block it names: the type, the local name, the entry name, and the location | FAIL; WARN for a rule type the shape cannot state |
 | `scope_blocks` | a name inside a scope block's `location` names a scope the run declares, by the type that defines it | FAIL |
 | `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
+| `protocol_object` | every `protocol` object on a `panos_virtual_router` block matches the `PROTOCOL_SHAPE` row for its level, prints as a field, and states the one key a choice level declares | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable the run declares | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
@@ -461,6 +465,11 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   the gate rule, the field inside `config`, the one field mapping and the one answer table and the one level
   rule, `ACTION_SCHEMA` against the live provider schema, the Terraform minimum, and the byte rule between
   two runs
+- `tests/test_protocol_object.py` - the `protocol` object on `panos_virtual_router`: the shape table against
+  the live provider schema, the print shape (`protocol = { ... }`, not a block), the one-of mapping, the peer
+  inside its peer group, the interface inside its area, the entry the file cannot express, a sensitive field as
+  the variable reference, `VALUE_VARIABLES` as the one shape owner, each violation type of the gate rule, and
+  the byte rule between two runs
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are
