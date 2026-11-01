@@ -1,7 +1,7 @@
 """Unit tests for PanoramaParser network parse methods (zones, interfaces, routers, BGP, OSPF).
 
-F7.1: `parse_bgp` and `parse_ospf` build one router's levels, so the protocol entries are captured
-fields of the router record and the router keeps one mark. The two entries the `.tf` cannot express are
+F7.1, F7.2: `parse_bgp`, `parse_ospf` and `parse_ospfv3` build one router's levels, so the protocol entries
+are captured fields of the router record and the router keeps one mark. An entry the `.tf` cannot express is
 marked for the report, and `entry_coverage.protocol_report_rows` is the one list of them.
 """
 
@@ -273,8 +273,9 @@ def test_parse_ospf(make_parser):
     assert len(ospf["area"]) == 1
     area = ospf["area"][0]
     assert area["name"] == "0.0.0.0"
-    # A `one_of` area type is the value itself: the provider key is `stub`, and the export states it.
-    assert area["type"] == {"stub": {"accept_summary": ""}}
+    # A `one_of` area type is the value itself: the provider key is `stub`, and the export states it. The
+    # fields of the body live inside the chosen element, so the parse reads them there (F7.2).
+    assert area["type"] == {"stub": {"accept_summary": True}}
     # A range entry prints inside the area, with the choice block the provider requires. The entry that
     # states neither has no `.tf` shape, so it is not in the printed list (F7.1).
     assert len(area["range"]) == 1, area["range"]
@@ -298,6 +299,47 @@ def test_parse_ospf(make_parser):
         ("default", "interface", "ethernet1/1")], rows
     assert rows[1]["detail"] == ('link_type multicast is not a value PROTOCOL_SHAPE states')
     assert rows[2]["captured"]["link_type"] == {"point-to-point": {}}
+
+
+def test_parse_ospfv3(make_parser):
+    """`parse_ospfv3` builds the `protocol/ospfv3` level of one router (F7.2).
+
+    `ospfv3.xml` puts one interface inside an area and one at the level, which is the case the `.tf` cannot
+    express. The area subtree is read by the same reader as `parse_ospf`, so the same facts hold.
+    """
+    p = _parser(make_parser, "ospfv3.xml")
+    router = p.parse_virtual_routers()[0]
+    ospfv3 = router["protocol"]["ospfv3"]
+    assert ospfv3["enable"] is True
+    assert ospfv3["router_id"] == "10.0.0.1"
+
+    assert len(ospfv3["area"]) == 1
+    area = ospfv3["area"][0]
+    assert area["name"] == "0.0.0.0"
+    # The fields of the chosen body live inside the chosen element, the same rule as the `ospf` level.
+    assert area["type"] == {"nssa": {"accept_summary": True}}
+    assert len(area["range"]) == 1, area["range"]
+    assert area["range"][0]["name"] == "10.0.0.0/8"
+    assert str(area["range"][0]["suppress"]) == "{}"
+    inner = area["interface"][0]
+    assert inner["name"] == "ethernet1/2"
+    # The captured dict is keyed by the value the export states; the emitter prints the key the mapping
+    # selects, which is `p2p` here.
+    assert inner["link_type"] == {"point-to-point": {}}
+    assert inner["passive"] is False
+
+    # The interface the export places at the level has no provider field, so the row note is the reason.
+    rows = entry_coverage.protocol_report_rows(p.ledger)
+    assert [(row["router"], row["level"], row["name"]) for row in rows] == [
+        ("default", "interface", "ethernet1/1")], rows
+    assert rows[0]["detail"] == 'no provider field for an interface outside an area', rows[0]
+
+
+def test_parse_ospfv3_absent(make_parser):
+    """A router with no OSPFv3 element has no `ospfv3` level, so nothing prints for it (F7.2)."""
+    p = _parser(make_parser, "zones.xml")
+    for router in p.parse_virtual_routers():
+        assert router["protocol"]["ospfv3"] == {}, router
 
 
 def test_parse_ospf_absent(make_parser):

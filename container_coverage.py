@@ -208,6 +208,7 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
     # emitted row.
     ContainerRow('parse_bgp', 'protocol/bgp', 'emitted', 'panos_virtual_router'),
     ContainerRow('parse_ospf', 'protocol/ospf', 'emitted', 'panos_virtual_router'),
+    ContainerRow('parse_ospfv3', 'protocol/ospfv3', 'emitted', 'panos_virtual_router'),
     ContainerRow('parse_ipsec_tunnels', 'network/tunnel/ipsec', 'emitted',
                  'panos_ipsec_tunnel; a manual-key tunnel is reported'),
     ContainerRow('parse_ike_gateways', 'network/ike/gateway', 'emitted',
@@ -254,6 +255,17 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                  level='sub-shape'),
     ContainerRow('parse_ospf', 'protocol/ospf/interface', 'report',
                  'no provider field for an interface outside an area', level='sub-shape'),
+    # F7.2: the `ospfv3` rows are the same shapes read by `parse_ospfv3`, which uses the area rule
+    # `_protocol_areas`. A range entry prints inside the area, so it is a nested block, and an interface the
+    # export places at the level has no provider field, so it stays a report row with the same note.
+    ContainerRow('parse_ospfv3', 'protocol/ospfv3/area', 'emitted', 'panos_virtual_router', level='sub-shape'),
+    ContainerRow('parse_ospfv3', 'protocol/ospfv3/range', 'nested-block',
+                  'nested block inside panos_virtual_router; name plus the required choice block',
+                  level='sub-shape'),
+    ContainerRow('parse_ospfv3', 'protocol/ospfv3/area/interface', 'emitted', 'panos_virtual_router',
+                  level='sub-shape'),
+    ContainerRow('parse_ospfv3', 'protocol/ospfv3/interface', 'report',
+                  'no provider field for an interface outside an area', level='sub-shape'),
     ContainerRow('parse_virtual_routers', 'routing-table/ip/static-route', 'emitted',
                  'panos_virtual_router_static_route_ipv4', level='sub-shape'),
     ContainerRow('parse_ipsec_tunnels', 'auto-key/proxy-id', 'nested-block',

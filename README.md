@@ -179,13 +179,13 @@ data visible in `MANUAL_SETUP_REPORT.txt` instead of emitting it:
 - IPsec tunnel monitor profiles (note: `panos_monitor_profile` is the
   PBF path monitoring profile, a different PAN-OS object)
 
-Routing is not in that list, because BGP and OSPF print as the `protocol` object on
+Routing is not in that list, because BGP, OSPF and OSPFv3 print as the `protocol` object on
 `panos_virtual_router` (`docs/ARCHITECTURE.md` §4.9). The report names only the routing entries the object
-cannot express: a peer no peer group names it, an OSPF interface outside an area, a choice value the mapping
-does not state, and a `range` entry that states neither `advertise` nor `suppress`. A routing level the shape
-table does not state is not read, so timers, policy, `ospfv3` and `rip` bodies stay out of the output, and an
-auth profile entry is not parsed, so a run prints no value for it. Those are recorded in
-[`backlog.md`](backlog.md).
+cannot express: a peer no peer group names it, an interface outside an area, a choice value the mapping does
+not state, and a `range` entry that states neither `advertise` nor `suppress`. A routing level the shape table
+does not state is not read, so the `ospfv3` timer, BFD, graceful-restart, export-rule and auth-profile levels,
+`rip`, the BGP `policy`, and the filter containers stay out of the output, and an auth profile entry the table
+states is not parsed, so a run prints no value for it. Those are recorded in [`backlog.md`](backlog.md).
 
 The following have a v2 provider resource, but the converter cannot emit
 the whole object — emitting a partial one would create a misconfigured
@@ -475,8 +475,9 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   rule, `ACTION_SCHEMA` against the live provider schema, the Terraform minimum, and the byte rule between
   two runs
 - `tests/test_protocol_object.py` - the `protocol` object on `panos_virtual_router`: the shape table against
-  the live provider schema, the print shape (`protocol = { ... }`, not a block), the one-of mapping, the peer
-  inside its peer group, the interface inside its area, the entry the file cannot express, a sensitive field as
+  the live provider schema, the print shape (`protocol = { ... }`, not a block), the one-of mapping, the body of
+  a chosen level read from inside the chosen element, the peer inside its peer group, the interface inside its
+  area, the entry the file cannot express, a sensitive field as
   the variable reference, `VALUE_VARIABLES` as the one shape owner, each violation type of the gate rule, and
   the byte rule between two runs
 - `ruff check .` - lint

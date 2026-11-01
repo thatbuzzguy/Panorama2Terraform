@@ -25,8 +25,8 @@ directory, so the write path that splits the output per unit directory and the g
 that reads a data file are the shared open steps, in `to-do.md` and `backlog.md`.
 
 Two facts from the 2026-10-31 re-measurement of the pinned provider hold. Routing is reachable through an
-object attribute, so the BGP and OSPF levels are an emitter shape and not a provider gap, and the tool
-prints them (`docs/ARCHITECTURE.md` §4.9). And a value the parse cannot carry has one shape: the block
+object attribute, so the BGP, OSPF and OSPFv3 levels are an emitter shape and not a provider gap, and the tool
+prints the levels the shape table states (`docs/ARCHITECTURE.md` §4.9). And a value the parse cannot carry has one shape: the block
 prints the variable reference, never the value. Both rules are in `backlog.md`.
 
 ## Goals
@@ -61,16 +61,20 @@ prints them inside the router block, the gate rule `protocol_object` reads a pri
 table, and `MANUAL_SETUP_REPORT.txt` names the entries the object cannot express. The rules are in
 `docs/ARCHITECTURE.md` §4.9.
 
-Open for Epic 7: the levels `PROTOCOL_SHAPE` does not state, which no parse method reads — `ospfv3`, `rip`,
-the BGP `policy`, the timer levels, the auth profile bodies, and the filter containers (route maps, prefix
-lists, community lists, access lists). They are in `backlog.md`.
+F7.2 landed: `parse_ospfv3` reads the `ospfv3` area subtree through the same shape table, and `_protocol_areas`
+is the area rule the two OSPF levels share, so the same reader, emitter and gate rule serve both.
+
+Open for Epic 7: the levels `PROTOCOL_SHAPE` does not state, which no parse method reads — the `ospfv3` timer,
+BFD, graceful-restart, export-rule and auth-profile levels, `rip`, the BGP `policy`, the auth profile bodies,
+and the filter containers (route maps, prefix lists, community lists, access lists). They are in
+`backlog.md`.
 
 ## Sequencing
 
 The open Epic 6 pieces are the write path that splits the output per unit directory and the gate rule that
 reads a data file. Their order is in `docs/CODEBASE_ASSEMBLY.md` §14, and the pieces held until the next
-feature takes them are in `to-do.md`. The open Epic 7 piece is a parse method for a routing level the shape
-table does not state: it needs a table row before an emitter or a gate rule can read it.
+feature takes them are in `to-do.md`. The open Epic 7 pieces are the routing levels the shape table does not
+state: each needs a row and a parse method before an emitter, a gate rule or the report can read it.
 
 ## Out of Scope (tracked in backlog.md)
 

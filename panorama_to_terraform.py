@@ -1692,17 +1692,19 @@ class PanoramaParser:
                 'nexthop_interface': self._get_text(route, f'nexthop/{next_hop_tag}'),
                 'metric': self._get_text(route, 'metric'),
             }))
-        # F7.1: `protocol` is a captured field of the router entry, so the entry keeps one mark and the
-        # protocol levels are the properties of that one entry. `parse_bgp` and `parse_ospf` build the
-        # levels, and each entry inside a level is marked by them.
+        # F7.1, F7.2: `protocol` is a captured field of the router entry, so the entry keeps one mark and the
+        # protocol levels are the properties of that one entry. `parse_bgp`, `parse_ospf` and `parse_ospfv3`
+        # build the levels, and each entry inside a level is marked by them.
         return {
             'name': router.get('name'),
             **self.identity_of(router),
             'interfaces': interfaces,
             'static_routes': static_routes,
             'protocol': {
+                # The keys are the levels `PROTOCOL_SHAPE` states for the `protocol` row, in the table order.
                 'bgp': self.parse_bgp(router),
                 'ospf': self.parse_ospf(router),
+                'ospfv3': self.parse_ospfv3(router),
             },
         }
 
@@ -2082,33 +2084,74 @@ class PanoramaParser:
     def parse_ospf(self, router: ET.Element) -> dict:
         """Build the `ospf` level of one router's protocol object (F7.1).
 
-        The shape table states an interface only inside an area, so an interface inside an area is
-        captured there and prints inside the area element. An interface at the `protocol/ospf` level has
-        no provider field, so it is marked for the report and the manual report prints it. A `range` entry
-        prints inside the area, and the provider requires exactly one of its `advertise` or `suppress`
-        blocks, so an entry that states neither cannot be expressed. The same rule as `parse_bgp`: an entry
-        the `.tf` cannot express is marked for the report and is not put in the printed list.
+        The area rule is `_protocol_areas`, the same reader `parse_ospfv3` uses. An interface at the
+        `protocol/ospf` level has no provider field, so it is marked for the report and the manual report
+        prints it.
         """
         ospf_path = 'protocol/ospf'
         ospf = router.find(ospf_path)
         if ospf is None:
             return {}
-        level = self._protocol_level(ospf, ospf_path)
-        # The key a level dict holds is the field the table path names, the same rule as `parse_bgp`.
-        area_path, range_path, interface_path = ('protocol/ospf/area', 'protocol/ospf/area/range',
-                                                  'protocol/ospf/area/interface')
-        for area in ospf.findall('.//area/entry'):
+        level = self._protocol_areas(ospf, ospf_path)
+        for iface in ospf.findall('./interface/entry'):
+            if not iface.get('name'):
+                continue
+            # The provider declares an interface only inside an area, so an interface at the OSPF level
+            # cannot be expressed and the manual report prints it. The row note is the reason, so the mark
+            # states no detail of its own.
+            captured, _ = self._protocol_interface(iface, ospf_path)
+            self.mark(iface, captured, destination='report')
+        return level
+
+    def parse_ospfv3(self, router: ET.Element) -> dict:
+        """Build the `ospfv3` level of one router's protocol object (F7.2).
+
+        The same reader as `parse_ospf`, because the provider declares the same fields for the two area
+        subtrees. An interface at the `protocol/ospfv3` level has no provider field, so the report names it.
+        A level the shape table states no row for is read by no method, so the levels this feature does not
+        read print nothing (`backlog.md`).
+        """
+        ospfv3_path = 'protocol/ospfv3'
+        ospfv3 = router.find(ospfv3_path)
+        if ospfv3 is None:
+            return {}
+        level = self._protocol_areas(ospfv3, ospfv3_path)
+        for iface in ospfv3.findall('./interface/entry'):
+            if not iface.get('name'):
+                continue
+            # The provider declares an interface only inside an area, so an interface at the level cannot be
+            # expressed and the manual report prints it, the same rule as `parse_ospf`.
+            captured, _ = self._protocol_interface(iface, ospfv3_path)
+            self.mark(iface, captured, destination='report')
+        return level
+
+    def _protocol_areas(self, container: ET.Element, base: str) -> dict:
+        """One routing level and its area entries, read as `PROTOCOL_SHAPE` states them (F7.1, F7.2).
+
+        `base` is the table path of the level, so the reader states a level as a path and never spells a
+        field name: the key a level dict holds is the field the path names, the same rule as `parse_bgp`.
+
+        A PAN-OS export states the area type as a flag element inside `type`, so the report value is the
+        flag's tag and the mapping for this level is the identity. The fields of the chosen body live inside
+        that body, so the chosen element is the holder `_protocol_choice` reads.
+
+        A `range` entry prints inside the area, and the provider requires exactly one of its `advertise` or
+        `suppress` blocks, so an entry that states neither cannot be expressed. The same rule as `parse_bgp`:
+        an entry the `.tf` cannot express is marked for the report and is not put in the printed list.
+        """
+        level = self._protocol_level(container, base)
+        area_path, range_path = f'{base}/area', f'{base}/area/range'
+        type_path, interface_path = f'{area_path}/type', f'{area_path}/interface'
+        for area in container.findall('.//area/entry'):
             name = area.get('name')
             if not name:
                 continue
             captured = self._protocol_level(area, area_path)
-            # A PAN-OS export states the area type as a flag element inside `type`, so the report value is
-            # the flag's tag, and the mapping for this level is the identity.
-            area_type_path = 'protocol/ospf/area/type'
-            field = self._protocol_field_name(area_type_path)
+            field = self._protocol_field_name(type_path)
             type_element = area.find(self._protocol_xml_name(field))
-            value = type_element[0].tag if type_element is not None and len(type_element) else ''
-            choice, detail = self._protocol_choice(area_type_path, value, type_element)
+            body = type_element[0] if type_element is not None and len(type_element) else None
+            value = body.tag if body is not None else ''
+            choice, detail = self._protocol_choice(type_path, value, body)
             captured[field] = choice
             entry = self.mark(area, captured, detail, destination='report' if detail else None)
             if detail:
@@ -2129,29 +2172,21 @@ class PanoramaParser:
             for iface in area.findall('./interface/entry'):
                 if not iface.get('name'):
                     continue
-                captured_iface, reason = self._protocol_interface(iface)
+                captured_iface, reason = self._protocol_interface(iface, base)
                 marked = self.mark(iface, captured_iface, reason, destination='report' if reason else None)
                 if not reason:
                     entry[self._protocol_field_name(interface_path)].append(marked)
-
-        for iface in ospf.findall('./interface/entry'):
-            if not iface.get('name'):
-                continue
-            # The provider declares an interface only inside an area, so an interface at the OSPF level
-            # cannot be expressed and the manual report prints it. The row note is the reason, so the mark
-            # states no detail of its own.
-            captured, _ = self._protocol_interface(iface)
-            self.mark(iface, captured, destination='report')
         return level
 
-    def _protocol_interface(self, iface: ET.Element) -> tuple:
-        """One OSPF interface entry, read as the shape table names its fields (F7.1).
+    def _protocol_interface(self, iface: ET.Element, base: str) -> tuple:
+        """One interface entry, read as the shape table names its fields (F7.1, F7.2).
 
-        `protocol/ospf/area/interface` is the only interface row the table states, because the provider
-        declares an interface only inside an area. `detail` is the reason the entry cannot be printed, which
-        is empty for a link type the mapping states.
+        The provider declares an interface only inside an area, so the area-interface row is the only
+        interface shape row for a routing level, and an interface the export places at the level itself is
+        read through the same row and then reported. `detail` is the reason the entry cannot be printed,
+        which is empty for a link type the mapping states.
         """
-        path = 'protocol/ospf/area/interface'
+        path = f'{base}/area/interface'
         field = self._protocol_field_name(f'{path}/link_type')
         captured = self._protocol_level(iface, path)
         choice, detail = self._protocol_choice(f'{path}/{field}',
@@ -2172,7 +2207,7 @@ class PanoramaParser:
         """The one key a `one_of` level states, as `({the report value: the sub-shape's fields}, detail)` (F7.1).
 
         `holder` is the element the sub-shape's fields live in, because the export puts them at the entry's
-        own level for a BGP peer group and inside the chosen element for an OSPF area type. `detail` is the
+        own level for a BGP peer group and inside the chosen element for an area type. `detail` is the
         reason the mapping cannot state the value, which is empty for a value it can state: the caller marks
         the entry for the report with it, because a one-of level with no key prints nothing.
         """

@@ -1,6 +1,6 @@
 # To Do
 
-F6.8 (the gate rule that reads the data files) is complete and committed. The next feature is not chosen.
+F7.2 (the `ospfv3` level of the protocol object) is complete and committed. The next feature is not chosen.
 
 ## Open pieces for Epic 6 (held until the next feature takes them)
 
@@ -26,7 +26,7 @@ F6.8 (the gate rule that reads the data files) is complete and committed. The ne
 
 ## Open pieces for Epic 7
 
-- A parse method for a routing level `PROTOCOL_SHAPE` does not state: `ospfv3`, `rip`, the BGP
-  `policy`, the timer levels, the auth profile bodies, and the filter containers. A level becomes
-  printable only when a parse method reads it and the table has a row for it, because the emitter,
-  the gate and the report all read that table.
+- The routing levels `PROTOCOL_SHAPE` states no row for are read by no parse method: the `ospfv3`
+  timer, BFD, graceful-restart, export-rule and auth-profile levels, `rip`, the BGP `policy`, and the filter
+  containers. A level becomes printable only when a parse method reads it and the table has a row for it,
+  because the emitter, the gate and the report all read that table.
