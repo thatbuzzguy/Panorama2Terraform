@@ -563,7 +563,8 @@ row per unit, and the two data files join on `directory`. The rules are in `owne
 - **The refusal rule.** `parse_rows` reads a written file back as data and refuses a row that is not
   the declared shape, the way `parse_record` refuses a line (§3.3).
 - **The content rule.** Written only when it has content, following the rule for the report files
-  (§4.5). A plain run writes it, so the CLI takes no flag for it, and the gate reads no data file.
+  (§4.5). A plain run writes it, so the CLI takes no flag for it, and the gate rule `data_files`
+  reads it back through `parse_rows` (§4.6, F6.8).
 
 The scan result keeps `line`, `container`, `reason`, and the device-group `chain` as run facts, so they
 are not written: the record states a fact, the report states a finding. `chain` is the device-group
@@ -579,7 +580,7 @@ Pinned by `tests/test_ownership.py`, including
 `::test_parse_rows_refuses_a_row_that_is_not_the_declared_shape`,
 `::test_two_runs_on_the_same_bytes_write_the_same_bytes`,
 `::test_the_record_is_written_only_when_it_has_content`,
-`::test_the_gate_reads_no_data_file`, and
+`::test_the_gate_reads_the_record_through_ownership`, and
 `::test_no_report_names_a_field_the_record_states`.
 
 ### 3.6 Reference edge record (F6.3)
@@ -602,7 +603,8 @@ entry), so it has its own file. The rules are in `reference_edges.py` and in
   the declared shape, including a row that names one unit instead of two, the way `parse_record`
   refuses a line (§3.3).
 - **The content rule.** Written only when it has content, following the rule for the report files
-  (§4.5). A plain run writes it, so the CLI takes no flag for it, and the gate reads no data file.
+  (§4.5). A plain run writes it, so the CLI takes no flag for it, and the gate rule `data_files`
+  reads it back through `parse_rows` (§4.6, F6.8).
 - **The two order fields** `rank` and `after` print on the §3.4 row, after the eight F6.1 fields,
   because §3.4 is the file that names each unit. `rank` is the position from 1, or 0 for a unit in a
   cycle; `after` is the sorted list of directories the unit must be planned after.
@@ -620,7 +622,7 @@ Pinned by `tests/test_reference_edges.py`, including
 `::test_the_record_round_trips_as_data`, `::test_a_row_that_is_not_the_declared_shape_is_refused`,
 `::test_the_record_names_no_path_and_no_timestamp`,
 `::test_the_record_is_written_only_when_it_has_content`,
-`::test_the_gate_reads_no_data_file_and_check_order_is_unchanged`,
+`::test_the_gate_reads_the_record_through_reference_edges_and_check_order_pins_the_position`,
 `::test_no_report_names_the_record_or_a_field_it_states`,
 `::test_the_cycle_line_shape_is_fixed`, and `::test_two_runs_write_the_same_bytes`.
 
@@ -645,14 +647,16 @@ the join §3.5 and §3.6 use. The rules are in `site_data.py` and in
   declared shape, including a variable name that is not the §5 shape of its string value, the way
   `parse_record` refuses a line (§3.3).
 - **The content rule.** Written only when it has content, following the rule for the report files (§4.5),
-  so a run that names no site value writes neither file, and the gate reads no data file.
+  so a run that names no site value writes neither file, and the gate rule `data_files` reads the record
+  back through `parse_rows` and compares the printed form with `render_tfvars` (§4.6, F6.8).
 - **The printed form.** `site.auto.tfvars` is written from the rows, not from the generator's state, one
   line per variable in name order across the file. Terraform loads a `*.auto.tfvars` file automatically, so
   `terraform.tfvars` stays the operator's own file for the credentials (`CODEBASE_ASSEMBLY.md` §11), and the
   tool writes no credential. A string prints as `json.dumps(value)`, the same escape set
   `import_blocks.unescape` reads back (§4.8); a list prints inline as `[ "a", "b" ]` and an empty list as
   `[]`. A value that is neither, and a name two rows state with two different values, are refusals. The
-  file is not a gate input, because the gate reads `.tf` files (§4.5).
+  file is read by the data rule against the record, and it is not one of the four data files, so the
+  report count names only the records (§4.5, F6.8).
 
 The values the rows state are the pairs `TerraformGenerator.location_field` recorded at the site that
 applied the value-to-variable table, keyed by the referrer's four facts, the way §4.3 records a reference
@@ -664,7 +668,7 @@ Pinned by `tests/test_site_data.py`, including `::test_the_fields_print_in_the_d
 `::test_the_tfvars_bytes_for_a_string_value`, `::test_a_list_prints_inline_and_an_empty_list_prints_empty`,
 `::test_a_value_that_is_neither_a_string_nor_a_list_is_a_refusal`,
 `::test_the_tfvars_file_is_written_only_when_it_has_content`,
-`::test_the_gate_reads_no_data_file`, `::test_no_report_names_a_field_the_site_data_states`, and
+`::test_the_gate_reads_the_record_and_its_printed_form_through_site_data`, `::test_no_report_names_a_field_the_site_data_states`, and
 `::test_two_runs_on_the_same_bytes_write_the_same_bytes`.
 
 ## 4. Emit pipeline
@@ -853,15 +857,18 @@ the site record, `site.auto.tfvars`.
 above, `scope.tf` (§4.1), `read_through.tf`, `imports.tf`, and the four data files are written only
 when they have content. These files are the complete set a run writes.
 
-The four data files are not report bodies, so no report names them or restates a row, and the gate
-reads only `.tf` files, so none is a gate input. `site.auto.tfvars` is not a `.tf` file, so the gate does
-not read it either. `imports.tf` is a `.tf` file, so the gate reads it (§4.6). Pinned by
+The four data files are not report bodies, so no report names them or restates a row. The gate reads the
+`.tf` files for the block rules, and it reads the four data files for the data rule (F6.8), which reads
+each row shape through the module that owns it, so no second shape rule appears. `site.auto.tfvars` is the
+printed form of the site record, so the data rule compares it with `site_data.render_tfvars` and does not
+count it as a data file. `imports.tf` is a `.tf` file, so the block rules read it (§4.6). Pinned by
 `tests/test_unit_manifest.py::test_no_report_names_a_field_the_manifest_states` and
-`::test_the_gate_reads_no_data_file`, by
+`::test_the_gate_reads_the_manifest_through_unit_manifest`, by
 `tests/test_ownership.py::test_no_report_names_a_field_the_record_states` and
-`::test_the_gate_reads_no_data_file`, and by
+`::test_the_gate_reads_the_record_through_ownership`, by
 `tests/test_site_data.py::test_no_report_names_a_field_the_site_data_states` and
-`::test_the_gate_reads_no_data_file`.
+`::test_the_gate_reads_the_record_and_its_printed_form_through_site_data`, and by the whole of
+`tests/test_data_file_gate.py`.
 
 A coverage section cannot name a read-through name, because the three scans read
 entries the parse captured and a read-through name is not one of them (§4.7). The
@@ -884,7 +891,9 @@ Pinned by `tests/test_reports.py`, including
 `main()` runs `sanity_checks.run_checks` after it writes the output. The gate
 reads the files in the output directory, so a rule is satisfied by a file, not
 by a bookkeeping value that never reached one. The gate runs on every
-conversion. The splitter writes XML, so it has no `.tf` to check.
+conversion. It reads the `.tf` files for the block rules and the four data files
+for the data rule (F6.8), and the report names both counts. The splitter writes
+XML, so it has no `.tf` file and no data file to check.
 
 | Check | Rule | Severity |
 |---|---|---|
@@ -897,6 +906,7 @@ conversion. The splitter writes XML, so it has no `.tf` to check.
 | `protocol_object` | every `protocol` object on a `panos_virtual_router` block matches its `PROTOCOL_SHAPE` row (§4.9) | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a variable this run declares (F6.6) | FAIL |
+| `data_files` | every data file reads as its declared rows and agrees with the rules that produced it (F6.8) | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder, such as the VPN key `***CHANGE_ME***`, is listed | WARN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
@@ -997,12 +1007,35 @@ and the tables are the whole input. Pinned by `tests/test_protocol_object.py`, o
 - The console summary names resource blocks only, so a run that writes `data` blocks
   reports the same resource count as the same run without them.
 
+The data rule (`data_files`, F6.8) reads the four data files, each through the module that owns the row
+shape, so no second shape rule appears, and it reads no `.tf` file, so no block rule reads a data file.
+Six findings, each a FAIL:
+
+- a data file that does not read as its declared rows, or a data file with no rows, because the content
+  rule writes a data file only when it has content;
+- a field `naming.py` decides, stated as a row instead of as the rule states it: the manifest `unit` and
+  `directory`, and the ownership `directory`;
+- a join: a `directory` another record names must name a unit the manifest names, or a directory the
+  ownership record names, because the tool writes an ownership row for an entry from a declared parent
+  source and the manifest names no unit for it (F5.4); an edge row must join on (`type`, `entry`) to an
+  ownership row whose `owner` names the `target`; a `kind` `ambiguous` row states no owner, so it cannot
+  name one;
+- an order: the manifest `rank` and `after` must be what `reference_edges.order` produces from the three
+  records read back, so `after` names only units the manifest names (`reference_edges.py` rule 7);
+- a printed form: `site.auto.tfvars` must equal `site_data.render_tfvars` of the site rows, and the record
+  and its printed form stand or fall together on the content rule;
+- a position: a data-file finding is stated at its row ordinal, because a data row spans many lines, and a
+  finding about a whole file states no row.
+
 Pinned by `tests/test_sanity_gate.py`: the gate runs on a conversion,
 every check detects its own violation, the gate reports no FAIL finding on every
 fixture, the report is byte-identical between two runs, the exit code follows the
 findings, and `--validate` runs the terraform check or reports it as SKIPPED. The
 `data` rules are pinned by `tests/test_data_blocks.py`, and the table itself by
-`tests/test_data_source_schema.py` against the live provider schema.
+`tests/test_data_source_schema.py` against the live provider schema. The data rule is
+pinned by `tests/test_data_file_gate.py`, one test per finding, and the rule that the
+order graph reads only manifest units is pinned by
+`tests/test_reference_edges.py::test_a_declared_parent_source_adds_no_dependency`.
 
 ### 4.7 Read-through data blocks (opt-in)
 
@@ -1056,8 +1089,8 @@ The shape is opt-in and off by default: a run that declares no `--import-blocks`
 and the same `.tf` bytes as before, so both golden sets stay byte-identical. This is the §4.7 precedent.
 
 The file is `imports.tf`, one file for the run, one block per entry the run declares, written only when
-the run declares the shape and has a block to write. A `.tf` file is the choice, because the gate rule
-reads `.tf` files only (§4.5); a data file could not be a gate input.
+the run declares the shape and has a block to write. A `.tf` file is the choice, because the block rules
+read `.tf` files and the data rule reads the four data files (§4.5); `imports.tf` is read by the block rule.
 
 One block per entry:
 

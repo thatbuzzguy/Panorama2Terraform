@@ -528,6 +528,12 @@ def test_a_declared_parent_source_adds_no_dependency(converter_module, tmp_path)
     filled = reference_edges.order(rows, [], [{'referrer': child, 'target': parent,
                                                'type': 'panos_address', 'entry': 'web'}])
     assert filled[0]['after'] == [], filled
+    # The inheritance rule needs the same guard: an override row whose owner is a parent-source unit puts
+    # no directory into `after`, so the gate rule `data_files` (F6.8) can read the order back.
+    filled = reference_edges.order(rows, [{'type': 'panos_address', 'entry': 'web',
+                                           'directory': child, 'owner': parent,
+                                           'kind': 'override'}], [])
+    assert filled[0]['after'] == [] and filled[0]['rank'] == 1, filled
 
 
 # --- 5. the report section, the console, and the exit code -------------------
@@ -637,17 +643,25 @@ def test_the_record_names_no_path_and_no_timestamp(tmp_path):
     assert 'timestamp' not in text
 
 
-def test_the_gate_reads_no_data_file_and_check_order_is_unchanged(tmp_path):
-    """AC-6.2: the gate reads `.tf` files only, so the record is not a gate input.
+def test_the_gate_reads_the_record_through_reference_edges_and_check_order_pins_the_position(tmp_path):
+    """F6.8 changed the file set: the data rule reads this record through `reference_edges.parse_rows`, so
+    no second shape rule appears, and the block reader stays `.tf`-only. The rule sits after the block
+    rules and before the byte rules, and it reports no finding on a record the tool wrote.
     """
     assert _run(FIXTURES_DIR / CYCLE_FIXTURE, tmp_path).returncode == 0
     files = sanity_checks.read_tf_files(tmp_path)
-    assert files and all(not name.endswith('.json') for name in files)
+    assert files and all(name.endswith('.tf') for name in files), 'the block reader is .tf-only'
+    assert dict(sanity_checks.DATA_FILES)[RECORD] is reference_edges
+    assert not hasattr(reference_edges, 'check'), 'the edge record owns no gate check'
+    assert sanity_checks.CHECK_ORDER.index('data_files') == \
+        sanity_checks.CHECK_ORDER.index('variables') + 1, 'the data rule is after the block rules'
+    assert sanity_checks.CHECK_ORDER.index('data_files') < sanity_checks.CHECK_ORDER.index('control_chars')
     report = sanity_checks.run_checks(tmp_path)
     assert [result.check for result in report.checks] == list(sanity_checks.CHECK_ORDER)
     assert report.file_count == len(files)
+    assert report.data_file_count == 4, 'the cycle fixture has content for all four records'
+    assert report.findings('data_files') == []
     assert report.fail_count == 0
-    assert not hasattr(reference_edges, 'check'), 'the edge record owns no gate check'
 
 
 def test_the_record_is_written_only_when_it_has_content(tmp_path):

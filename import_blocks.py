@@ -2,9 +2,9 @@
 
 An import block binds a resource block to the object the provider already has. Six rules, stated once here.
 
-1. **One block per entry, one file per codebase.** The gate reads `.tf` files only (`ARCHITECTURE.md` §4.5),
-   so the agreement rule (`sanity_checks.check_import_blocks`) can only read a `.tf` file. F6.1 rule 4 still
-   refuses a per-unit file, because this feature writes no directory.
+1. **One block per entry, one file per codebase.** The block rules of the gate read `.tf` files
+   (`ARCHITECTURE.md` §4.5), so the agreement rule (`sanity_checks.check_import_blocks`) can only read a
+   `.tf` file. F6.1 rule 4 still refuses a per-unit file, because this feature writes no directory.
 2. **The id is base64 of a JSON object** (`docs/CODEBASE_ASSEMBLY.md` §12). For an ordinary object type the
    object is the location object plus the entry name: `{"location": ..., "name": ...}`. Keys sort at every
    level and the separators are compact, so the same entry encodes to the same bytes; `ensure_ascii` keeps the

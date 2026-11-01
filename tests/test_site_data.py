@@ -12,7 +12,8 @@ Seven groups, one per rule in `site_data.py`, `resource_mapping.VALUE_VARIABLES`
 4. The device name as a variable, and the device that names none.
 5. The declaration set: the file, the data, and the `.tfvars` read the same run.
 6. The two gate rules, and the corpus that trips neither.
-7. Determinism, and the rules that a data file is not a gate input and no report names a site field.
+7. Determinism, and the gate rule that reads the record through this module and compares the printed
+   form, and the rule that no report names a site field.
 
 The golden bytes pin the print shape (`tests/test_golden_files.py`), and the device-name rule is
 pinned here for a device the parse names. Every test runs offline.
@@ -464,7 +465,7 @@ def test_the_corpus_trips_neither_rule(tmp_path):
         assert report.fail_count == 0, name
 
 
-# --- 7. determinism and the gates that read no data file -----------------------
+# --- 7. determinism and the gate rule that reads this record -------------------
 
 def test_two_runs_on_the_same_bytes_write_the_same_bytes(tmp_path):
     """Two runs on the same input write the same bytes for both new files."""
@@ -476,15 +477,22 @@ def test_two_runs_on_the_same_bytes_write_the_same_bytes(tmp_path):
         assert (first / name).read_bytes() == (second / name).read_bytes(), name
 
 
-def test_the_gate_reads_no_data_file(tmp_path):
-    """The gate reads `.tf` files, so neither new file is a gate input, and F6.6 adds no check."""
+def test_the_gate_reads_the_record_and_its_printed_form_through_site_data(tmp_path):
+    """F6.8 changed the file set: the data rule reads this record through `site_data.parse_rows`, and the
+    printed form through `site_data.render_tfvars`, so no second shape rule appears. The printed form is
+    not one of the four, so the count names only the records, and the block reader stays `.tf`-only.
+    """
     out = tmp_path / 'kitchen'
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
     files = sanity_checks.read_tf_files(out)
-    assert files
-    assert not [name for name in files if name.endswith('.json') or name.endswith('.tfvars')], files
+    assert files and all(name.endswith('.tf') for name in files), 'the block reader is .tf-only'
+    assert dict(sanity_checks.DATA_FILES)[site_data.SITE_DATA_FILE] is site_data
+    assert site_data.TFVARS_FILE not in dict(sanity_checks.DATA_FILES), 'the print is not a data file'
+    assert not hasattr(site_data, 'check'), 'the record owns no gate check'
     report = sanity_checks.run_checks(out)
     assert [check.check for check in report.checks] == list(sanity_checks.CHECK_ORDER)
+    assert report.data_file_count == 4, report.render()
+    assert report.findings('data_files') == []
     assert report.fail_count == 0, report.render()
 
 

@@ -338,11 +338,14 @@ def test_a_refusal_writes_no_record(converter_module, fetch_module, tmp_path):
 
 
 def test_the_record_is_not_a_gate_input_and_the_exit_code_is_unchanged(tmp_path):
-    """The gate reads `.tf` files, so the record cannot change what it counts or decides."""
+    """The gate reads the `.tf` files for the block rules and the four data files for the data rule
+    (F6.8), and `SOURCE.txt` is neither, so the record cannot change what the gate counts or decides.
+    """
     out = tmp_path / 'out'
     proc = run_script('panorama_to_terraform.py', str(SAMPLE_CONFIG), '--output-dir', str(out))
     assert proc.returncode == 0, proc.stdout + proc.stderr
     report = sanity_checks.run_checks(out)
     assert not report.failed
-    assert report.file_count == len(list(out.glob('*.tf'))), 'the gate counts .tf files only'
+    assert report.file_count == len(list(out.glob('*.tf'))), 'the block reader counts .tf files only'
+    assert report.data_file_count == 2, 'the record is not one of the four data files'
     assert report.result_of('terraform') == 'NOT RUN'

@@ -106,7 +106,7 @@ codes are unchanged. Pinned by `tests/test_unit_manifest.py`, including
 `::test_the_manifest_round_trips_as_data`,
 `::test_a_row_that_is_not_the_declared_shape_is_refused`,
 `::test_the_reference_names_are_recorded_for_the_referrers_facts`,
-`::test_the_gate_reads_no_data_file`, and `::test_two_runs_write_the_same_bytes`.
+`::test_the_gate_reads_the_manifest_through_unit_manifest`, and `::test_two_runs_write_the_same_bytes`.
 
 The decision this section asked for is settled: the manifest is a data file, not a section of
 the conversion report. §4 is landed; the edge list (§5) follows. The template stack is a
@@ -272,7 +272,7 @@ Pinned by `tests/test_reference_edges.py`, including
 `::test_the_shallower_scope_comes_before_the_deeper_scope_inside_it`,
 `::test_the_edge_target_comes_before_the_referrer`,
 `::test_a_declared_parent_source_adds_no_dependency`,
-`::test_the_gate_reads_no_data_file_and_check_order_is_unchanged`, and
+`::test_the_gate_reads_the_record_through_reference_edges_and_check_order_pins_the_position`, and
 `::test_two_runs_write_the_same_bytes`. `tests/fixtures/reference_cycle.xml` is the fixture that
 pins a cycle; no other fixture in the corpus produces one.
 
@@ -283,9 +283,11 @@ declares. The rules are in `import_blocks.py`, and `main()` writes the file. Eve
 comes from data the resource block already states, so no second naming rule and no second location
 rule exists.
 
-1. **One file per codebase, one block per entry.** The gate reads `.tf` files only
-   (`ARCHITECTURE.md` §4.5), so the agreement rule can read only a `.tf` file: a data file is not a
-   gate input. F6.1 rule 4 still refuses a per-unit file, because this feature writes no directory.
+1. **One file per codebase, one block per entry.** The block rules of the gate read the `.tf` files
+   (`ARCHITECTURE.md` §4.5), so the agreement rule reads a `.tf` file. F6.8 added the data rule, which
+   reads the four data files, so the two file sets are now distinct: a block is read by the block reader,
+   and a row is read through the module that owns its shape. F6.1 rule 4 still refuses a per-unit file,
+   because this feature writes no directory.
    The file is written only when the run declares the shape and has a row that states an id,
    following the rule for the report files and the four data files.
 2. **The shape is opt-in: `--import-blocks`, off by default.** A run that declares nothing writes the
@@ -506,7 +508,8 @@ files for every run that has content.
 Pinned by `tests/test_site_data.py`, including `::test_the_corpus_rows_are_pinned`,
 `::test_the_row_joins_to_the_manifest_on_directory`, `::test_the_import_rule_compares_a_mapped_field_by_name`,
 `::test_the_variable_rule_reads_both_directions`, `::test_the_corpus_trips_neither_rule`,
-`::test_two_runs_on_the_same_bytes_write_the_same_bytes`, and `::test_the_gate_reads_no_data_file`.
+`::test_two_runs_on_the_same_bytes_write_the_same_bytes`, and
+`::test_the_gate_reads_the_record_and_its_printed_form_through_site_data`.
 The `.tf` bytes and the report bytes of the corpus are otherwise unchanged.
 
 ## 10. The commit action per unit (F6.7, landed)

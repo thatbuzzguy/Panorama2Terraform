@@ -29,6 +29,7 @@ from pathlib import Path
 import pytest
 
 import sanity_checks
+import unit_manifest
 from conftest import FIXTURES_DIR, REPO_ROOT, SAMPLE_CONFIG, run_script
 
 TERRAFORM = shutil.which("terraform")
@@ -68,7 +69,7 @@ def test_console_summary_reports_the_result(tmp_path):
     """The console summary states the result, not only the file list."""
     result = _generate(SAMPLE_CONFIG, tmp_path)
     summary = [line for line in result.stdout.split('\n') if line.startswith('Sanity gate:')]
-    assert summary == ['Sanity gate: PASS (0 FAIL, 0 WARN) - 10 .tf files, 20 resources']
+    assert summary == ['Sanity gate: PASS (0 FAIL, 0 WARN) - 10 .tf files, 2 data files, 20 resources']
     assert 'Sanity report: ' in result.stdout
 
 
@@ -177,6 +178,38 @@ def test_variable_check_detects_a_consumer_with_no_declaration():
         'provider.tf': 'provider "panos" {\n  hostname = var.used\n}\n',
     }
     assert sanity_checks.check_variables(both) == []
+
+
+def test_the_report_counts_both_file_sets(tmp_path):
+    """The report names the `.tf` files and the data files, so a reader can tell which set the gate read.
+    The printed form of a record is not one of the four, so the count names only the records.
+    """
+    _generate(SAMPLE_CONFIG, tmp_path)
+    report = sanity_checks.run_checks(tmp_path)
+    assert report.file_count == len(list(tmp_path.glob('*.tf')))
+    assert report.data_file_count == 2
+    assert 'Files checked: 10 .tf files, 2 data files.' in report.render(), report.render()
+    assert re.search(r'^data_files\s+PASS$', report.render(), re.M)
+
+
+def test_data_file_check_detects_a_row_that_is_not_the_data_it_declares(tmp_path):
+    """One negative test per rule: the data rule reports a row that does not read as its declared shape,
+    a field that disagrees with `naming.py`, a row that joins to nothing, and a printed form that is not
+    the record rendered. Each finding names the file and the row ordinal (F6.8).
+    """
+    _generate(SAMPLE_CONFIG, tmp_path)
+    assert sanity_checks.check_data_files(tmp_path) == []
+    rows = unit_manifest.parse_rows((tmp_path / unit_manifest.MANIFEST_FILE).read_text(encoding='utf-8'))
+    planted = dict(rows[1])
+    planted['unit'] = 'NotTheLevelName'
+    rows[1] = planted
+    # Write the row back through the module, so the test states no second shape rule.
+    (tmp_path / unit_manifest.MANIFEST_FILE).write_text(unit_manifest.render(rows), encoding='utf-8')
+    findings = sanity_checks.check_data_files(tmp_path)
+    assert len(findings) == 1, [f.render() for f in findings]
+    assert findings[0].severity == sanity_checks.FAIL
+    assert findings[0].file == unit_manifest.MANIFEST_FILE and findings[0].line == 2
+    assert 'level rule' in findings[0].detail, findings[0].render()
 
 
 def test_control_char_check_detects_a_raw_control_character():
@@ -310,4 +343,5 @@ def test_splitter_output_has_no_tf_for_the_gate(tmp_path):
     assert list(tmp_path.glob('*.xml'))
     report = sanity_checks.run_checks(tmp_path)
     assert report.file_count == 0
+    assert report.data_file_count == 0, 'the splitter writes no data file'
     assert report.resource_count == 0

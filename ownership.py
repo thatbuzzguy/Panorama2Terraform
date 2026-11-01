@@ -46,6 +46,12 @@ export states, F6.5). `render` writes only the declared fields, and `parse_rows`
 states anything else. Report order is fixed: findings are sorted by line, then object type, then name,
 so the same sources produce the same bytes.
 
+The gate rule `data_files` (F6.8, `ARCHITECTURE.md` §4.6) reads the written file back through `parse_rows`
+here, so no second shape rule appears, and reports a `directory` that is not the §5 shape of the facts the
+row states, an `owner` that names no unit the manifest names or a row of this record, and a `kind`
+`ambiguous` row that names an owner. Pinned by
+`tests/test_ownership.py::test_the_gate_reads_the_record_through_ownership`.
+
 Usage:
     from ownership import OWNERSHIP_FILE, build_rows, render, parse_rows, findings
     rows = build_rows(ledger, parent_ledger, generator.sanitize_name)
