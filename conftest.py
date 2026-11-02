@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+import sanity_checks
+
 REPO_ROOT = Path(__file__).parent
 SAMPLE_CONFIG = REPO_ROOT / "sample_panorama_config.xml"
 FIXTURES_DIR = REPO_ROOT / "tests" / "fixtures"
@@ -26,13 +28,54 @@ TERRAFORM = shutil.which("terraform")
 RESOURCE_RE = re.compile(r'resource\s+"([a-z0-9_]+)"\s+"[^"]+"\s*\{')
 
 
+def tf_files(output_dir) -> dict[str, str]:
+    """The `.tf` files a run wrote, keyed by the path from the output directory.
+
+    F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the run writes one directory per unit, so a test reads the
+    file set the way the gate reads it, through `sanity_checks.read_tf_files`. A test that names a file
+    names the path, because a per-unit file names its unit only by its directory.
+    """
+    return sanity_checks.read_tf_files(Path(output_dir))
+
+
+def parts(files: dict[str, str], name: str) -> dict[str, str]:
+    """The parts of one file name across the unit set, keyed by the path the reader names (F6.10.3, §14).
+
+    A per-unit file names its unit only by its directory, so one file shape holds one part per unit. A test
+    that pins one file for one unit reads the part; a test that pins the shape across the run reads the
+    parts in path order.
+    """
+    return {key: files[key] for key in sorted(files) if Path(key).name == name}
+
+
+def file_text(files: dict[str, str], name: str) -> str:
+    """The text one file name holds across the unit set, with the parts in path order.
+
+    A test that pins one emitter's whole file reads the parts the run wrote for every unit, so the same pin
+    holds for a file set the run wrote one file per unit. `name` is the file name, not a path.
+    """
+    return ''.join(parts(files, name).values())
+
+
+def written_bytes(output_dir) -> dict[str, bytes]:
+    """The bytes a run wrote, keyed by the path from the output directory (F6.10.3, §14).
+
+    The run writes the root set at the root and the unit set inside one directory per unit, so a test that
+    pins two runs writing the same bytes compares the whole layout, not only the files at the root.
+    """
+    out = Path(output_dir)
+    return {str(path.relative_to(out)): path.read_bytes() for path in sorted(out.rglob('*')) if path.is_file()}
+
+
 def declared_provider() -> tuple[str, str]:
     """Read the panos provider source and version from the golden provider.tf.
 
     The golden provider.tf is the single source of truth for which provider
-    version the tests verify against (F2.1 pins it).
+    version the tests verify against (F2.1 pins it). F6.10.3: `provider.tf` is a unit-set file, so a
+    golden case holds one per unit, and each states the same provider block, so any one gives the version.
     """
-    text = (GOLDEN_DIR / "sample" / "provider.tf").read_text()
+    path = sorted((GOLDEN_DIR / "sample").rglob("provider.tf"))[0]
+    text = path.read_text()
     block = re.search(r"panos\s*=\s*\{([^}]*)\}", text, re.S).group(1)
     source = re.search(r'source\s*=\s*"([^"]+)"', block).group(1)
     version = re.search(r'version\s*=\s*"([^"]+)"', block).group(1)

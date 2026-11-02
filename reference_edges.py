@@ -57,10 +57,11 @@ Seven rules, stated once here.
 
 Usage:
     from reference_edges import EDGE_FILE, build_rows, render, parse_rows, findings, cycle_line, order
+    from write_path import root_path, write_file
     rows = build_rows(ownership_rows, generator.unit_references(), generator.sanitize_name)
     manifest_rows = order(unit_manifest.build_rows(ledger, generator.unit_references(),
                                                    generator.sanitize_name), ownership_rows, rows)
-    (output_dir / EDGE_FILE).write_text(render(rows), encoding='utf-8')
+    write_file(root_path(output_dir, EDGE_FILE), render(rows))
     for finding in findings(rows, manifest_rows):
         print(cycle_line(finding))
 """

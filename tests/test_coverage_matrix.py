@@ -36,7 +36,7 @@ import pytest
 
 import entry_coverage
 import resource_mapping
-from conftest import FIXTURES_DIR, run_script
+from conftest import FIXTURES_DIR, file_text, run_script, tf_files
 from resource_mapping import COVERAGE_MATRIX, EMITTED_TYPES
 
 # Every `resource "panos_x" "y" {` line in a Terraform file.
@@ -63,9 +63,7 @@ def _generate(fixture_name: str) -> dict[str, str]:
             '--output-dir', str(out_dir))
         assert result.returncode == 0, (
             f'converter failed on {fixture_name}: {result.stderr}\n{result.stdout}')
-        _OUTPUTS[fixture_name] = {
-            f.name: f.read_text() for f in sorted(out_dir.glob('*.tf'))
-        }
+        _OUTPUTS[fixture_name] = tf_files(out_dir)
     return _OUTPUTS[fixture_name]
 
 
@@ -145,10 +143,12 @@ def test_row_emits_the_provider_resource(row):
     the row's output file whose body carries the name field with the emitted name.
     """
     outputs = _generate(row['fixture'])
-    assert row['output_file'] in outputs, (
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): `output_file` is the kind the per-type table names, so
+    # the file is the unit's file and the reader keys it by the path from the output directory.
+    text = file_text(outputs, row['output_file'])
+    assert text, (
         f"row for {row['resource']}: converter wrote no {row['output_file']!r} "
         f'(files: {sorted(outputs)})')
-    text = outputs[row['output_file']]
     blocks = _resource_blocks(text, row['resource'])
     assert blocks, (
         f"row for {row['resource']}: no resource block of this type in "

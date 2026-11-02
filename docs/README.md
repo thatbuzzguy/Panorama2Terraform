@@ -32,7 +32,7 @@ that document instead of restating the rule.
 | Provider element per emitted type | `COVERAGE_MATRIX.md`, and `resource_mapping.COVERAGE_MATRIX` |
 | Migration workflow | `MIGRATION_GUIDE.md` |
 | Device group to template join | `DEVICE_GROUP_SPLITTING.md` |
-| Codebase unit, ownership, order between units, import blocks, scope objects, site data, commit action | `CODEBASE_ASSEMBLY.md` §3 to §10, and the modules `unit_manifest.py`, `ownership.py`, `reference_edges.py`, `import_blocks.py`, `site_data.py`, `commit_actions.py` |
+| Codebase unit, ownership, order between units, import blocks, scope objects, site data, commit action, the write path | `CODEBASE_ASSEMBLY.md` §3 to §10 and §14, and the modules `unit_manifest.py`, `ownership.py`, `reference_edges.py`, `import_blocks.py`, `site_data.py`, `commit_actions.py`, `write_path.py` |
 
 The machine-readable tables are code, not documents:
 [`../resource_mapping.py`](../resource_mapping.py),

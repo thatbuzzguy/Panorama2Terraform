@@ -27,7 +27,7 @@ import pytest
 
 import naming
 import unit_manifest
-from conftest import FIXTURES_DIR
+from conftest import FIXTURES_DIR, file_text, tf_files
 from panorama_to_terraform import TerraformGenerator
 
 # The association tables PanoramaParser.parse_associations builds for
@@ -258,7 +258,7 @@ def test_same_interface_name_on_two_devices(tmp_path):
          'device_group': 'Shared', 'vsys': '', 'template': '',
          'vsys_device': FW2},
     ])
-    blocks = _resources((tmp_path / 'interfaces.tf').read_text())
+    blocks = _resources(file_text(tf_files(tmp_path), 'interfaces.tf'))
     assert len(blocks) == 2
     locals_ = [header.split('"')[3] for header in blocks]
     assert len(set(locals_)) == 2, locals_
@@ -284,10 +284,10 @@ def test_a_template_referrer_keeps_the_plain_name_for_an_interface_another_unit_
               'interfaces': ['ethernet1/1']}
     gen.generate_interfaces([interface])
     gen.generate_virtual_routers([router])
-    routers = (tmp_path / 'virtual_routers.tf').read_text()
+    routers = file_text(tf_files(tmp_path), 'virtual_routers.tf')
     assert '"ethernet1/1"' in routers
     # The interface resource is still declared, by its own unit.
-    assert 'resource "panos_ethernet_interface" "ethernet1_1_' in (tmp_path / 'interfaces.tf').read_text()
+    assert 'resource "panos_ethernet_interface" "ethernet1_1_' in file_text(tf_files(tmp_path), 'interfaces.tf')
     # The referrer recorded the name as one it resolved outside its own unit.
     assert gen.unit_references()[unit_manifest.facts_of(router)] == ('ethernet1/1',)
 
@@ -311,7 +311,7 @@ def test_ambiguous_template_keeps_a_plain_interface_name(tmp_path):
         {'name': 'vr-shared', 'type': 'virtual-router', 'vsys': '',
          'template': '', 'vsys_device': '', 'interfaces': ['ethernet1/1']},
     ])
-    routers = (tmp_path / 'virtual_routers.tf').read_text()
+    routers = file_text(tf_files(tmp_path), 'virtual_routers.tf')
     assert 'panos_ethernet_interface.' not in routers
     assert '"ethernet1/1"' in routers
 
@@ -327,12 +327,12 @@ def test_a_referrer_that_names_no_unit_keeps_the_plain_name(tmp_path):
               'template': '', 'vsys_device': '', 'interfaces': ['ethernet1/1']}
     gen.generate_interfaces([interface])
     gen.generate_virtual_routers([router])
-    routers = (tmp_path / 'virtual_routers.tf').read_text()
+    routers = file_text(tf_files(tmp_path), 'virtual_routers.tf')
     assert '"ethernet1/1"' in routers
     # A router inside the unit that declared the interface resolves it (F6.10.2).
     inside = dict(router, name='vr-fw1', vsys_device=FW1)
     gen.generate_virtual_routers([inside])
-    text = (tmp_path / 'virtual_routers.tf').read_text()
+    text = file_text(tf_files(tmp_path), 'virtual_routers.tf')
     assert f'name = "{inside["name"]}"' in text
     assert 'panos_ethernet_interface.' in text
 
@@ -347,10 +347,10 @@ def test_multi_device_fixture_places_everything_it_can(tmp_path, make_parser):
     gen.generate_interfaces(parser.parse_interfaces())
     gen.generate_virtual_routers(parser.parse_virtual_routers())
     assert not (out / 'MANUAL_SETUP_REPORT.txt').exists()
-    routers = (out / 'virtual_routers.tf').read_text()
+    routers = file_text(tf_files(out), 'virtual_routers.tf')
     assert 'name = "HQ-Networks"' in routers
     assert 'name = "DC-Networks"' in routers
-    interfaces = (out / 'interfaces.tf').read_text()
+    interfaces = file_text(tf_files(out), 'interfaces.tf')
     assert f'ngfw_device = {naming.variable_text(FW1)}' in interfaces
     assert f'ngfw_device = {naming.variable_text(FW2)}' in interfaces
 

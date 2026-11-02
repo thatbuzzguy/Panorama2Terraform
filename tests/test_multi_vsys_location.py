@@ -20,6 +20,7 @@ Three contracts:
 import pytest
 
 import naming
+from conftest import file_text, tf_files
 from panorama_to_terraform import TerraformGenerator
 from resource_mapping import EMITTED_TYPES, LOCATION_SCHEMA
 
@@ -396,7 +397,7 @@ def test_interface_reference_stays_inside_its_unit(tmp_path):
          'vsys_device': 'fw-2.example.com', 'type': 'layer3',
          'interfaces': ['ethernet1/1']},
     ])
-    zones = _resources((tmp_path / 'zones.tf').read_text())
+    zones = _resources(file_text(tf_files(tmp_path), 'zones.tf'))
     blocks = {name: next(b for b in zones.values() if f'name = "{name}"' in b)
               for name in ('home', 'other')}
     assert 'panos_ethernet_interface.' in blocks['home']
@@ -423,7 +424,7 @@ def test_virtual_router_reference_stays_inside_its_device(tmp_path):
         {'name': 'vr-other', 'type': 'virtual-router', 'vsys': '', 'template': '',
          'vsys_device': 'fw-2.example.com', 'interfaces': ['ethernet1/1']},
     ])
-    routers = _resources((tmp_path / 'virtual_routers.tf').read_text())
+    routers = _resources(file_text(tf_files(tmp_path), 'virtual_routers.tf'))
     blocks = {name: next(b for b in routers.values() if f'name = "{name}"' in b)
               for name in ('vr-home', 'vr-other')}
     assert 'panos_ethernet_interface.' in blocks['vr-home']
@@ -439,7 +440,7 @@ def test_same_name_in_two_vsys_emits_two_resources(tmp_path):
         {'name': 'Web', 'value': '10.0.0.2/32', 'device_group': 'Shared',
          'vsys': 'vsys2', 'vsys_device': 'fw-2.example.com'},
     ])
-    blocks = _resources((tmp_path / 'address_objects.tf').read_text())
+    blocks = _resources(file_text(tf_files(tmp_path), 'address_objects.tf'))
     assert len(blocks) == 2
     names = [header.split('"')[3] for header in blocks]
     assert len(set(names)) == 2, names
@@ -457,7 +458,7 @@ def test_same_name_in_two_vsys_references_resolve_per_vsys(tmp_path):
         {'name': 'Web', 'value': '10.0.0.2/32', 'device_group': 'Shared',
          'vsys': 'vsys2', 'vsys_device': 'fw-2.example.com'},
     ])
-    blocks = _resources((tmp_path / 'address_objects.tf').read_text())
+    blocks = _resources(file_text(tf_files(tmp_path), 'address_objects.tf'))
     # Read each copy's local name back from its own location block, so the
     # assertion follows the emitted output instead of re-deriving digests.
     local_by_vsys = {}
@@ -469,6 +470,6 @@ def test_same_name_in_two_vsys_references_resolve_per_vsys(tmp_path):
         {'name': 'Group', 'static_members': ['Web'], 'device_group': 'Shared',
          'vsys': 'vsys2', 'vsys_device': 'fw-2.example.com'},
     ])
-    groups = (tmp_path / 'address_groups.tf').read_text()
+    groups = file_text(tf_files(tmp_path), 'address_groups.tf')
     assert f"panos_address.{local_by_vsys['vsys2']}.name" in groups
     assert local_by_vsys['vsys1'] not in groups

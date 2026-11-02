@@ -26,7 +26,7 @@ a design rule enforced by construction.
 | `shadow_coverage.py` | The cross-source shadow scan (§3.2): a child entry name that repeats a parent entry name | the key is the matrix row, not the name alone; both sources are read with the same row rule, so no second naming rule exists; a run with no declared parent has no parent to read |
 | `state_input.py` | The state producer (F5.6): a Terraform state document read as a reference source, through the same door | the two byte checks run on the state bytes, and only the parse step is chosen by the kind, so a `<!DOCTYPE` inside a JSON value is not a refusal; a document the identity key cannot read is an input refusal; the state source writes no output, so no `.tf` byte changes |
 | `state_coverage.py` | The state scan (§3.2): the ownership fact and the drift fact | the matrix row is the same table the property scan uses, keyed by the resource type; the ownership key is §2.1 identity with the declared facts, never the `Shared` fallback; the scan is not an output, so it reads captured values without recording |
-| `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state; one block reader serves every block kind a rule reads, so a fact about a block is reported once |
+| `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state; one block reader serves every block kind a rule reads, so a fact about a block is reported once; the plan check runs once per unit directory the record names, so the report prints one result per unit and names the directory it ran on |
 | `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4) | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line |
 | `naming.py` | The §5 sanitizing rule, stated in one module (F6.6): the shape a PAN-OS name takes when it becomes a Terraform name, and the `var.` text a block prints for a site value | one rule, three callers: the local name of a block, the unit directory name, and the variable name of a site value. The gate reads it without the generator, so `TerraformGenerator.sanitize_name` is a delegate and every other module takes the rule as an argument or reads it here |
 | `unit_manifest.py` | The unit as data (F6.1): one row per declared scope, as `CODEBASE_MANIFEST.json` (§3.4) | the rows come from the ledger, so the module adds no parse data; it takes the §5 naming rule as an argument, so no second naming rule exists; the reference names arrive from §4.3, so this module resolves no name |
@@ -34,6 +34,7 @@ a design rule enforced by construction.
 | `reference_edges.py` | The reference between units (F6.3): one row per pair, as `REFERENCE_EDGES.json` (§3.6), the acyclic rule, and the unit order on the manifest row | the edge set is the names §4.3 recorded, so this module records no name and resolves no name; the target is the ownership `owner`, so the pair joins to §3.4 on `directory` and to §3.5 on (`type`, `entry`); a row that names one unit is refused; the order comes from the three bases §6 of `CODEBASE_ASSEMBLY.md` states, read through the module that holds each fact |
 | `site_data.py` | The site as data (F6.6): one row per site that names a value, as `SITE_DATA.json` (§3.7), and the `.tfvars` written from the rows | the row joins to §3.4 on `directory`, so no second unit rule exists; the module resolves no name and names no value the run did not print; the `.tfvars` is the printed form of the data, not the generator's state; `parse_rows` refuses a shape it does not declare; the name is the §5 rule read through `naming.py` |
 | `import_blocks.py` | The import block (F6.4): one block per entry, as `imports.tf` (§4.8), and the id shape | the block is built from the same data the resource block uses, so this module states no location rule and no naming rule; the id is the base64 JSON object the provider documents, and `decode_id` refuses a shape it does not declare; the four `*_policy_rules` types are the rows `LOCATION_SCHEMA` declares `rulebase` for, so no second table names them |
+| `write_path.py` | The write path (F6.10.3): the one function that writes a file, and the two path builders, one per file set (§6) | the LF rule is enforced here and nowhere else, so no module of the tool writes a file outside it; `bytes` are written without translation, because the cache holds the bytes the input door parsed; the module states no unit rule and no naming rule, because a per-unit file names its unit only by its directory (§14 of `CODEBASE_ASSEMBLY.md`) |
 | `conftest.py`, `tests/` | The gate | each rule in this document names the test that pins it |
 
 `tools/build_kitchen_sink.py` assembles the fixture corpus from committed files.
@@ -512,7 +513,7 @@ The rule lives in `unit_manifest.py`, and it holds six facts:
 - **The directory name.** `sanitize(unit name) + '_' + 8-hex digest of the identity`, in the §5
   shape. The digest is always present, not only on a collision, so a name never depends on the
   other units in the run. The module takes the §5 rule as an argument, so it defines no second
-  naming rule. It names the directory; it writes no directory.
+  naming rule. It names the directory, and the write path (§6) writes the directory it names.
 - **The row shape.** `unit`, `device_group`, `vsys`, `template`, `vsys_device`, `directory`,
   `entry_count`, `references`. Fields print in the declared order, the rows sort by the identity,
   and the reference names are sorted. `parse_rows` reads a written file back, and a row that is
@@ -650,13 +651,17 @@ the join §3.5 and §3.6 use. The rules are in `site_data.py` and in
   so a run that names no site value writes neither file, and the gate rule `data_files` reads the record
   back through `parse_rows` and compares the printed form with `render_tfvars` (§4.6, F6.8).
 - **The printed form.** `site.auto.tfvars` is written from the rows, not from the generator's state, one
-  line per variable in name order across the file. Terraform loads a `*.auto.tfvars` file automatically, so
+  line per variable in name order. The run writes one file per unit inside the directory the row names
+  (`CODEBASE_ASSEMBLY.md` §14), so one file prints one row. Terraform loads a `*.auto.tfvars` file
+  automatically, so
   `terraform.tfvars` stays the operator's own file for the credentials (`CODEBASE_ASSEMBLY.md` §11), and the
   tool writes no credential. A string prints as `json.dumps(value)`, the same escape set
   `import_blocks.unescape` reads back (§4.8); a list prints inline as `[ "a", "b" ]` and an empty list as
-  `[]`. A value that is neither, and a name two rows state with two different values, are refusals. The
+  `[]`. A value that is neither, and a name two rows state with two different values, are refusals: the print
+  rule decides them across the record, so the gate reads the refusal only against the row it compares. The
   file is read by the data rule against the record, and it is not one of the four data files, so the
-  report count names only the records (§4.5, F6.8).
+  report count names only the records (§4.5, F6.8). A printed-form finding names the path from the codebase
+  root, so it names the unit the row belonged to (§14).
 
 The values the rows state are the pairs `TerraformGenerator.location_field` recorded at the site that
 applied the value-to-variable table, keyed by the referrer's four facts, the way §4.3 records a reference
@@ -688,13 +693,17 @@ content is not written. Pinned by
 `tests/test_golden_files.py::test_golden_file_set_matches` and
 `tests/test_real_or_report.py::test_no_report_when_no_report_only_items`.
 
-The scope objects (F6.5) are one file for the run, `scope.tf`, written after
+The run writes the unit set inside the directory the manifest row names, and the codebase root set at the
+codebase root (§14). Inside one unit, the file order is the order `main()` calls the emitters, so the pinned
+file order is read as paths from the output directory.
+
+The scope objects (F6.5) are a unit-set file, `scope.tf`, written inside the unit directory after
 `provider.tf` and before the object files, so the reader sees
 the unit before the config inside it (`docs/CODEBASE_ASSEMBLY.md` §6 and §8 rule 2).
 Inside the file, blocks print in the F3.9 level order that
 `resource_mapping.SCOPE_LEVEL_ORDER` states, and within a type in document order.
-`variables.tf` (F2.10) is written after the emitters, because F6.6 made its declaration set the values
-the run consumed: the file cannot state a variable the run has not printed. Pinned by
+`variables.tf` (F2.10) is a unit-set file written after the emitters, because F6.6 made its declaration set the
+values the run consumed: the file cannot state a variable the run has not printed. Pinned by
 `tests/test_scope_objects.py::test_the_scope_file_is_written_before_the_config_inside_it` and
 `tests/test_site_data.py::test_the_declaration_file_is_written_after_the_emitters`.
 Pinned by `tests/test_scope_objects.py::test_the_scope_file_is_written_before_the_config_inside_it`,
@@ -911,6 +920,15 @@ conversion. It reads the `.tf` files for the block rules and the four data files
 for the data rule (F6.8), and the report names both counts. The splitter writes
 XML, so it has no `.tf` file and no data file to check.
 
+The reader walks the codebase root and the directories under it and keys each `.tf` file by the path from the
+codebase root, so a finding names the unit the file belongs to: a per-unit file names its unit only by its
+directory (§14 of `CODEBASE_ASSEMBLY.md`). The plan check runs once per unit directory the manifest record
+names, because a unit is one plan and one root, so the report prints one result per unit and names the
+directory it ran on — the finding names it, or the note names it when the plan passed. `result_of` is the worst
+result the check produced, so a unit that failed is not hidden behind a unit that passed. The two report counts
+name the two sets: the `.tf` files the reader read, and the four records at the root
+(`tests/test_write_path.py`, `tests/test_sanity_gate.py`).
+
 | Check | Rule | Severity |
 |---|---|---|
 | `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |
@@ -1078,7 +1096,7 @@ One block per unit the reference site belongs to (F6.10.2), for a name no unit i
 A second site in the same unit uses the same block, and a site in another unit writes its own,
 because PAN-OS resolves a name in the referrer's own scope before the shared section. A name one
 unit declares and another unit uses is never a block: it is the plain name (§4.3 rule 2). The blocks
-go in one file for the run, `read_through.tf`, so a reader can separate what the run read from what
+go in that unit's `read_through.tf` (§14), so a reader can separate what the run read from what
 the plan will read. The file is written only when it has blocks, in sorted (type, local name) order,
 so it is byte-identical between runs.
 
@@ -1104,7 +1122,8 @@ for a unit reads `N to import, 0 to add, 0 to change, 0 to destroy` for the entr
 The shape is opt-in and off by default: a run that declares no `--import-blocks` writes no import file
 and the same `.tf` bytes as before, so both golden sets stay byte-identical. This is the §4.7 precedent.
 
-The file is `imports.tf`, one file for the run, one block per entry the run declares, written only when
+The file is `imports.tf`, one file per unit inside the directory the manifest row names (§14), one block per
+entry the run declares, written only when
 the run declares the shape and has a block to write. A `.tf` file is the choice, because the block rules
 read `.tf` files and the data rule reads the four data files (§4.5); `imports.tf` is read by the block rule.
 
@@ -1261,12 +1280,22 @@ Pinned by `tests/test_dependency_wiring.py::test_local_names_are_sanitized_name_
 
 Two runs on the same input produce identical bytes.
 
+**The byte rule lives in the write path.** One function writes a file (`write_path.py` `write_file`), so the
+rule is enforced in one place and not in an operator note: `open(..., 'w')` writes `os.linesep`, so a run on a
+Windows desktop writes CRLF and the goldens stop matching byte for byte. Text takes `newline=LF`; `bytes` are
+written without translation, because the write path receives the source cache bytes the input door parsed, and
+the rule for those bytes is "no change". No module of the tool writes a file outside the write path, and no
+module builds a path for a file it does not own: the two builders name the two sets (§14 of
+`CODEBASE_ASSEMBLY.md`). Pinned by `tests/test_write_path.py`
+`test_one_function_writes_bytes_and_no_other_module_writes_a_file`,
+`test_the_write_path_states_two_builders_one_per_set`, and `test_the_bytes_a_run_writes_hold_no_cr`.
+
 - Association tables sort names. Report sections sort by level, entries by name.
 - Names come from the identity digest, not from emission order.
 - Order that the input states is preserved on purpose: XML order inside a policy
   chain, and first-seen order of chains.
-- The goldens pin every emitted `.tf` file byte for byte
-  (`tests/test_golden_files.py`). Reports are not in the golden set, so report
+- The goldens pin every emitted `.tf` file byte for byte, read as paths from the case directory, so each
+  path names one unit directory (`tests/test_golden_files.py`). Reports are not in the golden set, so report
   determinism is pinned by
   `tests/test_reports.py::test_sections_and_entries_are_in_a_stable_order` and,
   for the sanity report, by
@@ -1307,7 +1336,8 @@ Two runs on the same input produce identical bytes.
   (`tests/test_state_coverage.py::test_two_runs_on_the_same_bytes_write_the_same_bytes`). A state
   read is a file read, so no cache-derived value enters its record.
 - The site record (§3.7) keeps the rows in identity order and sorts the names inside a row, the `.tfvars`
-  prints in name order across the file, and no field states a timestamp or a path, so two runs on the same
+  prints in name order inside the file of the unit the row names, and no field states a timestamp or a path, so
+  two runs on the same
   bytes write the same bytes from two different output directories
   (`tests/test_site_data.py::test_the_fields_print_in_the_declared_order` and
   `::test_two_runs_on_the_same_bytes_write_the_same_bytes`). A name comes from the value through `naming.py`,

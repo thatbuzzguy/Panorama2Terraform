@@ -4,12 +4,12 @@ The provider declares two actions (2.0.14, `docs/CODEBASE_ASSEMBLY.md` §12), an
 commit one device group, one template, or one template stack, so a commit stays inside one unit. Five
 rules, stated once here.
 
-1. **One block per unit, one file for the run.** One block per manifest row, in the identity order the
+1. **One block per unit, one file per unit.** One block per manifest row, in the identity order the
    manifest rows already print. `actions.tf` is a `.tf` file, so the gate rule
    (`sanity_checks.check_actions`) reads it, and it is written only when it has content, following the
    rule for the report files and the four data files. Emission is default, not a flag: the committed
    goldens pin what a default run emits, so a shape written only when a flag is on cannot be pinned
-   (the F6.5 rule 1 argument). `main()` writes the file as the last `.tf` file, so the reader reads the
+   (the F6.5 rule 1 argument). The file is the last `.tf` file of its unit, so the reader reads the
    action against the completed unit.
 2. **The action names the fact its own unit declares, and no fact another unit owns.** The fact is the
    one `unit_manifest.named_fact` selects for the row, and the block states it only when the provider
@@ -40,8 +40,9 @@ rules, stated once here.
 
 Usage:
     from commit_actions import ACTIONS_FILE, ROW_FIELDS, build_rows, render, read_block
+    from write_path import root_path, unit_path, write_file
     rows = build_rows(manifest_rows, naming.sanitize)
-    (output_dir / ACTIONS_FILE).write_text(render(rows), encoding='utf-8')
+    write_file(unit_path(output_dir, directory, ACTIONS_FILE), render(rows))
     for shape in [read_block(block) for block in sanity_checks.blocks(files, ('action',))]:
         print(shape['fact'], shape['entry_name'])
 """

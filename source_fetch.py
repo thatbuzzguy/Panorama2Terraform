@@ -74,6 +74,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Optional
 
+import write_path
 from xml_input import (
     DEFAULT_MAX_INPUT_BYTES,
     ENTRY_SEGMENT,
@@ -336,6 +337,7 @@ def fetch(request: ApiRequest, cache_dir, producer: Optional[Callable[[ApiReques
     data = producer(request) if producer is not None else network_producer(request, key, insecure)
     source = parse_bytes(data, origin, max_input_bytes)
     source = unwrap_config_root(source, request)
-    entry.parent.mkdir(parents=True, exist_ok=True)
-    entry.write_bytes(data)
+    # The write path is the only writer (F6.10.3); bytes reach it untranslated, so the cache holds
+    # the bytes the door parsed.
+    write_path.write_file(entry, data)
     return source

@@ -28,7 +28,7 @@ import import_blocks
 import panorama_to_terraform as module
 import sanity_checks
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, run_script
+from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, file_text, parts, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 IMPORTS = import_blocks.IMPORT_FILE
@@ -50,8 +50,13 @@ def _run(source: Path, out_dir: Path, extra: tuple = ()):
 
 
 def _files(out_dir: Path) -> dict:
-    """The `.tf` files the run wrote, as text."""
-    return {path.name: path.read_text(encoding='utf-8') for path in sorted(out_dir.glob('*.tf'))}
+    """The `.tf` files the run wrote, as text, keyed by the path from the output directory."""
+    return tf_files(out_dir)
+
+
+def _bytes(out_dir: Path) -> dict:
+    """The `.tf` bytes the run wrote, keyed by the same path the text reader keys by (F6.10.3, §14)."""
+    return {key: text.encode('utf-8') for key, text in _files(out_dir).items()}
 
 
 def _pair(name: str, location: dict) -> str:
@@ -206,7 +211,7 @@ def test_a_rule_entry_writes_no_block_and_one_warn_finding(tmp_path):
     result = _run(FIXTURES_DIR / 'kitchen_sink.xml', out, ('--import-blocks',))
     assert result.returncode == 0
     files = _files(out)
-    text = files[IMPORTS]
+    text = file_text(files, IMPORTS)
     for rule_type in import_blocks.rule_types():
         assert rule_type not in text
     findings = sanity_checks.check_import_blocks(files)
@@ -258,25 +263,28 @@ def test_the_file_prints_units_in_order_then_entries_in_order():
 def test_the_file_names_no_timestamp_and_no_path(tmp_path):
     out = tmp_path / 'run'
     assert _run(SAMPLE_CONFIG, out, ('--import-blocks',)).returncode == 0
-    text = _files(out)[IMPORTS]
+    text = file_text(_files(out), IMPORTS)
     assert 'timestamp' not in text.lower()
     assert str(tmp_path) not in text
     assert '.xml' not in text
 
 
 def test_two_runs_write_the_same_bytes(tmp_path):
+    """Two runs on the same input write the same bytes, including the per-unit layout (F6.10.3, §14)."""
     first = _run(SAMPLE_CONFIG, tmp_path / 'first', ('--import-blocks',))
     second = _run(SAMPLE_CONFIG, tmp_path / 'second', ('--import-blocks',))
     assert first.returncode == 0 and second.returncode == 0
-    assert (tmp_path / 'first' / IMPORTS).read_bytes() == (tmp_path / 'second' / IMPORTS).read_bytes()
+    assert _bytes(tmp_path / 'first') == _bytes(tmp_path / 'second')
 
 
 def test_a_run_that_declares_no_import_blocks_writes_the_golden_bytes(tmp_path):
     """The shape is opt-in, so both golden sets stay byte-identical."""
     assert _run(SAMPLE_CONFIG, tmp_path).returncode == 0
-    assert not (tmp_path / IMPORTS).exists()
-    for path in sorted((GOLDEN_DIR / 'sample').glob('*.tf')):
-        assert (tmp_path / path.name).read_bytes() == path.read_bytes()
+    assert not parts(tf_files(tmp_path), IMPORTS), 'a run that declares no entry writes no file'
+    for path in sorted((GOLDEN_DIR / 'sample').rglob('*.tf')):
+        # F6.10.3 (§14): the golden case holds the same per-unit layout the run writes, so the byte
+        # comparison reads the path inside the case.
+        assert (tmp_path / path.relative_to(GOLDEN_DIR / 'sample')).read_bytes() == path.read_bytes()
 
 
 def test_the_file_is_written_only_when_it_has_content(tmp_path):
@@ -288,7 +296,7 @@ def test_the_file_is_written_only_when_it_has_content(tmp_path):
                       '</entry></devices></config>\n', encoding='utf-8')
     out = tmp_path / 'out'
     assert _run(source, out, ('--import-blocks',)).returncode == 0
-    assert not (out / IMPORTS).exists()
+    assert not parts(_files(out), IMPORTS)
     assert 'import {' not in import_blocks.render([])
 
 
@@ -317,7 +325,8 @@ def test_the_import_file_is_a_gate_input(tmp_path):
     """Decision 1 rule 1: the agreement rule reads `.tf` files only, so the shape is a `.tf` file."""
     out = tmp_path / 'run'
     assert _run(SAMPLE_CONFIG, out, ('--import-blocks',)).returncode == 0
-    assert import_blocks.IMPORT_FILE in sanity_checks.read_tf_files(out)
+    assert parts(sanity_checks.read_tf_files(out), import_blocks.IMPORT_FILE), \
+        'the gate reads the file through the unit directory'
     assert 'import_blocks' in sanity_checks.CHECK_ORDER
     assert 'import_blocks' in (out / 'SANITY_REPORT.txt').read_text()
 
@@ -326,4 +335,4 @@ def test_the_opt_in_appears_in_help_and_defaults_off(tmp_path):
     """Decision 1 rule 2: the shape is opt-in, following the `--data-blocks` precedent."""
     assert '--import-blocks' in run_script(CONVERTER, '--help').stdout
     assert _run(SAMPLE_CONFIG, tmp_path).returncode == 0
-    assert not (tmp_path / IMPORTS).exists()
+    assert not parts(tf_files(tmp_path), IMPORTS)

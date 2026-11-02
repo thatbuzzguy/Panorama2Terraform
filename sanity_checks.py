@@ -12,7 +12,9 @@ module that owns each row shape, so no second shape rule appears.
 
 F6.10.1 (`docs/CODEBASE_ASSEMBLY.md` §14) states which set each rule reads: the block rules read the
 `.tf` files of one unit, keyed by the path from the codebase root, and the data rule reads the records at
-the root as one rule over the rows of every unit. No rule reads a report.
+the root as one rule over the rows of every unit. No rule reads a report. F6.10.3 lands that shape: the
+run writes one directory per unit, so the path a finding names is the unit directory plus the file name,
+and the plan check runs once per unit directory.
 
 Checks, in report order:
 
@@ -58,6 +60,7 @@ import reference_edges
 import resource_mapping
 import site_data
 import unit_manifest
+import write_path
 
 FAIL = 'FAIL'
 WARN = 'WARN'
@@ -273,18 +276,34 @@ class SanityReport:
     data_file_count: int = 0
     resource_count: int = 0
 
+    def results(self, check: str) -> list[CheckResult]:
+        """The results one check produced, in report order.
+
+        A check can hold more than one result: the plan check runs once per unit directory (F6.10.3, §14),
+        so it produces one result per unit. The report prints each result, and a count over the report
+        counts every result.
+        """
+        return [result for result in self.checks if result.check == check]
+
     def findings(self, check: str) -> list[Finding]:
         """Findings for one check, in report order."""
-        for result in self.checks:
-            if result.check == check:
-                return list(result.findings)
-        return []
+        return [finding for result in self.results(check) for finding in result.findings]
 
     def result_of(self, check: str) -> str:
-        for result in self.checks:
-            if result.check == check:
-                return result.result
-        return NOT_RUN
+        """The check as the report states it: the worst result the check produced.
+
+        A check that did not run is NOT RUN; a check that ran on more than one unit and failed on one of
+        them is FAIL, so the report cannot hide a unit that failed behind a unit that passed.
+        """
+        results = self.results(check)
+        if not results:
+            return NOT_RUN
+        if all(not result.ran for result in results):
+            return NOT_RUN
+        for severity in (FAIL, WARN, SKIP):
+            if any(result.result == severity for result in results):
+                return severity
+        return 'PASS'
 
     @property
     def fail_count(self) -> int:
@@ -308,14 +327,12 @@ class SanityReport:
         lines.append('CHECK RESULTS')
         lines.append('-' * 80)
         for name in CHECK_ORDER:
-            result = next((r for r in self.checks if r.check == name), None)
-            if result is None:
-                continue
-            count = len(result.findings)
-            label = f'{result.result} ({count})' if count else result.result
-            lines.append(f'{name:<24} {label}')
-            if result.note:
-                lines.append(f'{"":<24} {result.note}')
+            for result in self.results(name):
+                count = len(result.findings)
+                label = f'{result.result} ({count})' if count else result.result
+                lines.append(f'{name:<24} {label}')
+                if result.note:
+                    lines.append(f'{"":<24} {result.note}')
         lines.append('')
         lines.append('FINDINGS')
         lines.append('-' * 80)
@@ -323,16 +340,16 @@ class SanityReport:
             lines.append('(No finding.)')
         else:
             for name in CHECK_ORDER:
-                result = next((r for r in self.checks if r.check == name), None)
-                if result is None or not result.findings:
-                    continue
-                lines.append(f'[{name}]')
-                for finding in result.findings:
-                    lines.append(f'  {finding.render()}')
+                for result in self.results(name):
+                    if not result.findings:
+                        continue
+                    lines.append(f'[{name}]')
+                    for finding in result.findings:
+                        lines.append(f'  {finding.render()}')
         return '\n'.join(lines) + '\n'
 
     def console_summary(self) -> str:
-        """The short console summary. One line per check, then each finding."""
+        """The short console summary. One line per check result, then each finding."""
         lines = [
             f'Sanity gate: {"FAIL" if self.failed else "PASS"} '
             f'({self.fail_count} FAIL, {self.warn_count} WARN) - '
@@ -340,12 +357,10 @@ class SanityReport:
             f'{self.resource_count} resources'
         ]
         for name in CHECK_ORDER:
-            result = next((r for r in self.checks if r.check == name), None)
-            if result is None:
-                continue
-            lines.append(f'  {name}: {result.result}')
-            for finding in result.findings:
-                lines.append(f'    {finding.render()}')
+            for result in self.results(name):
+                lines.append(f'  {name}: {result.result}')
+                for finding in result.findings:
+                    lines.append(f'    {finding.render()}')
         return '\n'.join(lines)
 
 
@@ -1049,30 +1064,30 @@ def check_data_files(output_dir: Path) -> list[Finding]:
                     f'the order rule produces ({expected["rank"]}, {expected["after"]})',
                 ))
 
-    # Finding 5: the site record and its printed form. A printed form is not one of the four data
-    # files, so a finding about it names the printed file and the count names only the records.
-    tfvars = out / site_data.TFVARS_FILE
-    if site_rows and not tfvars.is_file():
-        findings.append(Finding(
-            'data_files', FAIL, site_data.TFVARS_FILE, 0,
-            'the site record has content, so its printed form must be written',
-        ))
-    elif tfvars.is_file() and not site_rows:
-        findings.append(Finding(
-            'data_files', FAIL, site_data.TFVARS_FILE, 0,
-            'the printed form stands with the site record, and the record holds no rows',
-        ))
-    elif tfvars.is_file():
+    # Finding 5: the site record and its printed form. The record is one file for the codebase, so the
+    # rule reads it at the root; the printed form is the unit's file, so the rule compares the printed
+    # form of one row with the file in the directory that row names (F6.10.3, §14). A printed form is not
+    # one of the four data files, so the count names only the records. The finding names the path from
+    # the codebase root, because a per-unit file names its unit only by its directory, and its position
+    # is the row ordinal the record states.
+    for ordinal, row in enumerate(site_rows, start=1):
+        printed = write_path.unit_path(out, row['directory'], site_data.TFVARS_FILE)
+        if not printed.is_file():
+            findings.append(Finding(
+                'data_files', FAIL, str(printed.relative_to(out)), ordinal,
+                f'row {ordinal}: the site row has content, so the unit it names must hold its printed form',
+            ))
+            continue
         try:
-            expected = site_data.render_tfvars(site_rows)
+            expected = site_data.render_tfvars([row])
         except ValueError as exc:
-            findings.append(Finding('data_files', FAIL, site_data.SITE_DATA_FILE, 0, str(exc)))
-        else:
-            if tfvars.read_text(encoding='utf-8', errors='surrogateescape') != expected:
-                findings.append(Finding(
-                    'data_files', FAIL, site_data.TFVARS_FILE, 0,
-                    'the printed form is not the site record rendered by the rule that prints it',
-                ))
+            findings.append(Finding('data_files', FAIL, site_data.SITE_DATA_FILE, ordinal, str(exc)))
+            continue
+        if printed.read_text(encoding='utf-8', errors='surrogateescape') != expected:
+            findings.append(Finding(
+                'data_files', FAIL, str(printed.relative_to(out)), ordinal,
+                f'row {ordinal}: the printed form is not the row rendered by the rule that prints it',
+            ))
 
     # Finding 6: the position is the row ordinal, and a finding about a whole file states row 0.
     return sorted(findings, key=lambda finding: (finding.file, finding.line, finding.detail))
@@ -1119,15 +1134,21 @@ def check_placeholders(files: dict[str, str]) -> list[Finding]:
 
 
 def check_terraform(output_dir: Path, terraform: Optional[str] = None,
-                    timeout: int = 300) -> CheckResult:
-    """Run `terraform init` + `terraform validate` on the output (`--validate`).
+                    unit: str = '.', timeout: int = 300) -> CheckResult:
+    """Run `terraform init` + `terraform validate` on one unit directory (`--validate`).
+
+    A unit is one plan and one root, so this check reads one directory (F6.10.3, §14). `unit` is the path
+    the report names for the directory it ran on, and `.` is the codebase root, which is where the check
+    runs when the manifest record names no unit. The check names no file, because a plan reads a directory,
+    so the report names the directory it ran on: the finding, or the note when the plan passed.
 
     A missing binary is a SKIPPED result, not a failure: the offline CI matrix
-    has no terraform, and the static checks still decide the exit code.
+    has no terraform, and the static checks still decide the exit code. A run that names no unit has no
+    unit directory, so the gate states one result for the run, not one per unit.
     """
     if terraform is None:
         return CheckResult('terraform', (Finding(
-            'terraform', SKIP, '', 0, 'terraform binary not found; skipped',
+            'terraform', SKIP, unit, 0, 'terraform binary not found; skipped',
         ),))
 
     def run(args: list[str]) -> tuple[int, str]:
@@ -1149,19 +1170,41 @@ def check_terraform(output_dir: Path, terraform: Optional[str] = None,
     init_code, init_out = run(['init', '-backend=false', '-input=false'])
     if init_code != 0:
         return CheckResult('terraform', (Finding(
-            'terraform', FAIL, '', 0, f'terraform init failed: {init_out[-2000:]}',
+            'terraform', FAIL, unit, 0, f'terraform init failed: {init_out[-2000:]}',
         ),))
 
     validate_code, validate_out = run(['validate'])
     if validate_code != 0:
         return CheckResult('terraform', (Finding(
-            'terraform', FAIL, '', 0, f'terraform validate failed: {validate_out[-2000:]}',
+            'terraform', FAIL, unit, 0, f'terraform validate failed: {validate_out[-2000:]}',
         ),))
+    # A result that passes has no finding, so the note names the directory the check ran on: the report can
+    # still say which unit the plan read (F6.10.3, §14).
     note = next((line for line in validate_out.split('\n') if line.strip()), '')
-    return CheckResult('terraform', (), note=note)
+    return CheckResult('terraform', (), note=f'{unit}: {note}')
 
 
 # --- The gate ----------------------------------------------------------------
+
+def unit_directories(output_dir: Path) -> list[str]:
+    """The unit directories the manifest record names, in the order the record prints its rows.
+
+    F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the manifest is the place that states the unit set, so the
+    gate reads it through `unit_manifest` and names no second rule. A record that is not there, or that
+    does not read as its rows, names no unit: the data rule reports that, and the plan check runs on the
+    codebase root.
+    """
+    out = Path(output_dir)
+    path = out / unit_manifest.MANIFEST_FILE
+    if not path.is_file():
+        return []
+    try:
+        rows = unit_manifest.parse_rows(path.read_text(encoding='utf-8', errors='surrogateescape'))
+    except ValueError:
+        # The data rule reports a record that does not read as its rows.
+        return []
+    return [row['directory'] for row in rows]
+
 
 def run_checks(output_dir: Path, run_terraform: bool = False,
                terraform: Optional[str] = None) -> SanityReport:
@@ -1186,7 +1229,16 @@ def run_checks(output_dir: Path, run_terraform: bool = False,
         CheckResult('placeholders', tuple(check_placeholders(files))),
     ]
     if run_terraform:
-        checks.append(check_terraform(Path(output_dir), terraform or shutil.which('terraform')))
+        binary = terraform or shutil.which('terraform')
+        # F6.10.3 (§14): one plan reads one root, so the plan check runs once per unit directory the
+        # manifest record names. A run that names no unit has no unit directory, so the check runs on the
+        # codebase root, which is where the gate reads the files.
+        units = unit_directories(Path(output_dir))
+        if not units:
+            checks.append(check_terraform(Path(output_dir), binary, '.'))
+        else:
+            for directory in units:
+                checks.append(check_terraform(Path(output_dir) / directory, binary, directory))
     else:
         # State the check the caller did not ask for, so the report cannot look as
         # if the terraform gate is part of the default run.

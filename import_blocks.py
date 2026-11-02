@@ -2,9 +2,10 @@
 
 An import block binds a resource block to the object the provider already has. Six rules, stated once here.
 
-1. **One block per entry, one file per codebase.** The block rules of the gate read `.tf` files
+1. **One block per entry, one file per unit.** The block rules of the gate read `.tf` files
    (`ARCHITECTURE.md` §4.5), so the agreement rule (`sanity_checks.check_import_blocks`) can only read a
-   `.tf` file. F6.1 rule 4 still refuses a per-unit file, because this feature writes no directory.
+   `.tf` file. The file is written inside the directory the manifest row names (`docs/CODEBASE_ASSEMBLY.md` §14),
+   so the gate finding names the path from the codebase root.
 2. **The id is base64 of a JSON object** (`docs/CODEBASE_ASSEMBLY.md` §12). For an ordinary object type the
    object is the location object plus the entry name: `{"location": ..., "name": ...}`. Keys sort at every
    level and the separators are compact, so the same entry encodes to the same bytes; `ensure_ascii` keeps the
@@ -34,8 +35,9 @@ An import block binds a resource block to the object the provider already has. S
 
 Usage:
     from import_blocks import IMPORT_FILE, ROW_FIELDS, build_id, decode_id, read_block, render, row
+    from write_path import unit_path, write_file
     shape = row(directory, 'panos_address', 'addr_1a2b3c4d', 'Web', {'device_group': {'name': 'VG1'}})
-    (output_dir / IMPORT_FILE).write_text(render([shape]), encoding='utf-8')
+    write_file(unit_path(output_dir, directory, IMPORT_FILE), render([shape]))
     print(decode_id(shape['import_id']))
 """
 

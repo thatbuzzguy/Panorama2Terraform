@@ -2,53 +2,46 @@
 
 ## Current position
 
-F6.10.2 (the print site per unit) is complete and committed: `name_ref` resolves a name inside the
-referrer's own unit, so a name the flat chain resolved across scopes is now the plain name. No
-directory is written in that slice, so `tests/test_write_path.py::test_no_unit_directory_is_written_yet`
-stays green and the directory write stays with F6.10.3.
+F6.10.3 (the directory write) is complete and committed. The suite is 1303 tests, all green, and
+`ruff check .` is clean.
 
-The rule, in `docs/ARCHITECTURE.md` §4.3, first match wins:
+The write path (`write_path.py`):
 
-1. A name the referrer's own unit declares is `HclRef('<scope>.<local>.name')`, where `local` is the
-   name the naming rule (§5) gave for that unit.
-2. A name another unit in the run declares is the plain name. The device case (F3.5, F3.6) is one case
-   of this rule, so the device rule and the helper that read it are gone.
-3. A name no unit in the run declares is a read-through `data block` when the run opted the scope in,
-   for the unit the site belongs to (§4.7).
-4. Otherwise the plain name.
+- `write_file` is the only function that writes a file, and text takes `newline=LF`, so the byte rule is enforced
+  in one place. `bytes` are written without translation, because the cache holds the bytes the input door
+  parsed, so `source_fetch.py` writes the cache through it.
+- `unit_path` and `root_path` are the two builders, one per file set. The tool writes through
+  `write_unit_file` and `write_root_file`, so no module builds a path for a file it does not own.
+- The generator groups its emitters through `UnitText`, keyed by the unit directory, and the file order is the
+  order `main()` calls the emitters. `TerraformGenerator.unit_set()` is the run's unit set, read through
+  `unit_manifest.units`, so a unit the manifest names gets a directory even when the run writes no block inside
+  it. `variables.tf` and `provider.tf` are unit-set files, so every unit directory holds at least those two.
 
-The shape the code carries:
+The gate:
 
-- `self._declaration_index` is `(scope, name)` -> the declaring unit's facts -> the local name. It
-  replaces `_block_registry`, `_flat_registry`, `_device_registry` and `_device_index`. A `data` block
-  enters no declaration index.
-- `declare_block_name` takes the object, because the rule reads the unit through `unit_manifest.facts_of`
-  at both ends. The digest input is unchanged for a resource (`context|vsys`), so a single-unit run writes
-  the same bytes; for a `data` block the identity is `identity_digest(facts)`, and no golden pins a
-  read-through local name.
-- `name_ref` takes no `context`, `vsys` or `device`: the referrer states them. `key` stays for a VPN
-  composite key. The recording rule is unchanged.
-- `_data_blocks` is keyed by `(scope, unit, name)`, and the writer sorts by `(type, local)` so the file
-  stays byte-identical between runs.
+- `read_tf_files` walks the codebase root and keys each `.tf` file by the path from the root, so a finding names
+  the unit directory the file is in.
+- `check_data_files` reads the four records at the root through `parse_rows`, over the rows of every unit, and
+  its printed-form half reads each unit's file inside the directory the row names, so that finding names the path.
+- `check_terraform` runs once per unit directory `unit_directories` names, and each result names the directory it
+  ran on: the finding names it, or the note names it when the plan passed. `result_of` is the worst result, so a
+  unit that failed is not hidden. A missing binary is a SKIPPED result, so the suite runs offline. A record that
+  names no unit runs the plan check on the codebase root, which the result names as `.`.
+- `SanityReport.results(check)` is one result per unit directory, and `findings(check)` reads the findings across
+  the results.
 
-The pin lists changed by this slice: `tests/test_reference_edges.py::CORPUS_EDGES` is 20 rows over five
-fixtures (`dependency_wiring.xml` 3, `kitchen_sink.xml` 8, `multi_device_templates.xml` 4,
-`reference_cycle.xml` 2, `policy_order.xml` 3), measured from a real run. `GROUPING_REFERENCES` in
-`tests/test_unit_manifest.py` is unchanged, because the grouping fixture names one unit. The kitchen
-goldens for `security_rules.tf`, `virtual_routers.tf` and `zones.tf` regenerated from a real run; the
-sample goldens are byte-identical. The suite is 1258 tests.
+The goldens moved to the per-unit layout, regenerated from a real run: `tests/golden/sample/`,
+`tests/golden/kitchen_sink/`, and the new `tests/golden/single_unit/` (`tests/fixtures/address_objects.xml`, one
+unit). The golden pin reads the `.tf` set as paths from the case directory, so
+`tests/test_policy_order.py` reads the parts per unit and no golden test skips. `conftest.py` holds the helpers
+the tests read the layout through: `tf_files`, `parts`, `file_text`, and `written_bytes` for the two-run byte
+pins.
 
-The pins that name the per-unit rule are `::test_name_ref_resolves_inside_the_referrers_own_unit`,
-`::test_a_name_another_unit_declares_stays_a_plain_name`, `::test_name_ref_resolves_inside_the_referrers_own_vsys`,
-and `::test_the_record_names_the_referrers_unit_not_the_declaring_unit`, plus the read-through pins in
-`tests/test_data_blocks.py` and `tests/test_multi_device_template.py` that `docs/ARCHITECTURE.md` §4.3
-names.
+`tests/test_write_path.py::test_no_unit_directory_is_written_yet` is replaced by
+`test_the_run_writes_one_directory_per_unit_the_manifest_names`, which names the directory the run writes.
 
-The next slice is F6.10.3 (the directory write). `acceptance.md` holds F6.10.2's criteria and must be
-overwritten for it. F6.10.3 writes one directory per unit the manifest names, holds the unit set §14
-states, applies the LF rule, and regenerates both goldens with the per-unit layout, so the golden pin reads
-the `.tf` set as paths from the case directory and a gate finding names the path. It also changes
-`test_no_unit_directory_is_written_yet`.
+The next slice is F6.10.4 (the site half): the `.tfvars` `target` fact, the `panos_push_to_devices` shape, and
+the generated `README.md` label. `acceptance.md` holds F6.10.3's criteria and must be overwritten for it.
 
 ## Rules to keep when writing documents
 
@@ -69,26 +62,21 @@ the `.tf` set as paths from the case directory and a gate finding names the path
 
 ## Watch for Epic 6 and Epic 7
 
-- The codebase modules name the unit, the owner, the pair, the order, the block, the scope
-  object and the site, and write no directory. The write path is the step that turns a
-  `directory` field into a real directory, and `scope.tf`, `imports.tf` and `site.auto.tfvars`
-  are one file for the run until it lands. The print-site rule it applies is decided
-  (`docs/CODEBASE_ASSEMBLY.md` §5 rule 5), and the file shape is decided (§14), so the step has
-  no open decision.
+- The write path landed (`docs/CODEBASE_ASSEMBLY.md` §14): the run writes one directory per unit the manifest
+  names, and the codebase root holds the root set. A new file shape must name which set it belongs to, and the
+  report counts, the console line and the tests that read the file set change with it. The open facts F6.10.4
+  names are the `.tfvars` `target` serial and the `panos_push_to_devices` shape.
 - A rule that pins an absence by scanning module sources cannot read a source that names the words it
   forbids, so a scan reads the tool's own modules, and the test name and the module docstring carry no
-  forbidden word. The pin for the outputs rule is group 7 of `tests/test_reference_edges.py`; the pins for
-  the file shape are `tests/test_write_path.py`.
-- The block reader in `sanity_checks.py` serves every kind, and the same field reader serves the
-  fields inside a container value and the elements of a list value, so a new block shape uses them
-  rather than writing a second reader.
-- The gate reads the `.tf` files for the block rules and the four data files for the data rule, so the two
-  file sets are distinct: a block rule reads a `.tf` file, and the data rule reads a record through the
-  module that owns its row shape. `scope.tf`, `imports.tf` and `actions.tf` are `.tf` files, so the block
-  rules read them. `site.auto.tfvars` is the printed form of the site record, so the data rule compares it
-  and does not count it as a data file, and `SOURCE.txt` is read by no rule. A new file shape must name
-  which of the two sets it belongs to, and the report counts, the console line and the tests that pin the
-  file set change with it. No data rule reads a `.tf` file, and no block rule reads a data file.
+  forbidden word. The writer scan excludes `write_path.py` (the single writer) and `conftest.py` (the test
+  harness). The pin for the outputs rule is group 7 of `tests/test_reference_edges.py`; the pins for the file
+  shape are `tests/test_write_path.py`.
+- The block reader in `sanity_checks.py` serves every kind, and the same field reader serves the fields inside a
+  container value and the elements of a list value, so a new block shape uses them rather than writing a second
+  reader.
+- A test that reads the `.tf` set reads it as the gate reads it, keyed by the path from the output directory, so
+  a run that names two units is not read as one file. A plan check that runs writes a `.terraform` cache inside
+  the directory it ran on, so a pin that reads a corpus run uses a copy of it.
 - A field reader must read at the block's own level and stop at the closing quote, or a
   sub-block field or an escaped quote answers for the block's field. Both are pinned in
   `tests/test_import_blocks.py`, and the scope rule reads at the block's own level through the
@@ -137,4 +125,5 @@ the `.tf` set as paths from the case directory and a gate finding names the path
   the pipeline in process.
 - A cycle test needs two units that each declare a name the other one uses, because the rule resolves a
   name only inside the unit that declared it (`tests/fixtures/reference_cycle.xml`).
-- The LF rule is a byte rule, so the goldens and the no-change tests change with the write path.
+- The LF rule is a byte rule, so the goldens and the no-change tests change with the write path. The rule is in
+  the one write function, and `docs/ARCHITECTURE.md` §6 states it.

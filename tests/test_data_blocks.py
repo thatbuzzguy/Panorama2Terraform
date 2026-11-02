@@ -30,7 +30,7 @@ import pytest
 import resource_mapping
 import sanity_checks
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, run_pipeline, run_script
+from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, file_text, parts, run_pipeline, run_script, tf_files
 from panorama_to_terraform import ADDR_SCOPES, REFERENCE_SCOPES, TerraformGenerator
 
 CONVERTER = 'panorama_to_terraform.py'
@@ -57,7 +57,7 @@ def _run(source: Path, out_dir: Path, extra: tuple = ()) -> subprocess.Completed
 
 def _files(out_dir: Path) -> dict:
     """The `.tf` files the run wrote, as text."""
-    return {path.name: path.read_text(encoding='utf-8') for path in sorted(out_dir.glob('*.tf'))}
+    return tf_files(out_dir)
 
 
 @pytest.fixture
@@ -239,7 +239,7 @@ def test_a_name_outside_the_run_becomes_one_data_block(tmp_path):
     result = _run(SAMPLE_CONFIG, tmp_path, ('--data-blocks', 'panos_address'))
     assert result.returncode == 0, result.stdout + result.stderr
     files = _files(tmp_path)
-    blocks = sanity_checks.data_blocks({READ_THROUGH: files[READ_THROUGH]})
+    blocks = sanity_checks.data_blocks({READ_THROUGH: file_text(files, READ_THROUGH)})
     assert blocks, 'the run wrote no data block'
     for block in blocks:
         # A block holds the type, the name, and the location, and nothing else.
@@ -440,7 +440,11 @@ def test_the_read_through_file_is_byte_identical_between_runs(tmp_path):
     first = _run(SAMPLE_CONFIG, tmp_path / 'a', args)
     second = _run(SAMPLE_CONFIG, tmp_path / 'b', args)
     assert first.returncode == 0 and second.returncode == 0
-    for name in (READ_THROUGH, 'SANITY_REPORT.txt', 'CONVERSION_REPORT.txt', 'README.md'):
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): `read_through.tf` is a unit-set file, so the two runs are
+    # compared on the parts each unit wrote, keyed by the same paths. The root-set files stay at the root.
+    assert parts(tf_files(tmp_path / 'a'), READ_THROUGH) == parts(tf_files(tmp_path / 'b'), READ_THROUGH), \
+        READ_THROUGH
+    for name in ('SANITY_REPORT.txt', 'CONVERSION_REPORT.txt', 'README.md'):
         assert (tmp_path / 'a' / name).read_bytes() == (tmp_path / 'b' / name).read_bytes(), name
 
 

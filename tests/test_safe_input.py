@@ -27,6 +27,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import file_text, parts, tf_files
+
 REPO_ROOT = Path(__file__).parent.parent
 CONVERTER = REPO_ROOT / 'panorama_to_terraform.py'
 SPLITTER = REPO_ROOT / 'split_device_groups.py'
@@ -92,7 +94,9 @@ def test_at_limit_input_is_accepted(tmp_path):
     proc = _run(CONVERTER, str(SAMPLE), '--output-dir', str(out_dir),
                 '--max-input-bytes', str(SAMPLE.stat().st_size), workdir=tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert (out_dir / 'provider.tf').is_file()
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): `provider.tf` is a unit-set file, so an accepted run
+    # writes one for every unit it names.
+    assert parts(tf_files(out_dir), 'provider.tf'), 'the run wrote the core files'
 
 
 def test_one_byte_over_the_limit_is_refused(tmp_path):
@@ -216,7 +220,7 @@ def test_clean_utf16_input_is_accepted(tmp_path):
     out_dir = tmp_path / 'out'
     proc = _run(CONVERTER, str(source), '--output-dir', str(out_dir), workdir=tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert '10.0.0.1/32' in (out_dir / 'address_objects.tf').read_text(encoding='utf-8')
+    assert '10.0.0.1/32' in file_text(tf_files(out_dir), 'address_objects.tf')
 
 
 def test_dtd_in_a_prolog_comment_is_not_a_refusal(tmp_path):
@@ -229,7 +233,9 @@ def test_dtd_in_a_prolog_comment_is_not_a_refusal(tmp_path):
     out_dir = tmp_path / 'out'
     proc = _run(CONVERTER, str(source), '--output-dir', str(out_dir), workdir=tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert (out_dir / 'provider.tf').is_file()
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): `provider.tf` is a unit-set file, so an accepted run
+    # writes one for every unit it names.
+    assert parts(tf_files(out_dir), 'provider.tf'), 'the run wrote the core files'
 
 
 def test_external_id_dtd_is_refused(tmp_path):

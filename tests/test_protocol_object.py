@@ -23,6 +23,7 @@ Pins:
 import ast
 import inspect
 import textwrap
+from pathlib import Path
 
 import entry_coverage
 import import_blocks
@@ -31,7 +32,7 @@ import resource_mapping
 import sanity_checks
 import site_data
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, run_script
+from conftest import FIXTURES_DIR, GOLDEN_DIR, file_text, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 
@@ -40,7 +41,15 @@ def _run(fixture: str, out_dir) -> dict:
     """Run the converter on one fixture and return the output files as text."""
     result = run_script(CONVERTER, str(FIXTURES_DIR / fixture), '--output-dir', str(out_dir))
     assert result.returncode == 0, result.stdout + result.stderr
-    return {f.name: f.read_text(encoding='utf-8') for f in out_dir.iterdir()}
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the `.tf` set is read as the gate reads it, so a `.tf`
+    # entry holds the parts the run wrote for every unit, in path order. A report is a codebase root-set
+    # file, so it stays at the root and is keyed by its name.
+    tf = tf_files(out_dir)
+    files = {Path(key).name: file_text(tf, Path(key).name) for key in tf}
+    for path in sorted(Path(out_dir).iterdir()):
+        if path.is_file() and path.name not in files:
+            files[path.name] = path.read_text(encoding='utf-8')
+    return files
 
 
 def _block(protocol: str) -> dict:
@@ -221,7 +230,8 @@ def test_a_one_of_level_prints_one_key():
                                       'made_up = {}'))
     assert len(findings) == 1 and 'is not a key PROTOCOL_SHAPE selects' in findings[0].detail, findings
     # The run prints one key, so a run reports nothing.
-    files = {f.name: f.read_text(encoding='utf-8') for f in (GOLDEN_DIR / 'kitchen_sink').glob('*.tf')}
+    files = {str(p.relative_to(GOLDEN_DIR / 'kitchen_sink')): p.read_text(encoding='utf-8')
+              for p in sorted((GOLDEN_DIR / 'kitchen_sink').rglob('*.tf'))}
     assert sanity_checks.check_protocol_object(files) == [], sanity_checks.check_protocol_object(files)
 
 

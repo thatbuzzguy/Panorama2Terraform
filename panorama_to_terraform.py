@@ -52,6 +52,7 @@ import source_fetch
 import state_coverage
 import state_input
 import unit_manifest
+import write_path
 from resource_mapping import (
     DATA_SOURCE_SCHEMA,
     INTERFACE_RESOURCE_TYPES,
@@ -2540,6 +2541,44 @@ REFERENCE_SCOPES = tuple(sorted({
 }))
 
 
+class UnitText:
+    """One `.tf` file's text, held per unit directory (F6.10.3, `docs/CODEBASE_ASSEMBLY.md` §14).
+
+    A per-unit file names its unit only by its directory, so this class puts no unit inside a file: the
+    unit is read through `unit_manifest.facts_of` at the site that built the block, and the path is the
+    only place a file states the unit it belongs to. `header` is the text the file states once, so it is
+    the start of each unit's text. `write` writes one file per unit that has content, through the one
+    write path, in the order the run read that unit's blocks.
+    """
+
+    def __init__(self, generator: 'TerraformGenerator', name: str, header: str = ''):
+        self.generator = generator
+        self.name = name
+        self.header = header
+        self._text: dict[str, str] = {}
+
+    def add(self, entry, text: str) -> None:
+        """One piece of the text, for the unit `entry` belongs to, in the order the run read it.
+
+        `entry` is the parsed entry, or the four scope facts of the unit when the text names no entry.
+        """
+        facts = entry if isinstance(entry, tuple) else unit_manifest.facts_of(entry)
+        directory = self.generator.directory_of(facts)
+        self._text[directory] = self._text.get(directory, self.header) + text
+
+    def add_once(self, entry, text: str) -> None:
+        """Text a file states once per unit, which is what a section header is (F6.10.3)."""
+        facts = entry if isinstance(entry, tuple) else unit_manifest.facts_of(entry)
+        directory = self.generator.directory_of(facts)
+        if text not in self._text.setdefault(directory, self.header):
+            self._text[directory] += text
+
+    def write(self) -> None:
+        """Write the file for every unit that has content, in the order the manifest rows print."""
+        for directory in sorted(self._text):
+            self.generator.write_unit_file(directory, self.name, self._text[directory])
+
+
 class TerraformGenerator:
     """Generate Terraform configuration files from Panorama data"""
 
@@ -2555,9 +2594,12 @@ class TerraformGenerator:
     }
 
     def __init__(self, output_dir: str, associations: Optional[dict] = None,
-                 data_scopes: Optional[frozenset] = None):
+                 data_scopes: Optional[frozenset] = None, ledger=None):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the run's unit set is the ledger's rows, read
+        # through `unit_manifest.units`, so the directories the run writes are the units rule 1 names.
+        self._ledger = ledger
         # Collision handling for block names. Two different PAN-OS names
         # can sanitize to the same Terraform name (for example 'a-b' and
         # 'a_b'), so the counter keeps the output valid HCL.
@@ -2603,6 +2645,49 @@ class TerraformGenerator:
         module defines a second shape. Every caller takes this method as the argument the data modules use.
         """
         return naming.sanitize(name)
+
+    # --- The write path (F6.10.3, `docs/CODEBASE_ASSEMBLY.md` §14) ------------
+    # `write_path.py` is the one place that writes bytes, and its two builders name the two file sets:
+    # the unit set inside the directory the manifest row names, the codebase root set at the root. The
+    # generator names the unit only through `unit_manifest`, so it states no unit rule and no directory
+    # rule, and a per-unit file names its unit only by its directory.
+
+    def directory_of(self, facts: tuple) -> str:
+        """The directory name `unit_manifest.directory_name` gives one unit identity (§5, F6.6)."""
+        return unit_manifest.directory_name(facts, self.sanitize_name)
+
+    def unit_directory(self, obj: dict) -> str:
+        """The directory the manifest row names for the unit a parsed object belongs to."""
+        return self.directory_of(unit_manifest.facts_of(obj))
+
+    def units_of(self, entries: list[dict]) -> list[tuple]:
+        """The units the entries belong to, in the identity order `unit_manifest` states."""
+        return sorted({unit_manifest.facts_of(entry) for entry in entries})
+
+    def unit_set(self) -> list[tuple]:
+        """The run's unit set: the units `unit_manifest.units` names, in identity order.
+
+        A unit exists when the ledger has a row in it, so a generator that reads no ledger names no unit.
+        The unit-set files that state no block (`provider.tf` and `variables.tf`) are written for the units
+        this rule names, which is why `main()` gives the generator the ledger the parse wrote.
+        """
+        return unit_manifest.units(self._ledger)
+
+    def write_unit_file(self, directory: str, name: str, content: str) -> None:
+        """Write one unit's file through the one write path, and only when it has content.
+
+        A unit that has no block for this file gets no file, which is the rule the emitter already
+        states (`if not content`), read per unit instead of per run.
+        """
+        if not content:
+            return
+        write_path.write_file(write_path.unit_path(self.output_dir, directory, name), content)
+
+    def write_root_file(self, name: str, content: str) -> None:
+        """Write one codebase root-set file through the one write path, and only when it has content."""
+        if not content:
+            return
+        write_path.write_file(write_path.root_path(self.output_dir, name), content)
 
     def declare_resource_name(self, name: str, scope: str, obj: dict,
                               context: str = '', vsys: str = '') -> str:
@@ -2776,6 +2861,8 @@ class TerraformGenerator:
                     'type': scope,
                     'local': local,
                     'name': name,
+                    # F6.10.3: the block is written in the unit it names, so the writer needs the facts.
+                    'unit': unit,
                     # The location the referrer's unit names: one location rule (`location_block`), and the
                     # tool does not guess which scope holds a name outside the run (F5.5).
                     'location': self.location_block(scope, {**referrer, 'name': name}),
@@ -3215,7 +3302,11 @@ class TerraformGenerator:
         return printed
 
     def generate_provider_config(self):
-        """Generate provider.tf file"""
+        """Generate `provider.tf` for every unit the run's unit set names (F6.10.3, §14).
+
+        One plan reads one root, so the provider block is a unit-set file: the codebase root set holds no
+        `.tf` file. The text states no unit, so the path is the only place the file names the unit.
+        """
         content = '''# Palo Alto Networks PAN-OS Provider Configuration
 # Supported provider range: v2 series, baseline 2.0.14 (the latest 2.x
 # release and the version the conformance and validate gates verify).
@@ -3240,22 +3331,23 @@ provider "panos" {
 }
 '''
 
-        with open(self.output_dir / 'provider.tf', 'w') as f:
-            f.write(content)
+        for facts in self.unit_set():
+            self.write_unit_file(self.directory_of(facts), 'provider.tf', content)
 
     def generate_variables(self):
-        """Generate variables.tf file.
+        """Generate `variables.tf` for every unit the run's unit set names (F6.10.3, §14).
 
         F2.10: every emitted variable is consumed. The three credential variables are consumed by the
-        provider block in provider.tf. The old dead `device_group` variable is gone: v2 location is
-        derived per resource from the source XML.
+        provider block in `provider.tf`, and `provider.tf` is a unit-set file, so the declaration file is
+        one per unit too. The old dead `device_group` variable is gone: v2 location is derived per
+        resource from the source XML.
 
-        F6.6: the rest of the declaration set is the site values the value-to-variable table mapped,
-        so the file declares exactly what the run printed. This is why `main()` calls it after the
-        emitters: the file cannot state a variable the run has not consumed. The type is the kind the
-        site data row declares, so a declaration agrees with the value the `.tfvars` prints.
+        F6.6: the rest of the declaration set is the site values the value-to-variable table mapped for
+        that unit, so the file declares exactly what that unit printed. `main()` calls it after the
+        emitters, because the file cannot state a variable the run has not consumed. The type is the kind
+        the site data row declares, so a declaration agrees with the value the `.tfvars` prints.
         """
-        content = '''# Variables for Palo Alto Configuration
+        header = '''# Variables for Palo Alto Configuration
 # Set the values in terraform.tfvars (do not commit it) or via the
 # TF_VAR_panos_hostname / TF_VAR_panos_username / TF_VAR_panos_password
 # environment variables.
@@ -3275,36 +3367,31 @@ variable "panos_password" {
   sensitive   = true
 }
 '''
-        values: dict[str, object] = {}
-        for recorded in self._value_variables.values():
-            for name, value in recorded.items():
-                if value is None:
-                    continue  # F7.1: a reference-only name is declared, but no value is held for it
-                values[name] = value
-        if values:
-            content += (f'# Site values (F6.6): one variable per value `resource_mapping.VALUE_VARIABLES` maps.\n'
-                        f'# The values are in {site_data.TFVARS_FILE}, which Terraform loads automatically.\n\n')
-            for name in sorted(values):
-                kind = 'list(string)' if isinstance(values[name], list) else 'string'
+        for facts in self.unit_set():
+            recorded = self._value_variables.get(facts) or {}
+            # F7.1: a reference-only name is a declaration with no value held for it.
+            values = {name: value for name, value in recorded.items() if value is not None}
+            content = header
+            if values:
+                content += (f'# Site values (F6.6): one variable per value `resource_mapping.VALUE_VARIABLES` maps.\n'
+                            f'# The values are in {site_data.TFVARS_FILE}, which Terraform loads automatically.\n\n')
+                for name in sorted(values):
+                    kind = 'list(string)' if isinstance(values[name], list) else 'string'
+                    content += (f'variable "{name}" {{\n'
+                                f'  description = "Site value (F6.6), read from {site_data.TFVARS_FILE}"\n'
+                                f'  type        = {kind}\n'
+                                '}\n\n')
+            held = {name for name in recorded if recorded[name] is None}
+            for name in sorted(held):
                 content += (f'variable "{name}" {{\n'
-                            f'  description = "Site value (F6.6), read from {site_data.TFVARS_FILE}"\n'
-                            f'  type        = {kind}\n'
+                            f'  description = "Sensitive protocol value (F7.1): the run holds no value for it"\n'
+                            f'  type        = string\n'
+                            f'  sensitive   = true\n'
                             '}\n\n')
-        # F7.1: a field the provider marks `sensitive` is declared with no value, so the operator supplies
-        # it in `terraform.tfvars`, which the tool never writes.
-        held = {name for recorded in self._value_variables.values() for name in recorded if name not in values}
-        for name in sorted(held):
-            content += (f'variable "{name}" {{\n'
-                        f'  description = "Sensitive protocol value (F7.1): the run holds no value for it"\n'
-                        f'  type        = string\n'
-                        f'  sensitive   = true\n'
-                        '}\n\n')
+            self.write_unit_file(self.directory_of(facts), 'variables.tf', content)
 
-        with open(self.output_dir / 'variables.tf', 'w') as f:
-            f.write(content)
-
-    # F6.5: the scope objects are one file for the run, the way `imports.tf` (F6.4) and
-    # `read_through.tf` (F5.5) are one file. Written only when the run has a block.
+    # F6.5: the scope objects are the unit's file, the way `imports.tf` (F6.4) and
+    # `read_through.tf` (F5.5) are unit-set files. Written only when the run has a block.
     SCOPE_FILE = 'scope.tf'
 
     def generate_scope_objects(self, device_groups: list[dict], templates: list[dict],
@@ -3348,7 +3435,7 @@ variable "panos_password" {
              ('description', 'template_stack', 'type'), ''),
             ('panos_vsys', systems, (), ''),
         )
-        content = ''
+        out = UnitText(self, self.SCOPE_FILE)
         # The print order is `SCOPE_LEVEL_ORDER`, the F3.9 level order the file states, and not the
         # order this method lists the levels in.
         levels_in_order = sorted(levels, key=lambda level: SCOPE_LEVEL_ORDER.index(level[0]))
@@ -3361,9 +3448,9 @@ variable "panos_password" {
                 # above it.
                 placement = next((key for key in SCOPE_PLACEMENT[resource_type] if entry.get(key)), '')
                 local = self.declare_resource_name(entry['name'], resource_type, entry, context=placement)
-                content += f'resource "{resource_type}" "{local}" {{\n'
-                content += self.location_block(resource_type, entry, local)
-                content += self._scope_name_field(resource_type, entry)
+                out.add(entry, f'resource "{resource_type}" "{local}" {{\n')
+                out.add(entry, self.location_block(resource_type, entry, local))
+                out.add(entry, self._scope_name_field(resource_type, entry))
                 for key in properties:
                     value = entry.get(key)
                     # A property that names the location sub-block is the location's field, not the
@@ -3372,12 +3459,9 @@ variable "panos_password" {
                     # declares it as a property this method reads.
                     if key in SCOPE_PLACEMENT[resource_type]:
                         continue
-                    content += self._scope_property(resource_type, key, value)
-                content += '}\n\n'
-        if not content:
-            return
-        with open(self.output_dir / self.SCOPE_FILE, 'w') as f:
-            f.write(content)
+                    out.add(entry, self._scope_property(resource_type, key, value))
+                out.add(entry, '}\n\n')
+        out.write()
 
     def _scope_name_field(self, resource_type: str, entry: dict) -> str:
         """The field that carries the entry name, in the shape the provider declares it (F6.5).
@@ -3425,7 +3509,7 @@ variable "panos_password" {
         if not addresses:
             return
 
-        content = '# Address Objects\n\n'
+        out = UnitText(self, 'address_objects.tf', '# Address Objects\n\n')
 
         for addr in addresses:
             if addr.get('report_only'):
@@ -3438,22 +3522,22 @@ variable "panos_password" {
                 context=addr.get('device_group') or '', vsys=addr.get('vsys') or ''
             )
 
-            content += f'resource "panos_address" "{resource_name}" {{\n'
-            content += self.location_block('panos_address', addr, resource_name)
-            content += f'  name = {self.escape_string(addr["name"])}\n'
+            out.add(addr, f'resource "panos_address" "{resource_name}" {{\n')
+            out.add(addr, self.location_block('panos_address', addr, resource_name))
+            out.add(addr, f'  name = {self.escape_string(addr["name"])}\n')
 
             if addr.get('description'):
-                content += f'  description = {self.escape_string(addr["description"])}\n'
+                out.add(addr, f'  description = {self.escape_string(addr["description"])}\n')
 
             disable = (addr.get('disable_override') or '').strip().lower()
             if disable in ('yes', 'no'):
                 # v2 takes the "yes"/"no" string, not a bool (verified 2.0.14)
-                content += f'  disable_override = "{disable}"\n'
+                out.add(addr, f'  disable_override = "{disable}"\n')
 
             value = (addr.get('value') or '').strip()
             if value:
                 attr = self._address_type_attribute(addr.get('type', 'ip-netmask'))
-                content += f'  {attr} = {self.escape_string(value)}\n'
+                out.add(addr, f'  {attr} = {self.escape_string(value)}\n')
 
             if addr.get('tags'):
                 # F2.6: tags declared in this run become references;
@@ -3464,12 +3548,11 @@ variable "panos_password" {
                     self.hcl_value(self.name_ref(t, TAG_SCOPES, referrer=addr), '')
                     for t in addr['tags']
                 ])
-                content += f'  tags = [{tags_str}]\n'
+                out.add(addr, f'  tags = [{tags_str}]\n')
 
-            content += '}\n\n'
+            out.add(addr, '}\n\n')
 
-        with open(self.output_dir / 'address_objects.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     @staticmethod
     def _address_type_attribute(addr_type: str) -> str:
@@ -3487,7 +3570,7 @@ variable "panos_password" {
         if not groups:
             return
 
-        content = '# Address Groups\n\n'
+        out = UnitText(self, 'address_groups.tf', '# Address Groups\n\n')
 
         for grp in groups:
             static_members = grp.get('static_members') or []
@@ -3497,7 +3580,7 @@ variable "panos_password" {
             # or the dynamic filter; an empty group would be invalid, so it is
             # kept visible as a comment instead of a resource.
             if not static_members and not dynamic_filter:
-                content += f'# NOTE: address group {grp["name"]} has no members or filter; configure manually\n\n'
+                out.add(grp, f'# NOTE: address group {grp["name"]} has no members or filter; configure manually\n\n')
                 continue
 
             resource_name = self.declare_resource_name(
@@ -3505,12 +3588,12 @@ variable "panos_password" {
                 context=grp.get('device_group') or '', vsys=grp.get('vsys') or ''
             )
 
-            content += f'resource "panos_address_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_address_group', grp, resource_name)
-            content += f'  name = {self.escape_string(grp["name"])}\n'
+            out.add(grp, f'resource "panos_address_group" "{resource_name}" {{\n')
+            out.add(grp, self.location_block('panos_address_group', grp, resource_name))
+            out.add(grp, f'  name = {self.escape_string(grp["name"])}\n')
 
             if grp.get('description'):
-                content += f'  description = {self.escape_string(grp["description"])}\n'
+                out.add(grp, f'  description = {self.escape_string(grp["description"])}\n')
 
             if static_members:
                 # F2.6: members declared in this run become references;
@@ -3521,16 +3604,15 @@ variable "panos_password" {
                     self.hcl_value(self.name_ref(m, ADDR_SCOPES, referrer=grp), '')
                     for m in static_members
                 ])
-                content += f'  static = [{members_str}]\n'
+                out.add(grp, f'  static = [{members_str}]\n')
 
             # v2 dynamic groups: the filter expression lives in dynamic.dynamic
             if dynamic_filter:
-                content += f'  dynamic = {self.hcl_value({"dynamic": {"filter": dynamic_filter}})}\n'
+                out.add(grp, f'  dynamic = {self.hcl_value({"dynamic": {"filter": dynamic_filter}})}\n')
 
-            content += '}\n\n'
+            out.add(grp, '}\n\n')
 
-        with open(self.output_dir / 'address_groups.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     def generate_service_objects(self, services: list[dict]):
         """Generate service object Terraform configuration (v2: panos_service)
@@ -3548,7 +3630,7 @@ variable "panos_password" {
         if not services:
             return
 
-        content = '# Service Objects\n\n'
+        out = UnitText(self, 'service_objects.tf', '# Service Objects\n\n')
 
         for svc in services:
             resource_name = self.declare_resource_name(
@@ -3556,35 +3638,35 @@ variable "panos_password" {
                 context=svc.get('device_group') or '', vsys=svc.get('vsys') or ''
             )
 
-            content += f'resource "panos_service" "{resource_name}" {{\n'
-            content += self.location_block('panos_service', svc, resource_name)
-            content += f'  name = {self.escape_string(svc["name"])}\n'
+            out.add(svc, f'resource "panos_service" "{resource_name}" {{\n')
+            out.add(svc, self.location_block('panos_service', svc, resource_name))
+            out.add(svc, f'  name = {self.escape_string(svc["name"])}\n')
 
             if svc.get('description'):
-                content += f'  description = {self.escape_string(svc["description"])}\n'
+                out.add(svc, f'  description = {self.escape_string(svc["description"])}\n')
 
             disable = (svc.get('disable_override') or '').strip().lower()
             if disable in ('yes', 'no'):
                 # F6.2: the same shape panos_address writes (F3.4). v2 takes the "yes"/"no" string,
                 # not a bool (verified 2.0.14).
-                content += f'  disable_override = "{disable}"\n'
+                out.add(svc, f'  disable_override = "{disable}"\n')
 
             # v2 protocol is a nested object: protocol = { tcp = { ... } }
             protocols = svc.get('protocols') or {}
             emitted = self.primary_service_protocol(protocols)
             if emitted:
-                content += f'  protocol = {self.hcl_value({emitted: protocols[emitted]})}\n'
+                out.add(svc, f'  protocol = {self.hcl_value({emitted: protocols[emitted]})}\n')
 
             for proto in self.dropped_service_protocols(protocols):
                 summary = self.protocol_summary(protocols[proto])
-                content += f'  # NOTE: {proto} leg not emitted, v2 takes one protocol only: '
-                content += f'{summary}\n'
+                out.add(svc, f'  # NOTE: {proto} leg not emitted, v2 takes one protocol only: ')
+                out.add(svc, f'{summary}\n')
 
             other = svc.get('other_protocol') or {}
             if other:
                 # v2 models only tcp and udp; keep the rest visible for review
                 names = ', '.join(sorted(other))
-                content += f'  # NOTE: protocol {names} is not modeled by the v2 schema; review manually\n'
+                out.add(svc, f'  # NOTE: protocol {names} is not modeled by the v2 schema; review manually\n')
 
             if svc.get('tags'):
                 # F2.6: tags declared in this run become references;
@@ -3595,12 +3677,11 @@ variable "panos_password" {
                     self.hcl_value(self.name_ref(t, TAG_SCOPES, referrer=svc), '')
                     for t in svc['tags']
                 ])
-                content += f'  tags = [{tags_str}]\n'
+                out.add(svc, f'  tags = [{tags_str}]\n')
 
-            content += '}\n\n'
+            out.add(svc, '}\n\n')
 
-        with open(self.output_dir / 'service_objects.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     # v2.0.14 panos_service accepts exactly one protocol leg (verified with
     # terraform validate). tcp is emitted first so the choice is stable.
@@ -3637,7 +3718,7 @@ variable "panos_password" {
         if not groups:
             return
 
-        content = '# Service Groups\n\n'
+        out = UnitText(self, 'service_groups.tf', '# Service Groups\n\n')
 
         for grp in groups:
             resource_name = self.declare_resource_name(
@@ -3645,9 +3726,9 @@ variable "panos_password" {
                 context=grp.get('device_group') or '', vsys=grp.get('vsys') or ''
             )
 
-            content += f'resource "panos_service_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_service_group', grp, resource_name)
-            content += f'  name = {self.escape_string(grp["name"])}\n'
+            out.add(grp, f'resource "panos_service_group" "{resource_name}" {{\n')
+            out.add(grp, self.location_block('panos_service_group', grp, resource_name))
+            out.add(grp, f'  name = {self.escape_string(grp["name"])}\n')
 
             if grp.get('members'):
                 # F2.6: members declared in this run become references;
@@ -3658,12 +3739,11 @@ variable "panos_password" {
                     self.hcl_value(self.name_ref(m, SERVICE_SCOPES, referrer=grp), '')
                     for m in grp['members']
                 ])
-                content += f'  members = [{members_str}]\n'
+                out.add(grp, f'  members = [{members_str}]\n')
 
-            content += '}\n\n'
+            out.add(grp, '}\n\n')
 
-        with open(self.output_dir / 'service_groups.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     def generate_tags(self, tags: list[dict]):
         """Generate tag Terraform configuration (v2: panos_administrative_tag)
@@ -3673,7 +3753,7 @@ variable "panos_password" {
         if not tags:
             return
 
-        content = '# Tags\n\n'
+        out = UnitText(self, 'tags.tf', '# Tags\n\n')
 
         for tag in tags:
             resource_name = self.declare_resource_name(
@@ -3681,9 +3761,9 @@ variable "panos_password" {
                 context=tag.get('device_group') or '', vsys=tag.get('vsys') or ''
             )
 
-            content += f'resource "panos_administrative_tag" "{resource_name}" {{\n'
-            content += self.location_block('panos_administrative_tag', tag, resource_name)
-            content += f'  name = {self.escape_string(tag["name"])}\n'
+            out.add(tag, f'resource "panos_administrative_tag" "{resource_name}" {{\n')
+            out.add(tag, self.location_block('panos_administrative_tag', tag, resource_name))
+            out.add(tag, f'  name = {self.escape_string(tag["name"])}\n')
 
             # v2 uses numeric color names (color1..colorN); PAN-OS exports use
             # the color words in the GUI order (red, orange, yellow, green, ...)
@@ -3694,24 +3774,23 @@ variable "panos_password" {
             }
             tag_color = (tag.get('color') or '').lower()
             if tag_color in color_map:
-                content += f'  color = {self.escape_string(color_map[tag_color])}\n'
+                out.add(tag, f'  color = {self.escape_string(color_map[tag_color])}\n')
 
             # Parser stores the tag text in comments (or description)
             tag_text = tag.get('comments') or tag.get('description')
             if tag_text:
-                content += f'  comments = {self.escape_string(tag_text)}\n'
+                out.add(tag, f'  comments = {self.escape_string(tag_text)}\n')
 
-            content += '}\n\n'
+            out.add(tag, '}\n\n')
 
-        with open(self.output_dir / 'tags.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     def generate_custom_url_categories(self, categories: list[dict]):
         """Generate custom URL category Terraform configuration (v2: panos_custom_url_category)"""
         if not categories:
             return
 
-        content = '# Custom URL Categories\n\n'
+        out = UnitText(self, 'custom_url_categories.tf', '# Custom URL Categories\n\n')
 
         for cat in categories:
             resource_name = self.declare_resource_name(
@@ -3719,31 +3798,30 @@ variable "panos_password" {
                 context=cat.get('device_group') or '', vsys=cat.get('vsys') or ''
             )
 
-            content += f'resource "panos_custom_url_category" "{resource_name}" {{\n'
-            content += self.location_block('panos_custom_url_category', cat, resource_name)
-            content += f'  name = {self.escape_string(cat["name"])}\n'
+            out.add(cat, f'resource "panos_custom_url_category" "{resource_name}" {{\n')
+            out.add(cat, self.location_block('panos_custom_url_category', cat, resource_name))
+            out.add(cat, f'  name = {self.escape_string(cat["name"])}\n')
 
             if cat.get('type'):
-                content += f'  type = {self.escape_string(cat["type"])}\n'
+                out.add(cat, f'  type = {self.escape_string(cat["type"])}\n')
 
             if cat.get('description'):
-                content += f'  description = {self.escape_string(cat["description"])}\n'
+                out.add(cat, f'  description = {self.escape_string(cat["description"])}\n')
 
             if cat.get('list'):
                 sites_str = ', '.join([self.escape_string(url) for url in cat['list']])
-                content += f'  list = [{sites_str}]\n'
+                out.add(cat, f'  list = [{sites_str}]\n')
 
-            content += '}\n\n'
+            out.add(cat, '}\n\n')
 
-        with open(self.output_dir / 'custom_url_categories.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     def generate_application_groups(self, app_groups: list[dict]):
         """Generate application group Terraform configuration (v2: panos_application_group)"""
         if not app_groups:
             return
 
-        content = '# Application Groups\n\n'
+        out = UnitText(self, 'application_groups.tf', '# Application Groups\n\n')
 
         for ag in app_groups:
             resource_name = self.declare_resource_name(
@@ -3751,18 +3829,17 @@ variable "panos_password" {
                 context=ag.get('device_group') or '', vsys=ag.get('vsys') or ''
             )
 
-            content += f'resource "panos_application_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_application_group', ag, resource_name)
-            content += f'  name = {self.escape_string(ag["name"])}\n'
+            out.add(ag, f'resource "panos_application_group" "{resource_name}" {{\n')
+            out.add(ag, self.location_block('panos_application_group', ag, resource_name))
+            out.add(ag, f'  name = {self.escape_string(ag["name"])}\n')
 
             if ag.get('members'):
                 members_str = ', '.join([self.escape_string(m) for m in ag['members']])
-                content += f'  members = [{members_str}]\n'
+                out.add(ag, f'  members = [{members_str}]\n')
 
-            content += '}\n\n'
+            out.add(ag, '}\n\n')
 
-        with open(self.output_dir / 'application_groups.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     # NOTE: application filters have no v2 resource (see resource_mapping.py).
     # Their parsed data goes to MANUAL_SETUP_REPORT.txt instead.
@@ -3796,7 +3873,7 @@ variable "panos_password" {
         if not ext_lists:
             return
 
-        content = '# External Dynamic Lists\n\n'
+        out = UnitText(self, 'external_lists.tf', '# External Dynamic Lists\n\n')
 
         # List types the v2 schema models inside the type block
         v2_types = ('domain', 'imei', 'imsi', 'ip', 'predefined_ip', 'predefined_url', 'url')
@@ -3807,9 +3884,9 @@ variable "panos_password" {
                 context=ext_list.get('device_group') or '', vsys=ext_list.get('vsys') or ''
             )
 
-            content += f'resource "panos_external_dynamic_list" "{resource_name}" {{\n'
-            content += self.location_block('panos_external_dynamic_list', ext_list, resource_name)
-            content += f'  name = {self.escape_string(ext_list["name"])}\n'
+            out.add(ext_list, f'resource "panos_external_dynamic_list" "{resource_name}" {{\n')
+            out.add(ext_list, self.location_block('panos_external_dynamic_list', ext_list, resource_name))
+            out.add(ext_list, f'  name = {self.escape_string(ext_list["name"])}\n')
 
             # v2 type is a nested object keyed by list type
             lt = ext_list.get('type') or 'ip'
@@ -3817,20 +3894,19 @@ variable "panos_password" {
             if lt in v2_types:
                 allowed = self.EDL_SUBSHAPE_FIELDS[lt]
                 emit = {k: v for k, v in fields.items() if k in allowed}
-                content += f'  type = {self.hcl_value({lt: emit})}\n'
+                out.add(ext_list, f'  type = {self.hcl_value({lt: emit})}\n')
                 for key in (k for k in fields if k not in allowed):
-                    content += f'  # NOTE: {key} is not modeled by the v2 {lt} '
-                    content += 'sub-shape; review manually\n'
+                    out.add(ext_list, f'  # NOTE: {key} is not modeled by the v2 {lt} ')
+                    out.add(ext_list, 'sub-shape; review manually\n')
             else:
                 # Unknown list type: keep the data visible for manual review
-                content += f'  # NOTE: list type {lt} is not modeled by the v2 schema; review manually\n'
+                out.add(ext_list, f'  # NOTE: list type {lt} is not modeled by the v2 schema; review manually\n')
                 if fields.get('url'):
-                    content += f'  # url = {fields["url"]}\n'
+                    out.add(ext_list, f'  # url = {fields["url"]}\n')
 
-            content += '}\n\n'
+            out.add(ext_list, '}\n\n')
 
-        with open(self.output_dir / 'external_lists.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     def _policy_rule_chains(self, rules: list[dict]) -> list[list[dict]]:
         """Group policy rules into per-(device group, vsys) chains (F2.5, F3.2).
@@ -3879,7 +3955,7 @@ variable "panos_password" {
         if not rules:
             return
 
-        content = '# Security Policy Rules\n\n'
+        out = UnitText(self, 'security_rules.tf', '# Security Policy Rules\n\n')
 
         for chain in self._policy_rule_chains(rules):
             prev_rule_name: Optional[str] = None
@@ -3890,11 +3966,11 @@ variable "panos_password" {
                     context=rule.get('device_group') or '', vsys=rule.get('vsys') or ''
                 )
 
-                content += f'resource "panos_security_policy_rules" "{resource_name}" {{\n'
-                content += self.location_block('panos_security_policy_rules', rule, resource_name)
-                content += self._policy_position_block(
+                out.add(rule, f'resource "panos_security_policy_rules" "{resource_name}" {{\n')
+                out.add(rule, self.location_block('panos_security_policy_rules', rule, resource_name))
+                out.add(rule, self._policy_position_block(
                     'panos_security_policy_rules', prev_rule_name, prev_resource_name
-                )
+                ))
 
                 # v2 rules is a list of objects
                 rule_obj: dict = {'name': rule['name']}
@@ -3935,14 +4011,13 @@ variable "panos_password" {
                 if rule.get('disabled'):
                     rule_obj['disabled'] = True
 
-                content += f'  rules = {self.hcl_value([rule_obj])}\n'
-                content += '}\n\n'
+                out.add(rule, f'  rules = {self.hcl_value([rule_obj])}\n')
+                out.add(rule, '}\n\n')
 
                 prev_rule_name = rule['name']
                 prev_resource_name = resource_name
 
-        with open(self.output_dir / 'security_rules.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     def generate_nat_rules(self, rules: list[dict]):
         """Generate NAT policy rules Terraform configuration (F2.5).
@@ -3956,7 +4031,7 @@ variable "panos_password" {
         if not rules:
             return
 
-        content = '# NAT Policy Rules\n\n'
+        out = UnitText(self, 'nat_rules.tf', '# NAT Policy Rules\n\n')
 
         for chain in self._policy_rule_chains(rules):
             prev_rule_name: Optional[str] = None
@@ -3967,11 +4042,11 @@ variable "panos_password" {
                     context=rule.get('device_group') or '', vsys=rule.get('vsys') or ''
                 )
 
-                content += f'resource "panos_nat_policy_rules" "{resource_name}" {{\n'
-                content += self.location_block('panos_nat_policy_rules', rule, resource_name)
-                content += self._policy_position_block(
+                out.add(rule, f'resource "panos_nat_policy_rules" "{resource_name}" {{\n')
+                out.add(rule, self.location_block('panos_nat_policy_rules', rule, resource_name))
+                out.add(rule, self._policy_position_block(
                     'panos_nat_policy_rules', prev_rule_name, prev_resource_name
-                )
+                ))
 
                 # v2 rules is a list of objects
                 rule_obj: dict = {'name': rule['name']}
@@ -4036,14 +4111,13 @@ variable "panos_password" {
                         dst['translated_port'] = int(rule['destination_translation_port'])
                     rule_obj['destination_translation'] = dst
 
-                content += f'  rules = {self.hcl_value([rule_obj])}\n'
-                content += '}\n\n'
+                out.add(rule, f'  rules = {self.hcl_value([rule_obj])}\n')
+                out.add(rule, '}\n\n')
 
                 prev_rule_name = rule['name']
                 prev_resource_name = resource_name
 
-        with open(self.output_dir / 'nat_rules.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     def generate_decryption_rules(self, rules: list[dict]):
         """Generate decryption policy rules (F2.9: real v2 resources).
@@ -4059,9 +4133,9 @@ variable "panos_password" {
         if not rules:
             return
 
-        content = '# Decryption Policy Rules (F2.9: real v2 resources)\n'
-        content += '# One panos_decryption_policy_rules resource per rule; per-device-group\n'
-        content += '# chains preserve XML order (F2.5).\n\n'
+        out = UnitText(self, 'decryption_rules.tf', '# Decryption Policy Rules (F2.9: real v2 resources)\n')
+        out.header += '# One panos_decryption_policy_rules resource per rule; per-device-group\n'
+        out.header += '# chains preserve XML order (F2.5).\n\n'
 
         for chain in self._policy_rule_chains(rules):
             prev_rule_name: Optional[str] = None
@@ -4073,11 +4147,11 @@ variable "panos_password" {
                     context=device_group, vsys=rule.get('vsys') or ''
                 )
 
-                content += f'resource "panos_decryption_policy_rules" "{resource_name}" {{\n'
-                content += self.location_block('panos_decryption_policy_rules', rule, resource_name)
-                content += self._policy_position_block(
+                out.add(rule, f'resource "panos_decryption_policy_rules" "{resource_name}" {{\n')
+                out.add(rule, self.location_block('panos_decryption_policy_rules', rule, resource_name))
+                out.add(rule, self._policy_position_block(
                     'panos_decryption_policy_rules', prev_rule_name, prev_resource_name
-                )
+                ))
 
                 rule_obj: dict = {'name': rule['name']}
                 if rule.get('description'):
@@ -4138,14 +4212,13 @@ variable "panos_password" {
                 if rule.get('disabled'):
                     rule_obj['disabled'] = True
 
-                content += f'  rules = {self.hcl_value([rule_obj])}\n'
-                content += '}\n\n'
+                out.add(rule, f'  rules = {self.hcl_value([rule_obj])}\n')
+                out.add(rule, '}\n\n')
 
                 prev_rule_name = rule['name']
                 prev_resource_name = resource_name
 
-        with open(self.output_dir / 'decryption_rules.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     def generate_pbf_rules(self, rules: list[dict]):
         """Generate Policy-Based Forwarding rules (F2.9: real v2 resources).
@@ -4158,9 +4231,9 @@ variable "panos_password" {
         if not rules:
             return
 
-        content = '# Policy-Based Forwarding Rules (F2.9: real v2 resources)\n'
-        content += '# One panos_pbf_policy_rules resource per rule; per-device-group\n'
-        content += '# chains preserve XML order (F2.5).\n\n'
+        out = UnitText(self, 'pbf_rules.tf', '# Policy-Based Forwarding Rules (F2.9: real v2 resources)\n')
+        out.header += '# One panos_pbf_policy_rules resource per rule; per-device-group\n'
+        out.header += '# chains preserve XML order (F2.5).\n\n'
 
         for chain in self._policy_rule_chains(rules):
             prev_rule_name: Optional[str] = None
@@ -4172,11 +4245,11 @@ variable "panos_password" {
                     context=device_group, vsys=rule.get('vsys') or ''
                 )
 
-                content += f'resource "panos_pbf_policy_rules" "{resource_name}" {{\n'
-                content += self.location_block('panos_pbf_policy_rules', rule, resource_name)
-                content += self._policy_position_block(
+                out.add(rule, f'resource "panos_pbf_policy_rules" "{resource_name}" {{\n')
+                out.add(rule, self.location_block('panos_pbf_policy_rules', rule, resource_name))
+                out.add(rule, self._policy_position_block(
                     'panos_pbf_policy_rules', prev_rule_name, prev_resource_name
-                )
+                ))
 
                 rule_obj: dict = {'name': rule['name']}
                 if rule.get('description'):
@@ -4242,14 +4315,13 @@ variable "panos_password" {
                 if rule.get('disabled'):
                     rule_obj['disabled'] = True
 
-                content += f'  rules = {self.hcl_value([rule_obj])}\n'
-                content += '}\n\n'
+                out.add(rule, f'  rules = {self.hcl_value([rule_obj])}\n')
+                out.add(rule, '}\n\n')
 
                 prev_rule_name = rule['name']
                 prev_resource_name = resource_name
 
-        with open(self.output_dir / 'pbf_rules.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     def generate_pbf_monitor_profiles(self, profiles: list[dict]):
         """Generate PBF path monitoring profiles (F2.9: real v2 resources).
@@ -4265,7 +4337,7 @@ variable "panos_password" {
         if not profiles:
             return
 
-        content = '# PBF Path Monitoring Profiles (F2.9: real v2 resources)\n\n'
+        out = UnitText(self, 'monitor_profiles.tf', '# PBF Path Monitoring Profiles (F2.9: real v2 resources)\n\n')
 
         for prof in profiles:
             # F3.6: a monitor profile lives in a template or in one device's
@@ -4275,21 +4347,20 @@ variable "panos_password" {
                 prof['name'], 'panos_monitor_profile', prof,
                 context=self.scope_context(prof), vsys=prof.get('vsys') or ''
             )
-            content += f'resource "panos_monitor_profile" "{resource_name}" {{\n'
-            content += self.location_block('panos_monitor_profile', prof, resource_name)
-            content += f'  name = {self.escape_string(prof["name"])}\n'
+            out.add(prof, f'resource "panos_monitor_profile" "{resource_name}" {{\n')
+            out.add(prof, self.location_block('panos_monitor_profile', prof, resource_name))
+            out.add(prof, f'  name = {self.escape_string(prof["name"])}\n')
             for attr in ('interval', 'threshold'):
                 raw = prof.get(attr)
                 # The v2 schema takes numbers; skip values that are not
                 # plain integers so the output always validates
                 if raw is not None and str(raw).isdigit():
-                    content += f'  {attr} = {int(raw)}\n'
+                    out.add(prof, f'  {attr} = {int(raw)}\n')
             if prof.get('action'):
-                content += f'  action = {self.escape_string(prof["action"])}\n'
-            content += '}\n\n'
+                out.add(prof, f'  action = {self.escape_string(prof["action"])}\n')
+            out.add(prof, '}\n\n')
 
-        with open(self.output_dir / 'monitor_profiles.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
 
     def generate_zones(self, zones: list[dict]):
@@ -4301,7 +4372,7 @@ variable "panos_password" {
         if not zones:
             return
 
-        content = '# Zone Configurations\n\n'
+        out = UnitText(self, 'zones.tf', '# Zone Configurations\n\n')
 
         for zone in zones:
             resource_name = self.declare_resource_name(
@@ -4309,9 +4380,9 @@ variable "panos_password" {
                 context=self.scope_context(zone), vsys=zone.get('vsys') or ''
             )
 
-            content += f'resource "panos_zone" "{resource_name}" {{\n'
-            content += self.location_block('panos_zone', zone, resource_name)
-            content += f'  name = {self.escape_string(zone["name"])}\n'
+            out.add(zone, f'resource "panos_zone" "{resource_name}" {{\n')
+            out.add(zone, self.location_block('panos_zone', zone, resource_name))
+            out.add(zone, f'  name = {self.escape_string(zone["name"])}\n')
 
             # v2 network object: membership list is keyed by layer type
             ztype = zone.get('type') or 'layer3'
@@ -4327,12 +4398,11 @@ variable "panos_password" {
             if zone.get('zone_protection_profile'):
                 network['zone_protection_profile'] = zone['zone_protection_profile']
             if network:
-                content += f'  network = {self.hcl_value(network)}\n'
+                out.add(zone, f'  network = {self.hcl_value(network)}\n')
 
-            content += '}\n\n'
+            out.add(zone, '}\n\n')
 
-        with open(self.output_dir / 'zones.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     def generate_virtual_routers(self, vrouters: list[dict]):
         """Generate virtual router Terraform configuration (v2: panos_virtual_router)
@@ -4344,8 +4414,8 @@ variable "panos_password" {
         if not vrouters:
             return
 
-        content = '# Router Configurations\n'
-        content += '# Supports both Virtual Routers (legacy) and Logical Routers (Advanced Routing Engine)\n\n'
+        out = UnitText(self, 'virtual_routers.tf', '# Router Configurations\n')
+        out.header += '# Supports both Virtual Routers (legacy) and Logical Routers (Advanced Routing Engine)\n\n'
 
         for router in vrouters:
             resource_name = self.declare_resource_name(
@@ -4357,17 +4427,17 @@ variable "panos_password" {
             # not place in a template is device-specific (F3.5 records the
             # template as '' there).
             template = router.get('template') or 'device-specific'
-            content += f'# Source: {template}\n'
+            out.add(router, f'# Source: {template}\n')
             router_type = router.get('router_type', 'virtual')
             if router_type == 'logical':
                 rtype = 'Logical Router (Advanced Routing Engine)'
             else:
                 rtype = 'Virtual Router (Legacy)'
-            content += f'# Type: {rtype}\n'
+            out.add(router, f'# Type: {rtype}\n')
 
-            content += f'resource "panos_virtual_router" "{resource_name}" {{\n'
-            content += self.location_block('panos_virtual_router', router, resource_name)
-            content += f'  name = {self.escape_string(router["name"])}\n'
+            out.add(router, f'resource "panos_virtual_router" "{resource_name}" {{\n')
+            out.add(router, self.location_block('panos_virtual_router', router, resource_name))
+            out.add(router, f'  name = {self.escape_string(router["name"])}\n')
 
             # v2 interfaces is a flat string list
             if router.get('interfaces'):
@@ -4379,7 +4449,7 @@ variable "panos_password" {
                         referrer=router), '')
                     for i in router['interfaces']
                 ])
-                content += f'  interfaces = [{ifaces_str}]\n'
+                out.add(router, f'  interfaces = [{ifaces_str}]\n')
 
             # F7.1: the protocol object is one field of the block, printed from `PROTOCOL_SHAPE`. A block
             # shape (`protocol { ... }`) is refused by the provider, so the object value is the only shape
@@ -4387,9 +4457,9 @@ variable "panos_password" {
             protocol = self._protocol_fields(resource_mapping.PROTOCOL_FIELD, router.get('protocol') or {},
                                              router)
             if protocol:
-                content += f'  protocol = {self.hcl_value(protocol, "  ")}\n'
+                out.add(router, f'  protocol = {self.hcl_value(protocol, "  ")}\n')
 
-            content += '}\n\n'
+            out.add(router, '}\n\n')
 
             # Generate static routes (v2: panos_virtual_router_static_route_ipv4)
             if router.get('static_routes'):
@@ -4400,28 +4470,28 @@ variable "panos_password" {
                         context=self.scope_context(router), vsys=router.get('vsys') or ''
                     )
 
-                    content += f'resource "panos_virtual_router_static_route_ipv4" "{route_resource}" {{\n'
+                    out.add(router, f'resource "panos_virtual_router_static_route_ipv4" "{route_resource}" {{\n')
                     # The route carries the owning router's source
                     # identity; only the report name is the route's own
-                    content += self.location_block(
+                    out.add(router, self.location_block(
                         'panos_virtual_router_static_route_ipv4',
-                        {**router, 'name': route['name']}, route_resource)
-                    content += f'  name = {self.escape_string(route["name"])}\n'
+                        {**router, 'name': route['name']}, route_resource))
+                    out.add(router, f'  name = {self.escape_string(route["name"])}\n')
                     # Reference the owning virtual router resource
-                    content += f'  virtual_router = panos_virtual_router.{resource_name}.name\n'
+                    out.add(router, f'  virtual_router = panos_virtual_router.{resource_name}.name\n')
 
                     if route.get('destination'):
                         # PAN-OS exports the default route destination as "default"
                         destination = route['destination']
                         if destination == 'default':
                             destination = '0.0.0.0/0'
-                        content += f'  destination = {self.escape_string(destination)}\n'
+                        out.add(router, f'  destination = {self.escape_string(destination)}\n')
 
                     if route.get('nexthop_ip'):
                         # v2 nexthop is a nested object
-                        content += f'  nexthop = {self.hcl_value({"ip_address": route["nexthop_ip"]})}\n'
+                        out.add(router, f'  nexthop = {self.hcl_value({"ip_address": route["nexthop_ip"]})}\n')
                     elif route.get('nexthop_interface'):
-                        content += f'  interface = {self.escape_string(route["nexthop_interface"])}\n'
+                        out.add(router, f'  interface = {self.escape_string(route["nexthop_interface"])}\n')
 
                     metric = route.get('metric')
                     if metric is not None:
@@ -4430,12 +4500,11 @@ variable "panos_password" {
                         except (TypeError, ValueError):
                             metric = None
                     if metric is not None:
-                        content += f'  metric = {metric}\n'
+                        out.add(router, f'  metric = {metric}\n')
 
-                    content += '}\n\n'
+                    out.add(router, '}\n\n')
 
-        with open(self.output_dir / 'virtual_routers.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     def generate_interfaces(self, interfaces: list[dict]):
         """Generate interface Terraform configuration (v2, one resource per kind).
@@ -4447,20 +4516,19 @@ variable "panos_password" {
         if not interfaces:
             return
 
-        content = '# Interface Configurations\n'
-        content += '# Note: These are reference configurations. Adjust for your hardware platform.\n\n'
+        out = UnitText(self, 'interfaces.tf', '# Interface Configurations\n')
+        out.header += '# Note: These are reference configurations. Adjust for your hardware platform.\n\n'
 
         for iface in interfaces:
             kind = iface['type']
             if kind == 'ethernet':
-                content += self._emit_ethernet_interface(iface)
+                out.add(iface, self._emit_ethernet_interface(iface))
                 continue
             scope = INTERFACE_RESOURCE_TYPES.get(kind)
             if scope:
-                content += self._emit_interface_resource(iface, scope)
+                out.add(iface, self._emit_interface_resource(iface, scope))
 
-        with open(self.output_dir / 'interfaces.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     def _emit_ethernet_interface(self, iface: dict) -> str:
         """Emit one ethernet entry: the physical interface, or a tagged subinterface."""
@@ -4688,24 +4756,25 @@ variable "panos_password" {
         content += '  - Aggregate interfaces may have different limitations\n'
         content += '  - Verify transceiver compatibility for the new platform\n\n'
 
-        with open(self.output_dir / 'INTERFACE_MIGRATION_REPORT.txt', 'w') as f:
-            f.write(content)
+        self.write_root_file('INTERFACE_MIGRATION_REPORT.txt', content)
 
     def generate_security_profiles(self, profiles: dict[str, list[dict]]):
         """Generate security profile Terraform configuration"""
         if not any(profiles.values()):
             return
 
-        content = '# Security Profiles\n'
-        content += '# Note: These are simplified profile references.\n'
-        content += '# Detailed profile rules must be configured manually or imported.\n\n'
+        out = UnitText(self, 'security_profiles.tf',
+                       '# Security Profiles\n'
+                       '# Note: These are simplified profile references.\n'
+                       '# Detailed profile rules must be configured manually or imported.\n\n')
 
         # Note: Full profile configuration with all rules is complex
         # This generates basic profile declarations that can be enhanced
 
         # Antivirus profiles
         if profiles.get('antivirus'):
-            content += '# Antivirus Profiles\n'
+            for facts in self.units_of(profiles['antivirus']):
+                out.add_once(facts, '# Antivirus Profiles\n')
             for prof in profiles['antivirus']:
                 resource_name = self.declare_resource_name(
                     prof['name'], 'panos_antivirus_security_profile', prof,
@@ -4713,14 +4782,15 @@ variable "panos_password" {
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
                     context='', vsys=prof.get('vsys') or '')
-                content += f'# Profile: {prof["name"]}\n'
+                out.add(prof, f'# Profile: {prof["name"]}\n')
                 if prof.get('description'):
-                    content += f'# Description: {prof["description"]}\n'
-                content += f'# Resource: panos_antivirus_security_profile.{resource_name}\n\n'
+                    out.add(prof, f'# Description: {prof["description"]}\n')
+                out.add(prof, f'# Resource: panos_antivirus_security_profile.{resource_name}\n\n')
 
         # Vulnerability profiles
         if profiles.get('vulnerability'):
-            content += '# Vulnerability Protection Profiles\n'
+            for facts in self.units_of(profiles['vulnerability']):
+                out.add_once(facts, '# Vulnerability Protection Profiles\n')
             for prof in profiles['vulnerability']:
                 resource_name = self.declare_resource_name(
                     prof['name'], 'panos_vulnerability_security_profile', prof,
@@ -4728,14 +4798,15 @@ variable "panos_password" {
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
                     context='', vsys=prof.get('vsys') or '')
-                content += f'# Profile: {prof["name"]}\n'
+                out.add(prof, f'# Profile: {prof["name"]}\n')
                 if prof.get('description'):
-                    content += f'# Description: {prof["description"]}\n'
-                content += f'# Resource: panos_vulnerability_security_profile.{resource_name}\n\n'
+                    out.add(prof, f'# Description: {prof["description"]}\n')
+                out.add(prof, f'# Resource: panos_vulnerability_security_profile.{resource_name}\n\n')
 
         # Anti-spyware profiles
         if profiles.get('anti_spyware'):
-            content += '# Anti-Spyware Profiles\n'
+            for facts in self.units_of(profiles['anti_spyware']):
+                out.add_once(facts, '# Anti-Spyware Profiles\n')
             for prof in profiles['anti_spyware']:
                 resource_name = self.declare_resource_name(
                     prof['name'], 'panos_anti_spyware_security_profile', prof,
@@ -4743,14 +4814,15 @@ variable "panos_password" {
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
                     context='', vsys=prof.get('vsys') or '')
-                content += f'# Profile: {prof["name"]}\n'
+                out.add(prof, f'# Profile: {prof["name"]}\n')
                 if prof.get('description'):
-                    content += f'# Description: {prof["description"]}\n'
-                content += f'# Resource: panos_anti_spyware_security_profile.{resource_name}\n\n'
+                    out.add(prof, f'# Description: {prof["description"]}\n')
+                out.add(prof, f'# Resource: panos_anti_spyware_security_profile.{resource_name}\n\n')
 
         # URL filtering profiles
         if profiles.get('url_filtering'):
-            content += '# URL Filtering Profiles\n'
+            for facts in self.units_of(profiles['url_filtering']):
+                out.add_once(facts, '# URL Filtering Profiles\n')
             for prof in profiles['url_filtering']:
                 resource_name = self.declare_resource_name(
                     prof['name'], 'panos_url_filtering_security_profile', prof,
@@ -4758,14 +4830,15 @@ variable "panos_password" {
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
                     context='', vsys=prof.get('vsys') or '')
-                content += f'# Profile: {prof["name"]}\n'
+                out.add(prof, f'# Profile: {prof["name"]}\n')
                 if prof.get('description'):
-                    content += f'# Description: {prof["description"]}\n'
-                content += f'# Resource: panos_url_filtering_security_profile.{resource_name}\n\n'
+                    out.add(prof, f'# Description: {prof["description"]}\n')
+                out.add(prof, f'# Resource: panos_url_filtering_security_profile.{resource_name}\n\n')
 
         # File blocking profiles
         if profiles.get('file_blocking'):
-            content += '# File Blocking Profiles\n'
+            for facts in self.units_of(profiles['file_blocking']):
+                out.add_once(facts, '# File Blocking Profiles\n')
             for prof in profiles['file_blocking']:
                 resource_name = self.declare_resource_name(
                     prof['name'], 'panos_file_blocking_security_profile', prof,
@@ -4773,14 +4846,15 @@ variable "panos_password" {
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
                     context='', vsys=prof.get('vsys') or '')
-                content += f'# Profile: {prof["name"]}\n'
+                out.add(prof, f'# Profile: {prof["name"]}\n')
                 if prof.get('description'):
-                    content += f'# Description: {prof["description"]}\n'
-                content += f'# Resource: panos_file_blocking_security_profile.{resource_name}\n\n'
+                    out.add(prof, f'# Description: {prof["description"]}\n')
+                out.add(prof, f'# Resource: panos_file_blocking_security_profile.{resource_name}\n\n')
 
         # WildFire profiles
         if profiles.get('wildfire_analysis'):
-            content += '# WildFire Analysis Profiles\n'
+            for facts in self.units_of(profiles['wildfire_analysis']):
+                out.add_once(facts, '# WildFire Analysis Profiles\n')
             for prof in profiles['wildfire_analysis']:
                 resource_name = self.declare_resource_name(
                     prof['name'], 'panos_wildfire_analysis_security_profile', prof,
@@ -4788,13 +4862,12 @@ variable "panos_password" {
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
                     context='', vsys=prof.get('vsys') or '')
-                content += f'# Profile: {prof["name"]}\n'
+                out.add(prof, f'# Profile: {prof["name"]}\n')
                 if prof.get('description'):
-                    content += f'# Description: {prof["description"]}\n'
-                content += f'# Resource: panos_wildfire_analysis_security_profile.{resource_name}\n\n'
+                    out.add(prof, f'# Description: {prof["description"]}\n')
+                out.add(prof, f'# Resource: panos_wildfire_analysis_security_profile.{resource_name}\n\n')
 
-        with open(self.output_dir / 'security_profiles.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     def generate_security_profile_groups(self, groups: list[dict]):
         """Generate security profile group Terraform configuration (v2: panos_security_profile_group)
@@ -4804,7 +4877,7 @@ variable "panos_password" {
         if not groups:
             return
 
-        content = '# Security Profile Groups\n\n'
+        out = UnitText(self, 'security_profile_groups.tf', '# Security Profile Groups\n\n')
 
         # Profile categories the v2 schema models as lists
         categories = ('virus', 'spyware', 'vulnerability', 'url_filtering',
@@ -4816,20 +4889,19 @@ variable "panos_password" {
                 context=grp.get('device_group') or '', vsys=grp.get('vsys') or ''
             )
 
-            content += f'resource "panos_security_profile_group" "{resource_name}" {{\n'
-            content += self.location_block('panos_security_profile_group', grp, resource_name)
-            content += f'  name = {self.escape_string(grp["name"])}\n'
+            out.add(grp, f'resource "panos_security_profile_group" "{resource_name}" {{\n')
+            out.add(grp, self.location_block('panos_security_profile_group', grp, resource_name))
+            out.add(grp, f'  name = {self.escape_string(grp["name"])}\n')
 
             for category in categories:
                 members = grp.get(category)
                 if members:
                     members_str = ', '.join([self.escape_string(m) for m in members])
-                    content += f'  {category} = [{members_str}]\n'
+                    out.add(grp, f'  {category} = [{members_str}]\n')
 
-            content += '}\n\n'
+            out.add(grp, '}\n\n')
 
-        with open(self.output_dir / 'security_profile_groups.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
 
     @staticmethod
@@ -5102,8 +5174,7 @@ variable "panos_password" {
 
         lines.append('End of report.')
 
-        with open(self.output_dir / 'MANUAL_SETUP_REPORT.txt', 'w') as f:
-            f.write('\n'.join(lines) + '\n')
+        self.write_root_file('MANUAL_SETUP_REPORT.txt', '\n'.join(lines) + '\n')
 
     def generate_conversion_report(self, ledger, shadows=None, state=None,
                                    ownership_findings=None, cycle_findings=None) -> str:
@@ -5214,8 +5285,7 @@ variable "panos_password" {
                 lines.append(entry_coverage.entry_line(row))
 
         content = '\n'.join(lines) + '\n'
-        with open(self.output_dir / entry_coverage.REPORT_FILE, 'w', encoding='utf-8') as f:
-            f.write(content)
+        self.write_root_file(entry_coverage.REPORT_FILE, content)
         return content
 
     def generate_vpn_config(self, ike_gateways: list[dict], ipsec_tunnels: list[dict],
@@ -5237,35 +5307,37 @@ variable "panos_password" {
         if not (ike_gateways or ipsec_tunnels or ike_profiles or ipsec_profiles):
             return
 
-        content = '# IPsec VPN Configuration\n'
-        content += '# IMPORTANT: Pre-shared keys are set to generic placeholders.\n'
-        content += '# You MUST update all pre-shared keys before applying!\n'
-        content += '# Search for "***CHANGE_ME***" and replace with actual keys.\n\n'
+        out = UnitText(self, 'vpn.tf',
+                       '# IPsec VPN Configuration\n'
+                       '# IMPORTANT: Pre-shared keys are set to generic placeholders.\n'
+                       '# You MUST update all pre-shared keys before applying!\n'
+                       '# Search for "***CHANGE_ME***" and replace with actual keys.\n\n')
 
         # IKE Crypto Profiles (v2: encryption/hash/dh_group lists + lifetime block)
         if ike_profiles:
-            content += '# IKE Crypto Profiles\n\n'
+            for facts in self.units_of(ike_profiles):
+                out.add_once(facts, '# IKE Crypto Profiles\n\n')
             for profile in ike_profiles:
                 resource_name = self.declare_resource_name(
                     f"ike_profile_{profile['name']}", 'panos_ike_crypto_profile', profile,
                     context=self.scope_context(profile), vsys=profile.get('vsys') or ''
                 )
-                content += f'resource "panos_ike_crypto_profile" "{resource_name}" {{\n'
-                content += self.location_block('panos_ike_crypto_profile', profile, resource_name)
-                content += f'  name = {self.escape_string(profile["name"])}\n'
+                out.add(profile, f'resource "panos_ike_crypto_profile" "{resource_name}" {{\n')
+                out.add(profile, self.location_block('panos_ike_crypto_profile', profile, resource_name))
+                out.add(profile, f'  name = {self.escape_string(profile["name"])}\n')
 
                 if profile.get('encryptions'):
                     enc_str = ', '.join([self.escape_string(e) for e in profile['encryptions']])
-                    content += f'  encryption = [{enc_str}]\n'
+                    out.add(profile, f'  encryption = [{enc_str}]\n')
 
                 # v2 calls the hash algorithms hash (not authentication)
                 if profile.get('authentications'):
                     auth_str = ', '.join([self.escape_string(a) for a in profile['authentications']])
-                    content += f'  hash = [{auth_str}]\n'
+                    out.add(profile, f'  hash = [{auth_str}]\n')
 
                 if profile.get('dh_groups'):
                     dh_str = ', '.join([self.escape_string(dh) for dh in profile['dh_groups']])
-                    content += f'  dh_group = [{dh_str}]\n'
+                    out.add(profile, f'  dh_group = [{dh_str}]\n')
 
                 if profile.get('lifetime_hours'):
                     try:
@@ -5273,26 +5345,27 @@ variable "panos_password" {
                     except (TypeError, ValueError):
                         hours = None
                     if hours is not None:
-                        content += f'  lifetime = {self.hcl_value({"hours": hours})}\n'
+                        out.add(profile, f'  lifetime = {self.hcl_value({"hours": hours})}\n')
 
-                content += '}\n\n'
+                out.add(profile, '}\n\n')
 
         # IPsec Crypto Profiles (v2: esp object + dh_group string + lifetime/lifesize)
         if ipsec_profiles:
-            content += '# IPsec Crypto Profiles\n\n'
+            for facts in self.units_of(ipsec_profiles):
+                out.add_once(facts, '# IPsec Crypto Profiles\n\n')
             for profile in ipsec_profiles:
                 profile_key = f"ipsec_profile_{profile['name']}"
                 resource_name = self.declare_resource_name(
                     profile_key, 'panos_ipsec_crypto_profile', profile,
                     context=self.scope_context(profile), vsys=profile.get('vsys') or ''
                 )
-                content += f'resource "panos_ipsec_crypto_profile" "{resource_name}" {{\n'
-                content += self.location_block('panos_ipsec_crypto_profile', profile, resource_name)
-                content += f'  name = {self.escape_string(profile["name"])}\n'
+                out.add(profile, f'resource "panos_ipsec_crypto_profile" "{resource_name}" {{\n')
+                out.add(profile, self.location_block('panos_ipsec_crypto_profile', profile, resource_name))
+                out.add(profile, f'  name = {self.escape_string(profile["name"])}\n')
 
                 # v2 dh_group is a single string (not a list)
                 if profile.get('dh_group'):
-                    content += f'  dh_group = {self.escape_string(profile["dh_group"])}\n'
+                    out.add(profile, f'  dh_group = {self.escape_string(profile["dh_group"])}\n')
 
                 # v2 esp object holds the encryption/authentication algorithms
                 esp: dict = {}
@@ -5301,7 +5374,7 @@ variable "panos_password" {
                 if profile.get('authentications'):
                     esp['authentication'] = list(profile['authentications'])
                 if esp:
-                    content += f'  esp = {self.hcl_value(esp)}\n'
+                    out.add(profile, f'  esp = {self.hcl_value(esp)}\n')
 
                 if profile.get('lifetime_hours'):
                     try:
@@ -5309,7 +5382,7 @@ variable "panos_password" {
                     except (TypeError, ValueError):
                         hours = None
                     if hours is not None:
-                        content += f'  lifetime = {self.hcl_value({"hours": hours})}\n'
+                        out.add(profile, f'  lifetime = {self.hcl_value({"hours": hours})}\n')
 
                 if profile.get('lifetime_kb'):
                     try:
@@ -5317,24 +5390,25 @@ variable "panos_password" {
                     except (TypeError, ValueError):
                         kb = None
                     if kb is not None:
-                        content += f'  lifesize = {self.hcl_value({"kb": kb})}\n'
+                        out.add(profile, f'  lifesize = {self.hcl_value({"kb": kb})}\n')
 
-                content += '}\n\n'
+                out.add(profile, '}\n\n')
 
         # IKE Gateways (v2: protocol/peer_address/authentication blocks)
         if ike_gateways:
-            content += '# IKE Gateways\n'
-            content += '# WARNING: Pre-shared keys use placeholder "***CHANGE_ME***"\n'
-            content += '# Update these with actual keys from your key management system!\n\n'
+            for facts in self.units_of(ike_gateways):
+                out.add_once(facts, '# IKE Gateways\n')
+                out.add_once(facts, '# WARNING: Pre-shared keys use placeholder "***CHANGE_ME***"\n')
+                out.add_once(facts, '# Update these with actual keys from your key management system!\n\n')
 
             for gw in ike_gateways:
                 resource_name = self.declare_resource_name(
                     f"ike_gw_{gw['name']}", 'panos_ike_gateway', gw,
                     context=self.scope_context(gw), vsys=gw.get('vsys') or ''
                 )
-                content += f'resource "panos_ike_gateway" "{resource_name}" {{\n'
-                content += self.location_block('panos_ike_gateway', gw, resource_name)
-                content += f'  name = {self.escape_string(gw["name"])}\n'
+                out.add(gw, f'resource "panos_ike_gateway" "{resource_name}" {{\n')
+                out.add(gw, self.location_block('panos_ike_gateway', gw, resource_name))
+                out.add(gw, f'  name = {self.escape_string(gw["name"])}\n')
 
                 # v2 protocol object: version + ikev1/ikev2 sub-object
                 version = gw.get('version', 'ikev1')
@@ -5350,12 +5424,12 @@ variable "panos_password" {
                             key=ike_key, referrer=gw)
                     if ver_obj:
                         proto_obj[version] = ver_obj
-                    content += f'  protocol = {self.hcl_value(proto_obj)}\n'
+                    out.add(gw, f'  protocol = {self.hcl_value(proto_obj)}\n')
 
                 if gw.get('peer_address'):
                     # v2 peer_address object keyed by fqdn or ip
                     key = 'fqdn' if gw.get('peer_address_type') == 'fqdn' else 'ip'
-                    content += f'  peer_address = {self.hcl_value({key: gw["peer_address"]})}\n'
+                    out.add(gw, f'  peer_address = {self.hcl_value({key: gw["peer_address"]})}\n')
 
                 if gw.get('local_address_interface'):
                     # F2.6: reference when the interface is in this run;
@@ -5363,7 +5437,7 @@ variable "panos_password" {
                     iface_ref = self.name_ref(
                         gw['local_address_interface'], INTERFACE_SCOPES,
                         referrer=gw)
-                    content += f'  local_address = {self.hcl_value({"interface": iface_ref})}\n'
+                    out.add(gw, f'  local_address = {self.hcl_value({"interface": iface_ref})}\n')
                 elif gw.get('local_address'):
                     # Heuristic: dotted-quad values are IPs, otherwise
                     # interfaces; F3.2, F6.10.2: resolve inside the gateway's unit
@@ -5372,25 +5446,26 @@ variable "panos_password" {
                     value = (self.name_ref(local, INTERFACE_SCOPES,
                                            referrer=gw)
                              if key == 'interface' else local)
-                    content += f'  local_address = {self.hcl_value({key: value})}\n'
+                    out.add(gw, f'  local_address = {self.hcl_value({key: value})}\n')
 
                 # v2 authentication object; pre-shared key only (cert auth is manual)
                 auth_type = gw.get('auth_type', 'pre-shared-key')
                 if auth_type == 'pre-shared-key' and gw.get('pre_shared_key'):
                     key_obj = self.hcl_value({'pre_shared_key': {'key': gw['pre_shared_key']}})
-                    content += f'  authentication = {key_obj}  # *** CHANGE THIS KEY ***\n'
+                    out.add(gw, f'  authentication = {key_obj}  # *** CHANGE THIS KEY ***\n')
 
                 if gw.get('local_id'):
-                    content += f'  local_id = {self.hcl_value({"id": gw["local_id"]})}\n'
+                    out.add(gw, f'  local_id = {self.hcl_value({"id": gw["local_id"]})}\n')
 
                 if gw.get('peer_id'):
-                    content += f'  peer_id = {self.hcl_value({"id": gw["peer_id"]})}\n'
+                    out.add(gw, f'  peer_id = {self.hcl_value({"id": gw["peer_id"]})}\n')
 
-                content += '}\n\n'
+                out.add(gw, '}\n\n')
 
         # IPsec Tunnels (v2: auto_key block with nested proxy_id entries)
         if ipsec_tunnels:
-            content += '# IPsec Tunnels\n\n'
+            for facts in self.units_of(ipsec_tunnels):
+                out.add_once(facts, '# IPsec Tunnels\n\n')
             for tunnel in ipsec_tunnels:
                 if tunnel.get('type') != 'auto-key':
                     # Manual-key tunnels need key material: manual-setup report only
@@ -5400,12 +5475,12 @@ variable "panos_password" {
                     f"tunnel_{tunnel['name']}", 'panos_ipsec_tunnel', tunnel,
                     context=self.scope_context(tunnel), vsys=tunnel.get('vsys') or ''
                 )
-                content += f'resource "panos_ipsec_tunnel" "{resource_name}" {{\n'
-                content += self.location_block('panos_ipsec_tunnel', tunnel, resource_name)
-                content += f'  name = {self.escape_string(tunnel["name"])}\n'
+                out.add(tunnel, f'resource "panos_ipsec_tunnel" "{resource_name}" {{\n')
+                out.add(tunnel, self.location_block('panos_ipsec_tunnel', tunnel, resource_name))
+                out.add(tunnel, f'  name = {self.escape_string(tunnel["name"])}\n')
 
                 if tunnel.get('tunnel_interface'):
-                    content += f'  tunnel_interface = {self.escape_string(tunnel["tunnel_interface"])}\n'
+                    out.add(tunnel, f'  tunnel_interface = {self.escape_string(tunnel["tunnel_interface"])}\n')
 
                 # v2 auto_key object; ike_gateway and proxy_id are lists of objects
                 auto_key: dict = {}
@@ -5445,12 +5520,11 @@ variable "panos_password" {
                     auto_key['proxy_id'] = proxy_list
 
                 if auto_key:
-                    content += f'  auto_key = {self.hcl_value(auto_key)}\n'
+                    out.add(tunnel, f'  auto_key = {self.hcl_value(auto_key)}\n')
 
-                content += '}\n\n'
+                out.add(tunnel, '}\n\n')
 
-        with open(self.output_dir / 'vpn.tf', 'w') as f:
-            f.write(content)
+        out.write()
 
     @staticmethod
     def _looks_like_ip(value: str) -> bool:
@@ -5597,10 +5671,9 @@ variable "panos_password" {
         content += '6. Implement proper key escrow and recovery procedures\n'
         content += '7. Audit key access and usage\n\n'
 
-        with open(self.output_dir / 'VPN_MIGRATION_REPORT.txt', 'w') as f:
-            f.write(content)
+        self.write_root_file('VPN_MIGRATION_REPORT.txt', content)
 
-    # F5.5: the read-through blocks go in one file for the run, so a reader can
+    # F5.5: the read-through blocks go in the unit's file, so a reader can
     # separate what the run read from what the plan will read.
     READ_THROUGH_FILE = 'read_through.tf'
 
@@ -5612,23 +5685,26 @@ variable "panos_password" {
         read-through scope writes no file and the golden bytes stay unchanged.
         Blocks are in sorted (type, local name) order, so the file is
         byte-identical between two runs on the same bytes.
+
+        F6.10.3: a block belongs to the unit its location names, so the file is one per unit and the
+        order is the same sorted order the run read the blocks in.
         """
         if not self._data_blocks:
             return
 
-        content = '# Read-through data blocks\n\n'
-        content += ('# Each block names an entry this run did not read. A `data` block resolves\n'
-                    '# at plan time, so the plan reads the device and fails when the entry is\n'
-                    '# not present in the location the block names.\n\n')
+        header = ('# Read-through data blocks\n\n'
+                  '# Each block names an entry this run did not read. A `data` block resolves\n'
+                  '# at plan time, so the plan reads the device and fails when the entry is\n'
+                  '# not present in the location the block names.\n\n')
+        out = UnitText(self, self.READ_THROUGH_FILE, header)
         for block in sorted(self._data_blocks.values(),
                             key=lambda block: (block['type'], block['local'])):
-            content += f'data "{block["type"]}" "{block["local"]}" {{\n'
-            content += f'  name = {self.escape_string(block["name"])}\n\n'
-            content += block['location']
-            content += '}\n\n'
+            out.add(block['unit'], f'data "{block["type"]}" "{block["local"]}" {{\n')
+            out.add(block['unit'], f'  name = {self.escape_string(block["name"])}\n\n')
+            out.add(block['unit'], block['location'])
+            out.add(block['unit'], '}\n\n')
 
-        with open(self.output_dir / self.READ_THROUGH_FILE, 'w') as f:
-            f.write(content)
+        out.write()
 
     def generate_readme(self):
         """Generate README with usage instructions.
@@ -5640,6 +5716,10 @@ variable "panos_password" {
         head = '''# Palo Alto Terraform Configuration
 
 This directory contains Terraform configuration files generated from Palo Alto Panorama export.
+
+The run writes one directory per unit the unit manifest names, and each unit directory holds that unit's `.tf`
+files and the printed form of its site row. A unit is one plan against one state, so run Terraform inside one
+unit directory.
 
 ## Prerequisites
 
@@ -5685,7 +5765,7 @@ terraform apply
 The generator writes a file only when it has content, so a run produces the
 subset below that matches the input.
 
-Terraform configuration:
+Terraform configuration, one file per unit inside the unit directory the manifest names:
 
 - `provider.tf` - Provider configuration
 - `variables.tf` - Variable definitions
@@ -5708,7 +5788,7 @@ Terraform configuration:
 - `actions.tf` - the commit action, one `panos_commit` block per unit the manifest names,
   written last
 
-Reports:
+Reports, at the codebase root:
 
 - `SOURCE.txt` - what this run read, as `field: value` data, one record per source read: the
   source kind, the source name, the path, the scope, the request identity, the cache entry, the
@@ -5757,8 +5837,7 @@ For more information on the PAN-OS Terraform provider:
 https://registry.terraform.io/providers/PaloAltoNetworks/panos/latest/docs
 '''
 
-        with open(self.output_dir / 'README.md', 'w') as f:
-            f.write(head + label + tail)
+        self.write_root_file('README.md', head + label + tail)
 
 
 def main():
@@ -6094,7 +6173,7 @@ def main():
 
         print(f"\nGenerating Terraform configuration in {args.output_dir}...")
         tf_gen = TerraformGenerator(args.output_dir, panorama.parse_associations(),
-                                    data_scopes=data_scopes)
+                                    data_scopes=data_scopes, ledger=panorama.ledger)
 
         # F4.4: the property scan measures which keys an output reads from a captured
         # object, so the record starts here and not during the parse.
@@ -6180,7 +6259,7 @@ def main():
             entry_coverage=container_coverage.render_section(coverage_findings, panorama.source.name),
         )
 
-        # F5.5: the read-through blocks, one file for the run, written before the
+        # F5.5: the read-through blocks, the unit's file, written before the
         # reports so the label can state the count and the gate can read the file.
         tf_gen.generate_read_through()
 
@@ -6243,29 +6322,31 @@ def main():
         # the two api fields stay `-` and the record references nothing: it prunes nothing.
         if state_source is not None:
             records.append(provenance.record_for(state_source))
-        record_file = Path(args.output_dir) / provenance.PROVENANCE_FILE
-        record_file.write_text(provenance.render_records(records), encoding='utf-8')
+        # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): a record describes the whole codebase, so it is a
+        # codebase root-set file and goes through the one write path at the root.
+        record_file = write_path.root_path(args.output_dir, provenance.PROVENANCE_FILE)
+        write_path.write_file(record_file, provenance.render_records(records))
 
         # F6.1: the manifest is written as data, so an orchestrator reads it. The rows are built
         # above, before the report, because a cycle finding reads its grouping facts through them.
-        manifest_file = Path(args.output_dir) / unit_manifest.MANIFEST_FILE
         if manifest_rows:
-            manifest_file.write_text(unit_manifest.render(manifest_rows), encoding='utf-8')
+            write_path.write_file(write_path.root_path(args.output_dir, unit_manifest.MANIFEST_FILE),
+                                unit_manifest.render(manifest_rows))
 
         # F6.2: the ownership record. One row per entry the coverage matrix covers, written as data,
         # and only when it has content, following the rule for the report files and the manifest. It
         # names the unit that declares each entry and the unit that owns its name, so a reader joins it
         # to the manifest row on `directory`.
-        ownership_file = Path(args.output_dir) / ownership.OWNERSHIP_FILE
         if ownership_rows:
-            ownership_file.write_text(ownership.render(ownership_rows), encoding='utf-8')
+            write_path.write_file(write_path.root_path(args.output_dir, ownership.OWNERSHIP_FILE),
+                                ownership.render(ownership_rows))
 
         # F6.3: the edge record. One row per pair the data can name, written as data, and only when it has
         # content, following the rule for the report files and the two data files. A reader joins `referrer`
         # and `target` to the manifest row on `directory`, and (`type`, `entry`) to the ownership row.
-        edge_file = Path(args.output_dir) / reference_edges.EDGE_FILE
         if edge_rows:
-            edge_file.write_text(reference_edges.render(edge_rows), encoding='utf-8')
+            write_path.write_file(write_path.root_path(args.output_dir, reference_edges.EDGE_FILE),
+                                reference_edges.render(edge_rows))
 
         # F6.6: the site data. One row per site that names a value, written as data, and only when it has
         # content, following the rule for the report files and the other data files. A reader joins
@@ -6274,18 +6355,28 @@ def main():
         # printed form with `render_tfvars` (`ARCHITECTURE.md` §4.5), so the run writes both or neither.
         site_rows = site_data.build_rows(panorama.ledger, tf_gen.value_variables(), tf_gen.sanitize_name)
         if site_rows:
-            site_file = Path(args.output_dir) / site_data.SITE_DATA_FILE
-            site_file.write_text(site_data.render(site_rows), encoding='utf-8')
-            tfvars_file = Path(args.output_dir) / site_data.TFVARS_FILE
-            tfvars_file.write_text(site_data.render_tfvars(site_rows), encoding='utf-8')
+            write_path.write_file(write_path.root_path(args.output_dir, site_data.SITE_DATA_FILE),
+                                    site_data.render(site_rows))
+            # F6.10.3: the printed form is the unit's file, so the run writes one per unit that names a value,
+            # each holding the printed form of that unit's row.
+            for row in site_rows:
+                write_path.write_file(write_path.unit_path(args.output_dir, row['directory'], site_data.TFVARS_FILE),
+                                      site_data.render_tfvars([row]))
 
         # F6.4: the import blocks. A `.tf` file, because the gate rule that checks an import block reads the
         # files the operator receives (`ARCHITECTURE.md` §4.5), and written only when the run declares them and
         # has rows that state an id. A row that states a rule instead of an id writes no block.
-        import_file = Path(args.output_dir) / import_blocks.IMPORT_FILE
         import_rows = [row for row in tf_gen.import_rows if row['import_id']]
         if args.import_blocks and import_rows:
-            import_file.write_text(import_blocks.render(import_rows), encoding='utf-8')
+            # F6.10.3: `imports.tf` is a `.tf` file, so it is the unit's file and the run writes one per
+            # unit that has a block. `render` prints rows in unit order, so a unit's blocks print in the
+            # same order the run read them.
+            for facts in tf_gen.unit_set():
+                directory = tf_gen.directory_of(facts)
+                unit_rows = [row for row in import_rows if row['unit'] == directory]
+                if unit_rows:
+                    write_path.write_file(write_path.unit_path(args.output_dir, directory, import_blocks.IMPORT_FILE),
+                                          import_blocks.render(unit_rows))
 
         # F6.7: the commit actions. One block per unit the manifest names, written as the last `.tf`
         # file so the gate rule reads the action against the completed unit, and only when it has
@@ -6294,8 +6385,14 @@ def main():
         # not be pinned (the F6.5 rule 1 argument).
         action_rows = commit_actions.build_rows(manifest_rows, tf_gen.sanitize_name)
         if action_rows:
-            action_file = Path(args.output_dir) / commit_actions.ACTIONS_FILE
-            action_file.write_text(commit_actions.render(action_rows), encoding='utf-8')
+            # F6.10.3: `actions.tf` is the last `.tf` file of a unit, so the run writes one per unit the
+            # manifest names, and each file holds that unit's block.
+            for facts in tf_gen.unit_set():
+                directory = tf_gen.directory_of(facts)
+                unit_rows = [row for row in action_rows if row['directory'] == directory]
+                if unit_rows:
+                    write_path.write_file(write_path.unit_path(args.output_dir, directory, commit_actions.ACTIONS_FILE),
+                                          commit_actions.render(unit_rows))
 
         print("\n✓ Successfully generated Terraform configuration!")
         print("\n📄 Generated Migration Reports:")
@@ -6329,8 +6426,8 @@ def main():
         # the operator receives. A WARN does not fail the gate; a FAIL does.
         # The four data files are written above, so the data rule (F6.8) reads the records the run wrote.
         report = sanity_checks.run_checks(args.output_dir, run_terraform=args.validate)
-        report_path = Path(args.output_dir) / 'SANITY_REPORT.txt'
-        report_path.write_text(report.render(), encoding='utf-8')
+        report_path = write_path.root_path(args.output_dir, 'SANITY_REPORT.txt')
+        write_path.write_file(report_path, report.render())
         print()
         print(report.console_summary())
         print(f"Sanity report: {report_path}")
@@ -6344,7 +6441,9 @@ def main():
         print("  5. Create terraform.tfvars with your credentials")
         if ike_gateways or ipsec_tunnels:
             print("  6. ⚠️  Add VPN pre-shared keys to terraform.tfvars (DO NOT COMMIT)")
-        print("  7. Run: terraform init")
+        # F6.10.3: a unit is one plan against one state, so the plan runs inside the unit directory the
+        # manifest names.
+        print("  7. Run: terraform init inside one unit directory the manifest names")
         print("  8. Run: terraform plan")
         print("  9. Run: terraform apply")
 

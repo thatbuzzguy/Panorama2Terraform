@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import FIXTURES_DIR, run_script
+from conftest import FIXTURES_DIR, file_text, run_script, tf_files
 
 
 def _fixture(name: str):
@@ -184,7 +184,7 @@ def _generate(fixture_name: str, out_dir: Path) -> dict[str, str]:
     proc = run_script('panorama_to_terraform.py', str(FIXTURES_DIR / fixture_name),
                       '--output-dir', str(out_dir))
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    return {f.name: f.read_text(encoding='utf-8') for f in out_dir.glob('*.tf')}
+    return tf_files(out_dir)
 
 
 @pytest.fixture(scope='module')
@@ -224,13 +224,13 @@ def test_dup_names_across_vsys_emit_distinct_digests(emitted_vsys):
     every local name is the sanitized base plus the 8-hex identity digest,
     with no _2 suffix.
     """
-    blocks = _resource_blocks(emitted_vsys['vsys1_first']['address_objects.tf'],
+    blocks = _resource_blocks(file_text(emitted_vsys['vsys1_first'], 'address_objects.tf'),
                               'panos_address')
     assert len(blocks) == 2
     for b in blocks:
         assert re.fullmatch(r'web_[0-9a-f]{8}', b['local']), b['local']
     assert blocks[0]['local'] != blocks[1]['local']
-    assert '_2' not in emitted_vsys['vsys1_first']['address_objects.tf']
+    assert '_2' not in file_text(emitted_vsys['vsys1_first'], 'address_objects.tf')
 
 
 def test_identity_to_name_assignment_survives_entry_order_flip(emitted_vsys):
@@ -239,16 +239,16 @@ def test_identity_to_name_assignment_survives_entry_order_flip(emitted_vsys):
     The digest is computed from the object identity, so the same object
     keeps the same local name in both fixture orderings.
     """
-    assert _addr_assignment(emitted_vsys['vsys1_first']['address_objects.tf']) == \
-        _addr_assignment(emitted_vsys['vsys2_first']['address_objects.tf'])
-    assert _rule_assignment(emitted_vsys['vsys1_first']['security_rules.tf']) == \
-        _rule_assignment(emitted_vsys['vsys2_first']['security_rules.tf'])
+    assert _addr_assignment(file_text(emitted_vsys['vsys1_first'], 'address_objects.tf')) == \
+        _addr_assignment(file_text(emitted_vsys['vsys2_first'], 'address_objects.tf'))
+    assert _rule_assignment(file_text(emitted_vsys['vsys1_first'], 'security_rules.tf')) == \
+        _rule_assignment(file_text(emitted_vsys['vsys2_first'], 'security_rules.tf'))
 
 
 def test_rule_resolves_name_in_its_own_vsys(emitted_vsys):
     """F3.2: a rule wires to the same-vsys object, not the other vsys's copy."""
-    text = emitted_vsys['vsys1_first']['security_rules.tf']
-    addr = _addr_assignment(emitted_vsys['vsys1_first']['address_objects.tf'])
+    text = file_text(emitted_vsys['vsys1_first'], 'security_rules.tf')
+    addr = _addr_assignment(file_text(emitted_vsys['vsys1_first'], 'address_objects.tf'))
     vs1_local = addr['10.1.0.1/32']   # the vsys1 web object
     vs2_local = addr['10.2.0.1/32']   # the vsys2 web object
     blocks = _resource_blocks(text, 'panos_security_policy_rules')
@@ -272,7 +272,7 @@ def test_rule_chains_do_not_cross_vsys(emitted_vsys):
     boundary), and each later rule pivots on and depends on the previous
     rule of its own vsys only.
     """
-    text = emitted_vsys['vsys1_first']['security_rules.tf']
+    text = file_text(emitted_vsys['vsys1_first'], 'security_rules.tf')
     blocks = _resource_blocks(text, 'panos_security_policy_rules')
     by_name = {}
     for b in blocks:
@@ -310,7 +310,7 @@ def test_rule_chains_do_not_cross_vsys(emitted_vsys):
 def test_address_emit_covers_v2_types_and_reports_the_rest(tmp_path):
     """ip-wildcard emits; entries with no v2 attribute emit nothing, and report."""
     files = _generate('address_objects.xml', tmp_path)
-    text = files['address_objects.tf']
+    text = file_text(files, 'address_objects.tf')
     assert 'ip_wildcard = "10.2.3.*"' in text
     assert 'disable_override = "yes"' in text
     # A location entry has no v2 attribute: it must not become a resource.
@@ -327,7 +327,7 @@ def test_service_emit_keeps_one_protocol_leg(tmp_path):
     """v2 takes one protocol leg: tcp emits, udp becomes a NOTE + report."""
     files = _generate('edge_multi_port_services.xml', tmp_path)
     blocks = {b['local']: b['body'] for b in
-              _resource_blocks(files['service_objects.tf'], 'panos_service')}
+              _resource_blocks(file_text(files, 'service_objects.tf'), 'panos_service')}
 
     dual = next(b for local, b in blocks.items() if local.startswith('svc_dual'))
     assert 'tcp = {' in dual
@@ -351,7 +351,7 @@ def test_edl_emit_skips_fields_the_subshape_lacks(tmp_path):
     """expand_domain is domain-only: an ip list must not emit it (F3.4)."""
     files = _generate('external_lists.xml', tmp_path)
     blocks = {b['local']: b['body'] for b in
-              _resource_blocks(files['external_lists.tf'], 'panos_external_dynamic_list')}
+              _resource_blocks(file_text(files, 'external_lists.tf'), 'panos_external_dynamic_list')}
 
     ip_expand = next(b for local, b in blocks.items() if local.startswith('ip_with_expand'))
     assert 'expand_domain =' not in ip_expand

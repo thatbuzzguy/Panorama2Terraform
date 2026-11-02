@@ -146,12 +146,6 @@ Completed work is not recorded here; the git history and the owner document hold
   cannot be read through a data source, because the certificate entry has no name
   a reference resolves.
 
-- The write path must force LF. `open(..., 'w')` writes `os.linesep`, so a run on a
-  Windows desktop writes CRLF and the `.tf` goldens no longer match byte for byte.
-  Decided 2026-10-31: the rule is in the write path, not in an operator note, because
-  the golden byte rule and the determinism rule (`ARCHITECTURE.md` §6) are the same
-  rule. It lands with the step that splits the output per unit directory.
-
 - A per-device template variable override has no place the provider can put it:
   `panos_template_variable.location` declares `template` and `template_stack` only,
   and neither sub-block has a device field. So the tool cannot generate the
@@ -466,8 +460,9 @@ restated here; they are in the record and the git history. Only the open items a
 - Open: `check_import_blocks` compares a mapping result, so it cannot detect an id that states the
   name instead of the value, because the naming rule is idempotent. The writer keeps the value in
   the id, so an id the tool builds cannot carry the name.
-- Open: the per-unit `.tfvars` that names one `target` serial stays with the write path, because the
-  site feature names the unit and writes no directory.
+- Open: the per-unit `.tfvars` that names one `target` serial. The printed form is written per unit since the
+  write path landed (`docs/CODEBASE_ASSEMBLY.md` §14), so the file exists; the fact it names is still open, and
+  it is the fact `panos_push_to_devices` needs.
 - Open: a module parameter is a standard a person writes, so a template variable value stays a
   literal until the write path decides what a module takes.
 - Finding: `location.device_group` declares a `panorama_device` field in the pinned schema, and the
@@ -475,10 +470,6 @@ restated here; they are in the record and the git history. Only the open items a
   tool writes no `panorama_device` in an id. An id states only what the block states. The value table
   records the field as a literal, so the block and the id print the same text for it. If a device
   fact becomes a rule, the id and the block change together.
-- Open: the manifest names the directory and writes no directory, so the path that creates one
-  directory per unit is still open. F6.10.1 (`docs/CODEBASE_ASSEMBLY.md` §14) names `scope.tf` as a
-  unit-set file, so each unit's scope blocks go in that unit's directory when the step lands; today
-  one file holds the scope blocks of every unit.
 - Finding: the generated `README.md` does not name `imports.tf`. The F5.5 label precedent says an
   opt-in shape labels itself, so the label should name the file and the block count. The goldens pin
   `.tf` files only, so the label is a report-shape change, not a byte change.

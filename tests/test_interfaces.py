@@ -8,14 +8,16 @@ same run.
 
 import re
 
-from conftest import FIXTURES_DIR, RESOURCE_RE, run_script
+from conftest import FIXTURES_DIR, RESOURCE_RE, file_text, run_script, tf_files
 
 
 def _generate(fixture: str, tmp_path) -> str:
     proc = run_script('panorama_to_terraform.py',
                       str(FIXTURES_DIR / fixture), '--output-dir', str(tmp_path))
     assert proc.returncode == 0, proc.stderr
-    return (tmp_path / 'interfaces.tf').read_text()
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): `interfaces.tf` is the unit's file, so the reader keys
+    # it by the path, and this helper joins the parts in path order.
+    return file_text(tf_files(tmp_path), 'interfaces.tf')
 
 
 def _blocks(text: str) -> dict[str, str]:

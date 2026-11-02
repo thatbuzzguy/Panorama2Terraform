@@ -34,7 +34,7 @@ import state_coverage
 import state_input
 import unit_manifest
 import xml_input
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, run_main, run_pipeline, run_script
+from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, run_main, run_pipeline, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 RECORD = ownership.OWNERSHIP_FILE
@@ -427,11 +427,15 @@ def test_the_emitter_prints_the_flag_as_a_string(converter_module, tmp_path):
     """
     out = tmp_path / 'out'
     _pipeline(converter_module, FIXTURES_DIR / FIXTURE, out)
-    parts = (out / 'service_objects.tf').read_text(encoding='utf-8').split('resource "panos_service"')
-    assert len(parts) == 3, parts
-    shared, branch = parts[1], parts[2]
-    assert shared.index('  description = "https service"') < shared.index('  disable_override = "yes"'), shared
-    assert 'disable_override' not in branch, 'the entry with no value prints no line'
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the file is one unit's file, so the run wrote two parts,
+    # one per unit, and each part holds the block of the entry that unit declared.
+    parts = {Path(key).parent.name: text for key, text in tf_files(out).items()
+             if Path(key).name == 'service_objects.tf'}
+    assert len(parts) == 2, sorted(parts)
+    flagged = [name for name, text in sorted(parts.items()) if 'disable_override' in text]
+    assert len(flagged) == 1, (sorted(parts), flagged)
+    text = parts[flagged[0]]
+    assert text.index('  description = "https service"') < text.index('  disable_override = "yes"'), flagged
 
 
 def test_the_service_row_names_the_property_the_emitter_reads(converter_module, tmp_path):
@@ -544,8 +548,10 @@ def test_two_runs_on_the_same_bytes_write_the_same_bytes(tmp_path):
     first, second = tmp_path / 'run1', tmp_path / 'run2'
     assert _run(FIXTURES_DIR / FIXTURE, first).returncode == 0
     assert _run(FIXTURES_DIR / FIXTURE, second).returncode == 0
-    assert {p.name: p.read_bytes() for p in first.iterdir()} == \
-           {p.name: p.read_bytes() for p in second.iterdir()}
+    def shape(out) -> dict:
+        return {str(p.relative_to(out)): p.read_bytes() for p in sorted(out.rglob('*')) if p.is_file()}
+
+    assert shape(first) == shape(second), 'the same bytes write the same layout'
     assert (first / RECORD).read_bytes() == (second / RECORD).read_bytes()
 
 

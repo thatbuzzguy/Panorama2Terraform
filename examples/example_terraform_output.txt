@@ -3,7 +3,8 @@
 The canonical example output is the golden sample: `tests/golden/sample/`.
 It is generated from `sample_panorama_config.xml` and pinned
 byte-for-byte by `tests/test_golden_files.py`, so it cannot drift from
-what the converter actually writes.
+what the converter actually writes. The golden set holds one unit directory per unit the manifest names, so a
+path from the case directory names the unit the file belongs to.
 
 Regenerate it locally:
 

@@ -49,10 +49,11 @@ A codebase is a set of directories, one per declared scope, that a platform plan
 applies. The design record is `docs/CODEBASE_ASSEMBLY.md`. Every feature in the record
 is a rule to decide, then a module to write. F6.1 to F6.8 are implemented, so their
 rules name the module and the test that holds them, and F6.9 is a rule decided with no
-module. F6.10.1 decides the file shape: the unit set, which one directory holds, and the
-codebase root set, which is one file per run (§14), and it is default output with no flag. Each landed feature names its unit and writes no directory, so the write path
-(§14) is the shared open step of Epic 6; the rule it applies at the print site is decided
-(§5 rule 5).
+module. F6.10.1 decided the file shape: the unit set, which one directory holds, and the
+codebase root set, which is one file per run (§14), and it is default output with no flag.
+F6.10.2 ran the print-site rule per unit (§5 rule 5), and F6.10.3 landed the write path: the run writes one
+directory per unit the manifest names, through the one function that writes bytes. Open for Epic 6: the `.tfvars`
+`target` serial and the `panos_push_to_devices` shape, and the held decisions the tracking markdown names.
 
 ## Epic 7 — Routing output through the protocol object (Goal 2) — open
 

@@ -26,11 +26,14 @@ GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 CASES: dict[str, tuple[Path, Path]] = {
     "sample": (SAMPLE_CONFIG, GOLDEN_DIR / "sample"),
     "kitchen_sink": (FIXTURES_DIR / "kitchen_sink.xml", GOLDEN_DIR / "kitchen_sink"),
+    # F6.10.3: the single-unit case is the same rule, one time. The fixture names one unit, so the case holds
+    # one unit directory.
+    "single_unit": (FIXTURES_DIR / "address_objects.xml", GOLDEN_DIR / "single_unit"),
 }
 
 # (case, path from the case directory) pairs for the per-file tests, from the committed goldens.
-# F6.10.1: the key is the path from the case directory, because the unit set is one set per unit, so a
-# golden case can hold unit directories. Today the committed goldens are flat, so the path is the file name.
+# F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the key is the path from the case directory, because the unit set
+# is one set per unit, so each path names one unit directory.
 CASE_FILES: list[tuple[str, str]] = sorted(
     (case, str(f.relative_to(golden_dir)))
     for case, (_src, golden_dir) in CASES.items() for f in golden_dir.rglob("*.tf")
@@ -67,8 +70,9 @@ def golden_outputs() -> dict[str, dict[str, bytes]]:
 def test_golden_file_set_matches(case, generated_outputs, golden_outputs):
     """The converter must emit exactly the .tf files in the golden set.
 
-    F6.10.1: the key is the path from the case directory, so the pin holds for a golden case that holds unit
-    directories. Today the committed goldens are flat, so the path is the file name.
+    F6.10.1 (`docs/CODEBASE_ASSEMBLY.md` §14): the key is the path from the case directory, so the pin holds for a
+    golden case that holds unit directories. The committed goldens hold the per-unit layout, so each path names one
+    unit directory.
     """
     assert set(generated_outputs[case]) == set(golden_outputs[case]), (
         f"file set mismatch for case {case!r}: "

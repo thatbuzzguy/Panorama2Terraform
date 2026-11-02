@@ -13,9 +13,9 @@ names the module or the test that holds it. Provider facts come from the pinned 
 The converter writes one output directory per run: the `.tf` files, which include the
 import file `imports.tf` for a run that declares it (§7), the five report files,
 `README.md`, `SOURCE.txt`, the unit manifest `CODEBASE_MANIFEST.json` (§3), the ownership
-record `OWNERSHIP.json` (§4), and the edge record `REFERENCE_EDGES.json` (§5). F6.10.1 decides the shape
-those files take: the unit set, which one directory holds, and the codebase root set, which is one file per
-run. §14 states the two sets.
+record `OWNERSHIP.json` (§4), and the edge record `REFERENCE_EDGES.json` (§5). F6.10.1 decided the shape
+those files take, and F6.10.3 landed it: the codebase root set is one file per run at the output directory
+root, and the unit set is written inside one directory per unit the manifest names. §14 states the two sets.
 A codebase is a set of directories that a platform plans and applies, one plan per
 directory. Six facts define it:
 
@@ -57,13 +57,14 @@ These parts are true today, so a codebase can be built on them.
 | The import block | The address that binds a written block to the object the live config already has, from the same identity data the resource block uses (§7) | `import_blocks.py`, §7 |
 | The scope object | The unit as a block in the run, so a new site is created by an apply and a name inside a location can be checked against the run (§8) | `resource_mapping.py`, §8 |
 
-§3 to §8 are landed. The gaps are §9 to §11.
+§3 to §10 are landed. §11 is a gap. The open work is the write path's remaining facts, in §14.
 
 ## 3. The unit boundary as data (F6.1, landed)
 
-The converter has no unit directory. `main()` reads one source and writes one output
-directory. F6.1 states the unit boundary as data: one row per declared scope in
-`CODEBASE_MANIFEST.json`. The rules are in `unit_manifest.py`, and `main()` writes the file.
+F6.1 states the unit boundary as data: one row per declared scope in
+`CODEBASE_MANIFEST.json`. The rules are in `unit_manifest.py`, and `main()` writes the file. `main()` reads one
+source and writes one output directory, which is the codebase root; the run writes one directory per unit inside
+it (§14).
 
 1. **The unit.** One unit is one combination of the four scope facts (§1 rule 1,
    `ARCHITECTURE.md` §2.2). A unit exists when the ledger has a report row in it, so the
@@ -92,7 +93,8 @@ directory. F6.1 states the unit boundary as data: one row per declared scope in
    fields `rank` and `after` print after the F6.1 fields (§6 rule 1).
 5. **One file per codebase run.** The edge list (§5) needs the whole set of units, and a reader
    cannot find a per-unit file before it knows the directory name, so one file holds one row per
-   unit. `CODEBASE_MANIFEST.json` is written only when it has content, following the rule for the
+   unit, and the write path writes the record at the codebase root (§14 rule 2). `CODEBASE_MANIFEST.json` is
+   written only when it has content, following the rule for the
    report files, and the CLI takes no flag for it. The data files are the manifest (one row per
    unit), the ownership record (one row per entry), the edge record (one row per pair), and the site record
    (one row per site that names a value, §9 rule 3), so no file states the unit set twice, which is why the
@@ -101,9 +103,9 @@ directory. F6.1 states the unit boundary as data: one row per declared scope in
    the referrer's four scope facts, so a row states the names a unit references from outside
    itself. This module resolves no name.
 
-The manifest names the directory; F6.1 writes no directory. A data file cannot change an
-existing output byte, so the `.tf` goldens, the report bodies, the gate inputs, and the exit
-codes are unchanged. Pinned by `tests/test_unit_manifest.py`, including
+The manifest names the directory, and the write path writes one directory per row (§14). A record is not a
+`.tf` file, so a data rule changes no `.tf` byte: the report bodies, the gate inputs, and the exit
+codes are unchanged by the record shape. Pinned by `tests/test_unit_manifest.py`, including
 `::test_one_row_per_combination_of_the_four_facts`,
 `::test_the_rows_are_sorted_by_the_identity_not_by_document_order`,
 `::test_the_manifest_round_trips_as_data`,
@@ -221,15 +223,15 @@ in `reference_edges.py`, and `main()` writes the file.
    referrer unit, and the platform plans in the order the data states (§13). The tool defines no
    outputs writer and reads no remote-state data source, because the state backend is out of scope
    and a module is a standard a person writes (§13), so the tool's part stays the data a module
-   consumes. The single-unit case is the flat run today, so a plain run writes the same `.tf` bytes as
-   before, because this feature writes no `.tf` byte. Pinned by
+   consumes. This feature writes no `.tf` byte, so the single-unit case writes the same `.tf` bytes as before,
+   inside the one unit directory. Pinned by
    `tests/test_reference_edges.py::test_the_mechanism_defines_no_writer_and_no_reader`;
    the plain-name half of `name_ref` is pinned in `tests/test_data_blocks.py` and
    `tests/test_robustness.py`, and the pair is pinned by `::test_the_record_is_one_row_per_edge_the_data_can_name`.
    The write path (§14) step that runs the rule per unit has landed at the print site (F6.10.2): a name
    the flat chain resolved across scopes is a plain name, and the edge set and the manifest `references`
    field name every cross-unit use the corpus shows, so `CORPUS_EDGES` in `tests/test_reference_edges.py`
-   reads 20 rows over five fixtures. The directory write itself stays with F6.10.3.
+   reads 20 rows over five fixtures. The directory write itself landed with F6.10.3.
 6. **The reference fact stays one fact.** `name_ref` records one fact: the name resolved outside the
    unit that asked for it (F6.10.2). It is not split into two kinds, because the edge row states the
    other unit when the ownership rule can name one, and the two cases are told apart by whether an
@@ -301,11 +303,11 @@ declares. The rules are in `import_blocks.py`, and `main()` writes the file. Eve
 comes from data the resource block already states, so no second naming rule and no second location
 rule exists.
 
-1. **One file per codebase, one block per entry.** The block rules of the gate read the `.tf` files
+1. **One file per unit, one block per entry.** The block rules of the gate read the `.tf` files
    (`ARCHITECTURE.md` §4.5), so the agreement rule reads a `.tf` file. F6.8 added the data rule, which
    reads the four data files, so the two file sets are now distinct: a block is read by the block reader,
-   and a row is read through the module that owns its shape. F6.1 rule 4 still refuses a per-unit file,
-   because this feature writes no directory.
+   and a row is read through the module that owns its shape. §3 rule 5 keeps the record at the codebase root,
+   and the write path (§14) writes `imports.tf` as a unit-set file, so the run writes one file per unit.
    The file is written only when the run declares the shape and has a row that states an id,
    following the rule for the report files and the four data files.
 2. **The shape is opt-in: `--import-blocks`, off by default.** A run that declares nothing writes the
@@ -360,8 +362,8 @@ Two halves of this section stay open:
   (`ARCHITECTURE.md` §3.2) names the entries that cannot reach zero change, the property gaps in
   `backlog.md` are the list of what can make a plan show a change, and the state scan (F5.6) is the
   offline check for this half. No test pins the plan itself, because a plan needs a device.
-- **The per-unit file, and the label.** The blocks are written in one file for the run, because the
-  write path (§14) is the step that splits the output per unit directory. The generated `README.md`
+- **The per-unit file, and the label.** The write path (§14) writes one `imports.tf` per unit, so the file
+  holds that unit's blocks and names its unit only by its directory. The generated `README.md`
   does not yet name `imports.tf`, which `backlog.md` records.
 
 ## 8. The scope objects as data (F6.5, landed)
@@ -483,8 +485,9 @@ files for every run that has content.
    PAN-OS variable and the tool cannot know which values a module takes as parameters (the tool cannot
    derive a module: a module is a standard a person writes). Recorded in `backlog.md`.
    Membership lists in `scope.tf` stay literals for the same reason.
-3. **`SITE_DATA.json`, one file for the run, one row per site.** §3 rule 4 still refuses a per-unit
-   file, because F6.6 writes no directory (§14): a per-site file would sit outside the shape it names. A
+3. **`SITE_DATA.json`, one file for the codebase run, one row per site.** The record is a codebase root-set
+   file (§14), so one file holds one row per site, and a per-unit record would split the set the edge list
+   needs (§3 rule 5). A
    site is a unit, so the row joins to the manifest on `directory` — the join `OWNERSHIP.json` (§4) and
    `REFERENCE_EDGES.json` (§5) use — and the identity and the directory name are read through
    `unit_manifest.facts_of` and `unit_manifest.directory_name`, so no second unit rule appears. A row is
@@ -494,8 +497,10 @@ files for every run that has content.
 4. **The `.tfvars` is written from the data**, not from the generator's state: the data is the fact and
    the `.tfvars` is its printed form. The file is `site.auto.tfvars`, because Terraform loads
    `*.auto.tfvars` automatically and keeps `terraform.tfvars` as the operator's own file for the
-   credentials, which the tool never writes (§11). One line per variable, in name order across the file,
-   one line for a name two rows state, and a name two rows state with two values is a refusal. A string
+   credentials, which the tool never writes (§11). The printed form is a unit-set file, so the run writes one
+   file per unit inside the directory that row names (§14), and one file prints one row. One line per
+   variable, in name order. A name two rows state with two values is a refusal of the print rule, so the gate
+   reads that refusal against the row it compares, not against a file that holds two rows. A string
    prints as `json.dumps(value)`, the same escape set `import_blocks.unescape` reads back (§7 rule 5), so
    no second escape rule appears; a list prints inline. Pinned by
    `tests/test_site_data.py::test_the_tfvars_bytes_for_a_string_value` and
@@ -667,18 +672,22 @@ a run with no network passes CI.
    single-unit case does not need the ownership rule. The rule types need the rulebase decision.
    Landed as F6.4.
 6. The scope objects (§8). Landed as F6.5.
-7. The site data layer (§9). Landed as F6.6. The per-unit `.tfvars` that names one `target` serial
-   stays with the step that splits the output per unit directory, because F6.6 names the unit and writes
-   no directory.
+7. The site data layer (§9). Landed as F6.6. The printed form of a site row is written inside the unit
+   directory that row names, which F6.10.3 landed. The per-unit `.tfvars` fact that names one `target`
+   serial stays with F6.10.4.
 8. The commit action (§10), last, because it needs the gate rule for an action block and
    the Terraform minimum decision. Landed as F6.7. The push half stays with the write path,
    because `devices` names site serials.
 9. The write path, the step that splits the output per unit directory. It applies the rule decided in
-   §5 rule 5 at the print site, with the per-unit `.tfvars` that names one `target` serial and the LF
-   rule. The shape is decided (F6.10.1); the step that writes the directories is open.
+   §5 rule 5 at the print site, with the LF rule. Landed as F6.10.3: `write_path.py` is the one place a run
+   writes a file, and `unit_path` and `root_path` are the two builders, one per set. The LF rule is stated in
+   `docs/ARCHITECTURE.md` §6, so this section does not restate it. What stays open is the `target` serial and
+   the push shape (F6.10.4), and the held decisions the tracking markdown names.
 
    **The unit set** is the files one plan reads, so one directory holds them: the `.tf` files for that unit,
-   and the printed form of that unit's site row (§9 rule 4). `provider.tf` and `variables.tf` are unit-set
+   and the printed form of that unit's site row (§9 rule 4). A run that names one unit writes one directory: the
+   same rule, one time, so there is no flat shape and no exception path. `provider.tf` and `variables.tf` are
+   unit-set
    files, because a unit is one plan against one state (§1 rule 3) and a plan reads the declarations in its own
    root, so a declaration must have its consumer in the same directory: the `variables` gate rule reads both
    directions. The per-type files
@@ -701,26 +710,28 @@ a run with no network passes CI.
    from the codebase root, which is the unit the file belongs to.
 
    **The gate reads each set through its own rule.** The block rules read every `.tf` file below the codebase
-   root, in sorted path order, keyed by the path from the codebase root, so one reader serves the flat run and
-   the split run: for a flat run the path is the file name, so the bytes a report names are unchanged. The data
-   rule keeps reading the four records at the root as one rule over the rows of every unit, so no per-unit
-   record and no second shape rule appears (§3 rule 4). The plan check runs on one directory, so it runs once
-   for each unit directory, because a unit is one plan and one root (§1 rule 3). No rule reads a report,
-   `README.md` or `SOURCE.txt`.
+   root, in sorted path order, keyed by the path from the codebase root, so a finding names the unit the file
+   belongs to; one reader serves the set, keyed by the path from the root, so a path names the unit directory the
+   file is in. The data rule keeps reading the four records at the root as one rule over the rows of every unit,
+   so no per-unit record and no second shape rule appears (§3 rule 4), and its printed-form half compares each
+   unit's file inside the directory that row names. The plan check runs on one directory, so it runs once for
+   each unit directory, because a unit is one plan and one root (§1 rule 3), and each result names the directory
+   it ran on. No rule reads a report, `README.md` or `SOURCE.txt`.
 
    **The shape is default output, with no flag.** §8 rule 1 forces it: the committed goldens pin what a default
    run emits, so a shape a run writes only when a flag is on cannot be pinned. The F5.5 (§4.7) and F6.4 (§7
    rule 2) opt-in precedent is a shape a block labels for itself, not the output layout, so it does not apply:
    a flag for the layout would give the reference rule two shapes (§5 rule 5) and force a second gate reader.
-   Consequence: both committed golden sets move to the per-unit layout, so the golden pin reads the `.tf` set as
-   paths from the case directory, and the goldens regenerate with the LF rule in the same step.
+   Consequence, landed: both committed golden sets hold the per-unit layout, so the golden pin reads the `.tf`
+   set as paths from the case directory, and the goldens regenerate with the LF rule in the same step.
 
-   `tests/test_write_path.py` pins what the decision can pin before the step runs: the two sets are distinct
-   and every file names one set; the block reader reads a `.tf` file inside a unit directory and names the path
-   from the codebase root, and for a flat run the path is the file name, so no report byte changes; the data
-   rule reads the records at the root only, as one rule over the rows of every unit; no rule reads a report; no
-   flag names the layout; the golden set is read as paths from the case directory; and no unit directory is
-   written yet, which is the pin that changes when the step lands.
+   `tests/test_write_path.py` pins the landed shape: the two sets are distinct and every file names one set; the
+   run writes one directory per unit the manifest names, so the codebase root holds only the root set; the block
+   reader reads a `.tf` file inside a unit directory and names the path from the codebase root; the data rule
+   reads the records at the root only, as one rule over the rows of every unit, and its printed-form half reads
+   the file inside the directory each row names; the plan check runs once per unit directory and each result
+   names the directory it ran on; no rule reads a report; no flag names the layout; the golden set is read as
+   paths from the case directory, and `tests/golden/single_unit/` is the case that shows one unit, one directory.
 
 The smallest useful increment is one unit: one directory, one manifest row, one set of
 import blocks, and a plan that shows zero change. A codebase is that shape repeated across

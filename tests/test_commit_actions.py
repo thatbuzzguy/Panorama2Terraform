@@ -37,7 +37,7 @@ import panorama_to_terraform as converter_module
 import resource_mapping
 import sanity_checks
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, TERRAFORM, run_script
+from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, TERRAFORM, parts, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 ACTIONS = commit_actions.ACTIONS_FILE
@@ -55,7 +55,7 @@ def _run(source: Path, out_dir: Path, extra: tuple = ()) -> subprocess.Completed
 
 def _files(out_dir: Path) -> dict:
     """The `.tf` files the run wrote, as text."""
-    return {path.name: path.read_text(encoding='utf-8') for path in sorted(out_dir.glob('*.tf'))}
+    return tf_files(out_dir)
 
 
 def _manifest(out_dir: Path) -> list:
@@ -91,8 +91,15 @@ def test_one_action_block_per_unit_the_manifest_names(tmp_path):
     assert rows, 'the kitchen sink names a device group and a template'
     blocks = sanity_checks.blocks(_files(out), ('action',))
     assert len(blocks) == len(rows), (blocks, rows)
-    for block, row in zip(blocks, rows):
-        assert commit_actions.read_block(block) == {**row, 'directory': ''}, (block, row)
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the file names its unit only by its directory, so the
+    # directory `read_block` states is the directory the reader read the block in.
+    by_local = {row['local_name']: row for row in rows}
+    for block in blocks:
+        shape = commit_actions.read_block(block)
+        # A per-unit file states no unit inside its bytes, so the block shape names no directory and the
+        # path names the unit the row put the block in.
+        assert shape == {**by_local[block.local], 'directory': ''}, (block.file, block.local)
+        assert Path(block.file).parent.name == by_local[block.local]['directory'], block.file
 
 
 def test_the_blocks_print_in_the_identity_order_the_manifest_rows_print(tmp_path):
@@ -104,9 +111,15 @@ def test_the_blocks_print_in_the_identity_order_the_manifest_rows_print(tmp_path
     rows = commit_actions.build_rows(_manifest(out), naming.sanitize)
     identities = [commit_actions.placed_identity(row['fact'], row['entry_name']) for row in rows]
     assert identities == sorted(identities), identities
-    text = (out / ACTIONS).read_text(encoding='utf-8')
-    assert [block.local for block in sanity_checks.blocks({ACTIONS: text}, ('action',))] == \
-        [row['local_name'] for row in rows]
+    # F6.10.3 (§14): one file holds one unit's blocks, so the order is read inside each unit's file, and the
+    # rows of one unit are the rows that print in that order.
+    by_unit = {}
+    for row in rows:
+        by_unit.setdefault(row['directory'], []).append(row)
+    for path, text in parts(_files(out), ACTIONS).items():
+        unit = Path(path).parent.name
+        assert [block.local for block in sanity_checks.blocks({path: text}, ('action',))] == \
+            [row['local_name'] for row in by_unit[unit]], (path, unit)
 
 
 def test_an_action_names_the_fact_its_own_unit_declares(tmp_path):
@@ -179,10 +192,11 @@ def test_the_file_is_written_only_when_it_has_content(tmp_path):
     """
     out = tmp_path / 'no_action'
     assert _run(FIXTURES_DIR / 'address_objects.xml', out).returncode == 0
-    assert not (out / ACTIONS).is_file(), 'the run names no fact a commit filter can name'
+    assert not parts(_files(out), ACTIONS), 'the run names no fact a commit filter can name'
     source = inspect.getsource(converter_module.main)
-    assert re.search(r'if action_rows:\n\s+action_file = Path\(args\.output_dir\) / commit_actions\.ACTIONS_FILE',
-                     source), source
+    assert 'if action_rows:' in source and 'for facts in tf_gen.unit_set()' in source, source
+    assert 'commit_actions.ACTIONS_FILE' in source and 'write_path.unit_path' in source, \
+        'the file is written through the write path, inside the unit directory'
     # The write is the last `.tf` write in `main()`, so the gate reads the action against the completed unit.
     tf_writes = [match.group(1) for match in re.finditer(r'(import_blocks\.IMPORT_FILE|commit_actions\.ACTIONS_FILE)',
                                                           source)]
@@ -315,11 +329,13 @@ def test_the_goldens_pass_the_rule(tmp_path):
     for case, source in (('sample', SAMPLE_CONFIG), ('kitchen_sink', FIXTURES_DIR / KITCHEN)):
         golden = GOLDEN_DIR / case
         files = _files(golden)
-        assert ACTIONS in files, case
+        assert parts(files, ACTIONS), case
         assert sanity_checks.check_actions(files) == [], case
         out = tmp_path / case
         assert _run(source, out).returncode == 0
-        assert files[ACTIONS] == (out / ACTIONS).read_text(encoding='utf-8'), case
+        # F6.10.3 (§14): the golden case holds one `actions.tf` per unit, and the run writes the same
+        # parts, so the pin reads the parts by path.
+        assert parts(files, ACTIONS) == parts(_files(out), ACTIONS), case
 
 
 # --- 3. One rule per fact ----------------------------------------------------
@@ -417,8 +433,12 @@ def test_the_generated_terraform_block_declares_the_minimum():
     the same line.
     """
     for case in ('sample', 'kitchen_sink'):
-        text = (GOLDEN_DIR / case / 'provider.tf').read_text(encoding='utf-8')
-        assert 'required_version = ">= 1.14"' in text, case
+        # F6.10.3 (§14): `provider.tf` is a unit-set file, so the case holds one per unit, and each states
+        # the same block.
+        paths = sorted((GOLDEN_DIR / case).rglob('provider.tf'))
+        assert paths, case
+        for path in paths:
+            assert 'required_version = ">= 1.14"' in path.read_text(encoding='utf-8'), path
     source = inspect.getsource(converter_module.TerraformGenerator.generate_provider_config)
     assert 'required_version = ">= 1.14"' in source, source
 
@@ -452,7 +472,10 @@ def test_two_runs_write_the_same_bytes(tmp_path):
     first, second = tmp_path / 'first', tmp_path / 'second'
     assert _run(FIXTURES_DIR / KITCHEN, first).returncode == 0
     assert _run(FIXTURES_DIR / KITCHEN, second).returncode == 0
-    assert (first / ACTIONS).read_bytes() == (second / ACTIONS).read_bytes()
+    # F6.10.3 (§14): the two runs write the same parts, keyed by the same paths.
+    first_parts = {path: text.encode('utf-8') for path, text in parts(_files(first), ACTIONS).items()}
+    second_parts = {path: text.encode('utf-8') for path, text in parts(_files(second), ACTIONS).items()}
+    assert first_parts == second_parts, 'the action bytes are the same for the same source'
     assert commit_actions.build_rows(_manifest(first), naming.sanitize) == \
         commit_actions.build_rows(_manifest(second), naming.sanitize)
 

@@ -67,7 +67,8 @@ or per HA pair. The join rule and the limits are in
 python3 panorama_to_terraform.py source-config.xml --output-dir migration_configs --validate
 ```
 
-`--validate` runs `terraform init` and `terraform validate` in the same run. The
+`--validate` runs `terraform init` and `terraform validate` in the same run, once for each unit directory the
+manifest names, so the report states one plan result per unit. The
 gate always runs the static checks and writes `SANITY_REPORT.txt`.
 
 ### 4. Read the reports
@@ -89,11 +90,14 @@ template, or virtual system the export states.
 ### 6. Validate and apply
 
 ```bash
-cd migration_configs
+cd migration_configs/<unit directory>   # one directory per unit the manifest names
 terraform init
-terraform plan          # review every change
+terraform plan          # review every change for that unit
 terraform apply
 ```
+
+A unit is one plan against one state, so you plan and apply one unit directory at a time, in the order the
+manifest rows print. Each unit directory holds that unit's `.tf` files and the printed form of its site row.
 
 Before apply: replace the placeholder VPN pre-shared keys, confirm the
 credential variables in `terraform.tfvars`, and finish the manual items from the

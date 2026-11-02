@@ -23,7 +23,7 @@ import pytest
 import resource_mapping
 import sanity_checks
 import site_data
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_script
+from conftest import FIXTURES_DIR, SAMPLE_CONFIG, file_text, run_script, tf_files
 
 CASES = {
     "sample": SAMPLE_CONFIG,
@@ -57,9 +57,7 @@ def _generate(case: str) -> dict[str, str]:
     """The converter's `.tf` output for one case. Cached per session."""
     if case not in _OUTPUTS:
         out_dir = _out_dir(case)
-        _OUTPUTS[case] = {
-            f.name: f.read_text() for f in sorted(out_dir.glob('*.tf'))
-        }
+        _OUTPUTS[case] = tf_files(out_dir)
     return _OUTPUTS[case]
 
 
@@ -77,7 +75,9 @@ def test_the_declaration_set_is_the_credentials_plus_the_site_values(case):
     """No dead variable survives: the declaration set is the credentials plus the values the table
     mapped (F6.6), and the file and the data read the same run.
     """
-    declared = set(VAR_DECL_RE.findall(_generate(case)['variables.tf']))
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): `variables.tf` is the unit's file, so the declaration
+    # set is the union across the unit set, read in path order.
+    declared = set(VAR_DECL_RE.findall(file_text(_generate(case), 'variables.tf')))
     site = {name for row in _site_rows(case) for name in row['variables']}
     assert declared == set(CREDENTIALS) | site, (
         f'{case}: variables.tf declares {sorted(declared)}; expected the credentials plus '
@@ -103,7 +103,7 @@ def test_provider_block_consumes_the_credentials(case):
     terraform.tfvars or via TF_VAR_*), not through commented-out lines.
     """
     files = _generate(case)
-    provider = files['provider.tf']
+    provider = file_text(files, 'provider.tf')
     for name in CREDENTIALS:
         assert f'var.{name}' in provider, (
             f'{case}: provider block does not consume var.{name}')
@@ -120,7 +120,7 @@ def test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_o
     name is declared by the operator, and no generated file states the value.
     """
     files = _generate(case)
-    text = files['variables.tf']
+    text = file_text(files, 'variables.tf')
     blocks = re.findall(
         r'variable\s+"([A-Za-z0-9_]+)"\s*\{(.*?)\n\}', text, re.S)
     reference_only = {field for field, row in resource_mapping.VALUE_VARIABLES.items()
