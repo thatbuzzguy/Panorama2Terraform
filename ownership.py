@@ -11,12 +11,12 @@ Ownership is a per-entry fact, so the file holds one row per entry, not one row 
    the reference rule (`ARCHITECTURE.md` §4.3) stays the only place that names a use.
 2. The declaring unit. Each entry belongs to the unit the export declares it inside
    (`docs/CODEBASE_ASSEMBLY.md` §4 rule 1). The identity is the matrix row, the entry name, and the
-   four scope facts, read through `state_coverage.ownership_key` and `unit_manifest.facts_of`, so no
+   five scope facts, read through `state_coverage.ownership_key` and `unit_manifest.facts_of`, so no
    second identity key appears. A row names a unit by its directory, so the two data files join on
    the manifest's `directory` field; this module defines no naming rule and takes
    `TerraformGenerator.sanitize_name` as an argument, the way `unit_manifest.build_rows` does.
 3. Two entries are one object only when the export can place them in one inheritance chain: the
-   shared unit (the four facts empty) and the units whose declared fact is a device group. A name in
+   shared unit (the five facts empty) and the units whose declared fact is a device group. A name in
    a template, a virtual system, or a device is a different object in each unit (`ARCHITECTURE.md`
    §2.1), so each unit owns its own entry.
 4. The owner rule. The ancestor entry owns the name, as `docs/CODEBASE_ASSEMBLY.md` §1 rule 2 states
@@ -72,11 +72,12 @@ import unit_manifest
 OWNERSHIP_FILE = 'OWNERSHIP.json'
 
 # Field order. Fixed, so two runs write the same bytes and a reader does not guess.
-# The field names are the printed keys, so `parse_rows` reads a row back as itself.
+# The field names are the printed keys, so `parse_rows` reads a row back as itself. The fact
+# segment is `FACT_KEYS` order, so the record prints the identity in the one fact order.
 FIELD_ORDER = ('type', 'entry', 'source', 'device_group', 'vsys', 'template', 'vsys_device',
-               'directory', 'owner', 'kind', 'override')
+               'template_stack', 'directory', 'owner', 'kind', 'override')
 
-# The four scope facts, read through `unit_manifest`, so the row joins to the manifest row and no
+# The five scope facts, read through `unit_manifest`, so the row joins to the manifest row and no
 # second fact order appears.
 FACT_KEYS = unit_manifest.FACT_KEYS
 

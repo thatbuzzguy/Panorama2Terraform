@@ -10,7 +10,10 @@ Completed work is not recorded here; the git history and the owner document hold
   - The root holds `AGENTS.md`, the two readme indexes (`README.md` and `docs/README.md`), and the tracking
     markdown (`PLAN.md`, `backlog.md`, `to-do.md`, `acceptance.md`, `agent-status.md`).
   - `docs/` holds every other document. `tests/` holds every test. `src/` holds the tool's modules.
-    `tools/` holds the developer scripts. `examples/` holds the sample input and the sample output.
+    `tools/` holds the developer scripts. `examples/` holds the sample input and the two example text
+    files, and the canonical sample output is the golden set `tests/golden/` pins byte for byte
+    (`examples/example_terraform_output.txt`). `terraform_output/` is the default value of `--output-dir`
+    and is ignored, so it holds no committed sample.
   - Each index names every document under it, so a file outside an index is a finding.
 
   Out of place today:
@@ -27,9 +30,6 @@ Completed work is not recorded here; the git history and the owner document hold
   - `quick_start.sh` and `sample_panorama_config.xml` are at the root. `quick_start.sh` is a developer script,
     so it belongs in `tools/`; the sample config and the example output text belong in `examples/`, with
     `examples/README.md` as its index.
-  - `terraform_output/` is committed sample output, but `.gitignore` ignores that path, so a regenerated
-    sample cannot be committed. Decide where sample output lives, then regenerate it or drop it. The stale
-    provider constraint and the unused variable in it are the existing finding for the same directory.
   - The `.gitignore` exception for `examples/**/*.xml` matches nothing until the sample config moves there, and
     the comment in `.gitignore` names the test corpus by a path the move changes.
   - `AGENTS.md` says "read all the markdown files in the root directory". The tracking set above is what that
@@ -147,10 +147,13 @@ Completed work is not recorded here; the git history and the owner document hold
   F3.6 left them alone for that reason. When real profile bodies land, give
   them their device group or template context and regenerate the digests.
 
-- `location.template_stack` is never emitted (F3.6). A stack holds device and
-  template members, not config, so nothing in an export is placed in one. If
-  an export ever nests config under a stack, report it rather than placing it
-  there.
+- A config entry the export nests inside a stack entry is read and placed in the stack unit
+  (F6.10.5), but `resource_mapping.LOCATION_SCHEMA` declares no `template_stack` sub-block for a
+  config type, so `TerraformGenerator.location_data` states no location for it and the run writes no
+  block for it. Measured on an export that nests one `address` entry under a `template-stack` entry:
+  the report line names the entry as `emitted`, and the unit directory holds no `address_objects.tf`.
+  Only `panos_template_variable` and `panos_vsys` declare the `template_stack` sub-block. The fix needs
+  the provider to state a config location inside a stack, so the entry stays a report finding until then.
 
 - The splitter copies a template only when the export lists a device in both
   the device group and the template (F3.6). An export whose device groups
@@ -325,7 +328,7 @@ Completed work is not recorded here; the git history and the owner document hold
 - A property name is the measured key name, so the grounding test can find it as a string
   in the emitter source. `declared_type` and `other` stay on the `panos_address` row
   because the manual setup report reads them for a report-only address.
-- The entry name and the four scope facts are the row identity, not properties, so the
+- The entry name and the five scope facts are the row identity, not properties, so the
   parity check compares the captured fields only.
 - `emitter` names two methods when a report writer reads properties the `.tf` emitter does
   not. Only `panos_address` has this today, because the manual setup report prints a
@@ -347,7 +350,7 @@ Completed work is not recorded here; the git history and the owner document hold
 
 - The parse layer keeps the ElementTree tree. The fetch layer is a byte producer, never the
   input model, because four things are keyed on the tree: the container table rows (XML
-  paths), the entry ledger marks, the parent walk that gives the four scope facts (§2.2),
+  paths), the entry ledger marks, the parent walk that gives the five scope facts (§2.2),
   and the expat line map (`ET.TreeBuilder` reports no line, so only the expat handler path
   can record one). A device-object model has no line number, so the F4.2 reporting cannot
   survive it.
@@ -493,17 +496,11 @@ restated here; they are in the record and the git history. Only the open items a
 - Open: `check_import_blocks` compares a mapping result, so it cannot detect an id that states the
   name instead of the value, because the naming rule is idempotent. The writer keeps the value in
   the id, so an id the tool builds cannot carry the name.
-- Open: a module parameter is a standard a person writes, so a template variable value stays a
-  literal until the write path decides what a module takes.
 - Finding: `location.device_group` declares a `panorama_device` field in the pinned schema, and the
   provider docs example states one, but the generator's location rule emits no device fact, so the
   tool writes no `panorama_device` in an id. An id states only what the block states. The value table
   records the field as a literal, so the block and the id print the same text for it. If a device
   fact becomes a rule, the id and the block change together.
-- Open: a declared template stack is a scope container (`container_coverage.SCOPE_CONTAINERS`), so a
-  stack can be a codebase unit, but the stack is not one of the four scope facts, so the manifest
-  names no stack unit today. A stack unit needs a fifth fact, or the decision to read `template` as
-  the stack name.
 - Open: a unit exists only when the ledger has a row in it, so a scope with no entry has no manifest
   row. A declared scope always has the entry that defines it, so no empty-unit case is possible
   today.
@@ -528,6 +525,3 @@ restated here; they are in the record and the git history. Only the open items a
   part is the data file a module consumes.
 - Reports are per run. A codebase-level view (the units, the entries each owns, the managed boundary)
   is not built.
-- Hygiene: the committed sample output directory `terraform_output/` states provider `~> 2.0.7` in
-  `provider.tf` and declares a `device_group` variable in `variables.tf` that the generator no
-  longer emits (F2.10). The generator pins `~> 2.0.14`. Regenerate the sample or drop it.

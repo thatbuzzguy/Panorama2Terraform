@@ -20,8 +20,8 @@ A codebase is a set of directories that a platform plans and applies, one plan p
 directory. Six facts define it:
 
 1. A unit is one declared scope, as [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.2 states
-   the four scope facts: a device group, a template, a template stack, or a virtual
-   system.
+   the five scope facts: a device group, a virtual system, a template, the device that owns
+   the entry, and a template stack (F6.10.5).
 2. One unit owns each entry. A name a parent defines and a child inherits is owned by
    the parent.
 3. One unit has one state, because one plan runs against one state.
@@ -66,14 +66,16 @@ F6.1 states the unit boundary as data: one row per declared scope in
 source and writes one output directory, which is the codebase root; the run writes one directory per unit inside
 it (§14).
 
-1. **The unit.** One unit is one combination of the four scope facts (§1 rule 1,
+1. **The unit.** One unit is one combination of the five scope facts (§1 rule 1,
    `ARCHITECTURE.md` §2.2). A unit exists when the ledger has a report row in it, so the
    manifest is built from `entry_coverage.EntryLedger` and adds no parse data. An entry inside
    a config-object entry is a property level (`ARCHITECTURE.md` §3.1), so the parent row's
    count covers it.
 2. **The unit name.** The deepest scope the export declares names the unit, in the F3.9 level
-   order. `Shared` names the unit whose four facts are empty, because the four facts alone
-   cannot name the shared section. `localhost.localdomain` names no firewall (F3.5), so the
+   order, read innermost first: `vsys`, `vsys_device`, `template`, `template_stack`,
+   `device_group`. A template inside a stack names its template, because the template is deeper
+   than the stack (F6.10.5). `Shared` names the unit whose five facts are empty, because the
+   five facts alone cannot name the shared section. `localhost.localdomain` names no firewall (F3.5), so the
    placeholder never names a unit, and `Shared` in `device_group` is the parse fallback (§2.2),
    so it never enters an identity.
 3. **The directory name.** `sanitize(unit name) + '_' + 8-hex digest of the unit identity`, in
@@ -100,13 +102,14 @@ it (§14).
    (one row per site that names a value, §9 rule 3), so no file states the unit set twice, which is why the
    order lives on the manifest row.
 6. **The reference names.** The reference rule records them (`ARCHITECTURE.md` §4.3), keyed by
-   the referrer's four scope facts, so a row states the names a unit references from outside
+   the referrer's five scope facts, so a row states the names a unit references from outside
    itself. This module resolves no name.
 
 The manifest names the directory, and the write path writes one directory per row (§14). A record is not a
 `.tf` file, so a data rule changes no `.tf` byte: the report bodies, the gate inputs, and the exit
 codes are unchanged by the record shape. Pinned by `tests/test_unit_manifest.py`, including
-`::test_one_row_per_combination_of_the_four_facts`,
+`::test_one_row_per_combination_of_the_five_facts`,
+`::test_the_stack_names_its_unit`,
 `::test_the_rows_are_sorted_by_the_identity_not_by_document_order`,
 `::test_the_manifest_round_trips_as_data`,
 `::test_a_row_that_is_not_the_declared_shape_is_refused`,
@@ -114,9 +117,10 @@ codes are unchanged by the record shape. Pinned by `tests/test_unit_manifest.py`
 `::test_the_gate_reads_the_manifest_through_unit_manifest`, and `::test_two_runs_write_the_same_bytes`.
 
 The decision this section asked for is settled: the manifest is a data file, not a section of
-the conversion report. §4 is landed; the edge list (§5) follows. The template stack is a
-scope container (`container_coverage.SCOPE_CONTAINERS`), but it is not one of the four facts, so
-no stack unit is named today; this is recorded in `backlog.md`.
+the conversion report. §4 is landed; the edge list (§5) follows. F6.10.5 settled the second
+decision: the stack entry names its own unit, so `template_stack` is one of the five facts. The
+field order, the identity join, and the level order all read the fact order, so the stack is a
+level in the order chain as well (`reference_edges.LEVEL_KEYS`).
 
 ## 4. Ownership as data (F6.2, landed)
 
@@ -388,7 +392,7 @@ are in `resource_mapping.py`, and `main()` calls the emitter for every run.
    template, template stack, template variable, virtual system — and within a type in document order,
    so the file is byte-identical between runs. The file is written only when it has content, the rule
    the report and data files use.
-3. **The entry name is the row identity, not a property.** The entry name and the four scope facts
+3. **The entry name is the row identity, not a property.** The entry name and the five scope facts
    are `entry_coverage.NON_FIELD_KEYS`. For `panos_device_group_parent` the provider declares no
    `name`, so the block carries the entry name through `entry_coverage.name_field`: `DATA_SOURCE_SCHEMA`
    says whether the type declares a `name`, and `REPORT_SCOPE_KEYS` is the one mapping from a scope
@@ -449,9 +453,9 @@ is unchanged. `tests/fixtures/scope_objects.xml` is the fixture that carries one
 six types.
 
 The value-to-variable mapping is now data (§9), so this closes for a location field: the emitter has no
-per-type branch to decide. What §9 does not decide is a template variable value, because the block *is* the
-PAN-OS variable and the tool cannot know which values a module takes as parameters, so the emitter prints it
-as the export states it. Recorded in `backlog.md`.
+per-type branch to decide. The one value the table does not cover is a template variable value, and §9 rule 2
+settles it: the block *is* the PAN-OS variable, so the emitter prints it as the export states it. F6.10.5
+closed this decision, so no module parameter rule is open.
 
 ## 9. The site data layer and the device name (F6.6, landed)
 
@@ -484,8 +488,11 @@ files for every run that has content.
    A property at the block's own level is the entry's content, not a site value, so it is not in the
    table: `panos_template_variable` prints its value as the export states it, because the block *is* the
    PAN-OS variable and the tool cannot know which values a module takes as parameters (the tool cannot
-   derive a module: a module is a standard a person writes). Recorded in `backlog.md`.
-   Membership lists in `scope.tf` stay literals for the same reason.
+   derive a module: a module is a standard a person writes). F6.10.5 settled this as the rule, so no
+   shape word in the table decides it and no open item names it.
+   Membership lists in `scope.tf` stay literals for the same reason, and the rule writes no byte change:
+   `tests/test_property_coverage.py` pins that the property list the row declares is the list the scan
+   measures, and the goldens hold the printed value.
 3. **`SITE_DATA.json`, one file for the codebase run, one row per site.** The record is a codebase root-set
    file (§14), so one file holds one row per site, and a per-unit record would split the set the edge list
    needs (§3 rule 5). A

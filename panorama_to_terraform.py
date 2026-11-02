@@ -232,10 +232,12 @@ class PanoramaParser:
     def parse_template_variables(self) -> list[dict]:
         """Parse the template variable entries (F6.5).
 
-        `template_stack` names the scope the entry sits in, which is the location sub-block the
-        emitter chooses. The value stays a literal: the value-to-variable mapping is F6.6. An
-        entry the export places in no template and no template stack has no place the provider
-        can put it, so the run writes no block for it.
+        `template_stack` is the fifth scope fact (F6.10.5), so the walk names the scope the entry
+        sits in and the emitter reads it to choose the location sub-block. The value stays a
+        literal: the tool cannot know which values a module takes as parameters, so the block is the
+        PAN-OS variable (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2). An entry the export places in no
+        template and no template stack has no place the provider can put it, so the run writes no
+        block for it.
         """
         variables = []
         for entry in self.root.findall('.//variable/entry'):
@@ -254,7 +256,6 @@ class PanoramaParser:
                 'name': name,
                 'description': self._get_text(entry, 'description'),
                 'type': self._variable_type(entry),
-                'template_stack': (self._scope_container_of(entry, ('template-stack',)) or ''),
                 **self.identity_of(entry),
             }))
 
@@ -400,26 +401,48 @@ class PanoramaParser:
             node = self.parent_map.get(node)
         return ''
 
+    def template_stack_of(self, elem: ET.Element) -> str:
+        """Return the template stack that owns elem, or '' when the export names none.
+
+        Walks up to the nearest <template-stack><entry name="..."> ancestor (F6.10.5, the
+        fifth scope fact). A stack entry is its own ancestor, so a stack names the stack. A
+        stack lists members instead of holding config, so the entries it owns are the ones the
+        export nests inside it, which is a variable.
+
+        The container name comes from `container_coverage.container_tag` (F5.4), so a
+        per-scope source reads its root as the place its path names.
+        """
+        node = elem
+        while node is not None:
+            container = container_coverage.container_tag(node, self.parent_map, self.source)
+            if node.tag == 'entry' and container == 'template-stack':
+                return node.get('name') or ''
+            node = self.parent_map.get(node)
+        return ''
+
     def identity_of(self, elem: ET.Element) -> dict:
-        """Return the four source scope facts of an entry (F3.5).
+        """Return the five source scope facts of an entry (F3.5, F6.10.5).
 
         Every parse method records these on every object, so the emitter can
         place a resource without looking at the XML again:
 
-            device_group  - the defining device group, 'Shared' for the
-                            shared section (F2.3)
-            vsys          - the declared virtual system, '' when the export
-                            declares none
-            template      - the declared template, '' when the export
-                            declares none
-            vsys_device   - the device that owns a vsys-scoped entry, used
-                            as the location `ngfw_device`
+            device_group    - the defining device group, 'Shared' for the
+                              shared section (F2.3)
+            vsys            - the declared virtual system, '' when the export
+                              declares none
+            template        - the declared template, '' when the export
+                              declares none
+            vsys_device     - the device that owns a vsys-scoped entry, used
+                              as the location `ngfw_device`
+            template_stack  - the declared template stack, '' when the export
+                              declares none (F6.10.5)
         """
         return {
             'device_group': self.device_group_of(elem),
             'vsys': self.vsys_of(elem),
             'template': self.template_of(elem),
             'vsys_device': self.device_of(elem),
+            'template_stack': self.template_stack_of(elem),
         }
 
     def _list_names(self, container: ET.Element, child_tag: str) -> list:
@@ -2226,7 +2249,7 @@ class PanoramaParser:
         rule and the property scan read the same names. A `string_list` level and a `one_of` level are
         filled by the caller, because the entries they hold and the key they select are decided there.
 
-        `facts` is the four scope facts. They belong to the object the ledger marks, which is the entry
+        `facts` is the five scope facts. They belong to the object the ledger marks, which is the entry
         level, so a level read for a choice body or for a child element is read without them.
         """
         row = resource_mapping.protocol_row(path)
@@ -2242,7 +2265,7 @@ class PanoramaParser:
             else:
                 level[field] = self._protocol_field(entry, field, self._protocol_xml_name(field), shape)
         if facts and entry is not None and entry.tag == 'entry':
-            # F3.10: a protocol entry is an object the ledger records, so it carries the four scope facts
+            # F3.10: a protocol entry is an object the ledger records, so it carries the five scope facts
             # of the router that holds it. A container level (`bgp`, `ospf`) is not an entry, and the
             # emitter places only the router, so that level holds no facts.
             level.update(self.identity_of(entry))
@@ -2560,7 +2583,7 @@ class UnitText:
     def add(self, entry, text: str) -> None:
         """One piece of the text, for the unit `entry` belongs to, in the order the run read it.
 
-        `entry` is the parsed entry, or the four scope facts of the unit when the text names no entry.
+        `entry` is the parsed entry, or the five scope facts of the unit when the text names no entry.
         """
         facts = entry if isinstance(entry, tuple) else unit_manifest.facts_of(entry)
         directory = self.generator.directory_of(facts)
@@ -2627,13 +2650,13 @@ class TerraformGenerator:
         self.data_scopes = frozenset(data_scopes or ())
         self._data_blocks: dict[tuple, dict] = {}
         # F6.1, F6.10.2: the names the reference rule could not resolve inside the referrer's own
-        # unit, keyed by the referrer's four scope facts (`unit_manifest.facts_of`), so the manifest
+        # unit, keyed by the referrer's five scope facts (`unit_manifest.facts_of`), so the manifest
         # row can state them. One name is stored once per unit.
         self._unit_references: dict[tuple, set] = {}
         # F6.4: one import row per entry a `resource` block declares, recorded at the site that applied the
         # naming rule (`import_blocks.row`). `render` prints them in the order a reader can reproduce.
         self.import_rows: list[dict] = []
-        # F6.6: the site values the value-to-variable table mapped, keyed by the unit's four scope facts
+        # F6.6: the site values the value-to-variable table mapped, keyed by the unit's five scope facts
         # (`unit_manifest.facts_of`) and recorded at the site that applied the table, so `site_data.py` states
         # them without resolving a name. One value is stored once per unit.
         self._value_variables: dict[tuple, dict] = {}
@@ -2767,7 +2790,7 @@ class TerraformGenerator:
 
         `referrer` is the parsed object the reference site belongs to, so the rule reads the unit through
         `unit_manifest.facts_of` and no second unit rule exists. A name the rule resolved outside the
-        referrer's unit is recorded against the referrer's four scope facts, so the manifest row can state
+        referrer's unit is recorded against the referrer's five scope facts, so the manifest row can state
         the names a unit references from outside itself (`unit_manifest.py`). The record is made here, at
         the site that applies the rule, so no second resolution rule exists. Every call site passes the
         object it belongs to, so a name is never recorded twice, and a call site names no context, no vsys
@@ -2791,11 +2814,11 @@ class TerraformGenerator:
         return isinstance(resolved, HclRef) and resolved.expr.startswith('data.')
 
     def unit_references(self) -> dict:
-        """The recorded reference names, keyed by the referrer's four scope facts, in sorted order."""
+        """The recorded reference names, keyed by the referrer's five scope facts, in sorted order."""
         return {facts: tuple(sorted(names)) for facts, names in self._unit_references.items()}
 
     def value_variables(self) -> dict:
-        """The recorded site values, keyed by the unit's four scope facts, in name order (F6.6).
+        """The recorded site values, keyed by the unit's five scope facts, in name order (F6.6).
 
         Recorded at the site that applied the value-to-variable table, so `site_data.py` can state the row
         without resolving a name, and `generate_variables` declares exactly the values the run printed.
@@ -2804,7 +2827,7 @@ class TerraformGenerator:
                 for facts, values in self._value_variables.items()}
 
     def value_shapes(self) -> dict:
-        """The recorded shapes, keyed by the unit's four scope facts, in name order (F6.10.4).
+        """The recorded shapes, keyed by the unit's five scope facts, in name order (F6.10.4).
 
         A name the run holds with no value is read through this record, so the declaration file and a test can
         tell a `reference_only` name from an `operator_supplied` one without naming the fields again.

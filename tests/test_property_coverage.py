@@ -119,7 +119,7 @@ def _read_set(ledger) -> dict:
         resource = entry_coverage.row_detail(row)
         if resource not in entry_coverage.MATRIX_BY_RESOURCE:
             continue
-        # The entry name and the four scope facts are the row identity, not content the
+        # The entry name and the five scope facts are the row identity, not content the
         # emitter reads, so the parity check compares the captured fields only.
         measured.setdefault(resource, set()).update(
             set(mark['captured'].used_keys()) - entry_coverage.NON_FIELD_KEYS)

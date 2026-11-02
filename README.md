@@ -212,11 +212,11 @@ a source. The other files are the unit set, and the run writes one directory per
 - `SOURCE.txt` - what the run read, as `field: value` data, one record per source read: the
   source kind, the name, the path, the scope, the request identity, the cache entry, the size,
   and the SHA-256 hex of the bytes the input door parsed ([`provenance.py`](provenance.py))
-- `CODEBASE_MANIFEST.json` - one row per unit (one declared scope), as data: the four scope facts,
+- `CODEBASE_MANIFEST.json` - one row per unit (one declared scope), as data: the five scope facts,
   the directory name, the entry count, and the names the unit references from outside itself
   ([`unit_manifest.py`](unit_manifest.py)). Every run writes it when it has content
 - `OWNERSHIP.json` - one row per entry a coverage matrix row covers, as data: the matrix row, the
-  entry name, the source, the four scope facts, the declaring unit, the owning unit, what the owner
+  entry name, the source, the five scope facts, the declaring unit, the owning unit, what the owner
   rule can say about the entry, and the `disable_override` flag as the parse read it
   ([`ownership.py`](ownership.py)). Every run writes it when it has content, and the two data files
   join on the unit directory

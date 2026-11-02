@@ -133,8 +133,8 @@ def test_emitted_rows_name_a_provider_resource():
 
 
 def test_scope_walk_rows_are_the_scope_containers(converter_module):
-    """The read-by-walk rows are the four scope facts over the scope containers."""
-    facts = {'device_group_of', 'vsys_of', 'template_of', 'device_of'}
+    """The read-by-walk rows are the five scope facts over the scope containers (F6.10.5)."""
+    facts = {'device_group_of', 'vsys_of', 'template_of', 'device_of', 'template_stack_of'}
     for row in container_coverage.CONTAINER_TABLE:
         if row.read_via != 'scope walk':
             continue
@@ -177,7 +177,7 @@ def test_container_under_a_scope_entry_is_a_section():
 
 
 def test_scope_entry_itself_is_not_a_config_object_entry():
-    """The four scope containers define a scope, so they do not break the rule."""
+    """The five scope containers define a scope, so they do not break the rule."""
     root, parents = _tree('<config><shared><devices><entry name="fw-1"/></devices></shared></config>')
     entry = root.find('.//devices/entry')
     assert container_coverage.is_scope_entry(entry, parents)

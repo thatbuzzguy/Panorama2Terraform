@@ -4,16 +4,16 @@
 # the provider pushes to all devices in the target.
 # Actions need Terraform 1.14 or later, which the `terraform` block declares (§12).
 
-action "panos_commit" "fw_template_6b469b29" {
+action "panos_commit" "branch_stack_5c39384d" {
   config {
-    templates = ["FW-Template"]
+    template_stacks = ["Branch-Stack"]
   }
 }
 
-action "panos_push_to_devices" "fw_template_6b469b29" {
+action "panos_push_to_devices" "branch_stack_5c39384d" {
   config {
-    name = "FW-Template"
-    type = "template"
+    name = "Branch-Stack"
+    type = "template_stack"
   }
 }
 

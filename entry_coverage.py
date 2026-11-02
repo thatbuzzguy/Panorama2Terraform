@@ -24,7 +24,7 @@ Four rules, stated once here.
    record starts after the parse, so a key the parse method read off the XML
    element is not a property the output used.
 
-The entry name (F2.3) and the four scope facts (F3.1, F3.2) are not captured
+The entry name (F2.3) and the five scope facts (F3.1, F3.2, F6.10.5) are not captured
 fields: they name the object and place it, so the report shows them as the row
 identity, not as content the parser took. A field the parser read as a name
 reference (an interface `ip` entry, an OSPF area `range` entry) is recorded on
@@ -59,7 +59,7 @@ DESTINATION_KINDS = container_coverage.DESTINATION_KINDS
 GAP_KINDS = ('count-only', 'skipped', 'unaccounted')
 
 # Keys a parsed object carries that are not entry fields: the entry name and the
-# four scope facts.
+# five scope facts.
 NON_FIELD_KEYS = frozenset({'name'}) | frozenset(container_coverage.SCOPE_FACT_KEYS)
 
 # A field with no value is not a captured field (F4.3 rule 3), so the property scan and the
@@ -73,6 +73,7 @@ REPORT_SCOPE_KEYS = {
     'vsys': 'vsys',
     'templates': 'template',
     'devices': 'vsys_device',
+    'template-stack': 'template_stack',
 }
 
 REPORT_FILE = 'CONVERSION_REPORT.txt'

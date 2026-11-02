@@ -16,13 +16,13 @@ Terraform, the input comes from a declared source with a provenance record, and 
 per-entry report accounts for every entry. The rules that came from that work are in
 `docs/ARCHITECTURE.md` §2 to §5 and `docs/COVERAGE_MATRIX.md`.
 
-Epic 6 (codebase assembly) is open. F6.1 to F6.9 landed: the unit boundary as data, ownership as
-data, the reference edge and the unit order, the import block, the scope objects, the site data
-layer, the commit action per unit, the gate rule that reads the four data files, and the outputs
-rule for a name another unit in the codebase owns. Their rules are in `docs/ARCHITECTURE.md` §3.4
-to §3.7, §4.1, §4.2, §4.5, §4.6, §4.8, and §5, and in `docs/CODEBASE_ASSEMBLY.md` §3 to §10. Each
-landed feature names its unit and writes no directory, so the write path that splits the output per
-unit directory is the shared open step, in `to-do.md`.
+Epic 6 (codebase assembly) is closed. The run writes one directory per unit the manifest names,
+and the codebase records name the unit, the owner, the reference edge, the order, the import block,
+the scope objects, the site values, and the commit and push action per unit. F6.10.5 closed the two
+rules the write path could decide after it landed: `template_stack` is the fifth scope fact, so a
+stack entry names its own unit, and the tool decides no module parameter. The rules are in
+`docs/ARCHITECTURE.md` §3.4 to §3.7, §4.1, §4.2, §4.5, §4.6, §4.8, and §5, and in
+`docs/CODEBASE_ASSEMBLY.md` §3 to §14.
 
 Two facts from the 2026-10-31 re-measurement of the pinned provider hold. Routing is reachable through an
 object attribute, so the BGP, OSPF and OSPFv3 levels are an emitter shape and not a provider gap, and the tool
@@ -43,17 +43,13 @@ prints the variable reference, never the value. Both rules are in `backlog.md`.
 A brown-field config is an existing production config: mixed shared objects,
 per-device-group overrides, template stacks, and multiple virtual systems.
 
-## Epic 6 — Codebase assembly (Goal 6) — open
+## Epic 6 — Codebase assembly (Goal 6) — closed
 
 A codebase is a set of directories, one per declared scope, that a platform plans and
-applies. The design record is `docs/CODEBASE_ASSEMBLY.md`. Every feature in the record
-is a rule to decide, then a module to write. F6.1 to F6.8 are implemented, so their
-rules name the module and the test that holds them, and F6.9 is a rule decided with no
-module. F6.10.1 decided the file shape: the unit set, which one directory holds, and the
-codebase root set, which is one file per run (§14), and it is default output with no flag.
-F6.10.2 ran the print-site rule per unit (§5 rule 5), and F6.10.3 landed the write path: the run writes one
-directory per unit the manifest names, through the one function that writes bytes. Open for Epic 6: the `.tfvars`
-`target` serial and the `panos_push_to_devices` shape, and the held decisions the tracking markdown names.
+applies. The design record is `docs/CODEBASE_ASSEMBLY.md`, and every rule it states names the module
+and the test that holds it. The unit rule, the owner rule, the edge rule, the order rule, the import
+block rule, the scope object rule, the site rule, and the action rule are all landed, and the write
+path writes one directory per unit the manifest names.
 
 ## Epic 7 — Routing output through the protocol object (Goal 2) — open
 
@@ -79,18 +75,19 @@ The layout is a rule, not a habit. The root holds `AGENTS.md`, the two readme in
 `src/` holds the tool's modules; `tools/` holds the developer scripts; `examples/` holds the sample input and
 the sample output. Each index names every document under it.
 
-`tests/` and `docs/` already hold what they should, so the open work is the root: `conftest.py`, the flat
-module set, `quick_start.sh`, `sample_panorama_config.xml`, and the committed sample output directory that
-`.gitignore` ignores. The item list, and the pins that read a path, are in `backlog.md`.
+`tests/` and `docs/` already hold what they should, and the canonical sample output is the golden set
+`tests/golden/` pins byte for byte, so `terraform_output/` is only the default value of `--output-dir`. The
+open work is the root: `conftest.py`, the flat module set, `quick_start.sh`, and `sample_panorama_config.xml`.
+The item list, and the pins that read a path, are in `backlog.md`.
 
 ## Sequencing
 
-The open Epic 6 piece is the write path that splits the output per unit directory, because the rule it
-applies at the print site is decided (`docs/CODEBASE_ASSEMBLY.md` §5 rule 5, F6.9). Its order is in §14,
-and the pieces held until the next feature takes them are in `to-do.md`. The open Epic 7 pieces are the
-routing levels the shape table does not state: each needs a row and a parse method before an emitter, a
-gate rule or the report can read it. The layout work waits for the open feature work to be committed,
-because it renames the paths those tests read.
+Epic 6 is closed, so the next feature is the open Epic 7 work: the routing levels
+`resource_mapping.PROTOCOL_SHAPE` does not state, each of which needs a row and a parse method before an
+emitter, a gate rule, or the report can read it. The gated pieces that stay held are in `backlog.md`: the
+four `*_policy_rules` types wait for the F3.5 rulebase decision, and a config entry inside a stack needs a
+provider location shape before the emitter can write a block for it. The layout work waits for the open
+feature work to be committed, because it renames the paths those tests read.
 
 ## Out of Scope (tracked in backlog.md)
 

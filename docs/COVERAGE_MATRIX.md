@@ -81,7 +81,7 @@ Each row is a dict with exactly eight fields:
 | `fixture` | The XML fixture under `tests/fixtures/` whose pipeline run exercises the row. |
 | `output_file` | The `.tf` file name that must contain the resource block. The run writes it inside the unit directory the manifest row names (§14), so a test reads the parts that name it, keyed by the path from the output directory. |
 | `emitter` | The `TerraformGenerator` method names that read this row's properties. Usually one method. Two names appear when a report writer reads a property the `.tf` emitter does not, which is the case for `panos_address`: the manual setup report prints a report-only address row from the same parsed object. |
-| `properties` | The keys of the parsed object that the row's emitters read. The entry name and the four scope facts are not properties: they are the row identity (§2.2 of [`ARCHITECTURE.md`](ARCHITECTURE.md)), so they are not listed here. |
+| `properties` | The keys of the parsed object that the row's emitters read. The entry name and the five scope facts are not properties: they are the row identity (§2.2 of [`ARCHITECTURE.md`](ARCHITECTURE.md)), so they are not listed here. |
 
 The property list is what makes the row a property-level statement, and two tests
 keep it honest:
@@ -95,11 +95,12 @@ keep it honest:
   fails when a row declares a property no output reads. A property captured but not
   read is a finding, not a declaration: the report prints it (§3.2).
 
-The six scope rows (F6.5) add three facts the other rows do not state:
+The six scope rows (F6.5) add two facts the other rows do not state:
 
-- A row that prints a property inside `location` declares the placement key it reads, so
-  `panos_template_variable` declares `template_stack` even though the block prints the name
-  inside `location` rather than as its own attribute.
+- The sub-block a scope row places itself in comes from `SCOPE_PLACEMENT`, and each key it names is a
+  scope fact, so a row declares no property for it (`entry_coverage.NON_FIELD_KEYS`).
+  `panos_template_variable` is the row with two possible sub-blocks, `template` and `template_stack`, so
+  the emitter reads the fact the export declares to choose between them (F6.10.5).
 - The device-group row declares `parent`, and the device-group block prints none: the provider has
   no `parent` attribute for `panos_device_group`, so the value reaches the output through the parent
   record the same entry feeds. The shape test excludes that property, because it is printed by another

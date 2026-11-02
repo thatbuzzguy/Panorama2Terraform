@@ -59,43 +59,43 @@ MECHANISM_TOKENS = ('outputs.tf', 'remote_state', 'terraform_remote_state')
 # become a silent false positive (AC-1.1).
 CORPUS_EDGES = {
     'dependency_wiring.xml': [
-        ('device1_e22d98e2', 'vsys1_a62792be', 'panos_ethernet_interface', 'ethernet1/1'),
-        ('device1_e22d98e2', 'vsys1_a62792be', 'panos_zone', 'zone-in'),
-        ('device1_e22d98e2', 'vsys1_a62792be', 'panos_zone', 'zone-out'),
+        ('device1_8c3ce387', 'vsys1_d7045c06', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('device1_8c3ce387', 'vsys1_d7045c06', 'panos_zone', 'zone-in'),
+        ('device1_8c3ce387', 'vsys1_d7045c06', 'panos_zone', 'zone-out'),
     ],
     KITCHEN: [
-        ('fw_2_example_com_5cef6fb6', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/1'),
-        ('fw_template_6b469b29', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/1'),
-        ('fw_template_6b469b29', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/2'),
-        ('production_dg_f7597196', 'shared_be5be69f', 'panos_address_group', 'Web-Servers'),
-        ('vsys1_53549b38', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/1'),
-        ('vsys1_6b05ad4a', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/1'),
-        ('vsys1_6b05ad4a', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/2'),
-        ('vsys2_803b06c0', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/2'),
+        ('fw_2_example_com_35aafbcf', 'shared_a6577c11', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('fw_template_00a08cdc', 'shared_a6577c11', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('fw_template_00a08cdc', 'shared_a6577c11', 'panos_ethernet_interface', 'ethernet1/2'),
+        ('production_dg_6ce3cc69', 'shared_45ca31c3', 'panos_address_group', 'Web-Servers'),
+        ('vsys1_78d8e4bc', 'shared_a6577c11', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('vsys1_b3e94a35', 'shared_a6577c11', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('vsys1_b3e94a35', 'shared_a6577c11', 'panos_ethernet_interface', 'ethernet1/2'),
+        ('vsys2_30925639', 'shared_a6577c11', 'panos_ethernet_interface', 'ethernet1/2'),
     ],
     MULTI: [
-        ('dc_networks_ad53ac42', 'fw_1_example_com_21a67a9f', 'panos_ethernet_interface', 'ethernet1/1'),
-        ('dc_networks_ad53ac42', 'fw_2_example_com_5cef6fb6', 'panos_ethernet_interface', 'ethernet1/1'),
-        ('hq_networks_0491f4e3', 'fw_1_example_com_21a67a9f', 'panos_ethernet_interface', 'ethernet1/1'),
-        ('hq_networks_0491f4e3', 'fw_2_example_com_5cef6fb6', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('dc_networks_19ae87d5', 'fw_1_example_com_6a71771b', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('dc_networks_19ae87d5', 'fw_2_example_com_35aafbcf', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('hq_networks_8ada44b7', 'fw_1_example_com_6a71771b', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('hq_networks_8ada44b7', 'fw_2_example_com_35aafbcf', 'panos_ethernet_interface', 'ethernet1/1'),
     ],
     CYCLE_FIXTURE: [
-        ('fw_a_example_com_4daa3d43', 'fw_b_example_com_f80a1db9', 'panos_ethernet_interface',
+        ('fw_a_example_com_4febb524', 'fw_b_example_com_85c521ca', 'panos_ethernet_interface',
          'ethernet1/2'),
-        ('fw_b_example_com_f80a1db9', 'fw_a_example_com_4daa3d43', 'panos_ethernet_interface',
+        ('fw_b_example_com_85c521ca', 'fw_a_example_com_4febb524', 'panos_ethernet_interface',
          'ethernet1/1'),
     ],
     'policy_order.xml': [
-        ('alpha_dg_4a3abf61', 'vsys1_6b05ad4a', 'panos_address', 'alpha-dst'),
-        ('alpha_dg_4a3abf61', 'vsys1_6b05ad4a', 'panos_address', 'alpha-src'),
-        ('alpha_dg_4a3abf61', 'vsys1_6b05ad4a', 'panos_service', 'alpha-svc'),
+        ('alpha_dg_2862f32a', 'vsys1_b3e94a35', 'panos_address', 'alpha-dst'),
+        ('alpha_dg_2862f32a', 'vsys1_b3e94a35', 'panos_address', 'alpha-src'),
+        ('alpha_dg_2862f32a', 'vsys1_b3e94a35', 'panos_service', 'alpha-svc'),
     ],
 }
 
 # The one finding the cycle fixture produces. The unit the cycle is read from is the smaller of the two,
 # so the line is grouped by it (rule 5).
-CYCLE_FACTS = ('', '', '', 'fw-a.example.com')
-CYCLE_UNITS = ('fw_a_example_com_4daa3d43', 'fw_b_example_com_f80a1db9')
+CYCLE_FACTS = ('', '', '', 'fw-a.example.com', '')
+CYCLE_UNITS = ('fw_a_example_com_4febb524', 'fw_b_example_com_85c521ca')
 UNIT_A, UNIT_B = CYCLE_UNITS
 
 
@@ -305,7 +305,7 @@ def test_a_self_reference_writes_no_row(converter_module, tmp_path):
     row. No corpus fixture produces one, so the rule is pinned on its own input.
     """
     gen = converter_module.TerraformGenerator(str(tmp_path / 'gen'))
-    facts = ('', '', '', 'fw-a.example.com')
+    facts = ('', '', '', 'fw-a.example.com', '')
     own = unit_manifest.directory_name(facts, gen.sanitize_name)
     assert reference_edges.build_rows(
         [{'type': 'panos_ethernet_interface', 'entry': 'ethernet1/1', 'directory': own, 'owner': own}],
@@ -325,10 +325,10 @@ def test_a_name_several_units_own_gives_one_row_per_owner(converter_module, tmp_
     separate objects gives one row per owner, which is the ambiguous-device case.
     """
     gen = converter_module.TerraformGenerator(str(tmp_path / 'gen'))
-    facts = ('HQ-Networks', '', '', '')
+    facts = ('HQ-Networks', '', '', '', '')
     referrer = unit_manifest.directory_name(facts, gen.sanitize_name)
-    owners = [unit_manifest.directory_name(('', '', '', 'fw-1.example.com'), gen.sanitize_name),
-              unit_manifest.directory_name(('', '', '', 'fw-2.example.com'), gen.sanitize_name)]
+    owners = [unit_manifest.directory_name(('', '', '', 'fw-1.example.com', ''), gen.sanitize_name),
+              unit_manifest.directory_name(('', '', '', 'fw-2.example.com', ''), gen.sanitize_name)]
     rows = reference_edges.build_rows(
         [{'type': 'panos_ethernet_interface', 'entry': 'ethernet1/1', 'directory': owner, 'owner': owner}
          for owner in owners], {facts: ('ethernet1/1',)}, gen.sanitize_name)
@@ -390,8 +390,8 @@ def test_a_self_reference_cannot_be_a_cycle(converter_module, tmp_path):
     """AC-3.4: rule 3 writes no self row, so the smallest cycle is two units.
     """
     gen = converter_module.TerraformGenerator(str(tmp_path / 'gen'))
-    own = unit_manifest.directory_name(('', '', '', 'fw-a.example.com'), gen.sanitize_name)
-    other = unit_manifest.directory_name(('', '', '', 'fw-b.example.com'), gen.sanitize_name)
+    own = unit_manifest.directory_name(('', '', '', 'fw-a.example.com', ''), gen.sanitize_name)
+    other = unit_manifest.directory_name(('', '', '', 'fw-b.example.com', ''), gen.sanitize_name)
     rows = [{'referrer': own, 'target': other, 'type': 'panos_ethernet_interface', 'entry': 'a'},
             {'referrer': other, 'target': own, 'type': 'panos_ethernet_interface', 'entry': 'b'},
             {'referrer': own, 'target': own, 'type': 'panos_ethernet_interface', 'entry': 'self'}]
@@ -455,30 +455,34 @@ def test_the_parent_unit_comes_before_the_unit_that_overrides_its_name(converter
     """AC-4.1: `ownership.py` rule 4, read through the ownership row.
     """
     _owners, _edges, rows = _sets(converter_module, FIXTURES_DIR / OVERRIDE, tmp_path)
-    child = _row(rows, 'branch_dg_ddec9c8a')
-    parent = _row(rows, 'shared_be5be69f')
+    child = _row(rows, 'branch_dg_fd5f0e2a')
+    parent = _row(rows, 'shared_45ca31c3')
     assert child['after'] == [parent['directory']], child
     assert child['rank'] > parent['rank'], child
 
 
 def test_the_shallower_scope_comes_before_the_deeper_scope_inside_it(converter_module, tmp_path):
-    """AC-4.2: the F3.9 level order, device group, then template, then device. A container the manifest
-    does not name adds no dependency.
+    """AC-4.2: the level order, read from the outermost scope in: device group, then stack, then
+    template, then device. A container the manifest does not name adds no dependency.
     """
     _owners, _edges, rows = _sets(converter_module, FIXTURES_DIR / MULTI, tmp_path)
-    shared = _row(rows, 'shared_be5be69f')
-    template = _row(rows, 'dc_networks_ad53ac42')
-    device = _row(rows, 'fw_2_example_com_114d91b6')
-    assert reference_edges.LEVEL_KEYS == ('device_group', 'template', 'vsys_device')
-    assert shared['after'] == []
+    stack = _row(rows, 'branch_stack_5c39384d')
+    template = _row(rows, 'dc_networks_19ae87d5')
+    device = _row(rows, 'fw_2_example_com_f7b99b64')
+    assert reference_edges.LEVEL_KEYS == ('device_group', 'template_stack', 'template', 'vsys_device')
+    assert stack['after'] == []
+    # F6.10.5: the stack is a level, so the device inside it depends on the unit that names the stack.
+    inside = _row(rows, 'fw_3_example_com_a1c0f1a0')
+    assert inside['after'] == [stack['directory']], inside
     # The device the template names has no edge, so its `after` is the level chain read from the
-    # outermost scope in.
-    assert device['after'] == sorted([shared['directory'], template['directory']])
+    # outermost scope in. Its device group fact is empty, and no ledger row is in the shared unit, so
+    # the chain names no container for that level.
+    assert device['after'] == [template['directory']], device
     # F6.10.2: the template resolves nothing inside itself here, so its `after` is the level chain plus
     # the edge base, the two device units that own the interface name it uses.
-    assert template['after'] == sorted([shared['directory'], 'fw_1_example_com_21a67a9f',
-                                        'fw_2_example_com_5cef6fb6'])
-    assert shared['rank'] < template['rank'] < device['rank'], (shared, template, device)
+    assert template['after'] == sorted(['fw_1_example_com_6a71771b', 'fw_2_example_com_35aafbcf'])
+    assert stack['rank'] < inside['rank'], (stack, inside)
+    assert template['rank'] < device['rank'], (template, device)
 
 
 def test_the_edge_target_comes_before_the_referrer(converter_module, tmp_path):
@@ -546,8 +550,8 @@ def test_a_declared_parent_source_adds_no_dependency(converter_module, tmp_path)
     the manifest names, and a parent source names no such unit.
     """
     gen = converter_module.TerraformGenerator(str(tmp_path / 'gen'))
-    parent = unit_manifest.directory_name(('Parent-DG', '', '', ''), gen.sanitize_name)
-    child_facts = ('Child-DG', '', '', '')
+    parent = unit_manifest.directory_name(('Parent-DG', '', '', '', ''), gen.sanitize_name)
+    child_facts = ('Child-DG', '', '', '', '')
     child = unit_manifest.directory_name(child_facts, gen.sanitize_name)
     rows = [dict(dict.fromkeys(unit_manifest.FIELD_ORDER, ''), device_group='Child-DG',
                  directory=child, entry_count=1, references=[])]

@@ -55,10 +55,10 @@ DESTINATION_KINDS = (
 )
 
 # How a method reaches the container: a findall/find pattern, or the parent
-# walk that answers the four scope facts (F3.5).
+# walk that answers the five scope facts (F3.5, F6.10.5).
 READ_VIAS = ('pattern', 'scope walk')
 
-# Containers whose entry defines a scope. This is the set the four scope facts
+# Containers whose entry defines a scope. This is the set the five scope facts
 # walk, so the section rule and the identity keys agree.
 SCOPE_CONTAINERS = frozenset({'device-group', 'templates', 'template-stack',
                               'devices', 'vsys'})
@@ -72,9 +72,11 @@ ENVELOPE = frozenset({'response', 'result'})
 # through this one definition.
 SCOPE_PATH_ROOTS = SCOPE_CONTAINERS | frozenset({'shared'})
 
-# The four scope facts (F3.1, F3.2) in report order. F4.3 uses these keys for
-# the captured-field rule, so the facts are named in one place.
-SCOPE_FACT_KEYS = ('device_group', 'vsys', 'template', 'vsys_device')
+# The five scope facts (F3.1, F3.2, F6.10.5) in report order. F4.3 uses these keys for
+# the captured-field rule, so the facts are named in one place. `template_stack` is the scope a
+# stack names, so the set covers every container in SCOPE_CONTAINERS. A new fact is appended,
+# because this order is the unit identity join (`docs/ARCHITECTURE.md` §5).
+SCOPE_FACT_KEYS = ('device_group', 'vsys', 'template', 'vsys_device', 'template_stack')
 
 # The PAN-OS "this device" placeholder (F3.5). It names no firewall, so it is never a
 # `vsys_device` fact, never an `ngfw_device`, and never joins two scopes. One definition,
@@ -126,6 +128,8 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
     ContainerRow('template_of', 'templates', 'bookkeeping', 'template scope fact',
                  level='section', read_via='scope walk'),
     ContainerRow('device_of', 'devices', 'bookkeeping', 'vsys_device scope fact',
+                 level='section', read_via='scope walk'),
+    ContainerRow('template_stack_of', 'template-stack', 'bookkeeping', 'template_stack scope fact',
                  level='section', read_via='scope walk'),
     ContainerRow('parse_tags', 'tag', 'emitted', 'panos_administrative_tag'),
     ContainerRow('parse_regions', 'region', 'count-only', 'no v2 resource (gap)'),
