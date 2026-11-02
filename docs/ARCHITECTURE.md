@@ -52,9 +52,9 @@ Pinned by `tests/test_edge_cases.py::test_dup_names_across_dgs_both_survive`,
 `tests/test_edge_cases.py::test_dup_names_across_vsys_both_survive`, and
 `tests/test_robustness.py::test_declare_same_name_in_two_contexts_gets_unique_names`.
 
-### 2.2 The four scope facts
+### 2.2 The five scope facts
 
-`PanoramaParser.identity_of(elem)` returns four facts. Every parse method
+`PanoramaParser.identity_of(elem)` returns five facts. Every parse method
 splats them onto every object it returns, so the emitter can place a resource
 without reading the XML again.
 
@@ -64,10 +64,16 @@ without reading the XML again.
 | `vsys` | the declared virtual system | `''` when the export declares none; never an invented `vsys1` |
 | `template` | the declared template | `''` when the export declares none |
 | `vsys_device` | the device that owns the entry | `localhost.localdomain` is the PAN-OS "this device" placeholder and names no firewall |
+| `template_stack` | the stack that owns the entry (F6.10.5) | `''` when the export declares no stack. The entry that defines a stack names the stack, so this fact is what names a stack unit (§3.4) |
+
+`template_stack` was added by F6.10.5. Before it, a variable inside a stack took the stack name as
+the `template` fact, so one fact carried two meanings: the template the entry sits inside, and the
+stack the codebase unit is named for. The fact order is the unit identity join (§5), so it is
+appended rather than inserted, and every unit digest is re-measured.
 
 Pinned by `tests/test_multi_vsys_location.py::test_parser_records_declared_scope`,
 `::test_parser_records_no_invented_scope`, and
-`::test_every_parse_method_records_the_four_scope_facts` (the rule holds for
+`::test_every_parse_method_records_the_five_scope_facts` (the rule holds for
 every parse method except `parse_device_groups`, which returns the device groups
 themselves).
 
@@ -225,7 +231,7 @@ declared property list, so its field gaps are recorded in `backlog.md` instead.
    `::test_a_state_read_calls_no_producer`.
 
 2. **Parent map.** ElementTree keeps no parent pointers, so the parser builds a
-   child → parent map once. The four scope facts walk that map.
+   child → parent map once. The five scope facts walk that map.
 3. **Association tables.** `parse_associations` reads the four membership lists
    the export declares (device group, template, template stack, stack →
    template) and `templates_for_device` resolves a device's effective templates.
@@ -273,7 +279,7 @@ Three rules the scan uses:
 
 - A container is a **section** when no config-object entry lies between it and a
   config root: the `config` element, or an entry whose container is one of the
-  four scope containers in §2.2. A container inside a config-object entry is a
+  five scope containers in §2.2. A container inside a config-object entry is a
   property level, and the property scan (F4.4) covers it (§3.2). The scan scope is
   the entries a matrix row covers, so a report, inventory, bookkeeping, count-only,
   or nested-block container is not a property finding: it has no row, and only a row
@@ -320,7 +326,7 @@ Six rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
   matching row wins, so a sub-shape row beats the general row for its container.
   A per-entry mark overrides the row when the method knows better: `report_only`
   content is `report`, and a skipped entry is `skipped`. A scope entry takes the
-  destination its table row states (F6.5): the four scope containers and `variable`
+  destination its table row states (F6.5): the five scope containers and `variable`
   are `emitted` rows, so a scope entry is an object the output writes, and the
   membership lists inside a scope entry stay `bookkeeping`, because no provider
   resource exists for a device.
@@ -331,7 +337,7 @@ Six rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
   the tool could not make. Pinned by `tests/test_parse_network.py` and
   `tests/test_protocol_object.py::test_an_unmapped_one_of_value_prints_nothing_and_is_reported`.
 - **Captured fields** are the keys of the object the method built, minus the entry
-  name and the four scope facts (§2.2), minus keys with no value, in sorted order.
+  name and the five scope facts (§2.2), minus keys with no value, in sorted order.
   An entry with nothing but its name says `captured: name only`. A field the
   method stored inside a type sub-shape is reported under the object key, not the
   XML tag.
@@ -407,7 +413,7 @@ has no line of its own. Values are printed as their JSON text and properties are
 one finding stays on one line.
 
 The ownership key is §2.1 identity as the F3.9 rule reads it: the matrix row, the entry name, and the
-four declared facts, read from the `location` block the state document holds, through the block names
+five declared facts, read from the `location` block the state document holds, through the block names
 `LOCATION_SCHEMA` declares. The `Shared` fallback is never in the key, because it is a parse fallback
 and not a declared fact; the `shared` block states no name, so it fills no fact; `localhost.localdomain`
 names no device (F3.5); and a sub-block the table does not declare for the row names a scope this
@@ -497,7 +503,7 @@ with no change; this is pinned by
 ### 3.4 Unit manifest (F6.1)
 
 `main()` writes one row per unit, as `CODEBASE_MANIFEST.json` in the output directory. A unit is
-one combination of the four scope facts (§2.2), and a unit exists when the ledger has a report
+one combination of the five scope facts (§2.2), and a unit exists when the ledger has a report
 row in it (§3.2), so the manifest is built from `entry_coverage.EntryLedger` and adds no parse
 data. An entry inside a config-object entry is a property level (§3.1), so the parent row's count
 covers it.
@@ -505,18 +511,19 @@ covers it.
 The rule lives in `unit_manifest.py`, and it holds six facts:
 
 - **The unit name.** The deepest scope the export declares names the unit, in the F3.9 level
-  order, read innermost first: `vsys`, `vsys_device`, `template`, `device_group`. `Shared` names
-  the unit whose four facts are empty, because the four facts alone cannot name the shared
-  section. The placeholder device names no unit (§2.2), so the scope above it names the unit.
+  order, read innermost first: `vsys`, `vsys_device`, `template`, `template_stack`,
+  `device_group` (F6.10.5). A template inside a stack names its template, because the template is
+  deeper than the stack. `Shared` names the unit whose five facts are empty, because the five facts
+  alone cannot name the shared section. The placeholder device names no unit (§2.2), so the scope above it names the unit.
 - **The identity.** `facts_of` reads a ledger row or a parsed object through one function, so both
   land on the same unit: it drops the `Shared` parse fallback from `device_group` (§2.2 rule).
 - **The directory name.** `sanitize(unit name) + '_' + 8-hex digest of the identity`, in the §5
   shape. The digest is always present, not only on a collision, so a name never depends on the
   other units in the run. The module takes the §5 rule as an argument, so it defines no second
   naming rule. It names the directory, and the write path (§6) writes the directory it names.
-- **The row shape.** `unit`, `device_group`, `vsys`, `template`, `vsys_device`, `directory`,
-  `entry_count`, `references`. Fields print in the declared order, the rows sort by the identity,
-  and the reference names are sorted. `parse_rows` reads a written file back, and a row that is
+- **The row shape.** `unit`, `device_group`, `vsys`, `template`, `vsys_device`, `template_stack`,
+  `directory`, `entry_count`, `references`. Fields print in the declared order, the rows sort by
+  the identity, and the reference names are sorted. `parse_rows` reads a written file back, and a row that is
   not the declared shape is a refusal, the way `parse_record` refuses a line (§3.3 rule).
 - **One file per codebase run.** The edge list needs the whole set of units, so one file holds one
   row per unit. A manifest row for a unit with no ledger row adds nothing, so every recorded name
@@ -526,7 +533,7 @@ The rule lives in `unit_manifest.py`, and it holds six facts:
   written. A plain run writes it, so the CLI takes no flag for it.
 
 The `references` field holds the names the reference rule could not resolve inside the referrer's own
-unit (§4.3), keyed by the referrer's four facts. The record is made at the site that applies the rule,
+unit (§4.3), keyed by the referrer's five facts. The record is made at the site that applies the rule,
 so no second resolution rule exists. A name another unit declares is recorded for the referrer's unit,
 because the rule records the referrer's fact and the edge row names the other unit (§3.6).
 
@@ -554,7 +561,7 @@ directory. Ownership is a per-entry fact, so this file holds one row per entry w
 row per unit, and the two data files join on `directory`. The rules are in `ownership.py` and in
 [`CODEBASE_ASSEMBLY.md`](CODEBASE_ASSEMBLY.md) §4; this section states only the shape.
 
-- **The row shape.** `type`, `entry`, `source`, the four scope facts, `directory`, `owner`, `kind`,
+- **The row shape.** `type`, `entry`, `source`, the five scope facts, `directory`, `owner`, `kind`,
   `override`. `kind` is one of `declared`, `definition`, `override`, `ambiguous`; `override` is the
   flag as the parse read it: `yes`, `no`, or `unknown`; `owner` is empty when the rule names no owner.
 - **The row order.** The §2.1 identity through `state_coverage.ownership_key`, then `source`, because
@@ -606,7 +613,7 @@ entry), so it has its own file. The rules are in `reference_edges.py` and in
 - **The content rule.** Written only when it has content, following the rule for the report files
   (§4.5). A plain run writes it, so the CLI takes no flag for it, and the gate rule `data_files`
   reads it back through `parse_rows` (§4.6, F6.8).
-- **The two order fields** `rank` and `after` print on the §3.4 row, after the eight F6.1 fields,
+- **The two order fields** `rank` and `after` print on the §3.4 row, after the nine F6.1 fields,
   because §3.4 is the file that names each unit. `rank` is the position from 1, or 0 for a unit in a
   cycle; `after` is the sorted list of directories the unit must be planned after.
 
@@ -671,7 +678,7 @@ the join §3.5 and §3.6 use. The rules are in `site_data.py` and in
   rule is in `CODEBASE_ASSEMBLY.md` §9 rule 8, and the README names the site files (§4.5).
 
 The values the rows state are the pairs `TerraformGenerator.printed_value` recorded at the site that
-applied the value-to-variable table, keyed by the unit's four facts, the way §4.3 records a reference
+applied the value-to-variable table, keyed by the unit's five facts, the way §4.3 records a reference
 name, and the shape each name came from is recorded with it (F6.10.4). This record resolves nothing, so
 `variables.tf` declares exactly what the run consumed and the gate rule `variables` (§4.6) cannot see a
 declaration with no consumer.
@@ -755,7 +762,7 @@ silently: a wrong sub-block fails at apply, not at validate.
 A location field prints as `VALUE_VARIABLES` says (F6.6): `var.<name>` for a field the table maps to a
 variable, and the quoted value for every other field, so no emitter branch decides the shape for one type.
 The value stays the fact in `location_data`, because the import id (§4.8) encodes the value and a variable
-name is not a device name. The pair is recorded at the print site, keyed by the referrer's four facts
+name is not a device name. The pair is recorded at the print site, keyed by the referrer's five facts
 (§3.4), the way `name_ref` records a reference name, so the site record (§3.7) states what the run printed.
 `localhost.localdomain` never enters a location (F3.5), so it never enters the mapping and names no
 variable.
@@ -807,7 +814,7 @@ them. `key` stays for a registry key that differs from the PAN-OS name (a VPN co
 
 The rule also records what it could not resolve inside the referrer's own unit (F6.1, F6.10.2).
 `name_ref` takes the object the reference site belongs to and records each such name against that
-object's four scope facts, so the manifest row can state the names a unit references from outside
+object's five scope facts, so the manifest row can state the names a unit references from outside
 itself (§3.4).
 The record is made here, at the site that applies the rule, so no second resolution rule
 exists. The same record is the edge set (§3.6), because an edge is a recorded name that an
@@ -1257,7 +1264,7 @@ is written there.
 - The digest makes the name independent of emission order and run count. The
   same object always gets the same local name.
 - The unit directory name (F6.1) reads through this one rule as an argument, so the rule it owns
-  is the digest input: the four scope facts, joined by `|`, in `SCOPE_FACT_KEYS` order
+  is the digest input: the five scope facts, joined by `|`, in `SCOPE_FACT_KEYS` order
   (`unit_manifest.py`, §3.4). No second naming rule exists, and the test pins that the module
   defines none.
 - **The rule lives in `naming.py`** (F6.6), because the post-run gate must read it without the generator:

@@ -106,7 +106,7 @@ python3 panorama_to_terraform.py export.xml --state production.tfstate --workspa
   alike, and `--workspace` needs `--state` (exit 2). A state read is a file read, so `--offline` still
   covers the api producer only and no test opens a connection.
 - The ownership section lists a run entry the state document already owns. The key is the entry
-  identity (matrix row, entry name, and the four declared scope facts) read from the `location` block
+  identity (matrix row, entry name, and the five declared scope facts) read from the `location` block
   the state holds, so the same name in a different scope is a different object.
 - The drift section lists an owned entry with a value this run does not match. Only a property the
   coverage matrix row declares is compared, and only when both sides hold it by the same name, so the
@@ -219,8 +219,8 @@ directory, so a table row names the file, not the path.
 | `VPN_MIGRATION_REPORT.txt` | VPN inventory and the pre-shared key actions |
 | `CONVERSION_REPORT.txt` | One line per entry the parse read, plus the gap section, the property section, the shadow section for a run that declares a parent source, the repeated-name section for a name the ownership rule cannot decide, the reference-cycle section for two units that reference each other, and the state ownership and drift sections for a run that declares a state source |
 | `SANITY_REPORT.txt` | The post-run gate result |
-| `CODEBASE_MANIFEST.json` | One row per unit (one declared scope), as data: the four scope facts, the directory name, the entry count, and the names the unit references from outside itself. Written only when it has content (F6.1) |
-| `OWNERSHIP.json` | One row per entry the coverage matrix covers, as data: the matrix row, the entry name, the source, the four scope facts, the declaring unit's directory, the owning unit's directory, what the rule can say about the entry, and the `disable_override` flag as the parse read it. Written only when it has content (F6.2) |
+| `CODEBASE_MANIFEST.json` | One row per unit (one declared scope), as data: the five scope facts, the directory name, the entry count, and the names the unit references from outside itself. Written only when it has content (F6.1) |
+| `OWNERSHIP.json` | One row per entry the coverage matrix covers, as data: the matrix row, the entry name, the source, the five scope facts, the declaring unit's directory, the owning unit's directory, what the rule can say about the entry, and the `disable_override` flag as the parse read it. Written only when it has content (F6.2) |
 | `REFERENCE_EDGES.json` | One row per reference pair, as data: the referrer unit, the target unit, the matrix row, and the entry name. Written only when it has content (F6.3) |
 | `SITE_DATA.json` | One row per site that names a value, as data: the unit directory and the variable names with their values. Written only when it has content (F6.6) |
 | `site.auto.tfvars` | The `.tfvars` written from the site data rows, one file per unit inside the directory that row names, one line per variable in name order (F6.6). Terraform loads a `*.auto.tfvars` file automatically, so `terraform.tfvars` stays the operator's own file for the credentials |
@@ -271,10 +271,10 @@ sha256: 9b1c...
 
 ### The unit manifest
 
-`CODEBASE_MANIFEST.json` is one row per unit, where a unit is one combination of the four scope
+`CODEBASE_MANIFEST.json` is one row per unit, where a unit is one combination of the five scope
 facts. It is written as data, in identity order, so a tool reads it and a document does not
-restate a row. Ten fields, in this order: `unit`, `device_group`, `vsys`, `template`,
-`vsys_device`, `directory`, `entry_count`, `references`, `rank`, `after`.
+restate a row. Eleven fields, in this order: `unit`, `device_group`, `vsys`, `template`,
+`vsys_device`, `template_stack`, `directory`, `entry_count`, `references`, `rank`, `after`.
 
 ```json
 [
@@ -284,7 +284,8 @@ restate a row. Ten fields, in this order: `unit`, `device_group`, `vsys`, `templ
     "vsys": "",
     "template": "",
     "vsys_device": "localhost.localdomain",
-    "directory": "production_dg_f7597196",
+    "template_stack": "",
+    "directory": "production_dg_6ce3cc69",
     "entry_count": 17,
     "references": [
       "any",
@@ -294,9 +295,11 @@ restate a row. Ten fields, in this order: `unit`, `device_group`, `vsys`, `templ
 ]
 ```
 
-- `unit` names the unit. It is the deepest scope the export declares. `Shared` names the unit whose
-  four facts are empty, and `localhost.localdomain` names no firewall, so the scope above it names
-  the unit.
+- `unit` names the unit. It is the deepest scope the export declares, in the level order read
+  innermost first. `Shared` names the unit whose five facts are empty, and `localhost.localdomain`
+  names no firewall, so the scope above it names the unit. The entry that defines a template stack
+  names its own unit (F6.10.5), so a unit named for a stack holds the stack entry and the entries
+  inside it.
 - `directory` is the sanitized unit name plus the 8-hex digest of the unit identity. The digest is
   always in the name, so a name does not move when an unrelated scope is added. F6.1 names the
   directory; it does not write one.
@@ -578,7 +581,8 @@ The limits are recorded in [`../backlog.md`](../backlog.md) and in
   accepts one.
 - Rulebase (pre, post, shared) is not recorded, so a device group with both
   pre- and post-rules chains across them.
-- `location.template_stack` is never emitted, and a template that targets two
+- `location.template_stack` is emitted only for the two scope types the provider places inside a
+  stack (`panos_template_variable` and `panos_vsys`), and a template that targets two
   devices keeps interface names as strings.
 - The state scan compares only a property the matrix row declares that both sides hold by the same
   name, because no rule maps a parse key to a provider attribute name, so the parse key `tags` and

@@ -72,7 +72,7 @@ def build_rows(ledger, recorded: dict, sanitize) -> list:
     """One row per site the ledger shows and the mapping recorded a value for, in identity order.
 
     `recorded` is the pairs the emitter recorded at the site that applied the value-to-variable table,
-    keyed by the unit's four scope facts. This module resolves no name and names no value the run did
+    keyed by the unit's five scope facts. This module resolves no name and names no value the run did
     not print, so the `.tfvars` cannot state a value no `.tf` file consumes.
 
     The unit set is `unit_manifest.units` (rule 1), so a row is one unit and no module counts units a

@@ -2,7 +2,7 @@
 
 Seven groups, one per rule in `unit_manifest.py` (`docs/CODEBASE_ASSEMBLY.md` §3):
 
-1. The unit. One row per combination of the four scope facts, built from the ledger
+1. The unit. One row per combination of the five scope facts, built from the ledger
    `entry_coverage.py` already writes, so F6.1 adds no parse data.
 2. The directory naming rule. `sanitize(unit name) + '_' + 8-hex digest of the unit identity`,
    always, so a name depends on the unit alone and not on the other units in the run.
@@ -39,27 +39,27 @@ GROUPING = 'report_grouping.xml'
 MULTI = 'multi_device_templates.xml'
 MANIFEST = unit_manifest.MANIFEST_FILE
 
-# The reference names the grouping fixture produces, keyed by the referrer's four facts.
+# The reference names the grouping fixture produces, keyed by the referrer's five facts.
 GROUPING_REFERENCES = {
-    ('', '', '', ''): ('IKE-DEFAULT',),
-    ('Datacenter-FW', '', '', ''): ('IKE-DEFAULT', 'IPSEC-DEFAULT'),
-    ('Datacenter-FW', 'vsys2', '', ''): ('IKE-DEFAULT',),
-    ('Office-FW', '', '', ''): ('IKE-DEFAULT', 'IPSEC-DEFAULT'),
+    ('', '', '', '', ''): ('IKE-DEFAULT',),
+    ('Datacenter-FW', '', '', '', ''): ('IKE-DEFAULT', 'IPSEC-DEFAULT'),
+    ('Datacenter-FW', 'vsys2', '', '', ''): ('IKE-DEFAULT',),
+    ('Office-FW', '', '', '', ''): ('IKE-DEFAULT', 'IPSEC-DEFAULT'),
 }
 
 # The units the grouping fixture shows, in the order the rows sort by the identity.
 GROUPING_UNITS = [
-    ('', '', '', ''),
-    ('', '', '', 'fw-2.example.com'),
-    ('', '', 'DC-Networks', ''),
-    ('', '', 'DC-Networks', container_coverage.PLACEHOLDER_DEVICE),
-    ('', '', 'HQ-Networks', ''),
-    ('', '', 'HQ-Networks', 'fw-1.example.com'),
-    ('Datacenter-FW', '', '', ''),
-    ('Datacenter-FW', '', '', 'fw-2.example.com'),
-    ('Datacenter-FW', 'vsys2', '', ''),
-    ('Office-FW', '', '', ''),
-    ('Office-FW', '', '', 'fw-1.example.com'),
+    ('', '', '', '', ''),
+    ('', '', '', 'fw-2.example.com', ''),
+    ('', '', 'DC-Networks', '', ''),
+    ('', '', 'DC-Networks', container_coverage.PLACEHOLDER_DEVICE, ''),
+    ('', '', 'HQ-Networks', '', ''),
+    ('', '', 'HQ-Networks', 'fw-1.example.com', ''),
+    ('Datacenter-FW', '', '', '', ''),
+    ('Datacenter-FW', '', '', 'fw-2.example.com', ''),
+    ('Datacenter-FW', 'vsys2', '', '', ''),
+    ('Office-FW', '', '', '', ''),
+    ('Office-FW', '', '', 'fw-1.example.com', ''),
 ]
 
 
@@ -123,8 +123,8 @@ def gen(converter_module, tmp_path):
 
 # --- 1. the unit ---------------------------------------------------------------
 
-def test_one_row_per_combination_of_the_four_facts(converter_module, tmp_path):
-    """A unit is one combination of the four scope facts, and the rows come from the ledger."""
+def test_one_row_per_combination_of_the_five_facts(converter_module, tmp_path):
+    """A unit is one combination of the five scope facts, and the rows come from the ledger."""
     parser, _gen = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
     rows = _manifest(tmp_path)
     units = sorted({unit_manifest.facts_of(row) for row in parser.ledger.rows()})
@@ -139,10 +139,10 @@ def test_the_scope_entry_is_one_of_its_rows(converter_module, tmp_path):
     """
     parser, _gen = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
     defining = [row for row in parser.ledger.rows()
-                if unit_manifest.facts_of(row) == ('Datacenter-FW', '', '', '')]
+                if unit_manifest.facts_of(row) == ('Datacenter-FW', '', '', '', '')]
     assert [row for row in defining if row['name'] == 'Datacenter-FW']
     assert [row for row in defining if row['destination'] == 'emitted']
-    assert _row(_manifest(tmp_path), ('Datacenter-FW', '', '', ''))['entry_count'] == len(defining)
+    assert _row(_manifest(tmp_path), ('Datacenter-FW', '', '', '', ''))['entry_count'] == len(defining)
 
 
 def test_the_property_level_is_counted_on_the_parent_row(converter_module, tmp_path):
@@ -150,19 +150,19 @@ def test_the_property_level_is_counted_on_the_parent_row(converter_module, tmp_p
     own: the parent row shows the count.
     """
     parser, _gen = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
-    office = [row for row in parser.ledger.rows() if unit_manifest.facts_of(row) == ('Office-FW', '', '', '')]
+    office = [row for row in parser.ledger.rows() if unit_manifest.facts_of(row) == ('Office-FW', '', '', '', '')]
     parent = next(row for row in office if row['name'] == 'ethernet1/1')
     assert parent['property_entries'] == 1
     assert '10.1.1.1/24' not in [row['name'] for row in office], 'the ip entry is a property level'
-    assert _row(_manifest(tmp_path), ('Office-FW', '', '', ''))['entry_count'] == len(office)
+    assert _row(_manifest(tmp_path), ('Office-FW', '', '', '', ''))['entry_count'] == len(office)
 
 
 def test_the_shared_unit_is_the_unit_with_empty_facts_and_is_named_shared(converter_module, tmp_path):
-    """`Shared` names the shared section (F3.9). The four facts alone cannot name it, so the row
+    """`Shared` names the shared section (F3.9). The five facts alone cannot name it, so the row
     states the name.
     """
     _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
-    row = _row(_manifest(tmp_path), ('', '', '', ''))
+    row = _row(_manifest(tmp_path), ('', '', '', '', ''))
     assert row['unit'] == unit_manifest.SHARED_UNIT
     assert row['device_group'] == '', 'Shared is the name of the unit, not a fact value'
 
@@ -174,7 +174,8 @@ def test_shared_in_device_group_is_not_a_fact_value(converter_module, tmp_path):
     parser, _gen = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
     entry = next(row for row in parser.ledger.rows() if row['name'] == 'ethernet1/9')
     assert entry['device_group'] == ''
-    object_facts = {'device_group': 'Shared', 'vsys': '', 'template': '', 'vsys_device': ''}
+    object_facts = {'device_group': 'Shared', 'vsys': '', 'template': '', 'vsys_device': '',
+                    'template_stack': ''}
     assert unit_manifest.facts_of(object_facts) == unit_manifest.facts_of(entry)
 
 
@@ -196,11 +197,11 @@ def test_the_directory_name_is_the_sanitized_name_plus_the_digest(gen, tmp_path)
     """
     _run(FIXTURES_DIR / GROUPING, tmp_path)
     rows = _manifest(tmp_path)
-    shared = hashlib.sha256(b'|||').hexdigest()[:8]
-    assert _row(rows, ('', '', '', ''))['directory'] == f'{gen.sanitize_name("Shared")}_{shared}'
+    shared = hashlib.sha256(b'||||').hexdigest()[:8]
+    assert _row(rows, ('', '', '', '', ''))['directory'] == f'{gen.sanitize_name("Shared")}_{shared}'
 
-    facts = ('Datacenter-FW', 'vsys2', '', '')
-    digest = hashlib.sha256(b'Datacenter-FW|vsys2||').hexdigest()[:8]
+    facts = ('Datacenter-FW', 'vsys2', '', '', '')
+    digest = hashlib.sha256(b'Datacenter-FW|vsys2|||').hexdigest()[:8]
     assert _row(rows, facts)['directory'] == f'{gen.sanitize_name("vsys2")}_{digest}'
 
 
@@ -215,10 +216,10 @@ def test_a_name_that_sanitizes_to_nothing_keeps_the_shape(gen):
     """§5: an empty name becomes `unnamed`, so a directory name is never empty, and the shape a name
     sanitizes to is the §5 shape, not a second rule.
     """
-    facts = ('!', '', '', '')
+    facts = ('!', '', '', '', '')
     assert unit_manifest.directory_name(facts, gen.sanitize_name) == \
         f'unnamed_{unit_manifest.identity_digest(facts)}'
-    facts = ('Sales & Eng', '', '', '')
+    facts = ('Sales & Eng', '', '', '', '')
     assert gen.sanitize_name('Sales & Eng') == 'sales___eng'
     assert unit_manifest.directory_name(facts, gen.sanitize_name) == \
         f'sales___eng_{unit_manifest.identity_digest(facts)}'
@@ -240,12 +241,13 @@ def test_the_digest_is_always_present_not_only_on_a_collision(converter_module, 
 
 def test_a_directory_name_does_not_move_when_an_unrelated_unit_is_added(tmp_path):
     """The name depends on the unit alone, so the same unit in two different runs gets the same
-    directory name.
+    directory name. The multi fixture names the stack unit, which the grouping fixture does not.
     """
     _run(FIXTURES_DIR / GROUPING, tmp_path / 'first')
     _run(FIXTURES_DIR / MULTI, tmp_path / 'second')
-    first = _row(_manifest(tmp_path / 'first'), ('', '', '', ''))
-    second = _row(_manifest(tmp_path / 'second'), ('', '', '', ''))
+    unit = ('Datacenter-FW', '', '', '', '')
+    first = _row(_manifest(tmp_path / 'first'), unit)
+    second = _row(_manifest(tmp_path / 'second'), unit)
     assert first['directory'] == second['directory']
     assert first['unit'] == second['unit']
 
@@ -254,15 +256,34 @@ def test_the_deepest_declared_scope_names_the_unit(converter_module, tmp_path):
     """The unit name is the deepest scope the export declares, in the F3.9 level order."""
     _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
     rows = _manifest(tmp_path)
-    assert _row(rows, ('Datacenter-FW', 'vsys2', '', ''))['unit'] == 'vsys2'
-    assert _row(rows, ('', '', 'HQ-Networks', ''))['unit'] == 'HQ-Networks'
-    assert _row(rows, ('', '', 'HQ-Networks', 'fw-1.example.com'))['unit'] == 'fw-1.example.com'
+    assert _row(rows, ('Datacenter-FW', 'vsys2', '', '', ''))['unit'] == 'vsys2'
+    assert _row(rows, ('', '', 'HQ-Networks', '', ''))['unit'] == 'HQ-Networks'
+    assert _row(rows, ('', '', 'HQ-Networks', 'fw-1.example.com', ''))['unit'] == 'fw-1.example.com'
+
+
+def test_the_stack_names_its_unit(converter_module, tmp_path):
+    """F6.10.5: the fifth fact is the scope a stack names, so the entry that defines a stack names a
+    unit, and the level order keeps the stack shallower than the template inside it.
+
+    `tests/fixtures/scope_objects.xml` is the fixture that carries the stack entry and the variable
+    inside it, so the run names the stack unit and counts both entries in it.
+    """
+    _pipeline(converter_module, FIXTURES_DIR / 'scope_objects.xml', tmp_path)
+    rows = _manifest(tmp_path)
+    stack = ('', '', '', '', 'Edge-Stack')
+    row = _row(rows, stack)
+    assert row['unit'] == 'Edge-Stack'
+    assert row['directory'] == f'edge_stack_{unit_manifest.identity_digest(stack)}'
+    assert row['entry_count'] == 2, 'the stack entry and the variable inside it'
+    # The level order, read innermost first: a template inside a stack names its template.
+    assert unit_manifest.named_fact(('', '', 'Edge-Networks', '', 'Edge-Stack')) == ('template', 'Edge-Networks')
+    assert unit_manifest.named_fact(stack) == ('template_stack', 'Edge-Stack')
 
 
 def test_the_placeholder_device_names_no_unit(converter_module, tmp_path):
     """F3.5: `localhost.localdomain` names no firewall, so the unit takes the scope above it."""
     _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
-    row = _row(_manifest(tmp_path), ('', '', 'DC-Networks', container_coverage.PLACEHOLDER_DEVICE))
+    row = _row(_manifest(tmp_path), ('', '', 'DC-Networks', container_coverage.PLACEHOLDER_DEVICE, ''))
     assert row['unit'] == 'DC-Networks'
     assert row['vsys_device'] == container_coverage.PLACEHOLDER_DEVICE
 
@@ -274,7 +295,8 @@ def test_the_row_fields_are_the_declared_shape_in_order(tmp_path):
     row.
     """
     assert unit_manifest.FIELD_ORDER == ('unit', 'device_group', 'vsys', 'template', 'vsys_device',
-                                         'directory', 'entry_count', 'references', 'rank', 'after')
+                                         'template_stack', 'directory', 'entry_count', 'references',
+                                         'rank', 'after')
     _run(FIXTURES_DIR / GROUPING, tmp_path)
     text = (tmp_path / MANIFEST).read_text(encoding='utf-8')
     assert list(json.loads(text)[0]) == list(unit_manifest.FIELD_ORDER)
@@ -298,9 +320,9 @@ def test_the_manifest_round_trips_as_data(gen, tmp_path):
 def test_a_row_that_is_not_the_declared_shape_is_refused():
     """The manifest is data, so a reader cannot fall back to reading prose."""
     good = {'unit': 'Shared', 'device_group': '', 'vsys': '', 'template': '', 'vsys_device': '',
-            'directory': 'shared_be5be69f', 'entry_count': 2, 'references': [],
-            'rank': 1, 'after': []}
-    assert unit_manifest.parse_rows(json.dumps([good]))[0]['directory'] == 'shared_be5be69f'
+            'template_stack': '', 'directory': 'shared_45ca31c3', 'entry_count': 2,
+            'references': [], 'rank': 1, 'after': []}
+    assert unit_manifest.parse_rows(json.dumps([good]))[0]['directory'] == 'shared_45ca31c3'
     bad_rows = (
         json.dumps({'unit': 'Shared'}),                       # not a list of rows
         json.dumps(['Shared']),                               # a row that is not an object
@@ -310,7 +332,7 @@ def test_a_row_that_is_not_the_declared_shape_is_refused():
         json.dumps([dict(good, references='IKE-DEFAULT')]),
         json.dumps([dict(good, vsys=None)]),
         json.dumps([dict(good, rank='1')]),                   # F6.3: rank is a position
-        json.dumps([dict(good, after='shared_be5be69f')]),    # F6.3: after is a list of directories
+        json.dumps([dict(good, after='shared_45ca31c3')]),    # F6.3: after is a list of directories
     )
     for bad in bad_rows:
         with pytest.raises(ValueError):
@@ -344,7 +366,7 @@ def test_the_manifest_is_one_file_for_the_codebase(tmp_path):
 
 def test_the_reference_names_are_recorded_for_the_referrers_facts(converter_module, tmp_path):
     """The names `name_ref` could not resolve inside the referrer's own unit, keyed by the referrer's
-    four scope facts, and printed sorted.
+    five scope facts, and printed sorted.
     """
     _parser, generator = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
     assert generator.unit_references() == GROUPING_REFERENCES
@@ -360,8 +382,8 @@ def test_a_contextless_call_site_records_the_name_for_the_referrers_unit(convert
     name is recorded for it; the office referrer records for its own unit.
     """
     _parser, generator = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
-    shared = ('', '', '', '')
-    office = ('Office-FW', '', '', '')
+    shared = ('', '', '', '', '')
+    office = ('Office-FW', '', '', '', '')
     assert generator.unit_references()[shared] == ('IKE-DEFAULT',)
     assert 'IPSEC-DEFAULT' in generator.unit_references()[office]
 
@@ -395,7 +417,7 @@ def test_the_record_names_the_referrers_unit_not_the_declaring_unit(gen):
     text = file_text(tf_files(gen.output_dir), 'virtual_routers.tf')
     assert 'panos_ethernet_interface.' not in text
     assert 'data.panos_ethernet_interface' not in text
-    assert gen.unit_references() == {('', '', '', ''): ('ethernet1/1',)}
+    assert gen.unit_references() == {('', '', '', '', ''): ('ethernet1/1',)}
 
 
 def test_a_read_through_name_is_recorded(converter_module, tmp_path):
@@ -431,7 +453,7 @@ def test_a_name_is_stored_once_per_unit(converter_module, tmp_path):
     _parser, generator = _pipeline(converter_module, SAMPLE_CONFIG, tmp_path)
     for names in generator.unit_references().values():
         assert len(set(names)) == len(names)
-    row = _row(_manifest(tmp_path), ('Production-DG', '', '', 'localhost.localdomain'))
+    row = _row(_manifest(tmp_path), ('Production-DG', '', '', 'localhost.localdomain', ''))
     assert row['references'].count('any') == 1
     assert row['references'] == sorted(row['references'])
 

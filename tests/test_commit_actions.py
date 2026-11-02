@@ -379,11 +379,11 @@ def test_the_answer_table_is_the_one_answer():
 
 def test_named_fact_is_the_one_level_rule():
     """`unit_name` is a delegate of `named_fact`, so no module states the level order a second time."""
-    facts = ('DG-A', 'vsys1', 'T-A', 'fw-2.example.com')
+    facts = ('DG-A', 'vsys1', 'T-A', 'fw-2.example.com', '')
     key, name = unit_manifest.named_fact(facts)
     assert (key, name) == ('vsys', 'vsys1'), (key, name)
     assert unit_manifest.unit_name(facts) == name
-    assert unit_manifest.unit_name(('', '', '', '')) == unit_manifest.SHARED_UNIT
+    assert unit_manifest.unit_name(('', '', '', '', '')) == unit_manifest.SHARED_UNIT
     for module in (commit_actions, sanity_checks, resource_mapping, naming):
         assert not hasattr(module, 'NAME_LEVELS'), module
         assert not any(getattr(module, attr, None) == unit_manifest.NAME_LEVELS for attr in dir(module)), module

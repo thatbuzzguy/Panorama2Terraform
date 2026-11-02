@@ -78,13 +78,14 @@ EDGE_FILE = 'REFERENCE_EDGES.json'
 # The field names are the printed keys, so `parse_rows` reads a row back as itself.
 FIELD_ORDER = ('referrer', 'target', 'type', 'entry')
 
-# The four scope facts, read through `unit_manifest`, so the row joins to the manifest row and no
+# The five scope facts, read through `unit_manifest`, so the row joins to the manifest row and no
 # second fact order appears.
 FACT_KEYS = unit_manifest.FACT_KEYS
 
-# The F3.9 level order (device group, then template, then device). The virtual system is a fact but not
-# a report level, so a vsys adds no level to the order chain.
-LEVEL_KEYS = ('device_group', 'template', 'vsys_device')
+# The level order, read from the outermost scope in: `unit_manifest.NAME_LEVELS` reversed, with the
+# virtual system left out because a fact that is not a report level adds no level to the order chain.
+# A unit inside a stack depends on the stack, so the stack is a level (F6.10.5).
+LEVEL_KEYS = ('device_group', 'template_stack', 'template', 'vsys_device')
 
 CYCLE_HEADING = 'Reference Cycles Between Units That Need an Operator Decision'
 
@@ -104,7 +105,7 @@ NO_RANK = 0
 def build_rows(ownership_rows: list, references: dict, sanitize: Callable[[str], str]) -> list:
     """One row per edge the data can name, in the order the fields sort by.
 
-    `references` is the reference names `name_ref` recorded, keyed by the referrer's four scope facts. The
+    `references` is the reference names `name_ref` recorded, keyed by the referrer's five scope facts. The
     target unit is the `owner` field of an ownership row that covers (`type`, `entry`). A name no ownership
     row covers writes no row (rule 1), and a row whose target is the referrer writes no row (rule 3).
     """
@@ -205,7 +206,7 @@ def cycles(rows: list) -> list:
 def findings(rows: list, manifest_rows: list) -> list:
     """The cycles that need an operator decision, in report order (rule 5).
 
-    A finding holds the four facts of the unit the cycle is read from, read through that unit's manifest
+    A finding holds the five facts of the unit the cycle is read from, read through that unit's manifest
     row, so the report groups it with the F3.9 rule, plus the walk and the names on each hop.
     """
     facts_of = {row['directory']: tuple(row[key] for key in FACT_KEYS) for row in manifest_rows}

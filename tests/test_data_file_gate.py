@@ -40,9 +40,9 @@ FIXTURES = sorted(p.name for p in FIXTURES_DIR.glob('*.xml') if not p.name.start
 
 # A unit the manifest names, and a unit only the ownership record names: the declared parent source
 # case (F5.4), which the join rule allows.
-SHARED = ('', '', '', '')
-CHILD = ('Child-DG', '', '', '')
-PARENT = ('Parent-DG', '', '', '')
+SHARED = ('', '', '', '', '')
+CHILD = ('Child-DG', '', '', '', '')
+PARENT = ('Parent-DG', '', '', '', '')
 SITE_VALUE = 'Site Value'
 
 
@@ -426,7 +426,7 @@ def test_a_data_file_finding_is_stated_at_its_row_ordinal(tmp_path):
     """A data row spans many lines, so the position is the row ordinal, and a whole-file finding states
     no row.
     """
-    first, second = _manifest_row(('Datacenter-FW', '', '', '')), _manifest_row(('Office-FW', '', '', ''))
+    first, second = _manifest_row(('Datacenter-FW', '', '', '', '')), _manifest_row(('Office-FW', '', '', '', ''))
     filled = reference_edges.order([first, second], [], [])
     planted = dict(filled[1])
     planted['unit'] = 'Office'

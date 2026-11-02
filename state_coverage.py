@@ -10,7 +10,7 @@ Five rules, stated once here.
    no source line, because only the expat handler path records one, so its position is its
    resource address.
 2. The ownership key is §2.1 identity as the F3.9 rule reads it: the matrix row, the entry name,
-   and the four declared scope facts (§2.2). `Shared` is the parse fallback, so the key uses the
+   and the five declared scope facts (§2.2). `Shared` is the parse fallback, so the key uses the
    facts each source declares, never the fallback. The state declares its scope through its
    `location` block, through the block names `LOCATION_SCHEMA` declares. A nested block is read
    as an object, or as a one-element list of an object, because the provider writes a nested block
@@ -72,13 +72,16 @@ DRIFT_RULE = (
 # come from `LOCATION_SCHEMA`, so this is the mapping, not a second naming rule; it is the
 # same shape `entry_coverage.REPORT_SCOPE_KEYS` holds for containers. `shared` names the
 # shared section, which states no name, so it fills no fact. A sub-block the table does not
-# declare for the row (`template_stack`, `template_stack_vsys`, `template_vsys`) names a scope
-# this converter never emits, so an entry placed there is not keyed.
+# declare for the row (`template_stack_vsys`, `template_vsys`) names a scope this converter
+# never emits, so an entry placed there is not keyed. `template_stack` is the fifth fact
+# (F6.10.5), so an entry placed inside a stack is keyed by its stack
+# (`tests/test_state_coverage.py::test_a_stack_sub_block_keys_the_fact_it_names`).
 STATE_SCOPE_KEYS = {
     'device_group': 'device_group',
     'vsys': 'vsys',
     'template': 'template',
     'ngfw': 'vsys_device',
+    'template_stack': 'template_stack',
     'shared': None,
 }
 
@@ -97,7 +100,7 @@ def nested_block(value) -> dict:
 
 
 def state_facts(entry: StateEntry) -> Optional[dict]:
-    """The four scope facts the state document declares for an entry, or None when it cannot key.
+    """The five scope facts the state document declares for an entry, or None when it cannot key.
 
     None when the entry sits in a sub-block `LOCATION_SCHEMA` does not declare for its row,
     because that entry cannot be the same object as a run entry. An entry with no `location`

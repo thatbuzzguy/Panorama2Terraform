@@ -1,101 +1,103 @@
-# Acceptance criteria — F6.10.4: the site half
+# Acceptance criteria — F6.10.5 (close Epic 6)
 
-Feature record: `PLAN.md` Epic 6, `to-do.md` slice 1 of the F6.10 slices. The write path landed (F6.10.3), so
-the facts the write path can now decide are the site half: the `target` fact, the `panos_push_to_devices`
-shape, and the `README.md` label.
+This is the closing slice of Epic 6 (`docs/CODEBASE_ASSEMBLY.md`, `PLAN.md`). It decides two rules,
+closes one housekeeping item, verifies the gated pieces, and closes the epic. `ruff check .` and
+`python3 -m pytest` must pass at the end.
 
-Scope: the shape table, the provider block, the action emitter, the generated `README.md`, and the tests that
-pin them. No new gate rule, no new CLI argument, no new naming rule, no new reference rule, no new unit rule,
-no new reader, no change to `CHECK_ORDER` and no change to the exit codes.
+## 1. The template stack unit rule (decided)
 
-## 1. The `target` fact
+**Decision: the stack is the fifth scope fact.** The unit rule names a unit by a fact, so a scope that
+names no fact cannot name a unit. `docs/CODEBASE_ASSEMBLY.md` §1 rule 1 names the template stack as a
+scope a unit is, and `container_coverage.SCOPE_CONTAINERS` holds `template-stack`, so the fact set must
+cover it.
 
-What the corpus shows, stated as evidence for the rule:
+Do not read `template` as the stack name. Three rules already name `template_stack` as its own key, and
+reading `template` as the stack name gives one fact two meanings:
 
-1. `target` takes one NGFW serial (`docs/CODEBASE_ASSEMBLY.md` §12, verified against provider 2.0.14).
-2. The parse records a device entry name as the fact `vsys_device`. Every device name the corpus states is a
-   hostname: `fw-1.example.com` (`tests/fixtures/multi_device_templates.xml`), `fw-2.example.com`
-   (`tests/fixtures/kitchen_sink.xml`), `device1`. No corpus entry states a serial.
-3. The one device entry the sample states is `localhost.localdomain`, which names no device (F3.5,
-   `container_coverage.PLACEHOLDER_DEVICE`), so it names no fact and no variable.
-4. Therefore the tool cannot name a serial without guessing. It names no serial today, and it must not start
-   guessing here.
+- `resource_mapping.ACTION_FILTERS` maps `template_stacks` → `template_stack`, so a stack unit's commit
+  block prints `type = "template_stack"`. With `template` as the stack name, the same filter field would
+  name a template, and `SCOPE_ANSWER['template']` would answer `panos_template` for a stack name.
+- `resource_mapping.SCOPE_PLACEMENT` gives `panos_template_variable` the two sub-blocks `template` and
+  `template_stack`, so an entry inside a stack must print the stack sub-block, not the template sub-block.
+- `entry_coverage.REPORT_SCOPE_KEYS` maps a scope container to the field the block carries the name in.
+  Adding the fact puts `template-stack` in that mapping, and the property scan stops counting
+  `template_stack` as captured content for the variable row.
 
-The rule:
+Criteria:
 
-1. **`VALUE_VARIABLES` is still the single shape owner.** `target` is one row in that table, with the shape
-   word `operator_supplied`: the run names the variable, holds no value for it, and the operator supplies the
-   value in `terraform.tfvars` (§11). This is the F7.1 `reference_only` shape with one difference: a serial is
-   not a secret, so the declaration is not `sensitive`. `sensitive = true` stays the `reference_only` row's
-   rule alone, so the table is read in one place and no name list decides a marking.
-2. **The name is the §5 rule applied to the field**, because there is no value to name it from. `target` is the
-   only row in the table whose name does not come from a value, so `naming.py` is still the only naming rule.
-3. **No site row and no `.tfvars` line is written for it**, because §9 rule 2 writes a row only for a site that
-   names a value. The `.tfvars` is the printed form of a row, and there is no row.
-4. **The provider block is the consumer.** The run prints `target = var.target` in the `provider` block of a
-   unit whose manifest row names a device fact, and prints no `target` for a unit that names no device, because
-   the `variables` gate rule refuses a declaration with no consumer, and a unit that names no device has no
-   serial to target. `provider.tf` is a unit-set file, so the declaration and its consumer are in the same
-   directory (§14).
-5. `generate_provider_config()` records the pair at the print site, before `generate_variables()` runs, the way
-   F6.6 orders them, so the declaration set is what the run consumed.
+1. `container_coverage.SCOPE_FACT_KEYS` is the one place that names the facts, and it holds five:
+   `device_group`, `vsys`, `template`, `vsys_device`, `template_stack`. No module defines a second fact
+   order.
+2. The parser walks the stack the same way it walks the other scope containers
+   (`container_coverage.parent_map`, one walk per fact), and every parse method records it through
+   `identity_of`. A stack entry names its own stack; an entry the export places in no stack states `''`.
+3. `unit_manifest.NAME_LEVELS` reads innermost first: `vsys`, `vsys_device`, `template`,
+   `template_stack`, `device_group`. A template inside a stack names its template, because the template is
+   deeper than the stack. A stack entry names the stack, so a run that declares a stack writes one unit
+   directory for it, and the commit and push blocks for that unit come from `ACTION_FILTERS`.
+4. The unit identity join is `SCOPE_FACT_KEYS` order (`docs/ARCHITECTURE.md` §5), so every unit digest
+   changes. The goldens regenerate from a real run, never by hand, and the measured pins in the tests
+   that name a digest are re-measured from the same run.
+5. `CODEBASE_MANIFEST.json` gains the field for the fifth fact, in the same position as the fact order,
+   and `parse_rows` still refuses a row that is not the declared shape.
+6. `state_coverage.STATE_SCOPE_KEYS` maps the `template_stack` location sub-block to the fact, so a state
+   entry placed inside a stack is keyed. The rule that a block naming no fact is not keyed still holds for
+   the sub-blocks the table does not declare.
+7. The variable inside a stack stops being a captured property, so `COVERAGE_MATRIX` row
+   `panos_template_variable` lists four properties, not five. The printed bytes for that block do not
+   change, because the emitter already prints the stack sub-block from the placement key.
+8. `docs/ARCHITECTURE.md` §2.2 stays the owner of the fact set, and every other document links to it. The
+   statement that no stack unit is named today is removed from `docs/CODEBASE_ASSEMBLY.md` §3.
 
-## 2. The `panos_push_to_devices` shape
+## 2. The module parameter rule (decided)
 
-The pinned schema declares two actions, and the push row is the one with required fields: `name` and `type`
-(§12). Measured against the provider docs: `type` takes `device_group`, `template`, `template_stack`,
-`log_collector_group`, `wildfire_appliance`, `wildfire_cluster`; `devices` is an optional list of serials, and
-when the action states no `devices` the provider pushes to all devices in the target.
+**Decision: the tool does not decide module parameters.** A module is a standard a person writes
+(`docs/CODEBASE_ASSEMBLY.md` §13), so the tool writes the data a module consumes and cannot know which
+values a module takes. A template variable value, and a membership list in `scope.tf`, stay the literal
+the export states: the variable block *is* the PAN-OS variable. This closes with no byte change; the open
+item is removed from `backlog.md`, and §9 rule 2 stays the owner of the behavior.
 
-The rule: the emitter writes one push block per unit the manifest names, for the three fact keys
-`SCOPE_ANSWER` answers, so F6.7's reason for holding the push half is closed: the shape no longer needs a
-serial, because the tool names no serial and the provider's documented default covers it.
+Criteria:
 
-1. **Emission is default, not a flag** (the F6.5 rule 1 argument, unchanged): the committed goldens pin what a
-   default run emits.
-2. **`name` states the fact its own unit declares, and `type` states the fact key**, both read through
-   `ACTION_FILTERS` and `SCOPE_ANSWER`: the `name` field names the fact its `type` states. No new mapping
-   table, and no branch names the fields again. A fact the row declares but an ancestor owns is not the unit's
-   own fact, so the block states one fact.
-3. **A unit whose fact is not one `type` takes writes no push block**: the shared unit names no fact, and a
-   `vsys` or `vsys_device` fact names no push type, so those units are pushed through the parent unit's block,
-   the way F6.7 stated them for the commit. `PLACEHOLDER_DEVICE` names no firewall, so it names no fact.
-4. **No `devices` field**, because the tool names no serial (rule 1 above), so the block keeps the provider's
-   default and the gate reads no serial. `force_template_values`, `include_template` and `description` are not
-   printed either: the parse records no push description, and the tool states no policy about forcing template
-   values.
-5. **Order and bytes are unchanged rules**: fields inside `config`, the required fields in the declared order,
-   rows in the identity order the manifest rows print, and within one unit the `ACTION_SCHEMA` order, which is
-   also the Panorama order (commit, then push). The address rule is the same rule for both block kinds, so the
-   commit block and the push block for one unit share one address, and the action type is the only difference
-   (the action address is `action.<type>.<label>`, so Terraform reads them as two blocks).
-6. **No new gate finding.** `check_actions` already reads the push shape through the one block reader and the
-   one field reader, and `read_block` now states the field that named the fact instead of the filter field the
-   fact would answer for, so the reader reports what a push block states.
+1. No new shape word in `resource_mapping.VALUE_VARIABLES`, and no new rule that decides a shape a second
+   time. `VALUE_VARIABLES` stays the single shape owner.
+2. The emitter prints a template variable value as the export states it, and the property scan measures the
+   same list the row declares.
+3. The open item is removed from `backlog.md`, and no document restates the decision.
 
-## 3. The `README.md` label
+## 3. Housekeeping: the sample output
 
-The F5.5 precedent: the generated `README.md` labels a shape a reader cannot see from a `.tf` file alone, and
-states no field the data states. This slice applies it to the write path's own files:
+**Decision: the repository holds no committed sample output.** `terraform_output/` is the default value of
+`--output-dir`, and `.gitignore` ignores it, so a regenerated sample cannot be committed. The canonical
+sample output is the pinned golden set (`tests/golden/sample/`, `tests/golden/kitchen_sink/`,
+`tests/golden/single_unit/`), which cannot drift from what the converter writes.
 
-1. The README names `imports.tf`, `SITE_DATA.json` and `site.auto.tfvars`, and names `target` as the fact the
-   tool names as a variable and cannot name as a value.
-2. It states no row, no value, and no mapping result, so §9 rule 6 still holds for it with the label as the one
-   exception: no report names a field the site data states, and the README names the files, not a field.
-3. The label is deterministic (no count, no path, no timestamp), so two runs on the same bytes write the same
-   bytes.
-4. No gate rule reads the README, so the file stays in the codebase root set (§14) and `CHECK_ORDER` is
-   unchanged.
-5. Goldens pin `.tf` files only, so the README is not a golden; the tests that read it read the run output.
+Criteria:
 
-## 4. Byte and pin consequences
+1. `git ls-files terraform_output/` is empty, so there is nothing to regenerate and nothing to delete; the
+   stale claim in `backlog.md` is removed.
+2. `examples/example_terraform_output.txt` names the golden set as the canonical sample output, and no
+   document calls `terraform_output/` committed sample output.
+3. The layout work that renames paths (`src/`, the module set, `quick_start.sh`) stays in `backlog.md`,
+   because it renames the paths the tests read.
 
-- `provider.tf` changes for a unit that names a device, and `actions.tf` gains the push blocks, so both golden
-  sets regenerate from a real run (`python3 panorama_to_terraform.py <source> --output-dir <dir>`), never by
-  hand.
-- `tests/test_site_data.py` changes for the table pins (§9 rule 2), the report pin (the README label), and the
-  `target` print pins. `tests/test_variables.py` changes for the declaration set, which is now the credentials
-  plus the site values plus the names the table records with no value. `tests/test_commit_actions.py` gains the
-  push emission pins.
-- The corpus produces no finding for the `variables` rule, the `actions` rule, or the `data_files` rule, and the
-  exit codes are unchanged.
+## 4. The gated pieces
+
+The four `*_policy_rules` types stay gated by the F3.5 rulebase decision. They are not part of this slice
+and stay in `backlog.md`, not in `to-do.md`. No import block, no action, and no gate rule changes for them.
+
+The write path gate keeps its rules: one writer, the two path builders, the `.tf` set read by the block
+rules and the four records read by the data rule, no new CLI flag, and the exit codes unchanged.
+
+## 5. Tracking markdown
+
+1. `PLAN.md`: Epic 6 is closed, so its feature detail is removed; the open work is the next feature queue.
+2. `to-do.md`: the completed F6.10.5 pieces are removed.
+3. `agent-status.md`: the position, the test count, and the pins that changed.
+4. No document restates a rule another document owns, and no document states a test count.
+5. Every claim names the module or the test that holds it.
+
+## 6. Commit
+
+One commit whose message starts with `F6.10.5:`, states the two decisions and the housekeeping choice in
+ASD-STE100, and states that Epic 6 is closed.

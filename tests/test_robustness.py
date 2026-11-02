@@ -158,7 +158,7 @@ def test_declare_resource_name_avoids_collisions(generator):
     import panorama_to_terraform
     scope = 'panos_address'
     # F6.10.2: the naming site takes the object, so the unit the name belongs to is the
-    # object's four facts, read through `unit_manifest.facts_of`.
+    # object's five facts, read through `unit_manifest.facts_of`.
     objs = {raw: {'name': raw} for raw in ('a-b', 'a_b', 'A-B')}
     first = generator.declare_resource_name('a-b', scope, objs['a-b'])
     second = generator.declare_resource_name('a_b', scope, objs['a_b'])
@@ -295,7 +295,7 @@ def test_declare_same_name_in_two_vsys_gets_unique_names(generator):
 def test_name_ref_resolves_inside_the_referrers_own_vsys(generator):
     """F3.2, F6.10.2: a referrer resolves a name its own unit declares, not another vsys's copy.
 
-    The device group alone is not a unit: the four facts decide, so a rule in vsys2 reaches vsys2's
+    The device group alone is not a unit: the five facts decide, so a rule in vsys2 reaches vsys2's
     object and keeps the plain name for the copy vsys1 declared.
     """
     scope = 'panos_address'

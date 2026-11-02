@@ -2,51 +2,79 @@
 
 ## Current position
 
-F6.10.4 (the site half) is complete and committed. The suite is 1310 tests, all green, and `ruff check .` is
-clean.
+F6.10.5 is complete and committed on `development`, which closes Epic 6. The suite is 1315 tests, all
+green (1310 at the start of this slice), and `ruff check .` is clean. The next feature is the open Epic 7
+work: the routing levels `resource_mapping.PROTOCOL_SHAPE` does not state (`backlog.md`).
 
-The three decisions:
+`acceptance.md` holds this slice's criteria and must be overwritten for the next one.
 
-- `target` is one row in `resource_mapping.VALUE_VARIABLES` with the new shape word `OPERATOR_SUPPLIED`: the run
-  names the variable, holds no value for it, and the operator supplies the value in `terraform.tfvars`. The corpus
-  states no serial, because every device entry name is a hostname, so the tool cannot name one without guessing.
-  `sensitive = true` stays the `REFERENCE_ONLY` row's rule alone, so the table is read in one place and no name
-  list decides a marking. The name is `naming.variable_name(field)`, because a fact the tool cannot read has no
-  value to name it from. No site row and no `.tfvars` line is written for it.
-- `printed_value(key, value, facts)` now takes the unit's facts, so the print site records the pair and the shape
-  through `unit_manifest.facts_of`; `value_shapes()` is the accessor for the shape. `generate_variables()` reads
-  the shape to decide the marking, and `generate_provider_config()` records the pair before it runs, because
-  `main()` calls the provider block first.
-- `provider.tf` prints `target = var.target` only for a unit whose manifest row names a device, so the declaration
-  has a consumer in the same directory. The sample set names no device, so it holds no `target`.
+### Decision 1: the stack is the fifth scope fact
 
-The push half:
+- `container_coverage.SCOPE_FACT_KEYS` holds five facts, and `template_stack` is appended, because that
+  order is the unit identity join (`docs/ARCHITECTURE.md` §5). `unit_manifest.py`, `ownership.py`,
+  `state_coverage.py`, `reference_edges.py`, and `entry_coverage.py` read the fact order through that one
+  table, so no module states a second order.
+- `PanoramaParser.identity_of` returns five facts, and `template_stack_of` is the scope-walk row for it in
+  `container_coverage.CONTAINER_TABLE` (F6.10.5).
+- Reading `template` as the stack name was rejected: `resource_mapping.ACTION_FILTERS` maps
+  `template_stacks` → `template_stack`, `resource_mapping.SCOPE_ANSWER` answers `panos_template_stack` for
+  the fact, `resource_mapping.SCOPE_PLACEMENT` gives `panos_template_variable` the two sub-blocks, and
+  `entry_coverage.REPORT_SCOPE_KEYS` maps `template-stack` → `template_stack`. One fact with two meanings
+  would make a filter field name both a template and a stack.
+- `unit_manifest.NAME_LEVELS` reads innermost first: `vsys`, `vsys_device`, `template`, `template_stack`,
+  `device_group`, so a template inside a stack names its template. A stack entry names its own unit, so a
+  run that declares a stack writes one directory for it and the commit and push blocks for that unit come
+  from `ACTION_FILTERS` (`tests/test_unit_manifest.py::test_the_stack_names_its_unit`).
+- `reference_edges.LEVEL_KEYS` gained `template_stack`, so a unit inside a stack depends on the stack unit.
+- `state_coverage.STATE_SCOPE_KEYS` gained `template_stack`, so an entry placed inside a stack is keyed. The
+  test that pins a sub-block the row does not declare now uses a sub-block `LOCATION_SCHEMA` does not
+  declare for `panos_address` (`tests/test_state_coverage.py::test_a_block_the_row_does_not_declare_is_not_keyed`).
+- `panos_template_variable` no longer states `template_stack` as a captured property, so its
+  `COVERAGE_MATRIX` row lists four properties (`tests/test_property_coverage.py`,
+  `tests/test_entry_coverage.py::test_captured_fields_exclude_name_and_scope_facts`).
 
-- `commit_actions.py` emits one push block per unit through `ACTION_FILTERS`, `SCOPE_ANSWER` and `ACTION_SCHEMA`:
-  `name` prints the fact the unit declares and `type` prints the fact key. No `devices`, because the tool names no
-  serial, so the provider's documented default pushes to all devices in the target. A shared, vsys or device unit
-  writes no push block. Within one unit the blocks print in the `ACTION_SCHEMA` order (commit, then push), and the
-  commit block and the push block for one unit share one address, because the action address is
-  `action.<type>.<label>`.
-- `ROW_FIELDS` gained `action`, `FACT_KEY_FIELD` is `type`, `filter_field(fact, action)` takes the action, and
-  `block_fields` and `field_text` are the emitter's two shape helpers. `read_block` records the stated field and
-  the action, so the gate reports what a block states instead of the filter field the fact would answer for.
-- `test_commit_actions.py` gained group 7 for the push block, and the address pins read the pair
-  (`action`, address) as the key for one row.
+### Decision 2: the tool decides no module parameter
 
-The README: the generated file now names `imports.tf`, `SITE_DATA.json` and `site.auto.tfvars` and names `target`
-as a fact the tool names as a variable. It states no row, no value, no mapping result, no count, no path and no
-timestamp, so the rule that no report names a field the site data states holds for the site record with the README
-as the file-inventory exception (`tests/test_site_data.py::test_no_report_names_a_field_the_site_data_states`,
-`::test_the_readme_names_the_site_files_and_states_no_row`).
+A module is a standard a person writes, so the tool writes the data a module consumes and decides no
+parameter. A template variable value, and a membership list in `scope.tf`, stay the literal the export
+states, because the block *is* the PAN-OS variable (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2). This closed with
+no byte change, and the open item is removed from `backlog.md`.
 
-Pins that changed: `tests/test_site_data.py` (the table rows, the README exception, the golden print pins),
-`tests/test_variables.py` (the declaration set is the credentials plus the site values plus the names the table
-records with no value), and `tests/test_protocol_object.py` (`printed_value` takes facts). Both golden sets
-regenerated from a real run: `provider.tf` and `actions.tf` changed.
+### Housekeeping: the sample output
 
-The next slice is F6.10.5, which closes Epic 6: the template stack unit, and the module parameter rule.
-`acceptance.md` holds F6.10.4's criteria and must be overwritten for it.
+The repository holds no committed sample output, so nothing was regenerated or deleted. `terraform_output/`
+is the default value of `--output-dir` and `.gitignore` ignores it. The canonical sample output is the
+golden set (`tests/golden/sample/`, `tests/golden/kitchen_sink/`, `tests/golden/single_unit/`), which
+`tests/test_golden_files.py` pins byte for byte. The layout work that renames paths stays in `backlog.md`.
+
+### Pins that changed
+
+- The fact order is the digest input, so every unit digest moved. 71 old→new pairs were re-measured from a
+  real run and applied to `tests/test_unit_manifest.py`, `tests/test_ownership.py`,
+  `tests/test_reference_edges.py`, `tests/test_site_data.py`, and `tests/test_write_path.py`. The unit that
+  holds no fact moved from `shared_be5be69f` to `shared_45ca31c3`, because the join gained one separator, and
+  the sample run's shared unit moved from `shared_0bc98741` to `shared_a6577c11`: the placeholder names no
+  unit, but it is still part of the identity.
+- The three golden sets regenerated from a real run, never by hand. `tests/golden/kitchen_sink/` gained the
+  stack unit directory `branch_stack_5c39384d`. The changed bytes are the action addresses, the data-block
+  names that state the fact order, and the unit directory names. A resource local name did not change,
+  because its identity is context plus vsys.
+- The corpus unit counts moved: `tests/test_write_path.py` counts eleven units for the kitchen sink run, and
+  `tests/test_golden_files.py` gained three cases for the new unit directory.
+- Pins that name a unit moved where the stack entry stopped naming the shared unit, not only by digest: the
+  kitchen sink run names the stack unit `branch_stack_5c39384d` instead of the shared unit, so
+  `tests/test_reference_edges.py` (the level order group) reads the stack unit as the shallower scope, and
+  `tests/test_unit_manifest.py::test_the_stack_names_its_unit` pins the stack unit and its two entries.
+  `tests/test_container_coverage.py` reads the fact set the scope-walk rows cover, and
+  `tests/test_state_coverage.py::test_a_stack_sub_block_keys_the_fact_it_names` pins the key for a state
+  entry placed inside a stack.
+- Test names that state the fact count: `test_one_row_per_combination_of_the_five_facts`,
+  `test_every_parse_method_records_the_five_scope_facts`, `test_a_block_the_row_does_not_declare_is_not_keyed`.
+- The suite gained five tests: `tests/test_unit_manifest.py::test_the_stack_names_its_unit`,
+  `tests/test_state_coverage.py::test_a_stack_sub_block_keys_the_fact_it_names`, and three
+  `tests/test_golden_files.py` cases for the new unit directory.
+- `docs/CODEBASE_ASSEMBLY.md` §3 and `docs/ARCHITECTURE.md` §2.2 name the new test, and the sentence that
+  said no stack unit is named today is removed.
 
 ## Rules to keep when writing documents
 
@@ -65,12 +93,14 @@ The next slice is F6.10.5, which closes Epic 6: the template stack unit, and the
 - Completed epic, phase, feature and task detail is removed from the tracking markdown after
   the work is committed; `AGENTS.md` states the rule.
 
-## Watch for Epic 6 and Epic 7
+## Watch for Epic 7 and the write path
 
 - The write path landed (`docs/CODEBASE_ASSEMBLY.md` §14): the run writes one directory per unit the manifest
   names, and the codebase root holds the root set. A new file shape must name which set it belongs to, and the
-  report counts, the console line and the tests that read the file set change with it. F6.10.4 landed the `target`
-  name and the push shape. What F6.10.5 can decide is the template stack unit and the module parameter rule.
+  report counts, the console line and the tests that read the file set change with it.
+- `unit_manifest.units` is the run's unit set, so a rule that names a unit for a directory, an owner, or an
+  edge reads it through that one function. A unit exists only when the ledger has a row in it, and the fact
+  order is the identity join, so a new fact changes every digest and every golden in the same commit.
 - `VALUE_VARIABLES` is the single shape owner and `sensitive = true` is the `REFERENCE_ONLY` row's rule alone, so a
   new shape word must be read in the table and not by a name list. The test that pins the declaration set reads the
   names the table records with no value (`tests/test_variables.py`), and the test that pins the report rule carves
@@ -106,7 +136,9 @@ The next slice is F6.10.5, which closes Epic 6: the template stack unit, and the
   `emitted` with the provider type in its note, because the matrix row and the report both read the note.
 - `SCOPE_PLACEMENT` and the location sub-block are one fact: a new scope type needs both the
   placement key and the `SCOPE_ANSWER` entry, and the emitter reads the placement key as the
-  location, so a new row cannot place itself in a scope it does not name.
+  location, so a new row cannot place itself in a scope it does not name. A config type has no
+  `template_stack` sub-block, so a config entry inside a stack writes no block and is a finding
+  recorded in `backlog.md`.
 - The entry name is never a property. A row whose provider type declares no `name` reaches the
   block through `entry_coverage.name_field`; no emitter, gate rule, or test should state the
   field again.
@@ -122,8 +154,10 @@ The next slice is F6.10.5, which closes Epic 6: the template stack unit, and the
 - The import position for the four `*_policy_rules` types must be the position the live config
   holds, and the F3.5 rulebase decision gates it. No block is written for a rule entry until both
   land.
-- The generated `README.md` does not name `imports.tf`, `SITE_DATA.json` or `site.auto.tfvars`;
-  the F5.5 label precedent says an opt-in shape labels itself.
+- The generated `README.md` names `imports.tf`, `SITE_DATA.json` and `site.auto.tfvars`, and it names
+  `target` as a fact the tool names as a variable. It states no row, no value, no mapping result, no count,
+  no path and no timestamp, so the report rule holds for the site record with the README as the
+  file-inventory exception (`tests/test_site_data.py`).
 - Actions need Terraform 1.14 or later; the committed goldens now declare it, so a change to the
   minimum is a golden change.
 - The credential rule needs one statement that covers both the fetch layer and the generated

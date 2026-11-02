@@ -60,7 +60,7 @@ UNIT_FILES = ('provider.tf', 'scope.tf', import_blocks.IMPORT_FILE, commit_actio
              'variables.tf', 'read_through.tf', 'security_profiles.tf', site_data.TFVARS_FILE)
 
 # A unit directory the corpus manifest names, for the pins that read a file inside one.
-UNIT_DIR = 'shared_0bc98741'
+UNIT_DIR = 'shared_a6577c11'
 
 # The words a flag would need to name the layout. The scan reads `--help`, so the test names none of them.
 LAYOUT_WORDS = ('unit', 'directory', 'split', 'layout', 'flat')
@@ -154,7 +154,7 @@ def test_the_run_writes_one_directory_per_unit_the_manifest_names(corpus_run):
     a directory even when the run writes no block inside it, so the shape is the rule and not the content.
     """
     rows = _rows(corpus_run)
-    assert len(rows) == 10, 'the corpus names ten units, so one set per unit is ten sets'
+    assert len(rows) == 11, 'the corpus names eleven units, so one set per unit is eleven sets'
     dirs = sorted(row['directory'] for row in rows)
     assert sorted(p.name for p in corpus_run.iterdir() if p.is_dir()) == dirs, \
         'one directory per unit, named by the row, in the order the row prints'
@@ -239,7 +239,7 @@ def test_the_data_rule_is_one_rule_over_the_rows_of_every_unit(corpus_run):
     directory each row names, so that half names the path.
     """
     rows = _rows(corpus_run)
-    assert len({row['directory'] for row in rows}) == len(rows) == 10, 'one record holds every unit rows'
+    assert len({row['directory'] for row in rows}) == len(rows) == 11, 'one record holds every unit rows'
     assert dict(sanity_checks.DATA_FILES) == RECORDS, 'each record is read through the module that owns it'
 
     rule = _rule_source('check_data_files', 'def check_control_chars')
@@ -380,8 +380,8 @@ def test_the_write_path_states_two_builders_one_per_set():
     """The unit set is written inside the directory the row names and the root set at the root, so a writer
     names which builder it uses.
     """
-    assert write_path.unit_path(Path('out'), 'shared_be5be69f', 'provider.tf') == \
-        Path('out') / 'shared_be5be69f' / 'provider.tf'
+    assert write_path.unit_path(Path('out'), 'shared_45ca31c3', 'provider.tf') == \
+        Path('out') / 'shared_45ca31c3' / 'provider.tf'
     assert write_path.root_path(Path('out'), unit_manifest.MANIFEST_FILE) == \
         Path('out') / unit_manifest.MANIFEST_FILE
 

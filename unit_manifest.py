@@ -4,7 +4,7 @@ A unit is one declared scope (`docs/CODEBASE_ASSEMBLY.md` §1). The manifest is 
 codebase needs before a directory, an owner, or a reference edge can be named. Five rules,
 stated once here.
 
-1. The unit. One unit is one combination of the four scope facts (`ARCHITECTURE.md` §2.2), and
+1. The unit. One unit is one combination of the five scope facts (`ARCHITECTURE.md` §2.2), and
    a unit exists when the ledger has a report row in it. The rows come from
    `entry_coverage.EntryLedger`, so the manifest adds no parse data. An entry inside a
    config-object entry is a property level (§3.1), so the parent row's count covers it.
@@ -65,23 +65,24 @@ MANIFEST_FILE = 'CODEBASE_MANIFEST.json'
 # Field order. Fixed, so two runs write the same bytes and a reader does not guess.
 # The field names are the printed keys, so `parse_rows` reads a row back as itself.
 # `rank` and `after` are the unit order (rule 5), so they print after the F6.1 fields.
-FIELD_ORDER = ('unit', 'device_group', 'vsys', 'template', 'vsys_device',
+FIELD_ORDER = ('unit', 'device_group', 'vsys', 'template', 'vsys_device', 'template_stack',
                'directory', 'entry_count', 'references', 'rank', 'after')
 
-# The four scope facts (F3.1, F3.2), read through `container_coverage`, so the identity order is
-# the order the state scan keys on (`state_coverage.ownership_key`).
+# The five scope facts (F3.1, F3.2, F6.10.5), read through `container_coverage`, so the identity
+# order is the order the state scan keys on (`state_coverage.ownership_key`).
 FACT_KEYS = container_coverage.SCOPE_FACT_KEYS
 
-# The level order the F3.9 rule states (device group, then template, then device), read from the
-# deepest level inward, so the deepest declared scope names the unit. The virtual system is the
-# innermost scope the export declares, so it is first here.
-NAME_LEVELS = ('vsys', 'vsys_device', 'template', 'device_group')
+# The level order the F3.9 rule states (device group, then template, then template stack, then
+# device), read from the deepest level inward, so the deepest declared scope names the unit. The
+# virtual system is the innermost scope the export declares, so it is first here, and a template
+# inside a stack names its template because the template is deeper than the stack (F6.10.5).
+NAME_LEVELS = ('vsys', 'vsys_device', 'template', 'template_stack', 'device_group')
 
 DIGEST_HEX = 8
 
 # The shared section, as the F3.9 rule names it. `Shared` in `device_group` is the parse fallback
 # for an entry the parse cannot place (§2.2), so it is the name of the shared unit and never a
-# fact value: the shared unit is the unit whose four facts are empty.
+# fact value: the shared unit is the unit whose five facts are empty.
 SHARED_UNIT = 'Shared'
 
 # A name that sanitizes to nothing, as §5 states it.
@@ -111,7 +112,7 @@ def named_fact(facts: tuple) -> tuple:
     The same rule `unit_name` states: the deepest scope the export declares, in the F3.9 level
     order, and the placeholder device never names anything (F3.5). The commit action needs the key
     as well as the name, so the rule is read through this one function and `unit_name` is a
-    delegate; no module states the level order a second time. A unit whose four facts are empty
+    delegate; no module states the level order a second time. A unit whose five facts are empty
     names no fact, so the pair is empty, and `Shared` is the name of the shared section, not a fact.
     """
     for key in NAME_LEVELS:
@@ -128,7 +129,7 @@ def unit_name(facts: tuple) -> str:
 
 
 def identity_digest(facts: tuple) -> str:
-    """The 8-hex digest of the unit identity: the four facts, in field order, joined by `|`."""
+    """The 8-hex digest of the unit identity: the five facts, in field order, joined by `|`."""
     return hashlib.sha256('|'.join(facts).encode()).hexdigest()[:DIGEST_HEX]
 
 

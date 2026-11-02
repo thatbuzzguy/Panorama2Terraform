@@ -49,8 +49,8 @@ STATE_FIXTURE = 'state_workspace.json'
 WORKSPACE = 'production'
 
 # The two units the fixture declares, and the three names the rule decides differently.
-SHARED = ('', '', '', '')
-BRANCH = ('Branch-DG', '', '', 'localhost.localdomain')
+SHARED = ('', '', '', '', '')
+BRANCH = ('Branch-DG', '', '', 'localhost.localdomain', '')
 FLAGGED = 'App-Server'       # the flag is on the ancestor: the repeat is a contradiction
 DECIDED = 'Printer-Pool'     # no flag: the rule names the owner
 REVERSED = 'Desk-Phone'      # the flag is on a descendant: the rule names no owner
@@ -206,7 +206,7 @@ def test_an_entry_inside_a_config_object_entry_writes_no_row(converter_module, t
     out = tmp_path / 'out'
     parser, _generator, _code = _pipeline(converter_module, FIXTURES_DIR / GROUPING, out)
     parent = next(row for row in parser.ledger.rows() if row['property_entries'] == 1)
-    assert unit_manifest.facts_of(parent) == ('Office-FW', '', '', '')
+    assert unit_manifest.facts_of(parent) == ('Office-FW', '', '', '', '')
     assert '10.1.1.1/24' not in [row['entry'] for row in _record(out)], 'the ip entry is a property level'
 
 
@@ -329,8 +329,8 @@ def test_a_stated_parent_names_the_ancestor(converter_module, tmp_path):
     """
     rows = _scan(converter_module, FIXTURES_DIR / 'ownership_parent.xml', tmp_path / 'out')
     device = container_coverage.PLACEHOLDER_DEVICE
-    ancestor = _row(rows, 'Printer-Pool', ('Parent-DG', '', '', device))
-    descendant = _row(rows, 'Printer-Pool', ('Child-DG', '', '', device))
+    ancestor = _row(rows, 'Printer-Pool', ('Parent-DG', '', '', device, ''))
+    descendant = _row(rows, 'Printer-Pool', ('Child-DG', '', '', device, ''))
     assert ancestor['kind'] == 'definition' and ancestor['owner'] == ancestor['directory']
     assert descendant['kind'] == 'override' and descendant['owner'] == ancestor['directory']
     assert not ownership.findings(rows), 'the export states the relation, so it is not a finding'
@@ -470,8 +470,8 @@ def test_the_goldens_are_byte_identical(tmp_path):
 # --- 5. the record shape ------------------------------------------------------
 
 GOOD = {'type': 'panos_address', 'entry': 'App-Server', 'source': 'ownership_override.xml',
-        'device_group': '', 'vsys': '', 'template': '', 'vsys_device': '',
-        'directory': 'shared_be5be69f', 'owner': 'shared_be5be69f',
+        'device_group': '', 'vsys': '', 'template': '', 'vsys_device': '', 'template_stack': '',
+        'directory': 'shared_45ca31c3', 'owner': 'shared_45ca31c3',
         'kind': 'definition', 'override': 'yes'}
 
 

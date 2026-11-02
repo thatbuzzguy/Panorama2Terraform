@@ -209,7 +209,7 @@ def test_parse_bgp_enabled(make_parser):
     # operator types in the GUI and the emitter maps it to the provider key.
     assert group["type"] == {"external": {"export_nexthop": "self", "import_nexthop": "self",
                                           "remove_private_as": ""}}
-    # The four facts belong to the entry the ledger marks, so the choice body holds none of them.
+    # The five facts belong to the entry the ledger marks, so the choice body holds none of them.
     assert not set(group["type"]["external"]) & entry_coverage.NON_FIELD_KEYS, group["type"]
 
     # The peer the export puts inside the peer-group element is captured on that entry, so the

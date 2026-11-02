@@ -190,10 +190,10 @@ def test_parser_records_no_invented_scope(make_parser):
     assert routers['vr-device-level']['template'] == ''
 
 
-def test_every_parse_method_records_the_four_scope_facts(make_parser):
-    """Every parse method records the four scope facts on every object (F3.10).
+def test_every_parse_method_records_the_five_scope_facts(make_parser):
+    """Every parse method records the five scope facts on every object (F3.10, F6.10.5).
 
-    The emitter places a resource from these four facts alone, so an object
+    The emitter places a resource from these five facts alone, so an object
     without them cannot be placed. The rule holds for every parse method that
     returns objects. parse_device_groups is the one exception: it returns the
     device groups themselves, which are the scope, not an object inside a
@@ -222,7 +222,7 @@ def test_every_parse_method_records_the_four_scope_facts(make_parser):
             values = result.values() if isinstance(result, dict) else [result]
             items = [item for value in values if isinstance(value, list) for item in value]
             for item in items:
-                assert facts <= set(item), f'{name} returned an object without the four facts: {item}'
+                assert facts <= set(item), f'{name} returned an object without the five facts: {item}'
                 checked += 1
     assert checked > 40, f'only {checked} objects checked: the fixture does not exercise the rule'
 

@@ -4,15 +4,15 @@
 # the provider pushes to all devices in the target.
 # Actions need Terraform 1.14 or later, which the `terraform` block declares (§12).
 
-action "panos_commit" "dev_dg_66a86129" {
+action "panos_commit" "production_dg_1d9ddc26" {
   config {
-    device_groups = ["Dev-DG"]
+    device_groups = ["Production-DG"]
   }
 }
 
-action "panos_push_to_devices" "dev_dg_66a86129" {
+action "panos_push_to_devices" "production_dg_1d9ddc26" {
   config {
-    name = "Dev-DG"
+    name = "Production-DG"
     type = "device_group"
   }
 }

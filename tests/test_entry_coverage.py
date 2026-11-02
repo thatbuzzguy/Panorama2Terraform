@@ -340,7 +340,7 @@ def test_predefined_entries_are_not_rows():
 # --- 4. Captured fields ----------------------------------------------------
 
 def test_captured_fields_exclude_name_and_scope_facts():
-    """The row identity and the four scope facts are not captured fields."""
+    """The row identity and the five scope facts are not captured fields."""
     assert 'name' in entry_coverage.NON_FIELD_KEYS
     assert set(container_coverage.SCOPE_FACT_KEYS) <= entry_coverage.NON_FIELD_KEYS
     mark = {'captured': {'name': 'GW-Common', 'pre_named': True, 'vsys': 'vsys1',

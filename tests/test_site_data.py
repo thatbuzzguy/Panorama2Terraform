@@ -46,24 +46,24 @@ KITCHEN = 'kitchen_sink.xml'
 # that starts naming a value must be added here in the same change, so no fixture can become a
 # silent false positive.
 CORPUS_ROWS = {
-    'dependency_wiring.xml': [('vsys1_a62792be', {'device1': 'device1'})],
+    'dependency_wiring.xml': [('vsys1_d7045c06', {'device1': 'device1'})],
     KITCHEN: [
-        ('fw_2_example_com_5cef6fb6', {naming.variable_name(DEVICE): DEVICE}),
-        ('vsys1_53549b38', {naming.variable_name(DEVICE): DEVICE}),
-        ('vsys2_803b06c0', {naming.variable_name(DEVICE): DEVICE}),
+        ('fw_2_example_com_35aafbcf', {naming.variable_name(DEVICE): DEVICE}),
+        ('vsys1_78d8e4bc', {naming.variable_name(DEVICE): DEVICE}),
+        ('vsys2_30925639', {naming.variable_name(DEVICE): DEVICE}),
     ],
     'multi_device_templates.xml': [
-        ('fw_1_example_com_21a67a9f', {'fw_1_example_com': 'fw-1.example.com'}),
-        ('fw_2_example_com_5cef6fb6', {naming.variable_name(DEVICE): DEVICE}),
+        ('fw_1_example_com_6a71771b', {'fw_1_example_com': 'fw-1.example.com'}),
+        ('fw_2_example_com_35aafbcf', {naming.variable_name(DEVICE): DEVICE}),
     ],
     'reference_cycle.xml': [
-        ('fw_a_example_com_4daa3d43', {'fw_a_example_com': 'fw-a.example.com'}),
-        ('fw_b_example_com_f80a1db9', {'fw_b_example_com': 'fw-b.example.com'}),
+        ('fw_a_example_com_4febb524', {'fw_a_example_com': 'fw-a.example.com'}),
+        ('fw_b_example_com_85c521ca', {'fw_b_example_com': 'fw-b.example.com'}),
     ],
-    'report_grouping.xml': [('fw_2_example_com_5cef6fb6', {naming.variable_name(DEVICE): DEVICE})],
+    'report_grouping.xml': [('fw_2_example_com_35aafbcf', {naming.variable_name(DEVICE): DEVICE})],
     'virtual_routers.xml': [
-        ('fw_1_example_com_21a67a9f', {'fw_1_example_com': 'fw-1.example.com'}),
-        ('vsys2_bbdff6d9', {'fw_1_example_com': 'fw-1.example.com'}),
+        ('fw_1_example_com_6a71771b', {'fw_1_example_com': 'fw-1.example.com'}),
+        ('vsys2_27ce8e0a', {'fw_1_example_com': 'fw-1.example.com'}),
     ],
 }
 
@@ -227,19 +227,19 @@ def test_parse_rows_refuses_a_row_that_is_not_the_declared_shape():
     value that is not a string or a list, and a name that is not the §5 shape of its value are
     refusals.
     """
-    good = {'directory': 'vsys1_a62792be', 'variables': {'device1': 'device1'}}
+    good = {'directory': 'vsys1_d7045c06', 'variables': {'device1': 'device1'}}
     assert site_data.parse_rows(site_data.render([good])) == [good]
     bad_rows = [
         dict(good, source='tests/fixtures/dependency_wiring.xml'),
-        {'directory': 'vsys1_a62792be'},
+        {'directory': 'vsys1_d7045c06'},
         {'variables': {'device1': 'device1'}},
         {'directory': '', 'variables': {'device1': 'device1'}},
-        {'directory': 'vsys1_a62792be', 'variables': ['device1']},
-        {'directory': 'vsys1_a62792be', 'variables': {'device1': 1}},
-        {'directory': 'vsys1_a62792be', 'variables': {'device1': ['device1', 2]}},
+        {'directory': 'vsys1_d7045c06', 'variables': ['device1']},
+        {'directory': 'vsys1_d7045c06', 'variables': {'device1': 1}},
+        {'directory': 'vsys1_d7045c06', 'variables': {'device1': ['device1', 2]}},
         # A name that is not the §5 shape of its value: the name is the mapping result, not a choice.
-        {'directory': 'vsys1_a62792be', 'variables': {'device1': 'device-1'}},
-        {'directory': 'vsys1_a62792be', 'variables': {'': 'device1'}},
+        {'directory': 'vsys1_d7045c06', 'variables': {'device1': 'device-1'}},
+        {'directory': 'vsys1_d7045c06', 'variables': {'': 'device1'}},
     ]
     for row in bad_rows:
         with pytest.raises(ValueError):
@@ -254,8 +254,8 @@ def test_the_fields_print_in_the_declared_order():
     """
     assert site_data.ROW_FIELDS == ('directory', 'variables')
     rows = [
-        {'directory': 'vsys2_803b06c0', 'variables': {naming.variable_name(DEVICE): DEVICE}},
-        {'directory': 'fw_2_example_com_5cef6fb6', 'variables': {naming.variable_name(DEVICE): DEVICE}},
+        {'directory': 'vsys2_30925639', 'variables': {naming.variable_name(DEVICE): DEVICE}},
+        {'directory': 'fw_2_example_com_35aafbcf', 'variables': {naming.variable_name(DEVICE): DEVICE}},
     ]
     printed = site_data.render(rows)
     assert list(site_data.parse_rows(printed)[0]) == list(site_data.ROW_FIELDS)
@@ -270,7 +270,7 @@ def test_the_tfvars_bytes_for_a_string_value():
     """One line per variable, in name order, and the escape set is the one `import_blocks.unescape`
     reads back, so no second escape rule appears.
     """
-    rows = [{'directory': 'vsys1_a62792be', 'variables': {'device1': 'device1'}}]
+    rows = [{'directory': 'vsys1_d7045c06', 'variables': {'device1': 'device1'}}]
     text = site_data.render_tfvars(rows)
     line = f"device1 = {site_data.value_text('device1')}\n"
     assert line in text, text
@@ -287,7 +287,7 @@ def test_a_list_prints_inline_and_an_empty_list_prints_empty():
     """
     assert site_data.value_text(['a', 'b']) == '[ "a", "b" ]'
     assert site_data.value_text([]) == '[]'
-    rows = [{'directory': 'vsys1_a62792be', 'variables': {'tags': ['a', 'b']}}]
+    rows = [{'directory': 'vsys1_d7045c06', 'variables': {'tags': ['a', 'b']}}]
     assert 'tags = [ "a", "b" ]' in site_data.render_tfvars(rows)
 
 
@@ -305,22 +305,22 @@ def test_a_name_two_rows_state_prints_one_line():
     """
     name = naming.variable_name(DEVICE)
     rows = [
-        {'directory': 'vsys1_a62792be', 'variables': {name: DEVICE}},
-        {'directory': 'vsys2_803b06c0', 'variables': {name: DEVICE}},
+        {'directory': 'vsys1_d7045c06', 'variables': {name: DEVICE}},
+        {'directory': 'vsys2_30925639', 'variables': {name: DEVICE}},
     ]
     text = site_data.render_tfvars(rows)
     assert text.count(f'{name} = {site_data.value_text(DEVICE)}') == 1, text
 
     lines = [line for line in site_data.render_tfvars([
-        {'directory': 'vsys2_803b06c0', 'variables': {'scope_b': 'scope-b'}},
-        {'directory': 'vsys1_a62792be', 'variables': {'scope_a': 'scope-a'}},
+        {'directory': 'vsys2_30925639', 'variables': {'scope_b': 'scope-b'}},
+        {'directory': 'vsys1_d7045c06', 'variables': {'scope_a': 'scope-a'}},
     ]).split('\n') if line and not line.startswith('#')]
     assert lines == ['scope_a = "scope-a"', 'scope_b = "scope-b"'], lines
 
     with pytest.raises(ValueError):
         site_data.render_tfvars([
-            {'directory': 'vsys1_a62792be', 'variables': {'tags': ['a']}},
-            {'directory': 'vsys2_803b06c0', 'variables': {'tags': ['b']}},
+            {'directory': 'vsys1_d7045c06', 'variables': {'tags': ['a']}},
+            {'directory': 'vsys2_30925639', 'variables': {'tags': ['b']}},
         ])
 
 
@@ -456,7 +456,7 @@ def test_the_provider_block_prints_target_only_for_a_unit_that_names_a_device(tm
     # holds the reference in three unit files and no target row in the sample set, which names no device.
     printed = sorted({Path(path).parent.name for path in (GOLDEN_DIR / 'kitchen_sink').rglob('provider.tf')
                       if 'target = var.target' in path.read_text(encoding='utf-8')})
-    assert printed == ['fw_2_example_com_5cef6fb6', 'vsys1_53549b38', 'vsys2_803b06c0'], printed
+    assert printed == ['fw_2_example_com_35aafbcf', 'vsys1_78d8e4bc', 'vsys2_30925639'], printed
     for path in sorted((GOLDEN_DIR / 'sample').rglob('provider.tf')):
         assert 'var.target' not in path.read_text(encoding='utf-8'), path
     # F6.10.3: `variables.tf` is the unit's file, so the declaration set is the union the run wrote,

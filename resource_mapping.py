@@ -1038,8 +1038,8 @@ SCOPE_LEVEL_ORDER = (
 )
 
 # The key the parse method records for the scope a scope entry sits in, in the order the emitter
-# tries it. `template` is one of the four scope facts; `template_stack` is the property the
-# template variable row declares, because the emitter reads it to choose the sub-block.
+# tries it. Both keys are scope facts (F6.10.5), so the placement key is the fact the emitter reads
+# to choose the sub-block, and the property scan counts no property for either.
 SCOPE_PLACEMENT = {
     'panos_device_group': (),
     'panos_device_group_parent': (),
@@ -1536,7 +1536,7 @@ NOT_EMITTED_TYPES = {
 #                  properties. Two names when a report writer reads properties
 #                  the .tf emitter does not.
 #   properties   - the keys of the parsed object those emitters read. The
-#                  entry name and the four scope facts are the row identity,
+#                  entry name and the five scope facts are the row identity,
 #                  not properties, so they are not listed here.
 #
 # Maintenance duty: an emitter change that adds, renames, or drops a
@@ -2003,8 +2003,11 @@ COVERAGE_MATRIX = (
         'emitter': ('generate_scope_objects',),
         'properties': ('default_vsys', 'description', 'devices', 'templates'),
     }, {
-        # `template_stack` is the placement fact the emitter reads to choose the location
-        # sub-block. The value prints as a literal until F6.6 makes it a `var.` reference.
+        # `template_stack` is a scope fact (F6.10.5), so the row lists no property for it: the
+        # emitter reads it to choose the location sub-block, and the fact is part of the row identity
+        # (`entry_coverage.NON_FIELD_KEYS`). The value prints as a literal, because the block is the
+        # PAN-OS variable and the tool cannot know which values a module takes as parameters
+        # (§9 rule 2).
         'resource': 'panos_template_variable',
         'xml_element': 'variable/entry',
         'xml_name': 'edge-tag',
@@ -2012,7 +2015,7 @@ COVERAGE_MATRIX = (
         'fixture': 'scope_objects.xml',
         'output_file': 'scope.tf',
         'emitter': ('generate_scope_objects',),
-        'properties': ('description', 'template_stack', 'type'),
+        'properties': ('description', 'type'),
     }, {
         # A virtual system block carries the entry name and the location only, so this row
         # declares no property.

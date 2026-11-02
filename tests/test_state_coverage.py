@@ -45,7 +45,7 @@ OWNED_NAME = 'Web-Server-1'
 OWNED_LINE = 5
 ORDER_NAME = 'Web-Services'
 STATE_ADDRESS = 'panos_address.web_server_1_11f477f4'
-NO_FACTS = {'device_group': '', 'vsys': '', 'template': '', 'vsys_device': ''}
+NO_FACTS = {'device_group': '', 'vsys': '', 'template': '', 'vsys_device': '', 'template_stack': ''}
 FOOTER = 'Entry lines are grouped by'
 
 
@@ -127,13 +127,13 @@ def test_a_nested_block_reads_as_an_object_or_a_one_element_list(state):
 # --- 2. The ownership fact ---------------------------------------------------
 
 def test_the_key_is_identity_as_the_f3_9_rule_reads_it(converter_module, tmp_path, state):
-    """AC-2.1: the matrix row, the entry name, and the four declared facts, read from the run.
+    """AC-2.1: the matrix row, the entry name, and the five declared facts, read from the run.
     A shared run entry is keyed with empty facts, never with the `Shared` fallback."""
     findings = _findings(converter_module, RUN_FIXTURE, tmp_path / 'out', state)
     row = next(f for f in findings if f['name'] == OWNED_NAME)
     key = state_coverage.ownership_key(row['resource'], row['name'],
                                       {fact: row[fact] for fact in container_coverage.SCOPE_FACT_KEYS})
-    assert key == ('panos_address', OWNED_NAME, '', '', '', ''), key
+    assert key == ('panos_address', OWNED_NAME, '', '', '', '', ''), key
     assert all(row[fact] == '' for fact in container_coverage.SCOPE_FACT_KEYS), row
     assert state_coverage.state_index(state)[key] is _entry(state, OWNED_NAME), key
     assert 'Shared' not in str(key), 'the parse fallback is not a declared fact'
@@ -143,8 +143,8 @@ def test_a_declared_fact_makes_a_different_object(state):
     """AC-2.2: the same name in a different scope is a different object, so a shared run entry is
     not keyed against the state entry in `Production-DG`."""
     index = state_coverage.state_index(state)
-    shared_key = ('panos_address', 'Web-Range', '', '', '', '')
-    declared_key = ('panos_address', 'Web-Range', 'Production-DG', 'Vsys2', '', 'firewall-2')
+    shared_key = ('panos_address', 'Web-Range', '', '', '', '', '')
+    declared_key = ('panos_address', 'Web-Range', 'Production-DG', 'Vsys2', '', 'firewall-2', '')
     assert shared_key in index and declared_key in index, index
     assert index[shared_key] is not index[declared_key], 'two objects, two keys'
 
@@ -164,17 +164,31 @@ def test_the_placeholder_device_names_no_device(state):
     assert container_coverage.PLACEHOLDER_DEVICE == 'localhost.localdomain', container_coverage.PLACEHOLDER_DEVICE
 
 
-def test_a_block_that_names_no_fact_is_not_keyed(state):
-    """AC-2.2: `template_stack` names a scope this converter never emits, so an entry placed there
-    is not keyed."""
+def test_a_block_the_row_does_not_declare_is_not_keyed(state):
+    """AC-2.2: `panos_address` declares no `template_stack` sub-block, so an entry placed there is not
+    keyed. The fact the sub-block names is `template_stack` (F6.10.5), so the refusal is the row's
+    schema, not the fact set."""
     entry = next(e for e in state.entries if e.resource_name == 'web_server_1_55555555')
     assert state_coverage.state_facts(entry) is None, state_coverage.state_facts(entry)
+
+
+def test_a_stack_sub_block_keys_the_fact_it_names(state):
+    """F6.10.5: `template_stack` is a fact, so a state entry the provider places inside a stack is
+    keyed by its stack. The entry is built here, because no committed fixture holds a state entry of a
+    type that declares the `template_stack` sub-block.
+    """
+    entry = state_input.StateEntry('root', 'panos_template_variable', 'edge-tag',
+                                   {'location': {'template_stack': {'name': 'Edge-Stack'}}})
+    facts = state_coverage.state_facts(entry)
+    assert facts == dict(NO_FACTS, template_stack='Edge-Stack'), facts
+    key = state_coverage.ownership_key('panos_template_variable', 'edge-tag', facts)
+    assert key == ('panos_template_variable', 'edge-tag', '', '', '', '', 'Edge-Stack'), key
 
 
 def test_the_first_entry_for_a_key_wins_in_document_order(state):
     """AC-2.3: one run entry is one finding, so the first state entry that carries the key wins."""
     index = state_coverage.state_index(state)
-    key = ('panos_address', OWNED_NAME, '', '', '', '')
+    key = ('panos_address', OWNED_NAME, '', '', '', '', '')
     assert index[key].resource_name == 'web_server_1_11f477f4', index[key]
     same_key = [e for e in state.entries if e.entry_name == OWNED_NAME
                 and e.resource_type == 'panos_address' and state_coverage.state_facts(e) == NO_FACTS]
