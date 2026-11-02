@@ -1,6 +1,6 @@
 """F5.5: read-through data blocks.
 
-A read-through `data` block is written for a name the run did not read. Six rules,
+A read-through `data` block is written for a name the codebase did not declare. Six rules,
 one per group here:
 
 1. One block reader (`sanity_checks.blocks`) serves every block kind, so the `import`
@@ -11,8 +11,9 @@ one per group here:
    none.
 3. A `.name` reference resolves to a block of its own kind.
 4. The emit path is opt-in: a run that declares no read-through scope writes the golden
-   bytes, and a reference site that resolves nothing inside the run writes one block per
-   identity.
+   bytes, and a reference site that resolves nothing inside the codebase writes one block
+   for the unit it belongs to (F6.10.2). A name the referrer's own unit declares is a
+   reference, and a name another unit declares is the plain name, never a block.
 5. No coverage section names a read-through name; the record is the `.tf` file plus the
    `README.md` label.
 6. A read-through run is labelled, because a `data` block resolves at plan time.
@@ -28,6 +29,7 @@ import pytest
 
 import resource_mapping
 import sanity_checks
+import unit_manifest
 from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, run_pipeline, run_script
 from panorama_to_terraform import ADDR_SCOPES, REFERENCE_SCOPES, TerraformGenerator
 
@@ -248,34 +250,54 @@ def test_a_name_outside_the_run_becomes_one_data_block(tmp_path):
     assert sanity_checks.check_references(files) == []
 
 
-def test_a_name_that_resolves_inside_the_run_stays_a_resource_reference(gen):
-    """A read-through scope does not turn a name the run declared into a block."""
-    local = gen.declare_resource_name('Web', 'panos_address', context='DG-A')
-    ref = gen.name_ref('Web', ADDR_SCOPES, context='DG-A')
-    assert str(ref) == f'panos_address.{local}.name'
+def test_a_name_the_referrers_unit_declares_stays_a_resource_reference(gen):
+    """A read-through scope does not turn a name the referrer's own unit declared into a block."""
+    entry = {'name': 'Web', 'device_group': 'DG-A'}
+    local = gen.declare_resource_name('Web', 'panos_address', entry, context='DG-A')
+    assert str(gen.name_ref('Web', ADDR_SCOPES, entry)) == f'panos_address.{local}.name'
     assert gen._data_blocks == {}
 
 
-def test_two_reference_sites_with_the_same_identity_share_one_block(gen):
-    first = gen.name_ref('Ghost', ADDR_SCOPES, context='DG-A')
-    again = gen.name_ref('Ghost', ADDR_SCOPES, context='DG-A')
+def test_a_name_another_unit_declares_is_the_plain_name_not_a_block(gen):
+    """F6.10.2, `docs/CODEBASE_ASSEMBLY.md` §5 rule 5: the read-through branch answers a name outside
+    the codebase, so a name one unit declares and another unit uses stays the plain name."""
+    gen.declare_resource_name('Web', 'panos_address', {'name': 'Web', 'device_group': 'DG-A'},
+                              context='DG-A')
+    referrer = {'name': 'rule-1', 'device_group': 'DG-B'}
+    assert gen.name_ref('Web', ADDR_SCOPES, referrer) == 'Web'
+    assert gen._data_blocks == {}
+
+
+def test_two_reference_sites_in_one_unit_share_one_block(gen):
+    first = gen.name_ref('Ghost', ADDR_SCOPES, {'name': 'rule-1', 'device_group': 'DG-A'})
+    again = gen.name_ref('Ghost', ADDR_SCOPES, {'name': 'rule-2', 'device_group': 'DG-A'})
     assert str(first) == str(again)
     assert len(gen._data_blocks) == 1
 
 
-def test_two_contexts_write_two_blocks(gen):
-    first = gen.name_ref('Ghost', ADDR_SCOPES, context='DG-A')
-    second = gen.name_ref('Ghost', ADDR_SCOPES, context='DG-B')
+def test_two_units_write_two_blocks(gen):
+    first = gen.name_ref('Ghost', ADDR_SCOPES, {'name': 'rule-1', 'device_group': 'DG-A'})
+    second = gen.name_ref('Ghost', ADDR_SCOPES, {'name': 'rule-2', 'device_group': 'DG-B'})
     assert str(first) != str(second)
     assert len(gen._data_blocks) == 2
+    # The location is the block's own unit, so the reader can tell the two apart.
+    units = {key[1] for key in gen._data_blocks}
+    assert units == {unit_manifest.facts_of({'name': 'rule-1', 'device_group': 'DG-A'}),
+                     unit_manifest.facts_of({'name': 'rule-2', 'device_group': 'DG-B'})}
 
 
-def test_an_ambiguous_device_name_stays_a_plain_string(gen):
-    """F3.5 and F3.6 stay in force: a name two devices declare is a guess, so the
-    read-through branch does not run for it."""
-    gen.declare_resource_name('Web', 'panos_address', context='DG-A', device='fw-1')
-    gen.declare_resource_name('Web', 'panos_address', context='DG-A', device='fw-2')
-    assert gen.name_ref('Web', ADDR_SCOPES, context='DG-A') == 'Web'
+def test_a_name_two_devices_declares_stays_a_plain_name_for_a_third_unit(gen):
+    """F3.5 and F3.6 are one case of the per-unit rule: two devices are two units, so each device
+    resolves its own copy, and the read-through branch still never runs for a name the run declares."""
+    fw1 = {'name': 'Web', 'device_group': 'DG-A', 'vsys_device': 'fw-1'}
+    fw2 = {'name': 'Web', 'device_group': 'DG-A', 'vsys_device': 'fw-2'}
+    one = gen.declare_resource_name('Web', 'panos_address', fw1, context='DG-A')
+    two = gen.declare_resource_name('Web', 'panos_address', fw2, context='DG-A')
+    assert one != two
+    assert gen.name_ref('Web', ADDR_SCOPES, fw1).expr == f'panos_address.{one}.name'
+    assert gen.name_ref('Web', ADDR_SCOPES, fw2).expr == f'panos_address.{two}.name'
+    # A referrer that names neither device keeps the plain name and writes no block.
+    assert gen.name_ref('Web', ADDR_SCOPES, {'name': 'rule-1', 'device_group': 'DG-A'}) == 'Web'
     assert gen._data_blocks == {}
 
 
@@ -283,20 +305,27 @@ def test_the_block_type_is_the_first_opted_in_scope_in_the_lookup_order(gen):
     """ADDR_SCOPES is (object, group). Only the group is opted in here, so the block type
     is the group."""
     gen.data_scopes = frozenset({'panos_address_group'})
-    assert str(gen.name_ref('Ghost', ADDR_SCOPES, context='DG-A')).startswith(
-        'data.panos_address_group.')
+    referrer = {'name': 'rule-1', 'device_group': 'DG-A'}
+    assert str(gen.name_ref('Ghost', ADDR_SCOPES, referrer)).startswith('data.panos_address_group.')
 
 
-def test_the_read_through_path_cannot_change_a_resource_name(tmp_path):
-    """The name rule is one rule (F2.7), so a read-through block takes the name the
-    object would have had as a resource, and a block a reference site creates enters no
-    declaration index."""
+def test_a_data_block_enter_no_declaration_index(tmp_path):
+    """The name rule is one rule (F2.7, F5.5), so a read-through block takes the sanitized name plus the
+    digest of the identity the reference site named, and a block a reference site creates enters no
+    declaration index (F6.10.2)."""
     gen = TerraformGenerator(str(tmp_path), data_scopes={'panos_address'})
-    local = str(gen.name_ref('Web', ADDR_SCOPES, context='DG-A')).split('.')[2]
+    referrer = {'name': 'rule-1', 'device_group': 'DG-A'}
+    local = str(gen.name_ref('Web', ADDR_SCOPES, referrer)).split('.')[2]
     assert re.fullmatch(r'web_[0-9a-f]{8}', local), local
-    assert gen._flat_registry == {}, 'a data block is not a declaration index entry'
-    plain_run = TerraformGenerator(str(tmp_path / 'plain'))
-    assert plain_run.declare_resource_name('Web', 'panos_address', 'DG-A') == local
+    # The identity the site named is the unit, so a second run that reads the same referrer writes the
+    # same block address.
+    same_run = TerraformGenerator(str(tmp_path / 'same'), data_scopes={'panos_address'})
+    assert str(same_run.name_ref('Web', ADDR_SCOPES, referrer)).split('.')[2] == local
+    # A site in another unit names another identity, so it cannot take this block's address.
+    other_unit = TerraformGenerator(str(tmp_path / 'other'), data_scopes={'panos_address'})
+    assert str(other_unit.name_ref('Web', ADDR_SCOPES,
+                                   {'name': 'rule-2', 'device_group': 'DG-B'})).split('.')[2] != local
+    assert gen._declaration_index == {}, 'a data block is not a declaration index entry'
 
 
 def test_the_data_path_targets_only_types_that_declare_name():

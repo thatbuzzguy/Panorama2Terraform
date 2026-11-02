@@ -340,8 +340,8 @@ def test_the_manifest_is_one_file_for_the_codebase(tmp_path):
 # --- 4. the reference names ---------------------------------------------------
 
 def test_the_reference_names_are_recorded_for_the_referrers_facts(converter_module, tmp_path):
-    """The names `name_ref` resolved outside the run, keyed by the referrer's four scope facts, and
-    printed sorted.
+    """The names `name_ref` could not resolve inside the referrer's own unit, keyed by the referrer's
+    four scope facts, and printed sorted.
     """
     _parser, generator = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
     assert generator.unit_references() == GROUPING_REFERENCES
@@ -353,8 +353,8 @@ def test_the_reference_names_are_recorded_for_the_referrers_facts(converter_modu
 
 
 def test_a_contextless_call_site_records_the_name_for_the_referrers_unit(converter_module, tmp_path):
-    """The VPN sites resolve through the shared chain with no call-site context, but the referrer
-    sits in a declared scope, so the name is recorded for that unit, not for the shared one.
+    """The VPN sites resolve with no call-site context, so the referrer sits in the shared unit and the
+    name is recorded for it; the office referrer records for its own unit.
     """
     _parser, generator = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
     shared = ('', '', '', '')
@@ -363,9 +363,9 @@ def test_a_contextless_call_site_records_the_name_for_the_referrers_unit(convert
     assert 'IPSEC-DEFAULT' in generator.unit_references()[office]
 
 
-def test_a_name_the_run_declares_is_not_recorded(converter_module, tmp_path):
-    """GW-Common is declared inside the run, so a reference to it resolves and is not an outside
-    name. A name recorded for the shared unit comes from a referrer in the shared section.
+def test_a_name_the_referrers_unit_declares_is_not_recorded(converter_module, tmp_path):
+    """GW-Common is declared inside the unit the referrer belongs to, so the name resolves there and is
+    not recorded. A name recorded for the shared unit comes from a referrer in the shared section.
     """
     _parser, generator = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
     recorded = {name for names in generator.unit_references().values() for name in names}
@@ -374,10 +374,11 @@ def test_a_name_the_run_declares_is_not_recorded(converter_module, tmp_path):
     assert recorded == {'IKE-DEFAULT', 'IPSEC-DEFAULT'}
 
 
-def test_the_ambiguous_device_name_is_recorded_as_an_outside_name(gen):
-    """F3.6: a name two devices declare stays plain because the referrer is ambiguous, not because
-    the name is outside the run. The edge list (F6.3) is the feature that names the other unit, so
-    this record keeps one fact, and the case is recorded here.
+def test_the_record_names_the_referrers_unit_not_the_declaring_unit(gen):
+    """Two devices declare `ethernet1/1`, and the referrer names no unit, so the name stays plain. The
+    record keys it by the referrer's unit, never by the unit that declared it, because the reference
+    fact is the referrer's. The edge list (F6.3) is the feature that names the other unit, so this
+    record keeps one fact, and the case is recorded here.
     """
     gen.generate_interfaces([
         {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',

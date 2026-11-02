@@ -11,7 +11,8 @@ Seven rules, stated once here.
    already stated in the manifest's `references` field.
 2. The target unit is the owner from the ownership row for (`type`, `entry`), not the declaring unit
    (`ownership.py` rule 5). A name several units declare as separate objects gives one row per owner,
-   which is the ambiguous-device case in `ARCHITECTURE.md` §4.3 rule 1. The join is the F6.2 rule:
+   because the ownership rule names the owner, not the unit that declared the name: that is the
+   multi-unit case in `ARCHITECTURE.md` §4.3 rule 2. The join is the F6.2 rule:
    `referrer` and `target` name units by their directory, so the row joins to `CODEBASE_MANIFEST.json` on
    `directory` and to `OWNERSHIP.json` on (`type`, `entry`). This module defines no naming rule and no
    identity key: it takes `TerraformGenerator.sanitize_name` as an argument, the way
@@ -32,7 +33,7 @@ Seven rules, stated once here.
    the same lines. A finding reads its grouping facts through the manifest row of the unit it is read
    from, because the manifest is the file that states the unit.
 6. The mechanism a name resolves through is not data here, and this module defines no part of it. The
-   data block is the rule for a name outside the run (`ARCHITECTURE.md` §4.7,
+   data block is the rule for a name no unit in the run declares (`ARCHITECTURE.md` §4.7,
    `sanity_checks.DATA_SOURCE_SCHEMA`). For a name another unit in the run owns, the mechanism is the
    plain name the reference rule already returns for a name it cannot resolve (F6.9, decided
    2026-11-01, `docs/CODEBASE_ASSEMBLY.md` §5 rule 5): the rule resolves inside one unit, so a name

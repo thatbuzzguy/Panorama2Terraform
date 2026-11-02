@@ -376,20 +376,18 @@ def test_report_is_absent_when_every_location_is_placeable(gen):
 
 # --- emitter: two virtual systems, two resources ---------------------------
 
-def test_interface_reference_stays_inside_its_device(tmp_path):
-    """A zone never references another device's interface resource (F3.5).
+def test_interface_reference_stays_inside_its_unit(tmp_path):
+    """F3.5, F6.10.2: a zone references an interface its own unit declared, and never another unit's.
 
-    Interfaces are device-level config and two firewalls declare the same
-    interface names. A zone whose export names a device resolves inside that
-    device, and stays a plain interface name when that device declares no
-    such interface.
+    Interfaces are device-level config and two firewalls declare the same interface names. The zone in
+    the unit that declared the name resolves it; the zone in the other unit, whose interface the export
+    declared with no vsys, keeps the plain interface name.
     """
+    home = {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
+            'device_group': 'Shared', 'vsys': 'vsys1', 'template': '',
+            'vsys_device': 'fw-1.example.com'}
     gen = TerraformGenerator(str(tmp_path))
-    gen.generate_interfaces([
-        {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
-         'device_group': 'Shared', 'vsys': '', 'template': '',
-         'vsys_device': 'fw-1.example.com'},
-    ])
+    gen.generate_interfaces([home, dict(home, vsys='', vsys_device='fw-2.example.com')])
     gen.generate_zones([
         {'name': 'home', 'device_group': 'Shared', 'vsys': 'vsys1',
          'vsys_device': 'fw-1.example.com', 'type': 'layer3',
@@ -407,12 +405,11 @@ def test_interface_reference_stays_inside_its_device(tmp_path):
 
 
 def test_virtual_router_reference_stays_inside_its_device(tmp_path):
-    """A contextless referrer on another device borrows no interface (F3.5).
+    """A router on another firewall borrows no interface (F3.5, F6.10.2).
 
-    A virtual router resolves with no context and no vsys, so the context
-    chain alone lands on whichever device declared the name first. The
-    device rule is checked first, so a router on the second firewall keeps a
-    plain interface name.
+    A virtual router is device config, so its unit is the device the export placed it under. The
+    router in the unit that declared the interface resolves it; the router on the second firewall,
+    which declared no interface, keeps a plain interface name.
     """
     gen = TerraformGenerator(str(tmp_path))
     gen.generate_interfaces([

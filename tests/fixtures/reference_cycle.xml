@@ -2,14 +2,13 @@
 <!-- F6.3: the cycle fixture for the edge list between units.
 
      Each unit declares one interface name and references the name the other unit declares, so the edge
-     graph has one cycle. Both references stay plain strings, so both are recorded as outside the run:
-     the reference rule keeps a device-declared name inside the device that declared it
-     (`ARCHITECTURE.md` §4.3 rule 1), and each zone names its own device while asking for the other
-     device's interface.
+     graph has one cycle. Both references stay plain strings, so both are recorded for the referrer's
+     unit: the reference rule resolves a name only inside the unit that declared it
+     (`ARCHITECTURE.md` §4.3 rule 2), and each zone asks for the interface the other device declared.
 
      Unit A is the device fw-a.example.com, which declares `ethernet1/1`; unit B is the device
      fw-b.example.com, which declares `ethernet1/2`. Each device holds its own zone, so the referrer and
-     the declaring entry are in the same unit.
+     the entry that declares the name it asks for are in different units.
 
      Every entry name is unique, so the ownership rule decides every name: this fixture writes no
      ownership finding.

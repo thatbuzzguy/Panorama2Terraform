@@ -103,13 +103,14 @@ enforced by `tests/test_coverage_matrix.py` — is in
 
 ## Dependency wiring
 
-Name attributes that reference an object exported by the same run are
+Name attributes that reference an object the referrer's own unit declares are
 emitted as Terraform `.name` references (for example
 `source_addresses = [ panos_address_group.web_servers.name ]`), so
-`terraform apply` orders the resources deterministically. Names that
-point outside the export — built-in PAN-OS names such as `any`,
-`application-default`, or `service-ftp`, or objects in other tenants —
-stay plain strings. The converter never declares a resource just to
+`terraform apply` orders the resources deterministically. A name another unit in
+the run declares, and a name that points outside the export — built-in PAN-OS
+names such as `any`, `application-default`, or `service-ftp`, or objects in
+other tenants — stay plain strings, because one plan runs against one root and
+one state. The converter never declares a resource just to
 make a reference work, so the output always passes
 `terraform validate`. The resolution order is in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.3.
@@ -216,8 +217,8 @@ Data files and reports written to the output directory. Each is written only whe
   rule can say about the entry, and the `disable_override` flag as the parse read it
   ([`ownership.py`](ownership.py)). Every run writes it when it has content, and the two data files
   join on the unit directory
-- `REFERENCE_EDGES.json` - one row per reference pair, as data: the unit that uses a name resolved
-  outside the run, the unit that owns it, the coverage matrix row, and the entry name
+- `REFERENCE_EDGES.json` - one row per reference pair, as data: the unit that uses a name another unit
+  owns, the unit that owns it, the coverage matrix row, and the entry name
   ([`reference_edges.py`](reference_edges.py)). Every run writes it when it has content, and the row
   joins to the manifest on the unit directory and to the ownership record on (`type`, `entry`)
 - `SITE_DATA.json` - one row per site that names a value, as data: the unit directory and the variable

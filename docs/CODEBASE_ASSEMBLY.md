@@ -47,7 +47,7 @@ These parts are true today, so a codebase can be built on them.
 |---|---|---|
 | Identity: (device group, vsys, type, name) | The key the state scan uses, and the same data a provider import id holds (§7) | `ARCHITECTURE.md` §2.1 |
 | Local name: sanitized name plus the 8-hex identity digest | A resource address that does not move when a unit is regenerated, so a Git diff and an import block stay stable across runs | `ARCHITECTURE.md` §5 and §6 |
-| The reference rule | A name defined outside the run stays a plain string. The set of those names is the reference edge list between units (§5) | `ARCHITECTURE.md` §4.3, §5 |
+| The reference rule | A name the referrer's own unit does not declare stays a plain string (F6.10.2). The set of those names is the reference edge list between units (§5) | `ARCHITECTURE.md` §4.3, §5 |
 | The policy chain rule | Order inside a unit, and no rule depends on a rule in another unit, so the graph between units stays coarse | `ARCHITECTURE.md` §4.4 |
 | The shadow scan | The naming-collision check between a parent scope and a child scope, which is the pre-flight check a codebase needs | `shadow_coverage.py`, `ARCHITECTURE.md` §3.2 |
 | The ownership record | The unit that owns a name, so one plan holds one entry and an override resolves through its owner | `ownership.py`, §4 |
@@ -183,13 +183,14 @@ in `reference_edges.py`, and `main()` writes the file.
 
 1. **The edge set is the names the reference rule recorded** (`TerraformGenerator.name_ref`,
    `ARCHITECTURE.md` §4.3), so the module records no name and resolves no name. A name the rule
-   resolved inside the run is a reference inside one root, not an edge between units, so it writes
-   no row. A name no unit in the run declares writes no row either: the pair does not exist, and
-   that name is already stated in the manifest's `references` field, the only place that states a
-   reference name.
+   resolved inside the referrer's own unit is a reference inside one root, not an edge between
+   units, so it writes no row. A name no unit in the run declares writes no row either: the pair
+   does not exist, and that name is already stated in the manifest's `references` field, the only
+   place that states a reference name.
 2. **The target unit is the owner**, the `owner` field of the ownership row for (`type`, `entry`),
    not the declaring unit (§4 rule 5). A name several units declare as separate objects gives one
-   row per owner, which is the ambiguous-device case in `ARCHITECTURE.md` §4.3 rule 1.
+   row per owner, because the ownership rule names the owner, not the unit that declared the name:
+   that is the per-unit case in `ARCHITECTURE.md` §4.3 rule 2. The join is the F6.2 rule:
 3. **Self-reference exclusion.** A row whose target is the referrer writes no row, because an edge
    is a fact between two units and a unit cannot come before itself. The same rule keeps a unit out
    of its own `after` (§6 rule 3).
@@ -225,14 +226,14 @@ in `reference_edges.py`, and `main()` writes the file.
    `tests/test_reference_edges.py::test_the_mechanism_defines_no_writer_and_no_reader`;
    the plain-name half of `name_ref` is pinned in `tests/test_data_blocks.py` and
    `tests/test_robustness.py`, and the pair is pinned by `::test_the_record_is_one_row_per_edge_the_data_can_name`.
-   When the write path (§14) splits the output per unit, the rule runs per unit, so names the flat
-   chain resolves across scopes today become plain names, and the edge set and the manifest
-   `references` field grow to name every cross-unit use; the corpus pin lists change with that step.
+   The write path (§14) step that runs the rule per unit has landed at the print site (F6.10.2): a name
+   the flat chain resolved across scopes is a plain name, and the edge set and the manifest `references`
+   field name every cross-unit use the corpus shows, so `CORPUS_EDGES` in `tests/test_reference_edges.py`
+   reads 20 rows over five fixtures. The directory write itself stays with F6.10.3.
 6. **The reference fact stays one fact.** `name_ref` records one fact: the name resolved outside the
-   run. It is not split into two kinds, because the edge row states the other unit when the
-   ownership rule can name one, and the two cases are told apart by whether an edge row exists. A
-   name the flat index resolves is not an edge: its split across unit directories is the write path,
-   and the block that binds an entry to the live config is §7.
+   unit that asked for it (F6.10.2). It is not split into two kinds, because the edge row states the
+   other unit when the ownership rule can name one, and the two cases are told apart by whether an
+   edge row exists. The block that binds an entry to the live config is §7.
 
 The decision this section asked for is settled: the edge list is a data file, not a report section,
 and it is written only when it has content. `tests/test_reference_edges.py` pins it, including
