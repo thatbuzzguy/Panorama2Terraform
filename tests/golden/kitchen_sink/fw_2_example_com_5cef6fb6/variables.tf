@@ -25,3 +25,8 @@ variable "fw_2_example_com" {
   type        = string
 }
 
+variable "target" {
+  description = "NGFW serial (F6.10.4): the export states no serial, so the run names the variable and the operator supplies the value"
+  type        = string
+}
+

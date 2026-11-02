@@ -493,9 +493,6 @@ restated here; they are in the record and the git history. Only the open items a
 - Open: `check_import_blocks` compares a mapping result, so it cannot detect an id that states the
   name instead of the value, because the naming rule is idempotent. The writer keeps the value in
   the id, so an id the tool builds cannot carry the name.
-- Open: the per-unit `.tfvars` that names one `target` serial. The printed form is written per unit since the
-  write path landed (`docs/CODEBASE_ASSEMBLY.md` §14), so the file exists; the fact it names is still open, and
-  it is the fact `panos_push_to_devices` needs.
 - Open: a module parameter is a standard a person writes, so a template variable value stays a
   literal until the write path decides what a module takes.
 - Finding: `location.device_group` declares a `panorama_device` field in the pinned schema, and the
@@ -503,9 +500,6 @@ restated here; they are in the record and the git history. Only the open items a
   tool writes no `panorama_device` in an id. An id states only what the block states. The value table
   records the field as a literal, so the block and the id print the same text for it. If a device
   fact becomes a rule, the id and the block change together.
-- Finding: the generated `README.md` does not name `imports.tf`. The F5.5 label precedent says an
-  opt-in shape labels itself, so the label should name the file and the block count. The goldens pin
-  `.tf` files only, so the label is a report-shape change, not a byte change.
 - Open: a declared template stack is a scope container (`container_coverage.SCOPE_CONTAINERS`), so a
   stack can be a codebase unit, but the stack is not one of the four scope facts, so the manifest
   names no stack unit today. A stack unit needs a fifth fact, or the decision to read `template` as
@@ -519,10 +513,8 @@ restated here; they are in the record and the git history. Only the open items a
   lands and a source states the position.
 - Actions: the pinned schema declares `panos_commit` and `panos_push_to_devices`. Decided
   2026-10-31: the codebase declares Terraform 1.14 as the minimum, because actions need it, so the
-  committed goldens state it. `panos_commit` is emitted per unit (`docs/CODEBASE_ASSEMBLY.md` §10).
-  Open for `panos_push_to_devices`: the emitted shape needs the `devices` decision, which is the
-  `.tfvars` `target` fact the write path holds, so the gate rule reads a hand-written push block
-  through `ACTION_SCHEMA` today and the emitter writes no push block.
+  committed goldens state it. Both actions are emitted per unit (`docs/CODEBASE_ASSEMBLY.md` §10), and the
+  push block states no `devices`, because the tool names no serial (`docs/CODEBASE_ASSEMBLY.md` §9 rule 8).
 - Open: no coverage matrix row covers an `action` block, the decision F5.5 made for a `data` block,
   because an action names no entry, so a property finding cannot name one.
 - The credential rule needs one statement that covers both the fetch layer (the key from the

@@ -1154,6 +1154,12 @@ LITERAL = 'literal'
 # prints the reference and no generated file states the value. The name is `naming.py` applied to the
 # entry name, because a value cannot name itself (`backlog.md`, the value the parse cannot carry).
 REFERENCE_ONLY = 'reference_only'
+# F6.10.4: the shape for a site fact the tool cannot name. The run names the variable, holds no value for it,
+# and the operator supplies the value in `terraform.tfvars` (§11). The export states a device as a hostname,
+# so a serial is a fact the tool cannot read, and the tool names the name and not the value. This is the
+# `reference_only` shape without the `sensitive` marking, because a serial is not a secret: the marking stays
+# the `reference_only` row's rule alone.
+OPERATOR_SUPPLIED = 'operator_supplied'
 VALUE_VARIABLES = {
     # The device the site names. Hardware replacement changes the serial, and a literal prints in every
     # resource inside the template, so this is the value a codebase changes per site (§9 rule 1).
@@ -1172,6 +1178,10 @@ VALUE_VARIABLES = {
     'secret': REFERENCE_ONLY,
     'key': REFERENCE_ONLY,
     'password': REFERENCE_ONLY,
+    # F6.10.4: the one row for a field the emitter prints outside a location, so the table covers the fields
+    # it prints a value shape for: the location fields, the `sensitive` names, and this provider argument.
+    # The corpus states no serial (the device entry names are hostnames), so no value can be named for it.
+    'target': OPERATOR_SUPPLIED,
 }
 
 # F7.1, F7.2: the shape of the `protocol` object attribute on `panos_virtual_router`, written from the live

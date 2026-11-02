@@ -1,24 +1,24 @@
 # To Do
 
-F6.10.3 (the directory write) is complete and committed: `write_path.py` is the one place a run writes a file,
-the run writes one directory per unit the manifest names, the gate reads the unit set as paths from the codebase
-root, the plan check runs once per unit directory, and both golden sets hold the per-unit layout with the LF rule
-(`docs/ARCHITECTURE.md` §6).
+F6.10.4 (the site half) is complete and committed: `target` is one row in `resource_mapping.VALUE_VARIABLES` with
+the shape word `operator_supplied`, so the run names the variable and holds no value for it and the operator
+supplies the serial; `provider.tf` is the consumer for a unit that names a device; `panos_push_to_devices` prints
+the fact and the fact key with no `devices`; and the generated `README.md` names `imports.tf`, `SITE_DATA.json` and
+`site.auto.tfvars` (`docs/CODEBASE_ASSEMBLY.md` §9 rules 8 and 9, §10 rule 5).
 
-Current feature: F6.10 — the write path (Epic 6). The shape is decided and landed
-(`docs/CODEBASE_ASSEMBLY.md` §14), so the open work is the facts the write path can now decide. The slices run
-in order, one at a time, and each slice commits its own work.
+Current feature: F6.10.5 — close Epic 6. The write path is landed (`docs/CODEBASE_ASSEMBLY.md` §14), so the open
+work is the facts it can now decide.
 
-## F6.10 slices, in order
+## F6.10.5, in order
 
-1. **F6.10.4 — the site half.** The per-unit `.tfvars` fact that names one `target` serial, and the
-   `panos_push_to_devices` shape that fact unlocks. The generated `README.md` names `imports.tf`,
-   `SITE_DATA.json` and `site.auto.tfvars`, by the F5.5 label precedent.
-2. **F6.10.5 — close Epic 6.** Decide the held pieces the write path can now decide: the template stack unit (a
-   fifth fact, or `template` read as the stack name), and the module parameter rule for a template variable
-   value and a membership list. The four `*_policy_rules` types stay gated by the F3.5 rulebase decision and
-   stay in `backlog.md` if they cannot land. Clear the completed slices, clean the tracking markdown, and
-   commit.
+1. Decide the template stack unit: a fifth fact, or `template` read as the stack name. The stack is a scope
+   container, so a stack can be a codebase unit, but the manifest names no stack unit today
+   (`container_coverage.SCOPE_CONTAINERS`).
+2. Decide the module parameter rule for a template variable value and a membership list: a module is a standard a
+   person writes, so a value stays a literal until the tool states what a module takes.
+3. The four `*_policy_rules` types stay gated by the F3.5 rulebase decision and stay in `backlog.md` if they
+   cannot land.
+4. Clear the completed slices, clean the tracking markdown, and commit.
 
 ## Rules the write path keeps
 

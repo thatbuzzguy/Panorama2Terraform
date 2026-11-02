@@ -389,10 +389,12 @@ def test_a_sensitive_field_prints_as_the_variable_reference(converter_module, tm
 
     # The print site is `printed_value`, and a reference-only name records no value for the `.tfvars`, so
     # the run declares nothing and writes no line for it: the operator supplies the value.
+    # F6.10.4: the print site takes the unit's facts, so the record is keyed by the unit the block reads.
     generator = converter_module.TerraformGenerator(str(tmp_path))
     entry = {'name': 'AP-1'}
-    assert generator.printed_value('secret', 'AP-1', entry) == naming.variable_text('AP-1')
-    assert generator.value_variables() == {unit_manifest.facts_of(entry): {}}, generator.value_variables()
+    facts = unit_manifest.facts_of(entry)
+    assert generator.printed_value('secret', 'AP-1', facts) == naming.variable_text('AP-1')
+    assert generator.value_variables() == {facts: {}}, generator.value_variables()
     printed = generator._protocol_fields('protocol/bgp/auth_profile',
                                          {'name': 'AP-1', 'secret': 'hunter2'}, entry)
     # A reference prints unquoted, so the value is the HCL expression the reader reads as an object, not a

@@ -12,6 +12,10 @@ so the file and the data cannot disagree.
 
 F7.1 adds the sensitive rule: `sensitive = true` is the table's `reference_only` row, so a name
 that is not in the table is never a secret.
+
+F6.10.4 adds the third part of the declaration set: a name the table records with no value for it, because the
+tool cannot read the fact it names. The set is read through the table and through the provider block that
+references it.
 """
 
 import re
@@ -20,6 +24,7 @@ from pathlib import Path
 
 import pytest
 
+import naming
 import resource_mapping
 import sanity_checks
 import site_data
@@ -70,18 +75,35 @@ def _site_rows(case: str) -> list:
     return site_data.parse_rows(path.read_text(encoding='utf-8')) if path.is_file() else []
 
 
+def _held_names(case: str) -> set[str]:
+    """F6.10.4: the names the table declares with no value, read through the table.
+
+    A name the tool cannot fill is a declaration only for the units whose provider block prints it, so the
+    reader keeps the names one run actually references. `provider.tf` is the unit's file, so the file set is
+    the unit set.
+    """
+    named = {naming.variable_name(field) for field, shape in resource_mapping.VALUE_VARIABLES.items()
+             if shape == resource_mapping.OPERATOR_SUPPLIED}
+    return {name for path, text in _generate(case).items()
+            if Path(path).name == 'provider.tf'
+            for name in named if f'var.{name}' in text}
+
+
 @pytest.mark.parametrize('case', list(CASES))
 def test_the_declaration_set_is_the_credentials_plus_the_site_values(case):
     """No dead variable survives: the declaration set is the credentials plus the values the table
     mapped (F6.6), and the file and the data read the same run.
+
+    F6.10.4: the table also names a value the run cannot read, so the declaration set holds the names it
+    declares with no value for the units whose provider block references them.
     """
     # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): `variables.tf` is the unit's file, so the declaration
     # set is the union across the unit set, read in path order.
     declared = set(VAR_DECL_RE.findall(file_text(_generate(case), 'variables.tf')))
     site = {name for row in _site_rows(case) for name in row['variables']}
-    assert declared == set(CREDENTIALS) | site, (
+    assert declared == set(CREDENTIALS) | site | _held_names(case), (
         f'{case}: variables.tf declares {sorted(declared)}; expected the credentials plus '
-        f'{sorted(site)}')
+        f'{sorted(site)} plus {sorted(_held_names(case))}')
 
 
 @pytest.mark.parametrize('case', list(CASES))
@@ -131,3 +153,8 @@ def test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_o
         marking = 'sensitive' if 'sensitive' in body else 'not sensitive'
         assert ('sensitive' in body) == (field in reference_only), (
             f'{case}: variable {name!r} sensitive marking is unexpected: {marking}')
+    # F6.10.4: `operator_supplied` is the shape word for a name the run cannot fill, and it states no marking,
+    # so the declaration for `target` holds none. A serial is not a secret.
+    assert resource_mapping.OPERATOR_SUPPLIED != resource_mapping.REFERENCE_ONLY
+    named = [body for name, body in blocks if name == 'target']
+    assert all('sensitive' not in body for body in named), (case, named)

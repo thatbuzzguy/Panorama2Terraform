@@ -234,7 +234,10 @@ a source. The other files are the unit set, and the run writes one directory per
   `terraform.tfvars` stays the operator's own file for the credentials, which the tool never writes. Written
   only when it has content. The gate rule `data_files` reads the record through `parse_rows` and compares
   the printed form with `render_tfvars`; the printed form is not one of the four data files, so the report
-  count names only the records
+  count names only the records. A name the table records with no value for it writes no row and no line:
+  `target` is such a name, because the export states a device as a hostname, so no serial reaches the parse and
+  the operator supplies the value
+  ([`docs/CODEBASE_ASSEMBLY.md`](docs/CODEBASE_ASSEMBLY.md) §9 rule 8)
 - `scope.tf` - The scope objects the export declares: one `resource` block per scope entry for
   `panos_device_group`, `panos_device_group_parent`, `panos_template`, `panos_template_stack`,
   `panos_template_variable`, and `panos_vsys`, written by every run that has a scope entry, before the
@@ -245,10 +248,13 @@ a source. The other files are the unit set, and the run writes one directory per
 - `imports.tf` - one `import` block per entry the run declares, as `to` and `id`
   ([`import_blocks.py`](import_blocks.py)). Written only for a run that declares `--import-blocks` and
   has a block to write, and the gate rule reads it because it is a `.tf` file
-- `actions.tf` - the commit action: one `panos_commit` block per unit the manifest names, and each block
-  names the fact its own unit selects ([`commit_actions.py`](commit_actions.py)). Written by every run that
-  has such a unit, as the last `.tf` file. A unit whose fact no commit filter can name writes no block, and
-  the file is written only when it has content ([`docs/CODEBASE_ASSEMBLY.md`](docs/CODEBASE_ASSEMBLY.md) §10)
+- `actions.tf` - the commit and push actions: one block per action the pinned schema declares, for each unit the
+  manifest names, and each block names the fact its own unit selects
+  ([`commit_actions.py`](commit_actions.py)). Written by every run that has such a unit, as the last `.tf` file,
+  and the push block prints after the commit block for the same unit and shares its address. A unit whose fact no
+  filter and no push type can name writes no block, and the file is written only when it has content
+  ([`docs/CODEBASE_ASSEMBLY.md`](docs/CODEBASE_ASSEMBLY.md) §10). The push block states no `devices`, because the
+  tool names no serial, so the provider pushes to all devices in the target
 - `MANUAL_SETUP_REPORT.txt` - everything above that must be configured
   manually, plus a section for a container no parse method reads
   ([`container_coverage.py`](container_coverage.py))
@@ -289,7 +295,8 @@ manifest names, holding that unit's `.tf` files and the printed form of that uni
   INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.txt
 
   <unit directory>/                    (one directory per unit the manifest names)
-    provider.tf  variables.tf          (written after the emitters: the values the run printed, F6.6)
+    provider.tf  variables.tf          (the credentials plus the values the run printed, F6.6; provider.tf reads
+                                        `var.target` for a unit that names a device, F6.10.4)
     scope.tf
     address_objects.tf  address_groups.tf
     service_objects.tf  service_groups.tf
@@ -299,7 +306,7 @@ manifest names, holding that unit's `.tf` files and the printed form of that uni
     vpn.tf
     security_rules.tf  nat_rules.tf  decryption_rules.tf  pbf_rules.tf
     read_through.tf  imports.tf        (opt-in: --data-blocks, --import-blocks)
-    actions.tf                         (the commit action per unit, the last .tf file written)
+    actions.tf                         (the commit and push actions per unit, the last .tf file written)
     site.auto.tfvars                   (the printed form of that unit's site row)
 ```
 

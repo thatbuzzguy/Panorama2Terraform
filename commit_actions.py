@@ -1,24 +1,25 @@
-"""F6.7 the commit action: one `panos_commit` action block per unit, as `actions.tf`.
+"""F6.7 the action block per unit, as `actions.tf`: the commit action, and the push action F6.10.4 adds.
 
-The provider declares two actions (2.0.14, `docs/CODEBASE_ASSEMBLY.md` §12), and `panos_commit` can
-commit one device group, one template, or one template stack, so a commit stays inside one unit. Five
-rules, stated once here.
+The provider declares two actions (2.0.14, `docs/CODEBASE_ASSEMBLY.md` §12), and both name one device group,
+one template, or one template stack, so an action stays inside one unit. `panos_commit` is the commit path,
+because the Terraform language has no native commit support; `panos_push_to_devices` is the push path. Six rules, stated
+once here.
 
-1. **One block per unit, one file per unit.** One block per manifest row, in the identity order the
-   manifest rows already print. `actions.tf` is a `.tf` file, so the gate rule
-   (`sanity_checks.check_actions`) reads it, and it is written only when it has content, following the
-   rule for the report files and the four data files. Emission is default, not a flag: the committed
-   goldens pin what a default run emits, so a shape written only when a flag is on cannot be pinned
-   (the F6.5 rule 1 argument). The file is the last `.tf` file of its unit, so the reader reads the
-   action against the completed unit.
+1. **One block per unit, one file per unit.** One block per manifest row and per action the pinned schema
+   declares, in the identity order the manifest rows already print. `actions.tf` is a `.tf` file, so the gate
+   rule (`sanity_checks.check_actions`) reads it, and it is written only when it has content, following the
+   rule for the report files and the four data files. Emission is default, not a flag: the committed goldens
+   pin what a default run emits, so a shape written only when a flag is on cannot be pinned
+   (the F6.5 rule 1 argument). The file is the last `.tf` file of its unit, so the reader reads the action
+   against the completed unit.
 2. **The action names the fact its own unit declares, and no fact another unit owns.** The fact is the
    one `unit_manifest.named_fact` selects for the row, and the block states it only when the provider
-   can name it in a commit filter: the device group, the template, the template stack. A `vsys` or a
-   `vsys_device` fact has no filter, so a unit whose selected fact is one of those writes no action, and
-   the platform commits it through the parent unit. The shared unit names no fact, so it writes no
-   action: a commit that names no filter commits the whole config, not a unit. A fact the row declares
-   but an ancestor unit owns is not the unit's own fact, so the action states one fact: the one its row
-   selects.
+   can name it for that fact: the device group, the template, the template stack, which are the facts
+   `SCOPE_ANSWER` answers. A `vsys` or a `vsys_device` fact names no filter and no push type, so a unit whose
+   selected fact is one of those writes no action, and the platform commits and pushes it through the parent
+   unit. The shared unit names no fact, so it writes no action: a commit that names no filter commits the
+   whole config, not a unit. A fact the row declares but an ancestor unit owns is not the unit's own fact, so
+   the action states one fact: the one its row selects.
 3. **The address names the identity the block states.** The local name is the §5 rule in `naming.py`
    (taken as an argument, so no second naming rule exists) applied to the fact the block states, plus
    the identity digest of the identity as the block states it: the fact in its `FACT_KEYS` position and
@@ -28,15 +29,22 @@ rules, stated once here.
 4. **The field mapping and the answer are one table each.** `resource_mapping.ACTION_FILTERS` maps the
    `action` field to the scope fact it names, and `resource_mapping.SCOPE_ANSWER` answers the name
    inside; the `name` field of a push shape names the fact its `type` states. The emitter reads the
-   tables through `filter_field` and the gate reads them through `field_fact`, so no branch names a
-   field again. `PLACEHOLDER_DEVICE` names no firewall (F3.5), so it never enters a filter and never
-   selects a fact.
+   tables through `filter_field` and `block_fields`, and the gate reads them through `field_fact`, so no
+   branch names a field again. `PLACEHOLDER_DEVICE` names no firewall (F3.5), so it never enters a filter and
+   never selects a fact.
 5. **Shape, order, and bytes.** One name per block, so one block names one unit. Fields print inside
-   `config`, the level the Terraform 1.14 action grammar requires (measured: `terraform validate`
+   `config`, the level the Terraform action grammar needs for 1.14 (measured: `terraform validate`
    refuses a field at the action's own level), in the declared order, and rows print in the identity
-   order the manifest rows print. A quoted value prints with the same escape set
+   order the manifest rows print; within one unit the blocks print in the `ACTION_SCHEMA` order, which is the
+   order a push follows a commit. A quoted value prints with the same escape set
    `import_blocks.unescape` reads back, and no field states a timestamp or a path. `read_block` reads a
    written block back as a row through the one block reader, the way `import_blocks.read_block` does.
+6. **The push block names no serial.** `devices` is an optional list of NGFW serials, and the tool names no
+   serial (`resource_mapping.VALUE_VARIABLES`, F6.10.4), so the block prints no `devices` and the provider
+   pushes to all devices in the target, which is the documented default. So the push half no longer needs the
+   serial fact F6.7 held it for. The commit block and the push block for one unit name the same fact, so
+   rule 3 gives them the same address, and the action type is the only difference: the action address is
+   `action.<type>.<label>`, so the language reads them as two blocks.
 
 Usage:
     from commit_actions import ACTIONS_FILE, ROW_FIELDS, build_rows, render, read_block
@@ -61,18 +69,56 @@ ACTIONS_FILE = 'actions.tf'
 CONFIG_BLOCK = 'config'
 
 # The row shape. Fixed, so two runs write the same bytes and a reader does not guess.
-# `fact` is the scope fact the block names, `field` is the filter field that states it
-# (`ACTION_FILTERS`), `entry_name` is the fact name, `local_name` is the §5 name plus the digest
-# (rule 3), and `directory` is the manifest join, not a block field.
-ROW_FIELDS = ('directory', 'fact', 'field', 'entry_name', 'local_name')
+# `action` is the `ACTION_SCHEMA` row the block is, `fact` is the scope fact the block names, `field` is the
+# field that states it (`ACTION_FILTERS`), `entry_name` is the fact name, `local_name` is the §5 name plus the
+# digest (rule 3), and `directory` is the manifest join, not a block field.
+ROW_FIELDS = ('directory', 'action', 'fact', 'field', 'entry_name', 'local_name')
+
+# The field a push shape uses for the fact key. `ACTION_FILTERS` states the relation (`name` names the fact its
+# `type` states), so this names the field that carries the key, and `block_fields` and `field_fact` are the two
+# readers of that one relation.
+FACT_KEY_FIELD = 'type'
 
 
-def filter_field(fact: str) -> str:
-    """The `action` field that names `fact`, read through `ACTION_FILTERS`, the one mapping."""
+def filter_field(fact: str, action: str = '') -> str:
+    """The `action` field that names `fact`, read through `ACTION_FILTERS`, the one mapping.
+
+    With no action the caller means the commit shape, which states the fact through its filter field. For an
+    action row the field must be one that row declares, and the push shape is the row whose mapping names the
+    fact key instead of a fact, so `name` is the field that states the fact. A fact `SCOPE_ANSWER` does not
+    answer names no field, the same rule the gate reads.
+    """
+    declared = resource_mapping.ACTION_SCHEMA.get(action, ((), {}))[1]
     for field, mapped in resource_mapping.ACTION_FILTERS.items():
-        if mapped == fact:
+        if action and field not in declared:
+            continue
+        if mapped == fact or (mapped == FACT_KEY_FIELD and resource_mapping.SCOPE_ANSWER.get(fact)):
             return field
     return ''
+
+
+def block_fields(action: str, fact: str, entry_name: str) -> dict:
+    """The fields one `ACTION_SCHEMA` row prints for one fact, in the order the row declares them.
+
+    The field `filter_field` gives prints the fact name. The push shape also prints the field the mapping
+    names for the fact key, which carries the fact key itself. So the emitter prints the same two tables the
+    gate reads, and a fact the answer does not answer prints no field.
+    """
+    name_field = filter_field(fact, action)
+    if not name_field:
+        return {}
+    required, declared = resource_mapping.ACTION_SCHEMA[action]
+    fields = {name_field: entry_name}
+    if FACT_KEY_FIELD in declared:
+        fields[FACT_KEY_FIELD] = fact
+    order = [field for field in required if field in fields] or sorted(fields)
+    return {field: fields[field] for field in order}
+
+
+def field_text(action: str, field: str, value: str) -> str:
+    """One field value as the row declares it, with the escape set `import_blocks.unescape` reads back."""
+    shape = resource_mapping.ACTION_SCHEMA[action][1][field]
+    return f'[{json.dumps(value)}]' if shape == 'string_list' else json.dumps(value)
 
 
 def field_fact(block, field: str) -> str:
@@ -101,11 +147,12 @@ def local_name(fact: str, entry_name: str, sanitize) -> str:
 
 
 def build_rows(manifest_rows: list, sanitize) -> list:
-    """One row per unit the manifest names, in the identity order the rows already print.
+    """One row per unit the manifest names and per action the pinned schema declares, in the identity order
+    the rows already print.
 
-    A unit whose selected fact is outside `ACTION_FILTERS` (a vsys or a device unit, or the shared unit)
-    writes no row, so the run writes no block for a unit a commit cannot name, and an action never
-    states a fact an ancestor unit owns.
+    A unit whose selected fact `SCOPE_ANSWER` does not answer (a vsys unit, a device unit, or the shared unit)
+    writes no row, so the run writes no block for a unit an action cannot name, and an action never states a
+    fact an ancestor unit owns.
     """
     rows = []
     for manifest_row in manifest_rows:
@@ -113,33 +160,40 @@ def build_rows(manifest_rows: list, sanitize) -> list:
         key, name = unit_manifest.named_fact(facts)
         if key == '' or name == container_coverage.PLACEHOLDER_DEVICE:
             continue
-        if filter_field(key) == '':
-            continue
-        shape = dict.fromkeys(ROW_FIELDS, '')
-        shape['directory'] = manifest_row['directory']
-        shape['fact'] = key
-        shape['field'] = filter_field(key)
-        shape['entry_name'] = name
-        shape['local_name'] = local_name(key, name, sanitize)
-        rows.append(shape)
+        for action in resource_mapping.ACTION_SCHEMA:
+            if not block_fields(action, key, name):
+                continue
+            shape = dict.fromkeys(ROW_FIELDS, '')
+            shape['directory'] = manifest_row['directory']
+            shape['action'] = action
+            shape['fact'] = key
+            shape['field'] = filter_field(key, action)
+            shape['entry_name'] = name
+            shape['local_name'] = local_name(key, name, sanitize)
+            rows.append(shape)
     return rows
 
 
 def render(rows: list) -> str:
     """The action file as text: one block per row, in the order a reader can reproduce.
 
-    The order is the identity order the manifest rows print: the identity as the block states it,
-    sorted in the `FACT_KEYS` order, so a reader reproduces it from the block text alone.
+    The order is the identity order the manifest rows print: the identity as the block states it, sorted in the
+    `FACT_KEYS` order, then the `ACTION_SCHEMA` order inside one unit, so a reader reproduces it from the block
+    text alone.
     """
-    lines = ['# Commit actions (F6.7): one `panos_commit` block per unit the manifest names.\n'
-            '# The block names the fact its own unit declares, and no fact another unit owns.\n'
+    lines = ['# Commit and push actions (F6.7, F6.10.4): one block per action the pinned schema declares, for\n'
+            '# each unit the manifest names. The block names the fact its own unit declares, and no fact\n'
+            '# another unit owns. The push block states no `devices`, because the tool names no serial, so\n'
+            '# the provider pushes to all devices in the target.\n'
             '# Actions need Terraform 1.14 or later, which the `terraform` block declares (§12).\n\n']
+    order = list(resource_mapping.ACTION_SCHEMA)
     for shape in sorted(rows, key=lambda row: (placed_identity(row['fact'], row['entry_name']),
-                                               row['local_name'])):
-        lines.append(f'action "panos_commit" "{shape["local_name"]}" {{\n'
-                     f'  {CONFIG_BLOCK} {{\n'
-                     f'    {shape["field"]} = [{json.dumps(shape["entry_name"])}]\n'
-                     '  }\n}\n\n')
+                                               order.index(row['action']), row['local_name'])):
+        fields = block_fields(shape['action'], shape['fact'], shape['entry_name'])
+        body = ''.join(f'    {field} = {field_text(shape["action"], field, fields[field])}\n'
+                       for field in fields)
+        lines.append(f'action "{shape["action"]}" "{shape["local_name"]}" {{\n'
+                     f'  {CONFIG_BLOCK} {{\n{body}  }}\n}}\n\n')
     return ''.join(lines)
 
 
@@ -154,6 +208,7 @@ def read_block(block) -> dict:
     shape = dict.fromkeys(ROW_FIELDS, '')
     fields = import_blocks.fields(block, CONFIG_BLOCK)
     names = {}
+    stated = ''
     for field in sorted(fields):
         fact = field_fact(block, field)
         if not fact:
@@ -164,11 +219,15 @@ def read_block(block) -> dict:
             raise ValueError(f'the block states more than one name in {field}: {block}')
         if values and values[0]:
             names[fact] = values[0]
+            stated = field
     if len(names) != 1:
         raise ValueError(f'the block does not state one fact: {names or "no field names a fact"}')
     fact, entry_name = next(iter(names.items()))
+    shape['action'] = block.rtype
     shape['fact'] = fact
-    shape['field'] = filter_field(fact)
+    # The reader states the field the block used, which is the field the fact key names for a push block
+    # and the filter field names for a commit block.
+    shape['field'] = stated
     shape['entry_name'] = entry_name
     shape['local_name'] = block.local
     return shape
