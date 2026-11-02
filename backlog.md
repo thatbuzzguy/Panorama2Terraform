@@ -5,6 +5,39 @@ Completed work is not recorded here; the git history and the owner document hold
 
 ## Tech Debt
 
+- **Repository layout (open).** State the layout as a rule, then move the files that break it:
+
+  - The root holds `AGENTS.md`, the two readme indexes (`README.md` and `docs/README.md`), and the tracking
+    markdown (`PLAN.md`, `backlog.md`, `to-do.md`, `acceptance.md`, `agent-status.md`).
+  - `docs/` holds every other document. `tests/` holds every test. `src/` holds the tool's modules.
+    `tools/` holds the developer scripts. `examples/` holds the sample input and the sample output.
+  - Each index names every document under it, so a file outside an index is a finding.
+
+  Out of place today:
+
+  - `conftest.py` is at the root, while every test is in `tests/`. Move it to `tests/conftest.py`. It holds
+    the helpers the tests read the layout through (`tf_files`, `parts`, `file_text`, `written_bytes`), so it
+    stays one file.
+  - The tool's 20 modules are flat at the root. The move to `src/` needs the import rule decided first,
+    because the tests import a module by name (`import sanity_checks`) and `conftest.py` builds a module path
+    from `REPO_ROOT`. The pins that read module sources (`tests/test_safe_input.py`, the writer scan, the
+    property grounding test) read those paths, so they change with the move.
+  - `tests/` is flat: the test files sit beside `fixtures/` and `golden/`. Group the tests by rule area, or
+    state that a flat test directory is the rule, so the layout does not change again.
+  - `quick_start.sh` and `sample_panorama_config.xml` are at the root. `quick_start.sh` is a developer script,
+    so it belongs in `tools/`; the sample config and the example output text belong in `examples/`, with
+    `examples/README.md` as its index.
+  - `terraform_output/` is committed sample output, but `.gitignore` ignores that path, so a regenerated
+    sample cannot be committed. Decide where sample output lives, then regenerate it or drop it. The stale
+    provider constraint and the unused variable in it are the existing finding for the same directory.
+  - The `.gitignore` exception for `examples/**/*.xml` matches nothing until the sample config moves there, and
+    the comment in `.gitignore` names the test corpus by a path the move changes.
+  - `AGENTS.md` says "read all the markdown files in the root directory". The tracking set above is what that
+    means; state the set in `AGENTS.md`, so a document move does not depend on habit.
+
+  Do the moves as one commit with `git mv`, after the open feature work lands, and change no code other than
+  the paths the pins read. Run `ruff check .` and `pytest` after the move, so the suite stays green.
+
 - `tools/build_kitchen_sink.py` still calls `ET.parse` directly. Accepted
   (F3.8): it is a developer tool that assembles the kitchen-sink fixture
   from files already committed to this repository, not an entry point that
