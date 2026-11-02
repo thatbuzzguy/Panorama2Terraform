@@ -72,13 +72,25 @@ BFD, graceful-restart, export-rule and auth-profile levels, `rip`, the BGP `poli
 and the filter containers (route maps, prefix lists, community lists, access lists). They are in
 `backlog.md`.
 
+## Housekeeping — repository layout (open)
+
+The layout is a rule, not a habit. The root holds `AGENTS.md`, the two readme indexes (`README.md`,
+`docs/README.md`) and the tracking markdown; `docs/` holds every other document; `tests/` holds every test;
+`src/` holds the tool's modules; `tools/` holds the developer scripts; `examples/` holds the sample input and
+the sample output. Each index names every document under it.
+
+`tests/` and `docs/` already hold what they should, so the open work is the root: `conftest.py`, the flat
+module set, `quick_start.sh`, `sample_panorama_config.xml`, and the committed sample output directory that
+`.gitignore` ignores. The item list, and the pins that read a path, are in `backlog.md`.
+
 ## Sequencing
 
 The open Epic 6 piece is the write path that splits the output per unit directory, because the rule it
 applies at the print site is decided (`docs/CODEBASE_ASSEMBLY.md` §5 rule 5, F6.9). Its order is in §14,
 and the pieces held until the next feature takes them are in `to-do.md`. The open Epic 7 pieces are the
 routing levels the shape table does not state: each needs a row and a parse method before an emitter, a
-gate rule or the report can read it.
+gate rule or the report can read it. The layout work waits for the open feature work to be committed,
+because it renames the paths those tests read.
 
 ## Out of Scope (tracked in backlog.md)
 
