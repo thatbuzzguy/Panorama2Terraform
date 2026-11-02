@@ -36,9 +36,9 @@ shape the cache entry is hashed from (F5.2 AC-5.4).
 
 Usage:
     from provenance import record_for, render, render_records, parse_record, parse_records
+    from write_path import root_path, write_file
     record = record_for(source, request=request)
-    (output_dir / PROVENANCE_FILE).write_text(
-        render_records([record, parent_record, state_record]), encoding='utf-8')
+    write_file(root_path(output_dir, PROVENANCE_FILE), render_records([record, parent_record, state_record]))
     reference = parse_records((output_dir / PROVENANCE_FILE).read_text())[0].cache_entry
 """
 

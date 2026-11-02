@@ -79,7 +79,7 @@ Each row is a dict with exactly eight fields:
 | `xml_name` | The `<entry name=...>` in the row's fixture that feeds the resource. |
 | `emitted_name` | The `name` attribute the emitted resource must carry. Equals `xml_name` except where the converter derives a name: the `.0` layer-3 subinterface is emitted as `ethernet1/1.0` from the `ethernet1/1` entry. For `panos_device_group_parent` the provider declares no `name`, so the value is the entry name carried by the field `entry_coverage.name_field` states. |
 | `fixture` | The XML fixture under `tests/fixtures/` whose pipeline run exercises the row. |
-| `output_file` | The `.tf` file (relative to the output directory) that must contain the resource block. |
+| `output_file` | The `.tf` file name that must contain the resource block. The run writes it inside the unit directory the manifest row names (§14), so a test reads the parts that name it, keyed by the path from the output directory. |
 | `emitter` | The `TerraformGenerator` method names that read this row's properties. Usually one method. Two names appear when a report writer reads a property the `.tf` emitter does not, which is the case for `panos_address`: the manual setup report prints a report-only address row from the same parsed object. |
 | `properties` | The keys of the parsed object that the row's emitters read. The entry name and the four scope facts are not properties: they are the row identity (§2.2 of [`ARCHITECTURE.md`](ARCHITECTURE.md)), so they are not listed here. |
 

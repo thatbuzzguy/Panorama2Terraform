@@ -17,6 +17,7 @@ No test calls the network: every api run uses an injected producer.
 
 import dataclasses
 import hashlib
+from pathlib import Path
 
 import pytest
 
@@ -25,7 +26,7 @@ import entry_coverage
 import provenance
 import sanity_checks
 import xml_input
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_main, run_script
+from conftest import FIXTURES_DIR, SAMPLE_CONFIG, file_text, run_main, run_script, tf_files
 
 FETCH_FIXTURE = 'api_response.xml'
 UNKNOWN_FIXTURE = 'unknown_containers.xml'
@@ -48,7 +49,15 @@ def _run_file(fixture_name: str, out_dir) -> dict:
     proc = run_script('panorama_to_terraform.py', str(FIXTURES_DIR / fixture_name),
                       '--output-dir', str(out_dir))
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    return {path.name: path.read_text(encoding='utf-8') for path in out_dir.iterdir()}
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the `.tf` set is read as the gate reads it, so a `.tf`
+    # entry holds the parts the run wrote for every unit, in path order. A report and a record are codebase
+    # root-set files, so they stay at the root and are keyed by their name.
+    tf = tf_files(out_dir)
+    files = {Path(key).name: file_text(tf, Path(key).name) for key in tf}
+    for path in sorted(Path(out_dir).iterdir()):
+        if path.is_file() and path.name not in files:
+            files[path.name] = path.read_text(encoding='utf-8')
+    return files
 
 
 def _run_api(converter_module, fetch_module, tmp_path, monkeypatch, cache_dir=None, out_dir=None):
@@ -346,6 +355,6 @@ def test_the_record_is_not_a_gate_input_and_the_exit_code_is_unchanged(tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     report = sanity_checks.run_checks(out)
     assert not report.failed
-    assert report.file_count == len(list(out.glob('*.tf'))), 'the block reader counts .tf files only'
+    assert report.file_count == len(tf_files(out)), 'the block reader counts the unit set'
     assert report.data_file_count == 2, 'the record is not one of the four data files'
     assert report.result_of('terraform') == 'NOT RUN'

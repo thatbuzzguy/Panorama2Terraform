@@ -8,15 +8,3 @@ action "panos_commit" "fw_template_6b469b29" {
   }
 }
 
-action "panos_commit" "dev_dg_66a86129" {
-  config {
-    device_groups = ["Dev-DG"]
-  }
-}
-
-action "panos_commit" "production_dg_e8044497" {
-  config {
-    device_groups = ["Production-DG"]
-  }
-}
-

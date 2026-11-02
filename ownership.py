@@ -54,8 +54,9 @@ row states, an `owner` that names no unit the manifest names or a row of this re
 
 Usage:
     from ownership import OWNERSHIP_FILE, build_rows, render, parse_rows, findings
+    from write_path import root_path, write_file
     rows = build_rows(ledger, parent_ledger, generator.sanitize_name)
-    (output_dir / OWNERSHIP_FILE).write_text(render(rows), encoding='utf-8')
+    write_file(root_path(output_dir, OWNERSHIP_FILE), render(rows))
     for finding in findings(rows):
         print(finding_line(finding))
 """

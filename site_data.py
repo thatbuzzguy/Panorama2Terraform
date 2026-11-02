@@ -3,8 +3,10 @@
 A codebase separates the standard from the site (`docs/CODEBASE_ASSEMBLY.md` §9). Six rules, stated once
 here.
 
-1. **One file per codebase run, one row per site.** F6.1 rule 4 still refuses a per-unit file, because this
-   feature writes no directory: a per-site file would sit outside the shape it names. A site is a unit (the
+1. **One record file per run at the codebase root, one row per site.** The record stays at the root, because a
+   reader cannot find a per-unit file before it knows the directory name (F6.1 rule 5). The printed form is the
+   unit's file, so the run writes it inside the directory the row names (`docs/CODEBASE_ASSEMBLY.md` §14). A site
+   is a unit (the
    device group and the template the export joins through one device), so the row joins to
    `CODEBASE_MANIFEST.json` on `directory` — the same join `OWNERSHIP.json` (F6.2) and `REFERENCE_EDGES.json`
    (F6.3) use. No second unit rule appears here: the identity and the directory name are read through
@@ -36,9 +38,11 @@ here.
 
 Usage:
     from site_data import ROW_FIELDS, SITE_DATA_FILE, TFVARS_FILE, build_rows, parse_rows, render, render_tfvars
+    from write_path import root_path, unit_path, write_file
     rows = build_rows(ledger, generator.value_variables(), generator.sanitize_name)
-    (output_dir / SITE_DATA_FILE).write_text(render(rows), encoding='utf-8')
-    (output_dir / TFVARS_FILE).write_text(render_tfvars(rows), encoding='utf-8')
+    write_file(root_path(output_dir, SITE_DATA_FILE), render(rows))
+    for row in rows:
+        write_file(unit_path(output_dir, row['directory'], TFVARS_FILE), render_tfvars([row]))
     for row in parse_rows((output_dir / SITE_DATA_FILE).read_text(encoding='utf-8')):
         print(row['directory'], row['variables'])
 """
@@ -70,10 +74,12 @@ def build_rows(ledger, recorded: dict, sanitize) -> list:
     `recorded` is the pairs the emitter recorded at the site that applied the value-to-variable table,
     keyed by the unit's four scope facts. This module resolves no name and names no value the run did
     not print, so the `.tfvars` cannot state a value no `.tf` file consumes.
+
+    The unit set is `unit_manifest.units` (rule 1), so a row is one unit and no module counts units a
+    second way.
     """
-    units = {unit_manifest.facts_of(entry) for entry in ledger.rows()}
     rows = []
-    for facts in sorted(units):
+    for facts in unit_manifest.units(ledger):
         variables = recorded.get(facts) or {}
         if not variables:
             # A site that names no value writes no row.

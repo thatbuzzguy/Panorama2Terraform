@@ -32,7 +32,7 @@ import reference_edges
 import sanity_checks
 import site_data
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, run_script
+from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, file_text, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 GROUPING = 'report_grouping.xml'
@@ -334,7 +334,10 @@ def test_the_manifest_is_one_file_for_the_codebase(tmp_path):
     data_files = {MANIFEST, ownership.OWNERSHIP_FILE, reference_edges.EDGE_FILE,
                   site_data.SITE_DATA_FILE}
     assert not any(p.name.endswith('.json') and p.name not in data_files for p in tmp_path.iterdir())
-    assert not [p for p in tmp_path.iterdir() if p.is_dir()], 'F6.1 names the directory, it writes none'
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the directory name the row decides is the directory the run
+    # writes, so the codebase root holds the records and each unit directory holds the unit set.
+    assert sorted(p.name for p in tmp_path.iterdir() if p.is_dir()) == \
+        sorted(row['directory'] for row in rows), 'one directory per unit the row names'
 
 
 # --- 4. the reference names ---------------------------------------------------
@@ -389,7 +392,7 @@ def test_the_record_names_the_referrers_unit_not_the_declaring_unit(gen):
     router = {'name': 'vr-shared', 'type': 'virtual-router', 'vsys': '', 'template': '',
               'vsys_device': '', 'interfaces': ['ethernet1/1']}
     gen.generate_virtual_routers([router])
-    text = (gen.output_dir / 'virtual_routers.tf').read_text(encoding='utf-8')
+    text = file_text(tf_files(gen.output_dir), 'virtual_routers.tf')
     assert 'panos_ethernet_interface.' not in text
     assert 'data.panos_ethernet_interface' not in text
     assert gen.unit_references() == {('', '', '', ''): ('ethernet1/1',)}
@@ -402,7 +405,7 @@ def test_a_read_through_name_is_recorded(converter_module, tmp_path):
     _parser, generator = _pipeline(converter_module, SAMPLE_CONFIG, tmp_path,
                                    ('--data-blocks', 'panos_address,panos_zone'))
     blocks = [line.split(' = ')[1].strip('"') for line in
-              (tmp_path / 'read_through.tf').read_text(encoding='utf-8').splitlines()
+              file_text(tf_files(tmp_path), 'read_through.tf').splitlines()
               if line.startswith('  name = ')]
     recorded = {name for names in generator.unit_references().values() for name in names}
     assert blocks and set(blocks) <= recorded
@@ -462,7 +465,7 @@ def test_the_gate_reads_the_manifest_through_unit_manifest(tmp_path):
     assert report.file_count == len(files)
     assert report.data_file_count == 2, 'the sample run writes the manifest and the ownership record'
     assert report.findings('data_files') == []
-    assert 'Files checked: 10 .tf files, 2 data files.' in report.render(), report.render()
+    assert 'Files checked: 14 .tf files, 2 data files.' in report.render(), report.render()
 
 
 def test_no_report_names_a_field_the_manifest_states(tmp_path):

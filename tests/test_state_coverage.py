@@ -31,7 +31,7 @@ import entry_coverage
 import provenance
 import state_coverage
 import state_input
-from conftest import FIXTURES_DIR, run_main, run_pipeline
+from conftest import FIXTURES_DIR, run_main, run_pipeline, written_bytes
 from xml_input import parse_xml
 
 STATE_FIXTURE = 'state_workspace.json'
@@ -357,8 +357,9 @@ def test_two_runs_on_the_same_bytes_write_the_same_bytes(converter_module, tmp_p
     second = tmp_path / 'second'
     run_pipeline(converter_module, RUN_FIXTURE, first, _state_args())
     run_pipeline(converter_module, RUN_FIXTURE, second, _state_args())
-    assert {path.name: path.read_bytes() for path in first.iterdir()} == \
-           {path.name: path.read_bytes() for path in second.iterdir()}
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the layout is the root set plus one directory per unit,
+    # so two runs are compared on the whole shape they wrote, keyed by path.
+    assert written_bytes(first) == written_bytes(second)
     lines = [line for line in _section(_report(first), state_coverage.OWNERSHIP_HEADING).splitlines()
              if line.startswith('  line')]
     assert lines == sorted(lines), lines

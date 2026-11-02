@@ -47,33 +47,3 @@ resource "panos_service" "dual_protocol_80d74303" {
   tags = [panos_administrative_tag.web_4d6aa528.name]
 }
 
-resource "panos_service" "vsys_service_b90169ce" {
-  location = {
-    vsys = {
-      name = "vsys1"
-      ngfw_device = var.fw_2_example_com
-    }
-  }
-  name = "Vsys-Service"
-  protocol = {
-    tcp = {
-      destination_port = "7001"
-    }
-  }
-}
-
-resource "panos_service" "vsys_service_b8cc0680" {
-  location = {
-    vsys = {
-      name = "vsys2"
-      ngfw_device = var.fw_2_example_com
-    }
-  }
-  name = "Vsys-Service"
-  protocol = {
-    tcp = {
-      destination_port = "7002"
-    }
-  }
-}
-

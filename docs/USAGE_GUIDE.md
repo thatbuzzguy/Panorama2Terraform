@@ -136,7 +136,7 @@ python3 panorama_to_terraform.py export.xml --data-blocks panos_address,panos_zo
   argument error (exit 2).
 - A reference that resolves inside the referrer's own unit stays a `.name` reference to the resource.
   A name another unit in the run declares is the plain name (F6.10.2). Only a name no unit in the run
-  declares becomes one `data` block, one per unit, in `read_through.tf`. The block holds the type, the
+  declares becomes one `data` block, one per unit, in that unit's `read_through.tf`. The block holds the type, the
   local name, `name`, and the `location` the referrer's unit states, and nothing else.
 - Read the file as a plan-time read, not as a stored fact: `terraform plan` asks the device for each
   block, and the plan fails when the entry is not present in the location the block names.
@@ -153,9 +153,9 @@ python3 panorama_to_terraform.py export.xml --import-blocks --output-dir out
 
 - Off by default. A run that does not declare it writes no `imports.tf`, so the generated `.tf` files
   are unchanged.
-- One `import` block per entry the run declares, in one file for the run, in unit order then local-name
-  order. Each block states `to` (the block address) and `id` (base64 of the location object plus the
-  entry name, the provider shape).
+- One `import` block per entry the run declares, in the unit's own `imports.tf`, in local-name order; the run
+  writes one file per unit, so the unit order is the path order. Each block states `to` (the block address)
+  and `id` (base64 of the location object plus the entry name, the provider shape).
 - The block and the id state one fact: the location comes from the same rule the resource block renders
   from, and the local name comes from the same naming rule. `panorama_device` is not stated, because the
   generator emits no device fact.
@@ -194,7 +194,10 @@ so it has no `.tf` output and no gate run.
 
 ## Output files
 
-The converter writes a file only when it has content.
+The converter writes a file only when it has content. The run writes two sets: the codebase root set is one
+file per run at the output directory root, and the unit set is written inside one directory per unit the
+manifest names ([CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) §14). A per-unit file names its unit only by its
+directory, so a table row names the file, not the path.
 
 | File | Content |
 |---|---|
@@ -219,7 +222,7 @@ The converter writes a file only when it has content.
 | `OWNERSHIP.json` | One row per entry the coverage matrix covers, as data: the matrix row, the entry name, the source, the four scope facts, the declaring unit's directory, the owning unit's directory, what the rule can say about the entry, and the `disable_override` flag as the parse read it. Written only when it has content (F6.2) |
 | `REFERENCE_EDGES.json` | One row per reference pair, as data: the referrer unit, the target unit, the matrix row, and the entry name. Written only when it has content (F6.3) |
 | `SITE_DATA.json` | One row per site that names a value, as data: the unit directory and the variable names with their values. Written only when it has content (F6.6) |
-| `site.auto.tfvars` | The `.tfvars` written from the site data rows, one line per variable in name order (F6.6). Terraform loads a `*.auto.tfvars` file automatically, so `terraform.tfvars` stays the operator's own file for the credentials |
+| `site.auto.tfvars` | The `.tfvars` written from the site data rows, one file per unit inside the directory that row names, one line per variable in name order (F6.6). Terraform loads a `*.auto.tfvars` file automatically, so `terraform.tfvars` stays the operator's own file for the credentials |
 
 The interface report, the VPN report, and the conversion report share one grouping
 rule: one section per scope the export declares (device group, then the template or
@@ -419,7 +422,7 @@ fields, in this order: `directory`, `variables`.
 ```
 
 ```
-# site.auto.tfvars, written from the row above
+# site.auto.tfvars, written from the row above, inside the directory that row names
 fw_2_example_com = "fw-2.example.com"
 ```
 
@@ -432,9 +435,9 @@ fw_2_example_com = "fw-2.example.com"
   each location field. Only `ngfw_device` prints as `var.<name>`, because the device is the value a codebase
   changes per site ([CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) §9). A run that names no value writes neither
   file, so the sample output is unchanged.
-- `site.auto.tfvars` prints one line per variable, in name order across the file, and one line for a name two
-  rows state. Terraform loads a `*.auto.tfvars` file automatically, so `terraform.tfvars` stays your own file
-  for the credentials, which the tool never writes.
+- `site.auto.tfvars` prints one line per variable, in name order. The run writes one file per unit, inside the
+  directory that row names, so one file prints one row. Terraform loads a `*.auto.tfvars` file automatically,
+  so `terraform.tfvars` stays your own file for the credentials, which the tool never writes.
 - `parse_rows` reads a written file back as data and refuses a row that is not the declared shape, including a
   variable name that is not the naming-rule shape of its string value
   ([ARCHITECTURE.md](ARCHITECTURE.md) §3.7). A value that is neither a string nor a list is a refusal, and so
@@ -497,14 +500,16 @@ Four things explain the shape of the output:
   [ARCHITECTURE.md](ARCHITECTURE.md) §4.3.
 - **Site values.** The device name in a `location` block prints as `var.<name>`, because the table
   `resource_mapping.VALUE_VARIABLES` maps that field to a variable (F6.6). A site change is a `.tfvars`
-  change, not a code change, so replacing hardware changes one line in `site.auto.tfvars` instead of every
-  resource inside the template. Every other location field prints as the value the source states.
+  change, not a code change, so replacing hardware changes one line in that unit's `site.auto.tfvars` instead
+  of every resource inside the template. Every other location field prints as the value the source states.
 
 ## Deploying the generated configuration
 
-1. Create `terraform.tfvars` with the credentials. Do not commit it. The tool writes `site.auto.tfvars`
-   from `SITE_DATA.json`, and Terraform loads it automatically, so put the credentials in
-   `terraform.tfvars` and leave the site values in the file the tool wrote.
+1. Create `terraform.tfvars` with the credentials. Do not commit it. The tool writes one `site.auto.tfvars` per
+   unit, inside the directory that the site row names, and Terraform loads it automatically, so put the
+   credentials in
+   `terraform.tfvars` and leave the site values in the file the tool wrote. Plan and apply one unit directory
+   at a time.
 2. Replace the placeholder VPN pre-shared keys.
 3. Read `MANUAL_SETUP_REPORT.txt` and configure those items by hand.
 4. Check interface names against the target platform

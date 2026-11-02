@@ -45,27 +45,3 @@ resource "panos_address" "masked_host_f81cf9c5" {
   ip_netmask = "10.1.4.5/32"
 }
 
-resource "panos_address" "vsys_duplicate_a082f4ca" {
-  location = {
-    vsys = {
-      name = "vsys1"
-      ngfw_device = var.fw_2_example_com
-    }
-  }
-  name = "Vsys-Duplicate"
-  description = "vsys1 copy of a shared name"
-  ip_netmask = "10.20.1.10/32"
-}
-
-resource "panos_address" "vsys_duplicate_e8ae6906" {
-  location = {
-    vsys = {
-      name = "vsys2"
-      ngfw_device = var.fw_2_example_com
-    }
-  }
-  name = "Vsys-Duplicate"
-  description = "vsys2 copy of a shared name"
-  ip_netmask = "10.20.2.10/32"
-}
-

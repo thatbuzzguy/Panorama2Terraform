@@ -12,6 +12,7 @@ import pytest
 
 import sanity_checks
 import unit_manifest
+from conftest import file_text, tf_files
 
 REPO_ROOT = Path(__file__).parent.parent
 CONVERTER = REPO_ROOT / 'panorama_to_terraform.py'
@@ -109,7 +110,9 @@ def test_entry_without_name_is_skipped(tmp_path):
     proc = _run(CONVERTER, str(FIXTURES_DIR / 'robust_empty_names.xml'),
                 '--output-dir', str(tmp_path / 'out'), workdir=tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    text = (tmp_path / 'out' / 'address_objects.tf').read_text(encoding='utf-8')
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the file is read as the gate reads it, so the parts the
+    # run wrote for every unit are read in path order.
+    text = file_text(tf_files(tmp_path / 'out'), 'address_objects.tf')
     # F2.7 naming: sanitized name plus an 8-hex digest of the source identity.
     assert re.search(r'resource "panos_address" "named_host_[0-9a-f]{8}"', text)
     # Exactly one resource: the unnamed entry must not produce a block.
@@ -121,7 +124,7 @@ def test_sanitization_collisions_get_unique_names(tmp_path):
     proc = _run(CONVERTER, str(FIXTURES_DIR / 'robust_name_collisions.xml'),
                 '--output-dir', str(tmp_path / 'out'), workdir=tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    text = (tmp_path / 'out' / 'address_objects.tf').read_text(encoding='utf-8')
+    text = file_text(tf_files(tmp_path / 'out'), 'address_objects.tf')
     names = re.findall(r'resource "panos_address" "([^"]+)"', text)
     # Three distinct resource addresses (duplicates would be invalid HCL).
     assert len(names) == 3

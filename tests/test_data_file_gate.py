@@ -30,7 +30,8 @@ import reference_edges
 import sanity_checks
 import site_data
 import unit_manifest
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_script
+import write_path
+from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_script, written_bytes
 
 CONVERTER = 'panorama_to_terraform.py'
 KITCHEN = 'kitchen_sink.xml'
@@ -99,8 +100,12 @@ def _clean(facts_list: list, ownership_rows: list = (), edge_rows: list = ()) ->
 
 
 def _write(out_dir: Path, name: str, module, rows: list) -> list:
-    """Write one data file as its module renders it, and return the rule findings for the directory."""
-    (out_dir / name).write_text(module.render(rows), encoding='utf-8')
+    """Write one record as its module renders it, through the write path, and return the rule findings.
+
+    A record is a codebase root-set file, so the test writes it with the same builder the tool uses
+    (F6.10.3, `docs/CODEBASE_ASSEMBLY.md` §14).
+    """
+    write_path.write_file(write_path.root_path(out_dir, name), module.render(rows))
     return sanity_checks.check_data_files(out_dir)
 
 
@@ -136,9 +141,14 @@ def test_the_report_names_both_file_sets(tmp_path):
     """
     assert _run(SAMPLE_CONFIG, tmp_path).returncode == 0
     report = sanity_checks.run_checks(tmp_path)
-    assert 'Files checked: 10 .tf files, 2 data files.' in report.render(), report.render()
-    assert 'Sanity gate: PASS (0 FAIL, 0 WARN) - 10 .tf files, 2 data files, 20 resources' in \
+    # F6.10.3 (§14): the count names the unit set the reader read below the root, so the sample run — two
+    # units, so two sets — measures 14 .tf files.
+    files = sanity_checks.read_tf_files(tmp_path)
+    assert report.file_count == len(files), 'the count names the unit set'
+    assert 'Files checked: 14 .tf files, 2 data files.' in report.render(), report.render()
+    assert 'Sanity gate: PASS (0 FAIL, 0 WARN) - 14 .tf files, 2 data files, 20 resources' in \
         report.console_summary()
+    assert all(Path(name).parent.name for name in files), 'the reader read the unit directories'
     # The printed form is not one of the four, so the count names only the records.
     kitchen = tmp_path / 'kitchen'
     assert _run(FIXTURES_DIR / KITCHEN, kitchen).returncode == 0
@@ -353,36 +363,61 @@ def test_the_printed_form_must_be_the_record_rendered_by_its_rule(tmp_path):
     findings = _for_file(_write(tmp_path, site_data.SITE_DATA_FILE, site_data, [row]),
                          site_data.SITE_DATA_FILE)
     assert findings == [], findings      # the shape and the join read clean
-    assert len(sanity_checks.check_data_files(tmp_path)) == 1, 'the printed form is missing'
-    assert 'printed form must be written' in sanity_checks.check_data_files(tmp_path)[0].detail
-
-    (tmp_path / site_data.TFVARS_FILE).write_text(site_data.render_tfvars([row]), encoding='utf-8')
-    assert sanity_checks.check_data_files(tmp_path) == []
-    (tmp_path / site_data.TFVARS_FILE).write_text(
-        site_data.render_tfvars([row]) + 'site_value = "other"\n', encoding='utf-8')
+    # F6.10.3 (§14): the printed form is the unit's file, so the rule reads the file the row names and the
+    # finding names the path from the codebase root.
+    printed = write_path.unit_path(tmp_path, row['directory'], site_data.TFVARS_FILE)
+    path = str(printed.relative_to(tmp_path))
     findings = sanity_checks.check_data_files(tmp_path)
-    assert len(findings) == 1 and 'not the site record rendered' in findings[0].detail, findings
-    assert findings[0].file == site_data.TFVARS_FILE
+    assert len(findings) == 1, 'the printed form is missing'
+    assert findings[0].file == path, findings[0].render()
+    assert 'must hold its printed form' in findings[0].detail, findings[0].render()
+
+    write_path.write_file(printed, site_data.render_tfvars([row]))
+    assert sanity_checks.check_data_files(tmp_path) == []
+    write_path.write_file(printed, site_data.render_tfvars([row]) + 'site_value = "other"\n')
+    findings = sanity_checks.check_data_files(tmp_path)
+    assert len(findings) == 1 and 'not the row rendered by the rule' in findings[0].detail, findings
+    assert findings[0].file == path, findings[0].render()
+    assert findings[0].line == 1, 'the position is the row ordinal the record states'
 
 
 def test_the_record_and_its_printed_form_stand_or_fall_together(tmp_path):
     """The content rule writes both or neither, so a printed form with no record is a finding."""
+    # F6.10.3 (§14): the rule reads the record, then the printed form of each row inside the directory that
+    # row names, so a row and its printed form stand together, and a printed form no row names is not a
+    # finding: the data rule reads no file inside a unit directory by itself.
     rows = _clean([SHARED, CHILD])
     assert _write(tmp_path, unit_manifest.MANIFEST_FILE, unit_manifest, rows) == []
-    (tmp_path / site_data.TFVARS_FILE).write_text(site_data.TFVARS_HEADER + 'site_value = "x"\n',
-                                                  encoding='utf-8')
-    findings = sanity_checks.check_data_files(tmp_path)
-    assert len(findings) == 1 and 'stands with the site record' in findings[0].detail, findings
+    assert sanity_checks.check_data_files(tmp_path) == [], 'the record has no row, so nothing is printed'
+    site_rows = [_site_row(facts, 'x') for facts in (SHARED, CHILD)]
+    assert _write(tmp_path, site_data.SITE_DATA_FILE, site_data, site_rows)
+    for row in site_rows:
+        assert sanity_checks.check_data_files(tmp_path), f"row {row['directory']}: the unit must hold its form"
+    for row in site_rows:
+        write_path.write_file(write_path.unit_path(tmp_path, row['directory'], site_data.TFVARS_FILE),
+                              site_data.render_tfvars([row]))
+    assert sanity_checks.check_data_files(tmp_path) == [], 'the record and its printed forms read clean'
+    unclaimed = tmp_path / 'unit_no_row_names'
+    write_path.write_file(unclaimed / site_data.TFVARS_FILE, site_data.TFVARS_HEADER + 'site_value = "x"\n')
+    assert sanity_checks.check_data_files(tmp_path) == [], 'the rule reads no file inside a unit directory'
 
-    # Two rows that state one name with two values cannot print one line, so the rule reports the
-    # refusal. A list value names no shape for its name, so one name can hold two lists.
+    # Two rows that state one name with two values cannot print one line, so the print rule refuses. F6.10.3
+    # (§14): a unit's file prints that unit's row, so one file never holds two rows, and the gate reads the
+    # refusal only through the row it is comparing. The refusal is still the rule's decision, so the test
+    # measures it through the rule, not through a printed file the run cannot write.
     site_rows = [{'directory': unit_manifest.directory_name(SHARED, naming.sanitize),
                   'variables': {'site_list': ['a']}},
                  {'directory': unit_manifest.directory_name(CHILD, naming.sanitize),
                   'variables': {'site_list': ['b']}}]
+    try:
+        site_data.render_tfvars(site_rows)
+    except ValueError as exc:
+        assert 'states two values' in str(exc), exc
+    else:
+        raise AssertionError('the print rule must refuse two values for one name')
     findings = _for_file(_write(tmp_path, site_data.SITE_DATA_FILE, site_data, site_rows),
                          site_data.SITE_DATA_FILE)
-    assert len(findings) == 1 and 'states two values' in findings[0].detail, findings
+    assert findings == [], 'one file prints one row, so the gate reads no conflict'
 
 
 # --- 7. Finding 6: the position, the corpus, determinism, the exit code ---------
@@ -427,12 +462,13 @@ def test_the_rule_is_the_same_between_two_runs(tmp_path):
     source = FIXTURES_DIR / KITCHEN
     first, second = tmp_path / 'first', tmp_path / 'second'
     assert _run(source, first).returncode == 0 and _run(source, second).returncode == 0
+    # F6.10.3 (§14): the layout is the root set plus one directory per unit, so the two runs are
+    # compared on the whole shape the run wrote.
+    assert written_bytes(first) == written_bytes(second), 'the same bytes write the same layout'
     for name, _ in sanity_checks.DATA_FILES:
         left, right = first / name, second / name
         if left.is_file():
             assert left.read_bytes() == right.read_bytes(), name
-    assert first.joinpath(site_data.TFVARS_FILE).read_bytes() == \
-        second.joinpath(site_data.TFVARS_FILE).read_bytes()
     assert sanity_checks.check_data_files(first) == sanity_checks.check_data_files(second)
     assert sanity_checks.count_data_files(first) == sanity_checks.count_data_files(second) == 4
 

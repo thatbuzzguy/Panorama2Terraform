@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 
 import sanity_checks
-from conftest import FIXTURES_DIR, run_script
+from conftest import FIXTURES_DIR, file_text, run_script, tf_files
 
 TERRAFORM = shutil.which("terraform")
 FIXTURE = FIXTURES_DIR / "dependency_wiring.xml"
@@ -48,16 +48,15 @@ def out_dir(tmp_path_factory) -> Path:
 
 
 def _read(out_dir: Path, name: str) -> str:
-    return (out_dir / name).read_text(encoding="utf-8")
+    """One file shape across the unit set, in path order (F6.10.3, `docs/CODEBASE_ASSEMBLY.md` §14)."""
+    return file_text(tf_files(out_dir), name)
 
 
 def _declared(out_dir: Path) -> set[tuple[str, str]]:
     """All (type, local) resource addresses declared in the output."""
     declared = set()
-    for path in out_dir.iterdir():
-        if path.suffix != ".tf":
-            continue
-        declared.update(RESOURCE_RE.findall(path.read_text(encoding="utf-8")))
+    for text in tf_files(out_dir).values():
+        declared.update(RESOURCE_RE.findall(text))
     return declared
 
 
@@ -245,7 +244,7 @@ def test_every_emitted_reference_resolves_to_a_declared_resource(out_dir):
     The rule is the one the conversion gate runs on every conversion, so the
     test calls the same function the CLI calls (F4.1).
     """
-    files = {path.name: path.read_text(encoding="utf-8") for path in out_dir.glob("*.tf")}
+    files = tf_files(out_dir)
     findings = sanity_checks.check_references(files)
     assert findings == [], "dangling references: " + ", ".join(f.render() for f in findings)
 

@@ -32,7 +32,7 @@ import entry_coverage
 import provenance
 import shadow_coverage
 import xml_input
-from conftest import FIXTURES_DIR, run_main, run_pipeline, run_script
+from conftest import FIXTURES_DIR, run_main, run_pipeline, run_script, written_bytes
 
 CHILD_FIXTURE = 'scope_child.xml'
 PARENT_FIXTURE = 'scope_parent.xml'
@@ -305,8 +305,9 @@ def test_two_runs_on_the_same_sources_write_the_same_bytes(converter_module, fet
     second = tmp_path / 'second'
     _run_pair(converter_module, fetch_module, first, cache, monkeypatch, offline=True)
     _run_pair(converter_module, fetch_module, second, cache, monkeypatch, offline=True)
-    assert {path.name: path.read_bytes() for path in first.iterdir()} == \
-           {path.name: path.read_bytes() for path in second.iterdir()}
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the layout is the root set plus one directory per unit,
+    # so two runs are compared on the whole shape they wrote, keyed by path.
+    assert written_bytes(first) == written_bytes(second)
     assert shadow_coverage.SHADOW_HEADING in (first / entry_coverage.REPORT_FILE).read_text(encoding='utf-8')
 
 

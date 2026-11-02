@@ -1,0 +1,46 @@
+# Address Objects
+
+resource "panos_address" "web_server_1_df7a622a" {
+  location = {
+    shared = {}
+  }
+  name = "Web-Server-1"
+  description = "Web server"
+  ip_netmask = "10.1.1.10/32"
+  tags = ["Production", "Web"]
+}
+
+resource "panos_address" "web_range_f9cb5402" {
+  location = {
+    shared = {}
+  }
+  name = "Web-Range"
+  ip_range = "10.1.2.0-10.1.2.255"
+}
+
+resource "panos_address" "external_api_e826c30a" {
+  location = {
+    shared = {}
+  }
+  name = "External-API"
+  description = "External API"
+  fqdn = "api.example.com"
+}
+
+resource "panos_address" "wildcard_net_24eccb47" {
+  location = {
+    shared = {}
+  }
+  name = "Wildcard-Net"
+  ip_wildcard = "10.2.3.*"
+}
+
+resource "panos_address" "masked_host_f81cf9c5" {
+  location = {
+    shared = {}
+  }
+  name = "Masked-Host"
+  disable_override = "yes"
+  ip_netmask = "10.2.4.5/32"
+}
+

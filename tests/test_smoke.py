@@ -4,7 +4,9 @@ These tests are the baseline gate. The deeper parser and generator tests
 are the rest of the suite.
 """
 
-from conftest import SAMPLE_CONFIG, run_script
+from pathlib import Path
+
+from conftest import SAMPLE_CONFIG, parts, run_script, tf_files
 
 
 def test_sample_config_exists():
@@ -29,10 +31,14 @@ def test_converter_runs_on_sample(converter_module, tmp_path):
         "security_rules.tf",
         "nat_rules.tf",
     ]
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the run writes one file per unit, so the core files are
+    # the parts it wrote, keyed by path, and each part has content.
+    files = tf_files(out_dir)
     for name in expected:
-        path = out_dir / name
-        assert path.is_file(), f"converter did not emit {name}"
-        assert path.stat().st_size > 0, f"converter emitted empty {name}"
+        written = parts(files, name)
+        assert written, f"converter did not emit {name}"
+        assert all(text for text in written.values()), f"converter emitted empty {name}"
+    assert all(Path(path).parent.name for path in files), 'the core files are inside unit directories'
 
 
 def test_splitter_help_exits_zero():

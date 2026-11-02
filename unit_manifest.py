@@ -24,10 +24,11 @@ stated once here.
    is not the declared shape is a refusal, the way `provenance.parse_record` refuses a line that
    is not a field.
 4. One file per codebase. A reader cannot find a per-unit file before it knows the directory
-   name, and the directory name is the fact this module decides. F6.1 writes no directory, so a
-   per-unit file would sit outside the shape it names. The set of units is a run fact, and the
-   edge list (F6.3) needs the whole set, so one file holds one row per unit. The file is written
-   only when it has content, following the existing rule for the report files.
+   name, and the directory name is the fact this module decides. The set of units is a run fact, and
+   the edge list (F6.3) needs the whole set, so one file holds one row per unit. The file is written
+   only when it has content, following the existing rule for the report files. `units` is that run
+   fact, so the directories a run writes are the units this rule names (`docs/CODEBASE_ASSEMBLY.md`
+   §14), and no module counts units a second way.
 5. The unit order lives on this row, as `rank` and `after`, because this file is the place that
    names each unit; a fourth data file that listed directories would be a second place that states
    the unit set. This module states the row shape only. `reference_edges.order` fills the two
@@ -45,9 +46,10 @@ above state, or a `rank` and `after` that are not what the order rule produces. 
 
 Usage:
     from unit_manifest import MANIFEST_FILE, build_rows, render, parse_rows
+    from write_path import root_path, write_file
     rows = build_rows(ledger, generator.unit_references(), generator.sanitize_name)
     rows = reference_edges.order(rows, ownership_rows, edge_rows)    # rule 5: fills rank and after
-    (output_dir / MANIFEST_FILE).write_text(render(rows), encoding='utf-8')
+    write_file(root_path(output_dir, MANIFEST_FILE), render(rows))
     for row in parse_rows((output_dir / MANIFEST_FILE).read_text(encoding='utf-8')):
         print(row['directory'], row['rank'], row['after'])
 """
@@ -135,6 +137,17 @@ def directory_name(facts: tuple, sanitize: Callable[[str], str]) -> str:
     return f'{sanitize(unit_name(facts)) or UNNAMED}_{identity_digest(facts)}'
 
 
+def units(ledger) -> list:
+    """The units the ledger shows, in identity order (rule 1).
+
+    F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the run's unit set is this list, because a unit exists
+    only when the ledger has a row in it, so the set that names the directories the run writes is read
+    through this one rule and no module counts units a second way. `build_rows` reads it here. A reader
+    that has no ledger names no unit, so it gets the empty set.
+    """
+    return sorted({facts_of(row) for row in ledger.rows()}) if ledger else []
+
+
 def build_rows(ledger, references: dict, sanitize: Callable[[str], str]) -> list:
     """One row per unit the ledger shows, in identity order.
 
@@ -143,17 +156,17 @@ def build_rows(ledger, references: dict, sanitize: Callable[[str], str]) -> list
     row adds nothing here; `tests/test_unit_manifest.py` pins that every recorded name belongs to
     a unit the ledger shows across the fixture corpus.
     """
-    units: dict = {}
+    counts: dict = {}
     for row in ledger.rows():
-        units[facts_of(row)] = units.get(facts_of(row), 0) + 1
+        counts[facts_of(row)] = counts.get(facts_of(row), 0) + 1
 
     rows = []
-    for facts in sorted(units):
+    for facts in units(ledger):          # rule 1: the unit set is read through this one rule
         row = dict.fromkeys(FIELD_ORDER, '')
         row.update(zip(FACT_KEYS, facts))
         row['unit'] = unit_name(facts)
         row['directory'] = directory_name(facts, sanitize)
-        row['entry_count'] = units[facts]
+        row['entry_count'] = counts[facts]
         row['references'] = sorted(references.get(facts, ()))
         # Rule 5: `reference_edges.order` fills these two fields. They start empty so a run that
         # applies no order rule still writes the declared shape.

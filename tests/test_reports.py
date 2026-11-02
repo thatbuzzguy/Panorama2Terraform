@@ -31,7 +31,7 @@ def _generate(tmp_path, fixture=FIXTURE):
     result = run_script('panorama_to_terraform.py', str(FIXTURES_DIR / fixture),
                         '--output-dir', str(tmp_path))
     assert result.returncode == 0, result.stderr
-    return {f.name: f.read_text() for f in tmp_path.iterdir()}
+    return {f.name: f.read_text() for f in sorted(tmp_path.iterdir()) if f.is_file()}
 
 
 def _sections(text: str) -> dict[str, str]:

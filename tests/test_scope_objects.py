@@ -3,9 +3,9 @@
 `docs/CODEBASE_ASSEMBLY.md` §8 states the decisions; these tests pin them:
 
 1. Emission and order. One `resource` block per scope entry, in the level order `SCOPE_LEVEL_ORDER`
-   states and in document order inside a type, in one file for the run. The file is written only
-   when the run has content, and `main()` writes it after `provider.tf` and `variables.tf` and
-   before the object files, so the reader sees the unit before the config inside it. Emission is the
+   states and in document order inside a type, in the unit's `scope.tf`. The file is written only
+   when the run has content, and the run writes it inside the directory the manifest row names, after
+   `provider.tf` and before the object files, so the reader sees the unit before the config inside it. Emission is the
    default for every run, so no flag names it.
 2. The name field. `panos_device_group_parent` declares no `name`, so its entry name reaches the
    block through the field `entry_coverage.name_field` states, the same rule the import agreement
@@ -35,7 +35,7 @@ import container_coverage
 import entry_coverage
 import resource_mapping
 import sanity_checks
-from conftest import FIXTURES_DIR, run_pipeline, run_script
+from conftest import FIXTURES_DIR, file_text, run_pipeline, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 SCOPE_FILE = 'scope.tf'
@@ -54,19 +54,30 @@ BLOCK_ORDER = ['panos_device_group', 'panos_device_group', 'panos_device_group',
                'panos_template_variable', 'panos_vsys']
 
 
-def _generate(fixture: str, out_dir: Path) -> str:
-    """Run the converter on one fixture and return the scope file text (empty when unwritten)."""
+def _generate(fixture: str, out_dir: Path) -> dict:
+    """Run the converter on one fixture and return the `.tf` file set as the gate reads it.
+
+    F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the run writes one directory per unit, so the key is the
+    path from the output directory and a per-unit file names its unit only by its directory.
+    """
     result = run_script(CONVERTER, str(FIXTURES_DIR / fixture), '--output-dir', str(out_dir))
     assert result.returncode == 0, f'converter failed on {fixture}: {result.stderr}\n{result.stdout}'
-    path = out_dir / SCOPE_FILE
-    return path.read_text(encoding='utf-8') if path.is_file() else ''
+    return tf_files(out_dir)
 
 
-def _blocks(text: str, rtype: str) -> list[str]:
-    """The resource blocks of one type. A block closes at the first `}` in column 0."""
+def _parts(files: dict, name: str) -> dict:
+    """One file shape across the unit set, keyed by the path the reader names (F6.10.3, §14)."""
+    return {key: text for key, text in files.items() if Path(key).name == name}
+
+
+def _blocks(text: str, rtype: str = '') -> list[str]:
+    """The resource blocks of one type, or every resource block when `rtype` is empty.
+
+    A block closes at the first `}` in column 0.
+    """
     found = []
     for match in RESOURCE_RE.finditer(text):
-        if match.group(1) != rtype:
+        if rtype and match.group(1) != rtype:
             continue
         end = text.find('\n}', match.end())
         assert end != -1, f'unclosed resource block for {rtype}'
@@ -83,41 +94,63 @@ def _block(text: str, rtype: str, name: str) -> str:
 
 
 @pytest.fixture(scope='module')
-def scope_text(tmp_path_factory) -> str:
-    """The scope file the run writes for the fixture, generated once for the module."""
-    return _generate(FIXTURE, tmp_path_factory.mktemp('scope_objects'))
+def scope_parts(tmp_path_factory) -> dict:
+    """The scope file for each unit the fixture names, keyed by the path from the output directory."""
+    return _parts(_generate(FIXTURE, tmp_path_factory.mktemp('scope_objects')), SCOPE_FILE)
+
+
+@pytest.fixture(scope='module')
+def scope_text(scope_parts) -> str:
+    """The scope blocks across the unit set, in path order, for the tests that read one block by name."""
+    return ''.join(scope_parts[key] for key in sorted(scope_parts))
 
 
 # --- 1. Emission and order --------------------------------------------------
 
-def test_one_block_per_scope_entry(scope_text):
+def test_one_block_per_scope_entry(scope_parts):
     """Eight blocks: the fixture carries one entry of each of the six types, and one device-group
     entry feeds two blocks (the scope object and the parent record).
+
+    F6.10.3 (section 14): the run writes the file per unit, so the set holds one file for each unit
+    that has a scope entry, and the block count is the sum across the files.
     """
-    assert [m.group(1) for m in RESOURCE_RE.finditer(scope_text)] == BLOCK_ORDER
+    blocks = [match.group(1) for key in sorted(scope_parts)
+              for match in RESOURCE_RE.finditer(scope_parts[key])]
+    assert len(scope_parts) == 6, sorted(scope_parts)
+    assert sorted(blocks) == sorted(BLOCK_ORDER), blocks
 
 
-def test_blocks_print_in_the_level_order_the_table_states(scope_text):
-    """The order the file prints is the order `SCOPE_LEVEL_ORDER` states, read through the first block
-    of each type, so the emitter cannot print a level out of order.
+def test_blocks_print_in_the_level_order_the_table_states(scope_parts):
+    """The order one unit's file prints is the order `SCOPE_LEVEL_ORDER` states, read through the
+    block types that file holds, so the emitter cannot print a level out of order.
+
+    F6.10.3 (section 14): the level order is a rule about one file, and the file is one unit's, so
+    the order is read per unit. A unit's file states only the levels that unit declares.
     """
-    order = [match.group(1) for match in RESOURCE_RE.finditer(scope_text)]
-    first_type_of_each_level = list(dict.fromkeys(order))
-    assert first_type_of_each_level == list(resource_mapping.SCOPE_LEVEL_ORDER), first_type_of_each_level
-    # A type's blocks sit together, so the level order is the print order.
-    for rtype in resource_mapping.SCOPE_LEVEL_ORDER:
-        positions = [index for index, type_name in enumerate(order) if type_name == rtype]
-        assert positions == list(range(positions[0], positions[-1] + 1)), (rtype, order)
+    for key in sorted(scope_parts):
+        order = [match.group(1) for match in RESOURCE_RE.finditer(scope_parts[key])]
+        assert order == sorted(order, key=lambda name: resource_mapping.SCOPE_LEVEL_ORDER.index(name)), (key, order)
+        # A type's blocks sit together, so the level order is the print order.
+        for rtype in resource_mapping.SCOPE_LEVEL_ORDER:
+            positions = [index for index, type_name in enumerate(order) if type_name == rtype]
+            if positions:
+                assert positions == list(range(positions[0], positions[-1] + 1)), (key, rtype, order)
 
 
-def test_entries_print_in_document_order_within_a_type(scope_text):
-    """Within a type the entries print in the order the export holds them, so the file is stable."""
-    names = [re.search(r'name = "([^"]+)"', block).group(1)
-             for block in _blocks(scope_text, 'panos_device_group')]
-    assert names == ['Shared-Parent', 'Edge-FW', 'Placeholder-Only'], names
+def test_entries_print_in_document_order_within_a_type(scope_parts):
+    """Within one unit's file the entries of one type print in the order the export holds them, so
+    the file is stable. F6.10.3 (section 14): the fixture places the three device-group entries in
+    three units, so each file holds one entry's block and the set holds one block per entry.
+    """
     entries = ET.parse(FIXTURES_DIR / FIXTURE).getroot().findall('.//device-group/entry')
-    assert [entry.get('name') for entry in entries] == names
-
+    order = {entry.get('name'): index for index, entry in enumerate(entries)}
+    names = []
+    for key in sorted(scope_parts):
+        found = [re.search(r'name = "([^"]+)"', block).group(1)
+                 for block in _blocks(scope_parts[key], 'panos_device_group')]
+        assert found == sorted(found, key=lambda name: order[name]), (key, found)
+        names.extend(found)
+    assert sorted(names) == sorted(order), names
 
 def test_the_scope_file_is_written_before_the_config_inside_it(converter_module):
     """The order rule (`docs/CODEBASE_ASSEMBLY.md` §6): `main()` writes the scope file after
@@ -136,7 +169,7 @@ def test_the_scope_file_is_written_before_the_config_inside_it(converter_module)
 
 def test_the_file_is_written_only_when_it_has_content(tmp_path):
     """A run on an input with no scope entry writes no file, the rule the report and data files use."""
-    assert _generate(NO_SCOPE_FIXTURE, tmp_path) == ''
+    assert file_text(_generate(NO_SCOPE_FIXTURE, tmp_path), SCOPE_FILE) == ''
 
 
 def test_emission_is_default_and_no_flag_names_it(tmp_path):
@@ -144,7 +177,11 @@ def test_emission_is_default_and_no_flag_names_it(tmp_path):
     the argument error the exit code states.
     """
     out = tmp_path / 'default'
-    assert _generate(FIXTURE, out) != '', 'a run must write the scope blocks by default'
+    files = _generate(FIXTURE, out)
+    assert file_text(files, SCOPE_FILE) != '', 'a run must write the scope blocks by default'
+    # F6.10.3 (section 14): the codebase root set holds no `.tf` file, so the reader names the unit
+    # directory for every `.tf` file the run wrote.
+    assert all(Path(key).parent.name for key in files), sorted(files)
     refused = run_script(CONVERTER, str(FIXTURES_DIR / FIXTURE), '--output-dir', str(tmp_path),
                          '--scope-blocks')
     assert refused.returncode == 2, refused.stdout
@@ -289,7 +326,7 @@ def test_a_scope_entry_the_export_places_nowhere_writes_no_block(converter_modul
     row = next(row for row in parser.ledger.rows() if row['name'] == 'vsys2')
     assert row['destination'] == 'skipped', row
     assert 'no template holds this virtual system' in row['detail'], row
-    assert 'panos_vsys' not in (out / SCOPE_FILE).read_text(encoding='utf-8')
+    assert 'panos_vsys' not in file_text(tf_files(out), SCOPE_FILE)
 
 
 # --- 6. The gate rule --------------------------------------------------------

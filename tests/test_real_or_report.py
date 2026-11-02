@@ -30,7 +30,7 @@ from pathlib import Path
 
 from test_policy_order import _check_chain_semantics, _rule_blocks
 
-from conftest import FIXTURES_DIR, run_script
+from conftest import FIXTURES_DIR, file_text, run_script, tf_files
 
 # The legacy comment-only placeholder text must be gone from all output.
 PLACEHOLDER_TEXT = 'Manual Terraform configuration is required'
@@ -62,7 +62,9 @@ def _convert(fixture_name: str, tmp_path: Path) -> Path:
 def test_decryption_rules_emit_real_v2_resources(tmp_path):
     """One panos_decryption_policy_rules resource per rule, chained, full body."""
     out = _convert('decryption_rules.xml', tmp_path)
-    text = (out / 'decryption_rules.tf').read_text(encoding='utf-8')
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): one file per unit, so the pin reads the parts the
+    # run wrote for the units the fixture names, in path order.
+    text = file_text(tf_files(out), 'decryption_rules.tf')
 
     blocks = _rule_blocks(text, 'panos_decryption_policy_rules')
     _check_chain_semantics(
@@ -98,7 +100,7 @@ def test_decryption_rules_emit_real_v2_resources(tmp_path):
 def test_pbf_rules_emit_chained_v2_resources(tmp_path):
     """One panos_pbf_policy_rules resource per rule, chained in XML order."""
     out = _convert('pbf_rules.xml', tmp_path)
-    text = (out / 'pbf_rules.tf').read_text(encoding='utf-8')
+    text = file_text(tf_files(out), 'pbf_rules.tf')
 
     blocks = _rule_blocks(text, 'panos_pbf_policy_rules')
     _check_chain_semantics(
@@ -129,7 +131,7 @@ def test_pbf_rules_emit_chained_v2_resources(tmp_path):
 def test_pbf_monitor_profiles_emit_real_v2_resources(tmp_path):
     """panos_monitor_profile with the complete parsed profile body."""
     out = _convert('pbf_monitor_profiles.xml', tmp_path)
-    text = (out / 'monitor_profiles.tf').read_text(encoding='utf-8')
+    text = file_text(tf_files(out), 'monitor_profiles.tf')
 
     assert text.count('resource "panos_monitor_profile"') == 2
     assert 'name = "PM-Branch"' in text

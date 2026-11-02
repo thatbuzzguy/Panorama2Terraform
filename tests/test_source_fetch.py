@@ -418,8 +418,9 @@ def test_the_key_never_reaches_the_cache_name_or_the_output(fetch_module, conver
     assert entry.is_file()
     assert 'SECRET-KEY-9f3' not in entry.name
     assert b'SECRET-KEY-9f3' not in entry.read_bytes()
-    for path in out_dir.rglob('*'):
-        assert b'SECRET-KEY-9f3' not in path.read_bytes(), f'the key reached {path.name}'
+    for path in sorted(out_dir.rglob('*')):
+        if path.is_file():
+            assert b'SECRET-KEY-9f3' not in path.read_bytes(), f'the key reached {path.name}'
 
     help_text = run_script('panorama_to_terraform.py', '--help').stdout
     assert '--key' not in help_text, 'the key comes from the environment, never from argv'
@@ -453,8 +454,13 @@ def test_api_run_writes_the_same_tf_bytes_as_the_file_run(converter_module, fetc
     out_file = tmp_path / 'file_out'
     run_pipeline(converter_module, FETCH_FIXTURE, out_file)
 
-    api_tf = {p.name: p.read_bytes() for p in sorted(out_api.glob('*.tf'))}
-    file_tf = {p.name: p.read_bytes() for p in sorted(out_file.glob('*.tf'))}
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the `.tf` set is read as the paths the write path wrote,
+    # so the two runs are compared on the same layout.
+    def layout(out) -> dict:
+        return {str(p.relative_to(out)): p.read_bytes() for p in sorted(out.rglob('*.tf')) if p.is_file()}
+
+    api_tf = layout(out_api)
+    file_tf = layout(out_file)
     assert api_tf == file_tf, 'the model and the naming are unchanged by the source'
     assert api_tf, 'the fixture emits a .tf file, so the comparison is not empty'
 
@@ -539,14 +545,19 @@ def test_source_fetch_imports_are_standard_library(fetch_module):
     redirect rule (see backlog.md), so nothing in the project imports a third-party
     module."""
     tree = ast.parse((REPO_ROOT / 'source_fetch.py').read_text(encoding='utf-8'))
+    # The shared door (`xml_input`) and the one writer (`write_path`) are local modules, not dependencies.
+    local = {'xml_input', 'write_path'}
     top_level = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
-            if node.module == 'xml_input':
-                continue  # the shared door is the local module, not a dependency
+            if node.module in local:
+                continue
             top_level.add(node.module.split('.')[0])
         elif isinstance(node, ast.Import):
-            top_level.add(node.names[0].name.split('.')[0])
+            name = node.names[0].name.split('.')[0]
+            if name in local:
+                continue
+            top_level.add(name)
     allowed = {'hashlib', 'os', 'ssl', 'urllib', 'dataclasses', 'pathlib', 'typing'}
     assert top_level <= allowed, top_level - allowed
     source = (REPO_ROOT / 'source_fetch.py').read_text(encoding='utf-8')

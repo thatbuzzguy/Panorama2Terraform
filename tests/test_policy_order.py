@@ -21,7 +21,8 @@ from pathlib import Path
 
 import pytest
 
-from conftest import FIXTURES_DIR, GOLDEN_DIR, run_script
+import sanity_checks
+from conftest import FIXTURES_DIR, GOLDEN_DIR, file_text, parts, run_script, tf_files
 
 # ---------------------------------------------------------------------------
 # Structural parser for the generated rule files.
@@ -113,7 +114,7 @@ EXPECTED_NAT = [
 def test_security_chains_emit_in_xml_order_per_device_group(generated):
     """Chains appear in first-seen DG order, rules in XML order."""
     blocks = _rule_blocks(
-        (generated / 'security_rules.tf').read_text(encoding='utf-8'),
+        file_text(tf_files(generated), 'security_rules.tf'),
         'panos_security_policy_rules')
     _check_chain_semantics(blocks, 'panos_security_policy_rules',
                            EXPECTED_SECURITY, 'security fixture')
@@ -123,7 +124,7 @@ def test_security_chains_emit_in_xml_order_per_device_group(generated):
 
 def test_security_single_rule_chain_has_only_the_anchor(generated):
     """Gamma-DG has one rule: anchor position, no pivot, no depends_on."""
-    text = (generated / 'security_rules.tf').read_text(encoding='utf-8')
+    text = file_text(tf_files(generated), 'security_rules.tf')
     blocks = _rule_blocks(text, 'panos_security_policy_rules')
     gamma = [b for b in blocks if b['device_group'] == 'Gamma-DG']
     assert len(gamma) == 1
@@ -134,7 +135,7 @@ def test_security_single_rule_chain_has_only_the_anchor(generated):
 
 def test_security_chains_do_not_cross_device_groups(generated):
     """A chain starts fresh in each DG: no pivot or depends_on from another DG."""
-    text = (generated / 'security_rules.tf').read_text(encoding='utf-8')
+    text = file_text(tf_files(generated), 'security_rules.tf')
     blocks = _rule_blocks(text, 'panos_security_policy_rules')
     by_dg: dict[str, list[dict]] = {}
     for b in blocks:
@@ -156,7 +157,7 @@ def test_security_chains_do_not_cross_device_groups(generated):
 
 def test_nat_chains_follow_the_same_semantics(generated):
     blocks = _rule_blocks(
-        (generated / 'nat_rules.tf').read_text(encoding='utf-8'),
+        file_text(tf_files(generated), 'nat_rules.tf'),
         'panos_nat_policy_rules')
     _check_chain_semantics(blocks, 'panos_nat_policy_rules',
                            EXPECTED_NAT, 'nat fixture')
@@ -171,20 +172,24 @@ def test_nat_chains_follow_the_same_semantics(generated):
     'kitchen_sink/nat_rules.tf',
 ], ids=lambda p: p.replace('/', '_'))
 def test_goldens_preserve_order_preserving_positions(fixture_file):
-    """The committed goldens already follow the chain contract."""
-    path = GOLDEN_DIR / fixture_file
-    if not path.exists():
-        pytest.skip(f'golden {fixture_file} not present')
-    text = path.read_text(encoding='utf-8')
-    resource_type = ('panos_security_policy_rules' if 'security' in fixture_file
+    """The committed goldens already follow the chain contract.
+
+    F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the case holds one part per unit, so the pin reads the parts
+    as paths from the case directory. A chain never crosses a unit, so the grouping is read inside each part.
+    """
+    case, name = fixture_file.split('/')
+    written = parts(sanity_checks.read_tf_files(GOLDEN_DIR / case), name)
+    assert written, f'no golden part named {name} in {case}'
+    resource_type = ('panos_security_policy_rules' if 'security' in name
                      else 'panos_nat_policy_rules')
-    blocks = _rule_blocks(text, resource_type)
-    assert blocks, f'no rule blocks found in {fixture_file}'
-    # Group consecutive blocks by device group (chains are emitted contiguously).
-    expected: list[tuple[str, list[str]]] = []
-    for b in blocks:
-        if expected and expected[-1][0] == b['device_group']:
-            expected[-1][1].append(b['names'][0])
-        else:
-            expected.append((b['device_group'], [b['names'][0]]))
-    _check_chain_semantics(blocks, resource_type, expected, fixture_file)
+    for path, text in written.items():
+        blocks = _rule_blocks(text, resource_type)
+        assert blocks, f'no rule blocks found in {path}'
+        # Group consecutive blocks by device group (chains are emitted contiguously).
+        expected: list[tuple[str, list[str]]] = []
+        for b in blocks:
+            if expected and expected[-1][0] == b['device_group']:
+                expected[-1][1].append(b['names'][0])
+            else:
+                expected.append((b['device_group'], [b['names'][0]]))
+        _check_chain_semantics(blocks, resource_type, expected, path)

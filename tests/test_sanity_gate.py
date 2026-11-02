@@ -30,7 +30,8 @@ import pytest
 
 import sanity_checks
 import unit_manifest
-from conftest import FIXTURES_DIR, REPO_ROOT, SAMPLE_CONFIG, run_script
+import write_path
+from conftest import FIXTURES_DIR, REPO_ROOT, SAMPLE_CONFIG, run_script, tf_files
 
 TERRAFORM = shutil.which("terraform")
 CONVERTER = REPO_ROOT / "panorama_to_terraform.py"
@@ -68,8 +69,10 @@ def test_gate_runs_and_writes_the_report(tmp_path):
 def test_console_summary_reports_the_result(tmp_path):
     """The console summary states the result, not only the file list."""
     result = _generate(SAMPLE_CONFIG, tmp_path)
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the count names the unit set the gate read, so the
+    # sample run - two units, so two sets - measures 14 .tf files.
     summary = [line for line in result.stdout.split('\n') if line.startswith('Sanity gate:')]
-    assert summary == ['Sanity gate: PASS (0 FAIL, 0 WARN) - 10 .tf files, 2 data files, 20 resources']
+    assert summary == ['Sanity gate: PASS (0 FAIL, 0 WARN) - 14 .tf files, 2 data files, 20 resources']
     assert 'Sanity report: ' in result.stdout
 
 
@@ -186,9 +189,13 @@ def test_the_report_counts_both_file_sets(tmp_path):
     """
     _generate(SAMPLE_CONFIG, tmp_path)
     report = sanity_checks.run_checks(tmp_path)
-    assert report.file_count == len(list(tmp_path.glob('*.tf')))
+    # F6.10.3 (§14): the reader reads the unit directories below the root, so the count names the parts it
+    # read by path, and every path names a unit directory.
+    files = tf_files(tmp_path)
+    assert report.file_count == len(files), report.render()
+    assert all(Path(name).parent.name for name in files), 'the count names the unit set'
     assert report.data_file_count == 2
-    assert 'Files checked: 10 .tf files, 2 data files.' in report.render(), report.render()
+    assert 'Files checked: 14 .tf files, 2 data files.' in report.render(), report.render()
     assert re.search(r'^data_files\s+PASS$', report.render(), re.M)
 
 
@@ -265,9 +272,11 @@ def test_kitchen_sink_warns_about_the_placeholder_and_exits_zero(tmp_path):
     text = (tmp_path / 'SANITY_REPORT.txt').read_text(encoding='utf-8')
     assert re.search(r'^placeholders\s+WARN \(\d+\)$', text, re.M)
     assert 'Result: PASS' in text
-    # The WARN line names the file and the line the operator must edit.
+    # The WARN line names the file and the line the operator must edit. F6.10.3 (§14): a finding names
+    # the path from the codebase root, so the path names the unit directory the file is in.
     line = sanity_checks.run_checks(tmp_path).findings('placeholders')
-    assert line and line[0].file == 'vpn.tf'
+    assert line and Path(line[0].file).name == 'vpn.tf', [f.render() for f in line]
+    assert Path(line[0].file).parent.name, 'the path names the unit directory the finding is in'
     assert 'replace before terraform apply' in line[0].detail
 
 
@@ -319,15 +328,46 @@ def test_validate_without_the_binary_is_skipped_not_failed(tmp_path):
 
 
 def test_terraform_check_failure_is_a_fail_finding(tmp_path):
-    """A validate failure is reported as FAIL, so the gate does not hide it."""
+    """A validate failure is reported as FAIL, so the gate does not hide it.
+
+    F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the plan check runs once per unit directory the record names,
+    so the failure is the result of that directory, and every plan result names the directory it ran on: the
+    finding names it, or the note names it when the plan passed. A run that names no unit runs the check on
+    the codebase root, and that result names the root.
+    """
     if TERRAFORM is None:
         pytest.skip("terraform binary not found")
+
+    def named(result) -> str:
+        """The directory one plan result names, as the path from the codebase root."""
+        return result.findings[0].file if result.findings else result.note.split(':', 1)[0]
+
     # An HCL syntax error is the smallest failure terraform reports.
-    (tmp_path / 'broken.tf').write_text('resource "panos_address" "x_00000000" {\n  name = "x"\n',
-                                        encoding='utf-8')
-    result = sanity_checks.run_checks(tmp_path, run_terraform=True, terraform=TERRAFORM)
-    assert result.result_of('terraform') == 'FAIL'
-    assert result.failed
+    assert _generate(SAMPLE_CONFIG, tmp_path).returncode == 0
+    units = sanity_checks.unit_directories(tmp_path)
+    assert units, 'the run wrote one directory per unit the record names'
+    planted = units[0]
+    write_path.write_file(write_path.unit_path(tmp_path, planted, 'broken.tf'),
+                          'resource "panos_address" "x_00000000" {\n  name = "x"\n')
+
+    report = sanity_checks.run_checks(tmp_path, run_terraform=True, terraform=TERRAFORM)
+    results = report.results('terraform')
+    assert len(results) == len(units), 'one plan check result per unit directory'
+    assert sorted(named(result) for result in results) == sorted(units), \
+        [named(result) for result in results]
+    assert [result for result in results if named(result) == planted][0].result == 'FAIL', results
+    assert report.failed, 'the planted unit is not hidden behind the units that read clean'
+
+    # A directory with no record names no unit, so the check runs on the codebase root and names it.
+    root = tmp_path / 'no_record'
+    root.mkdir()
+    write_path.write_file(write_path.root_path(root, 'broken.tf'),
+                          'resource "panos_address" "y_00000000" {\n  name = "y"\n')
+    lone = sanity_checks.run_checks(root, run_terraform=True, terraform=TERRAFORM)
+    assert sanity_checks.unit_directories(root) == [], 'no record, so no unit directory'
+    assert len(lone.results('terraform')) == 1, 'the root has one plan result'
+    assert named(lone.results('terraform')[0]) == '.', 'the root result names the codebase root'
+    assert lone.result_of('terraform') == 'FAIL'
 
 
 # --- The second entry point --------------------------------------------------

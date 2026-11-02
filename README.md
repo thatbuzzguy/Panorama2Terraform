@@ -22,7 +22,7 @@ that has no v2 resource.
 ```bash
 python3 panorama_to_terraform.py your_export.xml --output-dir terraform_output
 
-cd terraform_output
+cd terraform_output/<unit directory>     # one directory per unit the manifest names
 terraform init
 terraform validate
 ```
@@ -30,7 +30,8 @@ terraform validate
 Every run ends with a static gate (see [Post-run sanity gate](#post-run-sanity-gate)):
 it checks the files it wrote, writes `SANITY_REPORT.txt`, and exits non-zero
 when a check fails. Add `--validate` to run `terraform init` + `terraform
-validate` in the same run.
+validate` in the same run, once for each unit directory the manifest names. A unit is one plan against one
+state, so a plan runs inside the unit directory.
 
 Split a Panorama export into one XML file per device group:
 
@@ -203,8 +204,10 @@ resource — so the missing part stays in the report:
   `panos_service` accepts one leg, so the tcp leg emits and the udp leg is
   listed with its ports
 
-Data files and reports written to the output directory. Each is written only when it has content;
-`SOURCE.txt` is written on every completed run, because a run always reads a source:
+Data files and reports are the codebase root set: one file per run, written at the output directory root. Each
+is written only when it has content; `SOURCE.txt` is written on every completed run, because a run always reads
+a source. The other files are the unit set, and the run writes one directory per unit the manifest names
+([`docs/CODEBASE_ASSEMBLY.md`](docs/CODEBASE_ASSEMBLY.md) §14):
 
 - `SOURCE.txt` - what the run read, as `field: value` data, one record per source read: the
   source kind, the name, the path, the scope, the request identity, the cache entry, the size,
@@ -225,7 +228,8 @@ Data files and reports written to the output directory. Each is written only whe
   names with their values ([`site_data.py`](site_data.py)). Every run writes it when it has content, and the
   row joins to the manifest on the unit directory. The values are the pairs the emitter recorded when it
   applied the value-to-variable table ([`resource_mapping.py`](resource_mapping.py) `VALUE_VARIABLES`)
-- `site.auto.tfvars` - the `.tfvars` written from the site data rows, one line per variable in name order
+- `site.auto.tfvars` - the `.tfvars` written from the site data rows, one file per unit inside the directory
+  that row names, one line per variable in name order
   ([`site_data.py`](site_data.py)). Terraform loads a `*.auto.tfvars` file automatically, so
   `terraform.tfvars` stays the operator's own file for the credentials, which the tool never writes. Written
   only when it has content. The gate rule `data_files` reads the record through `parse_rows` and compares
@@ -272,27 +276,37 @@ section, named `Shared`. The rule is in
 
 ## Typical outputs
 
+The run writes two sets. The codebase root holds one file per run: the four records, the report files,
+`README.md` and `SOURCE.txt`. Every other file is the unit set, and the run writes one directory per unit the
+manifest names, holding that unit's `.tf` files and the printed form of that unit's site row
+([`docs/CODEBASE_ASSEMBLY.md`](docs/CODEBASE_ASSEMBLY.md) §14).
+
 ```
-provider.tf  README.md
-scope.tf
-address_objects.tf  address_groups.tf
-service_objects.tf  service_groups.tf
-tags.tf  custom_url_categories.tf  application_groups.tf  external_lists.tf
-security_rules.tf  nat_rules.tf  decryption_rules.tf  pbf_rules.tf
-security_profiles.tf  security_profile_groups.tf
-zones.tf  interfaces.tf  virtual_routers.tf  monitor_profiles.tf
-vpn.tf
-variables.tf                    (written after the emitters: the values the run printed, F6.6)
-MANUAL_SETUP_REPORT.txt  INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.txt
-CONVERSION_REPORT.txt  SANITY_REPORT.txt  SOURCE.txt  CODEBASE_MANIFEST.json
-OWNERSHIP.json  REFERENCE_EDGES.json  SITE_DATA.json  site.auto.tfvars
-read_through.tf  imports.tf        (opt-in: --data-blocks, --import-blocks)
-actions.tf                        (the commit action per unit, the last .tf file written)
+<output directory>                     (the codebase root set)
+  CODEBASE_MANIFEST.json  OWNERSHIP.json  REFERENCE_EDGES.json  SITE_DATA.json
+  README.md  SOURCE.txt
+  CONVERSION_REPORT.txt  SANITY_REPORT.txt  MANUAL_SETUP_REPORT.txt
+  INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.txt
+
+  <unit directory>/                    (one directory per unit the manifest names)
+    provider.tf  variables.tf          (written after the emitters: the values the run printed, F6.6)
+    scope.tf
+    address_objects.tf  address_groups.tf
+    service_objects.tf  service_groups.tf
+    tags.tf  custom_url_categories.tf  application_groups.tf  external_lists.tf
+    zones.tf  interfaces.tf  virtual_routers.tf  monitor_profiles.tf
+    security_profiles.tf  security_profile_groups.tf
+    vpn.tf
+    security_rules.tf  nat_rules.tf  decryption_rules.tf  pbf_rules.tf
+    read_through.tf  imports.tf        (opt-in: --data-blocks, --import-blocks)
+    actions.tf                         (the commit action per unit, the last .tf file written)
+    site.auto.tfvars                   (the printed form of that unit's site row)
 ```
 
 (Only files with content are written; the list above is the union across
-all supported inputs. The kitchen-sink fixture exercises the full set,
-and `tests/test_golden_files.py` pins the exact `.tf` file names and bytes.)
+all supported inputs. The kitchen-sink fixture exercises the full set, and
+`tests/test_golden_files.py` pins the exact `.tf` paths and bytes, read as paths from the case directory. A
+per-unit file names its unit only by its directory, so a gate finding names the path from the codebase root.)
 
 ## Exporting from Panorama
 
@@ -395,6 +409,9 @@ the exit code, so a run on a machine without terraform still reports the checks
 it could not run. The rules are stated once in `sanity_checks.py`; the tests
 call that module instead of restating them. One block reader serves every block
 kind the gate reads, including `import` blocks, which it reads through `to`. The
+reader keys each `.tf` file by the path from the codebase root, so a finding names the unit directory the file
+is in, and the `terraform` check runs once per unit directory the manifest names, so each result names the
+directory it ran on. The
 gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
 
 ## Testing
@@ -469,6 +486,11 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   the gate reads, the `CHECK_ORDER` position, each finding, the row ordinal as the finding position, the rule
   that each row shape is read through its own module, the truth across the corpus, and the byte rule between
   two runs
+- `tests/test_write_path.py` - the write path (`write_path.py`): the two file sets and the rule that every file
+  names one set, the one function that writes bytes and forces LF, the two path builders, the rule that no module
+  of the tool writes a file outside it, the reader key as the path from the codebase root, the plan check that
+  runs once per unit directory and names the directory it ran on, the rule that no flag names the layout, the
+  golden set read as paths from the case directory, the single-unit case, and the byte rule between two runs
 - `tests/test_commit_actions.py` - the commit action per unit (`actions.tf`): one block per unit the
   manifest names, the fact its own unit selects, the unit that writes no action, the address that answers
   the names inside the block, the order, the file written only when it has content, each violation type of

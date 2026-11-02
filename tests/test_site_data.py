@@ -33,7 +33,7 @@ import resource_mapping
 import sanity_checks
 import site_data
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, run_script
+from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, file_text, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 MANIFEST = unit_manifest.MANIFEST_FILE
@@ -83,10 +83,29 @@ def _pairs(rows: list) -> list:
     return [(row['directory'], row['variables']) for row in rows]
 
 
-def _tfvars_lines(out_dir: Path) -> list:
+def _printed_forms(out_dir: Path) -> dict:
+    """The printed form of every unit the run wrote, keyed by the path from the output directory.
+
+    F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the printed form is the unit's file, so the run writes one
+    per unit that names a value, and each holds only the printed form of that unit's row.
+    """
+    return {str(p.relative_to(out_dir)): p.read_text(encoding='utf-8')
+            for p in sorted(out_dir.rglob(site_data.TFVARS_FILE))}
+
+
+def _value_lines(text: str) -> list:
     """The `.tfvars` lines that state a value, without the header."""
-    text = (out_dir / site_data.TFVARS_FILE).read_text(encoding='utf-8')
     return [line for line in text.split('\n') if line and not line.startswith('#')]
+
+
+def _tfvars_lines(out_dir: Path) -> list:
+    """The value lines the run printed, across the unit set. Two units that name the same value hold the
+    same line, so the helper names the distinct lines.
+    """
+    lines = set()
+    for text in _printed_forms(out_dir).values():
+        lines.update(_value_lines(text))
+    return sorted(lines)
 
 
 # --- 1. the pinned table ------------------------------------------------------
@@ -145,7 +164,9 @@ def test_the_table_holds_no_property():
     assert not REFERENCE_ONLY_NAMES & {prop for row in resource_mapping.COVERAGE_MATRIX
                                        for prop in row['properties']}, \
         'a reference-only name is printed as a reference, not as a property'
-    scope = (GOLDEN_DIR / 'kitchen_sink' / 'scope.tf').read_text(encoding='utf-8')
+    # F6.10.3: `scope.tf` is the unit's file, so the golden set holds one per unit that has a scope block.
+    scope = ''.join(p.read_text(encoding='utf-8')
+                    for p in sorted((GOLDEN_DIR / 'kitchen_sink').rglob('scope.tf')))
     assert 'panos_template_variable' in scope, 'the kitchen-sink case declares a template variable'
     assert 'var.' not in scope, scope
     assert '"10.9.9.9/32"' in scope, scope
@@ -299,9 +320,12 @@ def test_the_tfvars_file_is_written_only_when_it_has_content(tmp_path):
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
     assert site_data.TFVARS_FILE == 'site.auto.tfvars'
     assert not (out / 'terraform.tfvars').is_file()
-    lines = _tfvars_lines(out)
-    assert lines == [f'{naming.variable_name(DEVICE)} = {site_data.value_text(DEVICE)}'], lines
-    assert 'panos_' not in (out / site_data.TFVARS_FILE).read_text(encoding='utf-8')
+    printed = _printed_forms(out)
+    assert len(printed) == len(_rows(out)), 'one printed form per site row, in the unit its row names'
+    line = f'{naming.variable_name(DEVICE)} = {site_data.value_text(DEVICE)}'
+    for path, text in printed.items():
+        assert _value_lines(text) == [line], (path, text)
+        assert 'panos_' not in text, path
 
 
 # --- 4. the device name as a variable ------------------------------------------
@@ -359,14 +383,17 @@ def test_the_goldens_pin_the_print_shape():
     field in the four files that carry a device location, and the sample set names no device, so it
     holds no `var.` location field at all.
     """
-    for path in sorted((GOLDEN_DIR / 'sample').glob('*.tf')):
-        assert 'ngfw_device = var.' not in path.read_text(encoding='utf-8'), path.name
-    changed = sorted(path.name for path in (GOLDEN_DIR / 'kitchen_sink').glob('*.tf')
-                     if 'ngfw_device = var.' in path.read_text(encoding='utf-8'))
+    for path in sorted((GOLDEN_DIR / 'sample').rglob('*.tf')):
+        assert 'ngfw_device = var.' not in path.read_text(encoding='utf-8'), path
+    changed = sorted({path.name for path in (GOLDEN_DIR / 'kitchen_sink').rglob('*.tf')
+                      if 'ngfw_device = var.' in path.read_text(encoding='utf-8')})
     assert changed == ['address_objects.tf', 'service_objects.tf', 'virtual_routers.tf',
                        'zones.tf'], changed
-    declared = sanity_checks.VARIABLE_RE.findall(
-        (GOLDEN_DIR / 'kitchen_sink' / 'variables.tf').read_text(encoding='utf-8'))
+    # F6.10.3: `variables.tf` is the unit's file, so the declaration set is the union the run wrote,
+    # one file per unit.
+    declared = set()
+    for path in sorted((GOLDEN_DIR / 'kitchen_sink').rglob('variables.tf')):
+        declared.update(sanity_checks.VARIABLE_RE.findall(path.read_text(encoding='utf-8')))
     assert sorted(declared) == ['fw_2_example_com', 'panos_hostname', 'panos_password',
                                 'panos_username'], declared
 
@@ -380,11 +407,10 @@ def test_the_file_the_data_and_the_tfvars_read_the_same_run(tmp_path):
     out = tmp_path / 'kitchen'
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
     site = {name for row in _rows(out) for name in row['variables']}
-    declared = set(sanity_checks.VARIABLE_RE.findall(
-        (out / 'variables.tf').read_text(encoding='utf-8')))
+    declared = set(sanity_checks.VARIABLE_RE.findall(file_text(tf_files(out), 'variables.tf')))
     assert site <= declared, (site, declared)
-    tf_files = {path.name: path.read_text(encoding='utf-8') for path in sorted(out.glob('*.tf'))}
-    findings = sanity_checks.check_variables(tf_files)
+    files = tf_files(out)
+    findings = sanity_checks.check_variables(files)
     assert findings == [], [finding.render() for finding in findings]
     assert sorted(line.split(' = ')[0] for line in _tfvars_lines(out)) == sorted(site)
 
@@ -474,7 +500,11 @@ def test_two_runs_on_the_same_bytes_write_the_same_bytes(tmp_path):
     assert _run(source, first).returncode == 0
     assert _run(source, second).returncode == 0
     for name in (site_data.SITE_DATA_FILE, site_data.TFVARS_FILE):
-        assert (first / name).read_bytes() == (second / name).read_bytes(), name
+        # F6.10.3: the record is one file for the codebase and the printed form is the unit's file, so the
+        # determinism rule reads the printed form of each unit against the same unit in the other run.
+        first_set = {str(p.relative_to(first)): p.read_bytes() for p in sorted(first.rglob(name))}
+        second_set = {str(p.relative_to(second)): p.read_bytes() for p in sorted(second.rglob(name))}
+        assert first_set == second_set, name
 
 
 def test_the_gate_reads_the_record_and_its_printed_form_through_site_data(tmp_path):
