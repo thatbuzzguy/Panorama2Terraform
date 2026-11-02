@@ -13,7 +13,9 @@ names the module or the test that holds it. Provider facts come from the pinned 
 The converter writes one output directory per run: the `.tf` files, which include the
 import file `imports.tf` for a run that declares it (§7), the five report files,
 `README.md`, `SOURCE.txt`, the unit manifest `CODEBASE_MANIFEST.json` (§3), the ownership
-record `OWNERSHIP.json` (§4), and the edge record `REFERENCE_EDGES.json` (§5).
+record `OWNERSHIP.json` (§4), and the edge record `REFERENCE_EDGES.json` (§5). F6.10.1 decides the shape
+those files take: the unit set, which one directory holds, and the codebase root set, which is one file per
+run. §14 states the two sets.
 A codebase is a set of directories that a platform plans and applies, one plan per
 directory. Six facts define it:
 
@@ -672,7 +674,52 @@ a run with no network passes CI.
    because `devices` names site serials.
 9. The write path, the step that splits the output per unit directory. It applies the rule decided in
    §5 rule 5 at the print site, with the per-unit `.tfvars` that names one `target` serial and the LF
-   rule. It is open.
+   rule. The shape is decided (F6.10.1); the step that writes the directories is open.
+
+   **The unit set** is the files one plan reads, so one directory holds them: the `.tf` files for that unit,
+   and the printed form of that unit's site row (§9 rule 4). `provider.tf` and `variables.tf` are unit-set
+   files, because a unit is one plan against one state (§1 rule 3) and a plan reads the declarations in its own
+   root, so a declaration must have its consumer in the same directory: the `variables` gate rule reads both
+   directions. The per-type files
+   (`resource_mapping.COVERAGE_MATRIX` `output_file`), `imports.tf`, `actions.tf`, `scope.tf` (§8 rule 2) and
+   `read_through.tf` are unit-set files.
+
+   **The codebase root set** is the files that describe the whole codebase, one per run: the four records, the
+   report files, `README.md`, `SOURCE.txt`. The records stay at the root, because the edge record needs the
+   whole unit set and a reader cannot find a per-unit file before it knows the directory name (§3 rule 5). A
+   report is read by no gate rule, so it cannot be a per-unit file a rule would have to read per unit, and one
+   run reads one source, so `SOURCE.txt` is one record file.
+
+   **The two sets are distinct**, and every file the run writes names one set: the block set is the `.tf`
+   files, the data set is the four records, and the printed form is compared and not counted (§9 rule 4, and
+   the file-set group of `tests/test_data_file_gate.py`). A new file shape must name which set it belongs to.
+
+   **A per-unit file names its unit only by the directory it is written in**, the name §3 rule 3 states, so
+   the unit set is stated once, in the manifest row (§3 rule 5). A reference inside a per-unit file names a
+   unit through the reference field, never through a path. So a gate finding for a per-unit file names the path
+   from the codebase root, which is the unit the file belongs to.
+
+   **The gate reads each set through its own rule.** The block rules read every `.tf` file below the codebase
+   root, in sorted path order, keyed by the path from the codebase root, so one reader serves the flat run and
+   the split run: for a flat run the path is the file name, so the bytes a report names are unchanged. The data
+   rule keeps reading the four records at the root as one rule over the rows of every unit, so no per-unit
+   record and no second shape rule appears (§3 rule 4). The plan check runs on one directory, so it runs once
+   for each unit directory, because a unit is one plan and one root (§1 rule 3). No rule reads a report,
+   `README.md` or `SOURCE.txt`.
+
+   **The shape is default output, with no flag.** §8 rule 1 forces it: the committed goldens pin what a default
+   run emits, so a shape a run writes only when a flag is on cannot be pinned. The F5.5 (§4.7) and F6.4 (§7
+   rule 2) opt-in precedent is a shape a block labels for itself, not the output layout, so it does not apply:
+   a flag for the layout would give the reference rule two shapes (§5 rule 5) and force a second gate reader.
+   Consequence: both committed golden sets move to the per-unit layout, so the golden pin reads the `.tf` set as
+   paths from the case directory, and the goldens regenerate with the LF rule in the same step.
+
+   `tests/test_write_path.py` pins what the decision can pin before the step runs: the two sets are distinct
+   and every file names one set; the block reader reads a `.tf` file inside a unit directory and names the path
+   from the codebase root, and for a flat run the path is the file name, so no report byte changes; the data
+   rule reads the records at the root only, as one rule over the rows of every unit; no rule reads a report; no
+   flag names the layout; the golden set is read as paths from the case directory; and no unit directory is
+   written yet, which is the pin that changes when the step lands.
 
 The smallest useful increment is one unit: one directory, one manifest row, one set of
 import blocks, and a plan that shows zero change. A codebase is that shape repeated across

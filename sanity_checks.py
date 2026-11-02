@@ -10,6 +10,10 @@ never reached one. The block rules read the `.tf` files; the data rule (F6.8)
 reads the four data files, and the site record's printed form, through the
 module that owns each row shape, so no second shape rule appears.
 
+F6.10.1 (`docs/CODEBASE_ASSEMBLY.md` §14) states which set each rule reads: the block rules read the
+`.tf` files of one unit, keyed by the path from the codebase root, and the data rule reads the records at
+the root as one rule over the rows of every unit. No rule reads a report.
+
 Checks, in report order:
 
 | Check | Rule | Severity |
@@ -348,14 +352,22 @@ class SanityReport:
 # --- Reading the output ------------------------------------------------------
 
 def read_tf_files(output_dir: Path) -> dict[str, str]:
-    """Read every `.tf` file in the output directory, keyed by file name.
+    """Read every `.tf` file the run wrote, keyed by the path from the codebase root.
+
+    F6.10.1 (`docs/CODEBASE_ASSEMBLY.md` §14): the block rules read the `.tf` files of each unit
+    directory, so the reader walks the codebase root and the directories under it. The key is the path
+    from the root, so a finding names the unit the file belongs to: a per-unit file names its unit only by
+    the directory it sits in. For a run that writes no unit directory the key is the file name, so the
+    gate reads the same files in the same order as before. One reader serves both shapes, so the gate
+    holds no second rule for the layout.
 
     `surrogateescape` keeps a non-UTF-8 byte readable instead of raising, so
     the gate reports an unreadable file rather than crashing on it.
     """
+    out = Path(output_dir)
     files = {}
-    for path in sorted(Path(output_dir).glob('*.tf')):
-        files[path.name] = path.read_text(encoding='utf-8', errors='surrogateescape')
+    for path in sorted(out.rglob('*.tf')):
+        files[str(path.relative_to(out))] = path.read_text(encoding='utf-8', errors='surrogateescape')
     return files
 
 
@@ -363,6 +375,9 @@ def read_tf_files(output_dir: Path) -> dict[str, str]:
 # reports a `parse_rows` refusal as a finding, because the gate reads the files the operator
 # receives, and a data file a person hand-wrote is an input. No second shape rule appears, and the
 # rule reads no `.tf` file, so no block rule reads a data file.
+# F6.10.1 (`docs/CODEBASE_ASSEMBLY.md` §14): this is the codebase root set, one file per run, and the
+# rule reads it as one rule over the rows of every unit, not one rule per unit, so the rule reads no file
+# inside a unit directory.
 DATA_FILES = (
     (unit_manifest.MANIFEST_FILE, unit_manifest),
     (ownership.OWNERSHIP_FILE, ownership),
@@ -375,7 +390,8 @@ def count_data_files(output_dir: Path) -> int:
     """How many of the four data files the output holds: the count the report names.
 
     `site.auto.tfvars` is not counted, because it is the printed form of the site record and not a
-    data file (F6.8).
+    data file (F6.8). F6.10.1 (`docs/CODEBASE_ASSEMBLY.md` §14): the printed form is a unit-set file, so
+    it sits in the unit directory named by its own row, and the count names only the records.
     """
     out = Path(output_dir)
     return sum(1 for name, _ in DATA_FILES if (out / name).is_file())

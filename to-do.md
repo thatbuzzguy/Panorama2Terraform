@@ -1,35 +1,49 @@
 # To Do
 
-F6.9 (the outputs rule for a name another unit owns) is complete and committed: it is a decision, so it
-writes no byte and no module. F7.2 (the `ospfv3` level of the protocol object) is committed. The next
-feature is not chosen.
+F6.10.1 (the shape of the write path) is complete and committed: it is a decision, so it
+writes no output byte. `docs/CODEBASE_ASSEMBLY.md` §14 records it, and
+`tests/test_write_path.py` pins what the decision can pin.
 
-## Open pieces for Epic 6 (held until the next feature takes them)
+Current feature: F6.10 — the write path (Epic 6). The print-site rule is decided
+(`docs/CODEBASE_ASSEMBLY.md` §5 rule 5, F6.9), so this feature is the step that turns the
+manifest `directory` field into a real directory per declared scope, holding the unit set §14
+states. The slices run in order, one at a time. Each slice commits its own work.
 
-- The directory write path: the codebase modules name the unit, the owner, the pair, the order,
-  the block, the scope object and the site, and write no directory. The step that splits the
-  output per unit directory is still open, and it applies the outputs rule
-  (`docs/CODEBASE_ASSEMBLY.md` §5 rule 5) at the print site, with the per-unit `.tfvars` that names
-  one `target` serial and the LF rule. The corpus pin lists change with that step, because a name the
-  flat chain resolves across scopes today becomes a plain name when the rule runs per unit.
-- The rule types: the import shape writes no block for the four `*_policy_rules` types.
-- The generated `README.md` does not name `imports.tf`, `SITE_DATA.json` or `site.auto.tfvars`; it
-  names `scope.tf` and `actions.tf`.
-- A template stack is a scope container but not one of the four scope facts, so the manifest
-  names no stack unit. A stack unit needs a fifth fact, or the decision to read `template` as
-  the stack name.
-- A module parameter cannot be named by the tool, so a template variable value and a membership
-  list in `scope.tf` stay literals until the write path decides what a module takes.
-- The `panos_push_to_devices` shape: the gate reads a push block through `ACTION_SCHEMA`, but the
-  emitted shape needs the `devices` decision, which is the `.tfvars` `target` fact the write path
-  holds (`backlog.md`).
-- The data rule reads the four records, so the write path must keep the rule reading through
-  `parse_rows`: a per-unit file set needs one rule that reads the records of every unit, not one
-  rule per unit.
+## F6.10 slices, in order
 
-## Open pieces for Epic 7
+1. **F6.10.2 — the print site per unit.** `name_ref` runs per unit, so a name the flat chain
+   resolves across scopes today becomes a plain name when the run names more than one unit.
+   The edge record and the manifest `references` field grow to name every cross-unit use, so
+   the corpus pin lists change (`tests/test_reference_edges.py::CORPUS_EDGES` and
+   `tests/test_unit_manifest.py::GROUPING_REFERENCES`).
+2. **F6.10.3 — the directory write.** One directory per unit the manifest names, holding the
+   unit set §14 states; the codebase root keeps the root set. The `.tf` files print per unit. The
+   LF rule lands (a byte rule, so the goldens and the no-change tests change with it). The block
+   rules read the per-unit `.tf` files through the one reader, keyed by the path from the codebase
+   root, and the data rule keeps reading the records through `parse_rows` as one rule over the
+   records of every unit, not one rule per unit. The goldens regenerate with the per-unit layout,
+   so the golden pin reads the `.tf` set as paths from the case directory, and the gate finding for
+   a per-unit file names the path. The plan check runs once per unit directory.
+3. **F6.10.4 — the site half.** The per-unit `.tfvars` that names one `target` serial. The
+   `panos_push_to_devices` shape decision that the `.tfvars` `target` fact unlocks. The
+   generated `README.md` names `imports.tf`, `SITE_DATA.json` and `site.auto.tfvars`, by the
+   F5.5 label precedent.
+4. **F6.10.5 — close Epic 6.** Decide the held pieces the write path can now decide: the
+   template stack unit (a fifth fact, or `template` read as the stack name); the module
+   parameter rule for a template variable value and a membership list; `scope.tf` per unit.
+   The four `*_policy_rules` types stay gated by the F3.5 rulebase decision and stay in
+   `backlog.md` if they cannot land. Clear the completed slices, clean the tracking markdown,
+   and commit.
 
-- The routing levels `PROTOCOL_SHAPE` states no row for are read by no parse method: the `ospfv3`
-  timer, BFD, graceful-restart, export-rule and auth-profile levels, `rip`, the BGP `policy`, and the filter
-  containers. A level becomes printable only when a parse method reads it and the table has a row for it,
-  because the emitter, the gate and the report all read that table.
+## Rules the write path must keep
+
+- The LF rule is a byte rule, so the goldens and the no-change tests change with the write
+  path (`backlog.md`).
+- The gate reads the `.tf` files for the block rules and the four data files for the data
+  rule; the two file sets stay distinct. A new file shape must name which set it belongs to.
+- One place decides the shape of a value (`resource_mapping.VALUE_VARIABLES`) and one place
+  decides the shape of a reference field (`TerraformGenerator.name_ref`); the write path
+  applies them per unit and defines no second rule.
+- The §5 naming rule lives in `naming.py`; the data modules take it as an argument.
+- A cycle test needs the referrer entry and the declaring entry in the same unit
+  (`tests/test_reference_edges.py`, group for F6.3).
