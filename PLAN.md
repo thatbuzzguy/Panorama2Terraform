@@ -16,13 +16,13 @@ Terraform, the input comes from a declared source with a provenance record, and 
 per-entry report accounts for every entry. The rules that came from that work are in
 `docs/ARCHITECTURE.md` §2 to §5 and `docs/COVERAGE_MATRIX.md`.
 
-Epic 6 (codebase assembly) is open. F6.1 to F6.7 landed: the unit boundary as data,
-ownership as data, the reference edge and the unit order, the import block, the scope
-objects, the site data layer, and the commit action per unit. Their rules are in
-`docs/ARCHITECTURE.md` §3.4 to §3.7, §4.1, §4.2, §4.5, §4.6, §4.8, and §5, and in
-`docs/CODEBASE_ASSEMBLY.md` §3 to §10. Each landed feature names its unit and writes no
-directory, so the write path that splits the output per unit directory and the gate rule
-that reads a data file are the shared open steps, in `to-do.md` and `backlog.md`.
+Epic 6 (codebase assembly) is open. F6.1 to F6.9 landed: the unit boundary as data, ownership as
+data, the reference edge and the unit order, the import block, the scope objects, the site data
+layer, the commit action per unit, the gate rule that reads the four data files, and the outputs
+rule for a name another unit in the codebase owns. Their rules are in `docs/ARCHITECTURE.md` §3.4
+to §3.7, §4.1, §4.2, §4.5, §4.6, §4.8, and §5, and in `docs/CODEBASE_ASSEMBLY.md` §3 to §10. Each
+landed feature names its unit and writes no directory, so the write path that splits the output per
+unit directory is the shared open step, in `to-do.md`.
 
 Two facts from the 2026-10-31 re-measurement of the pinned provider hold. Routing is reachable through an
 object attribute, so the BGP, OSPF and OSPFv3 levels are an emitter shape and not a provider gap, and the tool
@@ -47,10 +47,11 @@ per-device-group overrides, template stacks, and multiple virtual systems.
 
 A codebase is a set of directories, one per declared scope, that a platform plans and
 applies. The design record is `docs/CODEBASE_ASSEMBLY.md`. Every feature in the record
-is a rule to decide, then a module to write. F6.1 to F6.7 are implemented, so their
-rules name the module and the test that holds them. Each landed feature names its unit
-and writes no directory, so the write path (§14) and the gate rule that reads a data
-file are the shared open steps, and they are the open pieces of Epic 6.
+is a rule to decide, then a module to write. F6.1 to F6.8 are implemented, so their
+rules name the module and the test that holds them, and F6.9 is a rule decided with no
+module. Each landed feature names its unit and writes no directory, so the write path
+(§14) is the shared open step of Epic 6; the rule it applies at the print site is decided
+(§5 rule 5).
 
 ## Epic 7 — Routing output through the protocol object (Goal 2) — open
 
@@ -71,10 +72,11 @@ and the filter containers (route maps, prefix lists, community lists, access lis
 
 ## Sequencing
 
-The open Epic 6 pieces are the write path that splits the output per unit directory and the gate rule that
-reads a data file. Their order is in `docs/CODEBASE_ASSEMBLY.md` §14, and the pieces held until the next
-feature takes them are in `to-do.md`. The open Epic 7 pieces are the routing levels the shape table does not
-state: each needs a row and a parse method before an emitter, a gate rule or the report can read it.
+The open Epic 6 piece is the write path that splits the output per unit directory, because the rule it
+applies at the print site is decided (`docs/CODEBASE_ASSEMBLY.md` §5 rule 5, F6.9). Its order is in §14,
+and the pieces held until the next feature takes them are in `to-do.md`. The open Epic 7 pieces are the
+routing levels the shape table does not state: each needs a row and a parse method before an emitter, a
+gate rule or the report can read it.
 
 ## Out of Scope (tracked in backlog.md)
 

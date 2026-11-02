@@ -1,9 +1,10 @@
 # Codebase Assembly (design record)
 
 This is the design record for Epic 6 (`PLAN.md`). It states what a full Terraform
-codebase needs and what the converter does not do yet. F6.1, F6.2, F6.3 and F6.4 are
-implemented, so their sections name the module and the test that holds them. The rest of
-this document is not implemented, so no test pins it. Every statement about the converter
+codebase needs and what the converter does not do yet. F6.1 to F6.8 are implemented, so
+their sections name the module and the test that holds them. The rest of this document is
+not implemented, so no test pins it, except the outputs rule decision (§5 rule 5, F6.9),
+which names the test that holds its negative half. Every statement about the converter
 names the module or the test that holds it. Provider facts come from the pinned provider
 (2.0.14) and are listed in §12.
 
@@ -173,7 +174,7 @@ names the property
 (`tests/test_ownership.py::test_the_service_row_names_the_property_the_emitter_reads`). The edge list
 (§5) is the next gap, and it now has the owner fact to build on.
 
-## 5. The reference between units as data (F6.3, landed)
+## 5. The reference between units as data (F6.3, landed), and the outputs rule (F6.9, decided)
 
 The converter now states the pair as data: `REFERENCE_EDGES.json`, one row per edge. The rules are
 in `reference_edges.py`, and `main()` writes the file.
@@ -205,13 +206,26 @@ in `reference_edges.py`, and `main()` writes the file.
 | `type` | the coverage matrix row that covers the target entry |
 | `entry` | the reference name |
 
-5. **The mechanism that resolves a name is not data here.** A name outside the run resolves through
-   the `data` block, which is the codebase rule F5.5 chose (`ARCHITECTURE.md` §4.7), and the gate
-   rule `data_blocks` reads it. A name another unit in the run owns cannot resolve through a `data`
-   block, because that unit declares the entry in its own root and one plan runs against one state
-   (§1 rule 3): the mechanism must be that unit's outputs, and the generator writes no outputs. The
-   outputs rule stays open in `backlog.md`. A plain run writes the same `.tf` bytes as before,
-   because the module writes no `.tf` byte.
+5. **The mechanism that resolves a name (F6.9, decided 2026-11-01).** The pair is data here; the
+   shape is decided at the print site by `name_ref` (`ARCHITECTURE.md` §4.3), so no second rule
+   decides which name crosses a unit. A name outside the codebase resolves through the `data` block,
+   which is the codebase rule F5.5 chose (`ARCHITECTURE.md` §4.7), and the gate rule `data_blocks`
+   reads it. For a name another unit in the run owns, the mechanism is the plain name the reference
+   rule already returns for a name it cannot resolve: one plan runs against one root and one state
+   (§1 rule 3), so a reference cannot name an address another unit declares, and the value the
+   provider reads is the name itself, which Panorama resolves through its own inheritance at commit
+   time (the F5.5 fact). Order carries existence: the order rule (§6) ranks the owner unit before the
+   referrer unit, and the platform plans in the order the data states (§13). The tool defines no
+   outputs writer and reads no remote-state data source, because the state backend is out of scope
+   and a module is a standard a person writes (§13), so the tool's part stays the data a module
+   consumes. The single-unit case is the flat run today, so a plain run writes the same `.tf` bytes as
+   before, because this feature writes no `.tf` byte. Pinned by
+   `tests/test_reference_edges.py::test_the_mechanism_defines_no_writer_and_no_reader`;
+   the plain-name half of `name_ref` is pinned in `tests/test_data_blocks.py` and
+   `tests/test_robustness.py`, and the pair is pinned by `::test_the_record_is_one_row_per_edge_the_data_can_name`.
+   When the write path (§14) splits the output per unit, the rule runs per unit, so names the flat
+   chain resolves across scopes today become plain names, and the edge set and the manifest
+   `references` field grow to name every cross-unit use; the corpus pin lists change with that step.
 6. **The reference fact stays one fact.** `name_ref` records one fact: the name resolved outside the
    run. It is not split into two kinds, because the edge row states the other unit when the
    ownership rule can name one, and the two cases are told apart by whether an edge row exists. A
@@ -224,7 +238,8 @@ and it is written only when it has content. `tests/test_reference_edges.py` pins
 `::test_the_row_joins_to_the_manifest_and_to_the_ownership_record`,
 `::test_a_name_no_unit_declares_writes_no_row_and_stays_in_the_manifest`,
 `::test_the_module_resolves_no_name_and_records_no_name`,
-`::test_a_self_reference_writes_no_row`, and `::test_the_golden_tf_bytes_are_unchanged`.
+`::test_a_self_reference_writes_no_row`, `::test_the_golden_tf_bytes_are_unchanged`, and the outputs
+rule pin `::test_the_mechanism_defines_no_writer_and_no_reader`.
 
 The acyclic rule, which this section asked for, is §6.
 
@@ -643,7 +658,8 @@ a run with no network passes CI.
    No new parse data is needed. Landed as F6.1.
 3. The ownership assignment (§4), after the override decision. Landed as F6.2.
 4. The reference edge list (§5) and the unit order (§6), because both need the unit and the owner.
-   Landed as F6.3. The outputs rule for a name another unit owns is still open in `backlog.md`.
+   Landed as F6.3. The outputs rule for a name another unit owns is decided (§5 rule 5, F6.9), so the
+   write path has no open decision.
 5. The import blocks (§7), because they need the unit, the owner, and the local name. The
    single-unit case does not need the ownership rule. The rule types need the rulebase decision.
    Landed as F6.4.
@@ -654,6 +670,9 @@ a run with no network passes CI.
 8. The commit action (§10), last, because it needs the gate rule for an action block and
    the Terraform minimum decision. Landed as F6.7. The push half stays with the write path,
    because `devices` names site serials.
+9. The write path, the step that splits the output per unit directory. It applies the rule decided in
+   §5 rule 5 at the print site, with the per-unit `.tfvars` that names one `target` serial and the LF
+   rule. It is open.
 
 The smallest useful increment is one unit: one directory, one manifest row, one set of
 import blocks, and a plan that shows zero change. A codebase is that shape repeated across

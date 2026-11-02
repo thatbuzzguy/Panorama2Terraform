@@ -1,14 +1,17 @@
 # To Do
 
-F7.2 (the `ospfv3` level of the protocol object) is complete and committed. The next feature is not chosen.
+F6.9 (the outputs rule for a name another unit owns) is complete and committed: it is a decision, so it
+writes no byte and no module. F7.2 (the `ospfv3` level of the protocol object) is committed. The next
+feature is not chosen.
 
 ## Open pieces for Epic 6 (held until the next feature takes them)
 
 - The directory write path: the codebase modules name the unit, the owner, the pair, the order,
   the block, the scope object and the site, and write no directory. The step that splits the
-  output per unit directory is still open, and the per-unit `.tfvars` that names one `target`
-  serial is part of it, with the LF rule.
-- The outputs rule for a name another unit owns, which the reference edge rule left open.
+  output per unit directory is still open, and it applies the outputs rule
+  (`docs/CODEBASE_ASSEMBLY.md` §5 rule 5) at the print site, with the per-unit `.tfvars` that names
+  one `target` serial and the LF rule. The corpus pin lists change with that step, because a name the
+  flat chain resolves across scopes today becomes a plain name when the rule runs per unit.
 - The rule types: the import shape writes no block for the four `*_policy_rules` types.
 - The generated `README.md` does not name `imports.tf`, `SITE_DATA.json` or `site.auto.tfvars`; it
   names `scope.tf` and `actions.tf`.

@@ -31,10 +31,18 @@ Seven rules, stated once here.
    A cycle is read from its smallest unit, so one cycle is reported once and the same edge set produces
    the same lines. A finding reads its grouping facts through the manifest row of the unit it is read
    from, because the manifest is the file that states the unit.
-6. The mechanism a name resolves through is not data here. The data block is the rule for a name outside
-   the run (`ARCHITECTURE.md` §4.7, `sanity_checks.DATA_SOURCE_SCHEMA`); for a name another unit in the
-   run owns, the mechanism must be that unit's outputs, which the generator does not write, so the choice
-   stays open in `backlog.md`. This module writes no `.tf` byte.
+6. The mechanism a name resolves through is not data here, and this module defines no part of it. The
+   data block is the rule for a name outside the run (`ARCHITECTURE.md` §4.7,
+   `sanity_checks.DATA_SOURCE_SCHEMA`). For a name another unit in the run owns, the mechanism is the
+   plain name the reference rule already returns for a name it cannot resolve (F6.9, decided
+   2026-11-01, `docs/CODEBASE_ASSEMBLY.md` §5 rule 5): the rule resolves inside one unit, so a name
+   another unit declares is outside that unit and stays a plain string, which Panorama resolves through
+   its own inheritance at commit time, and the order rule ranks the owner unit before the referrer so
+   the platform applies the owner first. The tool defines no outputs writer and reads no remote-state
+   data source, so no second rule decides which name crosses a unit. Pinned by
+   `tests/test_reference_edges.py` group 7, `::test_the_mechanism_defines_no_writer_and_no_reader`, which
+   scans the tool's own modules, so this docstring carries no word the scan reads.
+   This module writes no `.tf` byte.
 7. The unit order. `after` names the units a unit must be planned after, and `rank` is its position in the
    order, from 1. Three rules produce `after` (`docs/CODEBASE_ASSEMBLY.md` §6), each read through the
    module that holds the fact: the ancestor unit before the unit that carries an override of a name it owns

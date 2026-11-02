@@ -511,12 +511,6 @@ restated here; they are in the record and the git history. Only the open items a
 - Open: a unit exists only when the ledger has a row in it, so a scope with no entry has no manifest
   row. A declared scope always has the entry that defines it, so no empty-unit case is possible
   today.
-- Open: the mechanism for a name another unit in the run owns. The `data` block is the codebase rule
-  for a name outside the run, and the gate rule that reads a `data` block is built. A name a unit in
-  the run owns cannot resolve through a `data` block, because that unit declares the entry in its own
-  root and one plan runs against one state, so the mechanism must be that unit's outputs, through a
-  remote state data source or a platform output, and the generator writes no outputs today. The
-  reference edge rule states the edge and the order and leaves this choice open.
 - Open, for the four `*_policy_rules` types: the position must be the position the live config
   holds, not the create-time position the generator emits, because a chain anchors at
   `where = "last"`. No import block is written for a rule entry until the F3.5 rulebase decision
