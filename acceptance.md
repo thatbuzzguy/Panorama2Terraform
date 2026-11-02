@@ -1,94 +1,83 @@
-# Acceptance criteria — F7.2: the `ospfv3` level of the protocol object
+# Acceptance criteria — F6.9: the outputs rule for a name another unit owns
 
-Feature record: `PLAN.md` Epic 7. The piece taken from `to-do.md` is the parse method for a routing level
-`PROTOCOL_SHAPE` does not state. The Epic 6 write path stays open: it needs the outputs rule for a name
-another unit owns, which is a decision, not a module.
+Feature record: `PLAN.md` Epic 6. The piece taken from `to-do.md` is the decision the reference edge
+rule (`docs/CODEBASE_ASSEMBLY.md` §5 rule 5) left open: the mechanism that resolves a name another
+unit in the run owns. This is a decision, not a module. It writes no byte, changes no gate rule, and
+adds no file, so no golden changes. The write path that splits the output per unit directory stays
+open and is no longer gated by an open decision.
 
-Scope: the `ospfv3` level and the area subtree under it. The parse method reads the levels the table states,
-the table gains a row for each of them, and the emitter, the gate rule and the report read the same table,
-so no second shape appears.
+Scope: the mechanism only. The pair is already data on the edge row, the order rule is already the
+plan order the data states, and the `data` block stays the rule for a name outside the codebase
+(F5.5). This feature decides what the write path prints for a name inside the codebase that belongs
+to another unit.
 
 ## Decisions
 
-### 1. The table states the levels the parse reads
+### 1. The mechanism is the plain name the reference rule already returns
 
-The `protocol` row gains the `ospfv3` field, and the new rows are the levels `parse_ospfv3` reads:
-`protocol/ospfv3`, `protocol/ospfv3/area`, `protocol/ospfv3/area/type` with its three bodies,
-`protocol/ospfv3/area/range`, `protocol/ospfv3/area/interface` with its three link bodies. Each row is the
-shape the live provider schema declares for that level, measured 2026-11-01 against the pinned provider
-2.0.14 and pinned by `tests/test_protocol_object.py::test_the_shape_table_is_the_measured_provider_shape`.
+`name_ref` is the one place that decides the shape of a reference field. For a codebase run, the rule
+resolves inside one unit: a name the unit declares stays a `.name` reference, and a name another unit
+declares is outside that unit, so the rule returns the plain name string. The provider reads the name
+as the value, and Panorama resolves an object name through its own inheritance at commit time (the
+F5.5 fact), so the plain name is correct output. The single-unit case is the flat run today, so a
+plain run writes the same bytes as before, and the goldens are unchanged.
 
-The table states a level only when a parse method reads it. The levels `ospfv3` declares but this feature
-does not read — `timers`, `global_bfd`, `graceful_restart`, `export_rules`, `auth_profile`,
-`area/virtual_link`, `area/interface/neighbor`, `area/type/default_route`, `area/type/nssa_ext_range` — stay
-unprinted and stay in `backlog.md`.
+### 2. Order carries existence
 
-### 2. The `ospfv3` area shape is the `ospf` area shape, field for field
+The tool cannot enforce order (§13), but the order rule already ranks the owner unit before the
+referrer unit through the edge, so the platform plans the owner first and the object exists when the
+referrer applies. No plan-time read of another unit's state is needed, so no remote-state data source
+appears. The `references` gate rule needs no change, because no `.name` reference crosses a unit
+boundary.
 
-The provider declares the same fields for both area subtrees: `name`, `type`, `range`, `interface`, the three
-area type bodies, the range choice blocks, and the three link types. So the new rows state the same shape
-words as the `ospf` rows, with the field order the print order. Two rows for two levels are not two tables:
-`PROTOCOL_SHAPE` stays the one owner, and the pin test reads both against the schema.
+### 3. No outputs block and no remote-state data source
 
-### 3. Bug fix the feature forces: the choice body lives inside the chosen element
+The tool writes no `outputs` block and reads no remote-state data source, because the state backend is
+out of scope, a module is a standard a person writes, and the tool's part is the data a module
+consumes. The `data` block stays the mechanism for a name the run cannot attribute to a unit in the
+codebase (`ARCHITECTURE.md` §4.7). The pair reaches the write path only as data, through the edge
+record, so no second rule decides which name crosses a unit.
 
-`_protocol_choice` takes the element the sub-shape's fields live in: the entry itself for a BGP peer group,
-and the chosen element for an area type. `parse_ospf` passed the `type` element, so a field inside the chosen
-body was read from the wrong place and printed nothing. Measured before the fix: an area with
-`<type><nssa><accept-summary>yes</accept-summary></nssa></type>` printed `type = { nssa = {} }`. Fix: the
-parse passes the chosen element for an area type in both levels. Pinned by
-`tests/test_protocol_object.py::test_an_ospf_area_type_body_prints_the_fields_it_declares`.
+### 4. The consequence for the write path
 
-### 4. Membership and the report cases
-
-An interface prints inside the area element that holds it, the same rule as the `ospf` level. An interface the
-export places at the `ospfv3` level has no provider field, so the container row for it is a report row and the
-manual report names it. A `range` entry must state exactly one of `advertise` or `suppress`, so an entry that
-states neither is a report row. An entry the file cannot hold is not put in the printed list.
-
-### 5. The container rows
-
-One row for the level and one row per container the method reads: `protocol/ospfv3`, `protocol/ospfv3/area`,
-`protocol/ospfv3/range` (nested block), `protocol/ospfv3/area/interface`, and `protocol/ospfv3/interface`
-(report). `test_every_row_path_is_read_by_its_method` pins the paths, and the property scan measures the
-emitted rows against the router row.
-
-### 6. Truth across the corpus
-
-`tests/fixtures/ospfv3.xml` is the fixture that exercises the level. The container scan reports no finding on
-it, the property scan reports no finding on it, the gate rule reports no finding on the block the run writes
-for it, and two runs on it write the same bytes. The committed goldens are unchanged.
+When the write path splits the output per unit, `name_ref` runs per unit, so the names that the flat
+chain resolves across scopes in today's single flat run become plain names. The recorded set is the
+pair set, so the edge record and the manifest `references` field grow to name every cross-unit use,
+and the corpus pin lists change with that step. The decision names the rule; the positive half prints
+bytes only when that step lands, so today the negative half is pinned.
 
 ## Acceptance criteria
 
-1. `resource_mapping.PROTOCOL_SHAPE` gains the `ospfv3` field on the `protocol` row and the rows for the
-   levels the parse reads; no row states a shape the live schema does not declare, and no field is spelled
-   outside the table.
-2. `PanoramaParser.parse_ospfv3` builds the level through `_protocol_level` and `_protocol_choice`, marks
-   every entry it reads, states each level as a table path, and writes no field name of its own; the fix in
-   decision 3 lands in `parse_ospf` as one rule for both levels.
-3. `_parse_router` builds the `ospfv3` level with the two existing levels, so the emitter prints it from the
-   table with no per-level branch.
-4. `container_coverage.CONTAINER_TABLE` gains the rows in decision 5.
-5. `tests/test_protocol_object.py` pins the table against the schema for the new rows, names `parse_ospfv3`
-   as a shape owner, states the mapping for the new choice levels, pins the printed shape for the fixture,
-   pins the choice body fix, and pins one report case.
-6. `tests/test_container_coverage.py` and `tests/test_property_coverage.py` stay green on the new fixture
-   with no new finding, and `tests/test_entry_coverage.py` pins that the parse marks the fixture's entries.
-7. `docs/ARCHITECTURE.md` §4.9, `README.md`, `backlog.md`, `PLAN.md`, `to-do.md` and `agent-status.md` state
-   the landed rule and name the test that holds it; the completed piece leaves the tracking markdown.
-8. `ruff check .` is clean, `pytest` is green, and the change is committed. The completed pieces leave
-   `to-do.md`, and `PLAN.md` keeps the open Epic 7 list without `ospfv3`.
+1. `docs/CODEBASE_ASSEMBLY.md` §5 rule 5 states the decision and names the test that holds it; §14
+   step 4 no longer names the rule as open.
+2. `reference_edges.py` rule 6 states the same rule and links the decision, so the module docstring
+   and the design record agree, and no module defines an outputs writer or reads remote state.
+3. `tests/test_reference_edges.py` pins the negative half:
+   `test_the_mechanism_defines_no_writer_and_no_reader`. The positive half is
+   held by the existing pins: the plain-name rule in `tests/test_data_blocks.py` and
+   `tests/test_robustness.py`, the pair in `tests/test_reference_edges.py`, and the order in the
+   order group of the same file.
+4. The open item leaves `backlog.md`; `to-do.md` keeps the write path as the open step with the print
+   site it must apply, `PLAN.md` records the landed decision, and `agent-status.md` states the fact
+   and the pin-list consequence named in decision 4.
+5. `ruff check .` is clean, `pytest` is green, and the change is committed. No byte changes: the
+   goldens, the reports, the gate, and the file sets are unchanged.
 
 ## Results
 
-All criteria are met. Measured against the pinned provider 2.0.14 on 2026-11-01: the `ospfv3` level declares
-`enable`, `router_id` and `area`, the area declares `name` (a string), `type`, `range` and `interface`, the area
-type states `normal`, `nssa` and `stub`, the range states `advertise` and `suppress` as blocks with no
-attributes, and the interface's link type states `p2p`, `broadcast` and `p2mp`. No field in the new rows is
-marked `sensitive`.
-
-`tests/fixtures/ospfv3.xml` prints the block the table states, the gate rule reports no finding on it, the
-container scan and the property scan report no finding on it, and two runs write the same bytes. The fix in
-decision 3 is measured: `tests/fixtures/ospf.xml` now prints `accept_summary = true` inside the `stub` body.
-The committed goldens are unchanged. `ruff check .` is clean and `pytest` is green (1244).
+1. Met. `docs/CODEBASE_ASSEMBLY.md` §5 rule 5 states the decision and names the pin; §14 step 4 states
+   the rule as decided, so the write path has no open decision.
+2. Met. `reference_edges.py` rule 6 states the same rule and names the pin. The scan reads the tool's own
+   modules, so the citation cites the group and the test name rather than the mechanism words: a source
+   that names a forbidden word cannot be scanned. No module defines an outputs writer or reads remote
+   state.
+3. Met. `tests/test_reference_edges.py` group 7 pins the negative half through
+   `test_the_mechanism_defines_no_writer_and_no_reader`: the scan of the tool's modules, the gate's block
+   kinds, the corpus run file set, and the block reader for an `output` block. The positive half is the
+   existing pins, unchanged.
+4. Met. The open item left `backlog.md`; `to-do.md` keeps the write path as the open step with the print
+   site it applies; `PLAN.md` records the landed rule; `agent-status.md` states the fact and the pin-list
+   consequence.
+5. Met. `ruff check .` is clean and `pytest` is green: 1245 tests, one more than before, and the added
+   test is the pin. No byte changed: the goldens, the reports, the gate rule set, the report counts and
+   the file sets are unchanged. Committed as F6.9.

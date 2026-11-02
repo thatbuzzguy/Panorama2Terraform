@@ -2,39 +2,44 @@
 
 ## Current position
 
-F7.2 (the `ospfv3` level of the protocol object) is complete and committed. `PanoramaParser.parse_ospfv3`
-reads the level and its area subtree, `_protocol_areas` is the area rule it shares with `parse_ospf`,
-`resource_mapping.PROTOCOL_SHAPE` states a row for each level the method reads, and the emitter, the gate rule
-`protocol_object` and the report read that table. The pins are
-`tests/test_protocol_object.py` (the table against the live schema, the printed shape for
-`tests/fixtures/ospfv3.xml`, the mapping for the two choice levels, the choice-body rule, and the interface the
-file cannot express) and `tests/test_parse_network.py::test_parse_ospfv3`. The suite is 1244 tests.
+F6.9 (the outputs rule for a name another unit in the codebase owns) is complete and committed. It is a
+decision, so it adds no module: it writes no byte, changes no gate rule, and adds no file, so the goldens,
+the reports, the file sets and the report counts are unchanged.
 
-The next feature is not chosen. The open pieces are in `to-do.md`, and the rules they must keep are in the
-watch list below.
+The decision: a name another unit in the codebase owns prints as the plain name string at the print site,
+in the order the reference edge rule states (the owner unit before the referrer unit), because Panorama
+resolves an object name through its own inheritance at commit time. The tool defines no outputs writer and
+reads no remote-state data source, because the state backend is out of scope and a module is a standard a
+person writes. The `data` block stays the mechanism for a name outside the codebase (F5.5). `name_ref`
+stays the one place that decides the shape of a reference field, so no second rule decides which name
+crosses a unit.
 
-Facts measured while the work landed, and the rules that follow from them:
+The rule is written once, in `docs/CODEBASE_ASSEMBLY.md` §5 rule 5, which is the owner document for it.
+`reference_edges.py` rule 6 states the same rule, and `docs/ARCHITECTURE.md` §4.3 links to it instead of
+restating it. The pin is
+`tests/test_reference_edges.py::test_the_mechanism_defines_no_writer_and_no_reader`, which scans the tool's
+own modules for the mechanism. The positive half is held by the pins that already read the rule: the plain
+name in `tests/test_data_blocks.py` and `tests/test_robustness.py`, the pair in
+`tests/test_reference_edges.py::test_the_record_is_one_row_per_edge_the_data_can_name`, and the order in the
+order group of the same file. The suite is 1245 tests.
 
-- The provider declares the same fields for the `ospf` and the `ospfv3` area subtrees, so one area reader
-  (`_protocol_areas`) serves both, and the table keeps one row per level. A row states only the fields the
-  method that reaches that level reads.
-- The fields of a `one_of` body live inside the chosen flag element, not inside `type`. Before the fix the
-  parse read them from the wrong element, so a flag field printed nothing: measured `type = { nssa = {} }` for
-  an area whose export stated `accept-summary` inside `nssa`. Both fixtures state one, and
-  `tests/test_protocol_object.py::test_a_choice_body_prints_the_fields_it_declares` pins the print.
-- `protocol/ospfv3/area/name` is a `string`, the way the `ospf` area name is, so the entry name prints as the
-  name field and not as a list.
-- A property-level entry is counted on the parent row, so an entry inside an area entry is not measured by the
-  property scan, and a `range` entry is a nested block row, so the scan reads nothing for it. The area entry
-  itself is measured through the router row.
-- The parse method that takes the router element is named in the test helpers that call it for each router:
-  `tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py`. A new level method
-  must be added there, or the corpus checks run no method for it.
-- A container row path is read from the method's own string constants plus the constants of the helpers it
-  calls, so a helper that takes the level path as an argument keeps the pin true.
+The next feature is not chosen. `to-do.md` keeps the Epic 6 write path as the open step, and the rules it
+must keep are in the watch list below.
 
-The next feature is not chosen. The open pieces are in `to-do.md`, and the rules they must keep are in the
-watch list below.
+Facts the decision rests on:
+
+- The reference rule already returns a plain string for a name it cannot resolve, so the decision added no
+  shape rule. A single-unit run is the flat run today, so a plain run writes the same bytes as before.
+- Order carries existence: the order rule ranks the owner unit before the referrer unit, and the platform
+  plans in the order the data states, so no plan-time read of another unit's state is needed, and no
+  remote-state data source appears.
+- A pin that reads module sources cannot read a source that names the words it forbids, so the scan reads
+  the tool's own modules only, and the module docstring cites the test by its name without the mechanism
+  words.
+- The consequence for the write path: `name_ref` runs per unit, so a name the flat chain resolves across
+  scopes today becomes a plain name. The edge set and the manifest `references` field grow to name every
+  cross-unit use, so `tests/test_reference_edges.py::CORPUS_EDGES` and
+  `tests/test_unit_manifest.py::GROUPING_REFERENCES` change with that step.
 
 ## Rules to keep when writing documents
 
@@ -58,7 +63,11 @@ watch list below.
 - The codebase modules name the unit, the owner, the pair, the order, the block, the scope
   object and the site, and write no directory. The write path is the step that turns a
   `directory` field into a real directory, and `scope.tf`, `imports.tf` and `site.auto.tfvars`
-  are one file for the run until it lands.
+  are one file for the run until it lands. The print-site rule it applies is decided
+  (`docs/CODEBASE_ASSEMBLY.md` §5 rule 5), so the step has no open decision.
+- A rule that pins an absence by scanning module sources cannot read a source that names the words it
+  forbids, so a scan reads the tool's own modules, and the test name and the module docstring carry no
+  forbidden word. The pin for the outputs rule is group 7 of `tests/test_reference_edges.py`.
 - The block reader in `sanity_checks.py` serves every kind, and the same field reader serves the
   fields inside a container value and the elements of a list value, so a new block shape uses them
   rather than writing a second reader.
@@ -81,6 +90,9 @@ watch list below.
   never spells a field name: `_protocol_xml_name` and `_protocol_field_name` are the two rules.
   `_protocol_areas` is the area rule the two OSPF levels share, and `_protocol_choice` takes the element that
   holds the chosen body: the flag element for an area type, the entry's own level for a BGP peer group.
+- The parse method that takes the router element is named in the test helpers that call it for each router:
+  `tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py`. A new level method
+  must be added there, or the corpus checks run no method for it.
 - A container row that moves from `report` to `emitted` changes the property scan scope, the per-entry
   report, and the `.tf` goldens together, so it cannot be a print-only change. A moved row must be
   `emitted` with the provider type in its note, because the matrix row and the report both read the note.
@@ -96,6 +108,9 @@ watch list below.
 - The §5 naming rule lives in `naming.py`. No module may define a second one;
   `TerraformGenerator.sanitize_name` is a delegate and the data modules take the rule as an
   argument.
+- One place decides the shape of a reference field: `TerraformGenerator.name_ref`, read at the print site.
+  The mechanism for a name it cannot resolve is the plain name it returns, so a write path that runs the
+  rule per unit changes the corpus pin lists, not the rule.
 - The import position for the four `*_policy_rules` types must be the position the live config
   holds, and the F3.5 rulebase decision gates it. No block is written for a rule entry until both
   land.

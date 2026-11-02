@@ -1,6 +1,7 @@
-"""F6.3 the reference between units: the edge record, the acyclic rule, and the unit order.
+"""F6.3 the reference between units: the edge record, the acyclic rule, the unit order, and the
+outputs rule decision (F6.9).
 
-Six groups, one per rule in `reference_edges.py` (`docs/CODEBASE_ASSEMBLY.md` §5 and §6):
+Seven groups, one per rule in `reference_edges.py` (`docs/CODEBASE_ASSEMBLY.md` §5 and §6):
 
 1. The edge row and the join: one row per pair the data can name, joined to the manifest on
    `directory` and to the ownership record on (`type`, `entry`).
@@ -10,6 +11,9 @@ Six groups, one per rule in `reference_edges.py` (`docs/CODEBASE_ASSEMBLY.md` §
 4. The unit order: `after` from the three bases (ancestor, level, edge), `rank` with the identity tie.
 5. The report section, the console, and the exit codes.
 6. The gates, determinism, and the rule that a file is written only when it has content.
+7. The outputs rule (F6.9, the decision): the mechanism for a name another unit in the codebase owns
+   is the plain name the reference rule already returns, so no module defines an outputs writer or
+   reads remote state.
 
 Every test runs offline, and the module writes no `.tf` byte.
 """
@@ -43,6 +47,12 @@ OVERRIDE = 'ownership_override.xml'
 GROUPING = 'report_grouping.xml'
 STATE_FIXTURE = 'state_workspace.json'
 WORKSPACE = 'production'
+
+# F6.9 pins an absence, so the scan is the test. It reads the tool's own modules at the repository root,
+# not the tests, because a source that names a forbidden word cannot be scanned by the test that holds the
+# rule, so the test name and the module docstring carry none of them.
+ROOT_MODULES = sorted(Path(reference_edges.__file__).parent.glob('*.py'))
+MECHANISM_TOKENS = ('outputs.tf', 'remote_state', 'terraform_remote_state')
 
 # The edge set across the fixture corpus, measured through the run, in the order the four fields sort
 # by. A fixture that starts producing an edge must be added here in the same change, so no fixture can
@@ -694,3 +704,23 @@ def test_the_cli_takes_no_flag_for_the_record(tmp_path):
     assert _run(FIXTURES_DIR / CYCLE_FIXTURE, tmp_path).returncode == 0
     assert (tmp_path / RECORD).is_file()
     assert not hasattr(reference_edges, 'add_arguments'), 'the record owns no CLI flag'
+
+
+# --- 7. the outputs rule (F6.9, the decision) ---------------------------------
+
+def test_the_mechanism_defines_no_writer_and_no_reader(tmp_path):
+    """AC-3.1 (F6.9): the mechanism for a name another unit in the codebase owns is the plain name the
+    reference rule already returns, so the tool writes no outputs block and reads no remote-state data
+    source. The scan reads the tool's own modules, so a module cannot add the mechanism later without
+    changing this test, and the test name carries no word the scan reads. The positive half is held by
+    the existing pins: the plain name in `tests/test_data_blocks.py`, the pair in group 1 here, and the
+    order in group 4 here.
+    """
+    for path in ROOT_MODULES:
+        for token in MECHANISM_TOKENS:
+            assert token not in path.read_text(encoding='utf-8'), (path.name, token)
+    assert 'output' not in sanity_checks.BLOCK_KINDS, 'the gate reads no output block'
+    assert _run(FIXTURES_DIR / KITCHEN, tmp_path).returncode == 0
+    assert not [name for name in sorted(p.name for p in tmp_path.iterdir()) if 'output' in name]
+    files = sanity_checks.read_tf_files(tmp_path)
+    assert sanity_checks.blocks(files, ('output',)) == []

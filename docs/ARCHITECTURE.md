@@ -787,6 +787,10 @@ exists. The same record is the edge set (§3.6), because an edge is a recorded n
 ownership row also covers. Pinned by `tests/test_unit_manifest.py::test_the_reference_names_are_recorded_for_the_referrers_facts`
 and `::test_a_name_the_run_declares_is_not_recorded`.
 
+For a name another unit in the codebase owns, this rule decides the shape only: the plain name it
+returns for a name it cannot resolve. The mechanism that carries that name is decided in the design
+record, `docs/CODEBASE_ASSEMBLY.md` §5 rule 5 (F6.9), so this section does not state it.
+
 Pinned by `tests/test_robustness.py::test_name_ref_never_dangles`,
 `::test_name_ref_prefers_referrers_own_context`,
 `::test_name_ref_falls_back_to_shared_then_contextless`,
