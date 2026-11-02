@@ -2,57 +2,53 @@
 
 ## Current position
 
-F6.10.1 (the shape of the write path) is complete and committed. It is a decision, so it writes no output
-byte: the goldens, the reports, the gate rule set, the report counts and the file sets the corpus run writes
-are unchanged. One code change carries the reading rule: `sanity_checks.read_tf_files` now walks the tree
-below the codebase root and keys each file by the path from the root, so the same block rule reads today's
-flat run and the split run, and a finding names the path. For a flat run the path is the file name, so the
-bytes a report names are unchanged.
+F6.10.2 (the print site per unit) is complete and committed: `name_ref` resolves a name inside the
+referrer's own unit, so a name the flat chain resolved across scopes is now the plain name. No
+directory is written in that slice, so `tests/test_write_path.py::test_no_unit_directory_is_written_yet`
+stays green and the directory write stays with F6.10.3.
 
-The decision, written once in `docs/CODEBASE_ASSEMBLY.md` §14 (the owner document):
+The rule, in `docs/ARCHITECTURE.md` §4.3, first match wins:
 
-- **The unit set** is the files one plan reads, so one directory holds them: the `.tf` files for that unit
-  and the printed form of that unit's site row. `provider.tf` and `variables.tf` are unit-set files, because
-  a plan reads the declarations in its own root.
-- **The codebase root set** is the files that describe the whole codebase, one per run: the four records, the
-  report files, `README.md`, `SOURCE.txt`. The records stay at the root, because the edge record needs the
-  whole unit set and a reader cannot find a per-unit file before it knows the directory name.
-- **The two sets are distinct**, and every file a run writes names one set. The printed form is compared and
-  not counted. A new file shape must name which set it belongs to, and the two counts change with it.
-- **Default output, not an opt-in.** The committed goldens pin what a default run emits, so a shape a run
-  writes only when a flag is on cannot be pinned. A flag for the layout would give the reference rule two
-  shapes and force a second gate reader. Consequence: both committed golden sets move to the per-unit layout
-  and regenerate in the same step as the LF rule.
-- **A per-unit file names its unit only by the directory it is written in**, so the manifest row stays the
-  only place that states the unit set, and a gate finding names the path from the codebase root.
-- **The gate reading:** the block rules read every `.tf` file below the codebase root, keyed by the path from
-  the root; the data rule keeps reading the four records at the root as one rule over the rows of every unit;
-  the plan check runs once per unit directory; no rule reads a report, `README.md` or `SOURCE.txt`.
+1. A name the referrer's own unit declares is `HclRef('<scope>.<local>.name')`, where `local` is the
+   name the naming rule (§5) gave for that unit.
+2. A name another unit in the run declares is the plain name. The device case (F3.5, F3.6) is one case
+   of this rule, so the device rule and the helper that read it are gone.
+3. A name no unit in the run declares is a read-through `data block` when the run opted the scope in,
+   for the unit the site belongs to (§4.7).
+4. Otherwise the plain name.
 
-The pins are `tests/test_write_path.py`, 12 tests, in the scan style of `tests/test_reference_edges.py`
-group 7. The pins that measure the corpus read the pinned measurements, not a restated rule: the corpus unit
-count (10), the file sets the corpus run writes, and the two report counts. The golden pin reads the `.tf`
-set as paths from the case directory (`tests/test_golden_files.py`), so it holds for a golden set that holds
-unit directories, and the committed goldens are byte-identical. The suite is 1257 tests.
+The shape the code carries:
 
-The pin names: `test_the_unit_set_and_the_codebase_root_set_are_distinct`,
-`test_a_per_unit_file_names_no_path_so_the_reader_names_the_unit`,
-`test_the_unit_set_is_one_set_per_unit_and_the_data_set_is_one_file_for_the_codebase`,
-`test_the_block_reader_walks_the_tree_and_a_finding_names_the_path`,
-`test_for_a_flat_run_the_path_is_the_file_name_so_no_report_byte_changes`,
-`test_the_data_rule_reads_the_records_at_the_codebase_root_only`,
-`test_the_data_rule_is_one_rule_over_the_rows_of_every_unit`,
-`test_no_rule_reads_a_file_outside_the_two_sets`,
-`test_the_plan_check_runs_on_one_directory_and_a_unit_is_one_directory`,
-`test_no_flag_names_the_write_path`,
-`test_the_golden_set_can_hold_unit_directories_so_only_default_output_can_be_pinned`,
-`test_no_unit_directory_is_written_yet`. The last one changes when F6.10.3 writes the directories.
+- `self._declaration_index` is `(scope, name)` -> the declaring unit's facts -> the local name. It
+  replaces `_block_registry`, `_flat_registry`, `_device_registry` and `_device_index`. A `data` block
+  enters no declaration index.
+- `declare_block_name` takes the object, because the rule reads the unit through `unit_manifest.facts_of`
+  at both ends. The digest input is unchanged for a resource (`context|vsys`), so a single-unit run writes
+  the same bytes; for a `data` block the identity is `identity_digest(facts)`, and no golden pins a
+  read-through local name.
+- `name_ref` takes no `context`, `vsys` or `device`: the referrer states them. `key` stays for a VPN
+  composite key. The recording rule is unchanged.
+- `_data_blocks` is keyed by `(scope, unit, name)`, and the writer sorts by `(type, local)` so the file
+  stays byte-identical between runs.
 
-The next slice is F6.10.2 (the print site per unit). `acceptance.md` holds F6.10.1's criteria and must be
-overwritten for it. `name_ref` runs per unit, so `tests/test_reference_edges.py::CORPUS_EDGES` and
-`tests/test_unit_manifest.py::GROUPING_REFERENCES` change with that step. F6.10.3 finds each unit's printed
-form by its site row's `directory`, reads the golden set as paths, and regenerates the goldens with the LF
-rule.
+The pin lists changed by this slice: `tests/test_reference_edges.py::CORPUS_EDGES` is 20 rows over five
+fixtures (`dependency_wiring.xml` 3, `kitchen_sink.xml` 8, `multi_device_templates.xml` 4,
+`reference_cycle.xml` 2, `policy_order.xml` 3), measured from a real run. `GROUPING_REFERENCES` in
+`tests/test_unit_manifest.py` is unchanged, because the grouping fixture names one unit. The kitchen
+goldens for `security_rules.tf`, `virtual_routers.tf` and `zones.tf` regenerated from a real run; the
+sample goldens are byte-identical. The suite is 1258 tests.
+
+The pins that name the per-unit rule are `::test_name_ref_resolves_inside_the_referrers_own_unit`,
+`::test_a_name_another_unit_declares_stays_a_plain_name`, `::test_name_ref_resolves_inside_the_referrers_own_vsys`,
+and `::test_the_record_names_the_referrers_unit_not_the_declaring_unit`, plus the read-through pins in
+`tests/test_data_blocks.py` and `tests/test_multi_device_template.py` that `docs/ARCHITECTURE.md` §4.3
+names.
+
+The next slice is F6.10.3 (the directory write). `acceptance.md` holds F6.10.2's criteria and must be
+overwritten for it. F6.10.3 writes one directory per unit the manifest names, holds the unit set §14
+states, applies the LF rule, and regenerates both goldens with the per-unit layout, so the golden pin reads
+the `.tf` set as paths from the case directory and a gate finding names the path. It also changes
+`test_no_unit_directory_is_written_yet`.
 
 ## Rules to keep when writing documents
 
@@ -139,6 +135,6 @@ rule.
   so it prunes nothing, and the prune rule reads a record file, not one record.
 - A coverage fact that comes from a run must be read from the run's ledger, so the scan tests run
   the pipeline in process.
-- A cycle test needs the referrer entry and the declaring entry in the same unit, for the reason
-  recorded in the git history for F6.3.
+- A cycle test needs two units that each declare a name the other one uses, because the rule resolves a
+  name only inside the unit that declared it (`tests/fixtures/reference_cycle.xml`).
 - The LF rule is a byte rule, so the goldens and the no-change tests change with the write path.

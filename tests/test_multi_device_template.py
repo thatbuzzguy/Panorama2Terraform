@@ -17,6 +17,8 @@ Four contracts:
    device, so the same name on two firewalls or in two templates stays two
    resources.
 4. The splitter joins a device group and a template on a shared device name.
+5. A reference resolves inside the unit that declared the name (F6.10.2), so the device the export
+   names is a naming fact, not a second reference rule.
 """
 
 import xml.etree.ElementTree as ET
@@ -24,6 +26,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 import naming
+import unit_manifest
 from conftest import FIXTURES_DIR
 from panorama_to_terraform import TerraformGenerator
 
@@ -264,26 +267,29 @@ def test_same_interface_name_on_two_devices(tmp_path):
     assert {'ngfw': {'ngfw_device': naming.variable_text(FW2)}} in locations
 
 
-def test_reference_resolves_inside_the_template_target_device(tmp_path):
-    """A template that targets one device resolves its interface names there.
+def test_a_template_referrer_keeps_the_plain_name_for_an_interface_another_unit_declares(tmp_path):
+    """F3.6, F6.10.2: the template target device is a naming fact, not a reference rule.
 
-    The virtual router is template config and names no device, but the
-    export says which device the template targets, so the interface name has
-    exactly one referent.
+    The virtual router is template config, so its unit is the template; the interface is device
+    config, so its unit is the firewall the export placed it under. One plan runs against one root,
+    so the reference is the plain name, and the pair is the edge the reference record names
+    (`tests/test_reference_edges.py`).
     """
     gen = TerraformGenerator(str(tmp_path), ASSOCIATIONS)
-    gen.generate_interfaces([
-        {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
-         'device_group': 'Shared', 'vsys': '', 'template': '',
-         'vsys_device': FW2},
-    ])
-    gen.generate_virtual_routers([
-        {'name': 'vr-hq', 'type': 'virtual-router', 'vsys': '',
-         'template': 'DC-Networks', 'vsys_device': '',
-         'interfaces': ['ethernet1/1']},
-    ])
+    interface = {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
+                 'device_group': 'Shared', 'vsys': '', 'template': '',
+                 'vsys_device': FW2}
+    router = {'name': 'vr-hq', 'type': 'virtual-router', 'vsys': '',
+              'template': 'DC-Networks', 'vsys_device': '',
+              'interfaces': ['ethernet1/1']}
+    gen.generate_interfaces([interface])
+    gen.generate_virtual_routers([router])
     routers = (tmp_path / 'virtual_routers.tf').read_text()
-    assert 'panos_ethernet_interface.ethernet1_1_' in routers
+    assert '"ethernet1/1"' in routers
+    # The interface resource is still declared, by its own unit.
+    assert 'resource "panos_ethernet_interface" "ethernet1_1_' in (tmp_path / 'interfaces.tf').read_text()
+    # The referrer recorded the name as one it resolved outside its own unit.
+    assert gen.unit_references()[unit_manifest.facts_of(router)] == ('ethernet1/1',)
 
 
 def test_ambiguous_template_keeps_a_plain_interface_name(tmp_path):
@@ -310,20 +316,25 @@ def test_ambiguous_template_keeps_a_plain_interface_name(tmp_path):
     assert '"ethernet1/1"' in routers
 
 
-def test_single_device_declaration_still_resolves_without_a_device(tmp_path):
-    """One device declaring the name is a fact, so the reference resolves."""
+def test_a_referrer_that_names_no_unit_keeps_the_plain_name(tmp_path):
+    """F3.6, F6.10.2: one device declaring a name is a fact about that unit, not a fact the
+    deviceless referrer can use, so it keeps the plain name (F2.6 brown-field case)."""
     gen = TerraformGenerator(str(tmp_path))
-    gen.generate_interfaces([
-        {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
-         'device_group': 'Shared', 'vsys': '', 'template': '',
-         'vsys_device': FW1},
-    ])
-    gen.generate_virtual_routers([
-        {'name': 'vr-any', 'type': 'virtual-router', 'vsys': '',
-         'template': '', 'vsys_device': '', 'interfaces': ['ethernet1/1']},
-    ])
+    interface = {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
+                 'device_group': 'Shared', 'vsys': '', 'template': '',
+                 'vsys_device': FW1}
+    router = {'name': 'vr-any', 'type': 'virtual-router', 'vsys': '',
+              'template': '', 'vsys_device': '', 'interfaces': ['ethernet1/1']}
+    gen.generate_interfaces([interface])
+    gen.generate_virtual_routers([router])
     routers = (tmp_path / 'virtual_routers.tf').read_text()
-    assert 'panos_ethernet_interface.ethernet1_1_' in routers
+    assert '"ethernet1/1"' in routers
+    # A router inside the unit that declared the interface resolves it (F6.10.2).
+    inside = dict(router, name='vr-fw1', vsys_device=FW1)
+    gen.generate_virtual_routers([inside])
+    text = (tmp_path / 'virtual_routers.tf').read_text()
+    assert f'name = "{inside["name"]}"' in text
+    assert 'panos_ethernet_interface.' in text
 
 
 # --- the fixture as a whole ------------------------------------------------

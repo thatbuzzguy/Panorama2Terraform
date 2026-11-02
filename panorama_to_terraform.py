@@ -2560,24 +2560,15 @@ class TerraformGenerator:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         # Collision handling for block names. Two different PAN-OS names
         # can sanitize to the same Terraform name (for example 'a-b' and
-        # 'a_b'). The registry maps (kind, scope, context, input) -> assigned
-        # name so a reference site that recomputes the same identity gets the
-        # same name (F3.1 keyed identity, F5.5 kind). The flat (scope, input)
-        # index keeps contextless reference sites resolving to the first
-        # declaration.
-        self._block_registry: dict[tuple, str] = {}
-        self._flat_registry: dict[tuple[str, str], str] = {}
+        # 'a_b'), so the counter keeps the output valid HCL.
         self._taken_names: dict[str, set[str]] = {}
-        # F3.5: declarations that name a target device, keyed
-        # (scope, device, name). An interface belongs to one device, and two
-        # devices can declare the same interface name, so a reference from a
-        # device-scoped referrer resolves against this index instead of the
-        # flat (scope, name) index.
-        self._device_registry: dict[tuple[str, str, str], str] = {}
-        # F3.6: (scope, name) -> the devices that declared it. A name two
-        # devices declare cannot be resolved by a referrer that names no
-        # device, so name_ref keeps it a plain string.
-        self._device_index: dict[tuple[str, str], set] = {}
+        # F6.10.2: the declaration index, keyed by the identity the naming rule applied (scope, name).
+        # Each entry maps the unit that declared the name, read through `unit_manifest.facts_of`, to the
+        # local name, so the reference rule resolves a name inside the referrer's own unit and can tell a
+        # name another unit declared from a name no unit declares (`docs/CODEBASE_ASSEMBLY.md` §5 rule 5).
+        # A `data` block enters no index, because a reference site creates it and a plain reference must
+        # not resolve to it (F5.5).
+        self._declaration_index: dict[tuple, dict] = {}
         # F3.5: (kind, line) pairs for a source scope the emitted location
         # cannot carry ('scope') and for a vsys location with no target
         # device name ('device'). generate_manual_setup_report writes them.
@@ -2587,13 +2578,15 @@ class TerraformGenerator:
         # export leaves unplaced is reported with the templates its device
         # takes, so the operator sets the real name.
         self._associations: dict = associations or {}
-        # F5.5: the read-through scopes the run declares (`--data-blocks`), and
-        # the blocks the reference sites needed, keyed by (type, local name).
+        # F5.5: the read-through scopes the run declares (`--data-blocks`), and the blocks the reference
+        # sites needed, keyed by the identity the reference site named: (scope, unit, name). So two sites
+        # in one unit that name the same outside name share one block, and a site in another unit writes
+        # its own (F6.10.2).
         self.data_scopes = frozenset(data_scopes or ())
-        self._data_blocks: dict[tuple[str, str], dict] = {}
-        # F6.1: the names the reference rule resolved outside the run, keyed by the referrer's
-        # four scope facts (`unit_manifest.facts_of`), so the manifest row can state them. One
-        # name is stored once per unit.
+        self._data_blocks: dict[tuple, dict] = {}
+        # F6.1, F6.10.2: the names the reference rule could not resolve inside the referrer's own
+        # unit, keyed by the referrer's four scope facts (`unit_manifest.facts_of`), so the manifest
+        # row can state them. One name is stored once per unit.
         self._unit_references: dict[tuple, set] = {}
         # F6.4: one import row per entry a `resource` block declares, recorded at the site that applied the
         # naming rule (`import_blocks.row`). `render` prints them in the order a reader can reproduce.
@@ -2602,25 +2595,6 @@ class TerraformGenerator:
         # (`unit_manifest.facts_of`) and recorded at the site that applied the table, so `site_data.py` states
         # them without resolving a name. One value is stored once per unit.
         self._value_variables: dict[tuple, dict] = {}
-        # F3.5: declarations that name a target device, keyed
-        # (scope, device, name). An interface belongs to one device, and two
-        # devices can declare the same interface name, so a reference from a
-        # device-scoped referrer resolves against this index instead of the
-        # flat (scope, name) index.
-        self._device_registry: dict[tuple[str, str, str], str] = {}
-        # F3.6: (scope, name) -> the devices that declared it. A name two
-        # devices declare cannot be resolved by a referrer that names no
-        # device, so name_ref keeps it a plain string.
-        self._device_index: dict[tuple[str, str], set] = {}
-        # F3.5: (kind, line) pairs for a source scope the emitted location
-        # cannot carry ('scope') and for a vsys location with no target
-        # device name ('device'). generate_manual_setup_report writes them.
-        self._location_reports: list[tuple[str, str]] = []
-        # F3.6: the device membership the export declares
-        # (PanoramaParser.parse_associations). A template-scoped entry the
-        # export leaves unplaced is reported with the templates its device
-        # takes, so the operator sets the real name.
-        self._associations: dict = associations or {}
 
     def sanitize_name(self, name: str) -> str:
         """Sanitize names for Terraform resource names.
@@ -2630,13 +2604,13 @@ class TerraformGenerator:
         """
         return naming.sanitize(name)
 
-    def declare_resource_name(self, name: str, scope: str, context: str = '',
-                              vsys: str = '', device: str = '') -> str:
+    def declare_resource_name(self, name: str, scope: str, obj: dict,
+                              context: str = '', vsys: str = '') -> str:
         """Assign a collision-free name for a `resource` declaration (F2.7)."""
-        return self.declare_block_name(name, scope, context, vsys, device)
+        return self.declare_block_name(name, scope, obj, context, vsys)
 
-    def declare_block_name(self, name: str, scope: str, context: str = '',
-                           vsys: str = '', device: str = '',
+    def declare_block_name(self, name: str, scope: str, obj: dict,
+                           context: str = '', vsys: str = '',
                            kind: str = 'resource') -> str:
         """Assign a collision-free Terraform name for a new block declaration.
 
@@ -2655,6 +2629,9 @@ class TerraformGenerator:
         emission order or run count. Same-named objects in different device
         groups, virtual systems, devices, or templates stay distinct.
 
+        For a `data` block the entry is not in the export, so the source identity is the unit the
+        reference site belongs to (F6.10.2), read through `unit_manifest.identity_digest`.
+
         If the address is already taken in the scope (a duplicate declaration
         or a digest collision), a numeric suffix follows, so the output is
         always valid HCL.
@@ -2665,17 +2642,20 @@ class TerraformGenerator:
         same-named objects in different vsys get different digests and both
         survive without the taken-name counter.
 
-        F3.5: `device` (the target device an entry names) is not part of the
-        digest. It indexes a declaration so a reference from one device
-        cannot resolve to another device's resource of the same name.
-
         F3.6: a template-scoped object passes its template, else the device
         the export placed it under (TerraformGenerator.scope_context), so
         the same interface name on two firewalls stays two resources instead
         of one resource plus a taken-name counter.
+
+        `obj` is the parsed object the declaration belongs to, so the declaring unit is recorded here, at
+        the site that applied the naming rule, through `unit_manifest.facts_of` — the same read
+        `record_import_row` makes. The reference rule reads the declaring unit from this record, so no
+        second unit rule and no second naming key exists.
         """
         base = self.sanitize_name(name) or 'unnamed'
-        digest = hashlib.sha256(f'{scope}|{context}|{vsys}|{name}'.encode()).hexdigest()[:8]
+        unit = unit_manifest.facts_of(obj)
+        identity = f'{context}|{vsys}' if kind == 'resource' else unit_manifest.identity_digest(unit)
+        digest = hashlib.sha256(f'{scope}|{identity}|{name}'.encode()).hexdigest()[:8]
         candidate = f'{base}_{digest}'
         taken = self._taken_names.setdefault(scope, set())
         n = 2
@@ -2683,47 +2663,40 @@ class TerraformGenerator:
             candidate = f'{base}_{digest}_{n}'
             n += 1
         taken.add(candidate)
-        # Reference sites resolve by (kind, scope, context, vsys, name); the
-        # first declaration of the same identity wins.
-        self._block_registry.setdefault((kind, scope, context, vsys, name), candidate)
         if kind == 'data':
             # A `data` block is created by a reference site, not by a parsed
             # entry, so it enters no declaration index: a plain reference must
             # not resolve to it, and a `data.` reference resolves only to the
             # block the same identity created (F5.5).
             return candidate
-        # Contextless reference sites resolve by (scope, name); the first
-        # declaration wins regardless of context (F2.6 robustness).
-        self._flat_registry.setdefault((scope, name), candidate)
-        if device:
-            self._device_registry.setdefault((scope, device, name), candidate)
-            self._device_index.setdefault((scope, name), set()).add(device)
+        # One local name per unit that declared the name, and the first declaration of one identity wins.
+        # The reference rule reads the referrer's own unit here (F6.10.2).
+        self._declaration_index.setdefault((scope, name), {}).setdefault(unit, candidate)
         return candidate
 
-    def name_ref(self, name: str, scopes, key: Optional[str] = None,
-                 context: Optional[str] = None, vsys: Optional[str] = None,
-                 device: Optional[str] = None, referrer: Optional[dict] = None):
-        """Apply the reference rule and record what it resolved outside the run (F6.1).
+    def name_ref(self, name: str, scopes, referrer: dict, key: Optional[str] = None):
+        """Apply the reference rule for one unit (F6.10.2) and record what it resolved outside it (F6.1).
 
-        `referrer` is the parsed object the reference site belongs to. A name the rule resolved
-        outside the run is recorded against the referrer's four scope facts, so the manifest row
-        can state the names a unit references from outside itself (`unit_manifest.py`). The record
-        is made here, at the site that applies the rule, so no second resolution rule exists.
-        Every call site passes the object it belongs to, so a name is never recorded twice.
+        `referrer` is the parsed object the reference site belongs to, so the rule reads the unit through
+        `unit_manifest.facts_of` and no second unit rule exists. A name the rule resolved outside the
+        referrer's unit is recorded against the referrer's four scope facts, so the manifest row can state
+        the names a unit references from outside itself (`unit_manifest.py`). The record is made here, at
+        the site that applies the rule, so no second resolution rule exists. Every call site passes the
+        object it belongs to, so a name is never recorded twice, and a call site names no context, no vsys
+        and no device, because the referrer states them.
         """
-        resolved = self._resolve_reference(name, scopes, key=key, context=context,
-                                           vsys=vsys, device=device)
-        if referrer is not None and self._is_outside_reference(resolved):
+        resolved = self._resolve_reference(name, scopes, referrer, key=key)
+        if self._is_outside_reference(resolved):
             self._unit_references.setdefault(unit_manifest.facts_of(referrer), set()).add(name)
         return resolved
 
     @staticmethod
     def _is_outside_reference(resolved) -> bool:
-        """True when the rule resolved the name to something outside the run: a plain string, or a
-        read-through `data` block (F5.5). A name the run declares resolves to a `resource` block,
-        so it is not an outside name. The F3.6 ambiguous-device case is a plain string because the
-        referrer is ambiguous, not because the name sits outside the run; the edge list (F6.3) is
-        the feature that names the other unit, so this record keeps one fact: outside the run.
+        """True when the rule resolved the name to something outside the unit that asked for it: a plain
+        string, or a read-through `data` block (F5.5). A name the referrer's own unit declares resolves to a
+        `resource` block inside the unit, so it is not an outside name. The edge list (F6.3) is the feature
+        that names the other unit, so this record keeps one fact: the name is outside the unit, which for one
+        unit is outside the run.
         """
         if isinstance(resolved, str):
             return True
@@ -2753,120 +2726,62 @@ class TerraformGenerator:
         self.import_rows.append(import_blocks.row(
             unit, resource_type, local_name, obj.get('name') or '', location))
 
-    def _resolve_reference(self, name: str, scopes, key: Optional[str] = None,
-                           context: Optional[str] = None, vsys: Optional[str] = None,
-                           device: Optional[str] = None):
-        """Resolve a PAN-OS name to a Terraform reference (F2.6, F3.1).
+    def _resolve_reference(self, name: str, scopes, referrer: dict,
+                           key: Optional[str] = None):
+        """Resolve a PAN-OS name inside one unit (F2.6, F6.10.2).
 
-        Returns an HclRef of '<scope>.<local>.name' when the object is
-        declared in this run, else the plain name. Names that point at
-        objects outside the export (built-ins, other tenants) stay plain
-        brown-field strings, so this never creates a reference to an
-        undeclared resource. `scopes` is tried in order so an object wins
-        over a group when both carry the same name. `key` is the registry
-        key when it differs from the PAN-OS name (VPN composite keys such
-        as 'ike_gw_<name>').
+        Returns an HclRef of '<scope>.<local>.name' when the referrer's own unit declares the name, else
+        the plain name. `scopes` is tried in order so an object wins over a group when both carry the same
+        name. `key` is the registry key when it differs from the PAN-OS name (VPN composite keys such as
+        'ike_gw_<name>').
 
-        F3.1: when `context` is given (the referrer's device group),
-        resolution tries the referrer's own context first, then the shared
-        context, then contextless declarations (template-scoped objects),
-        and only then falls back to the flat (scope, name) first-declaration
-        index. This makes same-named objects in different device groups
-        resolvable to their own resources instead of one name shadowing the
-        other.
+        Order, first match wins:
 
-        F3.2: `vsys` completes the key. PAN-OS resolution is per-vsys: a
-        rule sees its own vsys's objects and the shared objects of the same
-        vsys, never the other vsys's copies. Each stop of the context chain
-        is therefore paired with the referrer's vsys.
+        1. A name the referrer's own unit declares.
+        2. A name another unit in the run declares: the plain name. One plan runs against one root and one
+           state, so a reference cannot name an address another unit declares, and the value the provider
+           reads is the name itself, which Panorama resolves through its own inheritance at commit time
+           (`docs/CODEBASE_ASSEMBLY.md` §5 rule 5).
+        3. A name no unit in the run declares, when the run declares one of the scopes with
+           `--data-blocks`: one read-through `data` block, and the reference is `data.<scope>.<local>.name`
+           (F5.5). The read-through branch answers a name outside the codebase, so it does not run for a
+           name one unit declares and another unit uses. The block type is the first opted-in scope in this
+           site's lookup order, which is the order PAN-OS resolves a name in, and the block is the one
+           written for this site's identity (scope, unit, name), so a second site in one unit shares it and
+           a site in another unit writes its own.
+        4. Otherwise the plain name.
 
-        F3.5: `device` is the target device the referrer names. A name that
-        a device declared (an interface, which is device-level config) then
-        resolves only inside that device, so a zone on one firewall never
-        points at another firewall's interface resource. When the referrer
-        names no device, such a name resolves only when exactly one device
-        declares it (F3.6). A name no device declared (a template-supplied
-        interface) still resolves through the normal chain.
-
-        F5.5: when no scope in `scopes` holds a declaration and the run declares
-        that scope with `--data-blocks`, the name becomes one read-through `data`
-        block, and the reference is `data.<scope>.<local>.name`. A name that
-        resolves inside the run, or that stays ambiguous under the device rule
-        above, stays a plain string.
+        A name a device declared is one case of this rule: an interface is declared inside the device unit,
+        so a referrer outside that unit keeps the plain name (F3.5, F3.6). The rule reads the referrer's
+        unit through `unit_manifest.facts_of` and the declaring unit through the record `declare_block_name`
+        made, so no second unit rule and no second reference rule exists.
         """
         lookup = key if key is not None else name
-        vs = vsys or ''
-        # A device-declared name (an interface) resolves inside a device or
-        # not at all: check this before the context chain, which is
-        # device-blind (F3.5).
-        declared_by_a_device = any((scope, lookup) in self._device_index
-                                   for scope in scopes)
-        if declared_by_a_device:
-            if device:
-                for scope in scopes:
-                    local = self._device_registry.get((scope, device, lookup))
-                    if local is not None:
-                        return HclRef(f'{scope}.{local}.name')
-                return name
-            # The referrer names no device of its own, so it reached here
-            # through a template that targets one device or several (F3.6).
-            # One device declaring the name is a fact; two is a guess, so the
-            # reference stays a plain name.
-            devices: set = set()
-            for scope in scopes:
-                devices |= self._device_index.get((scope, lookup), set())
-            if len(devices) > 1:
-                return name
-        # Context chain for the referrer: its own context first (a rule in a
-        # device group references that group's objects), then the shared
-        # objects the group inherits, then contextless declarations (zones,
-        # interfaces, virtual routers, VPN objects). Every stop is paired
-        # with the referrer's vsys (F3.2).
-        chain: list[tuple[str, str]] = []
-        for ctx in ([context] if context else []) + ['Shared', '']:
-            pair = (ctx, vs)
-            if pair not in chain:
-                chain.append(pair)
+        unit = unit_manifest.facts_of(referrer)
         for scope in scopes:
-            for ctx, vs_key in chain:
-                local = self._block_registry.get(('resource', scope, ctx, vs_key, lookup))
-                if local is not None:
-                    return HclRef(f'{scope}.{local}.name')
-        # Flat fallback for contextless call sites: the first declaration of
-        # the (scope, name) pair wins (F2.6 robustness).
-        for scope in scopes:
-            local = self._flat_registry.get((scope, lookup))
+            local = self._declaration_index.get((scope, lookup), {}).get(unit)
             if local is not None:
                 return HclRef(f'{scope}.{local}.name')
-        # F5.5: the read-through branch. Nothing in this run declares the name,
-        # so a scope the run opted in (`--data-blocks`) writes one data block.
-        # The block type is the first opted-in scope in this site's lookup
-        # order, which is the order PAN-OS resolves a name in. The block name is
-        # the first block written for the identity (scope, context, vsys, name),
-        # so a second site with the same identity uses the same block and a site
-        # in another context writes its own, because PAN-OS looks in the
-        # referrer's own scope before the shared section.
+        # 2. The name is declared, but by another unit, so it is not reachable from this one.
+        if any(self._declaration_index.get((scope, lookup)) for scope in scopes):
+            return name
+        # 3. the read-through branch.
         for scope in scopes:
             if scope not in self.data_scopes:
                 continue
-            identity = ('data', scope, context or '', vs, lookup)
-            local = self._block_registry.get(identity)
-            if local is None:
-                local = self.declare_block_name(name, scope, context or '', vs,
-                                                device or '', kind='data')
-                self._data_blocks[(scope, local)] = {
+            block = self._data_blocks.get((scope, unit, lookup))
+            if block is None:
+                local = self.declare_block_name(name, scope, referrer, kind='data')
+                block = self._data_blocks[(scope, unit, lookup)] = {
+                    'type': scope,
+                    'local': local,
                     'name': name,
-                    # The location the referrer's identity names: one location
-                    # rule (`location_block`), and the tool does not guess which
-                    # scope holds a name outside the run (F5.5).
-                    'location': self.location_block(scope, {
-                        'name': name,
-                        'device_group': context or '',
-                        'vsys': vs,
-                        'vsys_device': device or '',
-                    }),
+                    # The location the referrer's unit names: one location rule (`location_block`), and the
+                    # tool does not guess which scope holds a name outside the run (F5.5).
+                    'location': self.location_block(scope, {**referrer, 'name': name}),
                 }
-            return HclRef(f'data.{scope}.{local}.name')
+            return HclRef(f'data.{scope}.{block["local"]}.name')
+        # 4.
         return name
 
     def escape_string(self, value: str) -> str:
@@ -2927,39 +2842,6 @@ class TerraformGenerator:
         if obj.get('vsys_device'):
             parts.append(f"device: {obj['vsys_device']}")
         return ', '.join(parts)
-
-    def _template_device(self, template: str) -> str:
-        """Return the one device a template targets, or '' when ambiguous (F3.6).
-
-        Reads the association tables backwards: `templates/entry/<T>/devices`
-        says which devices a template targets, and a device can take a
-        template through a template stack. A template that targets two
-        firewalls names no single device.
-        """
-        if not template:
-            return ''
-        devices = {device for device, names
-                   in self._associations.get('templates', {}).items()
-                   if template in names}
-        for device, stacks in self._associations.get('template_stacks', {}).items():
-            for stack in stacks:
-                if template in self._associations.get('stack_templates', {}).get(stack, []):
-                    devices.add(device)
-        return sorted(devices)[0] if len(devices) == 1 else ''
-
-    def reference_device(self, obj: dict) -> str:
-        """Return the device a reference from `obj` resolves inside (F3.6).
-
-        A device-scoped name (an interface) belongs to one firewall. When the
-        referrer names its own device, that device decides. When it names only
-        a template, the export still decides when that template targets
-        exactly one device; a template that targets two firewalls is
-        ambiguous, so the reference stays a plain name instead of guessing.
-        """
-        device = (obj.get('vsys_device') or '').strip()
-        if device:
-            return device
-        return self._template_device((obj.get('template') or '').strip())
 
     @staticmethod
     def scope_context(obj: dict) -> str:
@@ -3478,7 +3360,7 @@ variable "panos_password" {
                 # location state the same scope. An entry that defines its own scope has no context
                 # above it.
                 placement = next((key for key in SCOPE_PLACEMENT[resource_type] if entry.get(key)), '')
-                local = self.declare_resource_name(entry['name'], resource_type, context=placement)
+                local = self.declare_resource_name(entry['name'], resource_type, entry, context=placement)
                 content += f'resource "{resource_type}" "{local}" {{\n'
                 content += self.location_block(resource_type, entry, local)
                 content += self._scope_name_field(resource_type, entry)
@@ -3552,7 +3434,7 @@ variable "panos_password" {
                 continue
 
             resource_name = self.declare_resource_name(
-                addr['name'], 'panos_address',
+                addr['name'], 'panos_address', addr,
                 context=addr.get('device_group') or '', vsys=addr.get('vsys') or ''
             )
 
@@ -3575,11 +3457,11 @@ variable "panos_password" {
 
             if addr.get('tags'):
                 # F2.6: tags declared in this run become references;
-                # F3.2: resolve in the referrer's (device group, vsys) key
-                ctx = addr.get('device_group')
-                vs = addr.get('vsys') or ''
+                # F3.2, F6.10.2: resolve inside the referrer's own unit
+                addr.get('device_group')
+                addr.get('vsys') or ''
                 tags_str = ', '.join([
-                    self.hcl_value(self.name_ref(t, TAG_SCOPES, context=ctx, vsys=vs, referrer=addr), '')
+                    self.hcl_value(self.name_ref(t, TAG_SCOPES, referrer=addr), '')
                     for t in addr['tags']
                 ])
                 content += f'  tags = [{tags_str}]\n'
@@ -3619,7 +3501,7 @@ variable "panos_password" {
                 continue
 
             resource_name = self.declare_resource_name(
-                grp['name'], 'panos_address_group',
+                grp['name'], 'panos_address_group', grp,
                 context=grp.get('device_group') or '', vsys=grp.get('vsys') or ''
             )
 
@@ -3632,11 +3514,11 @@ variable "panos_password" {
 
             if static_members:
                 # F2.6: members declared in this run become references;
-                # F3.2: resolve in the referrer's (device group, vsys) key
-                ctx = grp.get('device_group')
-                vs = grp.get('vsys') or ''
+                # F3.2, F6.10.2: resolve inside the referrer's own unit
+                grp.get('device_group')
+                grp.get('vsys') or ''
                 members_str = ', '.join([
-                    self.hcl_value(self.name_ref(m, ADDR_SCOPES, context=ctx, vsys=vs, referrer=grp), '')
+                    self.hcl_value(self.name_ref(m, ADDR_SCOPES, referrer=grp), '')
                     for m in static_members
                 ])
                 content += f'  static = [{members_str}]\n'
@@ -3670,7 +3552,7 @@ variable "panos_password" {
 
         for svc in services:
             resource_name = self.declare_resource_name(
-                svc['name'], 'panos_service',
+                svc['name'], 'panos_service', svc,
                 context=svc.get('device_group') or '', vsys=svc.get('vsys') or ''
             )
 
@@ -3706,11 +3588,11 @@ variable "panos_password" {
 
             if svc.get('tags'):
                 # F2.6: tags declared in this run become references;
-                # F3.2: resolve in the referrer's (device group, vsys) key
-                ctx = svc.get('device_group')
-                vs = svc.get('vsys') or ''
+                # F3.2, F6.10.2: resolve inside the referrer's own unit
+                svc.get('device_group')
+                svc.get('vsys') or ''
                 tags_str = ', '.join([
-                    self.hcl_value(self.name_ref(t, TAG_SCOPES, context=ctx, vsys=vs, referrer=svc), '')
+                    self.hcl_value(self.name_ref(t, TAG_SCOPES, referrer=svc), '')
                     for t in svc['tags']
                 ])
                 content += f'  tags = [{tags_str}]\n'
@@ -3759,7 +3641,7 @@ variable "panos_password" {
 
         for grp in groups:
             resource_name = self.declare_resource_name(
-                grp['name'], 'panos_service_group',
+                grp['name'], 'panos_service_group', grp,
                 context=grp.get('device_group') or '', vsys=grp.get('vsys') or ''
             )
 
@@ -3769,11 +3651,11 @@ variable "panos_password" {
 
             if grp.get('members'):
                 # F2.6: members declared in this run become references;
-                # F3.2: resolve in the referrer's (device group, vsys) key
-                ctx = grp.get('device_group')
-                vs = grp.get('vsys') or ''
+                # F3.2, F6.10.2: resolve inside the referrer's own unit
+                grp.get('device_group')
+                grp.get('vsys') or ''
                 members_str = ', '.join([
-                    self.hcl_value(self.name_ref(m, SERVICE_SCOPES, context=ctx, vsys=vs, referrer=grp), '')
+                    self.hcl_value(self.name_ref(m, SERVICE_SCOPES, referrer=grp), '')
                     for m in grp['members']
                 ])
                 content += f'  members = [{members_str}]\n'
@@ -3795,7 +3677,7 @@ variable "panos_password" {
 
         for tag in tags:
             resource_name = self.declare_resource_name(
-                tag['name'], 'panos_administrative_tag',
+                tag['name'], 'panos_administrative_tag', tag,
                 context=tag.get('device_group') or '', vsys=tag.get('vsys') or ''
             )
 
@@ -3833,7 +3715,7 @@ variable "panos_password" {
 
         for cat in categories:
             resource_name = self.declare_resource_name(
-                cat['name'], 'panos_custom_url_category',
+                cat['name'], 'panos_custom_url_category', cat,
                 context=cat.get('device_group') or '', vsys=cat.get('vsys') or ''
             )
 
@@ -3865,7 +3747,7 @@ variable "panos_password" {
 
         for ag in app_groups:
             resource_name = self.declare_resource_name(
-                ag['name'], 'panos_application_group',
+                ag['name'], 'panos_application_group', ag,
                 context=ag.get('device_group') or '', vsys=ag.get('vsys') or ''
             )
 
@@ -3921,7 +3803,7 @@ variable "panos_password" {
 
         for ext_list in ext_lists:
             resource_name = self.declare_resource_name(
-                ext_list['name'], 'panos_external_dynamic_list',
+                ext_list['name'], 'panos_external_dynamic_list', ext_list,
                 context=ext_list.get('device_group') or '', vsys=ext_list.get('vsys') or ''
             )
 
@@ -4004,7 +3886,7 @@ variable "panos_password" {
             prev_resource_name: Optional[str] = None
             for rule in chain:
                 resource_name = self.declare_resource_name(
-                    rule['name'], 'panos_security_policy_rules',
+                    rule['name'], 'panos_security_policy_rules', rule,
                     context=rule.get('device_group') or '', vsys=rule.get('vsys') or ''
                 )
 
@@ -4020,31 +3902,31 @@ variable "panos_password" {
                     rule_obj['description'] = rule['description']
                 # F2.6: zones, addresses and services declared in this run
                 # become references; the rest stay brown-field strings
-                # F3.2: resolve in the referrer's (device group, vsys) key
-                ctx = rule.get('device_group')
-                vs = rule.get('vsys') or ''
+                # F3.2, F6.10.2: resolve inside the referrer's own unit
+                rule.get('device_group')
+                rule.get('vsys') or ''
                 if rule.get('source_zones'):
                     rule_obj['source_zones'] = [
-                        self.name_ref(z, ZONE_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        self.name_ref(z, ZONE_SCOPES, referrer=rule)
                         for z in rule['source_zones']]
                 if rule.get('source_addresses'):
                     rule_obj['source_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
                         for a in rule['source_addresses']]
                 if rule.get('destination_zones'):
                     rule_obj['destination_zones'] = [
-                        self.name_ref(z, ZONE_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        self.name_ref(z, ZONE_SCOPES, referrer=rule)
                         for z in rule['destination_zones']]
                 if rule.get('destination_addresses'):
                     rule_obj['destination_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
                         for a in rule['destination_addresses']]
                 if rule.get('applications'):
                     # Built-in PAN-OS app names: no managed scope, never wired
                     rule_obj['applications'] = list(rule['applications'])
                 if rule.get('services'):
                     rule_obj['services'] = [
-                        self.name_ref(s, SERVICE_SCOPES, context=ctx, vsys=vs, referrer=rule) for s in rule['services']]
+                        self.name_ref(s, SERVICE_SCOPES, referrer=rule) for s in rule['services']]
                 rule_obj['action'] = rule.get('action', 'allow')
                 if rule.get('log_start'):
                     rule_obj['log_start'] = True
@@ -4081,7 +3963,7 @@ variable "panos_password" {
             prev_resource_name: Optional[str] = None
             for rule in chain:
                 resource_name = self.declare_resource_name(
-                    rule['name'], 'panos_nat_policy_rules',
+                    rule['name'], 'panos_nat_policy_rules', rule,
                     context=rule.get('device_group') or '', vsys=rule.get('vsys') or ''
                 )
 
@@ -4097,28 +3979,28 @@ variable "panos_password" {
                     rule_obj['description'] = rule['description']
                 # F2.6: zones, addresses and services declared in this run
                 # become references; the rest stay brown-field strings
-                # F3.2: resolve in the referrer's (device group, vsys) key
-                ctx = rule.get('device_group')
-                vs = rule.get('vsys') or ''
+                # F3.2, F6.10.2: resolve inside the referrer's own unit
+                rule.get('device_group')
+                rule.get('vsys') or ''
                 if rule.get('source_zones'):
                     rule_obj['source_zones'] = [
-                        self.name_ref(z, ZONE_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        self.name_ref(z, ZONE_SCOPES, referrer=rule)
                         for z in rule['source_zones']]
                 # v2 destination_zone is a list
                 if rule.get('destination_zone'):
                     rule_obj['destination_zone'] = [
-                        self.name_ref(rule['destination_zone'], ZONE_SCOPES, context=ctx, vsys=vs, referrer=rule)]
+                        self.name_ref(rule['destination_zone'], ZONE_SCOPES, referrer=rule)]
                 if rule.get('source_addresses'):
                     rule_obj['source_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
                         for a in rule['source_addresses']]
                 if rule.get('destination_addresses'):
                     rule_obj['destination_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
                         for a in rule['destination_addresses']]
                 if rule.get('service'):
                     rule_obj['service'] = self.name_ref(
-                        rule['service'], SERVICE_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        rule['service'], SERVICE_SCOPES, referrer=rule)
                 if rule.get('disabled'):
                     rule_obj['disabled'] = True
 
@@ -4132,12 +4014,12 @@ variable "panos_password" {
                     if st_type == 'dynamic_ip_and_port' and st_addr:
                         # The translation address is the egress interface
                         # (F2.6: reference when declared in this run;
-                        # F3.2: resolve in the rule's vsys key)
+                        # F3.2, F6.10.2: resolve inside the rule's unit)
                         rule_obj['source_translation'] = {
                             st_type: {'interface_address': {
                                 'interface': self.name_ref(
                                     st_addr[0], INTERFACE_SCOPES,
-                                    context=ctx, vsys=vs, referrer=rule)}}}
+                                    referrer=rule)}}}
                     elif st_type == 'dynamic_ip' and st_addr:
                         rule_obj['source_translation'] = {
                             st_type: {'translated_address': list(st_addr)}}
@@ -4187,7 +4069,7 @@ variable "panos_password" {
             for rule in chain:
                 device_group = rule.get('device_group') or 'Shared'
                 resource_name = self.declare_resource_name(
-                    rule['name'], 'panos_decryption_policy_rules',
+                    rule['name'], 'panos_decryption_policy_rules', rule,
                     context=device_group, vsys=rule.get('vsys') or ''
                 )
 
@@ -4202,24 +4084,24 @@ variable "panos_password" {
                     rule_obj['description'] = rule['description']
                 # F2.6: zones, addresses and services declared in this run
                 # become references; the rest stay brown-field strings
-                # F3.2: resolve in the referrer's (device group, vsys) key
-                ctx = rule.get('device_group')
-                vs = rule.get('vsys') or ''
+                # F3.2, F6.10.2: resolve inside the referrer's own unit
+                rule.get('device_group')
+                rule.get('vsys') or ''
                 if rule.get('source_zones'):
                     rule_obj['source_zones'] = [
-                        self.name_ref(z, ZONE_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        self.name_ref(z, ZONE_SCOPES, referrer=rule)
                         for z in rule['source_zones']]
                 if rule.get('destination_zones'):
                     rule_obj['destination_zones'] = [
-                        self.name_ref(z, ZONE_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        self.name_ref(z, ZONE_SCOPES, referrer=rule)
                         for z in rule['destination_zones']]
                 if rule.get('source_addresses'):
                     rule_obj['source_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
                         for a in rule['source_addresses']]
                 if rule.get('destination_addresses'):
                     rule_obj['destination_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
                         for a in rule['destination_addresses']]
                 if rule.get('source_users'):
                     rule_obj['source_user'] = list(rule['source_users'])
@@ -4227,7 +4109,7 @@ variable "panos_password" {
                     rule_obj['category'] = list(rule['categories'])
                 if rule.get('services'):
                     rule_obj['services'] = [
-                        self.name_ref(s, SERVICE_SCOPES, context=ctx, vsys=vs, referrer=rule) for s in rule['services']]
+                        self.name_ref(s, SERVICE_SCOPES, referrer=rule) for s in rule['services']]
                 # F2.9: the v2 action is an enum (no-decrypt | decrypt |
                 # decrypt-and-forward) and the inspection mode is a separate
                 # type block. Modern PAN-OS exports carry both; legacy PAN-OS
@@ -4286,7 +4168,7 @@ variable "panos_password" {
             for rule in chain:
                 device_group = rule.get('device_group') or 'Shared'
                 resource_name = self.declare_resource_name(
-                    rule['name'], 'panos_pbf_policy_rules',
+                    rule['name'], 'panos_pbf_policy_rules', rule,
                     context=device_group, vsys=rule.get('vsys') or ''
                 )
 
@@ -4300,29 +4182,29 @@ variable "panos_password" {
                 if rule.get('description'):
                     rule_obj['description'] = rule['description']
                 # v2 models the PBF source as from { zone = [...] }
-                # F3.2: resolve in the referrer's (device group, vsys) key
-                ctx = rule.get('device_group')
-                vs = rule.get('vsys') or ''
+                # F3.2, F6.10.2: resolve inside the referrer's own unit
+                rule.get('device_group')
+                rule.get('vsys') or ''
                 if rule.get('source_zones'):
                     rule_obj['from'] = {
                         'zone': [
-                            self.name_ref(z, ZONE_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                            self.name_ref(z, ZONE_SCOPES, referrer=rule)
                             for z in rule['source_zones']]}
                 if rule.get('source_addresses'):
                     rule_obj['source_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
                         for a in rule['source_addresses']]
                 if rule.get('source_users'):
                     rule_obj['source_users'] = list(rule['source_users'])
                 if rule.get('destination_addresses'):
                     rule_obj['destination_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, context=ctx, vsys=vs, referrer=rule)
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
                         for a in rule['destination_addresses']]
                 if rule.get('applications'):
                     rule_obj['applications'] = list(rule['applications'])
                 if rule.get('services'):
                     rule_obj['services'] = [
-                        self.name_ref(s, SERVICE_SCOPES, context=ctx, vsys=vs, referrer=rule) for s in rule['services']]
+                        self.name_ref(s, SERVICE_SCOPES, referrer=rule) for s in rule['services']]
                 # Single-choice action object (v2 names use underscores)
                 action = rule.get('action')
                 if action:
@@ -4390,7 +4272,7 @@ variable "panos_password" {
             # own config, so the naming context is the declared template, else
             # the declared device (scope_context).
             resource_name = self.declare_resource_name(
-                prof['name'], 'panos_monitor_profile',
+                prof['name'], 'panos_monitor_profile', prof,
                 context=self.scope_context(prof), vsys=prof.get('vsys') or ''
             )
             content += f'resource "panos_monitor_profile" "{resource_name}" {{\n'
@@ -4423,7 +4305,7 @@ variable "panos_password" {
 
         for zone in zones:
             resource_name = self.declare_resource_name(
-                zone['name'], 'panos_zone',
+                zone['name'], 'panos_zone', zone,
                 context=self.scope_context(zone), vsys=zone.get('vsys') or ''
             )
 
@@ -4437,10 +4319,10 @@ variable "panos_password" {
             network: dict = {}
             if zone.get('interfaces'):
                 # F2.6: interfaces declared in this run become references;
-                # F3.2: resolve in the zone's vsys key
+                # F3.2, F6.10.2: resolve inside the zone's unit
                 network[key] = [
-                    self.name_ref(i, INTERFACE_SCOPES, vsys=zone.get('vsys') or '',
-                                  device=self.reference_device(zone), referrer=zone)
+                    self.name_ref(i, INTERFACE_SCOPES,
+                                  referrer=zone)
                     for i in zone['interfaces']]
             if zone.get('zone_protection_profile'):
                 network['zone_protection_profile'] = zone['zone_protection_profile']
@@ -4467,7 +4349,7 @@ variable "panos_password" {
 
         for router in vrouters:
             resource_name = self.declare_resource_name(
-                router['name'], 'panos_virtual_router',
+                router['name'], 'panos_virtual_router', router,
                 context=self.scope_context(router), vsys=router.get('vsys') or ''
             )
 
@@ -4490,11 +4372,11 @@ variable "panos_password" {
             # v2 interfaces is a flat string list
             if router.get('interfaces'):
                 # F2.6: interfaces declared in this run become references;
-                # F3.2: resolve in the router's vsys key
+                # F3.2, F6.10.2: resolve inside the router's unit
                 ifaces_str = ', '.join([
                     self.hcl_value(self.name_ref(
-                        i, INTERFACE_SCOPES, vsys=router.get('vsys') or '',
-                        device=self.reference_device(router), referrer=router), '')
+                        i, INTERFACE_SCOPES,
+                        referrer=router), '')
                     for i in router['interfaces']
                 ])
                 content += f'  interfaces = [{ifaces_str}]\n'
@@ -4514,7 +4396,7 @@ variable "panos_password" {
                 for route in router['static_routes']:
                     route_key = f"{resource_name}_{route['name']}"
                     route_resource = self.declare_resource_name(
-                        route_key, 'panos_virtual_router_static_route_ipv4',
+                        route_key, 'panos_virtual_router_static_route_ipv4', router,
                         context=self.scope_context(router), vsys=router.get('vsys') or ''
                     )
 
@@ -4586,7 +4468,6 @@ variable "panos_password" {
         mode = iface.get('mode')
         context = self.scope_context(iface)
         vsys = iface.get('vsys') or ''
-        device = iface.get('vsys_device') or ''
         scope_sub = 'panos_ethernet_layer3_subinterface'
         parent, dot, tag_str = name.partition('.')
 
@@ -4594,15 +4475,15 @@ variable "panos_password" {
         if dot and mode == 'layer3':
             scope = scope_sub
             resource_name = self.declare_resource_name(
-                name, scope, context=context, vsys=vsys, device=device)
+                name, scope, iface, context=context, vsys=vsys)
             out = f'resource "{scope}" "{resource_name}" {{\n'
             out += self.location_block(scope, iface, resource_name)
             out += f'  name = {self.escape_string(name)}\n'
             # F2.6: the parent is an interface declared in this run
             # (or a brown-field interface outside the export);
-            # F3.2: resolve in the subinterface's vsys key
-            parent_ref = self.name_ref(parent, IFACE_SCOPES, context=context,
-                                       vsys=vsys, device=device, referrer=iface)
+            # F3.2, F6.10.2: resolve inside the subinterface's unit
+            parent_ref = self.name_ref(parent, IFACE_SCOPES,
+                                       referrer=iface)
             out += f"  parent = {self.hcl_value(parent_ref, '')}\n"
             if tag_str.isdigit():
                 out += f'  tag = {int(tag_str)}\n'
@@ -4615,7 +4496,7 @@ variable "panos_password" {
         # Physical interface
         scope = 'panos_ethernet_interface'
         resource_name = self.declare_resource_name(
-            name, scope, context=context, vsys=vsys, device=device)
+            name, scope, iface, context=context, vsys=vsys)
         out = f'resource "{scope}" "{resource_name}" {{\n'
         out += self.location_block(scope, iface, resource_name)
         out += f'  name = {self.escape_string(name)}\n'
@@ -4649,16 +4530,16 @@ variable "panos_password" {
         if mode == 'layer3' and iface.get('ip_addresses'):
             sub_name = f'{name}.0'
             sub_resource = self.declare_resource_name(
-                sub_name, scope_sub, context=context, vsys=vsys, device=device)
+                sub_name, scope_sub, iface, context=context, vsys=vsys)
             out += f'resource "{scope_sub}" "{sub_resource}" {{\n'
             # The subinterface is its own object, so reports name it by its
             # own name (the location itself comes from the same source entry).
             out += self.location_block(scope_sub, {**iface, 'name': sub_name}, sub_resource)
             out += f'  name = {self.escape_string(sub_name)}\n'
             # F2.6: the parent is the physical interface declared above;
-            # F3.2: resolve in the subinterface's vsys key
-            parent_ref = self.name_ref(name, IFACE_SCOPES, context=context,
-                                       vsys=vsys, device=device, referrer=iface)
+            # F3.2, F6.10.2: resolve inside the subinterface's unit
+            parent_ref = self.name_ref(name, IFACE_SCOPES,
+                                       referrer=iface)
             out += f"  parent = {self.hcl_value(parent_ref, '')}\n"
             out += '  tag = 0\n'
             out += self._ip_list_line(iface)
@@ -4671,14 +4552,13 @@ variable "panos_password" {
         name = iface['name']
         context = self.scope_context(iface)
         vsys = iface.get('vsys') or ''
-        device = iface.get('vsys_device') or ''
         # An aggregate entry whose name already carries a unit (ae1.101) is a
         # layer-3 subinterface of the aggregate group; the group entry itself
         # has no ip, parent, or tag in the schema.
         if iface['type'] == 'aggregate' and '.' in name:
             scope = 'panos_aggregate_layer3_subinterface'
         resource_name = self.declare_resource_name(
-            name, scope, context=context, vsys=vsys, device=device)
+            name, scope, iface, context=context, vsys=vsys)
         out = f'resource "{scope}" "{resource_name}" {{\n'
         out += self.location_block(scope, iface, resource_name)
         out += f'  name = {self.escape_string(name)}\n'
@@ -4692,8 +4572,8 @@ variable "panos_password" {
             return out
         parent = iface.get('parent')
         if parent:
-            parent_ref = self.name_ref(parent, IFACE_SCOPES, context=context,
-                                       vsys=vsys, device=device, referrer=iface)
+            parent_ref = self.name_ref(parent, IFACE_SCOPES,
+                                       referrer=iface)
             out += f"  parent = {self.hcl_value(parent_ref, '')}\n"
         # Only the layer-3 subinterface types carry a tag in the schema.
         tag = iface.get('tag')
@@ -4828,7 +4708,7 @@ variable "panos_password" {
             content += '# Antivirus Profiles\n'
             for prof in profiles['antivirus']:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_antivirus_security_profile',
+                    prof['name'], 'panos_antivirus_security_profile', prof,
                     # F3.1: contextless. This stub emits no location, so
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
@@ -4843,7 +4723,7 @@ variable "panos_password" {
             content += '# Vulnerability Protection Profiles\n'
             for prof in profiles['vulnerability']:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_vulnerability_security_profile',
+                    prof['name'], 'panos_vulnerability_security_profile', prof,
                     # F3.1: contextless. This stub emits no location, so
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
@@ -4858,7 +4738,7 @@ variable "panos_password" {
             content += '# Anti-Spyware Profiles\n'
             for prof in profiles['anti_spyware']:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_anti_spyware_security_profile',
+                    prof['name'], 'panos_anti_spyware_security_profile', prof,
                     # F3.1: contextless. This stub emits no location, so
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
@@ -4873,7 +4753,7 @@ variable "panos_password" {
             content += '# URL Filtering Profiles\n'
             for prof in profiles['url_filtering']:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_url_filtering_security_profile',
+                    prof['name'], 'panos_url_filtering_security_profile', prof,
                     # F3.1: contextless. This stub emits no location, so
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
@@ -4888,7 +4768,7 @@ variable "panos_password" {
             content += '# File Blocking Profiles\n'
             for prof in profiles['file_blocking']:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_file_blocking_security_profile',
+                    prof['name'], 'panos_file_blocking_security_profile', prof,
                     # F3.1: contextless. This stub emits no location, so
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
@@ -4903,7 +4783,7 @@ variable "panos_password" {
             content += '# WildFire Analysis Profiles\n'
             for prof in profiles['wildfire_analysis']:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_wildfire_analysis_security_profile',
+                    prof['name'], 'panos_wildfire_analysis_security_profile', prof,
                     # F3.1: contextless. This stub emits no location, so
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
@@ -4932,7 +4812,7 @@ variable "panos_password" {
 
         for grp in groups:
             resource_name = self.declare_resource_name(
-                grp['name'], 'panos_security_profile_group',
+                grp['name'], 'panos_security_profile_group', grp,
                 context=grp.get('device_group') or '', vsys=grp.get('vsys') or ''
             )
 
@@ -5367,7 +5247,7 @@ variable "panos_password" {
             content += '# IKE Crypto Profiles\n\n'
             for profile in ike_profiles:
                 resource_name = self.declare_resource_name(
-                    f"ike_profile_{profile['name']}", 'panos_ike_crypto_profile',
+                    f"ike_profile_{profile['name']}", 'panos_ike_crypto_profile', profile,
                     context=self.scope_context(profile), vsys=profile.get('vsys') or ''
                 )
                 content += f'resource "panos_ike_crypto_profile" "{resource_name}" {{\n'
@@ -5403,7 +5283,7 @@ variable "panos_password" {
             for profile in ipsec_profiles:
                 profile_key = f"ipsec_profile_{profile['name']}"
                 resource_name = self.declare_resource_name(
-                    profile_key, 'panos_ipsec_crypto_profile',
+                    profile_key, 'panos_ipsec_crypto_profile', profile,
                     context=self.scope_context(profile), vsys=profile.get('vsys') or ''
                 )
                 content += f'resource "panos_ipsec_crypto_profile" "{resource_name}" {{\n'
@@ -5449,7 +5329,7 @@ variable "panos_password" {
 
             for gw in ike_gateways:
                 resource_name = self.declare_resource_name(
-                    f"ike_gw_{gw['name']}", 'panos_ike_gateway',
+                    f"ike_gw_{gw['name']}", 'panos_ike_gateway', gw,
                     context=self.scope_context(gw), vsys=gw.get('vsys') or ''
                 )
                 content += f'resource "panos_ike_gateway" "{resource_name}" {{\n'
@@ -5464,10 +5344,10 @@ variable "panos_password" {
                     if gw.get('ike_crypto_profile'):
                         ike_key = f"ike_profile_{gw['ike_crypto_profile']}"
                         # F2.6: reference when declared in this run, else
-                        # plain name; F3.2: resolve in the gateway's vsys key
+                        # plain name; F3.2, F6.10.2: resolve inside the gateway's unit
                         ver_obj['ike_crypto_profile'] = self.name_ref(
                             gw['ike_crypto_profile'], IKE_CRYPTO_SCOPES,
-                            key=ike_key, vsys=gw.get('vsys') or '', referrer=gw)
+                            key=ike_key, referrer=gw)
                     if ver_obj:
                         proto_obj[version] = ver_obj
                     content += f'  protocol = {self.hcl_value(proto_obj)}\n'
@@ -5479,20 +5359,18 @@ variable "panos_password" {
 
                 if gw.get('local_address_interface'):
                     # F2.6: reference when the interface is in this run;
-                    # F3.2: resolve in the gateway's vsys key
+                    # F3.2, F6.10.2: resolve inside the gateway's unit
                     iface_ref = self.name_ref(
                         gw['local_address_interface'], INTERFACE_SCOPES,
-                        vsys=gw.get('vsys') or '',
-                        device=self.reference_device(gw), referrer=gw)
+                        referrer=gw)
                     content += f'  local_address = {self.hcl_value({"interface": iface_ref})}\n'
                 elif gw.get('local_address'):
                     # Heuristic: dotted-quad values are IPs, otherwise
-                    # interfaces; F3.2: resolve in the gateway's vsys key
+                    # interfaces; F3.2, F6.10.2: resolve inside the gateway's unit
                     local = gw['local_address']
                     key = 'ip' if self._looks_like_ip(local) else 'interface'
                     value = (self.name_ref(local, INTERFACE_SCOPES,
-                                           vsys=gw.get('vsys') or '',
-                                           device=self.reference_device(gw), referrer=gw)
+                                           referrer=gw)
                              if key == 'interface' else local)
                     content += f'  local_address = {self.hcl_value({key: value})}\n'
 
@@ -5519,7 +5397,7 @@ variable "panos_password" {
                     continue
 
                 resource_name = self.declare_resource_name(
-                    f"tunnel_{tunnel['name']}", 'panos_ipsec_tunnel',
+                    f"tunnel_{tunnel['name']}", 'panos_ipsec_tunnel', tunnel,
                     context=self.scope_context(tunnel), vsys=tunnel.get('vsys') or ''
                 )
                 content += f'resource "panos_ipsec_tunnel" "{resource_name}" {{\n'
@@ -5534,18 +5412,18 @@ variable "panos_password" {
                 if tunnel.get('ike_gateway'):
                     # F2.6: reference when the gateway is in this run,
                     # else a plain brown-field name (never a phantom
-                    # resource); F3.2: resolve in the tunnel's vsys key
+                    # resource); F3.2, F6.10.2: resolve inside the tunnel's unit
                     auto_key['ike_gateway'] = [{'name': self.name_ref(
                         tunnel['ike_gateway'], IKE_GATEWAY_SCOPES,
                         key=f"ike_gw_{tunnel['ike_gateway']}",
-                        vsys=tunnel.get('vsys') or '', referrer=tunnel)}]
+                        referrer=tunnel)}]
                 if tunnel.get('ipsec_crypto_profile'):
                     ipsec_key = f"ipsec_profile_{tunnel['ipsec_crypto_profile']}"
                     # F2.6: reference when declared in this run, else
-                    # plain name; F3.2: resolve in the tunnel's vsys key
+                    # plain name; F3.2, F6.10.2: resolve inside the tunnel's unit
                     auto_key['ipsec_crypto_profile'] = self.name_ref(
                         tunnel['ipsec_crypto_profile'], IPSEC_CRYPTO_SCOPES,
-                        key=ipsec_key, vsys=tunnel.get('vsys') or '', referrer=tunnel)
+                        key=ipsec_key, referrer=tunnel)
 
                 # v2 merges proxy IDs into the tunnel as auto_key proxy_id entries
                 proxy_list = []
@@ -5742,9 +5620,9 @@ variable "panos_password" {
         content += ('# Each block names an entry this run did not read. A `data` block resolves\n'
                     '# at plan time, so the plan reads the device and fails when the entry is\n'
                     '# not present in the location the block names.\n\n')
-        for rtype, local in sorted(self._data_blocks):
-            block = self._data_blocks[(rtype, local)]
-            content += f'data "{rtype}" "{local}" {{\n'
+        for block in sorted(self._data_blocks.values(),
+                            key=lambda block: (block['type'], block['local'])):
+            content += f'data "{block["type"]}" "{block["local"]}" {{\n'
             content += f'  name = {self.escape_string(block["name"])}\n\n'
             content += block['location']
             content += '}\n\n'

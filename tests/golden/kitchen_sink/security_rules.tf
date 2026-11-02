@@ -17,7 +17,7 @@ resource "panos_security_policy_rules" "allow_web_traffic_59e6c98e" {
       source_zones = [ "Trust" ]
       source_addresses = [ "Internal-Network" ]
       destination_zones = [ "DMZ" ]
-      destination_addresses = [ panos_address_group.web_servers_526fa33a.name ]
+      destination_addresses = [ "Web-Servers" ]
       applications = [ "web-browsing", "ssl" ]
       services = [ "application-default" ]
       action = "allow"

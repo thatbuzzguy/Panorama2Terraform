@@ -58,12 +58,24 @@ MECHANISM_TOKENS = ('outputs.tf', 'remote_state', 'terraform_remote_state')
 # by. A fixture that starts producing an edge must be added here in the same change, so no fixture can
 # become a silent false positive (AC-1.1).
 CORPUS_EDGES = {
+    'dependency_wiring.xml': [
+        ('device1_e22d98e2', 'vsys1_a62792be', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('device1_e22d98e2', 'vsys1_a62792be', 'panos_zone', 'zone-in'),
+        ('device1_e22d98e2', 'vsys1_a62792be', 'panos_zone', 'zone-out'),
+    ],
     KITCHEN: [
         ('fw_2_example_com_5cef6fb6', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('fw_template_6b469b29', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('fw_template_6b469b29', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/2'),
+        ('production_dg_f7597196', 'shared_be5be69f', 'panos_address_group', 'Web-Servers'),
         ('vsys1_53549b38', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('vsys1_6b05ad4a', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('vsys1_6b05ad4a', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/2'),
         ('vsys2_803b06c0', 'shared_0bc98741', 'panos_ethernet_interface', 'ethernet1/2'),
     ],
     MULTI: [
+        ('dc_networks_ad53ac42', 'fw_1_example_com_21a67a9f', 'panos_ethernet_interface', 'ethernet1/1'),
+        ('dc_networks_ad53ac42', 'fw_2_example_com_5cef6fb6', 'panos_ethernet_interface', 'ethernet1/1'),
         ('hq_networks_0491f4e3', 'fw_1_example_com_21a67a9f', 'panos_ethernet_interface', 'ethernet1/1'),
         ('hq_networks_0491f4e3', 'fw_2_example_com_5cef6fb6', 'panos_ethernet_interface', 'ethernet1/1'),
     ],
@@ -72,6 +84,11 @@ CORPUS_EDGES = {
          'ethernet1/2'),
         ('fw_b_example_com_f80a1db9', 'fw_a_example_com_4daa3d43', 'panos_ethernet_interface',
          'ethernet1/1'),
+    ],
+    'policy_order.xml': [
+        ('alpha_dg_4a3abf61', 'vsys1_6b05ad4a', 'panos_address', 'alpha-dst'),
+        ('alpha_dg_4a3abf61', 'vsys1_6b05ad4a', 'panos_address', 'alpha-src'),
+        ('alpha_dg_4a3abf61', 'vsys1_6b05ad4a', 'panos_service', 'alpha-svc'),
     ],
 }
 
@@ -183,7 +200,7 @@ def test_the_record_is_one_row_per_edge_the_data_can_name(converter_module, tmp_
         if edge_rows:
             edges[path.name] = [tuple(row[key] for key in reference_edges.FIELD_ORDER) for row in edge_rows]
     assert edges == CORPUS_EDGES, edges
-    assert sum(len(rows) for rows in edges.values()) == 7
+    assert sum(len(rows) for rows in edges.values()) == 20
     pairs = [pair for rows in edges.values() for pair in rows]
     assert len(pairs) == len(set(pairs)), 'one row per pair'
     for fixture, expected in CORPUS_EDGES.items():
@@ -231,7 +248,7 @@ def test_a_name_no_unit_declares_writes_no_row_and_stays_in_the_manifest(convert
     out = tmp_path / 'out'
     _owners, edge_rows, manifest_rows = _sets(converter_module, FIXTURES_DIR / GROUPING, out)
     recorded = {name for row in manifest_rows for name in row['references']}
-    assert recorded, 'the grouping fixture records names the rule resolved outside the run'
+    assert recorded, 'the grouping fixture records names the rule could not resolve inside the referrers unit'
     assert not edge_rows, 'no unit in the run declares those names'
     assert not (out / RECORD).is_file(), 'a record with no row is not written'
     # No ownership row covers a recorded name, so the join finds no pair to name.
@@ -454,9 +471,13 @@ def test_the_shallower_scope_comes_before_the_deeper_scope_inside_it(converter_m
     device = _row(rows, 'fw_2_example_com_114d91b6')
     assert reference_edges.LEVEL_KEYS == ('device_group', 'template', 'vsys_device')
     assert shared['after'] == []
-    assert template['after'] == [shared['directory']]
-    # `after` is sorted, so it reads as the chain from the outermost scope in.
+    # The device the template names has no edge, so its `after` is the level chain read from the
+    # outermost scope in.
     assert device['after'] == sorted([shared['directory'], template['directory']])
+    # F6.10.2: the template resolves nothing inside itself here, so its `after` is the level chain plus
+    # the edge base, the two device units that own the interface name it uses.
+    assert template['after'] == sorted([shared['directory'], 'fw_1_example_com_21a67a9f',
+                                        'fw_2_example_com_5cef6fb6'])
     assert shared['rank'] < template['rank'] < device['rank'], (shared, template, device)
 
 

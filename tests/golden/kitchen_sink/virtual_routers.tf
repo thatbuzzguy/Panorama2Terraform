@@ -117,7 +117,7 @@ resource "panos_virtual_router" "default_c03bed95" {
     }
   }
   name = "default"
-  interfaces = [panos_ethernet_interface.ethernet1_1_d74b05bd.name, panos_ethernet_interface.ethernet1_2_ff1cc5a5.name]
+  interfaces = ["ethernet1/1", "ethernet1/2"]
 }
 
 resource "panos_virtual_router_static_route_ipv4" "default_c03bed95_default_gw_96fe6d2d" {
@@ -158,7 +158,7 @@ resource "panos_virtual_router" "lr_main_2258b30f" {
     }
   }
   name = "lr-main"
-  interfaces = [panos_ethernet_interface.ethernet1_1_d74b05bd.name]
+  interfaces = ["ethernet1/1"]
 }
 
 resource "panos_virtual_router_static_route_ipv4" "lr_main_2258b30f_lr_default_2029ebbd" {

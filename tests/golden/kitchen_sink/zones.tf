@@ -8,7 +8,7 @@ resource "panos_zone" "trust_c2dcfb60" {
   }
   name = "trust"
   network = {
-    layer3 = [ panos_ethernet_interface.ethernet1_1_d74b05bd.name, panos_ethernet_interface.ethernet1_2_ff1cc5a5.name ]
+    layer3 = [ "ethernet1/1", "ethernet1/2" ]
     zone_protection_profile = "ZPP-Default"
   }
 }

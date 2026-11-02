@@ -114,29 +114,6 @@ Completed work is not recorded here; the git history and the owner document hold
   F3.6 left them alone for that reason. When real profile bodies land, give
   them their device group or template context and regenerate the digests.
 
-- Reference resolution order (F3.2): the keyed chain is
-  (referrer context, referrer vsys), then (Shared, referrer vsys), then
-  (contextless, referrer vsys), then the flat first-declaration index. The
-  flat index is not vsys-aware, so a name that exists only in another vsys
-  still resolves through it. F3.6 gave the template-scoped types a real
-  context (their template, else their device), so the flat index is no
-  longer their primary route; it stays for call sites that pass no vsys.
-
-- Device-aware resolution (F3.5, F3.6) covers only names a device declared,
-  and only the interface generators declare a device. A name a device
-  declared resolves inside that device; a deviceless referrer resolves it
-  only when exactly one device declares it, and keeps the plain name when
-  several do. A zone, address or profile name that repeats on two firewalls
-  still resolves first-wins through the context chain. Extend the rule when
-  a generator declares per-device objects other than interfaces.
-
-- A template that targets two or more devices cannot say which device an
-  unqualified interface name means, so a virtual router or logical router in
-  such a template keeps `interfaces = ["ethernet1/1"]` as strings instead of
-  referencing one firewall's resource (F3.6). The fix is per-target-device
-  emission of the template's config, not a guess; it needs a fixture that
-  shows how a real export distinguishes the two.
-
 - `location.template_stack` is never emitted (F3.6). A stack holds device and
   template members, not config, so nothing in an export is placed in one. If
   an export ever nests config under a stack, report it rather than placing it

@@ -134,16 +134,16 @@ python3 panorama_to_terraform.py export.xml --data-blocks panos_address,panos_zo
 - `--data-blocks` names a scope the reference rule resolves against, and its provider data source
   must declare `name`. An empty value, a scope outside the reference sets, or a no-name scope is an
   argument error (exit 2).
-- A reference that resolves inside the run stays a `.name` reference to the resource. Only a name the
-  run cannot resolve becomes one `data` block, one per identity (type, context, vsys, name), in
-  `read_through.tf`. The block holds the type, the local name, `name`, and the `location` the
-  referrer's identity states, and nothing else.
+- A reference that resolves inside the referrer's own unit stays a `.name` reference to the resource.
+  A name another unit in the run declares is the plain name (F6.10.2). Only a name no unit in the run
+  declares becomes one `data` block, one per unit, in `read_through.tf`. The block holds the type, the
+  local name, `name`, and the `location` the referrer's unit states, and nothing else.
 - Read the file as a plan-time read, not as a stored fact: `terraform plan` asks the device for each
   block, and the plan fails when the entry is not present in the location the block names.
   `terraform validate` cannot check it.
-- Every name outside the run becomes a block, including a built-in such as `any`, because no verified
-  built-in name table exists. The generated `README.md` labels the run with the declared scopes and
-  the block count for that reason.
+- Every name no unit in the run declares becomes a block, including a built-in such as `any`, because
+  no verified built-in name table exists. The generated `README.md` labels the run with the declared
+  scopes and the block count for that reason.
 
 ### Import blocks (opt-in)
 
@@ -378,10 +378,10 @@ holds one row per pair. Four fields, in this order: `referrer`, `target`, `type`
 ]
 ```
 
-- `entry` is a name the reference rule resolved outside the run. `referrer` is the unit that used it.
-  A name the rule resolved inside the run is a reference inside one root, so it writes no row, and a
-  name no unit in the run declares writes no row: that name is already in the manifest's `references`
-  field.
+- `entry` is a name the reference rule could not resolve inside the referrer's own unit. `referrer` is
+  the unit that used it. A name the rule resolved inside the referrer's unit is a reference inside one
+  root, so it writes no row, and a name no unit in the run declares writes no row: that name is already
+  in the manifest's `references` field.
 - `target` is the unit that owns the name, which is the `owner` field of the `OWNERSHIP.json` row for
   (`type`, `entry`), not the unit that declared it. `type` is the same matrix row the property scan
   and the state scan use.

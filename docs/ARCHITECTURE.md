@@ -524,10 +524,10 @@ The rule lives in `unit_manifest.py`, and it holds six facts:
   report files (§4.5). A run that reads no entry writes no manifest, and the record is still
   written. A plain run writes it, so the CLI takes no flag for it.
 
-The `references` field holds the names the reference rule resolved outside the run (§4.3), keyed
-by the referrer's four facts. The record is made at the site that applies the rule, so no second
-resolution rule exists. The ambiguous-device case (§4.3 rule 1) is recorded as an outside name,
-because the row cannot name the other unit until the edge list exists.
+The `references` field holds the names the reference rule could not resolve inside the referrer's own
+unit (§4.3), keyed by the referrer's four facts. The record is made at the site that applies the rule,
+so no second resolution rule exists. A name another unit declares is recorded for the referrer's unit,
+because the rule records the referrer's fact and the edge row names the other unit (§3.6).
 
 Pinned by `tests/test_unit_manifest.py`, including
 `::test_the_shared_unit_is_the_unit_with_empty_facts_and_is_named_shared`,
@@ -539,8 +539,8 @@ Pinned by `tests/test_unit_manifest.py`, including
 `::test_the_manifest_is_written_only_when_it_has_content`,
 `::test_a_plain_run_writes_the_manifest_without_a_flag`,
 `::test_a_contextless_call_site_records_the_name_for_the_referrers_unit`,
-`::test_a_name_the_run_declares_is_not_recorded`,
-`::test_the_ambiguous_device_name_is_recorded_as_an_outside_name`,
+`::test_a_name_the_referrers_unit_declares_is_not_recorded`,
+`::test_the_record_names_the_referrers_unit_not_the_declaring_unit`,
 `::test_a_read_through_name_is_recorded`,
 `::test_every_recorded_name_belongs_to_a_unit_the_ledger_shows`,
 `::test_a_name_is_stored_once_per_unit`, `::test_the_exit_codes_are_unchanged`, and
@@ -752,57 +752,69 @@ the four report tests, `tests/test_schema_conformance.py::test_every_block_has_l
 `tests/test_scope_objects.py::test_the_four_panorama_scopes_print_the_empty_sub_block` and
 `::test_a_variable_and_a_vsys_place_in_the_scope_the_export_declares`.
 
-### 4.3 Reference resolution
+### 4.3 Reference resolution (F6.10.2)
 
-`name_ref` returns a `.name` reference only for an object declared in the same
-run. A name that points outside the export (a built-in such as `any`, or an
-object in another tenant) stays a plain string. The converter never declares a
-resource just to make a reference work.
+`name_ref` resolves a name inside one unit: the referrer's own. A name that points outside the
+export (a built-in such as `any`, or an object in another tenant) stays a plain string. The
+converter never declares a resource just to make a reference work.
 
 Order, first match wins:
 
-1. A name a device declared resolves inside that device. A referrer that names
-   no device resolves it only when exactly one device declares it; two devices
-   is a guess, so the name stays plain.
-2. The context chain, each stop paired with the referrer's vsys: the referrer's
-   own context, then `Shared`, then contextless declarations.
-3. The flat `(scope, name)` first-declaration index.
-4. A read-through `data` block, when the run declares one of the scopes in this
-   site's lookup order (§4.7). The block type is the first opted-in scope in that
-   order, which is the order PAN-OS resolves a name in.
-5. Otherwise the plain name.
+1. A name the referrer's own unit declares resolves inside the unit, as
+   `<scope>.<local>.name`, where `local` is the name the naming rule (§5) gave for that unit.
+2. A name another unit in the run declares is the plain name, because one plan runs against one
+   root and one state, so a reference cannot name an address another unit declares. A name a
+   device declared (an interface) is one case of this rule: the interface belongs to the device
+   unit, so a referrer outside that unit keeps the plain name (F3.5, F3.6). The mechanism that
+   carries the name is the decision in `docs/CODEBASE_ASSEMBLY.md` §5 rule 5, so this section
+   states only the shape.
+3. A name no unit in the run declares, when the run declares one of the scopes in this site's
+   lookup order with `--data-blocks`: one read-through `data` block for the unit the site belongs
+   to (§4.7). The block type is the first opted-in scope in that order, which is the order PAN-OS
+   resolves a name in. The read-through branch answers a name outside the codebase, so it never
+   runs for a name one unit declares and another unit uses.
+4. Otherwise the plain name.
 
-Object scopes come before group scopes, so a name that both an object and a
-group carry resolves to the object.
+Object scopes come before group scopes, so a name that both an object and a group carry resolves
+to the object.
 
-A `data` block is the only block `name_ref` creates, and only for a scope the run
-declares. A name that resolves inside the run, or that stays ambiguous under
-rule 1, stays a plain string.
+The rule reads the unit through `unit_manifest.facts_of` at both ends: the referrer's unit here,
+and the declaring unit from the record the naming site made (§5). No second unit rule and no
+second naming key exists, so no call site names a context, a vsys, or a device: the referrer states
+them. `key` stays for a registry key that differs from the PAN-OS name (a VPN composite key such as
+`ike_gw_<name>`), and `scopes` is the lookup order.
 
-The rule also records what it resolved outside the run (F6.1). `name_ref` takes the object
-the reference site belongs to and records each outside name against that object's four scope
-facts, so the manifest row can state the names a unit references from outside itself (§3.4).
+The rule also records what it could not resolve inside the referrer's own unit (F6.1, F6.10.2).
+`name_ref` takes the object the reference site belongs to and records each such name against that
+object's four scope facts, so the manifest row can state the names a unit references from outside
+itself (§3.4).
 The record is made here, at the site that applies the rule, so no second resolution rule
 exists. The same record is the edge set (§3.6), because an edge is a recorded name that an
-ownership row also covers. Pinned by `tests/test_unit_manifest.py::test_the_reference_names_are_recorded_for_the_referrers_facts`
-and `::test_a_name_the_run_declares_is_not_recorded`.
+ownership row also covers. Pinned by
+`tests/test_unit_manifest.py::test_the_reference_names_are_recorded_for_the_referrers_facts` and
+`::test_a_name_the_referrers_unit_declares_is_not_recorded`.
 
-For a name another unit in the codebase owns, this rule decides the shape only: the plain name it
-returns for a name it cannot resolve. The mechanism that carries that name is decided in the design
-record, `docs/CODEBASE_ASSEMBLY.md` §5 rule 5 (F6.9), so this section does not state it.
+For a name another unit in the codebase owns, rule 2 above is the shape the rule returns: the plain
+name. The mechanism that carries that name is decided in the design record,
+`docs/CODEBASE_ASSEMBLY.md` §5 rule 5 (F6.9), so this section does not state it.
 
 Pinned by `tests/test_robustness.py::test_name_ref_never_dangles`,
-`::test_name_ref_prefers_referrers_own_context`,
-`::test_name_ref_falls_back_to_shared_then_contextless`,
-`::test_name_ref_prefers_referrers_own_vsys`,
-`tests/test_multi_vsys_location.py::test_interface_reference_stays_inside_its_device`,
+`::test_name_ref_resolves_inside_the_referrers_own_unit`,
+`::test_a_name_another_unit_declares_stays_a_plain_name`,
+`::test_name_ref_resolves_inside_the_referrers_own_vsys`,
+`::test_name_ref_vsys_resolution_is_declaration_order_independent`,
+`tests/test_multi_vsys_location.py::test_interface_reference_stays_inside_its_unit`,
 `::test_virtual_router_reference_stays_inside_its_device`,
-`tests/test_multi_device_template.py::test_reference_resolves_inside_the_template_target_device`,
-`::test_ambiguous_template_keeps_a_plain_interface_name`,
-`::test_single_device_declaration_still_resolves_without_a_device`, and the
-read-through part by `tests/test_data_blocks.py::test_a_name_that_resolves_inside_the_run_stays_a_resource_reference`,
-`::test_an_ambiguous_device_name_stays_a_plain_string`,
-`::test_the_block_type_is_the_first_opted_in_scope_in_the_lookup_order`.
+`tests/test_multi_device_template.py::test_a_template_referrer_keeps_the_plain_name_for_an_interface_another_unit_declares`,
+`::test_a_referrer_that_names_no_unit_keeps_the_plain_name`,
+`::test_ambiguous_template_keeps_a_plain_interface_name`, and the read-through part by
+`tests/test_data_blocks.py::test_a_name_the_referrers_unit_declares_stays_a_resource_reference`,
+`::test_a_name_another_unit_declares_is_the_plain_name_not_a_block`,
+`::test_two_reference_sites_in_one_unit_share_one_block`, `::test_two_units_write_two_blocks`,
+`::test_a_name_two_devices_declares_stays_a_plain_name_for_a_third_unit`,
+`::test_the_block_type_is_the_first_opted_in_scope_in_the_lookup_order`,
+`::test_a_data_block_enter_no_declaration_index`, and the fixture run by
+`tests/test_dependency_wiring.py::test_security_rule_zone_address_service_refs`.
 
 ### 4.4 Policy chains
 
@@ -1054,21 +1066,21 @@ against, and its `DATA_SOURCE_SCHEMA` row must declare `name`: a data source wit
 `name` cannot hold the entry name a reference needs. An empty value, a scope outside
 the reference sets, or a no-name scope is an argument error (exit 2).
 
-One block per identity (type, context, vsys, name):
+One block per unit the reference site belongs to (F6.10.2), for a name no unit in the run declares:
 
 | Part | Value |
 |---|---|
 | type | the first opted-in scope in the reference site's lookup order (§4.3) |
 | local name | the name rule in §5, one rule for both block kinds |
 | `name` | the PAN-OS name the reference names |
-| `location` | `location_block` for the identity the referrer holds (§4.2) |
+| `location` | `location_block` for the unit the referrer belongs to (§4.2) |
 
-A second site with the same identity uses the same block, and a site in another
-context writes its own, because PAN-OS resolves a name in the referrer's own scope
-before the shared section. The blocks go in one file for the run,
-`read_through.tf`, so a reader can separate what the run read from what the plan
-will read. The file is written only when it has blocks, in sorted (type, local
-name) order, so it is byte-identical between runs.
+A second site in the same unit uses the same block, and a site in another unit writes its own,
+because PAN-OS resolves a name in the referrer's own scope before the shared section. A name one
+unit declares and another unit uses is never a block: it is the plain name (§4.3 rule 2). The blocks
+go in one file for the run, `read_through.tf`, so a reader can separate what the run read from what
+the plan will read. The file is written only when it has blocks, in sorted (type, local name) order,
+so it is byte-identical between runs.
 
 Two rules hold for a read-through run:
 
@@ -1186,12 +1198,18 @@ router row. Pinned by `tests/test_container_coverage.py`, `tests/test_coverage_m
 ## 5. Naming rules
 
 The local name of a block is **the sanitized PAN-OS name plus an 8-hex digest of
-the source identity**. One rule serves both block kinds (F5.5): a read-through
-`data` block takes the name the object would have had as a `resource` (§4.7).
+the source identity**. One rule serves both block kinds (F5.5), and the identity is what the site
+named: the export path for a `resource`, and the unit for a read-through `data` block, because a
+`data` block stands for an entry the run did not read (§4.7).
 
 ```
-local = sanitize(name) + '_' + sha256('scope|context|vsys|name')[:8]
+local = sanitize(name) + '_' + sha256('scope|identity|name')[:8]
+identity = context + '|' + vsys            for a resource
+identity = identity_digest(facts)           for a data block
 ```
+
+A run that declares no read-through scope writes the same bytes as before, because no `data` block
+is written there.
 
 - `sanitize` replaces every character outside `[A-Za-z0-9_]` with `_`, strips
   leading and trailing `_`, prefixes `_` when the result starts with a digit, and
@@ -1218,8 +1236,11 @@ local = sanitize(name) + '_' + sha256('scope|context|vsys|name')[:8]
   A true duplicate gets a numeric suffix (`_2`), so the output is always valid HCL.
   The suffix is a validity guard, not the identity mechanism: two different
   identities never need it.
-- `device` is not in the digest. It indexes a declaration so a reference from one
-  device cannot resolve to another device's resource of the same name.
+- `device` is not in the digest, and no device index exists. The naming site takes the object the
+  declaration belongs to, so it records the declaring unit (`unit_manifest.facts_of`) in the
+  declaration index: one local name per unit that declared the name, and the first declaration of
+  one identity wins. The reference rule (§4.3) reads the referrer's unit in that same record, so no
+  second unit rule and no second naming key exists (F6.10.2).
 - A block a reference site creates (a read-through `data` block, §4.7) enters no
   declaration index, because it stands for an entry this run did not read, so a
   plain reference cannot resolve to it.
@@ -1234,7 +1255,7 @@ Pinned by `tests/test_dependency_wiring.py::test_local_names_are_sanitized_name_
 `tests/test_edge_cases.py::test_dup_names_across_vsys_emit_distinct_digests`,
 `::test_identity_to_name_assignment_survives_entry_order_flip`,
 `tests/test_multi_device_template.py::test_same_interface_name_on_two_devices`, and
-`tests/test_data_blocks.py::test_the_read_through_path_cannot_change_a_resource_name`.
+`tests/test_data_blocks.py::test_a_data_block_enter_no_declaration_index`.
 
 ## 6. Determinism
 

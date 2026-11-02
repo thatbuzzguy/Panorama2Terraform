@@ -10,7 +10,10 @@ Pins on the dedicated fixture:
 
 - group member lists, rule zone/address/service lists, zone and virtual
   router interface lists, subinterface parents, and the VPN reference
-  chain all reference declared objects;
+  chain all reference declared objects. F6.10.2 decides which of these are
+  references: the name the referrer's own unit declared. The rules live in
+  Wire-DG and the zones and interfaces live in the vsys unit, so the rule
+  lists that name them stay plain strings.
 - object scope wins over group scope on name collisions;
 - undeclared names stay plain strings;
 - invariant: every emitted ``.name`` reference resolves to a resource
@@ -114,14 +117,12 @@ def test_address_tag_wired_and_ghost_plain(out_dir):
 
 def test_security_rule_zone_address_service_refs(out_dir):
     text = _read(out_dir, "security_rules.tf")
-    zones = _read(out_dir, "zones.tf")
-    zone_in = _local_of(zones, "panos_zone", "zone-in")
-    zone_out = _local_of(zones, "panos_zone", "zone-out")
+    # F6.10.2: the rule wires the names its own unit declared, and keeps the plain name for a name
+    # another unit declared. The rule is in Wire-DG, and the zones live in the vsys unit, so the
+    # zone list stays plain here and the address and service lists are references.
     both = _local_of(_read(out_dir, "address_objects.tf"), "panos_address", "both")
     svc_both = _local_of(_read(out_dir, "service_objects.tf"), "panos_service", "svc-both")
-    # Zones: declared zone refs + ghost zone plain.
-    assert f"panos_zone.{zone_in}.name" in text
-    assert f"panos_zone.{zone_out}.name" in text
+    assert '"zone-in"' in text and '"zone-out"' in text
     assert '"zone-ghost"' in text
     # Addresses: object scope wins the "both" collision; ghost plain.
     assert f"panos_address.{both}.name" in text
@@ -130,6 +131,10 @@ def test_security_rule_zone_address_service_refs(out_dir):
     # Services: object scope wins the "svc-both" collision; ghost plain.
     assert f"panos_service.{svc_both}.name" in text
     assert '"svc-ghost"' in text
+    # The zone file is inside the unit that declared the interfaces, so its members are references.
+    zones = _read(out_dir, "zones.tf")
+    eth11 = _local_of(_read(out_dir, "interfaces.tf"), "panos_ethernet_interface", "ethernet1/1")
+    assert f"panos_ethernet_interface.{eth11}.name" in zones
     # Applications are built-in PAN-OS names: never wired.
     m = re.search(r"applications = \[([^\]]*)\]", text)
     assert m is not None and '"web-browsing"' in m.group(1)
@@ -138,19 +143,22 @@ def test_security_rule_zone_address_service_refs(out_dir):
 
 def test_nat_rule_refs_and_translation_interface(out_dir):
     text = _read(out_dir, "nat_rules.tf")
-    zone_in = _local_of(_read(out_dir, "zones.tf"), "panos_zone", "zone-in")
-    zone_out = _local_of(_read(out_dir, "zones.tf"), "panos_zone", "zone-out")
     both = _local_of(_read(out_dir, "address_objects.tf"), "panos_address", "both")
     svc_both = _local_of(_read(out_dir, "service_objects.tf"), "panos_service", "svc-both")
-    eth11 = _local_of(_read(out_dir, "interfaces.tf"), "panos_ethernet_interface", "ethernet1/1")
-    assert f"panos_zone.{zone_in}.name" in text
+    # F6.10.2: the rule names no object its own unit declared for the zone list, so the zones stay
+    # plain, and the translation interface the vsys declared stays plain too.
+    assert '"zone-in"' in text
     m = re.search(r"destination_zone = \[([^\]]*)\]", text)
-    assert m is not None and f"panos_zone.{zone_out}.name" in m.group(1)
+    assert m is not None and '"zone-out"' in m.group(1)
+    # The names Wire-DG declared are still references.
     assert f"panos_address.{both}.name" in text
     m = re.search(r"^\s+service = (\S+)$", text, re.M)
     assert m is not None and m.group(1) == f"panos_service.{svc_both}.name"
     m = re.search(r"interface = (\S+)", text)
-    assert m is not None and m.group(1) == f"panos_ethernet_interface.{eth11}.name"
+    assert m is not None and m.group(1) == '"ethernet1/1"'
+    # The interface reference stays inside the unit that declared it (the virtual router).
+    eth11 = _local_of(_read(out_dir, "interfaces.tf"), "panos_ethernet_interface", "ethernet1/1")
+    assert f"panos_ethernet_interface.{eth11}.name" in _read(out_dir, "virtual_routers.tf")
 
 
 # --- Network lists -----------------------------------------------------------
