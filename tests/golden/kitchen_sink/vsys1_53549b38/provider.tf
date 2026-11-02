@@ -19,4 +19,7 @@ provider "panos" {
   hostname = var.panos_hostname
   username = var.panos_username
   password = var.panos_password
+  # The NGFW serial for the device this unit plans against. The run names the
+  # variable and holds no value for it, so the operator supplies the serial.
+  target = var.target
 }

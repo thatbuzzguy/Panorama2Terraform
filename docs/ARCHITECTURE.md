@@ -663,16 +663,28 @@ the join §3.5 and §3.6 use. The rules are in `site_data.py` and in
   report count names only the records (§4.5, F6.8). A printed-form finding names the path from the codebase
   root, so it names the unit the row belonged to (§14).
 
-The values the rows state are the pairs `TerraformGenerator.location_field` recorded at the site that
-applied the value-to-variable table, keyed by the referrer's four facts, the way §4.3 records a reference
-name. This record resolves nothing, so `variables.tf` declares exactly what the run consumed and the gate
-rule `variables` (§4.6) cannot see a declaration with no consumer.
+- **A name the tool cannot fill.** `operator_supplied` is the shape word for `target`, the NGFW serial the export
+  cannot state, because it states a device as a hostname. The run records the name with no value, so no row and no
+  printed-form line is written for it, and the operator supplies the value. The name is the §5 rule applied to the
+  field, because an unread fact has no value to name it from. `provider.tf` is the consumer, and the declaration
+  file marks a held name `sensitive` only when its row is `reference_only`, so no name list decides a marking. The
+  rule is in `CODEBASE_ASSEMBLY.md` §9 rule 8, and the README names the site files (§4.5).
+
+The values the rows state are the pairs `TerraformGenerator.printed_value` recorded at the site that
+applied the value-to-variable table, keyed by the unit's four facts, the way §4.3 records a reference
+name, and the shape each name came from is recorded with it (F6.10.4). This record resolves nothing, so
+`variables.tf` declares exactly what the run consumed and the gate rule `variables` (§4.6) cannot see a
+declaration with no consumer.
 
 Pinned by `tests/test_site_data.py`, including `::test_the_fields_print_in_the_declared_order`,
 `::test_the_row_joins_to_the_manifest_on_directory`, `::test_parse_rows_refuses_a_row_that_is_not_the_declared_shape`,
 `::test_the_tfvars_bytes_for_a_string_value`, `::test_a_list_prints_inline_and_an_empty_list_prints_empty`,
 `::test_a_value_that_is_neither_a_string_nor_a_list_is_a_refusal`,
 `::test_the_tfvars_file_is_written_only_when_it_has_content`,
+`::test_a_fact_the_tool_cannot_read_names_a_variable_and_holds_no_value`,
+`::test_a_name_the_tool_cannot_fill_writes_no_row_and_no_line`,
+`::test_the_provider_block_prints_target_only_for_a_unit_that_names_a_device`,
+`::test_the_readme_names_the_site_files_and_states_no_row`,
 `::test_the_gate_reads_the_record_and_its_printed_form_through_site_data`, `::test_no_report_names_a_field_the_site_data_states`, and
 `::test_two_runs_on_the_same_bytes_write_the_same_bytes`.
 
@@ -882,7 +894,9 @@ the site record, `site.auto.tfvars`.
 above, `scope.tf` (§4.1), `read_through.tf`, `imports.tf`, and the four data files are written only
 when they have content. These files are the complete set a run writes.
 
-The four data files are not report bodies, so no report names them or restates a row. The gate reads the
+The four data files are not report bodies, so no report names them or restates a row. `README.md` is the file
+inventory, so it names the site record and its printed form as files (F6.10.4, `CODEBASE_ASSEMBLY.md` §9 rule 9),
+and states no row, no value, no mapping result, no count, no path and no timestamp. The gate reads the
 `.tf` files for the block rules, and it reads the four data files for the data rule (F6.8), which reads
 each row shape through the module that owns it, so no second shape rule appears. `site.auto.tfvars` is the
 printed form of the site record, so the data rule compares it with `site_data.render_tfvars` and does not
@@ -1009,7 +1023,10 @@ sub-block it reads as an argument and no second reader appears. The rule answers
 names through `SCOPE_ANSWER`, not against a block this run declares, because a run scoped to an API
 scope writes no block for the scope it read. What makes an action a unit action is the address: the
 local name is the §5 name plus the digest of the identity the names inside the block build, so the
-block answers its own address. Pinned by `tests/test_commit_actions.py`: one test per violation
+block answers its own address. F6.10.4: the rule reads the two block kinds through the same mapping, and
+`commit_actions.read_block` states the field that named the fact, so a push block reports `name` and not the
+filter field the fact would answer for; the emitter prints through `filter_field`, so the two cannot disagree.
+Pinned by `tests/test_commit_actions.py`: one test per violation
 type, the one-reader pin, and `::test_no_false_positive_across_the_corpus`.
 
 `protocol_object` (F7.1) reads the `protocol` object of a `panos_virtual_router` block against

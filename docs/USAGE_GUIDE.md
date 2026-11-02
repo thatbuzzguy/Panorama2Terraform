@@ -201,8 +201,8 @@ directory, so a table row names the file, not the path.
 
 | File | Content |
 |---|---|
-| `provider.tf` | Provider block, wired to the three credential variables |
-| `variables.tf` | The three credential variables (`panos_hostname`, `panos_username`, `panos_password`) plus the site variables the run printed (F6.6). Written after the emitters, so it declares only what the run consumed |
+| `provider.tf` | Provider block, wired to the three credential variables, plus `target = var.target` for a unit that names a device (F6.10.4) |
+| `variables.tf` | The three credential variables (`panos_hostname`, `panos_username`, `panos_password`) plus the site variables the run printed (F6.6), plus a name the run declares with no value for it (`target`, F6.10.4). Written after the emitters, so it declares only what the run consumed |
 | `scope.tf` | The six scope objects the export declares: device group, the device-group parent record, template, template stack, template variable, and virtual system. Written by every run that has a scope entry, before the object files, in the F3.9 level order (F6.5) |
 | `address_objects.tf`, `address_groups.tf`, `service_objects.tf`, `service_groups.tf`, `tags.tf`, `custom_url_categories.tf`, `application_groups.tf`, `external_lists.tf` | Object resources |
 | `security_rules.tf`, `nat_rules.tf`, `decryption_rules.tf`, `pbf_rules.tf` | Policy rules, one resource per rule, chained in XML order |
@@ -211,7 +211,8 @@ directory, so a table row names the file, not the path.
 | `interfaces.tf`, `zones.tf`, `virtual_routers.tf`, `monitor_profiles.tf`, `vpn.tf` | Network and VPN resources |
 | `read_through.tf` | One `data` block per name a reference needed and the run did not read. Written only for a run that declares `--data-blocks` (F5.5) |
 | `imports.tf` | One `import` block per entry the run declares, as `to` and `id`: the block address, and base64 of the location object plus the entry name. Written only for a run that declares `--import-blocks` and has a block to write (F6.4) |
-| `README.md` | Deployment steps for the generated directory |
+| `actions.tf` | One `action` block per action the pinned provider schema declares, for each unit the manifest names: the commit, then the push. Written last, and only when it has content (F6.7, F6.10.4) |
+| `README.md` | Deployment steps for the generated directory, plus the section that names `imports.tf`, `SITE_DATA.json` and `site.auto.tfvars` (F6.10.4) |
 | `SOURCE.txt` | One record per source the run read, as `field: value` data: kind, name, path, scope, request, cache_entry, size, and the SHA-256 hex of the parsed bytes |
 | `MANUAL_SETUP_REPORT.txt` | Report-only configuration, plus a section for a container no parse method reads, and the routing entries the `protocol` object cannot express ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9) |
 | `INTERFACE_MIGRATION_REPORT.txt` | Interface and IP inventory |
@@ -502,13 +503,21 @@ Four things explain the shape of the output:
   `resource_mapping.VALUE_VARIABLES` maps that field to a variable (F6.6). A site change is a `.tfvars`
   change, not a code change, so replacing hardware changes one line in that unit's `site.auto.tfvars` instead
   of every resource inside the template. Every other location field prints as the value the source states.
+- **A fact the table names and cannot read.** `target` takes one NGFW serial, and the export states a device as a
+  hostname, so no serial reaches the parse. The run declares `target` for a unit that plans against a device, and
+  holds no value for it, so no site row and no `.tfvars` line is written for it, and `provider.tf` reads
+  `var.target`. Set the serial in `terraform.tfvars`, or with `TF_VAR_target`
+  ([CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) §9 rule 8). The declaration is not `sensitive`, because a serial
+  is not a secret.
 
 ## Deploying the generated configuration
 
 1. Create `terraform.tfvars` with the credentials. Do not commit it. The tool writes one `site.auto.tfvars` per
    unit, inside the directory that the site row names, and Terraform loads it automatically, so put the
    credentials in
-   `terraform.tfvars` and leave the site values in the file the tool wrote. Plan and apply one unit directory
+   `terraform.tfvars` and leave the site values in the file the tool wrote. Set the `target` serial there too:
+   the tool names the variable and holds no value for it, because the export states a device as a hostname
+   (F6.10.4). Plan and apply one unit directory
    at a time.
 2. Replace the placeholder VPN pre-shared keys.
 3. Read `MANUAL_SETUP_REPORT.txt` and configure those items by hand.

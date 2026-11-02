@@ -13,7 +13,8 @@ Seven groups, one per rule in `site_data.py`, `resource_mapping.VALUE_VARIABLES`
 5. The declaration set: the file, the data, and the `.tfvars` read the same run.
 6. The two gate rules, and the corpus that trips neither.
 7. Determinism, and the gate rule that reads the record through this module and compares the printed
-   form, and the rule that no report names a site field.
+   form, and the rule that no report names a site field, with the `README.md` file-inventory label as the one
+   exception (F6.10.4).
 
 The golden bytes pin the print shape (`tests/test_golden_files.py`), and the device-name rule is
 pinned here for a device the parse names. Every test runs offline.
@@ -33,7 +34,7 @@ import resource_mapping
 import sanity_checks
 import site_data
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, file_text, run_script, tf_files
+from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, file_text, parts, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 MANIFEST = unit_manifest.MANIFEST_FILE
@@ -117,30 +118,37 @@ REFERENCE_ONLY_NAMES = {'secret', 'key', 'password'}
 
 def test_the_table_covers_every_field_the_location_can_state():
     """The table is complete: one row per field `LOCATION_SCHEMA` declares, plus one row per
-    reference-only name (F7.1), so a field cannot gain a row without the test naming it.
+    reference-only name (F7.1), plus the one row for a fact the location cannot state because the export
+    holds no value for it (`target`, F6.10.4), so a field cannot gain a row without the test naming it.
     """
     fields = {field for scopes in resource_mapping.LOCATION_SCHEMA.values()
               for sub_block in scopes.values() for field in sub_block}
-    assert set(resource_mapping.VALUE_VARIABLES) == fields | REFERENCE_ONLY_NAMES, fields
+    assert set(resource_mapping.VALUE_VARIABLES) == fields | REFERENCE_ONLY_NAMES | {'target'}, fields
 
 
 def test_only_the_device_field_maps_to_a_variable():
-    """The table states what the block prints for each field, and only `ngfw_device` prints as a
-    variable (§9 rule 1). A reference-only name is the other case: the block prints the reference to a
-    variable the run declares, and the value itself is never in the table (F7.1).
+    """The table states what the block prints for each field, and only `ngfw_device` prints as a variable
+    that holds a value (§9 rule 1). A reference-only name is the other case: the block prints the reference to
+    a variable the run declares, and the value itself is never in the table (F7.1).
+
+    F6.10.4: `target` names a variable and holds no value, because the export states a device as a hostname,
+    so no serial reaches the parse and the operator supplies the value.
     """
-    variable, literal, reference = (
-        resource_mapping.VARIABLE, resource_mapping.LITERAL, resource_mapping.REFERENCE_ONLY)
+    variable, literal, reference, named = (
+        resource_mapping.VARIABLE, resource_mapping.LITERAL, resource_mapping.REFERENCE_ONLY,
+        resource_mapping.OPERATOR_SUPPLIED)
     assert {
         'ngfw_device': variable,
         'name': literal,
         'vsys': literal,
         'panorama_device': literal,
         'rulebase': literal,
+        'target': named,
         'secret': reference,
         'key': reference,
         'password': reference,
     } == resource_mapping.VALUE_VARIABLES
+    assert variable != named, 'the device field holds a value; the run names `target` and holds none'
 
 
 def test_the_generator_prints_a_value_through_the_table(converter_module):
@@ -158,9 +166,13 @@ def test_the_table_holds_no_property():
     A reference-only name is not a property either: the block prints the reference to a variable, and
     no `.tf` holds the value (F7.1). `panos_template_variable` prints its value as
     the export states it, and no variable is declared for it.
+    F6.10.4 adds one row for a fact the export cannot state: `target` names the device the unit plans
+    against, so the run names the variable and holds no value for it. It is not a property.
     """
-    allowed = {'name', 'ngfw_device', 'panorama_device', 'rulebase', 'vsys'} | REFERENCE_ONLY_NAMES
+    allowed = {'name', 'ngfw_device', 'panorama_device', 'rulebase', 'vsys', 'target'} | REFERENCE_ONLY_NAMES
     assert all(field in allowed for field in resource_mapping.VALUE_VARIABLES), resource_mapping.VALUE_VARIABLES
+    assert resource_mapping.VALUE_VARIABLES['target'] == resource_mapping.OPERATOR_SUPPLIED, \
+        'the run names the variable, the operator supplies the value'
     assert not REFERENCE_ONLY_NAMES & {prop for row in resource_mapping.COVERAGE_MATRIX
                                        for prop in row['properties']}, \
         'a reference-only name is printed as a reference, not as a property'
@@ -328,6 +340,21 @@ def test_the_tfvars_file_is_written_only_when_it_has_content(tmp_path):
         assert 'panos_' not in text, path
 
 
+def test_a_name_the_tool_cannot_fill_writes_no_row_and_no_line(tmp_path):
+    """F6.10.4 rule 3: a row is a value the run read (§9 rule 2), so the record holds no row for `target`
+    and the printed form holds no line for it, even though the run declares the variable for it.
+    """
+    out = tmp_path / 'kitchen'
+    assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
+    rows = _rows(out)
+    assert rows, 'the kitchen sink names a device value'
+    for row in rows:
+        assert 'target' not in row['variables'], row
+    for path, text in _printed_forms(out).items():
+        assert not any(line.startswith('target =') for line in _value_lines(text)), (path, text)
+    assert len(_printed_forms(out)) == len(rows), 'no printed form for a name with no row'
+
+
 # --- 4. the device name as a variable ------------------------------------------
 
 def test_the_emitter_prints_a_mapped_field_as_the_table_says(converter_module, tmp_path):
@@ -378,7 +405,43 @@ def test_a_device_that_names_no_device_names_no_variable(converter_module, tmp_p
     assert gen.value_variables() == {}
 
 
-def test_the_goldens_pin_the_print_shape():
+def test_a_fact_the_tool_cannot_read_names_a_variable_and_holds_no_value(converter_module, tmp_path):
+    """F6.10.4: `target` is the row the tool cannot fill, so `printed_value` records the name with no value
+    and records the shape, the way F7.1 records a `reference_only` name.
+
+    The name is the §5 rule applied to the field, because a fact the tool cannot read has no value to name
+    it from. A row is a value the run read (§9 rule 2), so the record holds no row for it and the printed
+    form holds no line for it.
+    """
+    gen = converter_module.TerraformGenerator(str(tmp_path))
+    obj = {'name': 'vr', 'vsys_device': DEVICE}
+    facts = unit_manifest.facts_of(obj)
+    assert gen.printed_value('target', '', facts) == naming.variable_text('target'), 'the name is the field'
+    # The recorded set holds the name with no value, so the accessor that reads the values returns none for
+    # the unit, and `build_rows` writes no row for a unit with no value.
+    assert gen.value_variables() == {facts: {}}, gen.value_variables()
+    assert gen.value_shapes() == {facts: {'target': resource_mapping.OPERATOR_SUPPLIED}}, gen.value_shapes()
+
+
+def test_the_provider_block_prints_target_only_for_a_unit_that_names_a_device(tmp_path):
+    """F6.10.4 rule 4: the provider block is the consumer of the name, so it prints the reference for a unit
+    whose manifest row names a device and prints none for a unit that names no device. The placeholder device
+    names none (F3.5), so a run that names no device declares no `target` at all.
+    """
+    out = tmp_path / 'kitchen'
+    assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
+    rows = {row['directory']: row for row in
+            unit_manifest.parse_rows((out / MANIFEST).read_text(encoding='utf-8'))}
+    seen = False
+    for path, text in parts(tf_files(out), 'provider.tf').items():
+        unit = Path(path).parent.name
+        device = rows[unit]['vsys_device']
+        names_a_device = bool(device) and device != NO_DEVICE
+        assert ('target = var.target' in text) == names_a_device, (path, device)
+        seen = seen or names_a_device
+    assert seen, 'the kitchen sink names a device, so one provider block prints the reference'
+    # The name is the §5 rule applied to the field, so the printed reference and the declared name agree.
+    assert naming.variable_name('target') == 'target'
     """The golden bytes pin the shape: the kitchen-sink set prints the variable name for the device
     field in the four files that carry a device location, and the sample set names no device, so it
     holds no `var.` location field at all.
@@ -389,13 +452,20 @@ def test_the_goldens_pin_the_print_shape():
                       if 'ngfw_device = var.' in path.read_text(encoding='utf-8')})
     assert changed == ['address_objects.tf', 'service_objects.tf', 'virtual_routers.tf',
                        'zones.tf'], changed
+    # F6.10.4: `target` is printed only for a unit whose provider block names a device, so the golden set
+    # holds the reference in three unit files and no target row in the sample set, which names no device.
+    printed = sorted({Path(path).parent.name for path in (GOLDEN_DIR / 'kitchen_sink').rglob('provider.tf')
+                      if 'target = var.target' in path.read_text(encoding='utf-8')})
+    assert printed == ['fw_2_example_com_5cef6fb6', 'vsys1_53549b38', 'vsys2_803b06c0'], printed
+    for path in sorted((GOLDEN_DIR / 'sample').rglob('provider.tf')):
+        assert 'var.target' not in path.read_text(encoding='utf-8'), path
     # F6.10.3: `variables.tf` is the unit's file, so the declaration set is the union the run wrote,
     # one file per unit.
     declared = set()
     for path in sorted((GOLDEN_DIR / 'kitchen_sink').rglob('variables.tf')):
         declared.update(sanity_checks.VARIABLE_RE.findall(path.read_text(encoding='utf-8')))
     assert sorted(declared) == ['fw_2_example_com', 'panos_hostname', 'panos_password',
-                                'panos_username'], declared
+                                'panos_username', 'target'], declared
 
 
 # --- 5. the declaration set ----------------------------------------------------
@@ -527,8 +597,12 @@ def test_the_gate_reads_the_record_and_its_printed_form_through_site_data(tmp_pa
 
 
 def test_no_report_names_a_field_the_site_data_states(tmp_path):
-    """The site record is a data file, not a report body: no report names it, names the mapping
-    result, or restates a row. A report may name the value, which is the parse fact.
+    """The site record is a data file, not a report body: no report names the mapping result or restates a
+    row. A report may name the value, which is the parse fact.
+
+    F6.10.4 carves one exception for `README.md`: the README is the file inventory, so it names the site
+    record and its printed form as files. The label states no row, no value, and no mapping result, so the
+    rule holds for the record itself, and no other report names the record.
     """
     out = tmp_path / 'kitchen'
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
@@ -539,9 +613,48 @@ def test_no_report_names_a_field_the_site_data_states(tmp_path):
         if not path.is_file():
             continue    # a report is written only when it has content
         text = path.read_text(encoding='utf-8')
-        assert site_data.SITE_DATA_FILE not in text, name
-        assert site_data.TFVARS_FILE not in text, name
+        if name == 'README.md':
+            # The inventory may name the files; it still states no field, no row and no value.
+            assert '## Site values' in text, name
+        else:
+            assert site_data.SITE_DATA_FILE not in text, name
+            assert site_data.TFVARS_FILE not in text, name
         assert mapping_result not in text, name
+        assert not any(line.strip().startswith(mapping_result + ' =') for line in text.split('\n')), name
+
+
+def test_the_readme_names_the_site_files_and_states_no_row(tmp_path):
+    """F6.10.4: the README is the file inventory, so the label names the site record, its printed form, and
+    `imports.tf`, and names `target` as the fact the tool names as a variable and cannot name as a value.
+
+    The label states no row, no value, no mapping result, no count, no path and no timestamp, so the §9 rule 6
+    exception is a file name, not a field. It is fixed text, so two runs on the same bytes write the same bytes.
+    """
+    out = tmp_path / 'kitchen'
+    assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
+    text = (out / 'README.md').read_text(encoding='utf-8')
+    label = text.split('## Site values', 1)[1]
+    for name in (site_data.SITE_DATA_FILE, site_data.TFVARS_FILE, 'imports.tf', 'target'):
+        assert name in text, name
+    assert naming.variable_name(DEVICE) not in text, 'no mapping result'
+    assert DEVICE not in text, 'no value'
+    assert not any(char.isdigit() for char in label), 'no count'
+    for word in ('timestamp', 'generated_at'):
+        assert word not in text, word
+    second = tmp_path / 'second'
+    assert _run(FIXTURES_DIR / KITCHEN, second).returncode == 0
+    assert (second / 'README.md').read_text(encoding='utf-8') == text, 'the label is deterministic'
+    # The label is the only difference the site half makes, so the F5.5 read-through label rule holds.
+    plain = tmp_path / 'plain'
+    read = tmp_path / 'read'
+    assert _run(FIXTURES_DIR / KITCHEN, plain).returncode == 0
+    assert _run(FIXTURES_DIR / KITCHEN, read, ('--data-blocks', 'panos_address')).returncode == 0
+    plain_text = (plain / 'README.md').read_text(encoding='utf-8')
+    read_text = (read / 'README.md').read_text(encoding='utf-8')
+    head, tail = plain_text.split('## Important Notes')
+    assert read_text.startswith(head + '## Site values') or read_text.startswith(head), 'same head'
+    assert read_text.endswith(tail), 'same tail'
+    assert 'Read-through data blocks' in read_text, 'the read run adds its own label'
 
 
 def test_site_data_defines_no_second_naming_rule():

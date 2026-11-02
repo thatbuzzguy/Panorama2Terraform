@@ -2,46 +2,51 @@
 
 ## Current position
 
-F6.10.3 (the directory write) is complete and committed. The suite is 1303 tests, all green, and
-`ruff check .` is clean.
+F6.10.4 (the site half) is complete and committed. The suite is 1310 tests, all green, and `ruff check .` is
+clean.
 
-The write path (`write_path.py`):
+The three decisions:
 
-- `write_file` is the only function that writes a file, and text takes `newline=LF`, so the byte rule is enforced
-  in one place. `bytes` are written without translation, because the cache holds the bytes the input door
-  parsed, so `source_fetch.py` writes the cache through it.
-- `unit_path` and `root_path` are the two builders, one per file set. The tool writes through
-  `write_unit_file` and `write_root_file`, so no module builds a path for a file it does not own.
-- The generator groups its emitters through `UnitText`, keyed by the unit directory, and the file order is the
-  order `main()` calls the emitters. `TerraformGenerator.unit_set()` is the run's unit set, read through
-  `unit_manifest.units`, so a unit the manifest names gets a directory even when the run writes no block inside
-  it. `variables.tf` and `provider.tf` are unit-set files, so every unit directory holds at least those two.
+- `target` is one row in `resource_mapping.VALUE_VARIABLES` with the new shape word `OPERATOR_SUPPLIED`: the run
+  names the variable, holds no value for it, and the operator supplies the value in `terraform.tfvars`. The corpus
+  states no serial, because every device entry name is a hostname, so the tool cannot name one without guessing.
+  `sensitive = true` stays the `REFERENCE_ONLY` row's rule alone, so the table is read in one place and no name
+  list decides a marking. The name is `naming.variable_name(field)`, because a fact the tool cannot read has no
+  value to name it from. No site row and no `.tfvars` line is written for it.
+- `printed_value(key, value, facts)` now takes the unit's facts, so the print site records the pair and the shape
+  through `unit_manifest.facts_of`; `value_shapes()` is the accessor for the shape. `generate_variables()` reads
+  the shape to decide the marking, and `generate_provider_config()` records the pair before it runs, because
+  `main()` calls the provider block first.
+- `provider.tf` prints `target = var.target` only for a unit whose manifest row names a device, so the declaration
+  has a consumer in the same directory. The sample set names no device, so it holds no `target`.
 
-The gate:
+The push half:
 
-- `read_tf_files` walks the codebase root and keys each `.tf` file by the path from the root, so a finding names
-  the unit directory the file is in.
-- `check_data_files` reads the four records at the root through `parse_rows`, over the rows of every unit, and
-  its printed-form half reads each unit's file inside the directory the row names, so that finding names the path.
-- `check_terraform` runs once per unit directory `unit_directories` names, and each result names the directory it
-  ran on: the finding names it, or the note names it when the plan passed. `result_of` is the worst result, so a
-  unit that failed is not hidden. A missing binary is a SKIPPED result, so the suite runs offline. A record that
-  names no unit runs the plan check on the codebase root, which the result names as `.`.
-- `SanityReport.results(check)` is one result per unit directory, and `findings(check)` reads the findings across
-  the results.
+- `commit_actions.py` emits one push block per unit through `ACTION_FILTERS`, `SCOPE_ANSWER` and `ACTION_SCHEMA`:
+  `name` prints the fact the unit declares and `type` prints the fact key. No `devices`, because the tool names no
+  serial, so the provider's documented default pushes to all devices in the target. A shared, vsys or device unit
+  writes no push block. Within one unit the blocks print in the `ACTION_SCHEMA` order (commit, then push), and the
+  commit block and the push block for one unit share one address, because the action address is
+  `action.<type>.<label>`.
+- `ROW_FIELDS` gained `action`, `FACT_KEY_FIELD` is `type`, `filter_field(fact, action)` takes the action, and
+  `block_fields` and `field_text` are the emitter's two shape helpers. `read_block` records the stated field and
+  the action, so the gate reports what a block states instead of the filter field the fact would answer for.
+- `test_commit_actions.py` gained group 7 for the push block, and the address pins read the pair
+  (`action`, address) as the key for one row.
 
-The goldens moved to the per-unit layout, regenerated from a real run: `tests/golden/sample/`,
-`tests/golden/kitchen_sink/`, and the new `tests/golden/single_unit/` (`tests/fixtures/address_objects.xml`, one
-unit). The golden pin reads the `.tf` set as paths from the case directory, so
-`tests/test_policy_order.py` reads the parts per unit and no golden test skips. `conftest.py` holds the helpers
-the tests read the layout through: `tf_files`, `parts`, `file_text`, and `written_bytes` for the two-run byte
-pins.
+The README: the generated file now names `imports.tf`, `SITE_DATA.json` and `site.auto.tfvars` and names `target`
+as a fact the tool names as a variable. It states no row, no value, no mapping result, no count, no path and no
+timestamp, so the rule that no report names a field the site data states holds for the site record with the README
+as the file-inventory exception (`tests/test_site_data.py::test_no_report_names_a_field_the_site_data_states`,
+`::test_the_readme_names_the_site_files_and_states_no_row`).
 
-`tests/test_write_path.py::test_no_unit_directory_is_written_yet` is replaced by
-`test_the_run_writes_one_directory_per_unit_the_manifest_names`, which names the directory the run writes.
+Pins that changed: `tests/test_site_data.py` (the table rows, the README exception, the golden print pins),
+`tests/test_variables.py` (the declaration set is the credentials plus the site values plus the names the table
+records with no value), and `tests/test_protocol_object.py` (`printed_value` takes facts). Both golden sets
+regenerated from a real run: `provider.tf` and `actions.tf` changed.
 
-The next slice is F6.10.4 (the site half): the `.tfvars` `target` fact, the `panos_push_to_devices` shape, and
-the generated `README.md` label. `acceptance.md` holds F6.10.3's criteria and must be overwritten for it.
+The next slice is F6.10.5, which closes Epic 6: the template stack unit, and the module parameter rule.
+`acceptance.md` holds F6.10.4's criteria and must be overwritten for it.
 
 ## Rules to keep when writing documents
 
@@ -64,8 +69,12 @@ the generated `README.md` label. `acceptance.md` holds F6.10.3's criteria and mu
 
 - The write path landed (`docs/CODEBASE_ASSEMBLY.md` §14): the run writes one directory per unit the manifest
   names, and the codebase root holds the root set. A new file shape must name which set it belongs to, and the
-  report counts, the console line and the tests that read the file set change with it. The open facts F6.10.4
-  names are the `.tfvars` `target` serial and the `panos_push_to_devices` shape.
+  report counts, the console line and the tests that read the file set change with it. F6.10.4 landed the `target`
+  name and the push shape. What F6.10.5 can decide is the template stack unit and the module parameter rule.
+- `VALUE_VARIABLES` is the single shape owner and `sensitive = true` is the `REFERENCE_ONLY` row's rule alone, so a
+  new shape word must be read in the table and not by a name list. The test that pins the declaration set reads the
+  names the table records with no value (`tests/test_variables.py`), and the test that pins the report rule carves
+  the `README.md` file-inventory exception. A change to a shape word moves both pins in the same commit.
 - A rule that pins an absence by scanning module sources cannot read a source that names the words it
   forbids, so a scan reads the tool's own modules, and the test name and the module docstring carry no
   forbidden word. The writer scan excludes `write_path.py` (the single writer) and `conftest.py` (the test

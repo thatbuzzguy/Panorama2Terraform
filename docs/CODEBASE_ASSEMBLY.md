@@ -363,8 +363,8 @@ Two halves of this section stay open:
   `backlog.md` are the list of what can make a plan show a change, and the state scan (F5.6) is the
   offline check for this half. No test pins the plan itself, because a plan needs a device.
 - **The per-unit file, and the label.** The write path (§14) writes one `imports.tf` per unit, so the file
-  holds that unit's blocks and names its unit only by its directory. The generated `README.md`
-  does not yet name `imports.tf`, which `backlog.md` records.
+  holds that unit's blocks and names its unit only by its directory. The generated `README.md` names the file,
+  the site record and its printed form (`docs/CODEBASE_ASSEMBLY.md` §9 rule 9).
 
 ## 8. The scope objects as data (F6.5, landed)
 
@@ -470,8 +470,9 @@ files for every run that has content.
    No new flag, so no new argument error path and no change to the exit codes.
 2. **The table is data, one row per location field the emitter prints** — the five fields
    `LOCATION_SCHEMA` declares — plus one row per reference-only name, which is a field the provider marks
-   `sensitive` (F7.1), and it states what the block prints for each. Only `ngfw_device` maps to
-   a variable: the device is the value a codebase changes per site. `name` is the row identity (§8 rule 3),
+   `sensitive` (F7.1), plus the one row for a fact the location can state no value for (rule 8), and it states
+   what the block prints for each. Only `ngfw_device` maps to a variable that holds a value: the device is the
+   value a codebase changes per site. `name` is the row identity (§8 rule 3),
    `vsys` is a scope name, `panorama_device` is the credential gap (§11) and is never emitted (§8 rule 6),
    and `rulebase` is not recorded (F3.5). A reference-only row holds no value, because the value must never
    reach a generated file: the block prints the reference to a variable the run declares with
@@ -525,13 +526,36 @@ files for every run that has content.
    location print `ngfw_device = var.<name>`, and `variables.tf` gains the device variable for that case.
    The sample set is byte-identical, because its only device entry is the "this device" placeholder, which
    names no device and no variable (F3.5). A run that reads no mapped value writes the same bytes as before.
-   `target`, which names one NGFW serial (§12), is not emitted today, so the per-unit `.tfvars` that names
-   one stays with the write path (§14) and is recorded in `backlog.md`.
+   A run that names a device gains the `target` name in `provider.tf` and in `variables.tf` (rule 8), and the
+   sample set gains nothing, because its only device entry names no device.
+8. **The tool names a variable for a fact it cannot read.** `target` takes one NGFW serial (§12), and every
+   device name the corpus states is a hostname, so no serial reaches the parse. The run names the variable,
+   holds no value for it, and the operator supplies the value in `terraform.tfvars` (§11). The shape word is
+   `operator_supplied`, which is the F7.1 `reference_only` shape with one difference: a serial is not a secret,
+   so `sensitive = true` stays the `reference_only` row's rule alone and the table is read in one place, and no
+   name list decides a marking. The name is the §5 rule applied to the field, because a fact the tool cannot
+   read has no value to name it from, so `naming.py` is still the only naming rule. No site row and no `.tfvars`
+   line is written for it, because rule 3 writes a row only for a site that names a value. `provider.tf` is the
+   consumer: the block prints `target = var.target` for a unit whose manifest row names a device and prints none
+   for a unit that names no device, so the `variables` gate rule (§4.6) sees no declaration with no consumer, and
+   the placeholder device names none (F3.5). `generate_provider_config()` records the pair at the print site,
+   before `generate_variables()` runs, so the declaration set is what the run consumed.
+9. **The generated `README.md` names the site files.** The F5.5 label precedent (§5) says a report may name what
+   a reader cannot see from a `.tf` file alone, so the README names `imports.tf`, `SITE_DATA.json` and
+   `site.auto.tfvars`, and names `target` as the fact the tool names as a variable and cannot name as a value. It
+   states no row, no value, no mapping result, no count, no path and no timestamp, so the rule that no report
+   names a field the site data states (§4.5) still holds for the site record: the exception is a file name, not a
+   field. No gate rule reads the README, so it stays in the codebase root set (§14) and `CHECK_ORDER` is
+   unchanged. Pinned by `tests/test_site_data.py::test_no_report_names_a_field_the_site_data_states` and
+   `::test_the_readme_names_the_site_files_and_states_no_row`.
 
 Pinned by `tests/test_site_data.py`, including `::test_the_corpus_rows_are_pinned`,
 `::test_the_row_joins_to_the_manifest_on_directory`, `::test_the_import_rule_compares_a_mapped_field_by_name`,
 `::test_the_variable_rule_reads_both_directions`, `::test_the_corpus_trips_neither_rule`,
-`::test_two_runs_on_the_same_bytes_write_the_same_bytes`, and
+`::test_two_runs_on_the_same_bytes_write_the_same_bytes`,
+`::test_a_name_the_tool_cannot_fill_writes_no_row_and_no_line`,
+`::test_a_fact_the_tool_cannot_read_names_a_variable_and_holds_no_value`,
+`::test_the_provider_block_prints_target_only_for_a_unit_that_names_a_device`, and
 `::test_the_gate_reads_the_record_and_its_printed_form_through_site_data`.
 The `.tf` bytes and the report bytes of the corpus are otherwise unchanged.
 
@@ -578,6 +602,20 @@ path. The emitter is `commit_actions.py`, the file is `actions.tf`, and `main()`
    resolved against a scope block this run declares, because a run scoped to an API scope writes no block
    for it. `CHECK_ORDER` names `actions` after `scope_blocks`. The rule reads no data file: it reads the
    block text, the tables, and `naming.py`.
+5. **The push block states the fact and the fact key, and no serial.** `panos_push_to_devices` prints for the
+   three fact keys `SCOPE_ANSWER` answers, so the reason F6.7 held the push half is closed: the shape needs no
+   serial, because the tool names no serial (§9 rule 8) and the provider's documented default pushes to all the
+   devices in the target. `name` prints the fact its own unit declares and `type` prints the fact key, both read
+   through `ACTION_FILTERS`, so `filter_field` serves both block kinds and no second mapping names the fields
+   again. A `vsys` fact and a `vsys_device` fact name no `type`, so a vsys unit, a device unit and the shared
+   unit write no push block and are pushed through the parent unit's block, the way rule 2 states the commit.
+   Within one unit the blocks print in the `ACTION_SCHEMA` order, which is the Panorama order: commit, then push.
+   The commit block and the push block for one unit share one address, because the action address is
+   `action.<type>.<label>`, so Terraform reads them as two blocks. `devices` is not printed, and
+   `force_template_values`, `include_template` and `description` are not printed: the parse records no push
+   description, and the tool states no policy about forcing template values. `read_block` states the field that
+   named the fact, so the rule reports what a push block states instead of the filter field the fact would answer
+   for, and the corpus trips no finding.
 
 Pinned by `tests/test_commit_actions.py`, including
 `::test_one_action_block_per_unit_the_manifest_names`,
@@ -592,14 +630,13 @@ Pinned by `tests/test_commit_actions.py`, including
 `::test_the_field_mapping_is_the_one_mapping`, `::test_the_answer_table_is_the_one_answer`,
 `::test_named_fact_is_the_one_level_rule`, `::test_no_module_defines_a_second_naming_rule`,
 `::test_the_action_rule_reads_no_data_file`, `::test_action_schema_is_pinned_against_the_live_schema`,
+`::test_the_push_shape_requires_name_and_type`, `::test_the_push_block_names_the_fact_and_the_fact_key`,
+`::test_a_fact_the_answer_does_not_answer_prints_no_field`, `::test_the_push_block_states_no_devices`,
+`::test_the_push_block_prints_after_the_commit_block`,
 `::test_check_order_names_actions_after_scope_blocks`, `::test_no_false_positive_across_the_corpus`, and
-`::test_the_goldens_pass_the_rule`. Both committed goldens gain `actions.tf` and declare Terraform 1.14;
-every other golden byte is unchanged.
-
-The push half stays open: `panos_push_to_devices` is not emitted, because `devices` names site serials,
-which is the `.tfvars` decision the write path holds (§14). No coverage matrix row covers an `action`
-block, the decision F5.5 made for a `data` block, because an action names no entry. Both are recorded in
-`backlog.md`.
+`::test_the_goldens_pass_the_rule`. Both committed goldens hold `actions.tf` with the commit block and the push
+block for each unit that names a fact `SCOPE_ANSWER` answers, and declare Terraform 1.14; every other golden
+byte is unchanged.
 
 ## 11. Gap — credentials and the provider block
 
@@ -672,17 +709,16 @@ a run with no network passes CI.
    single-unit case does not need the ownership rule. The rule types need the rulebase decision.
    Landed as F6.4.
 6. The scope objects (§8). Landed as F6.5.
-7. The site data layer (§9). Landed as F6.6. The printed form of a site row is written inside the unit
-   directory that row names, which F6.10.3 landed. The per-unit `.tfvars` fact that names one `target`
-   serial stays with F6.10.4.
+7. The site data layer (§9). Landed as F6.6, and the `target` name landed as F6.10.4: the run names the variable
+   and holds no value for it, because the export states a device as a hostname.
 8. The commit action (§10), last, because it needs the gate rule for an action block and
-   the Terraform minimum decision. Landed as F6.7. The push half stays with the write path,
-   because `devices` names site serials.
+   the Terraform minimum decision. Landed as F6.7, and the push half landed as F6.10.4: the block states the
+   fact and the fact key and no `devices`, because the tool names no serial.
 9. The write path, the step that splits the output per unit directory. It applies the rule decided in
    §5 rule 5 at the print site, with the LF rule. Landed as F6.10.3: `write_path.py` is the one place a run
    writes a file, and `unit_path` and `root_path` are the two builders, one per set. The LF rule is stated in
-   `docs/ARCHITECTURE.md` §6, so this section does not restate it. What stays open is the `target` serial and
-   the push shape (F6.10.4), and the held decisions the tracking markdown names.
+   `docs/ARCHITECTURE.md` §6, so this section does not restate it. What stays open is the template stack unit and
+   the module parameter rule (F6.10.5), and the held decisions the tracking markdown names.
 
    **The unit set** is the files one plan reads, so one directory holds them: the `.tf` files for that unit,
    and the printed form of that unit's site row (§9 rule 4). A run that names one unit writes one directory: the

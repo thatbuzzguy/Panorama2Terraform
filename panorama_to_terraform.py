@@ -2637,6 +2637,9 @@ class TerraformGenerator:
         # (`unit_manifest.facts_of`) and recorded at the site that applied the table, so `site_data.py` states
         # them without resolving a name. One value is stored once per unit.
         self._value_variables: dict[tuple, dict] = {}
+        # F6.10.4: the shape each recorded name came from, so the declaration file reads the marking through
+        # the table and not through a name list. Recorded at the same site as the pair.
+        self._value_shapes: dict[tuple, dict] = {}
 
     def sanitize_name(self, name: str) -> str:
         """Sanitize names for Terraform resource names.
@@ -2799,6 +2802,15 @@ class TerraformGenerator:
         """
         return {facts: {name: values[name] for name in sorted(values) if values[name] is not None}
                 for facts, values in self._value_variables.items()}
+
+    def value_shapes(self) -> dict:
+        """The recorded shapes, keyed by the unit's four scope facts, in name order (F6.10.4).
+
+        A name the run holds with no value is read through this record, so the declaration file and a test can
+        tell a `reference_only` name from an `operator_supplied` one without naming the fields again.
+        """
+        return {facts: {name: shapes[name] for name in sorted(shapes)}
+                for facts, shapes in self._value_shapes.items()}
 
     def record_import_row(self, resource_type: str, obj: dict, local_name: str, location: dict) -> None:
         """Record the import row for one entry, at the site that applied the naming rule (F6.4).
@@ -3148,8 +3160,8 @@ class TerraformGenerator:
             f'template; {self._device_template_text(device)}')
         return {'template': {'name': self._TEMPLATE_PLACEHOLDER}}
 
-    def printed_value(self, key: str, value: str, obj: dict) -> str:
-        """Print one field as `VALUE_VARIABLES` says, and record the pair (F6.6, F7.1).
+    def printed_value(self, key: str, value: str, facts: tuple) -> str:
+        """Print one field as `VALUE_VARIABLES` says, and record the pair (F6.6, F7.1, F6.10.4).
 
         `VALUE_VARIABLES` is the only place that decides the shape, so the emitter has no per-type branch.
         The pair is recorded at the site that applies the rule, the way `name_ref` records a reference
@@ -3160,17 +3172,23 @@ class TerraformGenerator:
         A field the table states as `reference_only` is a value the provider marks `sensitive`: no
         generated file may state it, so the run records the name with no value, and the `.tfvars` writer
         writes no line for it. The name is the §5 name of the entry, because a secret cannot name itself.
+
+        A field the table states as `operator_supplied` is a fact the tool cannot read: `target` is that
+        row, because the export states a device as a hostname and no serial reaches the parse (F6.10.4). The
+        run records the name with no value, so no site row and no `.tfvars` line is written for it, and the
+        operator supplies the value in `terraform.tfvars` (§11). The name is the §5 rule applied to the field,
+        because there is no value to name it from.
         """
         shape = resource_mapping.VALUE_VARIABLES.get(key)
-        if shape == resource_mapping.REFERENCE_ONLY:
-            name = naming.variable_name(value)
-            self._value_variables.setdefault(unit_manifest.facts_of(obj), {})[name] = None
-            return naming.variable_text(value)
-        if shape != resource_mapping.VARIABLE:
+        if shape not in (resource_mapping.VARIABLE, resource_mapping.REFERENCE_ONLY,
+                         resource_mapping.OPERATOR_SUPPLIED):
             return self.escape_string(value)
-        name = naming.variable_name(value)
-        self._value_variables.setdefault(unit_manifest.facts_of(obj), {})[name] = value
-        return naming.variable_text(value)
+        # A name the run holds no value for is named by the entry (F7.1) or by the field (F6.10.4), because a
+        # value cannot name itself and an unread fact has no value.
+        name = naming.variable_name(key if shape == resource_mapping.OPERATOR_SUPPLIED else value)
+        self._value_variables.setdefault(facts, {})[name] = value if shape == resource_mapping.VARIABLE else None
+        self._value_shapes.setdefault(facts, {})[name] = shape
+        return naming.variable_text(name)
 
     def location_field(self, key: str, value: str, obj: dict) -> str:
         """Print one location field as the value-to-variable table says, and record the pair (F6.6).
@@ -3178,7 +3196,7 @@ class TerraformGenerator:
         The value stays the fact in `location_data`: the import id encodes it, because the provider parses
         the id and a variable name is not a device name.
         """
-        return self.printed_value(key, value, obj)
+        return self.printed_value(key, value, unit_manifest.facts_of(obj))
 
     def location_block(self, resource_type: str, obj: dict, local_name: str = '') -> str:
         """Required location object for a generated resource (F2.3, F3.5).
@@ -3292,7 +3310,7 @@ class TerraformGenerator:
             elif shape == 'object':
                 out = self._protocol_fields(f'{path}/{field}', value, router)
             elif resource_mapping.VALUE_VARIABLES.get(field) == resource_mapping.REFERENCE_ONLY:
-                out = HclRef(self.printed_value(field, level.get('name') or '', router))
+                out = HclRef(self.printed_value(field, level.get('name') or '', unit_manifest.facts_of(router)))
             else:
                 out = value
             # A level that printed nothing prints nothing, so the block states no empty field.
@@ -3306,8 +3324,15 @@ class TerraformGenerator:
 
         One plan reads one root, so the provider block is a unit-set file: the codebase root set holds no
         `.tf` file. The text states no unit, so the path is the only place the file names the unit.
+
+        F6.10.4: the block prints `target` for a unit whose manifest row names a device, because the provider
+        reads the serial there (§12). The shape table decides the shape, so the block prints the reference to
+        the name the run declares, and the operator supplies the value in `terraform.tfvars` (§11): the export
+        states a device as a hostname, so no serial reaches the parse and the tool names no value for it. A unit
+        that names no device prints no `target`, because a declaration with no consumer is a finding, and the
+        placeholder device names no device (F3.5).
         """
-        content = '''# Palo Alto Networks PAN-OS Provider Configuration
+        head = '''# Palo Alto Networks PAN-OS Provider Configuration
 # Supported provider range: v2 series, baseline 2.0.14 (the latest 2.x
 # release and the version the conformance and validate gates verify).
 # Terraform 1.14 minimum: an `action` block is 1.14 syntax (F6.7).
@@ -3328,11 +3353,15 @@ provider "panos" {
   hostname = var.panos_hostname
   username = var.panos_username
   password = var.panos_password
-}
 '''
-
         for facts in self.unit_set():
-            self.write_unit_file(self.directory_of(facts), 'provider.tf', content)
+            body = head
+            device = unit_manifest.fact(facts, 'vsys_device')
+            if device and device != container_coverage.PLACEHOLDER_DEVICE:
+                body += ('  # The NGFW serial for the device this unit plans against. The run names the\n'
+                         '  # variable and holds no value for it, so the operator supplies the serial.\n'
+                         f'  target = {self.printed_value("target", "", facts)}\n')
+            self.write_unit_file(self.directory_of(facts), 'provider.tf', body + '}\n')
 
     def generate_variables(self):
         """Generate `variables.tf` for every unit the run's unit set names (F6.10.3, §14).
@@ -3382,12 +3411,22 @@ variable "panos_password" {
                                 f'  type        = {kind}\n'
                                 '}\n\n')
             held = {name for name in recorded if recorded[name] is None}
+            shapes = self._value_shapes.get(facts) or {}
             for name in sorted(held):
-                content += (f'variable "{name}" {{\n'
-                            f'  description = "Sensitive protocol value (F7.1): the run holds no value for it"\n'
-                            f'  type        = string\n'
-                            f'  sensitive   = true\n'
-                            '}\n\n')
+                # F7.1 marks a held name `sensitive` when its table row is `reference_only`; F6.10.4 names a
+                # fact the tool cannot read, and a serial is not a secret, so the marking follows the row.
+                if shapes.get(name) == resource_mapping.REFERENCE_ONLY:
+                    content += (f'variable "{name}" {{\n'
+                                f'  description = "Sensitive protocol value (F7.1): the run holds no value for it"\n'
+                                f'  type        = string\n'
+                                f'  sensitive   = true\n'
+                                '}\n\n')
+                else:
+                    content += (f'variable "{name}" {{\n'
+                                f'  description = "NGFW serial (F6.10.4): the export states no serial, so the run '
+                                f'names the variable and the operator supplies the value"\n'
+                                f'  type        = string\n'
+                                '}\n\n')
             self.write_unit_file(self.directory_of(facts), 'variables.tf', content)
 
     # F6.5: the scope objects are the unit's file, the way `imports.tf` (F6.4) and
@@ -5712,6 +5751,10 @@ variable "panos_password" {
         F5.5: a run that declares read-through scopes adds the label section, so a
         reader knows the plan will call the API. A run that declares no read-through
         scope writes the same README as before.
+
+        F6.10.4: the README names the site record, its printed form, and `imports.tf`, because those are the
+        files a reader cannot see from a `.tf` file alone. It names the files and states no row and no value,
+        so the rule that no report names a field the site data states still holds for the site record itself.
         """
         head = '''# Palo Alto Terraform Configuration
 
@@ -5785,8 +5828,11 @@ Terraform configuration, one file per unit inside the unit directory the manifes
   parse does not capture the profile body
 - `security_profile_groups.tf` - Security profile groups
 - `vpn.tf` - IKE and IPsec crypto profiles, IKE gateways, IPsec tunnels
-- `actions.tf` - the commit action, one `panos_commit` block per unit the manifest names,
-  written last
+- `imports.tf` - the import rows for a name this run references but did not read, written before
+  the blocks that reference the name
+- `actions.tf` - the commit and push actions, one block per action the provider schema declares for
+  each unit the manifest names, written last
+- `site.auto.tfvars` - the printed form of this unit's row in `SITE_DATA.json`
 
 Reports, at the codebase root:
 
@@ -5820,6 +5866,21 @@ Reports, at the codebase root:
                 'device before applying.\n'
             )
 
+        # F6.10.4 label: the site half names files a reader cannot see from a `.tf` file alone, so the README
+        # names them. The label states no row, no value and no mapping result, so the rule that no report names
+        # a field the site data states still holds for the site record. Deterministic: fixed text, no count, no
+        # path, no timestamp.
+        site_label = (
+            '\n## Site values\n\n'
+            f'The run writes `{site_data.SITE_DATA_FILE}` at the codebase root, one row per unit it recorded a '
+            f'site value for, and writes the printed form of that row as `{site_data.TFVARS_FILE}` inside the '
+            'unit directory. Set the values there, or with `TF_VAR_<name>`.\n\n'
+            'The tool names a variable for a site fact it cannot read. The export states a device as a '
+            'hostname, so no serial reaches the parse, and `target` is a name the tool declares for a unit that '
+            'plans against a device while the operator supplies the value in `terraform.tfvars`. A value the '
+            'provider marks sensitive follows the same rule.\n'
+        )
+
         tail = '''
 ## Important Notes
 
@@ -5837,7 +5898,7 @@ For more information on the PAN-OS Terraform provider:
 https://registry.terraform.io/providers/PaloAltoNetworks/panos/latest/docs
 '''
 
-        self.write_root_file('README.md', head + label + tail)
+        self.write_root_file('README.md', head + site_label + label + tail)
 
 
 def main():

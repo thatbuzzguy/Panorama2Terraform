@@ -1,10 +1,11 @@
-"""F6.7: the commit action, one `panos_commit` block per unit, as `actions.tf`.
+"""F6.7: the action block per unit, as `actions.tf`: the commit action, and the push action F6.10.4 adds.
 
-Six rule groups, one per section here:
+Seven rule groups, one per section here:
 
-1. **One block per unit.** `build_rows` writes one row per manifest row, and the block names the fact its
-   own unit selects through `unit_manifest.named_fact`. A unit whose fact no commit filter can name (a
-   vsys, a device, the shared section) writes no row, and `actions.tf` is written only when it has content.
+1. **One block per unit.** `build_rows` writes one row per manifest row and per action the pinned schema
+   declares, and the block names the fact its own unit selects through `unit_manifest.named_fact`. A unit whose
+   fact no filter and no push type can name (a vsys, a device, the shared section) writes no row, and
+   `actions.tf` is written only when it has content.
 2. **The gate rule `actions`.** Every finding is read through the one block reader
    (`sanity_checks.blocks(files, ('action',))`) and the one field reader (`import_blocks`), against the
    `ACTION_SCHEMA` row, the `ACTION_FILTERS` mapping, and `SCOPE_ANSWER`. One test per violation type, and
@@ -18,6 +19,10 @@ Six rule groups, one per section here:
    `terraform` block and in both goldens, `actions.tf` is the last `.tf` file `main()` writes, and
    `terraform validate` accepts the block shape.
 6. **Determinism.** Two runs on the same source write the same bytes.
+7. **The push block (F6.10.4).** `block_fields` prints `name` for the fact and `type` for the fact key through
+   `ACTION_FILTERS`, so the emitter and the gate read one mapping. No `devices`, because the tool names no serial
+   (`docs/CODEBASE_ASSEMBLY.md` §9 rule 8), so the provider's documented default covers the target. Within one
+   unit the blocks print in the `ACTION_SCHEMA` order, and the two blocks share one address.
 
 The pinned provider fact is the two action rows `terraform providers schema -json` declares for provider
 2.0.14.
@@ -73,33 +78,38 @@ def _row(facts: dict) -> dict:
     return row
 
 
-def _block(fact: str, name: str, local: str = None, field: str = None) -> str:
+def _block(fact: str, name: str, local: str = None, field: str = None,
+           action: str = 'panos_commit') -> str:
     """One action block, in the shape the generator writes, with the address the rule expects."""
     local = local or commit_actions.local_name(fact, name, naming.sanitize)
-    field = field or commit_actions.filter_field(fact)
-    return (f'action "panos_commit" "{local}" {{\n  {commit_actions.CONFIG_BLOCK} {{\n'
-            f'    {field} = ["{name}"]\n  }}\n}}\n')
+    fields = commit_actions.block_fields(action, fact, name)
+    if field:
+        fields = {field: name}
+    body = ''.join(f'    {part} = {commit_actions.field_text(action, part, fields[part])}\n'
+                   for part in fields)
+    return f'action "{action}" "{local}" {{\n  {commit_actions.CONFIG_BLOCK} {{\n{body}  }}\n}}\n'
 
 
 # --- 1. One block per unit ---------------------------------------------------
 
 def test_one_action_block_per_unit_the_manifest_names(tmp_path):
-    """The file is the manifest read as blocks: one block per row that names a commit-nameable fact."""
+    """The file is the manifest read as blocks: one block per row that names a fact the answer answers,
+    for each action the pinned schema declares."""
     out = tmp_path / 'kitchen'
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
     rows = commit_actions.build_rows(_manifest(out), naming.sanitize)
     assert rows, 'the kitchen sink names a device group and a template'
     blocks = sanity_checks.blocks(_files(out), ('action',))
     assert len(blocks) == len(rows), (blocks, rows)
-    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the file names its unit only by its directory, so the
-    # directory `read_block` states is the directory the reader read the block in.
-    by_local = {row['local_name']: row for row in rows}
+    # F6.10.4: the commit block and the push block for one unit share one address, so the pair (action,
+    # address) is the key that names one row.
+    by_block = {(row['action'], row['local_name']): row for row in rows}
     for block in blocks:
         shape = commit_actions.read_block(block)
         # A per-unit file states no unit inside its bytes, so the block shape names no directory and the
         # path names the unit the row put the block in.
-        assert shape == {**by_local[block.local], 'directory': ''}, (block.file, block.local)
-        assert Path(block.file).parent.name == by_local[block.local]['directory'], block.file
+        assert shape == {**by_block[(block.rtype, block.local)], 'directory': ''}, (block.file, block.local)
+        assert Path(block.file).parent.name == by_block[(block.rtype, block.local)]['directory'], block.file
 
 
 def test_the_blocks_print_in_the_identity_order_the_manifest_rows_print(tmp_path):
@@ -133,7 +143,7 @@ def test_an_action_names_the_fact_its_own_unit_declares(tmp_path):
         identity = tuple(manifest[row['directory']][key] for key in unit_manifest.FACT_KEYS)
         key, name = unit_manifest.named_fact(identity)
         assert (key, name) == (row['fact'], row['entry_name']), (row, key, name)
-        assert row['field'] == commit_actions.filter_field(key), row
+        assert row['field'] == commit_actions.filter_field(key, row['action']), row
 
 
 def test_an_action_states_no_fact_an_ancestor_declares():
@@ -478,6 +488,75 @@ def test_two_runs_write_the_same_bytes(tmp_path):
     assert first_parts == second_parts, 'the action bytes are the same for the same source'
     assert commit_actions.build_rows(_manifest(first), naming.sanitize) == \
         commit_actions.build_rows(_manifest(second), naming.sanitize)
+
+
+# --- 7. The push block (F6.10.4) ------------------------------------------------
+
+PUSH = 'panos_push_to_devices'
+
+
+def test_the_push_block_names_the_fact_and_the_fact_key():
+    """`name` states the fact and `type` states the fact key, both read through `ACTION_FILTERS`, so the
+    emitter and the reader use one mapping. The push row is the only action row with a required field, so the
+    print order is the order the row declares.
+    """
+    fields = commit_actions.block_fields(PUSH, 'device_group', 'DG-A')
+    assert fields == {'name': 'DG-A', 'type': 'device_group'}, fields
+    assert list(fields) == list(resource_mapping.ACTION_SCHEMA[PUSH][0]), fields
+    assert commit_actions.field_text(PUSH, 'name', 'DG-A') == '"DG-A"', 'a string field prints as a string'
+    assert commit_actions.field_text('panos_commit', 'device_groups', 'DG-A') == '["DG-A"]'
+    read = commit_actions.read_block(
+        sanity_checks.blocks({ACTIONS: _block('device_group', 'DG-A', action=PUSH)}, ('action',))[0])
+    assert (read['action'], read['fact'], read['field'], read['entry_name']) == \
+        (PUSH, 'device_group', 'name', 'DG-A'), read
+    # The two shapes share the address rule, so the commit block and the push block for one fact carry the
+    # same address, and the action type is the only difference.
+    assert commit_actions.local_name('device_group', 'DG-A', naming.sanitize) == read['local_name'], read
+    assert _block('device_group', 'DG-A').split('"')[1] == 'panos_commit'
+
+
+def test_a_fact_the_answer_does_not_answer_prints_no_field():
+    """The same answer table gates both shapes: a `vsys` fact and a `vsys_device` fact name no push type, so
+    the emitter prints no block for them and the gate reports such a block as naming no fact.
+    """
+    for fact in ('vsys', 'vsys_device', ''):
+        assert commit_actions.block_fields(PUSH, fact, 'x') == {}, fact
+        assert commit_actions.block_fields('panos_commit', fact, 'x') == {}, fact
+    assert commit_actions.filter_field('vsys', PUSH) == ''
+    assert commit_actions.filter_field('device_group', PUSH) == 'name'
+
+
+def test_the_push_block_states_no_devices(tmp_path):
+    """The tool names no serial, so the emitter prints no `devices` field and the provider pushes to all
+    devices in the target. The row still declares the field, so the gate accepts a hand-written one.
+    """
+    out = tmp_path / 'kitchen'
+    assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
+    texts = parts(_files(out), ACTIONS)
+    assert texts, 'the kitchen sink names units the push shape can name'
+    for path, text in texts.items():
+        assert not any(line.strip().startswith('devices =') for line in text.split('\n')), path
+        blocks = sanity_checks.blocks({path: text}, ('action',))
+        assert any(block.rtype == PUSH for block in blocks), path
+    assert 'devices' in resource_mapping.ACTION_SCHEMA[PUSH][1], 'the row declares it, the emitter prints none'
+    assert sanity_checks.check_actions(texts) == [], [f.render() for f in sanity_checks.check_actions(texts)]
+
+
+def test_the_push_block_prints_after_the_commit_block(tmp_path):
+    """Within one unit the blocks print in the `ACTION_SCHEMA` order, which is the order a push follows a
+    commit, and the two blocks share one address.
+    """
+    out = tmp_path / 'kitchen'
+    assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
+    rows = commit_actions.build_rows(_manifest(out), naming.sanitize)
+    order = list(resource_mapping.ACTION_SCHEMA)
+    assert order[0] == 'panos_commit' and order[1] == PUSH, order
+    for path, text in parts(_files(out), ACTIONS).items():
+        blocks = sanity_checks.blocks({path: text}, ('action',))
+        unit_rows = sorted((row for row in rows if row['directory'] == Path(path).parent.name),
+                           key=lambda row: order.index(row['action']))
+        assert [block.rtype for block in blocks] == [row['action'] for row in unit_rows], (path, blocks)
+        assert len({block.local for block in blocks}) == 1, (path, blocks)
 
 
 def test_check_order_names_actions_after_scope_blocks(tmp_path):
