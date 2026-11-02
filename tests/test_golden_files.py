@@ -28,21 +28,24 @@ CASES: dict[str, tuple[Path, Path]] = {
     "kitchen_sink": (FIXTURES_DIR / "kitchen_sink.xml", GOLDEN_DIR / "kitchen_sink"),
 }
 
-# (case, filename) pairs for the per-file tests, from the committed goldens.
+# (case, path from the case directory) pairs for the per-file tests, from the committed goldens.
+# F6.10.1: the key is the path from the case directory, because the unit set is one set per unit, so a
+# golden case can hold unit directories. Today the committed goldens are flat, so the path is the file name.
 CASE_FILES: list[tuple[str, str]] = sorted(
-    (case, f.name) for case, (_src, golden_dir) in CASES.items() for f in golden_dir.glob("*.tf")
+    (case, str(f.relative_to(golden_dir)))
+    for case, (_src, golden_dir) in CASES.items() for f in golden_dir.rglob("*.tf")
 )
 
 
 def _generate(source_xml: Path, out_dir: Path) -> dict[str, bytes]:
-    """Run the converter CLI. Return {filename: bytes} for the .tf output."""
+    """Run the converter CLI. Return {path from the output directory: bytes} for the .tf output."""
     result = run_script("panorama_to_terraform.py", str(source_xml), "--output-dir", str(out_dir))
     assert result.returncode == 0, f"converter failed: {result.stderr}\n{result.stdout}"
-    return {f.name: f.read_bytes() for f in sorted(out_dir.glob("*.tf"))}
+    return {str(f.relative_to(out_dir)): f.read_bytes() for f in sorted(out_dir.rglob("*.tf"))}
 
 
 def _goldens(golden_dir: Path) -> dict[str, bytes]:
-    return {f.name: f.read_bytes() for f in sorted(golden_dir.glob("*.tf"))}
+    return {str(f.relative_to(golden_dir)): f.read_bytes() for f in sorted(golden_dir.rglob("*.tf"))}
 
 
 @pytest.fixture(scope="session")
@@ -62,7 +65,11 @@ def golden_outputs() -> dict[str, dict[str, bytes]]:
 
 @pytest.mark.parametrize("case", list(CASES))
 def test_golden_file_set_matches(case, generated_outputs, golden_outputs):
-    """The converter must emit exactly the .tf files in the golden set."""
+    """The converter must emit exactly the .tf files in the golden set.
+
+    F6.10.1: the key is the path from the case directory, so the pin holds for a golden case that holds unit
+    directories. Today the committed goldens are flat, so the path is the file name.
+    """
     assert set(generated_outputs[case]) == set(golden_outputs[case]), (
         f"file set mismatch for case {case!r}: "
         f"missing={set(golden_outputs[case]) - set(generated_outputs[case])} "
