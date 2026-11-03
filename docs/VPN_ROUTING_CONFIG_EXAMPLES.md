@@ -116,7 +116,9 @@ resource "panos_virtual_router" "default_4b617d92" {
 
 An entry the object cannot express is named in `MANUAL_SETUP_REPORT.txt` instead, so the file holds no half
 of it: a peer the export places at the `bgp` level that no peer group names is one of those entries. A routing
-level the shape table does not state is not read, so a policy, a timer, or an auth profile body prints nothing.
+level the shape table does not state is not read, so a run prints nothing for it, such as an `ospf` timer. An
+auth profile body prints, and a field the provider marks `sensitive` prints as the reference to the variable the
+entry names, never as the value the export stated.
 
 ## OSPF
 

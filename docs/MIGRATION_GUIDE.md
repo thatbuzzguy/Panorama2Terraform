@@ -25,10 +25,12 @@ Report-only, because the provider has no v2 resource or the body is not parsed:
 
 - Application filters, application override rules, QoS profiles, IPsec
   tunnel monitor profiles
-- Routing levels the shape table does not state: timers, policy, `ospfv3`, `rip`, and the
-  auth profile bodies. BGP and OSPF themselves print as the `protocol` object on
+- Routing levels the shape table does not state, so no parse method reads them and a run prints nothing for
+  them: the `ospf` levels outside `area` and `auth_profile`, and the filter containers (route maps, prefix
+  lists, community lists, access lists). BGP, OSPF, OSPFv3 and RIP print as the `protocol` object on
   `panos_virtual_router` ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9), so only the entries that object
-  cannot express are reported.
+  cannot express are reported. An auth profile entry prints, and each field the provider marks `sensitive`
+  prints as the reference to the variable the entry names, because no generated file holds the value.
 - Security profile bodies, log forwarding profiles, schedules
 - Address types with no `panos_address` attribute, and the second protocol leg of
   a dual-protocol service

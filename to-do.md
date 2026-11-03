@@ -1,9 +1,9 @@
 # To Do
 
-F7.6 is complete and committed: `PROTOCOL_SHAPE` states the `policy` level the pinned provider declares on
-`protocol.bgp` and the 78 rows of its subtree, `parse_bgp` reads the four levels that hold entries, and the
-emitter, the gate rule and the property scan read the same rows. The next feature is the rest of Epic 7: the
-routing levels `resource_mapping.PROTOCOL_SHAPE` does not state.
+F7.7 is complete and committed: `PROTOCOL_SHAPE` states the four `auth_profile` levels the pinned provider
+declares, the four level methods read them through `_protocol_branch`, and a field the provider marks
+`sensitive` prints as the variable reference the entry names, never as the value the export stated. The next
+feature is the rest of Epic 7: the routing levels `resource_mapping.PROTOCOL_SHAPE` does not state.
 
 ## Next feature, in order (Epic 7 slices)
 
@@ -14,12 +14,12 @@ method for every router (`tests/test_entry_coverage.py::_parse_every`,
 word, so every new row is pinned against the live provider schema. A row that states a level the provider
 does not declare is a report decision, not a table row.
 
-1. **F7.7 — the auth profile bodies**: the parse method that reads an auth profile entry, for the BGP, OSPF,
-   OSPFv3 and RIP levels. The rows exist for the `sensitive` decision only; the entry-mark rule and the
-   property scan decide the report shape. The sensitive field stays the variable reference.
-2. **F7.8 — the filter containers**: route maps, prefix lists, community lists, access lists. These sit
+1. **F7.8 — the filter containers**: route maps, prefix lists, community lists, access lists. These sit
    outside the `protocol` object, so the slice first decides the container row (report, or emitted with a
    provider type in its note) before the parse method reads them.
+2. **F7.9 — the `ospf` fields the row does not state**: `timers`, `global_bfd`, `graceful_restart`,
+   `export_rules`, `rfc1583`, `allow_redist_default_route`, `reject_default_route`. The row gains the fields
+   `parse_ospf` reads, and the gate then accepts them in a hand-written file.
 
 ## Rules the write path keeps
 

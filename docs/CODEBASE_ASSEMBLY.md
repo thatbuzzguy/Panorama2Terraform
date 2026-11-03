@@ -481,7 +481,13 @@ files for every run that has content.
    and `rulebase` is not recorded (F3.5). A reference-only row holds no value, because the value must never
    reach a generated file: the block prints the reference to a variable the run declares with
    `sensitive = true`, and no `.tfvars` line and no site row is written for it, because rule 3 writes a row
-   only for a site that names a value. The operator supplies the value in `terraform.tfvars` (§11). Pinned by
+   only for a site that names a value. The operator supplies the value in `terraform.tfvars` (§11). F7.7: the run
+   can read a value for such a field inside an entry, and it holds that value only to decide the name, because a
+   field cannot name itself: the name is the §5 name of the entry that holds the field, the entry names itself
+   when the field is its own, and a level inside an entry names the entry that holds it. The run still writes no
+   `.tfvars` line and no site row for the name. Such a name is a property of the matrix row that covers the entry
+   the run read it in, which is `panos_virtual_router`, and `key` is not a property because it is read inside an
+   entry inside an entry, which no row covers. Pinned by
    `tests/test_site_data.py::test_the_table_covers_every_field_the_location_can_state`,
    `::test_only_the_device_field_maps_to_a_variable`, `::test_the_table_holds_no_property`, and
    `tests/test_variables.py::test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_only`.
@@ -516,7 +522,8 @@ files for every run that has content.
 5. **The print site is the only place the shape is decided.** `TerraformGenerator.printed_value` is the one
    site that applies the table, and `location_field`, called by `location_block`, delegates to it (F7.1), so
    a printed value's shape cannot be decided in two places: a mapped field prints as `var.<name>`, a
-   reference-only field prints as the reference to a name the entry states, and every other field prints as
+   reference-only field prints as the reference to the §5 name of the entry that holds the field
+   (F7.7), because a field cannot name itself, and every other field prints as the quoted value.
    the quoted value. `location_data` keeps the value, because the import id encodes the value (§7 rule 3) and a
    variable name is not a device name. The pair is recorded at the print site, keyed by
    `unit_manifest.facts_of`, the way `name_ref` records a reference name for the manifest (§3 rule 4), so
