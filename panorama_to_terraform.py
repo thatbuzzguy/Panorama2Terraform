@@ -2120,8 +2120,10 @@ class PanoramaParser:
                          'protocol/bgp/policy/import/rules'):
                 self._protocol_branch(policy_path, policy_level, policy, path)
             level[self._protocol_field_name(policy_path)] = policy_level
-        # The auth profile rows state the shape for a level this parse method does not read, so the run
-        # prints no value for it and the gate rule still refuses a literal secret there (`backlog.md`).
+        # F7.7: `auth_profile` is an entry level the row states as a `string_list` field, so the same rule
+        # fills it. The path is the only name this method states; `secret` is read as a field, and the print
+        # site turns it into the variable reference.
+        self._protocol_branch(bgp_path, level, bgp, 'protocol/bgp/auth_profile')
         return level
 
     def parse_ospf(self, router: ET.Element) -> dict:
@@ -2144,6 +2146,10 @@ class PanoramaParser:
             # states no detail of its own.
             captured, _ = self._protocol_interface(iface, ospf_path)
             self.mark(iface, captured, destination='report')
+        # F7.7: `auth_profile` is an entry level the row states as a `string_list` field, so the same rule
+        # fills it, and `md5` is the entry level inside the profile entry that `_protocol_body` fills through
+        # the table. The path is the only name this method states.
+        self._protocol_branch(ospf_path, level, ospf, 'protocol/ospf/auth_profile')
         return level
 
     def parse_ospfv3(self, router: ET.Element) -> dict:
@@ -2175,6 +2181,10 @@ class PanoramaParser:
             # expressed and the manual report prints it, the same rule as `parse_ospf`.
             captured, _ = self._protocol_interface(iface, ospfv3_path)
             self.mark(iface, captured, destination='report')
+        # F7.7: `auth_profile` is the entry level this method reads, and the choice levels inside the entry
+        # (`ah`, `esp/authentication`) and the object level `esp/encryption` are filled by `_protocol_body`,
+        # which reaches them through the table, so this method states no path for them.
+        self._protocol_branch(ospfv3_path, level, ospfv3, 'protocol/ospfv3/auth_profile')
         return level
 
     def parse_rip(self, router: ET.Element) -> dict:
@@ -2189,8 +2199,9 @@ class PanoramaParser:
         name-keyed list as an entry. An interface entry holds its `default_route` choice inside itself, so
         `_protocol_body` fills it, and an entry whose choice element states none of the alternatives the
         provider requires is marked for the report and not put in the printed list. The choice level itself is
-        not required, so an entry that states no choice element prints no field for it. The two `auth_profile`
-        rows state the `sensitive` decision only, so this method reads no value for them (`backlog.md`, F7.7).
+        not required, so an entry that states no choice element prints no field for it. F7.7: `auth_profile` is
+        the level this method reads through `_protocol_branch`, so the print site names the entry's variable
+        for `key` and `password`.
         """
         rip_path = 'protocol/rip'
         rip = router.find(rip_path)
@@ -2201,6 +2212,9 @@ class PanoramaParser:
         for path, entries in ((interface_path, rip.findall('./interfaces/entry')),
                               (rule_path, rip.findall('.//export-rules/entry'))):
             self._protocol_entries(path, level[self._protocol_field_name(path)], entries)
+        # F7.7: `auth_profile` is the entry level the row states as a `string_list` field, so the same rule
+        # fills it, and `md5` inside the profile entry is filled by `_protocol_body` through the table.
+        self._protocol_branch(rip_path, level, rip, 'protocol/rip/auth_profile')
         return level
 
     def _protocol_areas(self, container: ET.Element, base: str) -> dict:
@@ -3489,7 +3503,7 @@ class TerraformGenerator:
             return '[\n' + ',\n'.join(parts) + f'\n{indent}]'
         raise TypeError(f'Cannot render {type(value)} as HCL')
 
-    def _protocol_fields(self, path: str, level: dict, router: dict) -> dict:
+    def _protocol_fields(self, path: str, level: dict, router: dict, entry_name: str = '') -> dict:
         """One level of the protocol object, printed in the shape table's order (F7.1).
 
         `PROTOCOL_SHAPE` is the only thing that states a level's fields and shapes, so the emitter prints
@@ -3497,11 +3511,16 @@ class TerraformGenerator:
         nothing, a `list` level prints one object per element, and a `one_of` level prints the one key the
         mapping states. A field the table marks `sensitive` prints as the variable reference, because no
         generated file may state the value.
+
+        `entry_name` is the name of the entry that holds the level (F7.7). The variable a `sensitive` field
+        prints is the one the entry names, so the walk carries the name down: an entry names itself, and a
+        level inside an entry has no name of its own, so it prints the reference the entry that holds it names.
         """
         row = resource_mapping.protocol_row(path)
         if row['shape'] == 'block':
             # A `block` level states no field, so the value the parse read for it is the whole print (F7.1).
             return level
+        name = level.get('name') or entry_name or ''
         printed = {}
         for field, shape in row['fields'].items():
             value = level.get(field)
@@ -3512,7 +3531,7 @@ class TerraformGenerator:
                 # level row to walk (F7.6).
                 out = value
             elif shape == 'string_list':
-                out = [self._protocol_fields(f'{path}/{field}', element, router) for element in value]
+                out = [self._protocol_fields(f'{path}/{field}', element, router, name) for element in value]
             elif shape == 'one_of':
                 # The mapping lives on the one_of row for this field, not on the level that holds it.
                 sub = resource_mapping.protocol_row(f'{path}/{field}')
@@ -3524,11 +3543,12 @@ class TerraformGenerator:
                     # F7.6: the alternative is a value the row states, so the reader's value is the print.
                     out = {key: value[report_value]}
                 else:
-                    out = ({key: self._protocol_fields(f'{path}/{field}/{key}', value[report_value], router)})
+                    out = ({key: self._protocol_fields(f'{path}/{field}/{key}', value[report_value], router,
+                                                       name)})
             elif shape == 'object':
-                out = self._protocol_fields(f'{path}/{field}', value, router)
+                out = self._protocol_fields(f'{path}/{field}', value, router, name)
             elif resource_mapping.VALUE_VARIABLES.get(field) == resource_mapping.REFERENCE_ONLY:
-                out = HclRef(self.printed_value(field, level.get('name') or '', unit_manifest.facts_of(router)))
+                out = HclRef(self.printed_value(field, name, unit_manifest.facts_of(router)))
             else:
                 out = value
             # A level that printed nothing prints nothing, so the block states no empty field.
@@ -3635,7 +3655,8 @@ variable "panos_password" {
                 # fact the tool cannot read, and a serial is not a secret, so the marking follows the row.
                 if shapes.get(name) == resource_mapping.REFERENCE_ONLY:
                     content += (f'variable "{name}" {{\n'
-                                f'  description = "Sensitive protocol value (F7.1): the run holds no value for it"\n'
+                                f'  description = "Sensitive protocol value (F7.1, F7.7): the reference prints, so no '
+                                f'file states the value, and the operator supplies it"\n'
                                 f'  type        = string\n'
                                 f'  sensitive   = true\n'
                                 '}\n\n')

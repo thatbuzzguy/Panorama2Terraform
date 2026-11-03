@@ -13,6 +13,10 @@ so the file and the data cannot disagree.
 F7.1 adds the sensitive rule: `sensitive = true` is the table's `reference_only` row, so a name
 that is not in the table is never a secret.
 
+F7.7 adds the second way a reference-only name is named: a `sensitive` field the run read inside an entry
+cannot name itself, so the name is the §5 name of the entry that holds it, and the declaration set holds that
+name for the run that read it.
+
 F6.10.4 adds the third part of the declaration set: a name the table records with no value for it, because the
 tool cannot read the fact it names. The set is read through the table and through the provider block that
 references it.
@@ -20,10 +24,12 @@ references it.
 
 import re
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
 
+import entry_coverage
 import naming
 import resource_mapping
 import sanity_checks
@@ -33,6 +39,9 @@ from conftest import FIXTURES_DIR, SAMPLE_CONFIG, file_text, run_script, tf_file
 CASES = {
     "sample": SAMPLE_CONFIG,
     "kitchen_sink": FIXTURES_DIR / "kitchen_sink.xml",
+    # F7.7: the fixture that states an auth profile at each of the four routing levels, so the run records a
+    # reference-only name for a field it read inside an entry.
+    "auth_profile": FIXTURES_DIR / "auth_profile.xml",
 }
 
 CREDENTIALS = ("panos_hostname", "panos_username", "panos_password")
@@ -89,21 +98,65 @@ def _held_names(case: str) -> set[str]:
             for name in named if f'var.{name}' in text}
 
 
+def _reference_names(case: str, converter_module) -> set[str]:
+    """F7.7: the names a run records for a `sensitive` field it read inside an entry, read through the table.
+
+    A `sensitive` value cannot name itself, so the name is the §5 name of the entry that holds the field: an
+    entry names itself when the field is its own, and a level inside an entry names the entry that holds it. The
+    pin walks the fixture through the `sensitive` sets of the `PROTOCOL_SHAPE` rows, through the `string_list`
+    shape, which is the table's way of saying the object is an entry, and through `_protocol_xml_name`, the one
+    rule that turns a table name into the element the input spells, so it states no name list of its own. A
+    field with no value names nothing, because the parse records nothing for it, and a case with no protocol
+    object names nothing.
+    """
+    root = ET.fromstring(CASES[case].read_text(encoding='utf-8'))
+    spell = converter_module.PanoramaParser._protocol_xml_name
+    parents = {child: parent for parent in root.iter() for child in parent}
+    names = set()
+    for path, row in sorted(resource_mapping.PROTOCOL_SHAPE.items()):
+        if not row['sensitive']:
+            continue
+        # A `string_list` row reads entries, so the input holds one `entry` element for each object the row
+        # names; every other row reads the level itself, so the entry that names the reference is the one that
+        # holds the level.
+        segments = path.split('/')
+        parts = []
+        for index, segment in enumerate(segments):
+            parts.append(spell(segment))
+            walked = resource_mapping.PROTOCOL_SHAPE.get('/'.join(segments[:index + 1]))
+            if walked and walked['shape'] == 'string_list':
+                parts.append('entry')
+        xml_path = '/'.join(parts)
+        for obj in root.findall(f'.//virtual-router/entry/{xml_path}'):
+            for field in row['sensitive']:
+                value = obj.find(spell(field))
+                if value is None or value.text in entry_coverage.EMPTY_FIELD_VALUES:
+                    continue
+                holder = obj
+                while holder is not None and holder.tag != 'entry':
+                    holder = parents.get(holder)
+                if holder is not None:
+                    names.add(naming.variable_name(holder.get('name')))
+    return names
+
+
 @pytest.mark.parametrize('case', list(CASES))
-def test_the_declaration_set_is_the_credentials_plus_the_site_values(case):
+def test_the_declaration_set_is_the_credentials_plus_the_site_values(case, converter_module):
     """No dead variable survives: the declaration set is the credentials plus the values the table
     mapped (F6.6), and the file and the data read the same run.
 
     F6.10.4: the table also names a value the run cannot read, so the declaration set holds the names it
-    declares with no value for the units whose provider block references them.
+    declares with no value for the units whose provider block references them. F7.7: a `sensitive` field the
+    run read inside an entry names a variable after the entry, so the set also holds those names.
     """
     # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): `variables.tf` is the unit's file, so the declaration
     # set is the union across the unit set, read in path order.
     declared = set(VAR_DECL_RE.findall(file_text(_generate(case), 'variables.tf')))
     site = {name for row in _site_rows(case) for name in row['variables']}
-    assert declared == set(CREDENTIALS) | site | _held_names(case), (
+    assert declared == set(CREDENTIALS) | site | _held_names(case) | _reference_names(case, converter_module), (
         f'{case}: variables.tf declares {sorted(declared)}; expected the credentials plus '
-        f'{sorted(site)} plus {sorted(_held_names(case))}')
+        f'{sorted(site)} plus {sorted(_held_names(case))} plus '
+        f'{sorted(_reference_names(case, converter_module))}')
 
 
 @pytest.mark.parametrize('case', list(CASES))
@@ -134,12 +187,12 @@ def test_provider_block_consumes_the_credentials(case):
 
 
 @pytest.mark.parametrize('case', list(CASES))
-def test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_only(case):
+def test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_only(case, converter_module):
     """F7.1: `sensitive = true` follows `VALUE_VARIABLES`, not a name list.
 
-    `password` is the only reference-only name a run has a value for, so it is the only sensitive
-    block today. A protocol secret has no value in the export, so no block is declared for it: the
-    name is declared by the operator, and no generated file states the value.
+    A reference-only name is either the field the table marks `sensitive` (the credential `password`), or the
+    §5 name of the entry that holds such a field (F7.7), because a value cannot name itself. The pin reads both
+    through the table and the naming rule, so a name outside the two is never a secret.
     """
     files = _generate(case)
     text = file_text(files, 'variables.tf')
@@ -147,11 +200,12 @@ def test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_o
         r'variable\s+"([A-Za-z0-9_]+)"\s*\{(.*?)\n\}', text, re.S)
     reference_only = {field for field, row in resource_mapping.VALUE_VARIABLES.items()
                       if row == resource_mapping.REFERENCE_ONLY}
+    entry_names = _reference_names(case, converter_module)
     for name, body in blocks:
         # A variable name is the §5 name of a field: `panos_password` is the credential field `password`.
         field = name[len('panos_'):] if name.startswith('panos_') else name
         marking = 'sensitive' if 'sensitive' in body else 'not sensitive'
-        assert ('sensitive' in body) == (field in reference_only), (
+        assert ('sensitive' in body) == (field in reference_only or name in entry_names), (
             f'{case}: variable {name!r} sensitive marking is unexpected: {marking}')
     # F6.10.4: `operator_supplied` is the shape word for a name the run cannot fill, and it states no marking,
     # so the declaration for `target` holds none. A serial is not a secret.

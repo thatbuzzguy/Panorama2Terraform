@@ -303,6 +303,38 @@ def test_the_scan_measures_a_policy_entry_and_not_a_level_inside_it(converter_mo
         'protocol/bgp/policy/aggregation/address')
 
 
+def test_the_scan_measures_an_auth_profile_entry_and_not_the_entry_inside_it(converter_module, tmp_path):
+    """F7.7: the four auth profile entries are in the scan scope, and the `md5` entry inside one is not.
+
+    The four container rows the parse reads are the four levels, so the scan measures the fields each row
+    declares against the router row. The `md5` entry sits inside the profile entry, so its section path holds an
+    extra `entry` segment that no row path can match, and `key` stays grounded by the table. A `one_of` level
+    inside the entry is read as the field of the entry, so `ah` and `esp` are measured and the five alternatives
+    are not. The fixture states the two `ospfv3` choice levels in two entries, because the provider accepts one
+    or the other for an entry.
+    """
+    parser = run_pipeline(converter_module, 'auth_profile.xml', tmp_path)
+    assert parser is not None, 'auth_profile.xml'
+    ledger = parser.ledger
+    for level, entry_name in (('bgp', 'profile-bgp'), ('ospf', 'profile-ospf'), ('rip', 'profile-rip'),
+                              ('ospfv3', 'profile-ospfv3-ah'), ('ospfv3', 'profile-ospfv3-esp')):
+        entry = next(e for e in ledger.entries() if e.get('name') == entry_name)
+        path = container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source)
+        row = entry_coverage.matrix_row_for(path)
+        assert row is not None and row['resource'] == 'panos_virtual_router', (level, row, path)
+        assert entry_coverage.covering_row(path).path == f'protocol/{level}/auth-profile', path
+    inner = next(e for e in ledger.entries() if e.get('name') == 'profile-ospf-md5')
+    path = container_coverage.section_path(ledger.parents[inner], ledger.parents, ledger.source)
+    assert entry_coverage.matrix_row_for(path) is None, path
+    recorded = ledger.mark_for(inner)['captured']
+    assert sorted(set(recorded.used_keys()) - entry_coverage.NON_FIELD_KEYS) == ['key', 'preferred'], recorded
+    router_row = next(r for r in ROWS if r['resource'] == 'panos_virtual_router')
+    for field in ('ah', 'esp', 'md5', 'password', 'secret', 'spi'):
+        assert field in router_row['properties'], router_row['properties']
+    assert 'key' not in router_row['properties'], router_row['properties']
+    assert ledger.property_findings() == [], ledger.property_findings()
+
+
 # --- 3. The scan -----------------------------------------------------------
 
 def test_scan_reports_the_properties_no_output_read(converter_module, tmp_path):

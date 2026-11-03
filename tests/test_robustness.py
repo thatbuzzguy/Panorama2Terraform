@@ -42,6 +42,26 @@ def _assert_clean_failure(proc: subprocess.CompletedProcess) -> None:
 
 # --- Hostile input: must fail cleanly ---------------------------------------
 
+def test_a_parsed_secret_never_reaches_a_generated_file(tmp_path):
+    """F7.7: a `sensitive` value the parse read is printed as the reference, so no file holds the value.
+
+    `tests/fixtures/auth_profile.xml` states one distinct value per level, so the pin names each one. The block
+    prints `var.<the §5 name of the entry that holds the field>`, `site_data.py` rule 2 writes no row for a name
+    with no value, and no `.tfvars` line is written for it. The name itself, and its `sensitive = true` marking,
+    are pinned by `tests/test_variables.py`.
+    """
+    result = _run(CONVERTER, str(FIXTURES_DIR / 'auth_profile.xml'), '--output-dir', str(tmp_path),
+                  workdir=REPO_ROOT)
+    assert result.returncode == 0, result.stdout + result.stderr
+    values = ('bgp-secret-value', 'ospf-password-value', 'ospf-md5-value', 'rip-password-value',
+             'ospfv3-ah-value', 'ospfv3-esp-value')
+    written = {str(path): path.read_text(encoding='utf-8') for path in Path(tmp_path).rglob('*')
+              if path.is_file()}
+    assert not any(value in text for text in written.values() for value in values), sorted(written)
+    tfvars = [text for path, text in written.items() if path.endswith('.tfvars')]
+    assert not any(any(value in text for value in values) for text in tfvars), tfvars
+
+
 def test_entity_expansion_rejected(tmp_path):
     """A DTD with expanding entities is rejected before parsing (no DoS)."""
     proc = _run(CONVERTER, str(FIXTURES_DIR / 'hostile_billion_laughs.xml'),

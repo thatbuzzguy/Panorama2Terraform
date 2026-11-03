@@ -1144,15 +1144,17 @@ SCOPE_SHAPE = {
 # prints — the fields `LOCATION_SCHEMA` declares, and the leaf fields `PROTOCOL_SHAPE` states — and what
 # the block prints for it. The mapping is a table, so the emitter reads it and the gate reads it, and no
 # emitter branch decides the shape for one type. A property is the entry's content, not a site value, so
-# the table holds no property row except the two `sensitive` rows: a field the provider marks sensitive
+# the table holds no property row except the `sensitive` rows: a field the provider marks sensitive
 # cannot reach a generated file as a literal, so the block prints the reference for it even when the
-# value is the entry's content. `panos_template_variable` prints its value as a literal (F6.5 decision 3,
+# value is the entry's content. F7.7: such a name is a property only for the matrix row that covers the entry
+# the run read it in. `panos_template_variable` prints its value as a literal (F6.5 decision 3,
 # recorded in `backlog.md`). `variable` names the value through the §5 rule in `naming.py`.
 VARIABLE = 'variable'
 LITERAL = 'literal'
-# A field the provider marks `sensitive`: the run names the variable and holds no value, so the block
-# prints the reference and no generated file states the value. The name is `naming.py` applied to the
-# entry name, because a value cannot name itself (`backlog.md`, the value the parse cannot carry).
+# A field the provider marks `sensitive`: the block prints the reference, and no generated file states the
+# value. The name is `naming.py` applied to the entry that holds the field, because a value cannot name itself
+# (`backlog.md`, the value the parse cannot carry). F7.7: the run can read the value for such a field inside an
+# entry, and it holds it only to decide the name, so no `.tfvars` line and no site row is written for it.
 REFERENCE_ONLY = 'reference_only'
 # F6.10.4: the shape for a site fact the tool cannot name. The run names the variable, holds no value for it,
 # and the operator supplies the value in `terraform.tfvars` (§11). The export states a device as a hostname,
@@ -1173,8 +1175,8 @@ VALUE_VARIABLES = {
     'panorama_device': LITERAL,
     # The parse records no rulebase (F3.5), so no value reaches the block.
     'rulebase': LITERAL,
-    # The three provider `sensitive` facts in the protocol object (F7.1): the block prints the reference,
-    # the run declares the variable, and no generated file states the value.
+    # The three provider `sensitive` facts in the protocol object (F7.1, F7.7): the run reads them, the block
+    # prints the reference, the run declares the variable, and no generated file states the value.
     'secret': REFERENCE_ONLY,
     'key': REFERENCE_ONLY,
     'password': REFERENCE_ONLY,
@@ -1223,7 +1225,7 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'sensitive': frozenset(),
     },
     # F7.6: `policy` is the fifth level the provider declares for `bgp`, so the row states it and the reader
-    # fills it. `auth_profile` stays a `sensitive` row with no reader (`backlog.md`, F7.7).
+    # fills it. F7.7 put the `auth_profile` level into the table, so the reader fills it too.
     'protocol/bgp': {
         'shape': 'object',
         'fields': {'enable': 'bool', 'local_as': 'string', 'router_id': 'string',
@@ -1297,8 +1299,8 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset(),
     },
-    # The auth profile rows state the shape for a field no parse method reads yet (`backlog.md`), so the
-    # gate can refuse a literal secret inside a hand-written protocol object.
+    # F7.7: the four auth profile levels are the levels the four parse methods read. A field the provider marks
+    # `sensitive` is printed as the variable reference, so each row states its `sensitive` set.
     'protocol/bgp/auth_profile': {
         'shape': 'string_list',
         'fields': {'name': 'string', 'secret': 'string'},
@@ -1457,6 +1459,9 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset(),
     },
+    # F7.7: `md5` is an entry level inside the profile entry, so the reader fills it through `_protocol_body`,
+    # which reaches it through the field the profile row states. The container table states no row for it,
+    # because an entry inside an entry is not in the scan scope.
     'protocol/ospf/auth_profile': {
         'shape': 'string_list',
         'fields': {'name': 'string', 'password': 'string', 'md5': 'string_list'},
@@ -1465,7 +1470,7 @@ PROTOCOL_SHAPE: dict[str, dict] = {
     },
     'protocol/ospf/auth_profile/md5': {
         'shape': 'string_list',
-        'fields': {'name': 'string', 'key': 'string'},
+        'fields': {'name': 'string', 'key': 'string', 'preferred': 'bool'},
         'selects': {},
         'sensitive': frozenset({'key'}),
     },
@@ -1473,15 +1478,15 @@ PROTOCOL_SHAPE: dict[str, dict] = {
     # area subtree states the same shape the `ospf` rows state, field for field, because the provider
     # declares the same fields for both levels; the rows stay separate because the levels are separate. The
     # two are not identical: `ospfv3` declares `instance_id` on `area/interface` and on `area/virtual_link`,
-    # and `ospf` does not. A level the parse does not read has no row, so the gate refuses it: the
-    # `auth_profile` level is in `backlog.md`.
+    # and `ospf` does not. A level the parse does not read has no row, so the gate refuses it.
     # F7.3: the four levels measured 2026-11-02 are the scalar levels the provider declares for this level
-    # and `parse_ospfv3` reads. `auth_profile` stays a `sensitive` row with no reader (`backlog.md`).
+    # and `parse_ospfv3` reads. F7.7 added `auth_profile`, the level the same method reads through
+    # `_protocol_branch`.
     'protocol/ospfv3': {
         'shape': 'object',
         'fields': {'enable': 'bool', 'router_id': 'string', 'timers': 'object',
                    'global_bfd': 'object', 'graceful_restart': 'object', 'area': 'string_list',
-                   'export_rules': 'string_list'},
+                   'export_rules': 'string_list', 'auth_profile': 'string_list'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1516,6 +1521,104 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'fields': {'name': 'string', 'metric': 'number', 'new_path_type': 'string', 'new_tag': 'string'},
         'selects': {},
         'sensitive': frozenset(),
+    },
+    # F7.7: the `ospfv3` auth profile, measured 2026-11-03 against the pinned provider. `ah` and
+    # `esp/authentication` are choice levels: the export states the alternative by presence under the level, so
+    # the row states the alternatives as `selects` keys, and each alternative that declares an attribute is its
+    # own row. `none` declares no attribute, so it is the `block` field inside the row that holds it. Every
+    # alternative holds only `key`, which the provider marks `sensitive`.
+    'protocol/ospfv3/auth_profile': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'spi': 'string', 'ah': 'one_of', 'esp': 'object'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/auth_profile/ah': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'md5': 'md5', 'sha1': 'sha1', 'sha256': 'sha256', 'sha384': 'sha384', 'sha512': 'sha512'},
+        'sensitive': frozenset(),
+    },
+    # The five alternatives of `ah`, and the five of `esp/authentication`, are the same shape, so the rows are
+    # the same row content read under two paths.
+    'protocol/ospfv3/auth_profile/ah/md5': {
+        'shape': 'object',
+        'fields': {'key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'key'}),
+    },
+    'protocol/ospfv3/auth_profile/ah/sha1': {
+        'shape': 'object',
+        'fields': {'key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'key'}),
+    },
+    'protocol/ospfv3/auth_profile/ah/sha256': {
+        'shape': 'object',
+        'fields': {'key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'key'}),
+    },
+    'protocol/ospfv3/auth_profile/ah/sha384': {
+        'shape': 'object',
+        'fields': {'key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'key'}),
+    },
+    'protocol/ospfv3/auth_profile/ah/sha512': {
+        'shape': 'object',
+        'fields': {'key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'key'}),
+    },
+    'protocol/ospfv3/auth_profile/esp': {
+        'shape': 'object',
+        'fields': {'authentication': 'one_of', 'encryption': 'object'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/auth_profile/esp/authentication': {
+        'shape': 'one_of',
+        'fields': {'none': 'block'},
+        'selects': {'md5': 'md5', 'none': 'none', 'sha1': 'sha1', 'sha256': 'sha256',
+                     'sha384': 'sha384', 'sha512': 'sha512'},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/auth_profile/esp/authentication/md5': {
+        'shape': 'object',
+        'fields': {'key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'key'}),
+    },
+    'protocol/ospfv3/auth_profile/esp/authentication/sha1': {
+        'shape': 'object',
+        'fields': {'key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'key'}),
+    },
+    'protocol/ospfv3/auth_profile/esp/authentication/sha256': {
+        'shape': 'object',
+        'fields': {'key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'key'}),
+    },
+    'protocol/ospfv3/auth_profile/esp/authentication/sha384': {
+        'shape': 'object',
+        'fields': {'key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'key'}),
+    },
+    'protocol/ospfv3/auth_profile/esp/authentication/sha512': {
+        'shape': 'object',
+        'fields': {'key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'key'}),
+    },
+    'protocol/ospfv3/auth_profile/esp/encryption': {
+        'shape': 'object',
+        'fields': {'algorithm': 'string', 'key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'key'}),
     },
     'protocol/ospfv3/area': {
         'shape': 'string_list',
@@ -1717,6 +1820,7 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset(),
     },
+    # F7.7: the same two shapes as the `ospf` rows, read by `parse_rip`.
     'protocol/rip/auth_profile': {
         'shape': 'string_list',
         'fields': {'name': 'string', 'password': 'string', 'md5': 'string_list'},
@@ -1725,7 +1829,7 @@ PROTOCOL_SHAPE: dict[str, dict] = {
     },
     'protocol/rip/auth_profile/md5': {
         'shape': 'string_list',
-        'fields': {'name': 'string', 'key': 'string'},
+        'fields': {'name': 'string', 'key': 'string', 'preferred': 'bool'},
         'selects': {},
         'sensitive': frozenset({'key'}),
     },
@@ -2721,13 +2825,16 @@ COVERAGE_MATRIX = (
         # F7.6: the four policy entry levels this row covers join the measured set. A policy level inside an
         # entry is not in the scan scope, so its fields stay grounded by the table, and a member list is read
         # as the field of the entry that holds it.
+        # F7.7: an auth profile entry is in the scan scope, so its fields join the measured set. The levels
+        # inside it (`md5`, `ah`, `esp`) are read as the fields of the entry that holds them, and an `md5` entry
+        # inside a profile entry is not in the scan scope, so `key` stays grounded by the table.
         'properties': ('action', 'address_family_identifier', 'advertise_filters',
-                       'aggregate_route_attributes', 'as_set', 'authentication', 'bfd', 'default_route',
-                       'enable', 'interface', 'interfaces',
-                       'local_address', 'match', 'metric', 'mode', 'new_path_type', 'new_tag',
-                       'non_exist_filters', 'peer', 'peer_address', 'peer_as', 'prefix', 'protocol',
-                       'range', 'router_type', 'static_routes', 'summary', 'suppress_filters', 'type',
-                       'used_by', 'virtual_link',),
+                       'aggregate_route_attributes', 'ah', 'as_set', 'authentication', 'bfd',
+                       'default_route', 'enable', 'esp', 'interface', 'interfaces',
+                       'local_address', 'match', 'md5', 'metric', 'mode', 'new_path_type', 'new_tag',
+                       'non_exist_filters', 'password', 'peer', 'peer_address', 'peer_as', 'prefix', 'protocol',
+                       'range', 'router_type', 'secret', 'spi', 'static_routes', 'summary',
+                       'suppress_filters', 'type', 'used_by', 'virtual_link',),
     }, {
         'resource': 'panos_virtual_router_static_route_ipv4',
         'xml_element': 'static-route/entry',
