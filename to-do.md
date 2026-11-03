@@ -1,29 +1,38 @@
 # To Do
 
-F6.10.5 is complete and committed, which closes Epic 6: the stack entry names its own unit, so
-`template_stack` is the fifth scope fact, and the tool decides no module parameter
-(`acceptance.md`, `agent-status.md`). The pieces this slice removed from the tracking markdown are the
-stack unit, the module parameter rule, and the sample-output item.
+F7.3 is complete and committed: the four `ospfv3` levels the pinned provider declares outside `area` are
+`PROTOCOL_SHAPE` rows, `parse_ospfv3` reads them, and the emitter, the gate rule and the property scan read the
+same rows. The next feature is the rest of Epic 7: the routing levels `resource_mapping.PROTOCOL_SHAPE` does
+not state.
 
-The next feature is Epic 7: the routing levels `resource_mapping.PROTOCOL_SHAPE` does not state.
+## Next feature, in order (Epic 7 slices)
 
-## Next feature, in order
+Each slice states a `PROTOCOL_SHAPE` row for the levels it names, adds the parse method that reads them,
+then the emitter, then the gate rule, then registers the new method in the test helpers that call a parse
+method for every router (`tests/test_entry_coverage.py::_parse_every`,
+`tests/test_multi_vsys_location.py`). `WORD_TO_SCHEMA` is the pin between a table word and the schema
+word, so every new row is pinned against the live provider schema. A row that states a level the provider
+does not declare is a report decision, not a table row.
 
-1. State a `PROTOCOL_SHAPE` row for each level the table does not state, then the parse method that reads
-   it, then the emitter, then the gate rule. The levels are the `ospfv3` timer, BFD, graceful-restart,
-   export-rule and auth-profile levels, `rip`, the BGP `policy`, the auth profile bodies, and the filter
-   containers (`backlog.md`).
-2. `WORD_TO_SCHEMA` is the pin between a table word and the schema word, so a row cannot state a word the
-   provider does not declare.
-3. Add each new level method to the test helpers that call a parse method for every router
-   (`tests/test_entry_coverage.py::_parse_every`, `tests/test_multi_vsys_location.py`), so the corpus checks
-   run it.
+1. **F7.4 — the area sub-levels the table does not state**: `area/virtual_link`,
+   `area/interface/neighbor`, `area/type/default_route`, `area/type/nssa_ext_range`, for both the `ospf`
+   and the `ospfv3` levels, which share the area rule (`_protocol_areas`).
+2. **F7.5 — the `rip` level**: the `protocol` row gains the `rip` field, then the rows for the level the
+   provider declares.
+3. **F7.6 — the BGP `policy` level**: measure the provider shape first; the level becomes a table row only
+   if the provider declares it, otherwise it stays a report entry.
+4. **F7.7 — the auth profile bodies**: the parse method that reads an auth profile entry, for the BGP,
+   OSPF, OSPFv3 and RIP levels. The rows exist for the `sensitive` decision only; the entry-mark rule and
+   the property scan decide the report shape. The sensitive field stays the variable reference.
+5. **F7.8 — the filter containers**: route maps, prefix lists, community lists, access lists. These sit
+   outside the `protocol` object, so the slice first decides the container row (report, or emitted with a
+   provider type in its note) before the parse method reads them.
 
 ## Rules the write path keeps
 
 - One function writes a file (`write_path.py`), so the LF rule is enforced once (`ARCHITECTURE.md` §6), and the
   two path builders name the two sets. No module writes a file outside it.
-- The gate reads the `.tf` files for the block rules and the four records for the data rule; the two file sets
+- The gate reads the `.tf` files for the block rules and the four records read by the data rule; the two file sets
   stay distinct. A new file shape must name which set it belongs to.
 - One place decides the shape of a value (`resource_mapping.VALUE_VARIABLES`) and one place decides the shape of
   a reference field (`TerraformGenerator.name_ref`); the write path applies them per unit and defines no second
