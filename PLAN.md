@@ -63,10 +63,14 @@ table, and `MANUAL_SETUP_REPORT.txt` names the entries the object cannot express
 F7.2 landed: `parse_ospfv3` reads the `ospfv3` area subtree through the same shape table, and `_protocol_areas`
 is the area rule the two OSPF levels share, so the same reader, emitter and gate rule serve both.
 
-Open for Epic 7: the levels `PROTOCOL_SHAPE` does not state, which no parse method reads — the `ospfv3` timer,
-BFD, graceful-restart, export-rule and auth-profile levels, `rip`, the BGP `policy`, the auth profile bodies,
-and the filter containers (route maps, prefix lists, community lists, access lists). They are in
-`backlog.md`.
+F7.3 landed: `PROTOCOL_SHAPE` states the four `ospfv3` levels outside `area` that the pinned provider declares,
+so the emitter prints them, the gate rule reads them, and the property scan measures the export-rule entries.
+`resource_mapping.XML_NAME_EXCEPTIONS` is the one exception to the field name to element name rule.
+
+Open for Epic 7: the levels `PROTOCOL_SHAPE` does not state, which no parse method reads — the `ospfv3`
+`auth_profile` level, `area/virtual_link`, `area/interface/neighbor`, and `area/type/default_route`, `rip`, the
+BGP `policy`, the auth profile bodies, and the filter containers (route maps, prefix lists, community lists,
+access lists). They are in `backlog.md`.
 
 ## Housekeeping — repository layout (open)
 

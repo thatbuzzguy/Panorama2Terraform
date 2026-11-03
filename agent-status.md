@@ -2,79 +2,49 @@
 
 ## Current position
 
-F6.10.5 is complete and committed on `development`, which closes Epic 6. The suite is 1315 tests, all
-green (1310 at the start of this slice), and `ruff check .` is clean. The next feature is the open Epic 7
-work: the routing levels `resource_mapping.PROTOCOL_SHAPE` does not state (`backlog.md`).
+F7.3 is complete and committed on `development`. `resource_mapping.PROTOCOL_SHAPE` states the four `ospfv3`
+levels outside `area`, `parse_ospfv3` reads them, and the emitter, the gate rule `protocol_object` and the
+property scan read the same rows. The suite is 1320 tests, all green (1315 at the start of this slice), and
+`ruff check .` is clean. No golden set moved, because no golden fixture states one of the four levels.
+
+The next feature is F7.4: the area sub-levels the table does not state (`to-do.md`).
 
 `acceptance.md` holds this slice's criteria and must be overwritten for the next one.
 
-### Decision 1: the stack is the fifth scope fact
+### Decision 1: the four `ospfv3` levels outside `area` are table rows
 
-- `container_coverage.SCOPE_FACT_KEYS` holds five facts, and `template_stack` is appended, because that
-  order is the unit identity join (`docs/ARCHITECTURE.md` §5). `unit_manifest.py`, `ownership.py`,
-  `state_coverage.py`, `reference_edges.py`, and `entry_coverage.py` read the fact order through that one
-  table, so no module states a second order.
-- `PanoramaParser.identity_of` returns five facts, and `template_stack_of` is the scope-walk row for it in
-  `container_coverage.CONTAINER_TABLE` (F6.10.5).
-- Reading `template` as the stack name was rejected: `resource_mapping.ACTION_FILTERS` maps
-  `template_stacks` → `template_stack`, `resource_mapping.SCOPE_ANSWER` answers `panos_template_stack` for
-  the fact, `resource_mapping.SCOPE_PLACEMENT` gives `panos_template_variable` the two sub-blocks, and
-  `entry_coverage.REPORT_SCOPE_KEYS` maps `template-stack` → `template_stack`. One fact with two meanings
-  would make a filter field name both a template and a stack.
-- `unit_manifest.NAME_LEVELS` reads innermost first: `vsys`, `vsys_device`, `template`, `template_stack`,
-  `device_group`, so a template inside a stack names its template. A stack entry names its own unit, so a
-  run that declares a stack writes one directory for it and the commit and push blocks for that unit come
-  from `ACTION_FILTERS` (`tests/test_unit_manifest.py::test_the_stack_names_its_unit`).
-- `reference_edges.LEVEL_KEYS` gained `template_stack`, so a unit inside a stack depends on the stack unit.
-- `state_coverage.STATE_SCOPE_KEYS` gained `template_stack`, so an entry placed inside a stack is keyed. The
-  test that pins a sub-block the row does not declare now uses a sub-block `LOCATION_SCHEMA` does not
-  declare for `panos_address` (`tests/test_state_coverage.py::test_a_block_the_row_does_not_declare_is_not_keyed`).
-- `panos_template_variable` no longer states `template_stack` as a captured property, so its
-  `COVERAGE_MATRIX` row lists four properties (`tests/test_property_coverage.py`,
-  `tests/test_entry_coverage.py::test_captured_fields_exclude_name_and_scope_facts`).
+Measured 2026-11-02 against the pinned provider 2.0.14, the provider declares all four levels, so all four
+became rows: `timers`, `global_bfd`, `graceful_restart` (each `object`) and `export_rules` (`string_list`).
+None is a report refusal, and none carries a field the provider marks sensitive, so `VALUE_VARIABLES` gained no
+row and the sensitive pin is unchanged.
 
-### Decision 2: the tool decides no module parameter
+A single-object level holds no entry, so the scan measures nothing for it and the matrix row stays grounded by
+the table. `export_rules` holds entries, so its fields are measured, the container table gained the one sub-shape
+row for `protocol/ospfv3/export-rules`, and `COVERAGE_MATRIX` row `panos_virtual_router` gained `new_path_type`
+and `new_tag`.
 
-A module is a standard a person writes, so the tool writes the data a module consumes and decides no
-parameter. A template variable value, and a membership list in `scope.tf`, stay the literal the export
-states, because the block *is* the PAN-OS variable (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2). This closed with
-no byte change, and the open item is removed from `backlog.md`.
+### Decision 2: the spelling rule has one exception table
 
-### Housekeeping: the sample output
-
-The repository holds no committed sample output, so nothing was regenerated or deleted. `terraform_output/`
-is the default value of `--output-dir` and `.gitignore` ignores it. The canonical sample output is the
-golden set (`tests/golden/sample/`, `tests/golden/kitchen_sink/`, `tests/golden/single_unit/`), which
-`tests/test_golden_files.py` pins byte for byte. The layout work that renames paths stays in `backlog.md`.
+`_protocol_xml_name` turns `_` into `-`, so it cannot produce the element name `strict-lsa-checking` from the
+provider spelling `strict_l_s_a_checking`, because the provider splits the initialism.
+`resource_mapping.XML_NAME_EXCEPTIONS` is the one place that states the exception, and the rule reads it, so no
+parse method spells an element name of its own.
 
 ### Pins that changed
 
-- The fact order is the digest input, so every unit digest moved. 71 old→new pairs were re-measured from a
-  real run and applied to `tests/test_unit_manifest.py`, `tests/test_ownership.py`,
-  `tests/test_reference_edges.py`, `tests/test_site_data.py`, and `tests/test_write_path.py`. The unit that
-  holds no fact moved from `shared_be5be69f` to `shared_45ca31c3`, because the join gained one separator, and
-  the sample run's shared unit moved from `shared_0bc98741` to `shared_a6577c11`: the placeholder names no
-  unit, but it is still part of the identity.
-- The three golden sets regenerated from a real run, never by hand. `tests/golden/kitchen_sink/` gained the
-  stack unit directory `branch_stack_5c39384d`. The changed bytes are the action addresses, the data-block
-  names that state the fact order, and the unit directory names. A resource local name did not change,
-  because its identity is context plus vsys.
-- The corpus unit counts moved: `tests/test_write_path.py` counts eleven units for the kitchen sink run, and
-  `tests/test_golden_files.py` gained three cases for the new unit directory.
-- Pins that name a unit moved where the stack entry stopped naming the shared unit, not only by digest: the
-  kitchen sink run names the stack unit `branch_stack_5c39384d` instead of the shared unit, so
-  `tests/test_reference_edges.py` (the level order group) reads the stack unit as the shallower scope, and
-  `tests/test_unit_manifest.py::test_the_stack_names_its_unit` pins the stack unit and its two entries.
-  `tests/test_container_coverage.py` reads the fact set the scope-walk rows cover, and
-  `tests/test_state_coverage.py::test_a_stack_sub_block_keys_the_fact_it_names` pins the key for a state
-  entry placed inside a stack.
-- Test names that state the fact count: `test_one_row_per_combination_of_the_five_facts`,
-  `test_every_parse_method_records_the_five_scope_facts`, `test_a_block_the_row_does_not_declare_is_not_keyed`.
-- The suite gained five tests: `tests/test_unit_manifest.py::test_the_stack_names_its_unit`,
-  `tests/test_state_coverage.py::test_a_stack_sub_block_keys_the_fact_it_names`, and three
-  `tests/test_golden_files.py` cases for the new unit directory.
-- `docs/CODEBASE_ASSEMBLY.md` §3 and `docs/ARCHITECTURE.md` §2.2 name the new test, and the sentence that
-  said no stack unit is named today is removed.
+- `tests/test_protocol_object.py`: `test_the_shape_table_is_the_measured_provider_shape` no longer names the four
+  levels as outside the table. The new pins are
+  `test_the_ospfv3_scalar_levels_are_rows_the_parse_reads`,
+  `test_an_ospfv3_scalar_level_prints_the_shape_the_table_states`, and
+  `test_the_gate_reads_a_scalar_level_against_the_row_it_states`.
+  `test_the_table_is_the_only_shape_owner` pins the exception table.
+- `tests/fixtures/ospfv3.xml` gained the router entry `edge-af`, which states every field the four rows declare.
+  The area pin `test_an_ospfv3_area_prints_the_shape_the_table_states` is unchanged, because the `default` router
+  states none of the four levels.
+- `tests/test_parse_network.py::test_parse_ospfv3_reads_the_levels_the_table_states` pins the parse, and
+  `tests/test_property_coverage.py::test_the_scan_measures_an_export_rule_and_not_a_scalar_level` pins the
+  measurement scope.
+- The suite gained five tests.
 
 ## Rules to keep when writing documents
 
@@ -125,9 +95,12 @@ golden set (`tests/golden/sample/`, `tests/golden/kitchen_sink/`, `tests/golden/
 - `PROTOCOL_SHAPE` is the one table for the protocol object, and a level it does not state is not read.
   A new routing level needs a table row before an emitter, a gate rule or a report can read it, and
   `WORD_TO_SCHEMA` is the pin between a table word and the schema word. A parse method states a path and
-  never spells a field name: `_protocol_xml_name` and `_protocol_field_name` are the two rules.
-  `_protocol_areas` is the area rule the two OSPF levels share, and `_protocol_choice` takes the element that
-  holds the chosen body: the flag element for an area type, the entry's own level for a BGP peer group.
+  never spells a field name: `_protocol_xml_name` and `_protocol_field_name` are the two rules, and
+  `resource_mapping.XML_NAME_EXCEPTIONS` is the one exception the `-` rule cannot produce. A level that holds
+  no entry has no container row, so the property scan measures nothing for it and the matrix row stays grounded
+  by the table. `_protocol_areas` is the area rule the two OSPF levels share, and `_protocol_choice` takes the
+  element that holds the chosen body: the flag element for an area type, the entry's own level for a BGP peer
+  group.
 - The parse method that takes the router element is named in the test helpers that call it for each router:
   `tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py`. A new level method
   must be added there, or the corpus checks run no method for it.
