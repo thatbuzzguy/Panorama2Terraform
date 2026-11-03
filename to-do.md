@@ -1,8 +1,8 @@
 # To Do
 
-F7.4 is complete and committed: the four area sub-levels the pinned provider declares are
-`PROTOCOL_SHAPE` rows for both routing levels, `_protocol_areas` reads them, and the emitter, the gate rule
-and the property scan read the same rows. The next feature is the rest of Epic 7: the routing levels
+F7.5 is complete and committed: the `rip` levels the pinned provider declares are `PROTOCOL_SHAPE` rows,
+`parse_rip` reads them, an interface entry fills the choice it states inside itself, and the emitter, the gate
+rule and the property scan read the same rows. The next feature is the rest of Epic 7: the routing levels
 `resource_mapping.PROTOCOL_SHAPE` does not state.
 
 ## Next feature, in order (Epic 7 slices)
@@ -14,14 +14,12 @@ method for every router (`tests/test_entry_coverage.py::_parse_every`,
 word, so every new row is pinned against the live provider schema. A row that states a level the provider
 does not declare is a report decision, not a table row.
 
-1. **F7.5 — the `rip` level**: the `protocol` row gains the `rip` field, then the rows for the level the
-   provider declares.
-2. **F7.6 — the BGP `policy` level**: measure the provider shape first; the level becomes a table row only
+1. **F7.6 — the BGP `policy` level**: measure the provider shape first; the level becomes a table row only
    if the provider declares it, otherwise it stays a report entry.
-3. **F7.7 — the auth profile bodies**: the parse method that reads an auth profile entry, for the BGP,
-   OSPF, OSPFv3 and RIP levels. The rows exist for the `sensitive` decision only; the entry-mark rule and
-   the property scan decide the report shape. The sensitive field stays the variable reference.
-4. **F7.8 — the filter containers**: route maps, prefix lists, community lists, access lists. These sit
+2. **F7.7 — the auth profile bodies**: the parse method that reads an auth profile entry, for the BGP, OSPF,
+   OSPFv3 and RIP levels. The rows exist for the `sensitive` decision only; the entry-mark rule and the
+   property scan decide the report shape. The sensitive field stays the variable reference.
+3. **F7.8 — the filter containers**: route maps, prefix lists, community lists, access lists. These sit
    outside the `protocol` object, so the slice first decides the container row (report, or emitted with a
    provider type in its note) before the parse method reads them.
 

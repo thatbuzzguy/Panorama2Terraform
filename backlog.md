@@ -398,12 +398,10 @@ Completed work is not recorded here; the git history and the owner document hold
   property scan measures the routing levels through that row (`PROTOCOL_SHAPE`), and a level the table does
   not state is not read.
 - Routing levels `PROTOCOL_SHAPE` does not state are not read, so they reach no output and no report row: the
-  `ospfv3` `auth_profile` level, `rip`, the BGP `policy`,
-  and the filter containers (route maps, prefix lists, community lists, access lists). The `auth_profile` rows
-  exist for the `sensitive` decision only, because
-  no parse method reads an auth profile entry, so a run prints no value for one. A level becomes printable
-  when a parse method reads it and the table has a row for it, because the emitter, the gate and the report
-  all read that table. Epic 7 keeps the list.
+  BGP `policy`, and the filter containers (route maps, prefix lists, community lists, access lists). The
+  `auth_profile` rows exist for the `sensitive` decision only, because no parse method reads an auth profile
+  entry, so a run prints no value for one. A level becomes printable when a parse method reads it and the table
+  has a row for it, because the emitter, the gate and the report all read that table. Epic 7 keeps the list.
 - Read-through is opt-in per declared scope (F5.5). A plain string already applies, because
   Panorama resolves an object name through its own inheritance at commit time, and one `data` block
   is one plan-time API call. A `data` block for a name that does not exist fails at plan, not at

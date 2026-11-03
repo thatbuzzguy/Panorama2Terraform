@@ -72,9 +72,14 @@ reads the entries of `virtual_link`, `neighbor` and `nssa_ext_range`, and the `d
 states by presence. `selects` is the one place that maps the value the export states to the key the print
 states, so the export spelling `no` prints as `disable`.
 
-Open for Epic 7: the levels `PROTOCOL_SHAPE` does not state, which no parse method reads — the `ospfv3`
-`auth_profile` level, `rip`, the BGP `policy`, the auth profile bodies, and the filter containers (route maps,
-prefix lists, community lists, access lists). They are in `backlog.md`.
+F7.5 landed: `PROTOCOL_SHAPE` states the `rip` levels the pinned provider declares, `parse_rip` reads them, and
+`_parse_router` builds the `protocol` dict from the fields the `protocol` row states, so the level names are the
+table's names. An interface entry fills the choice it states inside itself, so the same reader that fills a
+chosen body also fills an entry.
+
+Open for Epic 7: the levels `PROTOCOL_SHAPE` does not state, which no parse method reads — the BGP `policy`,
+the auth profile bodies, and the filter containers (route maps, prefix lists, community lists, access lists).
+They are in `backlog.md`.
 
 ## Housekeeping — repository layout (open)
 
