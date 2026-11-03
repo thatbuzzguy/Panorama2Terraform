@@ -1717,19 +1717,15 @@ class PanoramaParser:
                 'metric': self._get_text(route, 'metric'),
             }))
         # F7.1, F7.2: `protocol` is a captured field of the router entry, so the entry keeps one mark and the
-        # protocol levels are the properties of that one entry. `parse_bgp`, `parse_ospf` and `parse_ospfv3`
-        # build the levels, and each entry inside a level is marked by them.
+        # protocol levels are the properties of that one entry. Each level is built by the parse method the
+        # `protocol` row names, in the table order, so this method states no field name of its own (F7.5).
         return {
             'name': router.get('name'),
             **self.identity_of(router),
             'interfaces': interfaces,
             'static_routes': static_routes,
-            'protocol': {
-                # The keys are the levels `PROTOCOL_SHAPE` states for the `protocol` row, in the table order.
-                'bgp': self.parse_bgp(router),
-                'ospf': self.parse_ospf(router),
-                'ospfv3': self.parse_ospfv3(router),
-            },
+            'protocol': {field: getattr(self, f'parse_{field}')(router)
+                          for field in resource_mapping.protocol_row(resource_mapping.PROTOCOL_FIELD)['fields']},
         }
 
     def _parse_routers(self, container_tag: str, next_hop_tag: str,
@@ -2158,6 +2154,32 @@ class PanoramaParser:
             self.mark(iface, captured, destination='report')
         return level
 
+    def parse_rip(self, router: ET.Element) -> dict:
+        """Build the `rip` level of one router's protocol object (F7.5).
+
+        The same rule as the other routing levels: every captured field is a field `PROTOCOL_SHAPE` declares
+        for the level, the method states a level as a table path, and `_protocol_field_name` and
+        `_protocol_xml_name` name the key and the element. `rip` declares no router id, no area and no
+        neighbor, so the level prints nothing for a field the row does not state.
+
+        The level's two `string_list` fields are filled by `_protocol_entries`, because the export states a
+        name-keyed list as an entry. An interface entry holds its `default_route` choice inside itself, so
+        `_protocol_body` fills it, and an entry whose choice element states none of the alternatives the
+        provider requires is marked for the report and not put in the printed list. The choice level itself is
+        not required, so an entry that states no choice element prints no field for it. The two `auth_profile`
+        rows state the `sensitive` decision only, so this method reads no value for them (`backlog.md`, F7.7).
+        """
+        rip_path = 'protocol/rip'
+        rip = router.find(rip_path)
+        if rip is None:
+            return {}
+        level = self._protocol_level(rip, rip_path)
+        interface_path, rule_path = f'{rip_path}/interfaces', f'{rip_path}/export_rules'
+        for path, entries in ((interface_path, rip.findall('./interfaces/entry')),
+                              (rule_path, rip.findall('.//export-rules/entry'))):
+            self._protocol_entries(path, level[self._protocol_field_name(path)], entries)
+        return level
+
     def _protocol_areas(self, container: ET.Element, base: str) -> dict:
         """One routing level and its area entries, read as `PROTOCOL_SHAPE` states them (F7.1, F7.2).
 
@@ -2213,31 +2235,34 @@ class PanoramaParser:
         return level
 
     def _protocol_entries(self, path: str, holder: list, entries) -> None:
-        """The entries of a `string_list` level, marked and put in the list that holds them (F7.4).
+        """The entries of a `string_list` level, marked and put in the list that holds them (F7.4, F7.5).
 
         `holder` is the list the field the path names holds in the object that owns it, so the caller states
-        the path once and this method never spells a field name. An entry that states no presence choice has
-        no `.tf` shape, so it is marked for the report and not put in the printed list, the same rule as
+        the path once and this method never spells a field name. An entry fills the two shapes a level dict
+        cannot hold: the choice it states inside itself, which is a `one_of` field the row declares, and its
+        `block` fields. The provider requires exactly one alternative, so an entry that states none has no
+        `.tf` shape: it is marked for the report and not put in the printed list, the same rule as
         `parse_bgp`.
         """
         for entry in entries:
             if not entry.get('name'):
                 continue
             captured = self._protocol_level(entry, path)
-            reason = self._protocol_presence_fields(path, captured)
+            reason = self._protocol_body(path, entry, captured) or self._protocol_presence_fields(path, captured)
             marked = self.mark(entry, captured, reason, destination='report' if reason else None)
             if not reason:
                 holder.append(marked)
 
     def _protocol_body(self, path: str, body: ET.Element, fields: dict) -> str:
-        """The shapes inside a chosen area body that a level dict cannot hold (F7.4).
+        """The shapes inside a level that a level dict cannot hold (F7.4, F7.5).
 
-        `_protocol_level` read the body's fields, so a `one_of` field is the empty dict it states and a
+        `_protocol_level` read the level's fields, so a `one_of` field is the empty dict it states and a
         `string_list` field is the empty list it states. This fills the two: the choice the export states by
-        presence inside the body, and the entries the export holds inside it. The provider requires exactly
-        one of the alternatives, so a body that states none prints nothing and the reason is the detail the
-        caller marks the area entry with. An entry that states no choice is marked for the report with the
-        same reason as a `range` entry.
+        presence under the level, and the entries the export holds under it. `body` is the element that holds
+        them, which is the chosen flag element for an area type and the entry itself for an interface entry.
+        The provider requires exactly one of the alternatives, so a level that states none prints nothing and
+        the reason is the detail the caller marks the entry with. An entry that states no choice is marked for
+        the report with the same reason as a `range` entry.
         """
         detail = ''
         for field, shape in resource_mapping.protocol_row(path)['fields'].items():
@@ -2253,11 +2278,13 @@ class PanoramaParser:
         return detail
 
     def _protocol_presence_choice(self, path: str, element: ET.Element) -> tuple:
-        """The one key a `one_of` level states when the export states the level by presence (F7.4).
+        """The one key a `one_of` level states when the export states the level by presence (F7.4, F7.5).
 
         The export holds the choice as the element under the level, so the value is that element's tag and
         the holder is that element: `advertise` or `no` for a default route. `selects` is the one lookup, so
-        the key the print uses is the key the row selects for the value, not the tag the export states.
+        the key the print uses is the key the row selects for the value, not the tag the export states. A
+        level element with no child states none of the alternatives the provider requires, so the mapping
+        cannot state a key for it and the caller marks the entry with that reason.
         """
         child = element[0] if len(element) else None
         return self._protocol_choice(path, child.tag if child is not None else '', child)

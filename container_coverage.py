@@ -213,6 +213,7 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
     ContainerRow('parse_bgp', 'protocol/bgp', 'emitted', 'panos_virtual_router'),
     ContainerRow('parse_ospf', 'protocol/ospf', 'emitted', 'panos_virtual_router'),
     ContainerRow('parse_ospfv3', 'protocol/ospfv3', 'emitted', 'panos_virtual_router'),
+    ContainerRow('parse_rip', 'protocol/rip', 'emitted', 'panos_virtual_router'),
     ContainerRow('parse_ipsec_tunnels', 'network/tunnel/ipsec', 'emitted',
                  'panos_ipsec_tunnel; a manual-key tunnel is reported'),
     ContainerRow('parse_ike_gateways', 'network/ike/gateway', 'emitted',
@@ -288,6 +289,14 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                  'panos_virtual_router', level='sub-shape'),
     ContainerRow('parse_ospfv3', 'protocol/ospfv3/area/virtual-link', 'emitted',
                  'panos_virtual_router', level='sub-shape'),
+    # F7.5: the two entry levels `rip` declares. `rip` has no area, so the interface entries are read at the
+    # level itself. The single-object levels (`timers`, `global_bfd`, `bfd`) hold no entry, so they need no
+    # row, and no row names `protocol/rip/interfaces/bfd`, because the parse reaches it through the field the
+    # interfaces row states.
+    ContainerRow('parse_rip', 'protocol/rip/interfaces', 'emitted', 'panos_virtual_router',
+                 level='sub-shape'),
+    ContainerRow('parse_rip', 'protocol/rip/export-rules', 'emitted', 'panos_virtual_router',
+                 level='sub-shape'),
     ContainerRow('parse_virtual_routers', 'routing-table/ip/static-route', 'emitted',
                  'panos_virtual_router_static_route_ipv4', level='sub-shape'),
     ContainerRow('parse_ipsec_tunnels', 'auto-key/proxy-id', 'nested-block',

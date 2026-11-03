@@ -212,7 +212,7 @@ def test_every_parse_method_records_the_five_scope_facts(make_parser):
     for name in sorted(dir(parser)):
         if not name.startswith('parse_') or name == 'parse_device_groups':
             continue
-        if name in ('parse_bgp', 'parse_ospf', 'parse_ospfv3'):
+        if name in ('parse_bgp', 'parse_ospf', 'parse_ospfv3', 'parse_rip'):
             results = [getattr(parser, name)(router) for router in routers]
         else:
             results = [getattr(parser, name)()]

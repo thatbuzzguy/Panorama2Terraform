@@ -1,8 +1,8 @@
 """Unit tests for PanoramaParser network parse methods (zones, interfaces, routers, BGP, OSPF).
 
-F7.1, F7.2: `parse_bgp`, `parse_ospf` and `parse_ospfv3` build one router's levels, so the protocol entries
-are captured fields of the router record and the router keeps one mark. An entry the `.tf` cannot express is
-marked for the report, and `entry_coverage.protocol_report_rows` is the one list of them.
+F7.1, F7.2, F7.5: `parse_bgp`, `parse_ospf`, `parse_ospfv3` and `parse_rip` build one router's levels, so the
+protocol entries are captured fields of the router record and the router keeps one mark. An entry the `.tf`
+cannot express is marked for the report, and `entry_coverage.protocol_report_rows` is the one list of them.
 """
 
 import entry_coverage
@@ -397,6 +397,56 @@ def test_parse_ospfv3_reads_the_levels_the_table_states(make_parser):
     assert p.ledger.mark_for(element) is not None, 'an export rule is a marked entry'
     assert rule["name"] == "static-af"
     assert (rule["metric"], rule["new_path_type"], rule["new_tag"]) == (10, "internal", "0"), rule
+
+
+def test_parse_rip_reads_the_levels_the_table_states(make_parser):
+    """`parse_rip` reads the `protocol/rip` levels as their rows state them (F7.5).
+
+    A `single` level is one object read by `_protocol_level` with no field name of its own, and the two
+    `string_list` levels are filled with the entries the export holds. An interface entry fills the choice it
+    states inside itself, so the entry whose choice element states no alternative is marked for the report and
+    is not put in the printed list.
+    """
+    p = _parser(make_parser, "rip.xml")
+    rip = p.parse_virtual_routers()[0]["protocol"]["rip"]
+    assert (rip["enable"], rip["allow_redist_default_route"], rip["reject_default_route"]) == (
+        True, True, False), rip
+    assert rip["timers"] == {"interval_seconds": 30, "update_intervals": 180,
+                             "expire_intervals": 210, "delete_intervals": 120}, rip["timers"]
+    assert rip["global_bfd"] == {"profile": "BFD-RIP"}, rip["global_bfd"]
+    # The two entries the print holds. The third states a choice with no alternative, so the report names it.
+    assert [entry["name"] for entry in rip["interfaces"]] == ["ethernet1/2", "ethernet1/3"], rip["interfaces"]
+    first = rip["interfaces"][0]
+    # `mode` is a string, so the read is the value the export states: no mapping stands between them.
+    assert (first["mode"], first["authentication"]) == ("v2", "md5"), first
+    assert first["bfd"] == {"profile": "BFD-RIP"}, first
+    # The choice the entry holds inside itself, the same rule as a choice inside a chosen area body.
+    assert first["default_route"] == {"advertise": {"metric": 10}}, first
+    # The export states this alternative as `no`, and the key the print states for it is `disable`.
+    second = rip["interfaces"][1]
+    assert str(second["default_route"]["no"]) == "{}", second
+    rule = rip["export_rules"][0]
+    assert (rule["name"], rule["metric"]) == ("static-af", 10), rule
+    # An interface entry and an export rule entry are entries the container table covers, so they are marked.
+    for name in ("ethernet1/2", "static-af"):
+        element = next(e for e in p.ledger.entries() if e.get("name") == name)
+        assert p.ledger.mark_for(element) is not None, name
+
+    rows = entry_coverage.protocol_report_rows(p.ledger)
+    assert [(row["router"], row["level"], row["name"]) for row in rows] == [
+        ("default", "interfaces", "ethernet1/4")], rows
+    assert rows[0]["detail"] == (
+        'panos_virtual_router - default_route states no key PROTOCOL_SHAPE selects'), rows[0]
+    # The entry is a property level of the router, so the row names the router that holds it and the level the
+    # row path names.
+    assert rows[0]["container"].endswith('protocol/rip/interfaces'), rows[0]["container"]
+
+
+def test_parse_rip_absent(make_parser):
+    """A router with no RIP element has no `rip` level, so nothing prints for it (F7.5)."""
+    p = _parser(make_parser, "zones.xml")
+    for router in p.parse_virtual_routers():
+        assert router["protocol"]["rip"] == {}, router
 
 
 def test_parse_ospfv3_absent(make_parser):

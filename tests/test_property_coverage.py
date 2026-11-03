@@ -238,6 +238,35 @@ def test_the_scan_measures_the_area_level_and_not_an_entry_inside_an_entry(conve
         router_row['properties']
 
 
+def test_the_scan_measures_a_rip_entry_and_not_a_level_inside_it(converter_module, tmp_path):
+    """F7.5: an interface entry is in the scan scope, and the levels inside it are not.
+
+    `protocol/rip/interfaces` is a `string_list` level, so its entries are marked and the scan measures the
+    fields the row states for them against the router row. `bfd` is measured as the field of the entry, not as
+    the level inside it, because `_protocol_level` builds the level dict as a plain dict, which records nothing.
+    `timers` and `global_bfd` are single-object levels: no entry, so no mark, and the row is grounded by the
+    table instead.
+    """
+    parser = run_pipeline(converter_module, 'rip.xml', tmp_path)
+    assert parser is not None, 'rip.xml'
+    ledger = parser.ledger
+    entry = next(e for e in ledger.entries() if e.get('name') == 'ethernet1/2')
+    row = entry_coverage.matrix_row_for(
+        container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source))
+    assert row is not None and row['resource'] == 'panos_virtual_router', row
+    recorded = ledger.mark_for(entry)['captured']
+    assert isinstance(recorded, entry_coverage.RecordingDict), recorded
+    assert sorted(set(recorded.used_keys()) - entry_coverage.NON_FIELD_KEYS) == [
+        'authentication', 'bfd', 'default_route', 'enable', 'mode'], recorded.used_keys()
+    level = ledger.mark_for(next(e for e in ledger.entries() if e.get('name') == 'default'))['captured']
+    for field in ('timers', 'global_bfd'):
+        assert not isinstance(level['protocol']['rip'][field], entry_coverage.RecordingDict), field
+    assert not isinstance(recorded['bfd'], entry_coverage.RecordingDict), recorded['bfd']
+    router_row = next(r for r in ROWS if r['resource'] == 'panos_virtual_router')
+    for field in ('authentication', 'bfd', 'default_route', 'enable', 'mode'):
+        assert field in router_row['properties'], router_row['properties']
+
+
 # --- 3. The scan -----------------------------------------------------------
 
 def test_scan_reports_the_properties_no_output_read(converter_module, tmp_path):
