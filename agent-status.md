@@ -2,111 +2,88 @@
 
 ## Current position
 
-F7.7 is complete and committed on `development`. `PROTOCOL_SHAPE` states the four
-`auth_profile` levels the
-pinned provider declares, the four level methods read them through `_protocol_branch`, and the
-emitter, the gate
-rule `protocol_object` and the property scan read the same rows. A field the provider marks
-`sensitive` prints as
-the variable reference the entry names, never as the value the export stated. The suite is 1346
-tests, all green
-(1336 at the start of this slice), and `ruff check .` is clean. No golden set moved, because no
-golden fixture
-states an auth profile. `terraform validate` accepts the block the run writes for
-`tests/fixtures/auth_profile.xml`.
+F7.8 is complete and committed on `development`. `FILTER_SHAPE` states the shape of the six
+routing-profile filter
+containers, which sit outside the `protocol` object, and every one of them is an `emitted`
+`CONTAINER_TABLE` row
+for `parse_filter_containers`: the pinned provider declares a resource for all six. The parse read,
+the emitter,
+the gate rule `filter_blocks` and the property scan all read the same table through
+`resource_mapping.FILTER_TABLE`.
+The suite is 1423 tests, all green (1346 at the start of this slice), and `ruff check .` is clean.
+Two golden
+cases moved, and both came from a real run: `tests/golden/filter_containers` is the new case, and
+`tests/golden/kitchen_sink` gained `filters.tf` for the filter entry `ACL-Kitchen`, so the scan scope,
+the
+per-entry report and the `.tf` goldens moved together. The gate reports `PASS (0 FAIL, 0 WARN)` on
+the filter
+fixture, and `terraform validate` accepts the blocks the run writes for it.
 
-The next feature is F7.8: the filter containers (`to-do.md`).
+The next feature is F7.9: the `ospf` fields `PROTOCOL_SHAPE` does not state (`to-do.md`).
 
 `acceptance.md` holds this slice's criteria and must be overwritten for the next one.
 
-### Decision 1: the entry that holds a `sensitive` field names the variable
+### Decision 1: a filter container is its own resource, so all six are emitted
 
-A value cannot name itself, so the name the block prints is the §5 name of the entry that holds
-the field: the
-entry names itself when the field is its own, and a level inside an entry names the entry that
-holds it.
-`TerraformGenerator._protocol_fields` carries the entry name down the walk as `entry_name`. The
-parse stores the
-value, because the gate and the property scan read the captured object, and `printed_value`
-records the name with
-no value for it, so `site_data.py` rule 2 writes no row and the run writes no `.tfvars` line.
-The declaration
-description now says the reference prints and no file states the value, because the run reads a
-value it never
-writes.
+Measured 2026-11-03 with the pinned provider: the provider declares a resource for each of the six
+filter containers, so no container is a `report` row and each `CONTAINER_TABLE` row is `emitted` with the
+provider type in its note. `FILTER_TYPES` is that same fact read the other way (path to type), so the emitter
+and the gate do not decide a type by themselves, and the pin compares the map with the row notes.
 
-### Decision 2: the measured rows for `ospfv3` follow the `policy` convention
+### Decision 2: `selects` is empty, because the schema states a filter choice as optional fields
 
-Measured 2026-11-03 with the pinned provider: `ah` and `esp/authentication` are choice levels,
-so each
-alternative that declares an attribute is its own row, and `none`, which declares none, is the
-`block` field of
-the row that holds it with `none` in its `selects`. The provider accepts `ah` or `esp` for one
-entry, which
-`terraform validate` reports, so the table states no word for a choice between two levels, the
-gate does not
-refuse a file that states both, and the fixture uses two entries. The 15 new rows are the
-`ospfv3` subtree: the profile row and 14 rows for the levels inside a profile entry, and the
-the two `md5` rows gained `preferred`, because the reader now reaches them through the table.
+No filter level is declared as required-exactly-one, so `selects` states nothing for any row. Three levels are
+the ones `terraform validate` refuses to hold more than one attribute, so the fixture answers each with one
+element: `access-list/type/ipv4/ipv4_entries/source_address` (`address`),
+`prefix-list/type/ipv4/ipv4_entries/prefix` (`entry`), and `redist-entry/bgp` (`ospf`). The table states no
+word for that choice, because the rule is the provider's and not the table's, and the pin that a run reports no
+finding is the pin that says the fixture is written the way the provider accepts.
 
-### Decision 3: a reference-only name is a property of the row that covers the entry
+### Decision 3: the row scope stops at the `match` and `set` rows
 
-The emitter reads a `sensitive` field to print the reference, so the field is a read the scan
-measures, and the
-matrix row that covers the entry gains it. The four `auth_profile` rows are `emitted` `sub-
-shape` rows with the
-note `panos_virtual_router`, so `panos_virtual_router` gained `ah`, `esp`, `md5`, `password`,
-`secret` and `spi`.
-`key` is not a property, because it is read inside an entry inside an entry, and `covering_row`
-cannot match a
-section path that holds an extra `entry` segment, so `PROTOCOL_SHAPE` stays the only place that
-states it. The
-four container rows use the input spelling, the same rule as `protocol/rip/interfaces`, because
-`covers` matches
-a row path against the tag chain the scan reads.
+The redistribution entry mirrors every level the provider declares, except that its `match` and `set` rows state
+leaf fields only, so no row stands under them. That is the scope decision this slice states, and it is the
+reason the walk does not enter a `match`: a field inside one is a finding. The table is 121 rows and 397 fields,
+73 of them under the redistribution entry, 17 of those stated as `string_list`, and 34 `match` or `set` rows.
+The six levels inside a `match` or `set` row are recorded in `backlog.md`.
 
-### Decision 4: one new fixture, so the existing print pins stay intact
+### Decision 4: an entry-list field is the singular container element, so the spelling map is path-keyed
 
-`tests/fixtures/auth_profile.xml` states one router with an auth profile entry at each of the
-four levels, and
-each entry states every field its row declares. The four level fixtures stay unchanged, so the
-whole-block print
-pins that read them still pass. Each value is distinct, so the pin that no generated file holds
-a parsed value can
-name each one.
+`FILTER_XML_NAME_EXCEPTIONS` is keyed by the container path, because one idea spells two ways in the input:
+`extended_community_regexes` is `ec-regex` inside a community-list entry, and `extended_communities` is
+`extended-community` inside a route-map match. The map holds 15 pairs, and `ipv4_entries` and `ipv6_entries`
+spell the same way in two containers, so 13 distinct spellings, and none is a spelling the `-` rule produces.
+Five pairs are in the fixture; the other ten are the spellings the pango source measures, because one entry
+states one entry-list spelling only, which is also why the fixture cannot state `ec-regex` beside
+`regular-entry`. `XML_NAME_EXCEPTIONS` stays the protocol table's own map.
+
+### Decision 5: the readers take the table as an argument, so one reader serves both tables
+
+`_protocol_level`, `_protocol_body`, `_protocol_field`, `_protocol_choice`, `_protocol_presence_choice`,
+`_protocol_presence_fields`, `_protocol_field_name`, `_protocol_xml_name` and `_protocol_fields` take an
+optional `table` that defaults to `PROTOCOL_TABLE`, so `FILTER_TABLE` reaches them through the same code.
+`_protocol_xml_name` now takes the path as well, because the exception map is keyed by the container path. The
+gate helpers are `_shape_level_findings` and `_shape_field_findings`, and `ShapeTable` gained `word` and `rule`
+so one reader states neither table name: the finding wording is the table's word. `SHAPE_TO_SCHEMA` is the one
+shape-word to schema-word definition, and both shape pins read it.
 
 ### Pins that changed
 
-- `tests/test_protocol_object.py`: the new pins are
-  `test_the_auth_profile_rows_are_the_levels_the_four_methods_read`,
-    `test_an_auth_profile_prints_the_reference_the_entry_names` (the block a real run writes),
-  and
-  `test_the_gate_reads_a_choice_level_inside_an_auth_profile`;
-    `test_the_shape_table_is_the_measured_provider_shape` now reads every row as a level a
-  parse method reads;
-    `test_a_sensitive_field_is_never_written_as_a_value` names the pin in
-  `tests/test_robustness.py`.
-- `tests/test_property_coverage.py`:
-`test_the_scan_measures_an_auth_profile_entry_and_not_the_entry_inside_it`
-  pins the scan scope.
-- `tests/test_variables.py`: `_reference_names` reads the names the run records through
-`PROTOCOL_SHAPE`, the
-    `string_list` shape and `_protocol_xml_name`, so the pin states no name list; the
-  declaration set and the
-  `sensitive` marking pins read it, and `auth_profile.xml` joined `CASES`.
-- `tests/test_site_data.py`: `test_the_table_holds_no_property` reads the reference-only names
-through the table
-  instead of excluding them.
-- `tests/test_robustness.py`: `test_a_parsed_secret_never_reaches_a_generated_file` pins the
-values a real run
-  must not write.
-- `tests/test_container_coverage.py`: `_segments_of_method` already reads each path segment
-through
-  `_protocol_xml_name`, so the four new rows match the four methods.
-- No new parse method, so no test helper changed: the auth profile read lives inside the four
-level methods,
-  which the two helpers already call.
-- The suite gained ten tests.
+- `tests/test_filter_containers.py` is the new file: the table against the live schema, the row scope, the six
+  container rows, the six matrix rows, the parse constants, the parse marks, the emitter print, the choice
+  levels, the gate reading a real run, one finding per rule, the path-keyed spellings, and the golden case.
+- `tests/test_protocol_object.py` reads both tables through `FILTER_TABLE` and `PROTOCOL_TABLE`, the renamed
+  gate helpers, `ShapeTable.field_name` and `ShapeTable.xml_name`, `parse_filter_containers` and
+  `generate_filter_containers`, and `allowed` gained `entry` for the input spelling `entry`.
+- `tests/test_coverage_matrix.py` grounds the `generate_filter_containers` emitter against `FILTER_SHAPE`.
+- `tests/test_data_file_gate.py` reads `filter_blocks` in `CHECK_ORDER`.
+- `tests/test_golden_files.py` gained the `filter_containers` case.
+- `tests/test_terraform_validate.py` validates each unit directory the manifest names for the filter fixture,
+  because the run writes no `.tf` file at the codebase root.
+- `tests/test_entry_coverage.py::_parse_every` and
+  `tests/test_multi_vsys_location.py::test_every_parse_method_records_the_five_scope_facts` reach
+  `parse_filter_containers` without a change, because it takes no argument and marks every entry it reads.
+- The suite gained 77 tests (1423 green).
 
 ## Rules to keep when writing documents
 
@@ -175,25 +152,20 @@ output directory, so
   same reader, which takes the sub-block it reads as an argument (the action rule reads inside
   `config`). The same reader also tells a quoted value from a `var.` reference, so no second
   rule decides the shape of a field.
-- `PROTOCOL_SHAPE` is the one table for the protocol object, and a level it does not state is
-not read.
-    A new routing level needs a table row before an emitter, a gate rule or a report can read
-  it, and
-    `WORD_TO_SCHEMA` is the pin between a table word and the schema word. A parse method states
-  a path and
-    never spells a field name: `_protocol_xml_name` and `_protocol_field_name` are the two
-  rules, and
-    `resource_mapping.XML_NAME_EXCEPTIONS` is the one exception the `-` rule cannot produce.
-  `_parse_router` builds
-    the `protocol` dict from the fields the `protocol` row states, so the level names are the
-  table's names there
-    too. A level that holds no entry has no container row, so the property scan measures
-  nothing for it and the
-    matrix row stays grounded by the table. An entry inside an entry is not in the scan scope
-  either, because
-    `covering_row` cannot match a section path that holds an entry segment, so the table
-  grounds that level.
-    `_protocol_areas` is the area rule the two OSPF levels share, `_protocol_branch` walks the
+- `PROTOCOL_SHAPE` is the one table for the `protocol` object, and `FILTER_SHAPE` is the one table for the filter
+  containers, which sit outside it. A level either table does not state is not read. A new routing level needs a
+  table row before an emitter, a gate rule or a report can read it, and `SHAPE_TO_SCHEMA` is the one pin between a
+  table word and the schema word for both tables. A parse method states a path and never spells a field name:
+  `_protocol_field_name` and `_protocol_xml_name` are the two rules; `XML_NAME_EXCEPTIONS` is the protocol table's
+  exception map, and `FILTER_XML_NAME_EXCEPTIONS` is the filter table's map, keyed by the container path because
+  one idea spells two ways in two containers. Both tables are the same row shape read as `resource_mapping.ShapeTable`,
+  so the readers and the gate helpers take the table as an argument and state no table name in their finding
+  wording. `_parse_router` builds the `protocol` dict from the fields the `protocol` row states, and
+  `parse_filter_containers` builds each entry dict from the fields its own row states, so the level names are the
+  table's names in both. A level that holds no entry has no container row, so the property scan measures nothing
+  for it and the matrix row stays grounded by the table. An entry inside an entry is not in the scan scope either,
+  because `covering_row` cannot match a section path that holds an entry segment, so the table grounds that level.
+  `_protocol_areas` is the area rule the two OSPF levels share, `_protocol_branch` walks the
   segments between a
     level dict and an entry level, `_protocol_entries` fills a `string_list` level, and
   `_protocol_body` fills the
@@ -203,26 +175,21 @@ not read.
   `_protocol_body` takes the entry
     as the element that holds it, and it reads an entry as a direct child, so an entry inside
   an entry belongs to
-    the level the field names. A presence choice states exactly one alternative, and the choice
-  level is not
-    required, so a level that states no choice element prints nothing for it while an element
-  that states none is a
-    report row. A choice level can state its alternatives as values, in which case
-  `_protocol_choice` reads the
-    value from the element the choice lives under and the print writes it as the reader read
-  it. A `member_list`
-    field is read by `_protocol_level`, because its members are values, so no level row stands
-  under it and the
-    walk never enters it: `sanity_checks.SHAPE_READS_AS` states which word the reader reads
-  each specialization as,
-    and `SHAPE_LEVELS` states which words name a level the walk enters. A parse method that
-  reads a container
-    reads only the level its own row states, which `entry_coverage.covering_row` decides. A
-  `sensitive` field cannot name itself, so `_protocol_fields` carries the name of the
-entry that holds the level: an entry names itself, and a level inside an entry prints the
-reference the entry
-that holds it names. One entry states `ah` or `esp` for an `ospfv3` profile, which
-`terraform validate` reports, so the table states no word for it.
+    the level the field names. A presence choice states exactly one alternative, and the choice level is not
+  required, so a level that states no choice element prints nothing for it while an element that states none is a
+  report row. A choice level can state its alternatives as values, in which case `_protocol_choice` reads the
+  value from the element the choice lives under and the print writes it as the reader read it. A `member_list`
+  field is read by `_protocol_level`, because its members are values, so no level row stands under it and the
+  walk never enters it: `sanity_checks.SHAPE_READS_AS` states which word the reader reads each specialization as,
+  and `SHAPE_LEVELS` states which words name a level the walk enters. A parse method that reads a container
+  reads only the level its own row states, which `entry_coverage.covering_row` decides. A row that states leaf
+  fields only is the walk's stop point, so a field inside it is a gate finding: the redistribution entry's
+  `match` and `set` rows are that case, and the six levels inside them are in `backlog.md`. A `sensitive` field
+  cannot name itself, so `_protocol_fields` carries the name of the entry that holds the level: an entry names
+  itself, and a level inside an entry prints the reference the entry that holds it names. One entry states `ah`
+  or `esp` for an `ospfv3` profile, and one filter entry states one alternative for the three levels
+  `terraform validate` refuses to hold more than one (`source_address`, `prefix`, and the redistribution entry's
+  `bgp`), so the table states no word for those choices.
 - The parse method that takes the router element is named in the test helpers that call it for
 each router:
     `tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py`. A new

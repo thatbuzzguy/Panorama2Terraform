@@ -1,23 +1,22 @@
 # To Do
 
-F7.7 is complete and committed: `PROTOCOL_SHAPE` states the four `auth_profile` levels the pinned provider
-declares, the four level methods read them through `_protocol_branch`, and a field the provider marks
-`sensitive` prints as the variable reference the entry names, never as the value the export stated. The next
-feature is the rest of Epic 7: the routing levels `resource_mapping.PROTOCOL_SHAPE` does not state.
+F7.8 is complete and committed: `resource_mapping.FILTER_SHAPE` states the shape of the six routing-profile
+filter containers, which sit outside the `protocol` object, and the measured provider schema gives a resource
+for all six, so every `CONTAINER_TABLE` row is `emitted` with the provider type in its note.
+`parse_filter_containers` reads the six paths through `FILTER_TABLE`, `generate_filter_containers` writes one
+block per entry in `filters.tf`, and the gate rule `filter_blocks` reads the same table. The next feature is
+the rest of Epic 7: the routing levels `PROTOCOL_SHAPE` does not state.
 
 ## Next feature, in order (Epic 7 slices)
 
-Each slice states a `PROTOCOL_SHAPE` row for the levels it names, adds the parse method that reads them,
+Each slice states a shape-table row for the levels it names, adds the parse method that reads them,
 then the emitter, then the gate rule, then registers the new method in the test helpers that call a parse
 method for every router (`tests/test_entry_coverage.py::_parse_every`,
-`tests/test_multi_vsys_location.py`). `WORD_TO_SCHEMA` is the pin between a table word and the schema
+`tests/test_multi_vsys_location.py`). `SHAPE_TO_SCHEMA` is the pin between a table word and the schema
 word, so every new row is pinned against the live provider schema. A row that states a level the provider
 does not declare is a report decision, not a table row.
 
-1. **F7.8 — the filter containers**: route maps, prefix lists, community lists, access lists. These sit
-   outside the `protocol` object, so the slice first decides the container row (report, or emitted with a
-   provider type in its note) before the parse method reads them.
-2. **F7.9 — the `ospf` fields the row does not state**: `timers`, `global_bfd`, `graceful_restart`,
+1. **F7.9 — the `ospf` fields the row does not state**: `timers`, `global_bfd`, `graceful_restart`,
    `export_rules`, `rfc1583`, `allow_redist_default_route`, `reject_default_route`. The row gains the fields
    `parse_ospf` reads, and the gate then accepts them in a hand-written file.
 

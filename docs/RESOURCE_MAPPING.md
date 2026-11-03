@@ -16,8 +16,8 @@ version.
 
 | Bucket | Count |
 |---|---|
-| Emitted as real v2 resources (`EMITTED_TYPES`) | 28 |
-| No v2 equivalent, report only (`REPORT_ONLY_TYPES`) | 10 |
+| Emitted as real v2 resources (`EMITTED_TYPES`) | 40 (34 before F7.8, plus the six filter containers) |
+| No v2 equivalent, report only (`REPORT_ONLY_TYPES`) | 4 |
 | v2 resource exists, intentionally not emitted (`NOT_EMITTED_TYPES`) | 3 |
 
 The old v1 names (`panos_address_object`, `panos_security_rule_group`,
@@ -82,6 +82,24 @@ not record which rulebase an entry came from. See
 interface kind to the type above. Virtual-wire and TAP write lines inside a
 parent resource block, so they have no resource type of their own.
 
+### Routing profile filters (template scoped)
+
+F7.8 added one row per filter container, because the provider declares a resource for each one and the shape
+table `FILTER_SHAPE` states its levels (`docs/ARCHITECTURE.md` §4.10). One resource block per entry, in
+`filters.tf`.
+
+| v2 type | Container it reads | v2 attribute notes (verified in schema) |
+|---|---|---|
+| `panos_filters_access_list_routing_profile` | `network/routing-profile/filters/access-list` | `type` is the choice level for `ipv4` or `ipv6`; each holds an entry list |
+| `panos_filters_as_path_access_list_routing_profile` | `network/routing-profile/filters/as-path-access-list` | `aspath_entries` is the entry list; each entry states `action`, `aspath_regex` and `name` |
+| `panos_filters_prefix_list_routing_profile` | `network/routing-profile/filters/prefix-list` | `type` is the choice level for `ipv4` or `ipv6`; each holds an entry list |
+| `panos_filters_community_list_routing_profile` | `network/routing-profile/filters/community-list` | `type` holds `regular`, `extended` or `large` as alternatives; each holds its own entry list |
+| `panos_filters_bgp_route_map_routing_profile` | `network/routing-profile/filters/route-maps/bgp/bgp-entry` | `route_map` is the entry list; each entry states `match` and `set` |
+| `panos_filters_route_maps_redistribution_routing_profile` | `network/routing-profile/filters/route-maps/redistribution/redist-entry` | the entry holds one protocol (`bgp`, `connected_static`, `ospf`, `ospfv3`, `rip`) as an alternative; `bgp` holds `rib`, `rip`, `ospf` and `ospfv3` as alternatives, and each holds its own route-map entry list with `match` and `set` |
+
+The placement is `template`, `template_stack` or `ngfw`, which is what `LOCATION_SCHEMA` states for these six
+types.
+
 ### VPN (template scoped)
 
 | v2 type | Renamed from | v2 attribute notes |
@@ -104,8 +122,11 @@ The report names the entries the object cannot express (§4.9 rule 4). `containe
 states which level prints and which one reports, and `tests/test_container_coverage.py` keeps the table and
 the test in step.
 
-The parser reads only the levels `PROTOCOL_SHAPE` states, so a routing profile, a policy, a timer, an auth
-profile, `ospfv3` and `rip` bodies are not captured. Those gaps are recorded in
+A filter container is the routing kind that does have a resource of its own, so it has six rows here and its
+shape is `FILTER_SHAPE` rather than `PROTOCOL_SHAPE` (`docs/ARCHITECTURE.md` §4.10).
+
+The parser reads only the levels `PROTOCOL_SHAPE` or `FILTER_SHAPE` states, so a policy, a timer, an auth
+profile, and the `ospf` levels outside `area` and `auth_profile` are not captured. Those gaps are recorded in
 [`../backlog.md`](../backlog.md).
 
 | Type | Why there is no v2 target |

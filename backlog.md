@@ -396,13 +396,21 @@ Completed work is not recorded here; the git history and the owner document hold
 - BGP and OSPF have neither a resource nor a data source of their own, so read-through cannot cover
   them. Their data reaches output as the `protocol` object inside the `panos_virtual_router` block, so the
   property scan measures the routing levels through that row (`PROTOCOL_SHAPE`), and a level the table does
-  not state is not read.
+  not state is not read. A filter container is not inside the `protocol` object, so its levels are measured
+  through `FILTER_SHAPE` instead (§4.10).
 - Routing levels `PROTOCOL_SHAPE` does not state are not read, so they reach no output and no report row: the
-  filter containers (route maps, prefix lists, community lists, access lists), and the `ospf` fields the row
-  does not state (`timers`, `global_bfd`, `graceful_restart`, `export_rules`, `rfc1583`,
+  `ospf` fields the row does not state (`timers`, `global_bfd`, `graceful_restart`, `export_rules`, `rfc1583`,
   `allow_redist_default_route`, `reject_default_route`). A level becomes printable when a parse method reads it
   and the table has a row for it, because the emitter, the gate and the report all read that table. Epic 7
   keeps the list.
+- Decision for the redistribution route-map entry (F7.8): the row scope stops at the `match` and `set` rows,
+  because those two rows state leaf fields only. The six levels inside them — `match.ipv4.address`,
+  `match.next_hop`, `match.route_source`, `set.metric`, `set.ipv4`, `set.ipv6` — are therefore not table rows,
+  so no parse method reads them and the gate refuses them in a hand-written file. `tests/fixtures` cannot state
+  one of the choice alternatives for the community-list `type` level and keep a valid run, because the provider
+  enforces exactly one entry for `type` (`regular`, `extended`, `large`), so `FILTER_XML_NAME_EXCEPTIONS` is
+  grounded by the five pairs the fixture states, and the other ten pairs are the spellings the pango source
+  measures.
 - Open: the provider accepts `ah` or `esp` for one `ospfv3` auth profile entry, which `terraform validate`
   reports, and the table has no word for a choice between two levels, so the gate rule does not refuse a
   hand-written file that states both in one entry. `tests/fixtures/auth_profile.xml` states the two levels in

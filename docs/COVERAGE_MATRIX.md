@@ -21,8 +21,8 @@ The document index is in [README.md](README.md).
 
 ## The matrix
 
-One row per emitted provider resource type (34 rows, including the six scope rows F6.5
-added). The table below shows the
+One row per emitted provider resource type (40 rows: 34 before F7.8, plus the six routing-profile filter
+containers, of which the six scope rows F6.5 added are part of the 34). The table below shows the
 six identity fields; the Row schema section names the other two, which are too
 long to read in a table. Read a whole row from the command at the top of this
 document.
@@ -63,6 +63,12 @@ document.
 | `panos_template_stack` | `template-stack/entry` | `Edge-Stack` | `Edge-Stack` | `scope_objects.xml` | `scope.tf` |
 | `panos_template_variable` | `variable/entry` | `edge-tag` | `edge-tag` | `scope_objects.xml` | `scope.tf` |
 | `panos_vsys` | `vsys/entry` | `edge-vsys` | `edge-vsys` | `scope_objects.xml` | `scope.tf` |
+| `panos_filters_access_list_routing_profile` | `network/routing-profile/filters/access-list/entry` | `ACL-Filter` | `ACL-Filter` | `filter_containers.xml` | `filters.tf` |
+| `panos_filters_as_path_access_list_routing_profile` | `network/routing-profile/filters/as-path-access-list/entry` | `ASPath-Filter` | `ASPath-Filter` | `filter_containers.xml` | `filters.tf` |
+| `panos_filters_prefix_list_routing_profile` | `network/routing-profile/filters/prefix-list/entry` | `Prefix-Filter` | `Prefix-Filter` | `filter_containers.xml` | `filters.tf` |
+| `panos_filters_community_list_routing_profile` | `network/routing-profile/filters/community-list/entry` | `Community-Filter` | `Community-Filter` | `filter_containers.xml` | `filters.tf` |
+| `panos_filters_bgp_route_map_routing_profile` | `network/routing-profile/filters/route-maps/bgp/bgp-entry/entry` | `RouteMap-Filter` | `RouteMap-Filter` | `filter_containers.xml` | `filters.tf` |
+| `panos_filters_route_maps_redistribution_routing_profile` | `network/routing-profile/filters/route-maps/redistribution/redist-entry/entry` | `Redist-Filter` | `Redist-Filter` | `filter_containers.xml` | `filters.tf` |
 
 Report-only types (`REPORT_ONLY_TYPES`) have no row and can never gain
 one without first leaving the report-only set and entering
@@ -200,12 +206,13 @@ per-row pipeline test, row shape, and property grounding.
   every `EMITTED_TYPES` type exists in the provider schema and that
   every `REPORT_ONLY_TYPES` type is genuinely absent from it.
 - **Validation gate.** `tests/test_terraform_validate.py` runs
-  `terraform init` + `terraform validate` on three generated outputs:
+  `terraform init` + `terraform validate` on five generated outputs:
   the sample config, the kitchen-sink fixture (every resource type),
-  and the crypto-profile-only fixture (the standalone `vpn.tf`
-  emission path).
-- **Golden files.** `tests/golden/sample` and `tests/golden/kitchen_sink`
-  pin the converter output byte-for-byte for the two committed cases.
+  the crypto-profile-only fixture (the standalone `vpn.tf`
+  emission path), the two-device fixture (the `location.ngfw` placement), and the filter fixture (the
+  `filters.tf` blocks, read through `sanity_checks.check_terraform` on each unit directory the manifest names).
+- **Golden files.** `tests/golden/sample`, `tests/golden/kitchen_sink`, `tests/golden/single_unit` and
+  `tests/golden/filter_containers` pin the converter output byte-for-byte for the four committed cases.
 - **Canonical commands.** `python3 -m pytest` runs the full suite
   (requirements.txt pins `pytest==9.1.1`, `ruff==0.16.10`);
   `ruff check .` is the lint gate.

@@ -185,9 +185,10 @@ Routing is not in that list, because BGP, OSPF and OSPFv3 print as the `protocol
 `panos_virtual_router` (`docs/ARCHITECTURE.md` §4.9). The report names only the routing entries the object
 cannot express: a peer no peer group names it, an interface outside an area, a choice value the mapping does
 not state, and a `range` entry that states neither `advertise` nor `suppress`. A routing level the shape table
-does not state is not read, so the `ospfv3` timer, BFD, graceful-restart, export-rule and auth-profile levels,
-`rip`, the BGP `policy`, and the filter containers stay out of the output, and an auth profile entry the table
-states is not parsed, so a run prints no value for it. Those are recorded in [`backlog.md`](backlog.md).
+does not state is not read, so the `ospfv3` timer, BFD, graceful-restart and export-rule levels, and the `ospf`
+fields outside `area` and `auth_profile` stay out of the output. The filter containers are the routing kind the
+provider declares as its own resource, so each entry prints in `filters.tf` through `FILTER_SHAPE`
+(`docs/ARCHITECTURE.md` §4.10). Those open levels are recorded in [`backlog.md`](backlog.md).
 
 The following have a v2 provider resource, but the converter cannot emit
 the whole object — emitting a partial one would create a misconfigured
@@ -301,7 +302,7 @@ manifest names, holding that unit's `.tf` files and the printed form of that uni
     address_objects.tf  address_groups.tf
     service_objects.tf  service_groups.tf
     tags.tf  custom_url_categories.tf  application_groups.tf  external_lists.tf
-    zones.tf  interfaces.tf  virtual_routers.tf  monitor_profiles.tf
+    zones.tf  interfaces.tf  virtual_routers.tf  filters.tf  monitor_profiles.tf
     security_profiles.tf  security_profile_groups.tf
     vpn.tf
     security_rules.tf  nat_rules.tf  decryption_rules.tf  pbf_rules.tf
@@ -403,6 +404,7 @@ both counts.
 | `scope_blocks` | a name inside a scope block's `location` names a scope the run declares, by the type that defines it | FAIL |
 | `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
 | `protocol_object` | every `protocol` object on a `panos_virtual_router` block matches the `PROTOCOL_SHAPE` row for its level, prints as a field, and states the one key a choice level declares | FAIL |
+| `filter_blocks` | every filter container block matches the `FILTER_SHAPE` row for its level, and an element inside a `[` container states the name the row reads as the entry name | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable the run declares | FAIL |
 | `data_files` | every data file reads as its declared rows, and the data agrees with the naming rule, the joins, the order rule, and its printed form | FAIL |
@@ -510,6 +512,10 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   area, the entry the file cannot express, a sensitive field as
   the variable reference, `VALUE_VARIABLES` as the one shape owner, each violation type of the gate rule, and
   the byte rule between two runs
+- `tests/test_filter_containers.py` - the six routing-profile filter containers: `FILTER_SHAPE` against the live
+  provider schema, the row scope that stops at a `match` or `set` row, the six `CONTAINER_TABLE`,
+  `COVERAGE_MATRIX`, `EMITTED_TYPES` and `LOCATION_SCHEMA` entries with `FILTER_TYPES` as the one decision owner,
+  the parse read and the print, the path-keyed input spellings, and each violation type of the gate rule
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are
