@@ -29,6 +29,9 @@ CASES: dict[str, tuple[Path, Path]] = {
     # F6.10.3: the single-unit case is the same rule, one time. The fixture names one unit, so the case holds
     # one unit directory.
     "single_unit": (FIXTURES_DIR / "address_objects.xml", GOLDEN_DIR / "single_unit"),
+    # F7.8: the six filter containers, one entry per container, so the case holds the `filters.tf` file the
+    # emitter writes for them.
+    "filter_containers": (FIXTURES_DIR / "filter_containers.xml", GOLDEN_DIR / "filter_containers"),
 }
 
 # (case, path from the case directory) pairs for the per-file tests, from the committed goldens.

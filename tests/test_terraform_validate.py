@@ -7,8 +7,9 @@ The gate has two checks:
 2. ``terraform validate`` succeeds against the v2 provider, for the
    sample config, the kitchen-sink fixture (which exercises every
    resource type), the crypto-profile-only fixture (which exercises the
-   F2.8 standalone-profile emission path in vpn.tf), and the two-device
-   fixture (which exercises the F3.6 ``location.ngfw`` placement).
+   F2.8 standalone-profile emission path in vpn.tf), the two-device
+   fixture (which exercises the F3.6 ``location.ngfw`` placement), and
+   the filter fixture (which exercises the F7.8 container emission).
 
 The test skips when the ``terraform`` binary is absent so the Python
 matrix jobs are unaffected; the CI ``terraform-gate`` job provides it.
@@ -20,12 +21,14 @@ from pathlib import Path
 
 import pytest
 
+import sanity_checks
 from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_script
 
 TERRAFORM = shutil.which("terraform")
 FIXTURES_KITCHEN = FIXTURES_DIR / "kitchen_sink.xml"
 FIXTURES_VPN_PROFILES = FIXTURES_DIR / "ike_crypto_profiles.xml"
 FIXTURES_MULTI_DEVICE = FIXTURES_DIR / "multi_device_templates.xml"
+FIXTURES_FILTERS = FIXTURES_DIR / "filter_containers.xml"
 
 
 def _generate_sample_output(out_dir: Path) -> None:
@@ -178,6 +181,28 @@ def tf_workspace_multi_device(tmp_path_factory) -> dict:
         timeout=300,
     )
     return {"dir": out_dir, "init": init}
+
+
+def test_terraform_validate_filters_succeeds(tmp_path):
+    """The filter fixture must pass terraform validate.
+
+    The filter run writes one directory per unit, so the gate reads the unit set through
+    `sanity_checks.unit_directories` and validates each one; a validate at the codebase root would read no
+    configuration files. The pin calls the same function the CLI calls on `--validate`, so the choice levels
+    the fixture answers with one element are the same choice levels the provider accepts.
+    """
+    if TERRAFORM is None:
+        pytest.skip("terraform binary not found (the CI terraform-gate job provides it)")
+    out_dir = tmp_path / "tf_validate_filters"
+    result = run_script(
+        "panorama_to_terraform.py", str(FIXTURES_FILTERS), "--output-dir", str(out_dir)
+    )
+    assert result.returncode == 0, f"converter failed: {result.stderr}\n{result.stdout}"
+    units = sanity_checks.unit_directories(out_dir)
+    assert units, "the run wrote no unit directory"
+    for directory in units:
+        check = sanity_checks.check_terraform(out_dir / directory, TERRAFORM, directory)
+        assert check.result == "PASS" and not check.findings, [f.render() for f in check.findings]
 
 
 def test_terraform_validate_multi_device_succeeds(tf_workspace_multi_device):

@@ -27,6 +27,7 @@ Checks, in report order:
 | `scope_blocks` | a name inside a scope block's `location` names a scope this run declares | FAIL |
 | `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
 | `protocol_object` | a `protocol` object on a `panos_virtual_router` block matches its `PROTOCOL_SHAPE` row | FAIL |
+| `filter_blocks` | a filter container block matches its `FILTER_SHAPE` row | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a declared variable | FAIL |
 | `data_files` | every data file reads as its declared rows and agrees with the rules that produced it (F6.8) | FAIL |
@@ -76,6 +77,7 @@ CHECK_ORDER = (
     'scope_blocks',
     'actions',
     'protocol_object',
+    'filter_blocks',
     'references',
     'variables',
     'data_files',
@@ -797,25 +799,31 @@ def check_protocol_object(files: dict[str, str]) -> list[Finding]:
                 f'protocol {block.address} is a block, not the field PROTOCOL_SHAPE states',
             ))
             continue
-        _protocol_level_findings(block, resource_mapping.PROTOCOL_FIELD, raw, findings)
+        _shape_level_findings(block, resource_mapping.PROTOCOL_FIELD, raw, findings,
+                            resource_mapping.PROTOCOL_TABLE)
     return findings
 
 
-def _protocol_level_findings(block, path: str, raw: str, findings: list) -> None:
-    """One level of a `protocol` value, walked from the text the one field reader read."""
-    row = resource_mapping.protocol_row(path)
+def _shape_level_findings(block, path: str, raw: str, findings: list, table) -> None:
+    """One level of a shape-table value, walked from the text the one field reader read.
+
+    `table` is the shape table the level belongs to, so the same reader serves the `protocol` object and a
+    filter container (F7.8). The finding wording reads `table.word` and `table.name`, so the protocol text is
+    unchanged, and `table.rule` names the rule the finding belongs to.
+    """
+    row = table.row(path)
     if row is None:
         findings.append(Finding(
-            'protocol_object', FAIL, block.file, block.line,
-            f'protocol level {path} is not a level PROTOCOL_SHAPE states ({block.address})',
+            table.rule, FAIL, block.file, block.line,
+            f'{table.word} level {path} is not a level {table.name} states ({block.address})',
         ))
         return
     shape = row['shape']
     if shape == 'string_list':
         if not raw.startswith('['):
             findings.append(Finding(
-                'protocol_object', FAIL, block.file, block.line,
-                f'protocol {block.address} {path} is not a string_list value',
+                table.rule, FAIL, block.file, block.line,
+                f'{table.word} {block.address} {path} is not a string_list value',
             ))
             return
         for element in import_blocks.elements_of(raw):
@@ -824,15 +832,15 @@ def _protocol_level_findings(block, path: str, raw: str, findings: list) -> None
             # reads for it.
             if 'name' not in fields:
                 findings.append(Finding(
-                    'protocol_object', FAIL, block.file, block.line,
-                    f'protocol {block.address} {path} element states no name',
+                    table.rule, FAIL, block.file, block.line,
+                    f'{table.word} {block.address} {path} element states no name',
                 ))
-            _protocol_field_findings(block, path, fields, findings)
+            _shape_field_findings(block, path, fields, findings, table)
         return
     if not raw.startswith('{'):
         findings.append(Finding(
-            'protocol_object', FAIL, block.file, block.line,
-            f'protocol {block.address} {path} is not an object value',
+            table.rule, FAIL, block.file, block.line,
+            f'{table.word} {block.address} {path} is not an object value',
         ))
         return
     fields = import_blocks.fields_at(import_blocks.container_body(raw))
@@ -840,55 +848,83 @@ def _protocol_level_findings(block, path: str, raw: str, findings: list) -> None
         # Rule 2: the level states exactly one key, and that key is one the row's mapping states.
         if len(fields) != 1:
             findings.append(Finding(
-                'protocol_object', FAIL, block.file, block.line,
-                f'protocol {block.address} {path} states {len(fields)} keys, which a one_of level cannot',
+                table.rule, FAIL, block.file, block.line,
+                f'{table.word} {block.address} {path} states {len(fields)} keys, which a one_of level cannot',
             ))
             return
         key = next(iter(fields))
         if key not in row['selects'].values():
             findings.append(Finding(
-                'protocol_object', FAIL, block.file, block.line,
-                f'protocol {block.address} {path} key {key} is not a key PROTOCOL_SHAPE selects',
+                table.rule, FAIL, block.file, block.line,
+                f'{table.word} {block.address} {path} key {key} is not a key {table.name} selects',
             ))
             return
         if key in row['fields']:
             # F7.6: the alternative is a value the row states, so the field rule reads it and the walk does
             # not enter a value.
-            _protocol_field_findings(block, path, fields, findings)
+            _shape_field_findings(block, path, fields, findings, table)
             return
-        _protocol_level_findings(block, f'{path}/{key}', fields[key], findings)
+        _shape_level_findings(block, f'{path}/{key}', fields[key], findings, table)
         return
-    _protocol_field_findings(block, path, fields, findings)
+    _shape_field_findings(block, path, fields, findings, table)
 
 
-def _protocol_field_findings(block, path: str, fields: dict, findings: list) -> None:
-    """The fields at one protocol level, checked against the row that states them."""
-    row = resource_mapping.protocol_row(path)
+def _shape_field_findings(block, path: str, fields: dict, findings: list, table) -> None:
+    """The fields at one level, checked against the row that states them."""
+    row = table.row(path)
     for field, value in fields.items():
         declares = row['fields'].get(field)
         if declares is None:
             findings.append(Finding(
-                'protocol_object', FAIL, block.file, block.line,
-                f'protocol {block.address} {path} {field} is not a field PROTOCOL_SHAPE declares',
+                table.rule, FAIL, block.file, block.line,
+                f'{table.word} {block.address} {path} {field} is not a field {table.name} declares',
             ))
             continue
         if field in row['sensitive']:
             # Rule 3: a value the provider marks sensitive reaches the block only as a variable reference.
             if not value.startswith('var.'):
                 findings.append(Finding(
-                    'protocol_object', FAIL, block.file, block.line,
-                    f'protocol {block.address} {path} {field} prints a sensitive value as a literal',
+                    table.rule, FAIL, block.file, block.line,
+                    f'{table.word} {block.address} {path} {field} prints a sensitive value as a literal',
                 ))
             continue
         word = SHAPE_READS_AS.get(declares, declares)
         if value_shape(value) != word:
             findings.append(Finding(
-                'protocol_object', FAIL, block.file, block.line,
-                f'protocol {block.address} {path} {field} is not a {declares} value',
+                table.rule, FAIL, block.file, block.line,
+                f'{table.word} {block.address} {path} {field} is not a {declares} value',
             ))
         elif declares in SHAPE_LEVELS:
-            _protocol_level_findings(block, f'{path}/{field}', value, findings)
+            _shape_level_findings(block, f'{path}/{field}', value, findings, table)
 
+
+def check_filter_blocks(files: dict[str, str]) -> list[Finding]:
+    """Every filter container block must match its `FILTER_SHAPE` row (F7.8).
+
+    Two findings, each a FAIL, read through the same block reader and field reader `protocol_object` uses:
+
+    1. A level the table states no row for, a field the row does not declare, or a value whose shape the
+       reader reads differently from the shape the row states.
+    2. An element inside a `[` container that states no `name`, which is the field the row reads for the
+       entry name.
+
+    `location` is the placement fact, so the rule reads the fields at the block's own level and not the
+    sub-block: `location_present` is the rule that asks for it. `FILTER_SHAPE` states no `selects` and no
+    `sensitive` row, so the `one_of` and the sensitive rules never fire for a filter block, and no filter
+    field is marked sensitive by the provider.
+
+    The rule reads no data file: the block text and the table are the whole input.
+    """
+    findings = []
+    table = resource_mapping.FILTER_TABLE
+    for block in sorted(blocks(files, ('resource',)), key=lambda b: (b.file, b.line)):
+        path = resource_mapping.filter_path(block.rtype)
+        if path is None:
+            continue
+        # `location` is the placement sub-block, not a field the container row declares.
+        fields = {key: value for key, value in import_blocks.fields_at(block.body).items() if key != 'location'}
+        _shape_field_findings(block, path, fields, findings, table)
+    return findings
 
 def check_references(files: dict[str, str]) -> list[Finding]:
     """Every `.name` reference must resolve to a block declared in this run (F2.6, F5.5).
@@ -1237,6 +1273,7 @@ def run_checks(output_dir: Path, run_terraform: bool = False,
         CheckResult('scope_blocks', tuple(check_scope_blocks(files))),
         CheckResult('actions', tuple(check_actions(files))),
         CheckResult('protocol_object', tuple(check_protocol_object(files))),
+        CheckResult('filter_blocks', tuple(check_filter_blocks(files))),
         CheckResult('references', tuple(check_references(files))),
         CheckResult('variables', tuple(check_variables(files))),
         CheckResult('data_files', tuple(check_data_files(Path(output_dir)))),

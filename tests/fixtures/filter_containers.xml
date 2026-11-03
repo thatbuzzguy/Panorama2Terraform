@@ -1,0 +1,140 @@
+<?xml version="1.0"?>
+<!-- F7.8: one entry per filter container, and each entry states every field the entry row of
+     FILTER_SHAPE declares, so the property scan measures the whole row. The entry sits inside a
+     template, so the block prints a location.
+
+     Each choice the provider enforces as exactly-one (source_address, prefix, and the redistribution
+     protocol level) states one alternative here, because `terraform validate` refuses a level that
+     states more than one. The pinned schema declares those alternatives as optional fields, so
+     FILTER_SHAPE states no `selects` row for them: the choice is the provider's, not the table's. -->
+<config version="10.0.0" urldb="paloaltonetworks">
+  <templates>
+    <entry name="FW-Template">
+      <network>
+        <routing-profile>
+          <filters>
+            <access-list>
+              <entry name="ACL-Filter">
+                <description>deny the test host</description>
+                <type>
+                  <ipv4>
+                    <ipv4-entry>
+                      <entry name="rule-1">
+                        <action>deny</action>
+                        <source-address>
+                          <address>10.0.0.0/8</address>
+                        </source-address>
+                      </entry>
+                    </ipv4-entry>
+                  </ipv4>
+                </type>
+              </entry>
+            </access-list>
+            <as-path-access-list>
+              <entry name="ASPath-Filter">
+                <description>the four-byte ASNs</description>
+                <aspath-entry>
+                  <entry name="rule-1">
+                    <action>permit</action>
+                    <aspath-regex>^65.*1$</aspath-regex>
+                  </entry>
+                </aspath-entry>
+              </entry>
+            </as-path-access-list>
+            <prefix-list>
+              <entry name="Prefix-Filter">
+                <description>the lab ranges</description>
+                <type>
+                  <ipv4>
+                    <ipv4-entry>
+                      <entry name="rule-1">
+                        <action>permit</action>
+                        <prefix>
+                          <entry>
+                            <network>172.16.1.0/24</network>
+                            <greater-than-or-equal>24</greater-than-or-equal>
+                            <less-than-or-equal>32</less-than-or-equal>
+                          </entry>
+                        </prefix>
+                      </entry>
+                    </ipv4-entry>
+                  </ipv4>
+                </type>
+              </entry>
+            </prefix-list>
+            <community-list>
+              <entry name="Community-Filter">
+                <description>the lab communities</description>
+                <type>
+                  <regular>
+                    <regular-entry>
+                      <entry name="rule-1">
+                        <action>permit</action>
+                        <community>
+                          <member>100:200</member>
+                        </community>
+                      </entry>
+                    </regular-entry>
+                  </regular>
+                </type>
+              </entry>
+            </community-list>
+            <route-maps>
+              <bgp>
+                <bgp-entry>
+                <entry name="RouteMap-Filter">
+                  <description>the lab route map</description>
+                  <route-map>
+                    <entry name="1">
+                      <action>permit</action>
+                      <match>
+                        <interface>ethernet1/1</interface>
+                        <metric>10</metric>
+                      </match>
+                      <set>
+                        <tag>100</tag>
+                      </set>
+                    </entry>
+                  </route-map>
+                </entry>
+                </bgp-entry>
+              </bgp>
+              <redistribution>
+                <redist-entry>
+                <entry name="Redist-Filter">
+                  <description>the redistribution route map</description>
+                  <bgp>
+                    <ospf>
+                      <route-map>
+                        <entry name="1">
+                          <action>permit</action>
+                          <match>
+                            <interface>ethernet1/1</interface>
+                            <metric>10</metric>
+                          </match>
+                          <set>
+                            <tag>100</tag>
+                          </set>
+                        </entry>
+                      </route-map>
+                    </ospf>
+                  </bgp>
+                </entry>
+                </redist-entry>
+              </redistribution>
+            </route-maps>
+          </filters>
+        </routing-profile>
+      </network>
+    </entry>
+  </templates>
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <network/>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

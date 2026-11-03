@@ -160,7 +160,8 @@ def test_check_order_puts_the_data_rule_after_the_block_rules(tmp_path):
     """The block rules, then the run-level text rules, then the data rule, then the byte rules."""
     assert sanity_checks.CHECK_ORDER == (
         'emitted_types', 'location_present', 'data_blocks', 'import_blocks', 'scope_blocks',
-        'actions', 'protocol_object', 'references', 'variables', 'data_files', 'control_chars',
+        'actions', 'protocol_object', 'filter_blocks', 'references', 'variables', 'data_files',
+        'control_chars',
         'placeholders', 'terraform',
     )
     assert _run(SAMPLE_CONFIG, tmp_path).returncode == 0
