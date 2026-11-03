@@ -9,6 +9,7 @@ Pins:
 
 - the table against the live provider schema: one row per level the converter prints, the field names the
   provider declares, the shape word for each field, the `selects` keys, and the `sensitive` flags;
+  F7.3 adds the four `ospfv3` levels outside `area` and the one spelling exception table;
 - the print shape: `protocol = { ... }` is one field of the block, and `protocol { ... }` is the shape the
   provider refuses, so the rule reports it (`tests/test_terraform_validate.py` runs the same check on a
   real run);
