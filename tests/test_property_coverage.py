@@ -187,6 +187,29 @@ def test_measured_reads_equal_the_declared_properties(converter_module, tmp_path
     assert drift == {}, drift
 
 
+def test_the_scan_measures_an_export_rule_and_not_a_scalar_level(converter_module, tmp_path):
+    """F7.3: an export-rule entry is in the scan scope, and a single-object level is not.
+
+    `mark` wraps the object it stores, so only a marked object can record a read. `_protocol_level` builds the
+    three single-object levels as plain dicts inside the router's `protocol` field, so nothing is measured for
+    them and the row is grounded by the table instead. An export rule is an entry, so the container table names
+    a row for its container and the scan measures its fields against the router row.
+    """
+    parser = run_pipeline(converter_module, 'ospfv3.xml', tmp_path)
+    assert parser is not None, 'ospfv3.xml'
+    ledger = parser.ledger
+    rule = next(e for e in ledger.entries() if e.get('name') == 'static-af')
+    row = entry_coverage.matrix_row_for(
+        container_coverage.section_path(ledger.parents[rule], ledger.parents, ledger.source))
+    assert row is not None and row['resource'] == 'panos_virtual_router', row
+    recorded = ledger.mark_for(rule)['captured']
+    assert isinstance(recorded, entry_coverage.RecordingDict), recorded
+    assert sorted(set(recorded.used_keys()) - entry_coverage.NON_FIELD_KEYS) == [
+        'metric', 'new_path_type', 'new_tag'], recorded.used_keys()
+    level = ledger.mark_for(next(e for e in ledger.entries() if e.get('name') == 'edge-af'))['captured']
+    assert not isinstance(level['protocol']['ospfv3']['timers'], entry_coverage.RecordingDict), level
+
+
 # --- 3. The scan -----------------------------------------------------------
 
 def test_scan_reports_the_properties_no_output_read(converter_module, tmp_path):

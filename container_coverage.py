@@ -268,6 +268,11 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                   level='sub-shape'),
     ContainerRow('parse_ospfv3', 'protocol/ospfv3/area/interface', 'emitted', 'panos_virtual_router',
                   level='sub-shape'),
+    # F7.3: an export rule is an entry, so the scan reads it as a property level of the router. The three
+    # single-object levels hold no entries, so they need no row: `PROTOCOL_SHAPE` states their fields and the
+    # parse reads them through `_protocol_level`.
+    ContainerRow('parse_ospfv3', 'protocol/ospfv3/export-rules', 'emitted', 'panos_virtual_router',
+                 level='sub-shape'),
     ContainerRow('parse_ospfv3', 'protocol/ospfv3/interface', 'report',
                   'no provider field for an interface outside an area', level='sub-shape'),
     ContainerRow('parse_virtual_routers', 'routing-table/ip/static-route', 'emitted',

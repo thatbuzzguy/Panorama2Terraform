@@ -25,6 +25,7 @@ import inspect
 import textwrap
 from pathlib import Path
 
+import container_coverage
 import entry_coverage
 import import_blocks
 import naming
@@ -99,8 +100,9 @@ def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
 
     The table states the levels this converter prints, so it is a subset of the schema: `protocol` also
     declares `rip` and the two redist profile lists, which the converter does not print and the gate does not
-    check. A row states only the fields the parse method that reaches the level reads, so the `ospfv3` timer,
-    BFD, graceful-restart, export-rule and auth-profile levels are outside the table (`backlog.md`).
+    check. A row states only the fields the parse method that reaches the level reads, so the `ospfv3`
+    `auth_profile` level, `area/virtual_link`, `area/interface/neighbor`, and `area/type/default_route` are
+    outside the table (`backlog.md`).
     """
     for path, row in sorted(resource_mapping.PROTOCOL_SHAPE.items()):
         node = _schema_node(provider_schema, path)
@@ -175,7 +177,38 @@ def test_the_table_is_the_only_shape_owner(converter_module):
     # The two spelling rules are one function each: the field name to element name rule, and the field name a
     # table path names, which is the key the captured dict holds.
     assert parser._protocol_xml_name('address_family_identifier') == 'address-family-identifier'
+    assert parser._protocol_xml_name('spf_calculation_delay') == 'spf-calculation-delay'
+    assert parser._protocol_field_name('protocol/ospfv3/export_rules') == 'export_rules'
     assert parser._protocol_field_name('protocol/ospf/area/interface/link_type') == 'link_type'
+    # F7.3: the provider spells one field name from an element name the `-` rule cannot produce, because it
+    # splits the initialism, so `XML_NAME_EXCEPTIONS` is the one place that states it.
+    assert resource_mapping.XML_NAME_EXCEPTIONS == {'strict_l_s_a_checking': 'strict-lsa-checking'}
+    assert parser._protocol_xml_name('strict_l_s_a_checking') == 'strict-lsa-checking'
+
+
+def test_the_ospfv3_scalar_levels_are_rows_the_parse_reads():
+    """The four `ospfv3` levels outside `area` are table rows, and the level that holds entries is the one
+    the property scan measures (F7.3).
+
+    `test_the_shape_table_is_the_measured_provider_shape` pins every row against the schema, so this test pins
+    the shape decision and the measurement scope: a single-object level holds no entry, so the scan measures
+    nothing for it and the container table names no row for it, while an export rule is an entry.
+    """
+    level = resource_mapping.protocol_row('protocol/ospfv3')
+    assert [field for field in level['fields'] if field not in ('enable', 'router_id', 'area')] == [
+        'timers', 'global_bfd', 'graceful_restart', 'export_rules'], level['fields']
+    for path, shape in (('protocol/ospfv3/timers', 'object'),
+                        ('protocol/ospfv3/global_bfd', 'object'),
+                        ('protocol/ospfv3/graceful_restart', 'object'),
+                        ('protocol/ospfv3/export_rules', 'string_list')):
+        assert resource_mapping.protocol_row(path)['shape'] == shape, path
+        # None of these levels carries a field the provider marks sensitive, so no `VALUE_VARIABLES` row.
+        assert resource_mapping.protocol_row(path)['sensitive'] == frozenset(), path
+    rows = [row.path for row in container_coverage.CONTAINER_TABLE
+            if row.path.startswith('protocol/ospfv3/')]
+    assert sorted(rows) == ['protocol/ospfv3/area', 'protocol/ospfv3/area/interface',
+                             'protocol/ospfv3/export-rules', 'protocol/ospfv3/interface',
+                             'protocol/ospfv3/range'], rows
 
 
 def test_value_shape_is_the_reader_inverse_for_every_shape_word():
@@ -316,6 +349,69 @@ def test_an_ospfv3_area_prints_the_shape_the_table_states(tmp_path):
     # The gate reads the same table, so the block the run wrote reports no finding.
     findings = _findings(expected)
     assert findings == [], findings
+
+
+def test_an_ospfv3_scalar_level_prints_the_shape_the_table_states(tmp_path):
+    """A `protocol/ospfv3` level outside `area` prints as its row states it (F7.3).
+
+    Field order is the table order, a `single` level prints as one object, and a `string_list` level prints one
+    object per element. `tests/fixtures/ospfv3.xml` states every field the four rows declare, so the pin is the
+    whole block the run wrote for that router.
+    """
+    expected = ('  protocol = {\n    ospfv3 = {\n      enable = true\n      timers = {\n'
+                '        lsa_interval = 120\n        spf_calculation_delay = 20\n      }\n'
+                '      global_bfd = {\n        profile = "BFD-OSP"\n      }\n'
+                '      graceful_restart = {\n        enable = true\n        grace_period = 120\n'
+                '        helper_enable = true\n        max_neighbor_restart_time = 200\n'
+                '        strict_l_s_a_checking = true\n      }\n      export_rules = [\n        {\n'
+                '          name = "static-af"\n          metric = 10\n          new_path_type = "internal"\n'
+                '          new_tag = "0"\n        }\n      ]\n    }\n  }\n')
+    files = _run('ospfv3.xml', tmp_path)
+    parts = files['virtual_routers.tf'].split('resource "panos_virtual_router" ')
+    assert len(parts) == 3, parts
+    assert expected in parts[2], parts[2]
+    # The area router states none of these levels, so it prints no field for them.
+    for field in ('timers', 'global_bfd', 'graceful_restart', 'export_rules'):
+        assert field not in parts[1], parts[1]
+    # The gate reads the same table, so the block the run wrote reports no finding.
+    findings = sanity_checks.check_protocol_object(files)
+    assert findings == [], findings
+
+
+def test_the_gate_reads_a_scalar_level_against_the_row_it_states():
+    """One finding per violation type for a level `PROTOCOL_SHAPE` states (F7.3).
+
+    The rule reads the printed value against the row, so a level printed in a shape the row does not state, a
+    field printed in a shape the row does not state, a field the row does not declare, and an element with no
+    name are four findings.
+    """
+    good = ('  protocol = {\n    ospfv3 = {\n      timers = {\n        lsa_interval = 120\n      }\n'
+            '      export_rules = [\n        {\n          name = "static-af"\n          new_tag = "0"\n        }\n'
+            '      ]\n    }\n  }\n')
+    assert _findings(good) == [], good
+    findings = _findings(good.replace('timers = {\n        lsa_interval = 120\n      }', 'timers = 120'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3 timers is not a object value'], findings
+    findings = _findings(good.replace('export_rules = [\n        {\n          name = "static-af"\n'
+                                      '          new_tag = "0"\n        }\n      ]',
+                                      'export_rules = {\n        name = "static-af"\n      }'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3 export_rules '
+        'is not a string_list value'], findings
+    findings = _findings(good.replace('new_tag = "0"', 'new_tag = 0'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/export_rules '
+        'new_tag is not a string value'], findings
+    # An element inside a `[` container is an entry, so the entry name is the field the row reads for it.
+    findings = _findings(good.replace('{\n          name = "static-af"\n          new_tag = "0"',
+                                      '{\n          new_tag = "0"'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/export_rules '
+        'element states no name'], findings
+    findings = _findings(good.replace('lsa_interval = 120', 'lsa_period = 120'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/timers '
+        'lsa_period is not a field PROTOCOL_SHAPE declares'], findings
 
 
 def test_a_choice_body_prints_the_fields_it_declares(tmp_path):

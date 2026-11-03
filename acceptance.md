@@ -1,103 +1,90 @@
-# Acceptance criteria — F6.10.5 (close Epic 6)
+# Acceptance criteria — F7.3 (the `ospfv3` scalar levels)
 
-This is the closing slice of Epic 6 (`docs/CODEBASE_ASSEMBLY.md`, `PLAN.md`). It decides two rules,
-closes one housekeeping item, verifies the gated pieces, and closes the epic. `ruff check .` and
-`python3 -m pytest` must pass at the end.
+This is the first slice of Epic 7 (`PLAN.md`). It puts the four `ospfv3` levels the provider declares and
+`parse_ospfv3` can read into `resource_mapping.PROTOCOL_SHAPE`, reads them, prints them, and keeps the gate
+rule reading the same table. `ruff check .` and `python3 -m pytest` must pass at the end.
 
-## 1. The template stack unit rule (decided)
+## 1. The measured levels (decided from the live provider schema)
 
-**Decision: the stack is the fifth scope fact.** The unit rule names a unit by a fact, so a scope that
-names no fact cannot name a unit. `docs/CODEBASE_ASSEMBLY.md` §1 rule 1 names the template stack as a
-scope a unit is, and `container_coverage.SCOPE_CONTAINERS` holds `template-stack`, so the fact set must
-cover it.
+The pinned provider is 2.0.14. `terraform providers schema -json` declares all four levels under
+`panos_virtual_router.protocol.ospfv3`, so all four become table rows. None is a report refusal, and none
+carries a field the provider marks `sensitive`, so `VALUE_VARIABLES` gains no row.
 
-Do not read `template` as the stack name. Three rules already name `template_stack` as its own key, and
-reading `template` as the stack name gives one fact two meanings:
-
-- `resource_mapping.ACTION_FILTERS` maps `template_stacks` → `template_stack`, so a stack unit's commit
-  block prints `type = "template_stack"`. With `template` as the stack name, the same filter field would
-  name a template, and `SCOPE_ANSWER['template']` would answer `panos_template` for a stack name.
-- `resource_mapping.SCOPE_PLACEMENT` gives `panos_template_variable` the two sub-blocks `template` and
-  `template_stack`, so an entry inside a stack must print the stack sub-block, not the template sub-block.
-- `entry_coverage.REPORT_SCOPE_KEYS` maps a scope container to the field the block carries the name in.
-  Adding the fact puts `template-stack` in that mapping, and the property scan stops counting
-  `template_stack` as captured content for the variable row.
+| Table path | Shape word | Fields the row states |
+|---|---|---|
+| `protocol/ospfv3/timers` | `object` | `lsa_interval` number, `spf_calculation_delay` number |
+| `protocol/ospfv3/global_bfd` | `object` | `profile` string |
+| `protocol/ospfv3/graceful_restart` | `object` | `enable` bool, `grace_period` number, `helper_enable` bool, `max_neighbor_restart_time` number, `strict_l_s_a_checking` bool |
+| `protocol/ospfv3/export_rules` | `string_list` | `name` string, `metric` number, `new_path_type` string, `new_tag` string |
 
 Criteria:
 
-1. `container_coverage.SCOPE_FACT_KEYS` is the one place that names the facts, and it holds five:
-   `device_group`, `vsys`, `template`, `vsys_device`, `template_stack`. No module defines a second fact
-   order.
-2. The parser walks the stack the same way it walks the other scope containers
-   (`container_coverage.parent_map`, one walk per fact), and every parse method records it through
-   `identity_of`. A stack entry names its own stack; an entry the export places in no stack states `''`.
-3. `unit_manifest.NAME_LEVELS` reads innermost first: `vsys`, `vsys_device`, `template`,
-   `template_stack`, `device_group`. A template inside a stack names its template, because the template is
-   deeper than the stack. A stack entry names the stack, so a run that declares a stack writes one unit
-   directory for it, and the commit and push blocks for that unit come from `ACTION_FILTERS`.
-4. The unit identity join is `SCOPE_FACT_KEYS` order (`docs/ARCHITECTURE.md` §5), so every unit digest
-   changes. The goldens regenerate from a real run, never by hand, and the measured pins in the tests
-   that name a digest are re-measured from the same run.
-5. `CODEBASE_MANIFEST.json` gains the field for the fifth fact, in the same position as the fact order,
-   and `parse_rows` still refuses a row that is not the declared shape.
-6. `state_coverage.STATE_SCOPE_KEYS` maps the `template_stack` location sub-block to the fact, so a state
-   entry placed inside a stack is keyed. The rule that a block naming no fact is not keyed still holds for
-   the sub-blocks the table does not declare.
-7. The variable inside a stack stops being a captured property, so `COVERAGE_MATRIX` row
-   `panos_template_variable` lists four properties, not five. The printed bytes for that block do not
-   change, because the emitter already prints the stack sub-block from the placement key.
-8. `docs/ARCHITECTURE.md` §2.2 stays the owner of the fact set, and every other document links to it. The
-   statement that no stack unit is named today is removed from `docs/CODEBASE_ASSEMBLY.md` §3.
+1. `PROTOCOL_SHAPE` is the one table. The emitter, the gate rule `protocol_object`, and the property scan read
+   it, so a shape stated twice is a failure.
+2. Every new row is pinned against the live provider schema by
+   `tests/test_protocol_object.py::test_the_shape_table_is_the_measured_provider_shape`, through
+   `WORD_TO_SCHEMA`. A row that states a field the provider does not declare is a failure.
+3. `test_the_sensitive_rows_are_the_reference_only_names` keeps its pins: no new sensitive field, so the
+   declared set stays `{'secret', 'key', 'password'}`.
+4. The `protocol/ospfv3` row gains the four as fields, so the emitter prints them. Field print order stays
+   the table order, and the `ospfv3` area pin in `tests/test_protocol_object.py` stays intact because the
+   fixture's area router states none of the new levels.
 
-## 2. The module parameter rule (decided)
+## 2. The spelling exception (decided)
 
-**Decision: the tool does not decide module parameters.** A module is a standard a person writes
-(`docs/CODEBASE_ASSEMBLY.md` §13), so the tool writes the data a module consumes and cannot know which
-values a module takes. A template variable value, and a membership list in `scope.tf`, stay the literal
-the export states: the variable block *is* the PAN-OS variable. This closes with no byte change; the open
-item is removed from `backlog.md`, and §9 rule 2 stays the owner of the behavior.
+`_protocol_xml_name` is the one rule that turns a table field name into the element name the export states.
+It cannot produce `strict-lsa-checking` from `strict_l_s_a_checking`, because the provider splits the
+initialism. The provider spelling is the table's, so the exception is one place in `resource_mapping`:
+`XML_NAME_EXCEPTIONS`, read by `_protocol_xml_name`. No parse method spells an element name of its own.
 
 Criteria:
 
-1. No new shape word in `resource_mapping.VALUE_VARIABLES`, and no new rule that decides a shape a second
-   time. `VALUE_VARIABLES` stays the single shape owner.
-2. The emitter prints a template variable value as the export states it, and the property scan measures the
-   same list the row declares.
-3. The open item is removed from `backlog.md`, and no document restates the decision.
+1. `XML_NAME_EXCEPTIONS` holds one entry: `strict_l_s_a_checking` → `strict-lsa-checking`. It is the only
+   place a spelling is stated besides the rule.
+2. `tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner` keeps its pins and names the
+   exception as the one case the rule cannot produce.
+3. `docs/ARCHITECTURE.md` §4.9 rule 3 states the exception in one sentence and names the table that holds it.
 
-## 3. Housekeeping: the sample output
-
-**Decision: the repository holds no committed sample output.** `terraform_output/` is the default value of
-`--output-dir`, and `.gitignore` ignores it, so a regenerated sample cannot be committed. The canonical
-sample output is the pinned golden set (`tests/golden/sample/`, `tests/golden/kitchen_sink/`,
-`tests/golden/single_unit/`), which cannot drift from what the converter writes.
+## 3. Parse, print, and the gate
 
 Criteria:
 
-1. `git ls-files terraform_output/` is empty, so there is nothing to regenerate and nothing to delete; the
-   stale claim in `backlog.md` is removed.
-2. `examples/example_terraform_output.txt` names the golden set as the canonical sample output, and no
-   document calls `terraform_output/` committed sample output.
-3. The layout work that renames paths (`src/`, the module set, `quick_start.sh`) stays in `backlog.md`,
-   because it renames the paths the tests read.
+1. The three `object` levels are read by `_protocol_level`, so `parse_ospfv3` gains no field-name literal;
+   `export_rules` is a `string_list`, so `parse_ospfv3` reads its entries with one path constant. The method
+   states a path and never spells a field name.
+2. `container_coverage.CONTAINER_TABLE` gains one sub-shape row for `protocol/ospfv3/export-rules`, so the
+   property scan measures its entries. A level that holds no entries needs no row.
+3. The emitter prints the four levels, and the gate rule reports no finding on a run that prints them. A
+   hand-written block that states a level in a shape the row does not state is one finding.
+4. `COVERAGE_MATRIX` row `panos_virtual_router` gains `new_path_type` and `new_tag`, because the property
+   scan measures an export-rule entry against that row. A field read through a level dict is grounded by the
+   table, not by the measurement, so the three `object` levels add nothing to the row.
+5. No test helper needs a new method name: `parse_ospfv3` is already registered in
+   `tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py`.
 
-## 4. The gated pieces
+## 4. Fixture and pins
 
-The four `*_policy_rules` types stay gated by the F3.5 rulebase decision. They are not part of this slice
-and stay in `backlog.md`, not in `to-do.md`. No import block, no action, and no gate rule changes for them.
+Criteria:
 
-The write path gate keeps its rules: one writer, the two path builders, the `.tf` set read by the block
-rules and the four records read by the data rule, no new CLI flag, and the exit codes unchanged.
+1. `tests/fixtures/ospfv3.xml` gains one router entry that states all four levels. The existing area entry is
+   unchanged, so the existing pins hold. The fixture is not a golden case, so no golden is regenerated.
+2. New pins in `tests/test_protocol_object.py`: the four rows against the schema (already generic), the
+   spelling exception, the parse reading the levels, the emitter printing them, and one gate finding per
+   violation type for a new level.
+3. Golden sets are the bytes of a real run and are not edited by hand. No golden fixture states one of the
+   four levels, so the goldens must not move; a run must show that.
+4. `ruff check .` is clean and `python3 -m pytest` is green.
 
 ## 5. Tracking markdown
 
-1. `PLAN.md`: Epic 6 is closed, so its feature detail is removed; the open work is the next feature queue.
-2. `to-do.md`: the completed F6.10.5 pieces are removed.
+1. `to-do.md`: this slice's pieces are tracked while the work runs, and removed when it is committed.
+2. `backlog.md`: the resolved `ospfv3` scalar levels are removed; `strict_l_s_a_checking` and the levels this
+   slice does not read stay.
 3. `agent-status.md`: the position, the test count, and the pins that changed.
-4. No document restates a rule another document owns, and no document states a test count.
-5. Every claim names the module or the test that holds it.
+4. `PLAN.md`: the Epic 7 paragraph names the levels this slice landed.
+5. No document restates a rule another document owns, and no document states a test count.
 
 ## 6. Commit
 
-One commit whose message starts with `F6.10.5:`, states the two decisions and the housekeeping choice in
-ASD-STE100, and states that Epic 6 is closed.
+One commit whose message starts with `F7.3:`, states the measured levels, the spelling exception and the
+property scan change in ASD-STE100. The tracking markdown is updated after the commit.
