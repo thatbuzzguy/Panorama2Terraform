@@ -1,61 +1,72 @@
-# F7.8 — acceptance criteria
+# F7.9 — acceptance criteria
 
-F7.8 decides, for the six filter containers in Epic 7, whether `CONTAINER_TABLE` names a provider
-type or a `report` row, then implements the read, the print, the gate rule and the pins.
+F7.9 states the shape rows for the `protocol/ospf` fields `PROTOCOL_SHAPE` does not declare, makes
+`parse_ospf` read them through the table, and pins the rows, the parse read, the emitter print, the gate
+rule, the container row and the scan scope.
 
-Measure source: `terraform providers schema -json` for the pinned provider (2.0.14), read through
-the door `tests/test_data_source_schema.py` uses (`conftest.py::provider_schemas`). The decision is
-from the measurement, not from memory. The measured shape is recorded in
-`resource_mapping.py::FILTER_SHAPE`.
+Measure source: `terraform providers schema -json` for the pinned provider (2.0.14), read through the door
+`tests/test_data_source_schema.py` uses (`conftest.py::provider_schemas`). The decision is from the
+measurement, not from memory. The measured shape is recorded in `resource_mapping.py::PROTOCOL_SHAPE`.
 
-## The decision, container by container
+## The measurement, field by field
 
-The pinned provider declares a resource for all six containers, so all six are `emitted` and the
-container row's note names the provider type. No container is a `report` row.
+Measured 2026-11-03 against provider 2.0.14 (Terraform 1.16.2). Every one of the seven fields the row
+does not state is declared by the provider, so every one becomes a row field. None is refused.
 
-| Container | Measured provider resource | Row |
+| Field | Measured provider shape | Row field |
 |---|---|---|
-| `network/routing-profile/filters/access-list` | `panos_filters_access_list_routing_profile` | `emitted` |
-| `network/routing-profile/filters/as-path-access-list` | `panos_filters_as_path_access_list_routing_profile` | `emitted` |
-| `network/routing-profile/filters/prefix-list` | `panos_filters_prefix_list_routing_profile` | `emitted` |
-| `network/routing-profile/filters/community-list` | `panos_filters_community_list_routing_profile` | `emitted` |
-| `network/routing-profile/filters/route-maps/bgp/bgp-entry` | `panos_filters_bgp_route_map_routing_profile` | `emitted` |
-| `network/routing-profile/filters/route-maps/redistribution/redist-entry` | `panos_filters_route_maps_redistribution_routing_profile` | `emitted` |
+| `timers` | `single`, 2 attributes | `object` |
+| `global_bfd` | `single`, 1 attribute | `object` |
+| `graceful_restart` | `single`, 5 attributes | `object` |
+| `export_rules` | `list`, entry level | `string_list` |
+| `rfc1583` | `bool` | `bool` |
+| `allow_redist_default_route` | `bool` | `bool` |
+| `reject_default_route` | `bool` | `bool` |
+
+The three `bool` fields are values, not blocks: the provider declares each as a leaf of type `bool`, so the
+row states `bool` and the field reader reads `yes` or `no` the way it already reads `enable`. No `ospf`
+field is `sensitive` in the schema, so the row states an empty `sensitive` set and no `VALUE_VARIABLES` row
+is needed. `strict_l_s_a_checking` is the one spelling the `-` rule cannot produce, and
+`XML_NAME_EXCEPTIONS` already states it.
+
+## The print order
+
+Field order is the table order, so the row's order is the print order. The `ospf` row states:
+`enable`, `router_id`, the three `bool` fields in the order the schema names them, the three single-object
+levels in the order the `ospfv3` row states them, then the two entry levels in the same order. The fields
+the row already stated keep their relative order, so a run that states no value for a new field prints the
+same bytes as before.
 
 ## Criteria
 
-1. **One shape owner.** A filter container sits outside the `protocol` object, so its shape is in
-   `FILTER_SHAPE`, not `PROTOCOL_SHAPE`. Each row states `shape`, `fields`, `selects`, `sensitive`,
-   the same row shape an existing config container uses, so the existing pins read both tables the
-   same way. A row whose shape word is `object` or `string_list` is the provider word measured from
-   the schema; `selects` is empty because the provider declares every choice as optional fields, not
-   as one-of; `sensitive` is empty because no filter field is `sensitive` in the schema.
-2. **The row scope is a subset choice, stated here.** For the four simple containers and the BGP
-   route-map entry, `FILTER_SHAPE` mirrors every level the provider declares. For the redistribution
-   route-map entry, the table states the entry level, the protocol levels, the protocol/pair levels,
-   the route-map entry level, and the `match` and `set` levels; the levels inside them
-   (`match.ipv4.address`, `match.next_hop`, `match.route_source`, `set.metric`, `set.ipv4`, `set.ipv6`)
-   are not in the table and are recorded in `backlog.md`.
-3. **No parse method names a field.** `parse_filter_containers` states the six container paths and
-   reads each level through `FILTER_SHAPE`. The entry-name rule and the field-shape rule of F7.1 apply
-   to a filter block the way they apply to `protocol`.
-4. **The input spelling is measured from pango.** `XML_NAME_EXCEPTIONS` gains the fields whose element
-   or attribute name differs from `to_xml_name`, and the pin `test_the_table_is_the_only_shape_owner`
-   reads every word of every `FILTER_SHAPE` row against the schema and pango. A field that spells two
-   ways in the input is pinned by its path (`ec-regex` for `extended_communities` in a community-list
-   entry, `extended-community` in a route-map match).
-5. **Every entry the method reads is marked**, and the property scan measures a filter entry against
-   its container row: the properties `COVERAGE_MATRIX` declares are the entry-level fields `FILTER_SHAPE`
-   states, minus the entry name.
-6. **The emitter prints what the row declares.** `generate_filter_containers` reads every property the
-   matrix row declares, and the gate rule `filter_blocks` refuses a filter block whose field reads as a
-   shape the row does not state, an entry inside a list element with no `name`, or a field the row does
-   not declare.
-7. **The fixture.** `tests/fixtures/filter_containers.xml` has one entry per container, each stating
-   every field its entry row declares, inside a template so a location block prints. The gate reports
-   `PASS (0 FAIL, 0 WARN)` on it, and `terraform validate` accepts the emitted block.
-8. **Goldens move together.** The corpus case `tests/fixtures/kitchen_sink.xml` gains one filter entry,
-   so a row change moves the property scan scope, the per-entry report and the `.tf` goldens together.
-   Goldens are regenerated only from a real run.
-9. **The pins.** Rows are pinned against the live schema; the parse read, the emitter print, the gate
-   rule, the scan scope and the input spellings are pinned; `ruff check .` and `python3 -m pytest` pass.
+1. **One shape owner.** `PROTOCOL_SHAPE` stays the only table that states the `protocol` object. The row
+   gains the seven measured fields, and four new rows stand under it for the levels. The emitter, the gate
+   rule and the property scan read the same names, so no field name is stated twice.
+2. **No parse method names a field.** `parse_ospf` reads the three `object` levels through
+   `_protocol_level`, so it states no path for them. `export_rules` is a `string_list` level, so the method
+   states its path and `_protocol_branch` fills it. The parse stays registered in
+   `tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py`, which already call
+   it for each router.
+3. **The scan scope.** `CONTAINER_TABLE` gains the sub-shape row for `protocol/ospf/export-rules`, because
+   an export rule is an entry and only an `emitted` row has a matrix row. The three single-object levels
+   hold no entry, so they gain no row and stay grounded by the table. The properties the row for
+   `panos_virtual_router` declares are measured through a fixture, so they move only if the run reads a new
+   name.
+4. **The gate accepts the new fields.** A hand-written block that states them is not a finding, and the gate
+   still refuses a field the row does not declare. The pin that refused these fields because the row did not
+   state them is restated.
+5. **The fixture.** `tests/fixtures/ospf.xml` states the three `bool` fields and each of the four new
+   levels, with one entry stating every field its row declares, so the property scan has no unused
+   property for it. A real run on it reports `PASS (0 FAIL, 0 WARN)` and `terraform validate` accepts the
+   block.
+6. **Goldens move only from a real run.** A golden case moves only when the run writes different bytes for
+   it.
+7. **The pins.** The rows are pinned against the live schema, the print order against a real run, the parse
+   read, the gate findings, the container row and the scan scope. `ruff check .` and `python3 -m pytest`
+   pass.
+
+## Out of scope for this slice
+
+Fields the provider declares for a routing level that the row does not state stay in `backlog.md`: the two
+redistribution profile lists, the `bgp` fields outside the levels the table states, and the `ospfv3` bool
+fields. A field the provider does not declare cannot become a row.

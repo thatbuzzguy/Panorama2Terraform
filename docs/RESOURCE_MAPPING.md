@@ -125,8 +125,9 @@ the test in step.
 A filter container is the routing kind that does have a resource of its own, so it has six rows here and its
 shape is `FILTER_SHAPE` rather than `PROTOCOL_SHAPE` (`docs/ARCHITECTURE.md` §4.10).
 
-The parser reads only the levels `PROTOCOL_SHAPE` or `FILTER_SHAPE` states, so a policy, a timer, an auth
-profile, and the `ospf` levels outside `area` and `auth_profile` are not captured. Those gaps are recorded in
+The parser reads only the levels `PROTOCOL_SHAPE` or `FILTER_SHAPE` states, so a level or a field the tables
+do not state is not captured. The gaps that stay are the two redistribution profile lists, the `bgp` fields
+outside the levels the row states, and the `ospfv3` fields the row does not state. Those gaps are recorded in
 [`../backlog.md`](../backlog.md).
 
 | Type | Why there is no v2 target |

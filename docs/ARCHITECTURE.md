@@ -1213,7 +1213,13 @@ read by no method, so it prints nothing and the gate refuses it in a hand-writte
 `auth_profile` levels into the table, so the four methods read them through `_protocol_branch`, and the levels
 inside a profile entry (`md5`, `ah`, `esp`, `esp/authentication`, `esp/encryption`) are filled by
 `_protocol_body` through the field the profile row states. One entry states `ah` or `esp`, not both, which
-`terraform validate` reports, so the table needs no word for it and the fixture uses two entries.
+`terraform validate` reports, so the table needs no word for it and the fixture uses two entries. F7.9 put
+the four `ospf` levels outside `area` into the table (`timers`, `global_bfd`, `graceful_restart`,
+`export_rules`) and the three fields the `ospf` row did not state (`rfc1583`,
+`allow_redist_default_route`, `reject_default_route`), which the provider declares as `bool` values and not
+as blocks, so `parse_ospf` reads them through the row and states one path for the entry level, which
+`_protocol_branch` fills. Field order is the print order, so the order the row states is the order the block
+prints.
 
 1. **`protocol` prints as one field of the block**: `protocol = { ... }`. `terraform validate` accepts the
    value and refuses the block shape, so the gate rule reports a `protocol` the field reader cannot read as
@@ -1304,7 +1310,9 @@ row is grounded by the table instead. The same holds for an entry the parse reac
 row names, such as a `neighbor` entry inside an interface entry: the section path holds an entry segment the row
 path cannot match, so `PROTOCOL_SHAPE` grounds that level. F7.7: the four `auth_profile` levels are
 container rows, so the scan measures a profile entry against the router row, and an `md5` entry inside a
-profile entry is not in the scan scope, so `key` stays grounded by the table. Pinned by
+profile entry is not in the scan scope, so `key` stays grounded by the table. F7.9: `protocol/ospf/export-rules`
+is a container row, so the scan measures an `ospf` export rule entry against the router row, and the three
+single-object levels stay grounded by the table, because they hold no entry. Pinned by
 `tests/test_container_coverage.py`, `tests/test_coverage_matrix.py` and `tests/test_property_coverage.py`.
 
 ### 4.10 The filter containers (F7.8)
