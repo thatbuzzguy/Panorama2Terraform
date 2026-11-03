@@ -1,101 +1,82 @@
-# Acceptance criteria — F7.4 (the area sub-levels)
+# Acceptance — F7.5, the `rip` level of the `protocol` object
 
-This slice of Epic 7 (`PLAN.md`) puts the four area sub-levels the pinned provider declares into
-`resource_mapping.PROTOCOL_SHAPE` for both routing levels, extends the area rule that reads them, prints them,
-and keeps the gate rule reading the same table. `ruff check .` and `python3 -m pytest` must pass at the end.
+Scope: the `rip` level the pinned provider declares. One table row per level `parse_rip` reads, the parse
+method that reads them through the table, the pins that hold the new rows against the live provider
+schema, and the tracking markdown.
 
-## 1. The measured levels (decided from the live provider schema)
+Baseline: `development`, provider 2.0.14, Terraform 1.16.2, `ruff check .` clean, 1322 tests.
 
-The pinned provider is 2.0.14, measured with `terraform providers schema -json` on 2026-11-02. All four levels
-are declared for `protocol.ospf` and for `protocol.ospfv3`, so all four become table rows. None is a report
-refusal, and none carries a field the provider marks `sensitive`, so `VALUE_VARIABLES` gains no row.
+## Criteria
 
-Two of the four are not direct children of `area`. The provider declares `default_route` inside the `nssa` and
-the `stub` bodies, so the rows are `.../area/type/nssa/default_route` and `.../area/type/stub/default_route`,
-and `default_route` is a field of those two rows. `nssa_ext_range` is declared only inside `nssa`. The rows stay
-separate per routing level, as F7.2 left them, and the two levels are not identical: `ospfv3` declares
-`instance_id` on `area/interface` and on `area/virtual_link`, and `ospf` does not. A new row states the whole
-field set the provider declares for its level, and an existing row gains only the new level field, so
-`instance_id` prints for the `ospfv3` virtual link and the `ospfv3` interface row keeps the fields the parse
-read before.
+1. **`PROTOCOL_SHAPE` gains the `rip` field on the `protocol` row**, and one row per level the provider
+   declares for the `rip` subtree that this converter prints:
 
-| Table path | Shape word | Fields the row states |
-|---|---|---|
-| `protocol/<level>/area` | `string_list` | gains `virtual_link` |
-| `protocol/<level>/area/virtual_link` | `string_list` | `name` string, `authentication` string, `bfd` object, `dead_counts` number, `enable` bool, `hello_interval` number, `instance_id` number (`ospfv3` only), `neighbor_id` string, `retransmit_interval` number, `transit_area_id` string, `transit_delay` number |
-| `protocol/<level>/area/virtual_link/bfd` | `object` | `profile` string |
-| `protocol/<level>/area/interface` | `string_list` | gains `neighbor` |
-| `protocol/<level>/area/interface/neighbor` | `string_list` | `name` string |
-| `protocol/<level>/area/type/nssa` | `object` | gains `default_route` (`one_of`), `nssa_ext_range` (`string_list`) |
-| `protocol/<level>/area/type/nssa/default_route` | `one_of` | selects `advertise` → `advertise`, `no` → `disable` |
-| `protocol/<level>/area/type/nssa/default_route/advertise` | `object` | `metric` number, `type` string |
-| `protocol/<level>/area/type/nssa/default_route/disable` | `block` | none |
-| `protocol/<level>/area/type/nssa/nssa_ext_range` | `string_list` | `name` string, `advertise` block, `suppress` block |
-| `protocol/<level>/area/type/stub` | `object` | gains `default_route` (`one_of`) |
-| `protocol/<level>/area/type/stub/default_route` | `one_of` | selects `advertise` → `advertise`, `no` → `disable` |
-| `protocol/<level>/area/type/stub/default_route/advertise` | `object` | `metric` number |
-| `protocol/<level>/area/type/stub/default_route/disable` | `block` | none |
+   | Path | Shape | Fields |
+   |---|---|---|
+   | `protocol/rip` | `object` | `enable` bool, `allow_redist_default_route` bool, `reject_default_route` bool, `timers` object, `global_bfd` object, `interfaces` string_list, `export_rules` string_list, `auth_profile` string_list |
+   | `protocol/rip/timers` | `object` | `interval_seconds`, `update_intervals`, `expire_intervals`, `delete_intervals`, each `number` |
+   | `protocol/rip/global_bfd` | `object` | `profile` string |
+   | `protocol/rip/interfaces` | `string_list` | `name` string, `enable` bool, `mode` string, `authentication` string, `bfd` object, `default_route` one_of |
+   | `protocol/rip/interfaces/bfd` | `object` | `profile` string |
+   | `protocol/rip/interfaces/default_route` | `one_of` | no fields, `selects` = `advertise` → `advertise`, `no` → `disable` |
+   | `protocol/rip/interfaces/default_route/advertise` | `object` | `metric` number |
+   | `protocol/rip/interfaces/default_route/disable` | `block` | no fields |
+   | `protocol/rip/export_rules` | `string_list` | `name` string, `metric` number |
+   | `protocol/rip/auth_profile` | `string_list` | `name` string, `password` string (sensitive) |
+   | `protocol/rip/auth_profile/md5` | `string_list` | `name` string, `key` string (sensitive) |
 
-Criteria:
+   Every row is the field name and shape the provider declares, measured 2026-11-02 against 2.0.14. The
+   provider declares no `router_id`, no `area`, no `neighbor`, and no `type` for `rip`, so `rip` has no area
+   row and no choice row outside `default_route`.
 
-1. `PROTOCOL_SHAPE` is the one table. The emitter, the gate rule `protocol_object`, and the property scan read
-   it, so a shape stated twice is a failure.
-2. Every row is pinned against the live provider schema by
-   `tests/test_protocol_object.py::test_the_shape_table_is_the_measured_provider_shape`, through
-   `WORD_TO_SCHEMA`. A row that states a level or a field the provider does not declare is a failure, so the
-   table states no `area/type/default_route` row.
-3. The spelling rule keeps its pins: `selects` is the one place that maps the value the export states (`no`) to
-   the key the provider reads (`disable`), so `XML_NAME_EXCEPTIONS` gains no row and no parse method spells a
-   field name.
-4. `test_the_sensitive_rows_are_the_reference_only_names` keeps its pins: no new sensitive field, so the
-   declared set stays `{'secret', 'key', 'password'}`.
-5. `COVERAGE_MATRIX` row `panos_virtual_router` gains `virtual_link`, because the property scan measures an area
-   entry against that row. A level the scan does not measure stays grounded by the table.
+2. **The two `auth_profile` rows are the sensitive decision only.** `parse_rip` reads no value for them, the
+   same rule as `protocol/bgp/auth_profile` and `protocol/ospf/auth_profile`. The `sensitive` facts they
+   state (`password`, `key`) are pinned against the schema, and `VALUE_VARIABLES` keeps the same three
+   reference-only names, so no new row is needed there. The parse method that reads an auth profile body is
+   F7.7, which is also the slice that decides `ospfv3`.
 
-## 2. The choice the export states by presence
+3. **`parse_rip` states a path and never spells a field name.** It reads the level through `_protocol_level`,
+   fills the two `string_list` levels with `_protocol_entries`, and fills the choice the export states inside
+   an interface entry through `_protocol_body` and `_protocol_presence_choice`. A field name comes from
+   `_protocol_field_name`, an element name from `_protocol_xml_name`. `test_the_table_is_the_only_shape_owner`
+   reads `parse_rip` as an owner.
 
-`terraform validate` refuses a `nssa_ext_range` element that states neither `advertise` or `suppress`, and a
-`default_route` element that states neither `advertise` or `no`. So the two are presence choices, the same rule
-F7.1 rule 7 states for a `range` element: the entry that states no choice is marked for the report and prints
-nothing. A `default_route` is not an entry, so the report names the entry that holds it — the area entry —
-because the report names entries and the file holds no half of it.
+4. **`_protocol_entries` fills the choice an entry states inside itself.** An interface entry holds its
+   `default_route` choice, so the reader fills a `one_of` field of the row from the element under the entry,
+   the same rule `_protocol_body` already uses for a chosen body, and keeps the existing rule for the row's
+   `block` fields. The choice level is not required, so an entry that states no choice element prints nothing
+   for it. A choice element that states none of the alternatives `terraform validate` requires has no `.tf`
+   shape, so the entry that holds it is marked for the report and not put in the printed list.
 
-Criteria:
+5. **The export states a name-keyed list as an entry**, so a `rip` interface and an export rule are entries the
+   ledger records, the same rule as every other protocol level.
 
-1. One rule reads the choice: the fields of a `string_list` entry level that are `block`, and the `selects`
-   mapping of a `one_of` level. `_protocol_choice` is the one lookup for both.
-2. An export that states no `default-route` element states no choice, so nothing prints and nothing is
-   reported: only a level the export states can be a finding.
-3. A `one_of` level that states two keys, or a key the mapping does not state, is one gate finding for each.
+6. **The container table gains the rows the scan reads**: `protocol/rip`, `protocol/rip/interfaces`,
+   `protocol/rip/export-rules`, each `emitted` with `panos_virtual_router`. A single-object level holds no
+   entry, so it has no row. No row names `protocol/rip/interfaces/bfd`, because the parse reaches it through
+   the field the interfaces row states.
 
-## 3. Parse, print, and the gate
+7. **The property scan measures the two entry levels**, so `COVERAGE_MATRIX` row `panos_virtual_router` gains
+   the properties a run reads from a `rip` entry: `authentication`, `bfd`, `default_route`, `mode`. `enable` and
+   `metric` are already there. The single-object levels are plain dicts, so nothing is measured for them.
 
-Criteria:
+8. **The gate rule needs no new branch**: it reads the table. New pins: the rip rows against the schema, the
+   block a run writes for `tests/fixtures/rip.xml`, one finding per violation type for a choice inside an
+   entry, and the `password` and `key` fields printed as the variable reference.
+   `test_the_rule_reports_an_undeclared_field_and_a_wrong_shape` no longer uses `rip` for a level outside the
+   table; it uses `redist_profile`, which the table still does not state.
 
-1. `_protocol_areas` is still the area rule the two routing levels share. It reads the entries of a
-   `string_list` level and the one key of a `one_of` level, and it states a level as a table path: no new
-   field-name literal appears in the parse methods, which
-   `tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner` pins.
-2. `container_coverage.CONTAINER_TABLE` gains one `emitted` sub-shape row per routing level for each entry
-   level the parse states as a path: `area/virtual-link` and `area/interface/neighbor`. `nssa-ext-range` needs
-   no row, because the parse reaches it from the field the `nssa` body row names, so no path string states it
-   and `test_every_row_path_is_read_by_its_method` could not read such a row.
-3. The emitter prints the new levels in the table order, and the gate rule reports no finding on a run that
-   prints them.
-4. The parse registers no new method, so `tests/test_entry_coverage.py::_parse_every` and
-   `tests/test_multi_vsys_location.py` keep their lists: the new levels are read through
-   `_protocol_areas`, which `parse_ospf` and `parse_ospfv3` already call.
+9. **The new parse method is registered in the two test helpers** that call a parse method for every router:
+   `tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py`.
 
-## 4. Pins
+10. **`tests/fixtures/rip.xml`** states every field the new rows declare, plus one interface entry whose
+    choice element states no alternative for the report. It is a device-level fixture, so the scope pins and
+    the corpus scan read it with no finding. No golden fixture states `rip`, so no golden set moves.
 
-1. `tests/test_protocol_object.py`: `test_the_shape_table_is_the_measured_provider_shape` no longer names the
-   four levels as outside the table; the new pins state the rows, the presence-choice mapping, the print for a
-   choice inside a body, and the gate finding for a choice inside a nested level.
-2. `tests/fixtures/ospf.xml` and `tests/fixtures/ospfv3.xml` gain entries that reach every new level for their
-   routing level, and one entry that states no presence choice, which the report names.
-3. `tests/test_parse_network.py` pins the parse read for both routing levels.
-4. `tests/test_property_coverage.py` pins the scan scope: the area dict is measured, so `virtual_link` is a
-   declared property of the router row, and a neighbor entry inside an interface entry is not measured, so
-   `neighbor` is not.
-5. The golden set is the bytes of a real run. The three golden fixtures state none of the new levels, so the
-   goldens move only if a run moves them.
+11. **The markdown tracks the slice**: `docs/ARCHITECTURE.md` §4.9 names the new levels and the entry that
+    holds its own choice; `backlog.md` closes the `rip` line and keeps the auth profile body line; `PLAN.md`
+    records F7.5; `to-do.md` moves to F7.6; `agent-status.md` records the position, the test count and the
+    pins that changed.
+
+12. `ruff check .` is clean and `python3 -m pytest` passes. `terraform validate` accepts the block the run
+    writes for `rip.xml` (measured 2026-11-02, Terraform 1.16.2, provider 2.0.14).

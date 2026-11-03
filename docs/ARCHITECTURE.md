@@ -1190,11 +1190,12 @@ that states its shape: one row per level this converter prints, with the nesting
 fields the level declares, the value that selects a `one_of` key, and the `sensitive` flag. The emitter
 (`TerraformGenerator._protocol_fields`), the gate rule (§4.6) and the test read that table, so no second
 table names a shape. A level is printable only when a parse method reads it and the table has a row for it:
-`parse_bgp`, `parse_ospf` and `parse_ospfv3` read the levels, and `_protocol_areas` is the area rule the two
-OSPF levels share. F7.4 put the four area sub-levels into the table, so the rule fills the entries of
+`parse_bgp`, `parse_ospf`, `parse_ospfv3` and `parse_rip` read the levels, `_parse_router` builds the
+`protocol` dict from the fields the `protocol` row states, and `_protocol_areas` is the area rule the two OSPF
+levels share. F7.4 put the four area sub-levels into the table, so the rule fills the entries of
 `virtual_link`, `neighbor` and `nssa_ext_range` through `_protocol_entries`, and the choice inside a chosen
-body through `_protocol_body`. A level the table states no row for is read by no method, so it prints nothing
-and the gate refuses it in a hand-written file.
+body through `_protocol_body`. F7.5 put the `rip` levels into the table. A level the table states no row for is
+read by no method, so it prints nothing and the gate refuses it in a hand-written file.
 
 1. **`protocol` prints as one field of the block**: `protocol = { ... }`. `terraform validate` accepts the
    value and refuses the block shape, so the gate rule reports a `protocol` the field reader cannot read as
@@ -1235,9 +1236,14 @@ and the gate refuses it in a hand-written file.
    or as the `selects` keys of a `one_of` level. A `range` entry and an `nssa_ext_range` entry state
    `advertise` or `suppress`, and the alternatives are the row's `block` fields, so the rule reads the table
    and the two levels are one shape. A `default_route` level states `advertise` or `no`, and the key the print
-   states for `no` is `disable`. An element that states neither has no `.tf` shape, so it is a report row, and
-   a `default_route` is not an entry, so the report names the area entry that holds it. Pinned by
-   `tests/test_parse_network.py::test_parse_ospf` and `tests/test_parse_network.py::test_parse_ospfv3`.
+   states for `no` is `disable`. The choice level itself is not required, so a level that states no choice
+   element prints nothing for it, and the element that states none of the alternatives has no `.tf` shape, so it
+   is a report row. The report names the entry that holds the choice element, which can be the entry the choice
+   is inside: the area entry for an OSPF level, and the interface entry for a `rip` interface, because F7.5
+   showed an entry can hold its own choice and `_protocol_body` reads the element under it the same way. Pinned
+   by `tests/test_parse_network.py::test_parse_ospf`, `tests/test_parse_network.py::test_parse_ospfv3`,
+   `tests/test_parse_network.py::test_parse_rip` and
+   `tests/test_protocol_object.py::test_the_gate_reads_a_choice_inside_an_entry_level`.
 8. **A sensitive field prints as the variable reference**, through `VALUE_VARIABLES`
    (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2), and the run holds no value for it, so no generated file states
    one. `SHAPE_WORDS` is the word list the table uses, and `sanity_checks.value_shape` is its reader inverse.
