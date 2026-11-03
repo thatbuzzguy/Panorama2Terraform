@@ -928,6 +928,30 @@
             </routing-table>
           </entry>
         </virtual-router>
+        <!-- F7.8: one filter entry, so a `FILTER_SHAPE` row change moves the property scan scope, the
+             per-entry report and the `.tf` goldens together. The entry states every field its entry row
+             declares. -->
+        <routing-profile>
+          <filters>
+            <access-list>
+              <entry name="ACL-Kitchen">
+                <description>The kitchen sink access list</description>
+                <type>
+                  <ipv4>
+                    <ipv4-entry>
+                      <entry name="kitchen-rule">
+                        <action>deny</action>
+                        <source-address>
+                          <address>10.9.9.9/32</address>
+                        </source-address>
+                      </entry>
+                    </ipv4-entry>
+                  </ipv4>
+                </type>
+              </entry>
+            </access-list>
+          </filters>
+        </routing-profile>
       </network>
       <!-- F6.5: the four scope entries this fixture carries, so the golden set shows all six scope
            types. A virtual system and a template variable are entries inside the template entry, and

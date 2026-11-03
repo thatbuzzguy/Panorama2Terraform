@@ -94,10 +94,8 @@ def _schema_level(node: dict) -> str:
     return nested['nesting_mode']
 
 
-# A `SHAPE_WORDS` word as the schema states it. A level word is a nesting mode, and a leaf word is a type.
-# `member_list` is the word for a field whose type is `['list', 'string']`, so it reads as the leaf type `list`.
-WORD_TO_SCHEMA = {'string_list': 'list', 'member_list': 'list', 'object': 'single', 'one_of': 'single',
-                  'block': 'single'}
+# A `SHAPE_WORDS` word as the schema states it, read through the one definition `resource_mapping` owns.
+WORD_TO_SCHEMA = resource_mapping.SHAPE_TO_SCHEMA
 
 
 # --- 1. the table against the live provider schema ---------------------------
@@ -161,7 +159,10 @@ def test_the_table_is_the_only_shape_owner(converter_module):
     there too. `name` is the field the rule reads for the entry name, and `protocol` is the table's own
     `PROTOCOL_FIELD`: those two are the names the rule has to state.
     """
-    fields = {field for row in resource_mapping.PROTOCOL_SHAPE.values() for field in row['fields']}
+    # Both shape tables are shape owners, so a field name written as a string constant in a reader, an emitter
+    # or a gate branch is a second owner for either table (F7.8).
+    fields = {field for table in (resource_mapping.PROTOCOL_TABLE, resource_mapping.FILTER_TABLE)
+              for row in table.rows.values() for field in row['fields']}
     # The static-route emitter is not a protocol owner: `metric` is the route's own field there, and the row
     # `COVERAGE_MATRIX` states for it names that shape. `name` is the field the rule reads for the entry
     # name, and `protocol` is the table's own `PROTOCOL_FIELD`. `interfaces` is the router's own field there,
@@ -169,10 +170,13 @@ def test_the_table_is_the_only_shape_owner(converter_module):
     # different shape from the `protocol/rip` field the table states (F7.5).
     static_route = [row for row in resource_mapping.COVERAGE_MATRIX
                     if row['resource'] == 'panos_virtual_router_static_route_ipv4'][0]
-    allowed = (set(resource_mapping.SHAPE_WORDS) | {'name', resource_mapping.PROTOCOL_FIELD}
+    # `entry` is the element the reader walks for an entry list, and it is also a schema attribute name for a
+    # nested entry list (F7.8), so the reader has to state it.
+    allowed = (set(resource_mapping.SHAPE_WORDS) | {'name', 'entry', resource_mapping.PROTOCOL_FIELD}
                | set(static_route['properties']) | {'interfaces'})
     owners = [getattr(sanity_checks, name, None) for name in
-              ('check_protocol_object', '_protocol_level_findings', '_protocol_field_findings', 'value_shape')]
+              ('check_protocol_object', 'check_filter_blocks', '_shape_level_findings',
+               '_shape_field_findings', 'value_shape')]
     generator = converter_module.TerraformGenerator
     parser = converter_module.PanoramaParser
     owners += [getattr(generator, name) for name in ('generate_virtual_routers', '_protocol_fields', 'printed_value')]

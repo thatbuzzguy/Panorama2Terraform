@@ -217,15 +217,18 @@ def test_row_names_its_emitter_and_properties(row, converter_module):
 
 
 def _shape_table_grounding(row: dict) -> set:
-    """The properties the row's emitter prints through `PROTOCOL_SHAPE` (F7.1).
+    """The properties the row's emitter prints through a shape table (F7.1, F7.8).
 
-    `generate_virtual_routers` has no per-field branch: it prints the fields the shape table declares for
-    each level of the `protocol` object. So a field the table states is grounded by the table, and
-    tests/test_protocol_object.py is what keeps the table against the live provider schema.
+    `generate_virtual_routers` and `generate_filter_containers` have no per-field branch: each prints the
+    fields the shape table declares for the level it reads. So a field the table states is grounded by the
+    table, and tests/test_protocol_object.py and tests/test_filter_containers.py are what keep the two tables
+    against the live provider schema.
     """
-    if 'generate_virtual_routers' not in row['emitter']:
-        return set()
-    return {field for shape_row in resource_mapping.PROTOCOL_SHAPE.values() for field in shape_row['fields']}
+    if 'generate_virtual_routers' in row['emitter']:
+        return {field for shape_row in resource_mapping.PROTOCOL_SHAPE.values() for field in shape_row['fields']}
+    if 'generate_filter_containers' in row['emitter']:
+        return {field for shape_row in resource_mapping.FILTER_SHAPE.values() for field in shape_row['fields']}
+    return set()
 
 
 @pytest.mark.parametrize('row', ROWS, ids=_row_id)

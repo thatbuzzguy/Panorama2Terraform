@@ -239,6 +239,45 @@ LOCATION_SCHEMA = {
         'vsys': ('name', 'ngfw_device'),
         'template': ('name', 'ngfw_device', 'panorama_device', 'vsys'),
     },
+
+# F7.8: the six filter containers place in a template or a template stack, the shape the pinned
+# data source declares for each one.
+
+    'panos_filters_access_list_routing_profile': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    },
+
+    'panos_filters_as_path_access_list_routing_profile': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    },
+
+    'panos_filters_bgp_route_map_routing_profile': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    },
+
+    'panos_filters_community_list_routing_profile': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    },
+
+    'panos_filters_prefix_list_routing_profile': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    },
+
+    'panos_filters_route_maps_redistribution_routing_profile': {
+        'ngfw': ('ngfw_device',),
+        'template': ('name', 'ngfw_device', 'panorama_device'),
+        'template_stack': ('name', 'ngfw_device', 'panorama_device'),
+    },
 }
 
 # F5.5: the shape of every provider data source type, written from
@@ -1007,6 +1046,14 @@ EMITTED_TYPES = frozenset({
     'panos_template_stack',
     'panos_template_variable',
     'panos_vsys',
+
+# F7.8: the six routing-profile filter containers, one resource per entry (`filters.tf`).
+    'panos_filters_access_list_routing_profile',
+    'panos_filters_as_path_access_list_routing_profile',
+    'panos_filters_bgp_route_map_routing_profile',
+    'panos_filters_community_list_routing_profile',
+    'panos_filters_prefix_list_routing_profile',
+    'panos_filters_route_maps_redistribution_routing_profile',
 })
 
 # F6.5: the six scope object types, and the parsed key that names the scope each one places
@@ -1198,6 +1245,13 @@ VALUE_VARIABLES = {
 # `selects` is the mapping from the report value to the key a `one_of` level prints; an empty `selects`
 # means the level is not a one-of choice. `sensitive` names the fields the provider marks sensitive.
 SHAPE_WORDS = ('string', 'bool', 'number', 'object', 'string_list', 'member_list', 'one_of', 'block')
+
+# Each shape word as the provider schema states it: a level word is a nesting mode, and a leaf word is a
+# type. `one_of`, `block` and `object` are all the `single` mode, and a `member_list` is a `list` whose
+# members are values, so the two list words read the same way. The two shape-table pins read this one
+# mapping instead of each stating its own (F7.1, F7.8).
+SHAPE_TO_SCHEMA = {'string_list': 'list', 'member_list': 'list', 'object': 'single', 'one_of': 'single',
+                   'block': 'single', 'string': 'string', 'bool': 'bool', 'number': 'number'}
 
 # The reader states a `[` container as `string_list`, so that word covers a list of objects as well as a
 # list of strings; `one_of` is the `object` shape with the extra rule that it states exactly one key.
@@ -2398,6 +2452,1110 @@ PROTOCOL_SHAPE: dict[str, dict] = {
     },
 }
 
+# F7.8: the six filter containers sit outside the `protocol` object, so their shape is its own table.
+# One row per level, and each row is the shape the pinned provider (2.0.14) declares for it, read through
+# `terraform providers schema -json` and pinned by tests/test_filter_containers.py.
+#
+# The container row is the level the resource block prints, so its `fields` are the properties the
+# `COVERAGE_MATRIX` row declares for that resource. `selects` is empty for every row: the provider declares
+# each choice level as optional fields, not as required-exactly-one, so `one_of` is not the word for it.
+# `sensitive` is empty: no filter field is marked sensitive in the schema, so `VALUE_VARIABLES` gains no row.
+#
+# The redistribution route-map entry is mirrored to the `match` and `set` levels, and those rows state leaf
+# fields only: the levels inside them (`match.ipv4.address`, `match.next_hop`, `match.route_source`,
+# `set.metric`, `set.ipv4`, `set.ipv6`) are not read or printed, and they are recorded in backlog.md.
+FILTER_SHAPE: dict[str, dict] = {
+    # network/routing-profile/filters/access-list (panos_filters_access_list_routing_profile)
+    'network/routing-profile/filters/access-list': {
+        'shape': 'object',
+        'fields': {
+        'description': 'string', 'name': 'string', 'type': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/access-list/type': {
+        'shape': 'object',
+        'fields': {
+        'ipv4': 'object', 'ipv6': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/access-list/type/ipv4': {
+        'shape': 'object',
+        'fields': {
+        'ipv4_entries': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/access-list/type/ipv4/ipv4_entries': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'destination_address': 'object', 'name': 'string', 'source_address': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/access-list/type/ipv4/ipv4_entries/destination_address': {
+        'shape': 'object',
+        'fields': {
+        'address': 'string', 'entry': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/access-list/type/ipv4/ipv4_entries/destination_address/entry': {
+        'shape': 'object',
+        'fields': {
+        'address': 'string', 'wildcard': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/access-list/type/ipv4/ipv4_entries/source_address': {
+        'shape': 'object',
+        'fields': {
+        'address': 'string', 'entry': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/access-list/type/ipv4/ipv4_entries/source_address/entry': {
+        'shape': 'object',
+        'fields': {
+        'address': 'string', 'wildcard': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/access-list/type/ipv6': {
+        'shape': 'object',
+        'fields': {
+        'ipv6_entries': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/access-list/type/ipv6/ipv6_entries': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'name': 'string', 'source_address': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/access-list/type/ipv6/ipv6_entries/source_address': {
+        'shape': 'object',
+        'fields': {
+        'address': 'string', 'entry': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/access-list/type/ipv6/ipv6_entries/source_address/entry': {
+        'shape': 'object',
+        'fields': {
+        'address': 'string', 'exact_match': 'bool'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # network/routing-profile/filters/as-path-access-list (panos_filters_as_path_access_list_routing_profile)
+    'network/routing-profile/filters/as-path-access-list': {
+        'shape': 'object',
+        'fields': {
+        'aspath_entries': 'string_list', 'description': 'string', 'name': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/as-path-access-list/aspath_entries': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'aspath_regex': 'string', 'name': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # network/routing-profile/filters/prefix-list (panos_filters_prefix_list_routing_profile)
+    'network/routing-profile/filters/prefix-list': {
+        'shape': 'object',
+        'fields': {
+        'description': 'string', 'name': 'string', 'type': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/prefix-list/type': {
+        'shape': 'object',
+        'fields': {
+        'ipv4': 'object', 'ipv6': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/prefix-list/type/ipv4': {
+        'shape': 'object',
+        'fields': {
+        'ipv4_entries': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/prefix-list/type/ipv4/ipv4_entries': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'name': 'string', 'prefix': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/prefix-list/type/ipv4/ipv4_entries/prefix': {
+        'shape': 'object',
+        'fields': {
+        'entry': 'object', 'network': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/prefix-list/type/ipv4/ipv4_entries/prefix/entry': {
+        'shape': 'object',
+        'fields': {
+        'greater_than_or_equal': 'number', 'less_than_or_equal': 'number', 'network': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/prefix-list/type/ipv6': {
+        'shape': 'object',
+        'fields': {
+        'ipv6_entries': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/prefix-list/type/ipv6/ipv6_entries': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'name': 'string', 'prefix': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/prefix-list/type/ipv6/ipv6_entries/prefix': {
+        'shape': 'object',
+        'fields': {
+        'entry': 'object', 'network': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/prefix-list/type/ipv6/ipv6_entries/prefix/entry': {
+        'shape': 'object',
+        'fields': {
+        'greater_than_or_equal': 'number', 'less_than_or_equal': 'number', 'network': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # network/routing-profile/filters/community-list (panos_filters_community_list_routing_profile)
+    'network/routing-profile/filters/community-list': {
+        'shape': 'object',
+        'fields': {
+        'description': 'string', 'name': 'string', 'type': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/community-list/type': {
+        'shape': 'object',
+        'fields': {
+        'extended': 'object', 'large': 'object', 'regular': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/community-list/type/extended': {
+        'shape': 'object',
+        'fields': {
+        'extended_entries': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/community-list/type/extended/extended_entries': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'extended_community_regexes': 'member_list', 'name': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/community-list/type/large': {
+        'shape': 'object',
+        'fields': {
+        'large_entries': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/community-list/type/large/large_entries': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'large_community_regexes': 'member_list', 'name': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/community-list/type/regular': {
+        'shape': 'object',
+        'fields': {
+        'regular_entries': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/community-list/type/regular/regular_entries': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'communities': 'member_list', 'name': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # network/routing-profile/filters/route-maps/bgp/bgp-entry (panos_filters_bgp_route_map_routing_profile)
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry': {
+        'shape': 'object',
+        'fields': {
+        'description': 'string', 'name': 'string', 'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'as_path_access_list': 'string', 'extended_community': 'string', 'interface': 'string', 'ipv4': 'object',
+        'ipv6': 'object', 'large_community': 'string', 'local_preference': 'number', 'metric': 'number',
+        'origin': 'string', 'peer': 'string', 'regular_community': 'string', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/match/ipv4': {
+        'shape': 'object',
+        'fields': {
+        'address': 'object', 'next_hop': 'object', 'route_source': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/match/ipv4/address': {
+        'shape': 'object',
+        'fields': {
+        'access_list': 'string', 'prefix_list': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/match/ipv4/next_hop': {
+        'shape': 'object',
+        'fields': {
+        'access_list': 'string', 'prefix_list': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/match/ipv4/route_source': {
+        'shape': 'object',
+        'fields': {
+        'access_list': 'string', 'prefix_list': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/match/ipv6': {
+        'shape': 'object',
+        'fields': {
+        'address': 'object', 'next_hop': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/match/ipv6/address': {
+        'shape': 'object',
+        'fields': {
+        'access_list': 'string', 'prefix_list': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/match/ipv6/next_hop': {
+        'shape': 'object',
+        'fields': {
+        'access_list': 'string', 'prefix_list': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'aggregator': 'object', 'aspath_exclude': 'member_list', 'aspath_prepend': 'member_list',
+        'atomic_aggregate': 'bool', 'extended_community': 'member_list', 'ipv4': 'object', 'ipv6': 'object',
+        'ipv6_nexthop_prefer_global': 'bool', 'large_community': 'member_list', 'local_preference': 'number',
+        'metric': 'object', 'origin': 'string', 'originator_id': 'string', 'overwrite_large_community': 'bool',
+        'overwrite_regular_community': 'bool', 'regular_community': 'member_list', 'remove_large_community': 'string',
+        'remove_regular_community': 'string', 'tag': 'number', 'weight': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/set/aggregator': {
+        'shape': 'object',
+        'fields': {
+        'as': 'number', 'router_id': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/set/ipv4': {
+        'shape': 'object',
+        'fields': {
+        'next_hop': 'string', 'source_address': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/set/ipv6': {
+        'shape': 'object',
+        'fields': {
+        'next_hop': 'string', 'source_address': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/set/metric': {
+        'shape': 'object',
+        'fields': {
+        'action': 'string', 'value': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # network/routing-profile/filters/route-maps/redistribution/redist-entry
+    # (panos_filters_route_maps_redistribution_routing_profile)
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry': {
+        'shape': 'object',
+        'fields': {
+        'bgp': 'object', 'connected_static': 'object', 'description': 'string', 'name': 'string', 'ospf': 'object',
+        'ospfv3': 'object', 'rip': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp': {
+        'shape': 'object',
+        'fields': {
+        'ospf': 'object', 'ospfv3': 'object', 'rib': 'object', 'rip': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/ospf': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/ospf/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/ospf/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'as_path_access_list': 'string', 'extended_communities': 'string', 'interface': 'string',
+        'large_communities': 'string', 'local_preference': 'number', 'metric': 'number', 'origin': 'string',
+        'peer': 'string', 'regular_communities': 'string', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/ospf/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'metric_type': 'string', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/ospfv3': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/ospfv3/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/ospfv3/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'as_path_access_list': 'string', 'extended_communities': 'string', 'interface': 'string',
+        'large_communities': 'string', 'local_preference': 'number', 'metric': 'number', 'origin': 'string',
+        'peer': 'string', 'regular_communities': 'string', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/ospfv3/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'metric_type': 'string', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/rib': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/rib/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/rib/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'as_path_access_list': 'string', 'extended_communities': 'string', 'interface': 'string',
+        'large_communities': 'string', 'local_preference': 'number', 'metric': 'number', 'origin': 'string',
+        'peer': 'string', 'regular_communities': 'string', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/rib/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'source_address': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/rip': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/rip/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/rip/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'as_path_access_list': 'string', 'extended_communities': 'string', 'interface': 'string',
+        'large_communities': 'string', 'local_preference': 'number', 'metric': 'number', 'origin': 'string',
+        'peer': 'string', 'regular_communities': 'string', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/rip/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'next_hop': 'string', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static': {
+        'shape': 'object',
+        'fields': {
+        'bgp': 'object', 'ospf': 'object', 'ospfv3': 'object', 'rib': 'object', 'rip': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/bgp': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/bgp/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/bgp/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'interface': 'string', 'metric': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/bgp/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'aspath_prepends': 'member_list', 'atomic_aggregate': 'bool', 'extended_communities': 'member_list',
+        'large_communities': 'member_list', 'local_preference': 'number', 'origin': 'string',
+        'originator_id': 'string', 'regular_communities': 'member_list', 'tag': 'number', 'weight': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/ospf': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/ospf/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/ospf/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'interface': 'string', 'metric': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/ospf/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'metric_type': 'string', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/ospfv3': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/ospfv3/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/ospfv3/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'interface': 'string', 'metric': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/ospfv3/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'metric_type': 'string', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/rib': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/rib/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/rib/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'interface': 'string', 'metric': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/rib/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'source_address': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/rip': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/rip/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/rip/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'interface': 'string', 'metric': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/rip/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'next_hop': 'string', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf': {
+        'shape': 'object',
+        'fields': {
+        'bgp': 'object', 'rib': 'object', 'rip': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf/bgp': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf/bgp/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf/bgp/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'interface': 'string', 'metric': 'number', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf/bgp/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'aspath_prepends': 'member_list', 'atomic_aggregate': 'bool', 'extended_communities': 'member_list',
+        'large_communities': 'member_list', 'local_preference': 'number', 'origin': 'string',
+        'originator_id': 'string', 'regular_communities': 'member_list', 'tag': 'number', 'weight': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf/rib': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf/rib/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf/rib/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'interface': 'string', 'metric': 'number', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf/rib/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'source_address': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf/rip': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf/rip/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf/rip/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'interface': 'string', 'metric': 'number', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf/rip/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'next_hop': 'string', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospfv3': {
+        'shape': 'object',
+        'fields': {
+        'bgp': 'object', 'rib': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospfv3/bgp': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospfv3/bgp/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospfv3/bgp/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'interface': 'string', 'metric': 'number', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospfv3/bgp/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'aspath_prepends': 'member_list', 'atomic_aggregate': 'bool', 'extended_communities': 'member_list',
+        'large_communities': 'member_list', 'local_preference': 'number', 'origin': 'string',
+        'originator_id': 'string', 'regular_communities': 'member_list', 'tag': 'number', 'weight': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospfv3/rib': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospfv3/rib/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospfv3/rib/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'interface': 'string', 'metric': 'number', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospfv3/rib/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'source_address': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip': {
+        'shape': 'object',
+        'fields': {
+        'bgp': 'object', 'ospf': 'object', 'rib': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip/bgp': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip/bgp/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip/bgp/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'interface': 'string', 'metric': 'number', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip/bgp/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'aspath_prepends': 'member_list', 'atomic_aggregate': 'bool', 'extended_communities': 'member_list',
+        'large_communities': 'member_list', 'local_preference': 'number', 'origin': 'string',
+        'originator_id': 'string', 'regular_communities': 'member_list', 'tag': 'number', 'weight': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip/ospf': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip/ospf/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip/ospf/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'interface': 'string', 'metric': 'number', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip/ospf/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'metric_type': 'string', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip/rib': {
+        'shape': 'object',
+        'fields': {
+        'route_map': 'string_list'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip/rib/route_map': {
+        'shape': 'string_list',
+        'fields': {
+        'action': 'string', 'description': 'string', 'match': 'object', 'name': 'string', 'set': 'object'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip/rib/route_map/match': {
+        'shape': 'object',
+        'fields': {
+        'interface': 'string', 'metric': 'number', 'tag': 'number'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip/rib/route_map/set': {
+        'shape': 'object',
+        'fields': {
+        'source_address': 'string'
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+}
+
+# The provider type each filter container row names, which the emitter and the gate both need. It is the
+# same fact `CONTAINER_TABLE` states in the row note, so tests/test_filter_containers.py pins the two
+# against each other instead of letting this be a second decision.
+FILTER_TYPES = {
+    'network/routing-profile/filters/access-list': 'panos_filters_access_list_routing_profile',
+    'network/routing-profile/filters/as-path-access-list': 'panos_filters_as_path_access_list_routing_profile',
+    'network/routing-profile/filters/prefix-list': 'panos_filters_prefix_list_routing_profile',
+    'network/routing-profile/filters/community-list': 'panos_filters_community_list_routing_profile',
+    'network/routing-profile/filters/route-maps/bgp/bgp-entry': 'panos_filters_bgp_route_map_routing_profile',
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry':
+        'panos_filters_route_maps_redistribution_routing_profile',
+}
+
+# The six filter containers: the entry rows of `FILTER_SHAPE`, which are the keys of `FILTER_TYPES` and the
+# paths `CONTAINER_TABLE` names.
+FILTER_PATHS = tuple(sorted(FILTER_TYPES))
+
+
+def filter_row(path: str) -> Optional[dict]:
+    """The shape row for one filter level. None when the table states no shape for the level."""
+    return FILTER_SHAPE.get(path)
+
+
+def filter_path(resource: str) -> Optional[str]:
+    """The container path a filter resource type belongs to (`FILTER_TYPES`, read the other way)."""
+    for path, name in FILTER_TYPES.items():
+        if name == resource:
+            return path
+    return None
+
+
+# The input spellings `ShapeTable.xml_name` cannot produce, keyed by the container path, because one
+# provider field name spells two ways in the input: `extended_communities` is `ec-regex` inside a
+# community-list entry and `extended-community` inside a route-map match. An entry-list field is the
+# singular container element that holds the entries, so those fields are here too.
+FILTER_XML_NAME_EXCEPTIONS = {
+    'network/routing-profile/filters/access-list': {'ipv4_entries': 'ipv4-entry', 'ipv6_entries': 'ipv6-entry'},
+    'network/routing-profile/filters/as-path-access-list': {'aspath_entries': 'aspath-entry'},
+    'network/routing-profile/filters/prefix-list': {'ipv4_entries': 'ipv4-entry', 'ipv6_entries': 'ipv6-entry'},
+    'network/routing-profile/filters/community-list': {
+        'extended_entries': 'extended-entry', 'large_entries': 'large-entry',
+        'regular_entries': 'regular-entry', 'communities': 'community',
+        'extended_community_regexes': 'ec-regex', 'large_community_regexes': 'lc-regex'},
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry': {
+        'extended_communities': 'extended-community', 'large_communities': 'large-community',
+        'regular_communities': 'regular-community', 'aspath_prepends': 'aspath-prepend'},
+}
+
+
+class ShapeTable:
+    """One shape table: its rows, and the input spellings the field-name rule cannot produce.
+
+    The reader, the printer and the gate rule walk a level through this object, so no method writes a
+    field name of its own (F7.1 rule): the table is the only shape owner. `exceptions` is the spelling map
+    for this table, keyed by the container path, because one provider field name can spell two ways in the
+    input (F7.8). `xml_name` is the one rule that turns a table name into the tag the input spells.
+    """
+
+    def __init__(self, name: str, rows: dict, exceptions: Optional[dict] = None,
+                 word: str = 'shape', rule: str = 'shape_blocks'):
+        self.name = name
+        self.rows = rows
+        self.exceptions = exceptions or {}
+        # `word` is the word a finding uses for the table's levels, and `rule` is the gate rule that reports
+        # them, so the one reader can serve both tables without naming either one.
+        self.word = word
+        self.rule = rule
+
+    def row(self, path: str) -> Optional[dict]:
+        return self.rows.get(path)
+
+    @staticmethod
+    def field_name(path: str) -> str:
+        """The field the path names, which is the last part of the path (F7.1)."""
+        return path.rsplit('/', 1)[-1]
+
+    def xml_name(self, field: str, path: str = '') -> str:
+        """The element name for a field name: `_` becomes `-`, with this table's exceptions."""
+        for container, words in self.exceptions.items():
+            if path == container or path.startswith(container + '/'):
+                word = words.get(field)
+                if word:
+                    return word
+        return XML_NAME_EXCEPTIONS.get(field, field.replace('_', '-'))
+
+
+# The two shape tables as the reader, the printer and the gate rule see them.
+PROTOCOL_TABLE = ShapeTable('PROTOCOL_SHAPE', PROTOCOL_SHAPE, word='protocol', rule='protocol_object')
+FILTER_TABLE = ShapeTable('FILTER_SHAPE', FILTER_SHAPE, FILTER_XML_NAME_EXCEPTIONS, 'filter', 'filter_blocks')
+
 
 def protocol_row(path: str) -> Optional[dict]:
     """The shape row for one protocol path. None when the table states no shape for the level."""
@@ -2978,6 +4136,79 @@ COVERAGE_MATRIX = (
         'output_file': 'scope.tf',
         'emitter': ('generate_scope_objects',),
         'properties': (),
-    }
+    },
+
+    {
+        'resource': 'panos_filters_access_list_routing_profile',
+        'xml_element': 'network/routing-profile/filters/access-list/entry',
+        'xml_name': 'ACL-Filter',
+        'emitted_name': 'ACL-Filter',
+        'fixture': 'filter_containers.xml',
+        'output_file': 'filters.tf',
+        'emitter': ('generate_filter_containers',),
+        # F7.8: the emitter prints the fields the entry row states, so the properties are the
+        # entry row's fields without the entry name, and the scan measures them through the fixture.
+        'properties': ('description', 'type'),
+    },
+    {
+        'resource': 'panos_filters_as_path_access_list_routing_profile',
+        'xml_element': 'network/routing-profile/filters/as-path-access-list/entry',
+        'xml_name': 'ASPath-Filter',
+        'emitted_name': 'ASPath-Filter',
+        'fixture': 'filter_containers.xml',
+        'output_file': 'filters.tf',
+        'emitter': ('generate_filter_containers',),
+        # F7.8: the emitter prints the fields the entry row states, so the properties are the
+        # entry row's fields without the entry name, and the scan measures them through the fixture.
+        'properties': ('aspath_entries', 'description'),
+    },
+    {
+        'resource': 'panos_filters_prefix_list_routing_profile',
+        'xml_element': 'network/routing-profile/filters/prefix-list/entry',
+        'xml_name': 'Prefix-Filter',
+        'emitted_name': 'Prefix-Filter',
+        'fixture': 'filter_containers.xml',
+        'output_file': 'filters.tf',
+        'emitter': ('generate_filter_containers',),
+        # F7.8: the emitter prints the fields the entry row states, so the properties are the
+        # entry row's fields without the entry name, and the scan measures them through the fixture.
+        'properties': ('description', 'type'),
+    },
+    {
+        'resource': 'panos_filters_community_list_routing_profile',
+        'xml_element': 'network/routing-profile/filters/community-list/entry',
+        'xml_name': 'Community-Filter',
+        'emitted_name': 'Community-Filter',
+        'fixture': 'filter_containers.xml',
+        'output_file': 'filters.tf',
+        'emitter': ('generate_filter_containers',),
+        # F7.8: the emitter prints the fields the entry row states, so the properties are the
+        # entry row's fields without the entry name, and the scan measures them through the fixture.
+        'properties': ('description', 'type'),
+    },
+    {
+        'resource': 'panos_filters_bgp_route_map_routing_profile',
+        'xml_element': 'network/routing-profile/filters/route-maps/bgp/bgp-entry/entry',
+        'xml_name': 'RouteMap-Filter',
+        'emitted_name': 'RouteMap-Filter',
+        'fixture': 'filter_containers.xml',
+        'output_file': 'filters.tf',
+        'emitter': ('generate_filter_containers',),
+        # F7.8: the emitter prints the fields the entry row states, so the properties are the
+        # entry row's fields without the entry name, and the scan measures them through the fixture.
+        'properties': ('description', 'route_map'),
+    },
+    {
+        'resource': 'panos_filters_route_maps_redistribution_routing_profile',
+        'xml_element': 'network/routing-profile/filters/route-maps/redistribution/redist-entry/entry',
+        'xml_name': 'Redist-Filter',
+        'emitted_name': 'Redist-Filter',
+        'fixture': 'filter_containers.xml',
+        'output_file': 'filters.tf',
+        'emitter': ('generate_filter_containers',),
+        # F7.8: the emitter prints the fields the entry row states, so the properties are the
+        # entry row's fields without the entry name, and the scan measures them through the fixture.
+        'properties': ('bgp', 'connected_static', 'description', 'ospf', 'ospfv3', 'rip'),
+    },
 )
 
