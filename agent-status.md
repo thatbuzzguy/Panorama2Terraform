@@ -45,8 +45,8 @@ the row that holds it with `none` in its `selects`. The provider accepts `ah` or
 entry, which
 `terraform validate` reports, so the table states no word for a choice between two levels, the
 gate does not
-refuse a file that states both, and the fixture uses two entries. The 14 new rows are the
-`ospfv3` subtree, and
+refuse a file that states both, and the fixture uses two entries. The 15 new rows are the
+`ospfv3` subtree: the profile row and 14 rows for the levels inside a profile entry, and the
 the two `md5` rows gained `preferred`, because the reader now reaches them through the table.
 
 ### Decision 3: a reference-only name is a property of the row that covers the entry

@@ -28,7 +28,7 @@ Measured 2026-11-03 against the pinned provider 2.0.14 (`terraform providers sch
 
 The existing rows for the `bgp`, `ospf` and `rip` auth profiles state the fields the provider declares, so they
 stay. The `md5` rows gain `preferred`, because the reader now reads the level and a row states only the fields
-the reader reads. The `ospfv3` auth-profile subtree has no rows, so this slice states 14 rows for it. No
+the reader reads. The `ospfv3` auth-profile subtree had no rows, so this slice states 15 rows for it: the profile row and 14 rows for the levels inside a profile entry.
 auth-profile level declares a field outside the three `reference_only` names, so `VALUE_VARIABLES` gains no row
 and the sensitive set stays `secret`, `key`, `password`.
 
