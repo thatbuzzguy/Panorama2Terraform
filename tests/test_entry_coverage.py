@@ -49,12 +49,12 @@ def _ledger(fixture_name: str, folder: Path = FIXTURES_DIR) -> entry_coverage.En
 def _parse_every(parser) -> None:
     """Run every parse method, so the ledger holds the marks the parse made.
 
-    `parse_bgp`, `parse_ospf` and `parse_ospfv3` take the router element (F7.1, F7.2), so they are called for
-    each router the fixture names; every other parse method takes no argument.
+    `parse_bgp`, `parse_ospf`, `parse_ospfv3` and `parse_rip` take the router element (F7.1, F7.2, F7.5), so
+    they are called for each router the fixture names; every other parse method takes no argument.
     """
     for name in [n for n in dir(parser) if n.startswith('parse_')]:
         method = getattr(parser, name)
-        if name in ('parse_bgp', 'parse_ospf', 'parse_ospfv3'):
+        if name in ('parse_bgp', 'parse_ospf', 'parse_ospfv3', 'parse_rip'):
             for router in parser.root.findall('.//virtual-router/entry'):
                 method(router)
         else:

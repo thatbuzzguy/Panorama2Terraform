@@ -1214,7 +1214,7 @@ XML_NAME_EXCEPTIONS = {'strict_l_s_a_checking': 'strict-lsa-checking'}
 PROTOCOL_SHAPE: dict[str, dict] = {
     'protocol': {
         'shape': 'object',
-        'fields': {'bgp': 'object', 'ospf': 'object', 'ospfv3': 'object'},
+        'fields': {'bgp': 'object', 'ospf': 'object', 'ospfv3': 'object', 'rip': 'object'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1646,6 +1646,83 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset(),
     },
+    # F7.5: the `rip` levels, measured 2026-11-02. `rip` declares no `router_id`, no `area` and no
+    # `neighbor`, so it has no area row and no choice row outside `default_route`. The two `auth_profile`
+    # rows state the `sensitive` decision only, because no parse method reads an auth profile body
+    # (`backlog.md`, F7.7).
+    'protocol/rip': {
+        'shape': 'object',
+        'fields': {'enable': 'bool', 'allow_redist_default_route': 'bool',
+                   'reject_default_route': 'bool', 'timers': 'object', 'global_bfd': 'object',
+                   'interfaces': 'string_list', 'export_rules': 'string_list',
+                   'auth_profile': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/rip/timers': {
+        'shape': 'object',
+        'fields': {'interval_seconds': 'number', 'update_intervals': 'number',
+                   'expire_intervals': 'number', 'delete_intervals': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/rip/global_bfd': {
+        'shape': 'object',
+        'fields': {'profile': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/rip/interfaces': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'enable': 'bool', 'mode': 'string', 'authentication': 'string',
+                   'bfd': 'object', 'default_route': 'one_of'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/rip/interfaces/bfd': {
+        'shape': 'object',
+        'fields': {'profile': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # `mode` is the string the export states, not a choice, so the row states no `selects` for it. Only the
+    # `one_of` level states a choice, and `terraform validate` requires exactly one of its keys.
+    'protocol/rip/interfaces/default_route': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'advertise': 'advertise', 'no': 'disable'},
+        'sensitive': frozenset(),
+    },
+    'protocol/rip/interfaces/default_route/advertise': {
+        'shape': 'object',
+        'fields': {'metric': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/rip/interfaces/default_route/disable': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/rip/export_rules': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'metric': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/rip/auth_profile': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'password': 'string', 'md5': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset({'password'}),
+    },
+    'protocol/rip/auth_profile/md5': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'key'}),
+    },
 }
 
 
@@ -2069,8 +2146,12 @@ COVERAGE_MATRIX = (
         # F7.4: `virtual_link` is a field of the area entry, which this row covers, so the scan measures it.
         # The levels inside an entry are not in the scan scope, so `neighbor` and the fields of a
         # `nssa_ext_range` entry stay grounded by the table.
-        'properties': ('address_family_identifier', 'enable', 'interface', 'interfaces',
-                       'local_address', 'metric', 'new_path_type', 'new_tag',
+        # F7.5: `authentication`, `bfd`, `default_route` and `mode` join the measured set through a `rip`
+        # interface entry, which this row covers. `bfd` is measured as the field of the entry, not as the
+        # level inside it, because the level dict the parse builds is not a recorded object.
+        'properties': ('address_family_identifier', 'authentication', 'bfd', 'default_route',
+                       'enable', 'interface', 'interfaces',
+                       'local_address', 'metric', 'mode', 'new_path_type', 'new_tag',
                        'peer', 'peer_address', 'peer_as', 'protocol',
                        'range', 'router_type', 'static_routes', 'type', 'virtual_link',),
     }, {

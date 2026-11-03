@@ -15,6 +15,8 @@ Pins:
   real run);
 - the one-of mapping, the peer membership, the interface inside an area, and the value the mapping cannot
   state;
+- the `rip` levels as the rows that state them, the choice an entry states inside itself, and the block a
+  real run writes for them (F7.5);
 - a sensitive field as the variable reference, and `VALUE_VARIABLES` as the one shape owner for a printed
   value;
 - one negative test per gate finding, the gate reporting no finding on a run, and two runs writing the
@@ -100,10 +102,11 @@ def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
     """Every row, field, shape word, `selects` key, and `sensitive` flag is a fact the provider declares.
 
     The table states the levels this converter prints, so it is a subset of the schema: `protocol` also
-    declares `rip` and the two redist profile lists, which the converter does not print and the gate does not
-    check. A row states only the fields the parse method that reaches the level reads, so the `ospfv3`
-    `auth_profile` level stays outside the table (`backlog.md`). F7.4 added the four area sub-levels, which
-    `_protocol_areas` reads.
+    declares the two redist profile lists, which the converter does not print and the gate does not check. A
+    row states only the fields the parse method that reaches the level reads, except the three `auth_profile`
+    rows, which state the `sensitive` decision for a level no parse method reads (`backlog.md`, F7.7). F7.4
+    added the four area sub-levels, which `_protocol_areas` reads, and F7.5 added the `rip` levels, which
+    `parse_rip` reads.
     """
     for path, row in sorted(resource_mapping.PROTOCOL_SHAPE.items()):
         node = _schema_node(provider_schema, path)
@@ -143,31 +146,34 @@ def test_the_sensitive_rows_are_the_reference_only_names():
 
 
 def test_the_table_is_the_only_shape_owner(converter_module):
-    """No parse method, emitter, or gate branch names a protocol field or a shape of its own (F7.1).
+    """No parse method, emitter, or gate branch names a protocol field or a shape of its own (F7.1, F7.5).
 
     The table states the names and the shapes, and the reader and the rule read the table, so a field name
     written as a string constant in a parse method, the emitter, or the rule is a second owner. The parse
-    methods state a level as a table path, so the key they write is the field the path names. `name` is the
-    field the rule reads for the entry name, and `protocol` is the table's own `PROTOCOL_FIELD`: those two are
-    the names the rule has to state.
+    methods state a level as a table path, so the key they write is the field the path names. `_parse_router`
+    builds the `protocol` dict from the fields the `protocol` row states, so the levels are the table's names
+    there too. `name` is the field the rule reads for the entry name, and `protocol` is the table's own
+    `PROTOCOL_FIELD`: those two are the names the rule has to state.
     """
     fields = {field for row in resource_mapping.PROTOCOL_SHAPE.values() for field in row['fields']}
     # The static-route emitter is not a protocol owner: `metric` is the route's own field there, and the row
     # `COVERAGE_MATRIX` states for it names that shape. `name` is the field the rule reads for the entry
-    # name, and `protocol` is the table's own `PROTOCOL_FIELD`.
+    # name, and `protocol` is the table's own `PROTOCOL_FIELD`. `interfaces` is the router's own field there,
+    # the flat list of interface names the matrix row for `panos_virtual_router` declares, which is a
+    # different shape from the `protocol/rip` field the table states (F7.5).
     static_route = [row for row in resource_mapping.COVERAGE_MATRIX
                     if row['resource'] == 'panos_virtual_router_static_route_ipv4'][0]
     allowed = (set(resource_mapping.SHAPE_WORDS) | {'name', resource_mapping.PROTOCOL_FIELD}
-               | set(static_route['properties']))
+               | set(static_route['properties']) | {'interfaces'})
     owners = [getattr(sanity_checks, name, None) for name in
               ('check_protocol_object', '_protocol_level_findings', '_protocol_field_findings', 'value_shape')]
     generator = converter_module.TerraformGenerator
     parser = converter_module.PanoramaParser
     owners += [getattr(generator, name) for name in ('generate_virtual_routers', '_protocol_fields', 'printed_value')]
     owners += [getattr(parser, name) for name in
-               ('parse_bgp', 'parse_ospf', 'parse_ospfv3', '_protocol_areas', '_protocol_level',
-                '_protocol_field', '_protocol_choice', '_protocol_interface', '_protocol_field_name',
-                '_protocol_xml_name', '_protocol_entries', '_protocol_body',
+               ('_parse_router', 'parse_bgp', 'parse_ospf', 'parse_ospfv3', 'parse_rip', '_protocol_areas',
+                '_protocol_level', '_protocol_field', '_protocol_choice', '_protocol_interface',
+                '_protocol_field_name', '_protocol_xml_name', '_protocol_entries', '_protocol_body',
                 '_protocol_presence_choice', '_protocol_presence_fields')]
     offenders = {}
     for owner in owners:
@@ -213,6 +219,47 @@ def test_the_ospfv3_scalar_levels_are_rows_the_parse_reads():
                              'protocol/ospfv3/area/interface/neighbor',
                              'protocol/ospfv3/area/virtual-link', 'protocol/ospfv3/export-rules',
                              'protocol/ospfv3/interface', 'protocol/ospfv3/range'], rows
+
+
+def test_the_rip_levels_are_rows_the_parse_reads():
+    """The `protocol/rip` levels are table rows, and the two that hold entries are the ones the scan
+    measures (F7.5).
+
+    `test_the_shape_table_is_the_measured_provider_shape` pins every row against the schema, so this test pins
+    the shape decision and the measurement scope: `rip` declares no `router_id`, no `area` and no `neighbor`,
+    so the level states no field for them, and `mode` is a string, so the row states no `selects` for it. A
+    single-object level holds no entry, so the scan measures nothing for it and the container table names no
+    row for it, while an interface entry and an export rule entry are entries. No row names
+    `protocol/rip/interfaces/bfd`, because the parse reaches that level through the field the interfaces row
+    states.
+    """
+    level = resource_mapping.protocol_row('protocol/rip')
+    assert level['fields'] == {
+        'enable': 'bool', 'allow_redist_default_route': 'bool', 'reject_default_route': 'bool',
+        'timers': 'object', 'global_bfd': 'object', 'interfaces': 'string_list',
+        'export_rules': 'string_list', 'auth_profile': 'string_list'}, level['fields']
+    for path, shape in (('protocol/rip/timers', 'object'),
+                        ('protocol/rip/global_bfd', 'object'),
+                        ('protocol/rip/interfaces', 'string_list'),
+                        ('protocol/rip/interfaces/bfd', 'object'),
+                        ('protocol/rip/interfaces/default_route', 'one_of'),
+                        ('protocol/rip/interfaces/default_route/advertise', 'object'),
+                        ('protocol/rip/interfaces/default_route/disable', 'block'),
+                        ('protocol/rip/export_rules', 'string_list')):
+        row = resource_mapping.protocol_row(path)
+        assert row['shape'] == shape, path
+        # None of the levels `parse_rip` reads carries a field the provider marks sensitive, so no
+        # `VALUE_VARIABLES` row for them.
+        assert row['sensitive'] == frozenset(), path
+    # The two `auth_profile` rows state the `sensitive` decision for a level no parse method reads (F7.7).
+    assert resource_mapping.protocol_row('protocol/rip/auth_profile')['sensitive'] == frozenset({'password'})
+    assert resource_mapping.protocol_row('protocol/rip/auth_profile/md5')['sensitive'] == frozenset({'key'})
+    # `selects` is the one place that maps the value the export states to the key the print states, the same
+    # mapping the two OSPF levels use for a default route.
+    assert resource_mapping.protocol_row('protocol/rip/interfaces/default_route')['selects'] == {
+        'advertise': 'advertise', 'no': 'disable'}
+    rows = [row.path for row in container_coverage.CONTAINER_TABLE if row.path.startswith('protocol/rip/')]
+    assert sorted(rows) == ['protocol/rip/export-rules', 'protocol/rip/interfaces'], rows
 
 
 def test_value_shape_is_the_reader_inverse_for_every_shape_word():
@@ -390,6 +437,40 @@ def test_an_ospfv3_scalar_level_prints_the_shape_the_table_states(tmp_path):
     assert findings == [], findings
 
 
+def test_an_rip_level_prints_the_shape_the_table_states(tmp_path):
+    """A `protocol/rip` level prints as the rows `PROTOCOL_SHAPE` states for it (F7.5).
+
+    Field order is the table order, a `single` level prints as one object, a `string_list` level prints one
+    object per element, and a `one_of` level states the one key its mapping selects, so the export spelling
+    `no` prints as `disable`. A field the export does not state prints nothing, and the entry whose choice
+    element states no alternative is not printed, so the file holds no half of it and the report names it once.
+    """
+    expected = ('  protocol = {\n    rip = {\n      enable = true\n'
+                '      allow_redist_default_route = true\n      reject_default_route = false\n'
+                '      timers = {\n        interval_seconds = 30\n        update_intervals = 180\n'
+                '        expire_intervals = 210\n        delete_intervals = 120\n      }\n'
+                '      global_bfd = {\n        profile = "BFD-RIP"\n      }\n      interfaces = [\n'
+                '        {\n          name = "ethernet1/2"\n          enable = true\n          mode = "v2"\n'
+                '          authentication = "md5"\n          bfd = {\n            profile = "BFD-RIP"\n          }\n'
+                '          default_route = {\n            advertise = {\n              metric = 10\n'
+                '            }\n          }\n        },\n        {\n          name = "ethernet1/3"\n'
+                '          enable = false\n          mode = "v1"\n          default_route = {\n'
+                '            disable = {}\n          }\n        }\n      ]\n'
+                '      export_rules = [\n        {\n          name = "static-af"\n          metric = 10\n'
+                '        }\n      ]\n    }\n  }\n')
+    files = _run('rip.xml', tmp_path)
+    block = files['virtual_routers.tf']
+    assert expected in block, block
+    # The entry the file cannot hold is named by the report, and the file holds no half of it.
+    report = files['MANUAL_SETUP_REPORT.txt']
+    assert ('router default: interfaces ethernet1/4 '
+            '(panos_virtual_router - default_route states no key PROTOCOL_SHAPE selects)') in report, report
+    assert 'ethernet1/4' not in block, block
+    # The gate reads the same table, so the block the run wrote reports no finding.
+    findings = sanity_checks.check_protocol_object(files)
+    assert findings == [], findings
+
+
 def test_the_gate_reads_a_scalar_level_against_the_row_it_states():
     """One finding per violation type for a level `PROTOCOL_SHAPE` states (F7.3).
 
@@ -483,6 +564,47 @@ def test_the_gate_reads_a_choice_inside_a_body():
         'element states no name'], findings
 
 
+def test_the_gate_reads_a_choice_inside_an_entry_level():
+    """F7.5: the walk reads a `one_of` field inside an entry against the row that states it.
+
+    A choice inside a chosen body and a choice inside an entry are the same rule, so `default_route` inside a
+    `rip` interface entry is checked the same way `type` inside an area body is: the level states one key, and
+    that key is one the row's mapping selects. The entry name is the field the row reads for an element inside
+    a `string_list` level, and the fields of a chosen alternative are checked against the row for that
+    alternative.
+    """
+    good = ('  protocol = {\n    rip = {\n      interfaces = [\n        {\n'
+            '          name = "ethernet1/2"\n          default_route = {\n            advertise = {\n'
+            '              metric = 10\n            }\n          }\n        }\n      ]\n    }\n  }\n')
+    assert _findings(good) == [], good
+    findings = _findings(good.replace('advertise = {\n              metric = 10\n            }',
+                                      'advertise = {}\n            disable = {}'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/rip/interfaces/default_route '
+        'states 2 keys, which a one_of level cannot'], findings
+    findings = _findings(good.replace('            advertise = {\n              metric = 10\n            }',
+                                      '            no = {}'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/rip/interfaces/default_route '
+        'key no is not a key PROTOCOL_SHAPE selects'], findings
+    findings = _findings(good.replace('metric = 10', 'made_up = 10'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/rip/interfaces/default_route/advertise '
+        'made_up is not a field PROTOCOL_SHAPE declares'], findings
+    # `mode` is a string, so the row states no `selects` for it: the value is the string the export states.
+    findings = _findings(good.replace('          name = "ethernet1/2"\n',
+                                      '          name = "ethernet1/2"\n          mode = {\n'
+                                      '            v2 = {}\n          }\n'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/rip/interfaces '
+        'mode is not a string value'], findings
+    # An element inside a `[` container is an entry, so the entry name is the field the row reads for it.
+    findings = _findings(good.replace('{\n          name = "ethernet1/2"\n', '{\n          mode = "v2"\n'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/rip/interfaces '
+        'element states no name'], findings
+
+
 def test_an_unmapped_one_of_value_prints_nothing_and_is_reported(make_parser):
     """The mapping is the one lookup, and the entry it cannot state is the entry the report names.
 
@@ -557,6 +679,27 @@ def test_a_sensitive_field_prints_as_the_variable_reference(converter_module, tm
     assert 'secret = var.ap_1' in rendered and '"hunter2"' not in rendered, rendered
 
 
+def test_a_rip_auth_profile_field_prints_the_reference_only():
+    """F7.5: the two `protocol/rip` rows that state the `sensitive` decision are read by the rule.
+
+    No parse method reads an auth profile body, so the block is written by hand, the same way the `bgp` row is
+    read above. The schema marks `password` on the profile level and `key` inside `md5`, so the rule refuses a
+    literal for each and accepts the variable reference.
+    """
+    literal = ('  protocol = {\n    rip = {\n      auth_profile = [\n        {\n'
+               '          name = "AP-RIP"\n          password = "hunter2"\n          md5 = [\n'
+               '            {\n              name = "MD5-1"\n              key = "hunter2"\n            }\n'
+               '          ]\n        }\n      ]\n    }\n  }\n')
+    assert [f.detail for f in _findings(literal)] == [
+        'protocol panos_virtual_router.default_00000000 protocol/rip/auth_profile '
+        'password prints a sensitive value as a literal',
+        'protocol panos_virtual_router.default_00000000 protocol/rip/auth_profile/md5 '
+        'key prints a sensitive value as a literal'], _findings(literal)
+    reference = literal.replace('password = "hunter2"', 'password = var.ap_rip').replace(
+        'key = "hunter2"', 'key = var.md5_1')
+    assert _findings(reference) == [], reference
+
+
 def test_a_sensitive_field_is_never_written_as_a_value(tmp_path):
     """No generated file states a protocol secret, because the run holds no value for a reference-only name.
 
@@ -581,10 +724,12 @@ def test_the_rule_reports_an_undeclared_field_and_a_wrong_shape():
     findings = _findings('  protocol = {\n    bgp = {\n      peer_group = {\n'
                          '        name = "PG"\n      }\n    }\n  }\n')
     assert len(findings) == 1 and 'peer_group is not a string_list value' in findings[0].detail, findings
-    # A level the table states no row for is the same finding: `protocol` declares `rip` in the provider,
-    # but the table states only the levels this converter prints, so the rule refuses a level outside it.
-    findings = _findings('  protocol = {\n    rip = {\n      enable = true\n    }\n  }\n')
-    assert len(findings) == 1 and 'rip is not a field' in findings[0].detail, findings
+    # A level the table states no row for is the same finding: `protocol` declares the two redist profile
+    # lists in the provider, but the table states only the levels this converter prints, so the rule refuses a
+    # level outside it. `rip` is a row now (F7.5), so the rule reads it against its row instead, which
+    # `test_the_gate_reads_a_choice_inside_an_entry_level` pins.
+    findings = _findings('  protocol = {\n    redist_profile = {\n      name = "R1"\n    }\n  }\n')
+    assert len(findings) == 1 and 'redist_profile is not a field' in findings[0].detail, findings
 
 
 def test_the_rule_reports_a_list_element_with_no_name():
