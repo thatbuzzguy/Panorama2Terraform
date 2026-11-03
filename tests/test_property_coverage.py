@@ -210,6 +210,34 @@ def test_the_scan_measures_an_export_rule_and_not_a_scalar_level(converter_modul
     assert not isinstance(level['protocol']['ospfv3']['timers'], entry_coverage.RecordingDict), level
 
 
+def test_the_scan_measures_the_area_level_and_not_an_entry_inside_an_entry(converter_module, tmp_path):
+    """F7.4: the area dict is in the scan scope, and the entries inside a property level are not.
+
+    The area entry is an entry whose container the container table covers, so the scan measures the fields
+    the row for `protocol/ospf/area` states, and `virtual_link` joins the measured set through the emitter
+    reading the table. A neighbor entry sits inside an interface entry, so its section path holds an entry
+    segment the row path cannot match, and the level stays grounded by the table: the router row declares no
+    property for it.
+    """
+    parser = run_pipeline(converter_module, 'ospf.xml', tmp_path)
+    assert parser is not None, 'ospf.xml'
+    ledger = parser.ledger
+    area = next(e for e in ledger.entries() if e.get('name') == '0.0.0.0')
+    row = entry_coverage.matrix_row_for(
+        container_coverage.section_path(ledger.parents[area], ledger.parents, ledger.source))
+    assert row is not None and row['resource'] == 'panos_virtual_router', row
+    recorded = ledger.mark_for(area)['captured']
+    assert sorted(set(recorded.used_keys()) - entry_coverage.NON_FIELD_KEYS) == [
+        'interface', 'range', 'type', 'virtual_link'], recorded.used_keys()
+    neighbor = next(e for e in ledger.entries() if e.get('name') == '10.0.0.2'
+                    and ledger.parents[e].tag == 'neighbor')
+    path = container_coverage.section_path(ledger.parents[neighbor], ledger.parents, ledger.source)
+    assert entry_coverage.matrix_row_for(path) is None, path
+    router_row = next(r for r in ROWS if r['resource'] == 'panos_virtual_router')
+    assert 'virtual_link' in router_row['properties'] and 'neighbor' not in router_row['properties'], \
+        router_row['properties']
+
+
 # --- 3. The scan -----------------------------------------------------------
 
 def test_scan_reports_the_properties_no_output_read(converter_module, tmp_path):

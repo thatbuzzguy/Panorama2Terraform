@@ -259,6 +259,14 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                  level='sub-shape'),
     ContainerRow('parse_ospf', 'protocol/ospf/interface', 'report',
                  'no provider field for an interface outside an area', level='sub-shape'),
+    # F7.4: the area sub-levels that hold entries. An entry inside a config-object entry is a property
+    # level, so the scan never measures it, and `PROTOCOL_SHAPE` grounds these levels instead. No row names
+    # `nssa-ext-range`, because the parse reaches that level through the `nssa` body row: the code states no
+    # path for it, so the table cannot state one.
+    ContainerRow('parse_ospf', 'protocol/ospf/area/interface/neighbor', 'emitted',
+                 'panos_virtual_router', level='sub-shape'),
+    ContainerRow('parse_ospf', 'protocol/ospf/area/virtual-link', 'emitted',
+                 'panos_virtual_router', level='sub-shape'),
     # F7.2: the `ospfv3` rows are the same shapes read by `parse_ospfv3`, which uses the area rule
     # `_protocol_areas`. A range entry prints inside the area, so it is a nested block, and an interface the
     # export places at the level has no provider field, so it stays a report row with the same note.
@@ -275,6 +283,11 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                  level='sub-shape'),
     ContainerRow('parse_ospfv3', 'protocol/ospfv3/interface', 'report',
                   'no provider field for an interface outside an area', level='sub-shape'),
+    # F7.4: the same two entry levels as the `ospf` rows, read by the same area rule.
+    ContainerRow('parse_ospfv3', 'protocol/ospfv3/area/interface/neighbor', 'emitted',
+                 'panos_virtual_router', level='sub-shape'),
+    ContainerRow('parse_ospfv3', 'protocol/ospfv3/area/virtual-link', 'emitted',
+                 'panos_virtual_router', level='sub-shape'),
     ContainerRow('parse_virtual_routers', 'routing-table/ip/static-route', 'emitted',
                  'panos_virtual_router_static_route_ipv4', level='sub-shape'),
     ContainerRow('parse_ipsec_tunnels', 'auto-key/proxy-id', 'nested-block',

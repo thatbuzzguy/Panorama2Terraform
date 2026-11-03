@@ -1191,8 +1191,10 @@ fields the level declares, the value that selects a `one_of` key, and the `sensi
 (`TerraformGenerator._protocol_fields`), the gate rule (§4.6) and the test read that table, so no second
 table names a shape. A level is printable only when a parse method reads it and the table has a row for it:
 `parse_bgp`, `parse_ospf` and `parse_ospfv3` read the levels, and `_protocol_areas` is the area rule the two
-OSPF levels share. A level the table states no row for is read by no method, so it prints nothing and the gate
-refuses it in a hand-written file.
+OSPF levels share. F7.4 put the four area sub-levels into the table, so the rule fills the entries of
+`virtual_link`, `neighbor` and `nssa_ext_range` through `_protocol_entries`, and the choice inside a chosen
+body through `_protocol_body`. A level the table states no row for is read by no method, so it prints nothing
+and the gate refuses it in a hand-written file.
 
 1. **`protocol` prints as one field of the block**: `protocol = { ... }`. `terraform validate` accepts the
    value and refuses the block shape, so the gate rule reports a `protocol` the field reader cannot read as
@@ -1229,8 +1231,13 @@ refuses it in a hand-written file.
    peer outside a peer group and no interface outside an area. A peer group name is not a field the block
    prints, because the entry it names is the parent. Pinned by
    `tests/test_protocol_object.py::test_an_ospfv3_area_prints_the_shape_the_table_states`.
-7. **An OSPF `range` element must state exactly one of `advertise` or `suppress`**, so the row declares both
-   as `block` fields and an element that states neither is a report row.
+7. **A presence choice states exactly one alternative**, so the row states the alternatives as `block` fields
+   or as the `selects` keys of a `one_of` level. A `range` entry and an `nssa_ext_range` entry state
+   `advertise` or `suppress`, and the alternatives are the row's `block` fields, so the rule reads the table
+   and the two levels are one shape. A `default_route` level states `advertise` or `no`, and the key the print
+   states for `no` is `disable`. An element that states neither has no `.tf` shape, so it is a report row, and
+   a `default_route` is not an entry, so the report names the area entry that holds it. Pinned by
+   `tests/test_parse_network.py::test_parse_ospf` and `tests/test_parse_network.py::test_parse_ospfv3`.
 8. **A sensitive field prints as the variable reference**, through `VALUE_VARIABLES`
    (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2), and the run holds no value for it, so no generated file states
    one. `SHAPE_WORDS` is the word list the table uses, and `sanity_checks.value_shape` is its reader inverse.
@@ -1238,8 +1245,10 @@ refuses it in a hand-written file.
 The container rows for the levels this converter prints are `emitted` with the note
 `panos_virtual_router` (`container_coverage.CONTAINER_TABLE`), so the property scan measures them against the
 router row. A level that holds no entry has no container row, so the scan measures nothing for it and the matrix
-row is grounded by the table instead. Pinned by `tests/test_container_coverage.py`, `tests/test_coverage_matrix.py`
-and `tests/test_property_coverage.py`.
+row is grounded by the table instead. The same holds for an entry the parse reaches through a field the parent
+row names, such as a `neighbor` entry inside an interface entry: the section path holds an entry segment the row
+path cannot match, so `PROTOCOL_SHAPE` grounds that level. Pinned by `tests/test_container_coverage.py`,
+`tests/test_coverage_matrix.py` and `tests/test_property_coverage.py`.
 
 ## 5. Naming rules
 
