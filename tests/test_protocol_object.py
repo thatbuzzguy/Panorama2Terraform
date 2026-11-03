@@ -102,8 +102,8 @@ def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
     The table states the levels this converter prints, so it is a subset of the schema: `protocol` also
     declares `rip` and the two redist profile lists, which the converter does not print and the gate does not
     check. A row states only the fields the parse method that reaches the level reads, so the `ospfv3`
-    `auth_profile` level, `area/virtual_link`, `area/interface/neighbor`, and `area/type/default_route` are
-    outside the table (`backlog.md`).
+    `auth_profile` level stays outside the table (`backlog.md`). F7.4 added the four area sub-levels, which
+    `_protocol_areas` reads.
     """
     for path, row in sorted(resource_mapping.PROTOCOL_SHAPE.items()):
         node = _schema_node(provider_schema, path)
@@ -167,7 +167,8 @@ def test_the_table_is_the_only_shape_owner(converter_module):
     owners += [getattr(parser, name) for name in
                ('parse_bgp', 'parse_ospf', 'parse_ospfv3', '_protocol_areas', '_protocol_level',
                 '_protocol_field', '_protocol_choice', '_protocol_interface', '_protocol_field_name',
-                '_protocol_xml_name')]
+                '_protocol_xml_name', '_protocol_entries', '_protocol_body',
+                '_protocol_presence_choice', '_protocol_presence_fields')]
     offenders = {}
     for owner in owners:
         for node in ast.walk(ast.parse(textwrap.dedent(inspect.getsource(owner)))):
@@ -194,6 +195,7 @@ def test_the_ospfv3_scalar_levels_are_rows_the_parse_reads():
     `test_the_shape_table_is_the_measured_provider_shape` pins every row against the schema, so this test pins
     the shape decision and the measurement scope: a single-object level holds no entry, so the scan measures
     nothing for it and the container table names no row for it, while an export rule is an entry.
+    F7.4 names the two entry levels the area rule reads: a neighbor entry, and a virtual link.
     """
     level = resource_mapping.protocol_row('protocol/ospfv3')
     assert [field for field in level['fields'] if field not in ('enable', 'router_id', 'area')] == [
@@ -208,8 +210,9 @@ def test_the_ospfv3_scalar_levels_are_rows_the_parse_reads():
     rows = [row.path for row in container_coverage.CONTAINER_TABLE
             if row.path.startswith('protocol/ospfv3/')]
     assert sorted(rows) == ['protocol/ospfv3/area', 'protocol/ospfv3/area/interface',
-                             'protocol/ospfv3/export-rules', 'protocol/ospfv3/interface',
-                             'protocol/ospfv3/range'], rows
+                             'protocol/ospfv3/area/interface/neighbor',
+                             'protocol/ospfv3/area/virtual-link', 'protocol/ospfv3/export-rules',
+                             'protocol/ospfv3/interface', 'protocol/ospfv3/range'], rows
 
 
 def test_value_shape_is_the_reader_inverse_for_every_shape_word():
@@ -331,19 +334,27 @@ def test_an_ospf_interface_inside_an_area_prints_inside_the_area(tmp_path):
 
 
 def test_an_ospfv3_area_prints_the_shape_the_table_states(tmp_path):
-    """The `ospfv3` subtree prints as the rows `PROTOCOL_SHAPE` states for it (F7.2).
+    """The `ospfv3` subtree prints as the rows `PROTOCOL_SHAPE` states for it (F7.2, F7.4).
 
     Field order is the table order, a `one_of` level states the one key its mapping selects, and a `block`
-    field prints `{}` because the export states it by presence.
+    field prints `{}` because the export states it by presence. F7.4: the choice inside a body prints as the
+    key the row selects, so the export spelling `no` prints as `disable`.
     """
     expected = ('  protocol = {\n    ospfv3 = {\n      enable = true\n      router_id = "10.0.0.1"\n'
                 '      area = [\n        {\n          name = "0.0.0.0"\n          type = {\n'
-                '            nssa = {\n              accept_summary = true\n            }\n          }\n'
+                '            nssa = {\n              accept_summary = true\n              default_route = {\n'
+                '                disable = {}\n              }\n              nssa_ext_range = [\n'
+                '                {\n                  name = "10.20.0.0/16"\n                  advertise = {}\n'
+                '                }\n              ]\n            }\n          }\n'
                 '          range = [\n            {\n              name = "10.0.0.0/8"\n'
                 '              suppress = {}\n            }\n          ]\n          interface = [\n'
                 '            {\n              name = "ethernet1/2"\n              enable = true\n'
                 '              passive = false\n              metric = 10\n              link_type = {\n'
-                '                p2p = {}\n              }\n            }\n          ]\n        }\n      ]\n'
+                '                p2p = {}\n              }\n              neighbor = [\n'
+                '                {\n                  name = "10.0.0.2"\n                }\n              ]\n'
+                '            }\n          ]\n          virtual_link = [\n'
+                '            {\n              name = "10.0.0.2"\n              instance_id = 1\n'
+                '              neighbor_id = "10.0.0.3"\n            }\n          ]\n        }\n      ]\n'
                 '    }\n  }\n')
     block = _run('ospfv3.xml', tmp_path)['virtual_routers.tf']
     assert expected in block, block
@@ -416,16 +427,60 @@ def test_the_gate_reads_a_scalar_level_against_the_row_it_states():
 
 
 def test_a_choice_body_prints_the_fields_it_declares(tmp_path):
-    """The fields of a `one_of` body live inside the chosen element, so the parse reads them there (F7.2).
+    """The fields of a `one_of` body live inside the chosen element, so the parse reads them there (F7.2, F7.4).
 
     The export puts the flag's fields inside the chosen element, not inside `type`. The rule is one rule for
-    both routing levels, so the same test pins the `ospf` area and the `ospfv3` area.
+    both routing levels, so the same test pins the `ospf` area and the `ospfv3` area. F7.4: the export states
+    the choice inside the body by presence, and the print states the key the row selects for it, which is
+    `disable` for the value `no`.
     """
-    body = 'type = {\n            stub = {\n              accept_summary = true\n            }\n          }'
+    ospf_body = ('type = {\n            stub = {\n              accept_summary = true\n'
+                 '              default_route = {\n                advertise = {\n                  metric = 10\n'
+                 '                }\n              }\n            }\n          }')
+    ospfv3_body = ('type = {\n            nssa = {\n              accept_summary = true\n'
+                   '              default_route = {\n                disable = {}\n              }\n'
+                   '              nssa_ext_range = [\n                {\n'
+                   '                  name = "10.20.0.0/16"\n                  advertise = {}\n'
+                   '                }\n              ]\n            }\n          }')
     ospf = _run('ospf.xml', tmp_path / 'ospf')['virtual_routers.tf']
     ospfv3 = _run('ospfv3.xml', tmp_path / 'ospfv3')['virtual_routers.tf']
-    assert body in ospf, ospf
-    assert body.replace('stub', 'nssa') in ospfv3, ospfv3
+    assert ospf_body in ospf, ospf
+    assert ospfv3_body in ospfv3, ospfv3
+    # F7.4: a neighbor entry prints as the entry name, which is the whole shape the row states.
+    pin = 'neighbor = [\n                {\n                  name = "10.0.0.2"\n                }\n              ]'
+    assert pin in ospfv3, ospfv3
+
+
+def test_the_gate_reads_a_choice_inside_a_body():
+    """F7.4: the walk reads a `one_of` level inside a chosen body against the row that states it.
+
+    The rule is one rule for every level, so `default_route` is checked the same way `type` is: the level
+    states one key, and that key is one the row's mapping selects. The value the export states (`no`) is not
+    the key the print states (`disable`), so a block that writes the export spelling is a finding.
+    """
+    good = ('  protocol = {\n    ospfv3 = {\n      area = [\n        {\n          name = "0.0.0.0"\n'
+            '          type = {\n            nssa = {\n              default_route = {\n'
+            '                disable = {}\n              }\n            }\n          }\n        }\n      ]\n'
+            '    }\n  }\n')
+    assert _findings(good) == [], good
+    findings = _findings(good.replace('disable = {}', 'no = {}'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/area/type/nssa/default_route '
+        'key no is not a key PROTOCOL_SHAPE selects'], findings
+    findings = _findings(good.replace('default_route = {\n                disable = {}\n              }',
+                                      'default_route = {}'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/area/type/nssa/default_route '
+        'states 0 keys, which a one_of level cannot'], findings
+    # The entries inside a `string_list` level hold the entry name, which is the field the row reads.
+    findings = _findings(good.replace(
+        'default_route = {\n                disable = {}\n              }',
+        'default_route = {\n                disable = {}\n              }\n'
+        '              nssa_ext_range = [\n                {\n                  advertise = {}\n                }\n'
+        '              ]'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/area/type/nssa/nssa_ext_range '
+        'element states no name'], findings
 
 
 def test_an_unmapped_one_of_value_prints_nothing_and_is_reported(make_parser):

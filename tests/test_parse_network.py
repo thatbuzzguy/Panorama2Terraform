@@ -255,10 +255,10 @@ def test_parse_bgp_absent(make_parser):
 
 
 def test_parse_ospf(make_parser):
-    """`parse_ospf` builds the `protocol/ospf` level of one router (F7.1).
+    """`parse_ospf` builds the `protocol/ospf` level of one router (F7.1, F7.4).
 
     `ospf.xml` puts one interface inside an area and one at the OSPF level, which is the case the
-    `.tf` cannot express.
+    `.tf` cannot express, and one area of each type so the two body shapes print.
     """
     p = _parser(make_parser, "ospf.xml")
     router = p.parse_virtual_routers()[0]
@@ -270,12 +270,15 @@ def test_parse_ospf(make_parser):
     assert ospf["enable"] is True
     assert ospf["router_id"] == "10.0.0.1"
 
-    assert len(ospf["area"]) == 1
+    assert len(ospf["area"]) == 2
     area = ospf["area"][0]
     assert area["name"] == "0.0.0.0"
     # A `one_of` area type is the value itself: the provider key is `stub`, and the export states it. The
     # fields of the body live inside the chosen element, so the parse reads them there (F7.2).
-    assert area["type"] == {"stub": {"accept_summary": True}}
+    # F7.4: `default_route` is the one choice the provider requires inside the body, so the export states
+    # it by presence and the value read is the child element's tag.
+    assert area["type"] == {"stub": {"accept_summary": True,
+                                     "default_route": {"advertise": {"metric": 10}}}}
     # A range entry prints inside the area, with the choice block the provider requires. The entry that
     # states neither has no `.tf` shape, so it is not in the printed list (F7.1).
     assert len(area["range"]) == 1, area["range"]
@@ -288,21 +291,40 @@ def test_parse_ospf(make_parser):
     assert inner["link_type"] == {"broadcast": {}}
     assert inner["metric"] == 10
     assert inner["passive"] is False
+    # F7.4: a neighbor entry holds the entry name, which is the whole shape the provider declares.
+    assert [entry["name"] for entry in inner["neighbor"]] == ["10.0.0.2"]
+    # F7.4: the virtual link is read through the same area rule, and the `ospf` row states no `instance_id`
+    # for it, so the captured dict holds no key for a field the provider does not declare here.
+    link = area["virtual_link"][0]
+    assert link["name"] == "10.0.0.2"
+    assert link["hello_interval"] == 10
+    assert link["transit_area_id"] == "0.0.0.1"
+    assert "instance_id" not in link
 
-    # The three entries the `.tf` cannot express: the range entry with no choice, the interface whose
-    # link-type value the mapping cannot state, and the interface the export places outside an area.
-    # The rows come from the ledger in report order.
+    # F7.4: the `nssa` body holds the entry level `nssa_ext_range`, and the default-route choice the export
+    # states as `no`. `str()` is the print, which is the empty object a `block` level states.
+    nssa = ospf["area"][1]["type"]["nssa"]
+    assert str(nssa["default_route"]["no"]) == "{}"
+    assert [(entry["name"], str(entry["suppress"])) for entry in nssa["nssa_ext_range"]] == [
+        ("10.20.0.0/16", "{}")]
+
+    # The four entries the `.tf` cannot express: the range entry with no choice, the interface whose
+    # link-type value the mapping cannot state, the `nssa_ext_range` entry with no choice, and the
+    # interface the export places outside an area. The rows come from the ledger in report order.
     rows = entry_coverage.protocol_report_rows(p.ledger)
     assert [(row["router"], row["level"], row["name"]) for row in rows] == [
         ("default", "range", "10.60.0.0/16"),
         ("default", "interface", "ethernet1/3"),
+        ("default", "nssa-ext-range", "10.30.0.0/16"),
         ("default", "interface", "ethernet1/1")], rows
     assert rows[1]["detail"] == ('link_type multicast is not a value PROTOCOL_SHAPE states')
-    assert rows[2]["captured"]["link_type"] == {"point-to-point": {}}
+    # The same reason as a `range` entry, because the row states the choice as `block` fields.
+    assert rows[2]["detail"] == 'no advertise or suppress', rows[2]
+    assert rows[3]["captured"]["link_type"] == {"point-to-point": {}}
 
 
 def test_parse_ospfv3(make_parser):
-    """`parse_ospfv3` builds the `protocol/ospfv3` level of one router (F7.2).
+    """`parse_ospfv3` builds the `protocol/ospfv3` level of one router (F7.2, F7.4).
 
     `ospfv3.xml` puts one interface inside an area and one at the level, which is the case the `.tf` cannot
     express. The area subtree is read by the same reader as `parse_ospf`, so the same facts hold.
@@ -315,9 +337,16 @@ def test_parse_ospfv3(make_parser):
 
     assert len(ospfv3["area"]) == 1
     area = ospfv3["area"][0]
+    # F7.4: the second area states a `default-route` element with no child, so it is not in the printed
+    # list and the report names it below.
     assert area["name"] == "0.0.0.0"
     # The fields of the chosen body live inside the chosen element, the same rule as the `ospf` level.
-    assert area["type"] == {"nssa": {"accept_summary": True}}
+    # F7.4: the value read is the child element's tag `no`, and the key the print states is `disable`.
+    nssa = area["type"]["nssa"]
+    assert nssa["accept_summary"] is True
+    assert str(nssa["default_route"]["no"]) == "{}"
+    assert [(entry["name"], str(entry["advertise"])) for entry in nssa["nssa_ext_range"]] == [
+        ("10.20.0.0/16", "{}")]
     assert len(area["range"]) == 1, area["range"]
     assert area["range"][0]["name"] == "10.0.0.0/8"
     assert str(area["range"][0]["suppress"]) == "{}"
@@ -327,12 +356,24 @@ def test_parse_ospfv3(make_parser):
     # selects, which is `p2p` here.
     assert inner["link_type"] == {"point-to-point": {}}
     assert inner["passive"] is False
+    # F7.4: a neighbor entry holds the entry name, which is the whole shape the provider declares.
+    assert [entry["name"] for entry in inner["neighbor"]] == ["10.0.0.2"]
+    # F7.4: `instance_id` is the one field the provider declares for this level and not for the `ospf` one,
+    # so the same reader reads it here.
+    link = area["virtual_link"][0]
+    assert link["name"] == "10.0.0.2"
+    assert link["instance_id"] == 1
 
-    # The interface the export places at the level has no provider field, so the row note is the reason.
+    # The two entries the `.tf` cannot express: the area whose `default-route` element states neither
+    # choice, and the interface the export places at the level. A `default_route` is not an entry, so the
+    # report names the area entry that holds it.
     rows = entry_coverage.protocol_report_rows(p.ledger)
     assert [(row["router"], row["level"], row["name"]) for row in rows] == [
+        ("default", "area", "0.0.1.0"),
         ("default", "interface", "ethernet1/1")], rows
-    assert rows[0]["detail"] == 'no provider field for an interface outside an area', rows[0]
+    assert rows[0]["detail"] == (
+        'panos_virtual_router - default_route states no key PROTOCOL_SHAPE selects'), rows[0]
+    assert rows[1]["detail"] == 'no provider field for an interface outside an area', rows[1]
 
 
 def test_parse_ospfv3_reads_the_levels_the_table_states(make_parser):

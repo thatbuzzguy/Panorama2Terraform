@@ -1306,10 +1306,29 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset(),
     },
+    # F7.4: the four area sub-levels the provider declares, measured 2026-11-02. `default_route` is not a
+    # child of `type`: the provider declares it inside the `nssa` and the `stub` bodies, and
+    # `nssa_ext_range` only inside `nssa`, so the rows are the bodies' fields. The two routing levels stay
+    # separate rows, because the provider declares `instance_id` for `ospfv3` and not for `ospf`.
     'protocol/ospf/area': {
         'shape': 'string_list',
         'fields': {'name': 'string', 'type': 'one_of', 'range': 'string_list',
-                   'interface': 'string_list'},
+                   'interface': 'string_list', 'virtual_link': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/virtual_link': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'authentication': 'string', 'bfd': 'object',
+                   'dead_counts': 'number', 'enable': 'bool', 'hello_interval': 'number',
+                   'neighbor_id': 'string', 'retransmit_interval': 'number',
+                   'transit_area_id': 'string', 'transit_delay': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/virtual_link/bfd': {
+        'shape': 'object',
+        'fields': {'profile': 'string'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1325,15 +1344,63 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset(),
     },
+    # A `default_route` element is the one choice the provider requires: `terraform validate` refuses one that
+    # states neither `advertise` or `no`, so the row states the choice as `selects`. The export spells the
+    # second alternative `no`, which is the value the mapping reads, and the key the provider prints is
+    # `disable`. `nssa_ext_range` is an entry level with the same presence choice as a `range` entry.
     'protocol/ospf/area/type/nssa': {
         'shape': 'object',
-        'fields': {'accept_summary': 'bool'},
+        'fields': {'accept_summary': 'bool', 'default_route': 'one_of',
+                   'nssa_ext_range': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/type/nssa/default_route': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'advertise': 'advertise', 'no': 'disable'},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/type/nssa/default_route/advertise': {
+        'shape': 'object',
+        'fields': {'metric': 'number', 'type': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/type/nssa/default_route/disable': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/type/nssa/nssa_ext_range': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'advertise': 'block', 'suppress': 'block'},
         'selects': {},
         'sensitive': frozenset(),
     },
     'protocol/ospf/area/type/stub': {
         'shape': 'object',
-        'fields': {'accept_summary': 'bool'},
+        'fields': {'accept_summary': 'bool', 'default_route': 'one_of'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/type/stub/default_route': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'advertise': 'advertise', 'no': 'disable'},
+        'sensitive': frozenset(),
+    },
+    # The `stub` body declares no metric type for the advertised default route, so this row states one field.
+    'protocol/ospf/area/type/stub/default_route/advertise': {
+        'shape': 'object',
+        'fields': {'metric': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/type/stub/default_route/disable': {
+        'shape': 'block',
+        'fields': {},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1349,7 +1416,14 @@ PROTOCOL_SHAPE: dict[str, dict] = {
     'protocol/ospf/area/interface': {
         'shape': 'string_list',
         'fields': {'name': 'string', 'enable': 'bool', 'passive': 'bool',
-                   'metric': 'number', 'link_type': 'one_of'},
+                   'metric': 'number', 'link_type': 'one_of', 'neighbor': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # A neighbor entry is the entry name, which is the whole shape the provider declares for it.
+    'protocol/ospf/area/interface/neighbor': {
+        'shape': 'string_list',
+        'fields': {'name': 'string'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1391,9 +1465,10 @@ PROTOCOL_SHAPE: dict[str, dict] = {
     },
     # F7.2: the `ospfv3` levels `parse_ospfv3` reads, measured 2026-11-01 against the pinned provider. The
     # area subtree states the same shape the `ospf` rows state, field for field, because the provider
-    # declares the same fields for both levels; the rows stay separate because the levels are separate. A
-    # level the parse does not read has no row, so the gate refuses it: `area/virtual_link`,
-    # `area/interface/neighbor`, and `area/type/default_route` are in `backlog.md`.
+    # declares the same fields for both levels; the rows stay separate because the levels are separate. The
+    # two are not identical: `ospfv3` declares `instance_id` on `area/interface` and on `area/virtual_link`,
+    # and `ospf` does not. A level the parse does not read has no row, so the gate refuses it: the
+    # `auth_profile` level is in `backlog.md`.
     # F7.3: the four levels measured 2026-11-02 are the scalar levels the provider declares for this level
     # and `parse_ospfv3` reads. `auth_profile` stays a `sensitive` row with no reader (`backlog.md`).
     'protocol/ospfv3': {
@@ -1439,7 +1514,25 @@ PROTOCOL_SHAPE: dict[str, dict] = {
     'protocol/ospfv3/area': {
         'shape': 'string_list',
         'fields': {'name': 'string', 'type': 'one_of', 'range': 'string_list',
-                   'interface': 'string_list'},
+                   'interface': 'string_list', 'virtual_link': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # F7.4: the same shape the `ospf` row states, plus the `instance_id` the provider declares for this
+    # level only.
+    'protocol/ospfv3/area/virtual_link': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'authentication': 'string', 'bfd': 'object',
+                   'dead_counts': 'number', 'enable': 'bool', 'hello_interval': 'number',
+                   'instance_id': 'number', 'neighbor_id': 'string',
+                   'retransmit_interval': 'number', 'transit_area_id': 'string',
+                   'transit_delay': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/virtual_link/bfd': {
+        'shape': 'object',
+        'fields': {'profile': 'string'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1457,13 +1550,56 @@ PROTOCOL_SHAPE: dict[str, dict] = {
     },
     'protocol/ospfv3/area/type/nssa': {
         'shape': 'object',
-        'fields': {'accept_summary': 'bool'},
+        'fields': {'accept_summary': 'bool', 'default_route': 'one_of',
+                   'nssa_ext_range': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/type/nssa/default_route': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'advertise': 'advertise', 'no': 'disable'},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/type/nssa/default_route/advertise': {
+        'shape': 'object',
+        'fields': {'metric': 'number', 'type': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/type/nssa/default_route/disable': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/type/nssa/nssa_ext_range': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'advertise': 'block', 'suppress': 'block'},
         'selects': {},
         'sensitive': frozenset(),
     },
     'protocol/ospfv3/area/type/stub': {
         'shape': 'object',
-        'fields': {'accept_summary': 'bool'},
+        'fields': {'accept_summary': 'bool', 'default_route': 'one_of'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/type/stub/default_route': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'advertise': 'advertise', 'no': 'disable'},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/type/stub/default_route/advertise': {
+        'shape': 'object',
+        'fields': {'metric': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/type/stub/default_route/disable': {
+        'shape': 'block',
+        'fields': {},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1476,7 +1612,13 @@ PROTOCOL_SHAPE: dict[str, dict] = {
     'protocol/ospfv3/area/interface': {
         'shape': 'string_list',
         'fields': {'name': 'string', 'enable': 'bool', 'passive': 'bool',
-                   'metric': 'number', 'link_type': 'one_of'},
+                   'metric': 'number', 'link_type': 'one_of', 'neighbor': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/interface/neighbor': {
+        'shape': 'string_list',
+        'fields': {'name': 'string'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1924,10 +2066,13 @@ COVERAGE_MATRIX = (
         # F7.3: an export rule is an entry, so the scan measures its fields, and `new_path_type` and `new_tag`
         # join the measured set through `tests/fixtures/ospfv3.xml`. The three single-object levels hold no
         # entry, so they stay grounded by the table.
+        # F7.4: `virtual_link` is a field of the area entry, which this row covers, so the scan measures it.
+        # The levels inside an entry are not in the scan scope, so `neighbor` and the fields of a
+        # `nssa_ext_range` entry stay grounded by the table.
         'properties': ('address_family_identifier', 'enable', 'interface', 'interfaces',
                        'local_address', 'metric', 'new_path_type', 'new_tag',
                        'peer', 'peer_address', 'peer_as', 'protocol',
-                       'range', 'router_type', 'static_routes', 'type',),
+                       'range', 'router_type', 'static_routes', 'type', 'virtual_link',),
     }, {
         'resource': 'panos_virtual_router_static_route_ipv4',
         'xml_element': 'static-route/entry',

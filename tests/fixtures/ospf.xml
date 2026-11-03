@@ -18,6 +18,13 @@
                         <type>
                           <stub>
                             <accept-summary>yes</accept-summary>
+                            <!-- F7.4: `default-route` is the one choice the provider requires inside the body,
+                                 so the export states it by presence and the print states the key -->
+                            <default-route>
+                              <advertise>
+                                <metric>10</metric>
+                              </advertise>
+                            </default-route>
                           </stub>
                         </type>
                         <range>
@@ -39,6 +46,10 @@
                             <passive>no</passive>
                             <link-type>broadcast</link-type>
                             <metric>10</metric>
+                            <!-- F7.4: a neighbor entry is the entry name, which is the whole shape -->
+                            <neighbor>
+                              <entry name="10.0.0.2"/>
+                            </neighbor>
                           </entry>
                           <!-- F7.1: a value the mapping cannot state makes the entry not expressible, so
                                the report names the whole entry -->
@@ -47,6 +58,37 @@
                             <link-type>multicast</link-type>
                           </entry>
                         </interface>
+                        <!-- F7.4: a virtual link prints inside the area, and the provider declares no
+                             `instance_id` for this level -->
+                        <virtual-link>
+                          <entry name="10.0.0.2">
+                            <neighbor-id>10.0.0.3</neighbor-id>
+                            <transit-area-id>0.0.0.1</transit-area-id>
+                            <hello-interval>10</hello-interval>
+                          </entry>
+                        </virtual-link>
+                      </entry>
+                      <!-- F7.4: the `nssa` body holds the second shape the parse reads: the entries of
+                           `nssa_ext_range`, and the `default-route` choice the export states as `no` -->
+                      <entry name="0.0.1.0">
+                        <type>
+                          <nssa>
+                            <default-route>
+                              <no/>
+                            </default-route>
+                            <nssa-ext-range>
+                              <entry name="10.20.0.0/16">
+                                <name>10.20.0.0/16</name>
+                                <suppress/>
+                              </entry>
+                              <!-- F7.4: an entry that states neither has no `.tf` shape, so the manual report
+                                   names it -->
+                              <entry name="10.30.0.0/16">
+                                <name>10.30.0.0/16</name>
+                              </entry>
+                            </nssa-ext-range>
+                          </nssa>
+                        </type>
                       </entry>
                     </area>
                     <interface>
