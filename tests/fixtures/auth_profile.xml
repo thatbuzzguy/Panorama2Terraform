@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+<config version="10.0.0" urldb="paloaltonetworks">
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <network>
+            <virtual-router>
+              <!-- F7.7: one router with an auth profile entry at each of the four routing levels, each entry
+                   stating every field its row declares. A field the provider marks `sensitive` prints as the
+                   variable the entry names, so none of these values can reach a generated file. The provider
+                   accepts `ah` or `esp` in one `ospfv3` profile entry, not both, so the two choice levels are
+                   two entries. `none` states no attribute, so it is the `block` field inside the
+                   `esp/authentication` one_of row. The `md5` entry sits inside the profile entry, so the
+                   property scan measures the profile entry and not the entry inside it. -->
+              <entry name="profile-router">
+                <protocol>
+                  <bgp>
+                    <enable>yes</enable>
+                    <auth-profile>
+                      <entry name="profile-bgp">
+                        <secret>bgp-secret-value</secret>
+                      </entry>
+                    </auth-profile>
+                  </bgp>
+                  <ospf>
+                    <enable>yes</enable>
+                    <auth-profile>
+                      <entry name="profile-ospf">
+                        <password>ospf-password-value</password>
+                        <md5>
+                          <entry name="profile-ospf-md5">
+                            <key>ospf-md5-value</key>
+                            <preferred>yes</preferred>
+                          </entry>
+                        </md5>
+                      </entry>
+                    </auth-profile>
+                  </ospf>
+                  <rip>
+                    <enable>yes</enable>
+                    <auth-profile>
+                      <entry name="profile-rip">
+                        <password>rip-password-value</password>
+                        <md5>
+                          <entry name="profile-rip-md5">
+                            <key>rip-md5-value</key>
+                          </entry>
+                        </md5>
+                      </entry>
+                    </auth-profile>
+                  </rip>
+                  <ospfv3>
+                    <enable>yes</enable>
+                    <auth-profile>
+                      <entry name="profile-ospfv3-ah">
+                        <spi>2000</spi>
+                        <ah>
+                          <sha1>
+                            <key>ospfv3-ah-value</key>
+                          </sha1>
+                        </ah>
+                      </entry>
+                      <entry name="profile-ospfv3-esp">
+                        <esp>
+                          <authentication>
+                            <none/>
+                          </authentication>
+                          <encryption>
+                            <algorithm>aes256</algorithm>
+                            <key>ospfv3-esp-value</key>
+                          </encryption>
+                        </esp>
+                      </entry>
+                    </auth-profile>
+                  </ospfv3>
+                </protocol>
+              </entry>
+            </virtual-router>
+          </network>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

@@ -107,11 +107,11 @@ def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
 
     The table states the levels this converter prints, so it is a subset of the schema: `protocol` also
     declares the two redist profile lists, which the converter does not print and the gate does not check. A
-    row states only the fields the parse method that reaches the level reads, except the three `auth_profile`
-    rows, which state the `sensitive` decision for a level no parse method reads (`backlog.md`, F7.7). F7.4
-    added the four area sub-levels, which `_protocol_areas` reads, and F7.5 added the `rip` levels, which
-    `parse_rip` reads. F7.6 added the 78 `policy` levels, which `parse_bgp` reads, and the `member_list` word
-    for the fields the schema declares as `['list', 'string']`.
+    row states only the fields the parse method that reaches the level reads. F7.4 added the four area
+    sub-levels, which `_protocol_areas` reads, F7.5 added the `rip` levels, which `parse_rip` reads, F7.6
+    added the 78 `policy` levels, which `parse_bgp` reads, the `member_list` word for the fields the schema
+    declares as `['list', 'string']`, and F7.7 added the `ospfv3` auth profile levels, which `parse_ospfv3`
+    reads: every row in the table is now a level a parse method reads.
     """
     for path, row in sorted(resource_mapping.PROTOCOL_SHAPE.items()):
         node = _schema_node(provider_schema, path)
@@ -211,7 +211,7 @@ def test_the_ospfv3_scalar_levels_are_rows_the_parse_reads():
     """
     level = resource_mapping.protocol_row('protocol/ospfv3')
     assert [field for field in level['fields'] if field not in ('enable', 'router_id', 'area')] == [
-        'timers', 'global_bfd', 'graceful_restart', 'export_rules'], level['fields']
+        'timers', 'global_bfd', 'graceful_restart', 'export_rules', 'auth_profile'], level['fields']
     for path, shape in (('protocol/ospfv3/timers', 'object'),
                         ('protocol/ospfv3/global_bfd', 'object'),
                         ('protocol/ospfv3/graceful_restart', 'object'),
@@ -223,8 +223,9 @@ def test_the_ospfv3_scalar_levels_are_rows_the_parse_reads():
             if row.path.startswith('protocol/ospfv3/')]
     assert sorted(rows) == ['protocol/ospfv3/area', 'protocol/ospfv3/area/interface',
                              'protocol/ospfv3/area/interface/neighbor',
-                             'protocol/ospfv3/area/virtual-link', 'protocol/ospfv3/export-rules',
-                             'protocol/ospfv3/interface', 'protocol/ospfv3/range'], rows
+                             'protocol/ospfv3/area/virtual-link', 'protocol/ospfv3/auth-profile',
+                             'protocol/ospfv3/export-rules', 'protocol/ospfv3/interface',
+                             'protocol/ospfv3/range'], rows
 
 
 def test_the_rip_levels_are_rows_the_parse_reads():
@@ -237,7 +238,8 @@ def test_the_rip_levels_are_rows_the_parse_reads():
     single-object level holds no entry, so the scan measures nothing for it and the container table names no
     row for it, while an interface entry and an export rule entry are entries. No row names
     `protocol/rip/interfaces/bfd`, because the parse reaches that level through the field the interfaces row
-    states.
+    states, and no row names `protocol/rip/auth-profile/md5` for the same reason: an entry inside an entry is
+    not in the scan scope.
     """
     level = resource_mapping.protocol_row('protocol/rip')
     assert level['fields'] == {
@@ -257,7 +259,8 @@ def test_the_rip_levels_are_rows_the_parse_reads():
         # None of the levels `parse_rip` reads carries a field the provider marks sensitive, so no
         # `VALUE_VARIABLES` row for them.
         assert row['sensitive'] == frozenset(), path
-    # The two `auth_profile` rows state the `sensitive` decision for a level no parse method reads (F7.7).
+    # F7.7: `parse_rip` reads the profile level, so the run prints the reference for `password`, and `key` is
+    # the field the reader reads inside the `md5` entry.
     assert resource_mapping.protocol_row('protocol/rip/auth_profile')['sensitive'] == frozenset({'password'})
     assert resource_mapping.protocol_row('protocol/rip/auth_profile/md5')['sensitive'] == frozenset({'key'})
     # `selects` is the one place that maps the value the export states to the key the print states, the same
@@ -265,7 +268,67 @@ def test_the_rip_levels_are_rows_the_parse_reads():
     assert resource_mapping.protocol_row('protocol/rip/interfaces/default_route')['selects'] == {
         'advertise': 'advertise', 'no': 'disable'}
     rows = [row.path for row in container_coverage.CONTAINER_TABLE if row.path.startswith('protocol/rip/')]
-    assert sorted(rows) == ['protocol/rip/export-rules', 'protocol/rip/interfaces'], rows
+    assert sorted(rows) == ['protocol/rip/auth-profile', 'protocol/rip/export-rules',
+                            'protocol/rip/interfaces'], rows
+
+
+def test_the_auth_profile_rows_are_the_levels_the_four_methods_read():
+    """F7.7: the four `auth_profile` levels are table rows the four parse methods read, and the entry inside a
+    profile entry is not one of the rows the property scan reads.
+
+    `test_the_shape_table_is_the_measured_provider_shape` pins every row against the schema, so this test pins
+    the shape decision: a `list` level is a `string_list` row, a `single` level whose attributes are the
+    alternatives is a `one_of` row with the identity mapping, a `single` level with attributes is an `object`
+    row, and the alternative that declares no attribute is the `block` field of the row that holds it. The four
+    container rows are the four levels, because the scan measures an entry only through an emitted row that
+    names the provider type. No row names the `md5` level, because the parse reaches it through the field the
+    profile row states, and a section path that holds an extra `entry` segment cannot match a row path.
+    The provider accepts `ah` or `esp` for one entry, and the table has no word for that, so the fixture states
+    the two choice levels in two entries.
+    """
+    for level in ('bgp', 'ospf', 'rip', 'ospfv3'):
+        row = resource_mapping.protocol_row(f'protocol/{level}/auth_profile')
+        assert row['shape'] == 'string_list', level
+        # The entry name is the field the row reads for the entry, so it is never a property.
+        assert 'name' in row['fields'], level
+        for field in row['sensitive']:
+            assert resource_mapping.VALUE_VARIABLES[field] == resource_mapping.REFERENCE_ONLY, (level, field)
+    assert resource_mapping.protocol_row('protocol/bgp/auth_profile')['fields'] == {
+        'name': 'string', 'secret': 'string'}, resource_mapping.protocol_row('protocol/bgp/auth_profile')['fields']
+    assert resource_mapping.protocol_row('protocol/bgp/auth_profile')['sensitive'] == frozenset({'secret'})
+    for level in ('ospf', 'rip'):
+        row = resource_mapping.protocol_row(f'protocol/{level}/auth_profile')
+        assert row['fields'] == {'name': 'string', 'password': 'string', 'md5': 'string_list'}, level
+        assert row['sensitive'] == frozenset({'password'}), level
+        assert resource_mapping.protocol_row(f'protocol/{level}/auth_profile/md5')['fields'] == {
+            'name': 'string', 'key': 'string', 'preferred': 'bool'}, level
+    # The `ospfv3` profile is the level the run reads through the table: `ah` and `esp/authentication` are
+    # choice levels, and `none` is the alternative that declares no attribute, so it is the `block` field.
+    assert resource_mapping.protocol_row('protocol/ospfv3/auth_profile')['fields'] == {
+        'name': 'string', 'spi': 'string', 'ah': 'one_of', 'esp': 'object'}
+    assert resource_mapping.protocol_row('protocol/ospfv3/auth_profile/ah')['selects'] == {
+        'md5': 'md5', 'sha1': 'sha1', 'sha256': 'sha256', 'sha384': 'sha384', 'sha512': 'sha512'}
+    authentication = resource_mapping.protocol_row('protocol/ospfv3/auth_profile/esp/authentication')
+    assert authentication['fields'] == {'none': 'block'}, authentication['fields']
+    assert authentication['selects'] == {
+        'md5': 'md5', 'none': 'none', 'sha1': 'sha1', 'sha256': 'sha256', 'sha384': 'sha384',
+        'sha512': 'sha512'}, authentication['selects']
+    for path in (f'protocol/ospfv3/auth_profile/ah/{key}' for key in authentication['selects'].values()
+                 if key != 'none'):
+        row = resource_mapping.protocol_row(path)
+        assert row['shape'] == 'object', path
+        assert row['sensitive'] == frozenset({'key'}), path
+    assert resource_mapping.protocol_row('protocol/ospfv3/auth_profile/esp/encryption')['fields'] == {
+        'algorithm': 'string', 'key': 'string'}
+    assert resource_mapping.protocol_row('protocol/ospfv3/auth_profile/esp/encryption')['sensitive'] == \
+        frozenset({'key'})
+    # The four rows the scan reads are the four levels, in the input's spelling.
+    rows = sorted(row.path for row in container_coverage.CONTAINER_TABLE
+                  if row.path.endswith('/auth-profile'))
+    assert rows == ['protocol/bgp/auth-profile', 'protocol/ospf/auth-profile',
+                    'protocol/ospfv3/auth-profile', 'protocol/rip/auth-profile'], rows
+    assert not [row for row in container_coverage.CONTAINER_TABLE if '/md5' in row.path], \
+        [row.path for row in container_coverage.CONTAINER_TABLE]
 
 
 def test_value_shape_is_the_reader_inverse_for_every_shape_word():
@@ -848,8 +911,9 @@ def test_an_ospfv3_interface_at_the_level_is_reported(make_parser):
 def test_a_sensitive_field_prints_as_the_variable_reference(converter_module, tmp_path):
     """The rule refuses a secret written as a literal, and the emitter prints the reference the table says.
 
-    No parse method reads an auth profile, so the block is written by hand: the table row for
-    `protocol/bgp/auth_profile` is what both the emitter and the rule read.
+    `protocol/bgp/auth_profile` is a level the parse reads, so a run prints the reference for the value it read
+    (`test_an_auth_profile_prints_the_reference_the_entry_names`); the block here is written by hand, so the pin
+    is the rule alone: the table row is what both the emitter and the rule read.
     """
     findings = _findings('  protocol = {\n    bgp = {\n      auth_profile = [\n        {\n'
                          '          name = "AP-1"\n          secret = "hunter2"\n        }\n      ]\n    }\n  }\n')
@@ -897,11 +961,89 @@ def test_a_rip_auth_profile_field_prints_the_reference_only():
     assert _findings(reference) == [], reference
 
 
+def test_an_auth_profile_prints_the_reference_the_entry_names(tmp_path):
+    """F7.7: a run that reads an auth profile prints the reference the entry names, never the value.
+
+    The entry that holds a `sensitive` field names the variable: the profile entry for `secret` and `password`,
+    the `md5` entry for the `key` inside it, and the profile entry for the `key` inside a choice level, because
+    a level inside an entry is not an entry and names nothing. Field order is the table order, `none` prints as
+    `{}` because it is the `block` field of the row that states it, and the gate reads the same table, so the
+    block the run wrote reports no finding. The fixture states the two `ospfv3` choice levels in two entries,
+    because the provider accepts one or the other for an entry, which `terraform validate` confirms.
+    """
+    expected = ('  protocol = {\n    bgp = {\n      enable = true\n      auth_profile = [\n'
+                '        {\n          name = "profile-bgp"\n          secret = var.profile_bgp\n'
+                '        }\n      ]\n    }\n    ospf = {\n      enable = true\n'
+                '      auth_profile = [\n        {\n          name = "profile-ospf"\n'
+                '          password = var.profile_ospf\n          md5 = [\n            {\n'
+                '              name = "profile-ospf-md5"\n              key = var.profile_ospf_md5\n'
+                '              preferred = true\n            }\n          ]\n        }\n      ]'
+                '\n    }\n    ospfv3 = {\n      enable = true\n      auth_profile = [\n        {'
+                '\n          name = "profile-ospfv3-ah"\n          spi = "2000"\n          ah = {\n'
+                '            sha1 = {\n              key = var.profile_ospfv3_ah\n            }\n'
+                '          }\n        },\n        {\n          name = "profile-ospfv3-esp"\n'
+                '          esp = {\n            authentication = {\n              none = {}\n'
+                '            }\n            encryption = {\n              algorithm = "aes256"\n'
+                '              key = var.profile_ospfv3_esp\n            }\n          }\n        }'
+                '\n      ]\n    }\n    rip = {\n      enable = true\n      auth_profile = [\n'
+                '        {\n          name = "profile-rip"\n          password = var.profile_rip\n'
+                '          md5 = [\n            {\n              name = "profile-rip-md5"\n'
+                '              key = var.profile_rip_md5\n            }\n          ]\n        }\n'
+                '      ]\n    }\n  }\n}')
+    files = _run('auth_profile.xml', tmp_path)
+    block = files['virtual_routers.tf']
+    assert expected in block, block
+    assert sanity_checks.check_protocol_object(files) == [], sanity_checks.check_protocol_object(files)
+
+
+def test_the_gate_reads_a_choice_level_inside_an_auth_profile():
+    """F7.7: the gate reads the choice levels inside the `ospfv3` profile entry against the same rows.
+
+    `ah` and `esp/authentication` are `one_of` levels whose alternatives are their own rows, so the rule reads
+    the chosen alternative as a level and refuses a literal for the field the provider marks `sensitive` there.
+    `none` is the `block` field the row states, so an object value for it is the shape the reader reads back.
+    The provider accepts `ah` or `esp` for one entry, so the example states them in two entries, the way the
+    fixture does.
+    """
+    literal = ('  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n'
+               '          name = "AP-3"\n          ah = {\n            sha1 = {\n'
+               '              key = "hunter2"\n            }\n          }\n        },\n        {\n'
+               '          name = "AP-4"\n          esp = {\n            authentication = {\n'
+               '              md5 = {\n                key = "hunter2"\n              }\n            }\n          }\n'
+               '        }\n      ]\n    }\n  }\n')
+    assert [f.detail for f in _findings(literal)] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile/ah/sha1 '
+        'key prints a sensitive value as a literal',
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile/esp/authentication/md5 '
+        'key prints a sensitive value as a literal'], _findings(literal)
+    # Each entry names its own variable, so a reference for each is the shape the gate accepts.
+    reference = ('  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n'
+                 '          name = "AP-3"\n          ah = {\n            sha1 = {\n'
+                 '              key = var.ap_3\n            }\n          }\n        },\n        {\n'
+                 '          name = "AP-4"\n          esp = {\n            authentication = {\n'
+                 '              md5 = {\n                key = var.ap_4\n              }\n            }\n          }\n'
+                 '        }\n      ]\n    }\n  }\n')
+    assert _findings(reference) == [], reference
+    # A `block` alternative is the empty object the export stated by presence, so it is the shape the reader
+    # reads back.
+    assert _findings('  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n'
+                     '          name = "AP-3"\n          esp = {\n            authentication = {\n'
+                     '              none = {}\n            }\n          }\n        }\n      ]\n    }\n  }\n') == []
+    # A value the row does not state as an alternative is the same finding the one-of rule reports.
+    findings = _findings('  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n'
+                         '          name = "AP-3"\n          ah = {\n            unknown = {}\n'
+                         '          }\n        }\n      ]\n    }\n  }\n')
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile/ah key unknown '
+        'is not a key PROTOCOL_SHAPE selects'], findings
+
+
 def test_a_sensitive_field_is_never_written_as_a_value(tmp_path):
     """No generated file states a protocol secret, because the run holds no value for a reference-only name.
 
     `site_data.py` rule 2 writes a row for a site that names a value, so a name the run cannot value has no
-    `.tfvars` line and no site data row.
+    `.tfvars` line and no site data row. F7.7: the same rule for a value the run did read is pinned by
+    `tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`.
     """
     files = _run('kitchen_sink.xml', tmp_path)
     assert not any('hunter2' in text for text in files.values()), sorted(files)

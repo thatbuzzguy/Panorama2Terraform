@@ -310,6 +310,21 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                   'panos_virtual_router', level='sub-shape'),
     ContainerRow('parse_bgp', 'protocol/bgp/policy/import/rules', 'emitted',
                   'panos_virtual_router', level='sub-shape'),
+    # F7.7: the four auth profile levels, one per routing level. An auth profile entry is a property level of
+    # the router, so the scan measures the fields its row states against the router row. The row path is the
+    # input's spelling of the level the parse states as a table path, the same rule as `protocol/rip/interfaces`,
+    # because `covers` matches a row path against the tag chain the scan reads. No row names
+    # `protocol/ospf/auth-profile/md5` or `protocol/rip/auth-profile/md5`, because the parse reaches that level
+    # through the field the profile row states, and no row names a choice level inside an entry for the same
+    # reason.
+    ContainerRow('parse_bgp', 'protocol/bgp/auth-profile', 'emitted', 'panos_virtual_router',
+                  level='sub-shape'),
+    ContainerRow('parse_ospf', 'protocol/ospf/auth-profile', 'emitted', 'panos_virtual_router',
+                  level='sub-shape'),
+    ContainerRow('parse_ospfv3', 'protocol/ospfv3/auth-profile', 'emitted', 'panos_virtual_router',
+                  level='sub-shape'),
+    ContainerRow('parse_rip', 'protocol/rip/auth-profile', 'emitted', 'panos_virtual_router',
+                  level='sub-shape'),
     ContainerRow('parse_virtual_routers', 'routing-table/ip/static-route', 'emitted',
                  'panos_virtual_router_static_route_ipv4', level='sub-shape'),
     ContainerRow('parse_ipsec_tunnels', 'auto-key/proxy-id', 'nested-block',

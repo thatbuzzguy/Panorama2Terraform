@@ -163,19 +163,27 @@ def test_the_generator_prints_a_value_through_the_table(converter_module):
 def test_the_table_holds_no_property():
     """A property at the block's own level is the entry's content, not a site value, so the table
     holds location fields and the reference-only names only (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2).
-    A reference-only name is not a property either: the block prints the reference to a variable, and
-    no `.tf` holds the value (F7.1). `panos_template_variable` prints its value as
+    A reference-only name is not a site value: the block prints the reference to a variable, and no
+    `.tf` holds the value (F7.1). `panos_template_variable` prints its value as
     the export states it, and no variable is declared for it.
     F6.10.4 adds one row for a fact the export cannot state: `target` names the device the unit plans
     against, so the run names the variable and holds no value for it. It is not a property.
+    F7.7: a reference-only name is a property only for the row that covers the entry the run read it in,
+    because the emitter reads the field to print the reference. So the reference-only names in the matrix are
+    the fields `PROTOCOL_SHAPE` marks `sensitive` for the levels that row covers, and `key` is the exception
+    the scan scope states: it is read inside an entry inside an entry, which no row covers, so the table stays
+    the only place that states it.
     """
     allowed = {'name', 'ngfw_device', 'panorama_device', 'rulebase', 'vsys', 'target'} | REFERENCE_ONLY_NAMES
     assert all(field in allowed for field in resource_mapping.VALUE_VARIABLES), resource_mapping.VALUE_VARIABLES
     assert resource_mapping.VALUE_VARIABLES['target'] == resource_mapping.OPERATOR_SUPPLIED, \
         'the run names the variable, the operator supplies the value'
-    assert not REFERENCE_ONLY_NAMES & {prop for row in resource_mapping.COVERAGE_MATRIX
-                                       for prop in row['properties']}, \
-        'a reference-only name is printed as a reference, not as a property'
+    measured = {prop for row in resource_mapping.COVERAGE_MATRIX for prop in row['properties']}
+    assert measured & REFERENCE_ONLY_NAMES == {field for row in resource_mapping.PROTOCOL_SHAPE.values()
+                                               for field in row['sensitive']} - {'key'}, measured
+    assert all(row['resource'] == 'panos_virtual_router'
+               for row in resource_mapping.COVERAGE_MATRIX
+               if set(row['properties']) & REFERENCE_ONLY_NAMES), measured
     # F6.10.3: `scope.tf` is the unit's file, so the golden set holds one per unit that has a scope block.
     scope = ''.join(p.read_text(encoding='utf-8')
                     for p in sorted((GOLDEN_DIR / 'kitchen_sink').rglob('scope.tf')))
