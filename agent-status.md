@@ -2,49 +2,58 @@
 
 ## Current position
 
-F7.3 is complete and committed on `development`. `resource_mapping.PROTOCOL_SHAPE` states the four `ospfv3`
-levels outside `area`, `parse_ospfv3` reads them, and the emitter, the gate rule `protocol_object` and the
-property scan read the same rows. The suite is 1320 tests, all green (1315 at the start of this slice), and
-`ruff check .` is clean. No golden set moved, because no golden fixture states one of the four levels.
+F7.4 is complete and committed on `development`. `resource_mapping.PROTOCOL_SHAPE` states the four area
+sub-levels for both routing levels, `_protocol_areas` reads the entries they hold and the choice inside a
+chosen body, and the emitter, the gate rule `protocol_object` and the property scan read the same rows. The
+suite is 1322 tests, all green (1320 at the start of this slice), and `ruff check .` is clean. No golden set
+moved, because no golden fixture states one of the new levels.
 
-The next feature is F7.4: the area sub-levels the table does not state (`to-do.md`).
+The next feature is F7.5: the `rip` level (`to-do.md`).
 
 `acceptance.md` holds this slice's criteria and must be overwritten for the next one.
 
-### Decision 1: the four `ospfv3` levels outside `area` are table rows
+### Decision 1: `default_route` is a field of the chosen body, not of `type`
 
-Measured 2026-11-02 against the pinned provider 2.0.14, the provider declares all four levels, so all four
-became rows: `timers`, `global_bfd`, `graceful_restart` (each `object`) and `export_rules` (`string_list`).
-None is a report refusal, and none carries a field the provider marks sensitive, so `VALUE_VARIABLES` gained no
-row and the sensitive pin is unchanged.
+Measured 2026-11-02 against the pinned provider 2.0.14, the provider declares `default_route` inside the
+`nssa` and the `stub` bodies, so the rows are the bodies' fields and no `area/type/default_route` row exists.
+`nssa_ext_range` is declared only inside `nssa`. `terraform validate` refuses a `default_route` element that
+states neither `advertise` or `no`, so the row states the choice as `selects` and both alternatives are rows:
+`advertise` (`object`) and `disable` (`block`). The export spells the second alternative `no`, which is the
+value the mapping reads, so `selects` is the one place that states the difference and
+`XML_NAME_EXCEPTIONS` gained no row.
 
-A single-object level holds no entry, so the scan measures nothing for it and the matrix row stays grounded by
-the table. `export_rules` holds entries, so its fields are measured, the container table gained the one sub-shape
-row for `protocol/ospfv3/export-rules`, and `COVERAGE_MATRIX` row `panos_virtual_router` gained `new_path_type`
-and `new_tag`.
+### Decision 2: the two routing levels are not identical
 
-### Decision 2: the spelling rule has one exception table
+The provider declares `instance_id` for the `ospfv3` virtual link and not for the `ospf` one, so the two
+`virtual_link` rows state a different field set. A new row states the whole field set the provider declares
+for its level, and an existing row gains only the new level field. No new field is sensitive, so
+`VALUE_VARIABLES` gained no row.
 
-`_protocol_xml_name` turns `_` into `-`, so it cannot produce the element name `strict-lsa-checking` from the
-provider spelling `strict_l_s_a_checking`, because the provider splits the initialism.
-`resource_mapping.XML_NAME_EXCEPTIONS` is the one place that states the exception, and the rule reads it, so no
-parse method spells an element name of its own.
+### Decision 3: the scan measures an entry a matrix row covers, not an entry inside an entry
+
+`COVERAGE_MATRIX` row `panos_virtual_router` gained `virtual_link`, because the area entry is measured against
+that row. `neighbor` is not a property: a neighbor entry sits inside an interface entry, so its section path
+holds an entry segment the row path cannot match, and `PROTOCOL_SHAPE` grounds that level.
+`CONTAINER_TABLE` gained `area/virtual-link` and `area/interface/neighbor` for each routing level. No row
+names `nssa-ext-range`, because the parse reaches that level through the field name the `nssa` row states, so
+no path string states it.
 
 ### Pins that changed
 
-- `tests/test_protocol_object.py`: `test_the_shape_table_is_the_measured_provider_shape` no longer names the four
-  levels as outside the table. The new pins are
-  `test_the_ospfv3_scalar_levels_are_rows_the_parse_reads`,
-  `test_an_ospfv3_scalar_level_prints_the_shape_the_table_states`, and
-  `test_the_gate_reads_a_scalar_level_against_the_row_it_states`.
-  `test_the_table_is_the_only_shape_owner` pins the exception table.
-- `tests/fixtures/ospfv3.xml` gained the router entry `edge-af`, which states every field the four rows declare.
-  The area pin `test_an_ospfv3_area_prints_the_shape_the_table_states` is unchanged, because the `default` router
-  states none of the four levels.
-- `tests/test_parse_network.py::test_parse_ospfv3_reads_the_levels_the_table_states` pins the parse, and
-  `tests/test_property_coverage.py::test_the_scan_measures_an_export_rule_and_not_a_scalar_level` pins the
-  measurement scope.
-- The suite gained five tests.
+- `tests/test_protocol_object.py`: `test_the_shape_table_is_the_measured_provider_shape` no longer names the
+  four area sub-levels as outside the table. The new pins are `test_the_gate_reads_a_choice_inside_a_body`,
+  the printed block in `test_an_ospfv3_area_prints_the_shape_the_table_states`, the two bodies in
+  `test_a_choice_body_prints_the_fields_it_declares`, and the container row list in
+  `test_the_ospfv3_scalar_levels_are_rows_the_parse_reads`.
+  `test_the_table_is_the_only_shape_owner` reads the four new parse helpers as owners.
+- `tests/fixtures/ospf.xml` and `tests/fixtures/ospfv3.xml` gained entries that reach every new level, and one
+  entry that states no presence choice: an `nssa_ext_range` entry for `ospf`, and a `default-route` element
+  with no child for `ospfv3`, which the report names as the area entry that holds it.
+- `tests/test_parse_network.py::test_parse_ospf` and `::test_parse_ospfv3` pin the parse read and the report
+  rows for both routing levels.
+- `tests/test_property_coverage.py::test_the_scan_measures_the_area_level_and_not_an_entry_inside_an_entry`
+  pins the measurement scope.
+- The suite gained two tests.
 
 ## Rules to keep when writing documents
 
@@ -98,9 +107,13 @@ parse method spells an element name of its own.
   never spells a field name: `_protocol_xml_name` and `_protocol_field_name` are the two rules, and
   `resource_mapping.XML_NAME_EXCEPTIONS` is the one exception the `-` rule cannot produce. A level that holds
   no entry has no container row, so the property scan measures nothing for it and the matrix row stays grounded
-  by the table. `_protocol_areas` is the area rule the two OSPF levels share, and `_protocol_choice` takes the
-  element that holds the chosen body: the flag element for an area type, the entry's own level for a BGP peer
-  group.
+  by the table. An entry inside an entry is not in the scan scope either, because `covering_row` cannot match
+  a section path that holds an entry segment, so the table grounds that level. `_protocol_areas` is the area
+  rule the two OSPF levels share, `_protocol_choice` takes the element that holds the chosen body,
+  `_protocol_entries` fills a `string_list` level, and `_protocol_body` fills the two shapes a level dict cannot
+  hold: the choice the export states by presence, and the entries inside the body. A presence choice is the
+  row's `block` fields, or the `selects` keys of a `one_of` level, so an element that states none is a report
+  row.
 - The parse method that takes the router element is named in the test helpers that call it for each router:
   `tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py`. A new level method
   must be added there, or the corpus checks run no method for it.

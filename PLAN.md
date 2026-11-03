@@ -67,10 +67,14 @@ F7.3 landed: `PROTOCOL_SHAPE` states the four `ospfv3` levels outside `area` tha
 so the emitter prints them, the gate rule reads them, and the property scan measures the export-rule entries.
 `resource_mapping.XML_NAME_EXCEPTIONS` is the one exception to the field name to element name rule.
 
+F7.4 landed: `PROTOCOL_SHAPE` states the four area sub-levels for both routing levels, so `_protocol_areas`
+reads the entries of `virtual_link`, `neighbor` and `nssa_ext_range`, and the `default_route` choice the export
+states by presence. `selects` is the one place that maps the value the export states to the key the print
+states, so the export spelling `no` prints as `disable`.
+
 Open for Epic 7: the levels `PROTOCOL_SHAPE` does not state, which no parse method reads — the `ospfv3`
-`auth_profile` level, `area/virtual_link`, `area/interface/neighbor`, and `area/type/default_route`, `rip`, the
-BGP `policy`, the auth profile bodies, and the filter containers (route maps, prefix lists, community lists,
-access lists). They are in `backlog.md`.
+`auth_profile` level, `rip`, the BGP `policy`, the auth profile bodies, and the filter containers (route maps,
+prefix lists, community lists, access lists). They are in `backlog.md`.
 
 ## Housekeeping — repository layout (open)
 
