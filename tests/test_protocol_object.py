@@ -9,7 +9,8 @@ Pins:
 
 - the table against the live provider schema: one row per level the converter prints, the field names the
   provider declares, the shape word for each field, the `selects` keys, and the `sensitive` flags;
-  F7.3 adds the four `ospfv3` levels outside `area` and the one spelling exception table;
+  F7.3 adds the four `ospfv3` levels outside `area` and the one spelling exception table, and F7.9 adds the
+  four `ospf` levels outside `area`;
 - the print shape: `protocol = { ... }` is one field of the block, and `protocol { ... }` is the shape the
   provider refuses, so the rule reports it (`tests/test_terraform_validate.py` runs the same check on a
   real run);
@@ -108,8 +109,9 @@ def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
     row states only the fields the parse method that reaches the level reads. F7.4 added the four area
     sub-levels, which `_protocol_areas` reads, F7.5 added the `rip` levels, which `parse_rip` reads, F7.6
     added the 78 `policy` levels, which `parse_bgp` reads, the `member_list` word for the fields the schema
-    declares as `['list', 'string']`, and F7.7 added the `ospfv3` auth profile levels, which `parse_ospfv3`
-    reads: every row in the table is now a level a parse method reads.
+    declares as `['list', 'string']`, F7.7 added the `ospfv3` auth profile levels, which `parse_ospfv3`
+    reads, and F7.9 added the four `ospf` levels outside `area`, which `parse_ospf` reads: every row in the
+    table is now a level a parse method reads.
     """
     for path, row in sorted(resource_mapping.PROTOCOL_SHAPE.items()):
         node = _schema_node(provider_schema, path)
@@ -197,11 +199,50 @@ def test_the_table_is_the_only_shape_owner(converter_module):
     assert parser._protocol_xml_name('address_family_identifier') == 'address-family-identifier'
     assert parser._protocol_xml_name('spf_calculation_delay') == 'spf-calculation-delay'
     assert parser._protocol_field_name('protocol/ospfv3/export_rules') == 'export_rules'
+    # F7.9: the same rule for the `ospf` level, which the row now states as an entry level.
+    assert parser._protocol_field_name('protocol/ospf/export_rules') == 'export_rules'
     assert parser._protocol_field_name('protocol/ospf/area/interface/link_type') == 'link_type'
     # F7.3: the provider spells one field name from an element name the `-` rule cannot produce, because it
     # splits the initialism, so `XML_NAME_EXCEPTIONS` is the one place that states it.
     assert resource_mapping.XML_NAME_EXCEPTIONS == {'strict_l_s_a_checking': 'strict-lsa-checking'}
     assert parser._protocol_xml_name('strict_l_s_a_checking') == 'strict-lsa-checking'
+
+
+def test_the_ospf_scalar_levels_are_rows_the_parse_reads():
+    """The `protocol/ospf` levels outside `area` are table rows, and the level that holds entries is the one
+    the property scan measures (F7.9).
+
+    `test_the_shape_table_is_the_measured_provider_shape` pins every row against the schema, so this test pins
+    the shape decision and the measurement scope: the three `bool` fields are leaf values, not blocks, a
+    single-object level holds no entry so the scan measures nothing for it and the container table names no row
+    for it, and an export rule is an entry. Field order is the print order, so the row's order is pinned as the
+    dict's order: the two fields the row already stated keep their order, the `bool` fields follow in the order
+    the schema names them, then the single-object levels and the entry levels in the order the `ospfv3` row
+    states them. `disable_transit_traffic` is the field the provider declares for `ospfv3` and not for `ospf`,
+    so this row states no field for it.
+    """
+    level = resource_mapping.protocol_row('protocol/ospf')
+    assert list(level['fields']) == [
+        'enable', 'router_id', 'allow_redist_default_route', 'reject_default_route', 'rfc1583',
+        'timers', 'global_bfd', 'graceful_restart', 'area', 'export_rules', 'auth_profile'], level['fields']
+    assert level['fields'] == {
+        'enable': 'bool', 'router_id': 'string', 'allow_redist_default_route': 'bool',
+        'reject_default_route': 'bool', 'rfc1583': 'bool', 'timers': 'object', 'global_bfd': 'object',
+        'graceful_restart': 'object', 'area': 'string_list', 'export_rules': 'string_list',
+        'auth_profile': 'string_list'}, level['fields']
+    for path, shape in (('protocol/ospf/timers', 'object'),
+                        ('protocol/ospf/global_bfd', 'object'),
+                        ('protocol/ospf/graceful_restart', 'object'),
+                        ('protocol/ospf/export_rules', 'string_list')):
+        assert resource_mapping.protocol_row(path)['shape'] == shape, path
+        # None of these levels carries a field the provider marks sensitive, so no `VALUE_VARIABLES` row.
+        assert resource_mapping.protocol_row(path)['sensitive'] == frozenset(), path
+    rows = [row.path for row in container_coverage.CONTAINER_TABLE
+            if row.path.startswith('protocol/ospf/')]
+    assert sorted(rows) == ['protocol/ospf/area', 'protocol/ospf/area/interface',
+                             'protocol/ospf/area/interface/neighbor', 'protocol/ospf/area/virtual-link',
+                             'protocol/ospf/auth-profile', 'protocol/ospf/export-rules',
+                             'protocol/ospf/interface', 'protocol/ospf/range'], rows
 
 
 def test_the_ospfv3_scalar_levels_are_rows_the_parse_reads():
@@ -521,6 +562,50 @@ def test_an_ospfv3_area_prints_the_shape_the_table_states(tmp_path):
     assert findings == [], findings
 
 
+def test_an_ospf_level_prints_the_shape_the_table_states(tmp_path):
+    """A `protocol/ospf` level prints as the rows `PROTOCOL_SHAPE` states for it (F7.9).
+
+    Field order is the table order, so the pin is the whole `protocol` field the run wrote: `enable`,
+    `router_id`, the three `bool` fields in the order the row states them, the three single-object levels as
+    one object each, then the two entry levels. `export_rules` is a `string_list`, so it prints one object per
+    entry. The fixture states every field the four new rows declare, so the run prints every one of them, and
+    the gate reads the same table, so the block the run wrote reports no finding.
+    """
+    expected = ('  protocol = {\n    ospf = {\n      enable = true\n      router_id = "10.0.0.1"\n'
+                '      allow_redist_default_route = true\n      reject_default_route = false\n'
+                '      rfc1583 = true\n      timers = {\n        lsa_interval = 120\n'
+                '        spf_calculation_delay = 20\n      }\n      global_bfd = {\n'
+                '        profile = "BFD-OSPF"\n      }\n      graceful_restart = {\n'
+                '        enable = true\n        grace_period = 120\n        helper_enable = true\n'
+                '        max_neighbor_restart_time = 200\n        strict_l_s_a_checking = true\n      }\n'
+                '      area = [\n        {\n          name = "0.0.0.0"\n          type = {\n'
+                '            stub = {\n              accept_summary = true\n              default_route = {\n'
+                '                advertise = {\n                  metric = 10\n                }\n'
+                '              }\n            }\n          }\n          range = [\n            {\n'
+                '              name = "10.0.0.0/8"\n              advertise = {}\n            }\n          ]\n'
+                '          interface = [\n            {\n              name = "ethernet1/2"\n'
+                '              enable = true\n              passive = false\n              metric = 10\n'
+                '              link_type = {\n                broadcast = {}\n              }\n'
+                '              neighbor = [\n                {\n                  name = "10.0.0.2"\n'
+                '                }\n              ]\n            }\n          ]\n          virtual_link = [\n'
+                '            {\n              name = "10.0.0.2"\n              hello_interval = 10\n'
+                '              neighbor_id = "10.0.0.3"\n              transit_area_id = "0.0.0.1"\n'
+                '            }\n          ]\n        },\n        {\n          name = "0.0.1.0"\n'
+                '          type = {\n            nssa = {\n              default_route = {\n'
+                '                disable = {}\n              }\n              nssa_ext_range = [\n'
+                '                {\n                  name = "10.20.0.0/16"\n                  suppress = {}\n'
+                '                }\n              ]\n            }\n          }\n        }\n      ]\n'
+                '      export_rules = [\n        {\n          name = "export-static"\n          metric = 10\n'
+                '          new_path_type = "internal"\n          new_tag = "0"\n        }\n      ]\n'
+                '    }\n  }\n')
+    files = _run('ospf.xml', tmp_path)
+    block = files['virtual_routers.tf']
+    assert expected in block, block
+    # The gate reads the same table, so the block the run wrote reports no finding.
+    findings = sanity_checks.check_protocol_object(files)
+    assert findings == [], findings
+
+
 def test_an_ospfv3_scalar_level_prints_the_shape_the_table_states(tmp_path):
     """A `protocol/ospfv3` level outside `area` prints as its row states it (F7.3).
 
@@ -769,6 +854,43 @@ def test_the_gate_reads_a_scalar_level_against_the_row_it_states():
     assert [f.detail for f in findings] == [
         'protocol panos_virtual_router.default_00000000 protocol/ospfv3/timers '
         'lsa_period is not a field PROTOCOL_SHAPE declares'], findings
+
+
+def test_the_gate_reads_an_ospf_level_against_the_row_it_states():
+    """F7.9: the walk reads the seven `protocol/ospf` fields the row now states, and still refuses a field the
+    row does not declare.
+
+    The seven fields are the measured provider shape, so a hand-written block that states them is not a
+    finding: three `bool` values, three single-object levels, and one entry list. `disable_transit_traffic` is
+    the field the provider declares for `ospfv3` and not for `ospf`, so the refusal the row restates is the same
+    finding the field rule reports for any name the row does not declare. The positive half read from a real
+    run is `test_an_ospf_level_prints_the_shape_the_table_states`.
+    """
+    good = ('  protocol = {\n    ospf = {\n      enable = true\n      router_id = "10.0.0.1"\n'
+            '      allow_redist_default_route = true\n      reject_default_route = false\n'
+            '      rfc1583 = true\n      timers = {\n        lsa_interval = 120\n      }\n'
+            '      global_bfd = {\n        profile = "BFD-OSPF"\n      }\n      graceful_restart = {\n'
+            '        enable = true\n        grace_period = 120\n        helper_enable = true\n'
+            '        max_neighbor_restart_time = 200\n        strict_l_s_a_checking = true\n      }\n'
+            '      export_rules = [\n        {\n          name = "export-static"\n          metric = 10\n'
+            '          new_path_type = "internal"\n          new_tag = "0"\n        }\n      ]\n    }\n  }\n')
+    assert _findings(good) == [], good
+    findings = _findings(good.replace('rfc1583 = true', 'rfc1583 = "yes"'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospf rfc1583 is not a bool value'], findings
+    findings = _findings(good.replace('reject_default_route = false', 'disable_transit_traffic = true'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospf '
+        'disable_transit_traffic is not a field PROTOCOL_SHAPE declares'], findings
+    findings = _findings(good.replace('timers = {\n        lsa_interval = 120\n      }', 'timers = 120'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospf timers is not a object value'], findings
+    # An entry inside the entry list is an entry, so the entry name is the field the row reads for it.
+    findings = _findings(good.replace('{\n          name = "export-static"\n          metric = 10',
+                                      '{\n          metric = 10'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospf/export_rules '
+        'element states no name'], findings
 
 
 def test_a_choice_body_prints_the_fields_it_declares(tmp_path):

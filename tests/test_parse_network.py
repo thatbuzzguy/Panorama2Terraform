@@ -323,6 +323,32 @@ def test_parse_ospf(make_parser):
     assert rows[3]["captured"]["link_type"] == {"point-to-point": {}}
 
 
+def test_parse_ospf_reads_the_levels_the_table_states(make_parser):
+    """`parse_ospf` reads the `protocol/ospf` levels outside `area` as their rows state them (F7.9).
+
+    A `bool` field is the shape the row states, so the read is `yes` or `no` the way `enable` is read, and a
+    `single` level is one object read by `_protocol_level` with no field name of its own. `export_rules` is a
+    `string_list`, so `parse_ospf` states its path and `_protocol_branch` fills it with the entries the export
+    holds. The entry is marked, so the property scan measures it against the router row.
+    """
+    p = _parser(make_parser, "ospf.xml")
+    ospf = p.parse_virtual_routers()[0]["protocol"]["ospf"]
+    assert (ospf["enable"], ospf["allow_redist_default_route"], ospf["reject_default_route"],
+            ospf["rfc1583"]) == (True, True, False, True), ospf
+    assert ospf["timers"] == {"lsa_interval": 120, "spf_calculation_delay": 20}, ospf["timers"]
+    assert ospf["global_bfd"] == {"profile": "BFD-OSPF"}, ospf["global_bfd"]
+    # `strict_l_s_a_checking` is the provider spelling, and `XML_NAME_EXCEPTIONS` is the one place that states
+    # the element name the export holds for it, so the same rule reads it for both OSPF levels.
+    assert ospf["graceful_restart"] == {
+        "enable": True, "grace_period": 120, "helper_enable": True,
+        "max_neighbor_restart_time": 200, "strict_l_s_a_checking": True}, ospf["graceful_restart"]
+    rule = ospf["export_rules"][0]
+    assert (rule["name"], rule["metric"], rule["new_path_type"], rule["new_tag"]) == (
+        "export-static", 10, "internal", "0"), rule
+    element = next(e for e in p.ledger.entries() if e.get("name") == "export-static")
+    assert p.ledger.mark_for(element) is not None, 'an export rule is a marked entry'
+
+
 def test_parse_ospfv3(make_parser):
     """`parse_ospfv3` builds the `protocol/ospfv3` level of one router (F7.2, F7.4).
 

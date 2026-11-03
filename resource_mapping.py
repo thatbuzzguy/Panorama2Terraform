@@ -1361,10 +1361,48 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset({'secret'}),
     },
+    # F7.9: the seven fields measured 2026-11-03 are the fields `parse_ospf` reads, so the row states them.
+    # Field order is the print order: the two fields the row already stated keep their order, the three
+    # `bool` fields follow in the order the schema names them, then the single-object levels in the order
+    # the `ospfv3` row states them, then the two entry levels in the same order. None of these fields is
+    # `sensitive`, so no `VALUE_VARIABLES` row is needed for them.
     'protocol/ospf': {
         'shape': 'object',
         'fields': {'enable': 'bool', 'router_id': 'string',
-                   'area': 'string_list', 'auth_profile': 'string_list'},
+                   'allow_redist_default_route': 'bool', 'reject_default_route': 'bool',
+                   'rfc1583': 'bool', 'timers': 'object', 'global_bfd': 'object',
+                   'graceful_restart': 'object', 'area': 'string_list',
+                   'export_rules': 'string_list', 'auth_profile': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # A single-object level holds no entry, so the parse reads it as one object and the container table
+    # names no row for it. `export_rules` is an entry level, so `parse_ospf` fills it and the property scan
+    # measures its entries against the router row.
+    'protocol/ospf/timers': {
+        'shape': 'object',
+        'fields': {'lsa_interval': 'number', 'spf_calculation_delay': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/global_bfd': {
+        'shape': 'object',
+        'fields': {'profile': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # `strict_l_s_a_checking` is the provider spelling, and `XML_NAME_EXCEPTIONS` is the one place that
+    # states the element name the export holds for it.
+    'protocol/ospf/graceful_restart': {
+        'shape': 'object',
+        'fields': {'enable': 'bool', 'grace_period': 'number', 'helper_enable': 'bool',
+                   'max_neighbor_restart_time': 'number', 'strict_l_s_a_checking': 'bool'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/export_rules': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'metric': 'number', 'new_path_type': 'string', 'new_tag': 'string'},
         'selects': {},
         'sensitive': frozenset(),
     },
