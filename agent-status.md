@@ -2,88 +2,72 @@
 
 ## Current position
 
-F7.8 is complete and committed on `development`. `FILTER_SHAPE` states the shape of the six
-routing-profile filter
-containers, which sit outside the `protocol` object, and every one of them is an `emitted`
-`CONTAINER_TABLE` row
-for `parse_filter_containers`: the pinned provider declares a resource for all six. The parse read,
-the emitter,
-the gate rule `filter_blocks` and the property scan all read the same table through
-`resource_mapping.FILTER_TABLE`.
-The suite is 1423 tests, all green (1346 at the start of this slice), and `ruff check .` is clean.
-Two golden
-cases moved, and both came from a real run: `tests/golden/filter_containers` is the new case, and
-`tests/golden/kitchen_sink` gained `filters.tf` for the filter entry `ACL-Kitchen`, so the scan scope,
-the
-per-entry report and the `.tf` goldens moved together. The gate reports `PASS (0 FAIL, 0 WARN)` on
-the filter
-fixture, and `terraform validate` accepts the blocks the run writes for it.
+F7.9 is complete and committed on `development` (`afcaefb`). `PROTOCOL_SHAPE` states the four
+`protocol/ospf` levels outside `area` (`timers`, `global_bfd`, `graceful_restart`, `export_rules`) and the
+seven fields the `ospf` row did not state, which the pinned provider declares (2026-11-03, provider 2.0.14,
+Terraform 1.16.2): `rfc1583`, `allow_redist_default_route`, and `reject_default_route` as `bool` fields, and
+the three single-object levels plus the one entry level. `parse_ospf` reads them through the table: the three
+`bool` fields and the three single-object levels are row fields read by `_protocol_level`, so the method
+states one path, `protocol/ospf/export_rules`, and `_protocol_branch` fills it.
 
-The next feature is F7.9: the `ospf` fields `PROTOCOL_SHAPE` does not state (`to-do.md`).
+The suite is 1428 tests, all green (1423 at the start of this slice), and `ruff check .` is clean.
 
-`acceptance.md` holds this slice's criteria and must be overwritten for the next one.
+No golden moved, because no golden case states a value for one of the new fields: the bytes a run writes for
+the four golden cases are unchanged, and a golden is regenerated only from a real run. A real run on
+`tests/fixtures/ospf.xml` reports `PASS (0 FAIL, 0 WARN)` and `terraform validate` accepts the block it
+writes. The property scan measures the `ospf` export rule entry through the new container row and reports no
+finding for the fixture.
 
-### Decision 1: a filter container is its own resource, so all six are emitted
+The next feature is F7.10: the fields the rows do not state (`to-do.md`).
 
-Measured 2026-11-03 with the pinned provider: the provider declares a resource for each of the six
-filter containers, so no container is a `report` row and each `CONTAINER_TABLE` row is `emitted` with the
-provider type in its note. `FILTER_TYPES` is that same fact read the other way (path to type), so the emitter
-and the gate do not decide a type by themselves, and the pin compares the map with the row notes.
+`acceptance.md` holds F7.9's criteria and must be overwritten for the next one.
 
-### Decision 2: `selects` is empty, because the schema states a filter choice as optional fields
+### Decision 1: every one of the seven fields is a row field, so none is refused
 
-No filter level is declared as required-exactly-one, so `selects` states nothing for any row. Three levels are
-the ones `terraform validate` refuses to hold more than one attribute, so the fixture answers each with one
-element: `access-list/type/ipv4/ipv4_entries/source_address` (`address`),
-`prefix-list/type/ipv4/ipv4_entries/prefix` (`entry`), and `redist-entry/bgp` (`ospf`). The table states no
-word for that choice, because the rule is the provider's and not the table's, and the pin that a run reports no
-finding is the pin that says the fixture is written the way the provider accepts.
+The pinned provider declares all seven, so all seven join the `protocol/ospf` row. `rfc1583`,
+`allow_redist_default_route` and `reject_default_route` are leaf values of type `bool`, not blocks: the
+provider declares no attributes under them, so the row states `bool` and the field reader reads `yes` or `no`
+the way it already reads `enable`. No `ospf` field is marked sensitive, so the row states an empty `sensitive`
+set and no `VALUE_VARIABLES` row is needed.
 
-### Decision 3: the row scope stops at the `match` and `set` rows
+### Decision 2: field order is the print order
 
-The redistribution entry mirrors every level the provider declares, except that its `match` and `set` rows state
-leaf fields only, so no row stands under them. That is the scope decision this slice states, and it is the
-reason the walk does not enter a `match`: a field inside one is a finding. The table is 121 rows and 397 fields,
-73 of them under the redistribution entry, 17 of those stated as `string_list`, and 34 `match` or `set` rows.
-The six levels inside a `match` or `set` row are recorded in `backlog.md`.
+The row's field order is the order the block prints. The two fields the row already stated keep their order,
+the three `bool` fields follow in the order the schema names them, then the three single-object levels in the
+order the `ospfv3` row states them, then the entry levels in the same order. A run that states no value for a
+new field prints the same bytes as before, so the order rule moved no golden.
 
-### Decision 4: an entry-list field is the singular container element, so the spelling map is path-keyed
+### Decision 3: a single-object level gains no container row
 
-`FILTER_XML_NAME_EXCEPTIONS` is keyed by the container path, because one idea spells two ways in the input:
-`extended_community_regexes` is `ec-regex` inside a community-list entry, and `extended_communities` is
-`extended-community` inside a route-map match. The map holds 15 pairs, and `ipv4_entries` and `ipv6_entries`
-spell the same way in two containers, so 13 distinct spellings, and none is a spelling the `-` rule produces.
-Five pairs are in the fixture; the other ten are the spellings the pango source measures, because one entry
-states one entry-list spelling only, which is also why the fixture cannot state `ec-regex` beside
-`regular-entry`. `XML_NAME_EXCEPTIONS` stays the protocol table's own map.
+The three single-object levels hold no entry, so the property scan measures nothing for them and the container
+table names no row for them: `PROTOCOL_SHAPE` grounds those rows. `export_rules` is an entry level, so the
+table gained `protocol/ospf/export-rules` as an `emitted` sub-shape row naming `panos_virtual_router`, and the
+scan measures the entry the fixture states against the router row. The properties the row for
+`panos_virtual_router` declares did not move: the `ospf` export rule reads the three names the `ospfv3` and
+`rip` export rules already read.
 
-### Decision 5: the readers take the table as an argument, so one reader serves both tables
+### Decision 4: the parse states one path
 
-`_protocol_level`, `_protocol_body`, `_protocol_field`, `_protocol_choice`, `_protocol_presence_choice`,
-`_protocol_presence_fields`, `_protocol_field_name`, `_protocol_xml_name` and `_protocol_fields` take an
-optional `table` that defaults to `PROTOCOL_TABLE`, so `FILTER_TABLE` reaches them through the same code.
-`_protocol_xml_name` now takes the path as well, because the exception map is keyed by the container path. The
-gate helpers are `_shape_level_findings` and `_shape_field_findings`, and `ShapeTable` gained `word` and `rule`
-so one reader states neither table name: the finding wording is the table's word. `SHAPE_TO_SCHEMA` is the one
-shape-word to schema-word definition, and both shape pins read it.
+`parse_ospf` states `protocol/ospf/export_rules` only. The three single-object levels and the three `bool`
+fields are read through the row fields, so the method names no field. The registration in
+`tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py` was already there, so
+this slice changed no helper.
 
 ### Pins that changed
 
-- `tests/test_filter_containers.py` is the new file: the table against the live schema, the row scope, the six
-  container rows, the six matrix rows, the parse constants, the parse marks, the emitter print, the choice
-  levels, the gate reading a real run, one finding per rule, the path-keyed spellings, and the golden case.
-- `tests/test_protocol_object.py` reads both tables through `FILTER_TABLE` and `PROTOCOL_TABLE`, the renamed
-  gate helpers, `ShapeTable.field_name` and `ShapeTable.xml_name`, `parse_filter_containers` and
-  `generate_filter_containers`, and `allowed` gained `entry` for the input spelling `entry`.
-- `tests/test_coverage_matrix.py` grounds the `generate_filter_containers` emitter against `FILTER_SHAPE`.
-- `tests/test_data_file_gate.py` reads `filter_blocks` in `CHECK_ORDER`.
-- `tests/test_golden_files.py` gained the `filter_containers` case.
-- `tests/test_terraform_validate.py` validates each unit directory the manifest names for the filter fixture,
-  because the run writes no `.tf` file at the codebase root.
-- `tests/test_entry_coverage.py::_parse_every` and
-  `tests/test_multi_vsys_location.py::test_every_parse_method_records_the_five_scope_facts` reach
-  `parse_filter_containers` without a change, because it takes no argument and marks every entry it reads.
-- The suite gained 77 tests (1423 green).
+- `tests/test_protocol_object.py` gained `test_the_ospf_scalar_levels_are_rows_the_parse_reads` (the row, the
+  field order, the four rows, and the container rows),
+  `test_an_ospf_level_prints_the_shape_the_table_states` (the whole `protocol` field from a real run, and the
+  gate reading it), and `test_the_gate_reads_an_ospf_level_against_the_row_it_states` (the gate accepts the
+  seven fields and refuses `disable_transit_traffic`, which the provider declares for `ospfv3` and not for
+  `ospf`). The spelling pin now reads `protocol/ospf/export_rules` as well as the `ospfv3` path.
+- `tests/test_property_coverage.py` gained
+  `test_the_scan_measures_an_ospf_export_rule_and_not_a_scalar_level`.
+- `tests/test_parse_network.py` gained `test_parse_ospf_reads_the_levels_the_table_states`.
+- `tests/fixtures/ospf.xml` states the three `bool` fields and the four new levels, with one entry that states
+  every field its row declares.
+- `docs/ARCHITECTURE.md` §4.9 records the F7.9 levels and the scan scope.
+- The suite gained 5 tests (1428 green).
 
 ## Rules to keep when writing documents
 
@@ -162,7 +146,8 @@ output directory, so
   so the readers and the gate helpers take the table as an argument and state no table name in their finding
   wording. `_parse_router` builds the `protocol` dict from the fields the `protocol` row states, and
   `parse_filter_containers` builds each entry dict from the fields its own row states, so the level names are the
-  table's names in both. A level that holds no entry has no container row, so the property scan measures nothing
+  table's names in both. Field order is the table order, so the order a row states is the order the block
+  prints, and a row change that moves the order moves the goldens. A level that holds no entry has no container row, so the property scan measures nothing
   for it and the matrix row stays grounded by the table. An entry inside an entry is not in the scan scope either,
   because `covering_row` cannot match a section path that holds an entry segment, so the table grounds that level.
   `_protocol_areas` is the area rule the two OSPF levels share, `_protocol_branch` walks the

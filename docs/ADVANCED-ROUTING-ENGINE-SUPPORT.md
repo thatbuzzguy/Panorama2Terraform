@@ -65,17 +65,17 @@ export states the default route destination as `default`.
 
 ## Not parsed
 
-These ARE features are not read: routing profiles (authentication, timers,
-dampening, filtering), access lists, prefix lists, AS path lists, community
-lists, route maps, MP-BGP address families, BFD, and multicast. Configure them
+The parser reads only the levels `resource_mapping.PROTOCOL_SHAPE` and `resource_mapping.FILTER_SHAPE`
+state. The ARE features outside those two tables are not read: dampening, MP-BGP address families,
+multicast, the two redistribution profile lists, and the routing fields the rows do not state (the `bgp`
+fields outside the levels the row states, and the `ospfv3` fields the row does not state). Configure them
 on the target after migration.
 
 BGP, OSPF and their redistribution rules print as the object attribute `protocol` on
-`panos_virtual_router` ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9). The parser reads only the levels
-`resource_mapping.PROTOCOL_SHAPE` states, so the features listed above are not read, and the report names
-only the routing entries the object cannot express (§4.9 rule 4): a peer no peer group names it, an
-interface outside an area, a choice value the mapping does not state, and a `range` entry that states
-neither choice.
+`panos_virtual_router` ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9), and a filter container prints as its own
+block (§4.10). The report names only the routing entries the object cannot express (§4.9 rule 4): a peer no
+peer group names it, an interface outside an area, a choice value the mapping does not state, and a `range`
+entry that states neither choice.
 
 ## References
 

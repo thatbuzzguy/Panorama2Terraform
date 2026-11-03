@@ -1,11 +1,11 @@
 # To Do
 
-F7.8 is complete and committed: `resource_mapping.FILTER_SHAPE` states the shape of the six routing-profile
-filter containers, which sit outside the `protocol` object, and the measured provider schema gives a resource
-for all six, so every `CONTAINER_TABLE` row is `emitted` with the provider type in its note.
-`parse_filter_containers` reads the six paths through `FILTER_TABLE`, `generate_filter_containers` writes one
-block per entry in `filters.tf`, and the gate rule `filter_blocks` reads the same table. The next feature is
-the rest of Epic 7: the routing levels `PROTOCOL_SHAPE` does not state.
+F7.9 is complete and committed: `PROTOCOL_SHAPE` states the four `protocol/ospf` levels outside `area`
+(`timers`, `global_bfd`, `graceful_restart`, `export_rules`) and the three `bool` fields the row did not
+state (`rfc1583`, `allow_redist_default_route`, `reject_default_route`), `parse_ospf` reads them through the
+table, the gate accepts them in a hand-written file, and `CONTAINER_TABLE` gained the export-rule row, so the
+property scan measures an `ospf` export rule entry. The next feature is the rest of Epic 7: the fields the
+rows do not state.
 
 ## Next feature, in order (Epic 7 slices)
 
@@ -16,9 +16,13 @@ method for every router (`tests/test_entry_coverage.py::_parse_every`,
 word, so every new row is pinned against the live provider schema. A row that states a level the provider
 does not declare is a report decision, not a table row.
 
-1. **F7.9 — the `ospf` fields the row does not state**: `timers`, `global_bfd`, `graceful_restart`,
-   `export_rules`, `rfc1583`, `allow_redist_default_route`, `reject_default_route`. The row gains the fields
-   `parse_ospf` reads, and the gate then accepts them in a hand-written file.
+1. **F7.10 — the fields the rows do not state**: `ospfv3` (`allow_redist_default_route`,
+   `disable_transit_traffic`, `reject_default_route`), and `bgp` (`allow_redist_default_route`,
+   `dampening_profile`, `ecmp_multi_as`, `enforce_first_as`, `global_bfd`, `install_route`,
+   `reject_default_route`, and the `routing_options` level). Measured 2026-11-03 against provider 2.0.14:
+   each is a `bool` leaf, `dampening_profile` is a `list`, and `routing_options` is a `single` level with
+   7 attributes. None is marked sensitive, so no `VALUE_VARIABLES` row is needed. The shapes are recorded in
+   `backlog.md`.
 
 ## Rules the write path keeps
 
