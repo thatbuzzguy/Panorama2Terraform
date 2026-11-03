@@ -2,59 +2,80 @@
 
 ## Current position
 
-F7.5 is complete and committed on `development`. `resource_mapping.PROTOCOL_SHAPE` states the `rip` levels the
-pinned provider declares, `parse_rip` reads them through the table, `_parse_router` builds the `protocol` dict
-from the fields the `protocol` row states, and the emitter, the gate rule `protocol_object` and the property scan
-read the same rows. The suite is 1330 tests, all green (1322 at the start of this slice), and `ruff check .` is
-clean. No golden set moved, because no golden fixture states `rip`.
+F7.6 is complete and committed on `development`. `resource_mapping.PROTOCOL_SHAPE` states the `policy` level
+the pinned provider declares on `protocol.bgp` and the 78 rows of its subtree, `parse_bgp` reads the four
+levels that hold entries through `_protocol_branch`, and the emitter, the gate rule `protocol_object` and the
+property scan read the same rows. The suite is 1336 tests, all green (1330 at the start of this slice), and
+`ruff check .` is clean. No golden set moved, because no golden fixture states a BGP policy.
+`terraform validate` accepts the block the run writes for `tests/fixtures/bgp_policy.xml`.
 
-The next feature is F7.6: the BGP `policy` level (`to-do.md`).
+The next feature is F7.7: the auth profile bodies (`to-do.md`).
 
 `acceptance.md` holds this slice's criteria and must be overwritten for the next one.
 
-### Decision 1: the `rip` levels are rows, and `rip` declares no area
+### Decision 1: `member_list` is the word for a field whose members are values
 
-Measured 2026-11-02 against the pinned provider 2.0.14, `protocol` declares `rip`, so the `protocol` row gained
-the `rip` field and the subtree gained 11 rows. `rip` declares no `router_id`, no `area` and no `neighbor`, so it
-has no area row and no choice row outside `default_route`. `mode` is a string, so the interfaces row states no
-`selects` for it. The two `auth_profile` rows state the `sensitive` decision only, the same rule as the `bgp` and
-`ospf` rows, so `parse_rip` reads no value for them and the fixture states no auth profile entry.
+The provider declares 27 fields as `['list', 'string']` (`from_peer`, `nexthop`, `append`, `overwrite`,
+`used_by`). `string_list` already covers a `[` value, so the table needed a word that says the level holds no
+entry: `SHAPE_WORDS` gained `member_list`, and `WORD_TO_SCHEMA` reads it as the leaf type `list`.
+`sanity_checks.SHAPE_READS_AS` is the one place that states which word the field reader reads each
+specialization as (`one_of` and `block` as `object`, `member_list` as `string_list`), and
+`sanity_checks.SHAPE_LEVELS` states which words name a level the gate walk enters, so rule 4 never reaches a
+member list.
 
-### Decision 2: an entry can hold its own choice
+### Decision 2: nine policy levels hold exactly one attribute
 
-`_protocol_body` takes the element that holds the shapes a level dict cannot hold. For an area type that element
-is the chosen flag element; for a `rip` interface entry it is the entry itself, so the same rule fills the
-`one_of` field the row states for the entry. `terraform validate` (measured 2026-11-02) accepts an interface
-entry with no `default_route` key, so the choice level is not required and such an entry prints nothing for it.
-The report case is a choice element that states none of the alternatives, which is the same shape as a `range`
-entry, so no new tolerance was needed in `_protocol_presence_choice`.
+Measured 2026-11-02 with `terraform validate` (Terraform 1.16.2, provider 2.0.14): the provider accepts a
+policy level that states one attribute and refuses one that states two, so
+`aggregate_route_attributes/{as_path,community,extended_community}` and
+`{export,import}/rules/action/allow/update/{as_path,community,extended_community}` are `one_of` rows with the
+identity mapping, and the levels that hold them state those fields as `one_of`. `update` and `match` accept
+more than one attribute, so they stayed `object` rows. The import `update` `as_path` level declares only `none`
+and `remove`, so its mapping states only those two keys. Mapping keys are the spellings the export states, so
+`remove-regex` and `remove-and-prepend` are keys. `_protocol_choice` gained the branch that reads an
+alternative which is a field the row states, and the emitter and the gate each gained the matching branch.
 
-### Decision 3: the matrix row gained the four properties an interface entry measures
+### Decision 3: an entry inside an entry belongs to the level the field names
 
-`COVERAGE_MATRIX` row `panos_virtual_router` gained `authentication`, `bfd`, `default_route` and `mode`, the keys
-a run reads from a `rip` interface entry. `bfd` is measured as the field of the entry, not as the level inside
-it, because the level dict the parse builds is not a recorded object. `timers` and `global_bfd` are
-single-object levels, so they hold no entry and nothing is measured for them. `enable` and `metric` were already
-in the row.
+`_protocol_body` now also fills the entries under an `object` field, because a level dict is not an entry, and
+it reads an entry as a direct child rather than any descendant. The fixture states an `address_prefix` entry
+inside a `match` level, so the pin measures that the entry belongs to the `match` level and not to the entry
+above it. `parse_address_objects` reads only the level its own row states: it asks `entry_coverage` for the
+row that covers the container, so a policy address entry is read by `parse_bgp`. The `is_section` form was not
+used, because for a file input the result is the envelope and the entry under it is not a scope entry.
+
+### Decision 4: the matrix row gained the properties a policy entry measures
+
+`COVERAGE_MATRIX` row `panos_virtual_router` gained `action`, `advertise_filters`,
+`aggregate_route_attributes`, `as_set`, `match`, `non_exist_filters`, `prefix`, `summary`,
+`suppress_filters` and `used_by`. `enable` was already in the row, and `name` is never a property. A policy
+level inside a policy entry is a property level inside a property level, so the scan measures nothing for it
+and `PROTOCOL_SHAPE` grounds it. The four container rows use the input spelling, so
+`conditional-advertisement` is the path the scan reads.
 
 ### Pins that changed
 
-- `tests/test_protocol_object.py`: `test_the_shape_table_is_the_measured_provider_shape` no longer names `rip` as
-  outside the table, and `test_the_rule_reports_an_undeclared_field_and_a_wrong_shape` uses `redist_profile` for
-  a level the table does not state. The new pins are `test_the_rip_levels_are_rows_the_parse_reads`,
-  `test_an_rip_level_prints_the_shape_the_table_states`,
-  `test_the_gate_reads_a_choice_inside_an_entry_level`, and `test_a_rip_auth_profile_field_prints_the_reference_only`.
-  `test_the_table_is_the_only_shape_owner` reads `parse_rip` and `_parse_router` as owners.
-- `tests/test_parse_network.py::test_parse_rip_reads_the_levels_the_table_states` pins the parse read and the
-  report row for an entry that states a choice with no alternative, and
-  `::test_parse_rip_absent` pins a router with no `rip` element.
-- `tests/test_property_coverage.py::test_the_scan_measures_a_rip_entry_and_not_a_level_inside_it` pins the
+- `tests/test_protocol_object.py`: `WORD_TO_SCHEMA` gained `member_list`;
+  `test_the_shape_table_is_the_measured_provider_shape` allows a `one_of` alternative to be the field the row
+  states; `test_the_one_of_mapping_is_the_decision_the_report_prints` covers the nine value-choice levels and
+  the `action` identity mapping; `test_a_one_of_level_prints_one_key` and
+  `test_value_shape_is_the_reader_inverse_for_every_shape_word` read `SHAPE_READS_AS`; the new pins are
+  `test_member_list_is_the_word_for_a_field_whose_members_are_values`,
+  `test_the_gate_reads_a_member_list_as_values_and_not_as_entries`, and
+  `test_a_policy_block_prints_the_shape_the_table_states`, which pins the block a real run writes.
+  `test_the_table_is_the_only_shape_owner` reads `_protocol_branch` as an owner.
+- `tests/test_parse_network.py::test_parse_bgp_reads_the_policy_levels_the_table_states` pins the parse read,
+  the value alternative, the entry inside an entry, and the report row for a choice element that states no
+  alternative.
+- `tests/test_property_coverage.py::test_the_scan_measures_a_policy_entry_and_not_a_level_inside_it` pins the
   measurement scope.
-- `tests/fixtures/rip.xml` is the new device-level fixture: it states every field the new rows declare, and one
-  interface entry the report names.
-- `parse_rip` is registered in the two test helpers that call a parse method for every router
-  (`tests/test_entry_coverage.py::_parse_every`, `tests/test_multi_vsys_location.py`).
-- The suite gained eight tests.
+- `tests/test_container_coverage.py::_segments_of_method` reads each path segment through
+  `_protocol_xml_name`, so the four new rows match `parse_bgp`.
+- `tests/fixtures/bgp_policy.xml` is the new device-level fixture: it states every field the four entry rows
+  declare, plus one export rule the report names. Each choice level states exactly one alternative.
+- No new parse method, so no test helper changed: the policy read lives inside `parse_bgp`, which the two
+  helpers already call.
+- The suite gained six tests.
 
 ## Rules to keep when writing documents
 
@@ -111,12 +132,19 @@ in the row.
   too. A level that holds no entry has no container row, so the property scan measures nothing for it and the
   matrix row stays grounded by the table. An entry inside an entry is not in the scan scope either, because
   `covering_row` cannot match a section path that holds an entry segment, so the table grounds that level.
-  `_protocol_areas` is the area rule the two OSPF levels share, `_protocol_choice` takes the element that holds
-  the chosen body, `_protocol_entries` fills a `string_list` level, and `_protocol_body` fills the two shapes a
-  level dict cannot hold: the choice the export states by presence, and the entries inside the level. An entry can
-  hold its own choice, so `_protocol_body` takes the entry as the element that holds it. A presence choice states
-  exactly one alternative, and the choice level is not required, so a level that states no choice element prints
-  nothing for it while an element that states none is a report row.
+  `_protocol_areas` is the area rule the two OSPF levels share, `_protocol_branch` walks the segments between a
+  level dict and an entry level, `_protocol_entries` fills a `string_list` level, and `_protocol_body` fills the
+  three shapes a level dict cannot hold: the choice the export states by presence, the entries inside the level,
+  and the entries inside an `object` field. An entry can hold its own choice, so `_protocol_body` takes the entry
+  as the element that holds it, and it reads an entry as a direct child, so an entry inside an entry belongs to
+  the level the field names. A presence choice states exactly one alternative, and the choice level is not
+  required, so a level that states no choice element prints nothing for it while an element that states none is a
+  report row. A choice level can state its alternatives as values, in which case `_protocol_choice` reads the
+  value from the element the choice lives under and the print writes it as the reader read it. A `member_list`
+  field is read by `_protocol_level`, because its members are values, so no level row stands under it and the
+  walk never enters it: `sanity_checks.SHAPE_READS_AS` states which word the reader reads each specialization as,
+  and `SHAPE_LEVELS` states which words name a level the walk enters. A parse method that reads a container
+  reads only the level its own row states, which `entry_coverage.covering_row` decides.
 - The parse method that takes the router element is named in the test helpers that call it for each router:
   `tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py`. A new level method
   must be added there, or the corpus checks run no method for it.
