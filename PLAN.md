@@ -81,9 +81,13 @@ F7.6 landed: `PROTOCOL_SHAPE` states the `policy` level the pinned provider decl
 78 rows of its subtree, `parse_bgp` reads the four levels that hold entries, and a `member_list` field prints as
 the values its element holds. Nine policy levels accept one attribute, so they are `one_of` rows.
 
-Open for Epic 7: the levels `PROTOCOL_SHAPE` does not state, which no parse method reads — the auth profile
-bodies, and the filter containers (route maps, prefix lists, community lists, access lists). They are in
-`backlog.md`.
+F7.7 landed: `PROTOCOL_SHAPE` states the four `auth_profile` levels the pinned provider declares, the four level
+methods read them through `_protocol_branch`, and a field the provider marks `sensitive` prints as the variable
+reference the entry names. One `ospfv3` entry states `ah` or `esp`, not both, which `terraform validate` reports.
+
+Open for Epic 7: the levels `PROTOCOL_SHAPE` does not state, which no parse method reads — the `ospf` fields
+outside `area` and `auth_profile`, and the filter containers (route maps, prefix lists, community lists, access
+lists). They are in `backlog.md`.
 
 ## Housekeeping — repository layout (open)
 

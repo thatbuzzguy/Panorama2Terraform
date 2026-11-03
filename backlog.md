@@ -398,10 +398,15 @@ Completed work is not recorded here; the git history and the owner document hold
   property scan measures the routing levels through that row (`PROTOCOL_SHAPE`), and a level the table does
   not state is not read.
 - Routing levels `PROTOCOL_SHAPE` does not state are not read, so they reach no output and no report row: the
-  filter containers (route maps, prefix lists, community lists, access lists). The `auth_profile` rows exist
-  for the `sensitive` decision only, because no parse method reads an auth profile entry, so a run prints no
-  value for one. A level becomes printable when a parse method reads it and the table has a row for it, because
-  the emitter, the gate and the report all read that table. Epic 7 keeps the list.
+  filter containers (route maps, prefix lists, community lists, access lists), and the `ospf` fields the row
+  does not state (`timers`, `global_bfd`, `graceful_restart`, `export_rules`, `rfc1583`,
+  `allow_redist_default_route`, `reject_default_route`). A level becomes printable when a parse method reads it
+  and the table has a row for it, because the emitter, the gate and the report all read that table. Epic 7
+  keeps the list.
+- Open: the provider accepts `ah` or `esp` for one `ospfv3` auth profile entry, which `terraform validate`
+  reports, and the table has no word for a choice between two levels, so the gate rule does not refuse a
+  hand-written file that states both in one entry. `tests/fixtures/auth_profile.xml` states the two levels in
+  two entries.
 - Read-through is opt-in per declared scope (F5.5). A plain string already applies, because
   Panorama resolves an object name through its own inheritance at commit time, and one `data` block
   is one plan-time API call. A `data` block for a name that does not exist fails at plan, not at
@@ -441,6 +446,11 @@ Completed work is not recorded here; the git history and the owner document hold
   external dynamic list credentials, and the VPN pre-shared key. One table decides the shape, so the
   emitter, the gate and the `.tfvars` writer read `resource_mapping.VALUE_VARIABLES`; the literal half
   is held by `tests/test_robustness.py` (no generated file may contain the secret).
+- Decided 2026-11-03 (F7.7): the rule is about the print, not about what the parse can carry. A parse
+  method can read a `sensitive` value inside an entry and still print the reference, so the value is held
+  only to decide the name, and the name is the §5 name of the entry that holds the field, because a field
+  cannot name itself. The pin that no generated file holds a parsed value is
+  `tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`.
 - A FIPS-mode export carries no private key and no recoverable password hash, so the value cannot come
   from the source. The tool names the variable; the operator or the platform supplies the value. The
   placeholder check should read the same table that names the sensitive fields, so one table decides

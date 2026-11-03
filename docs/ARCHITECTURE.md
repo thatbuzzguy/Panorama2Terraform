@@ -1199,7 +1199,11 @@ table: `policy` is a `single` level with four children, and the four levels belo
 four the container table names, so `parse_bgp` fills them through `_protocol_branch`, which walks the path's
 segments and states no field name of its own. A level inside an entry is filled by `_protocol_body`, so the code
 states no path for it and the container table states no row for it. A level the table states no row for is
-read by no method, so it prints nothing and the gate refuses it in a hand-written file.
+read by no method, so it prints nothing and the gate refuses it in a hand-written file. F7.7 put the four
+`auth_profile` levels into the table, so the four methods read them through `_protocol_branch`, and the levels
+inside a profile entry (`md5`, `ah`, `esp`, `esp/authentication`, `esp/encryption`) are filled by
+`_protocol_body` through the field the profile row states. One entry states `ah` or `esp`, not both, which
+`terraform validate` reports, so the table needs no word for it and the fixture uses two entries.
 
 1. **`protocol` prints as one field of the block**: `protocol = { ... }`. `terraform validate` accepts the
    value and refuses the block shape, so the gate rule reports a `protocol` the field reader cannot read as
@@ -1250,11 +1254,19 @@ read by no method, so it prints nothing and the gate refuses it in a hand-writte
    `tests/test_parse_network.py::test_parse_rip` and
    `tests/test_protocol_object.py::test_the_gate_reads_a_choice_inside_an_entry_level`.
 8. **A sensitive field prints as the variable reference**, through `VALUE_VARIABLES`
-   (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2), and the run holds no value for it, so no generated file states
-   one. `SHAPE_WORDS` is the word list the table uses, and `sanity_checks.value_shape` is its reader inverse.
+   (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2), and no generated file states the value. F7.7: the run can
+   read a value for such a field inside an entry, and the name it prints is the §5 name of the entry
+   that holds the field, because a value cannot name itself. The entry names itself when the field is
+   its own, and a level inside an entry names the entry that holds it. The run writes no `.tfvars` line
+   and no site row for the name, and `variables.tf` declares it with `sensitive = true`.
+   `SHAPE_WORDS` is the word list the table uses, and `sanity_checks.value_shape` is its reader inverse.
    A specialization is read back as its family word through `sanity_checks.SHAPE_READS_AS`, and
-   `sanity_checks.SHAPE_LEVELS` states which words name a level the walk enters, so a member list is never
-   walked. Pinned by `tests/test_protocol_object.py::test_value_shape_is_the_reader_inverse_for_every_shape_word`.
+   `sanity_checks.SHAPE_LEVELS` states which words name a level the walk enters, so a member list is
+   never walked. Pinned by
+   `tests/test_protocol_object.py::test_value_shape_is_the_reader_inverse_for_every_shape_word`,
+   `tests/test_protocol_object.py::test_an_auth_profile_prints_the_reference_the_entry_names`,
+   `tests/test_variables.py::test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_only`
+   and `tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`.
 
 9. **A `member_list` field is a `[` value whose members are values.** The provider declares 27 fields as
    `['list', 'string']` (`from_peer`, `nexthop`, `append`, `overwrite`, `used_by`), which `string_list` already
@@ -1280,8 +1292,10 @@ The container rows for the levels this converter prints are `emitted` with the n
 router row. A level that holds no entry has no container row, so the scan measures nothing for it and the matrix
 row is grounded by the table instead. The same holds for an entry the parse reaches through a field the parent
 row names, such as a `neighbor` entry inside an interface entry: the section path holds an entry segment the row
-path cannot match, so `PROTOCOL_SHAPE` grounds that level. Pinned by `tests/test_container_coverage.py`,
-`tests/test_coverage_matrix.py` and `tests/test_property_coverage.py`.
+path cannot match, so `PROTOCOL_SHAPE` grounds that level. F7.7: the four `auth_profile` levels are
+container rows, so the scan measures a profile entry against the router row, and an `md5` entry inside a
+profile entry is not in the scan scope, so `key` stays grounded by the table. Pinned by
+`tests/test_container_coverage.py`, `tests/test_coverage_matrix.py` and `tests/test_property_coverage.py`.
 
 ## 5. Naming rules
 
