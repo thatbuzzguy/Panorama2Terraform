@@ -782,6 +782,14 @@ class PanoramaParser:
             if not name:
                 self.mark_skipped(addr, "entry has no name attribute")
                 continue
+            # F7.6: the policy states an `address` level that holds entries, so the row that covers that container
+            # is the policy row and not the address-object row. The table is the one place that states which method
+            # reads a level, so the address rule reads only the level its own row states, and a policy address
+            # entry is read by `parse_bgp`.
+            row = entry_coverage.covering_row(
+                container_coverage.section_path(self.parent_map.get(addr), self.parent_map, self.source))
+            if row is not None and row.method != 'parse_address_objects':
+                continue
 
             # A reference pointer has no content: skip it.
             if self._is_reference_pointer(addr):
@@ -2065,7 +2073,8 @@ class PanoramaParser:
             choice_path = 'protocol/bgp/peer_group/type'
             field = self._protocol_field_name(choice_path)
             choice, detail = self._protocol_choice(choice_path,
-                                                   self._get_text(group, self._protocol_xml_name(field)), group)
+                                                   self._get_text(group, self._protocol_xml_name(field)),
+                                                   group, group)
             captured[field] = choice
             entry = self.mark(group, captured, detail, destination='report' if detail else None)
             if detail:
@@ -2097,6 +2106,20 @@ class PanoramaParser:
             if rule.get('name'):
                 level[self._protocol_field_name(redist_path)].append(
                     self.mark(rule, self._protocol_level(rule, redist_path)))
+        # F7.6: the `policy` level and its subtree are read through the table. The four levels inside it that
+        # hold entries are the levels the container table names, so this method states their paths; a level
+        # inside an entry is filled by `_protocol_body`, which reaches it through the table and so states no
+        # path, and the container table states no row for it.
+        policy_path = 'protocol/bgp/policy'
+        policy = router.find(policy_path)
+        if policy is not None:
+            policy_level = self._protocol_level(policy, policy_path)
+            for path in ('protocol/bgp/policy/aggregation/address',
+                         'protocol/bgp/policy/conditional_advertisement/policy',
+                         'protocol/bgp/policy/export/rules',
+                         'protocol/bgp/policy/import/rules'):
+                self._protocol_branch(policy_path, policy_level, policy, path)
+            level[self._protocol_field_name(policy_path)] = policy_level
         # The auth profile rows state the shape for a level this parse method does not read, so the run
         # prints no value for it and the gate rule still refuses a literal secret there (`backlog.md`).
         return level
@@ -2211,7 +2234,7 @@ class PanoramaParser:
             type_element = area.find(self._protocol_xml_name(field))
             body = type_element[0] if type_element is not None and len(type_element) else None
             value = body.tag if body is not None else ''
-            choice, detail = self._protocol_choice(type_path, value, body)
+            choice, detail = self._protocol_choice(type_path, value, type_element, body)
             captured[field] = choice
             key = resource_mapping.protocol_row(type_path)['selects'].get(value, '')
             if key:
@@ -2234,6 +2257,26 @@ class PanoramaParser:
                                            iface.findall('./neighbor/entry'))
         return level
 
+    def _protocol_branch(self, base: str, level: dict, element: ET.Element, path: str) -> None:
+        """Fill one entry level that lives inside a level dict (F7.6).
+
+        `level` is the dict `_protocol_level` read for `base`, and `path` is the table path of the entry level.
+        The segments between them are the field names the rows declare, so this rule states no field name of
+        its own: it walks the dict through them, and walks the XML through the same segments to the element
+        that holds the entries. `_protocol_entries` then marks each entry and puts it in the list the last
+        segment names. A `member_list` field holds values and not entries, so it is read by `_protocol_level`
+        and never reaches this rule.
+        """
+        segments = path[len(base) + 1:].split('/')
+        holder, source = level, element
+        for segment in segments[:-1]:
+            holder = holder[self._protocol_field_name(segment)]
+            source = source.find(self._protocol_xml_name(segment))
+            if source is None:
+                return
+        entries = source.findall(f'./{self._protocol_xml_name(segments[-1])}/entry')
+        self._protocol_entries(path, holder[self._protocol_field_name(path)], entries)
+
     def _protocol_entries(self, path: str, holder: list, entries) -> None:
         """The entries of a `string_list` level, marked and put in the list that holds them (F7.4, F7.5).
 
@@ -2254,15 +2297,17 @@ class PanoramaParser:
                 holder.append(marked)
 
     def _protocol_body(self, path: str, body: ET.Element, fields: dict) -> str:
-        """The shapes inside a level that a level dict cannot hold (F7.4, F7.5).
+        """The shapes inside a level that a level dict cannot hold (F7.4, F7.5, F7.6).
 
-        `_protocol_level` read the level's fields, so a `one_of` field is the empty dict it states and a
-        `string_list` field is the empty list it states. This fills the two: the choice the export states by
-        presence under the level, and the entries the export holds under it. `body` is the element that holds
-        them, which is the chosen flag element for an area type and the entry itself for an interface entry.
-        The provider requires exactly one of the alternatives, so a level that states none prints nothing and
-        the reason is the detail the caller marks the entry with. An entry that states no choice is marked for
-        the report with the same reason as a `range` entry.
+        `_protocol_level` read the level's fields, so a `one_of` field is the choice it read from the element
+        and a `string_list` field is the empty list it states. This fills the three: the choice the export
+        states by presence under the level, the entries the export holds under it, and the entries under an
+        `object` field, because a level dict is not an entry and the export holds its entries under the element
+        the field names. `body` is the element that holds them, which is the chosen flag element for an area
+        type and the entry itself for an interface entry. The provider requires exactly one of the alternatives,
+        so a level that states none prints nothing, and the detail the mapping cannot state is captured here
+        because the entry is the object the ledger marks. A `member_list` field and a `block` field hold no
+        entries, so `_protocol_level` reads them and this rule states nothing for them.
         """
         detail = ''
         for field, shape in resource_mapping.protocol_row(path)['fields'].items():
@@ -2273,8 +2318,14 @@ class PanoramaParser:
             if shape == 'one_of':
                 fields[field], reason = self._protocol_presence_choice(entry_path, element)
                 detail = detail or reason
-            else:
-                self._protocol_entries(entry_path, fields[field], element.findall('.//entry'))
+            elif shape == 'string_list':
+                # The entries a level holds are its own children, so an entry inside an entry belongs to the
+                # level that names it and not to the one above it (F7.6).
+                self._protocol_entries(entry_path, fields[field], element.findall('./entry'))
+            elif shape == 'object':
+                # F7.6: a level dict is not an entry, so the entries a `string_list` field holds live under the
+                # element this field names. The same rule fills them, through the path the field names.
+                self._protocol_body(entry_path, element, fields[field])
         return detail
 
     def _protocol_presence_choice(self, path: str, element: ET.Element) -> tuple:
@@ -2287,7 +2338,7 @@ class PanoramaParser:
         cannot state a key for it and the caller marks the entry with that reason.
         """
         child = element[0] if len(element) else None
-        return self._protocol_choice(path, child.tag if child is not None else '', child)
+        return self._protocol_choice(path, child.tag if child is not None else '', element, child)
 
     def _protocol_presence_fields(self, path: str, captured: dict) -> str:
         """The reason an entry that states a presence choice states none of its alternatives (F7.1, F7.4).
@@ -2314,7 +2365,8 @@ class PanoramaParser:
         field = self._protocol_field_name(f'{path}/link_type')
         captured = self._protocol_level(iface, path)
         choice, detail = self._protocol_choice(f'{path}/{field}',
-                                               self._get_text(iface, self._protocol_xml_name(field)), iface)
+                                               self._get_text(iface, self._protocol_xml_name(field)),
+                                               iface, iface)
         captured[field] = choice
         return captured, detail
 
@@ -2327,11 +2379,15 @@ class PanoramaParser:
         """
         return path.rsplit('/', 1)[-1]
 
-    def _protocol_choice(self, path: str, report_value: str, holder: Optional[ET.Element]) -> tuple:
-        """The one key a `one_of` level states, as `({the report value: the sub-shape's fields}, detail)` (F7.1).
+    def _protocol_choice(self, path: str, report_value: str, level: Optional[ET.Element],
+                         holder: Optional[ET.Element]) -> tuple:
+        """The one key a `one_of` level states, as `({the report value: the alternative's value}, detail)` (F7.1).
 
-        `holder` is the element the sub-shape's fields live in, because the export puts them at the entry's
-        own level for a BGP peer group and inside the chosen element for an area type. `detail` is the
+        `level` is the element the choice lives under and `holder` is the element the alternative's fields live
+        in, because the export puts them at the entry's own level for a BGP peer group and inside the chosen
+        element for an area type. F7.6: the alternatives are the attributes the row states, so an alternative
+        can be a value instead of a level. When the row states it as a field, the field reader reads it from
+        `level`, and when the row states it as a level, the level reader reads it from `holder`. `detail` is the
         reason the mapping cannot state the value, which is empty for a value it can state: the caller marks
         the entry for the report with it, because a one-of level with no key prints nothing.
         """
@@ -2342,14 +2398,20 @@ class PanoramaParser:
             return {report_value: {}}, (
                 f'{name} {report_value} is not a value PROTOCOL_SHAPE states' if report_value
                 else f'{name} states no key PROTOCOL_SHAPE selects')
+        if chosen in row['fields']:
+            field = self._protocol_field_name(f'{path}/{chosen}')
+            return ({report_value: self._protocol_field(level, field, self._protocol_xml_name(field),
+                                                        row['fields'][chosen])}, '')
         return ({report_value: self._protocol_level(holder, f'{path}/{chosen}', facts=False)}, '')
 
     def _protocol_level(self, entry: Optional[ET.Element], path: str, facts: bool = True) -> dict:
         """Read one protocol level as `PROTOCOL_SHAPE` names its fields (F7.1).
 
         The shape table is the only thing that states a level's fields and shapes, so the emitter, the gate
-        rule and the property scan read the same names. A `string_list` level and a `one_of` level are
-        filled by the caller, because the entries they hold and the key they select are decided there.
+        rule and the property scan read the same names. A `string_list` level is filled by the caller,
+        because the entries it holds are decided there. A `one_of` field is read here when the row states its
+        alternatives as fields; a row that states no field is left to the caller, because the alternative is a
+        level the export states by presence and the caller reports the entry that states none.
 
         `facts` is the five scope facts. They belong to the object the ledger marks, which is the entry
         level, so a level read for a choice body or for a child element is read without them.
@@ -2364,7 +2426,16 @@ class PanoramaParser:
             if shape == 'string_list':
                 level[field] = []
             elif shape == 'one_of':
-                level[field] = {}
+                sub = resource_mapping.protocol_row(f'{path}/{field}')
+                if sub['fields']:
+                    # F7.6: the row states its alternatives as its own fields, so the level reads the one the
+                    # element holds. A row that states no field leaves the choice to the caller, because the
+                    # alternative there is a level the export states by presence.
+                    element = entry.find(self._protocol_xml_name(field)) if entry is not None else None
+                    level[field] = self._protocol_presence_choice(f'{path}/{field}', element)[0] \
+                        if element is not None else {}
+                else:
+                    level[field] = {}
             elif shape == 'object':
                 child = entry.find(self._protocol_xml_name(field)) if entry is not None else None
                 level[field] = self._protocol_level(child, f'{path}/{field}')
@@ -2411,6 +2482,10 @@ class PanoramaParser:
             # Presence is the value: the provider reads an empty block as the export having stated it, so
             # the field prints `{}` when the element is there and prints nothing when it is not (F7.1).
             return HclRef('{}') if node is not None else ''
+        if shape == 'member_list':
+            # The provider declares this field as `['list', 'string']`, so the value is the members the element
+            # holds: there is no entry and no level row for a member (F7.6).
+            return [(member.text or '').strip() for member in node.findall('member')] if node is not None else []
         return text
 
     def parse_ipsec_tunnels(self) -> list[dict]:
@@ -3432,15 +3507,24 @@ class TerraformGenerator:
             value = level.get(field)
             if value in entry_coverage.EMPTY_FIELD_VALUES:
                 continue
-            if shape == 'string_list':
+            if shape == 'member_list':
+                # The value is the members themselves, so there is no element to print as an object and no
+                # level row to walk (F7.6).
+                out = value
+            elif shape == 'string_list':
                 out = [self._protocol_fields(f'{path}/{field}', element, router) for element in value]
             elif shape == 'one_of':
                 # The mapping lives on the one_of row for this field, not on the level that holds it.
                 sub = resource_mapping.protocol_row(f'{path}/{field}')
                 report_value = next(iter(value), '')
                 key = sub['selects'].get(report_value, '')
-                out = ({key: self._protocol_fields(f'{path}/{field}/{key}', value[report_value], router)}
-                       if key else {})
+                if not key:
+                    out = {}
+                elif key in sub['fields']:
+                    # F7.6: the alternative is a value the row states, so the reader's value is the print.
+                    out = {key: value[report_value]}
+                else:
+                    out = ({key: self._protocol_fields(f'{path}/{field}/{key}', value[report_value], router)})
             elif shape == 'object':
                 out = self._protocol_fields(f'{path}/{field}', value, router)
             elif resource_mapping.VALUE_VARIABLES.get(field) == resource_mapping.REFERENCE_ONLY:

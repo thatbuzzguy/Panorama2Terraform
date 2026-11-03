@@ -297,6 +297,19 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                  level='sub-shape'),
     ContainerRow('parse_rip', 'protocol/rip/export-rules', 'emitted', 'panos_virtual_router',
                  level='sub-shape'),
+    # F7.6: the four entry levels `policy` declares. A policy level inside a policy entry is a property level
+    # inside a property level, so the scan never measures it and `PROTOCOL_SHAPE` grounds it. `policy` itself
+    # and its four object levels hold no entry, so they need no row. The row path is the input's spelling, so
+    # `conditional-advertisement` is the path the scan reads, and the pin reads it through the same spelling
+    # rule the parse uses.
+    ContainerRow('parse_bgp', 'protocol/bgp/policy/aggregation/address', 'emitted',
+                  'panos_virtual_router', level='sub-shape'),
+    ContainerRow('parse_bgp', 'protocol/bgp/policy/conditional-advertisement/policy', 'emitted',
+                  'panos_virtual_router', level='sub-shape'),
+    ContainerRow('parse_bgp', 'protocol/bgp/policy/export/rules', 'emitted',
+                  'panos_virtual_router', level='sub-shape'),
+    ContainerRow('parse_bgp', 'protocol/bgp/policy/import/rules', 'emitted',
+                  'panos_virtual_router', level='sub-shape'),
     ContainerRow('parse_virtual_routers', 'routing-table/ip/static-route', 'emitted',
                  'panos_virtual_router_static_route_ipv4', level='sub-shape'),
     ContainerRow('parse_ipsec_tunnels', 'auto-key/proxy-id', 'nested-block',
