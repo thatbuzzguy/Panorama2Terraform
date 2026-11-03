@@ -2128,18 +2128,27 @@ class PanoramaParser:
         return level
 
     def parse_ospfv3(self, router: ET.Element) -> dict:
-        """Build the `ospfv3` level of one router's protocol object (F7.2).
+        """Build the `ospfv3` level of one router's protocol object (F7.2, F7.3).
 
         The same reader as `parse_ospf`, because the provider declares the same fields for the two area
         subtrees. An interface at the `protocol/ospfv3` level has no provider field, so the report names it.
         A level the shape table states no row for is read by no method, so the levels this feature does not
         read print nothing (`backlog.md`).
+
+        F7.3: the three single-object levels are read by `_protocol_level`, because the row states them as
+        fields of this level. `export_rules` is a `string_list`, so this method fills it with the entries the
+        export holds, the same rule as `parse_bgp` for `redist_rules`.
         """
         ospfv3_path = 'protocol/ospfv3'
         ospfv3 = router.find(ospfv3_path)
         if ospfv3 is None:
             return {}
         level = self._protocol_areas(ospfv3, ospfv3_path)
+        export_path = f'{ospfv3_path}/export_rules'
+        for rule in ospfv3.findall('.//export-rules/entry'):
+            if rule.get('name'):
+                level[self._protocol_field_name(export_path)].append(
+                    self.mark(rule, self._protocol_level(rule, export_path)))
         for iface in ospfv3.findall('./interface/entry'):
             if not iface.get('name'):
                 continue
@@ -2276,9 +2285,11 @@ class PanoramaParser:
         """The XML element name for a `PROTOCOL_SHAPE` field name (F7.1).
 
         A PAN-OS export spells a field with `-` where the provider schema spells it with `_`, so the shape
-        table states the provider spelling and this is the one rule that turns it into the element name.
+        table states the provider spelling and this is the one rule that turns it into the element name. The
+        one exception is `resource_mapping.XML_NAME_EXCEPTIONS`, because the provider splits an initialism the
+        export does not (F7.3).
         """
-        return field.replace('_', '-')
+        return resource_mapping.XML_NAME_EXCEPTIONS.get(field, field.replace('_', '-'))
 
     def _protocol_field(self, entry: ET.Element, field: str, xml_name: str, shape: str):
         """One protocol field, read as the shape table states it (F7.1)."""

@@ -335,6 +335,29 @@ def test_parse_ospfv3(make_parser):
     assert rows[0]["detail"] == 'no provider field for an interface outside an area', rows[0]
 
 
+def test_parse_ospfv3_reads_the_levels_the_table_states(make_parser):
+    """`parse_ospfv3` reads the four `protocol/ospfv3` levels outside `area` as their rows state them (F7.3).
+
+    A `single` level is one object, so `_protocol_level` reads it with no field name of its own, and
+    `export_rules` is a `string_list`, so the method fills it with the entries the export holds. The entry is
+    marked, so the property scan measures it against the router row.
+    """
+    p = _parser(make_parser, "ospfv3.xml")
+    ospfv3 = {r["name"]: r for r in p.parse_virtual_routers()}["edge-af"]["protocol"]["ospfv3"]
+    assert ospfv3["timers"] == {"lsa_interval": 120, "spf_calculation_delay": 20}, ospfv3["timers"]
+    assert ospfv3["global_bfd"] == {"profile": "BFD-OSP"}, ospfv3["global_bfd"]
+    assert ospfv3["graceful_restart"] == {
+        "enable": True, "grace_period": 120, "helper_enable": True,
+        "max_neighbor_restart_time": 200, "strict_l_s_a_checking": True}, ospfv3["graceful_restart"]
+    # The element name for `strict_l_s_a_checking` is the one case the `-` rule cannot produce, so the export
+    # states `strict-lsa-checking` and the table reads it through `XML_NAME_EXCEPTIONS`.
+    rule = ospfv3["export_rules"][0]
+    element = next(e for e in p.ledger.entries() if e.get("name") == "static-af")
+    assert p.ledger.mark_for(element) is not None, 'an export rule is a marked entry'
+    assert rule["name"] == "static-af"
+    assert (rule["metric"], rule["new_path_type"], rule["new_tag"]) == (10, "internal", "0"), rule
+
+
 def test_parse_ospfv3_absent(make_parser):
     """A router with no OSPFv3 element has no `ospfv3` level, so nothing prints for it (F7.2)."""
     p = _parser(make_parser, "zones.xml")

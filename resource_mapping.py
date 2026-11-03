@@ -1206,6 +1206,11 @@ SHAPE_WORDS = ('string', 'bool', 'number', 'object', 'string_list', 'one_of', 'b
 PROTOCOL_TYPE = 'panos_virtual_router'
 PROTOCOL_FIELD = 'protocol'
 
+# The one exception to the field name to element name rule (`PanoramaParser._protocol_xml_name`), which
+# turns `_` into `-`. The provider spells `strict_l_s_a_checking` for the element a PAN-OS export names
+# `strict-lsa-checking`, because it splits the initialism, so the rule cannot produce it (F7.3).
+XML_NAME_EXCEPTIONS = {'strict_l_s_a_checking': 'strict-lsa-checking'}
+
 PROTOCOL_SHAPE: dict[str, dict] = {
     'protocol': {
         'shape': 'object',
@@ -1387,12 +1392,47 @@ PROTOCOL_SHAPE: dict[str, dict] = {
     # F7.2: the `ospfv3` levels `parse_ospfv3` reads, measured 2026-11-01 against the pinned provider. The
     # area subtree states the same shape the `ospf` rows state, field for field, because the provider
     # declares the same fields for both levels; the rows stay separate because the levels are separate. A
-    # level the parse does not read has no row, so the gate refuses it: the `ospfv3` timer, BFD,
-    # graceful-restart, export-rule and auth-profile levels, `area/virtual_link`,
+    # level the parse does not read has no row, so the gate refuses it: `area/virtual_link`,
     # `area/interface/neighbor`, and `area/type/default_route` are in `backlog.md`.
+    # F7.3: the four levels measured 2026-11-02 are the scalar levels the provider declares for this level
+    # and `parse_ospfv3` reads. `auth_profile` stays a `sensitive` row with no reader (`backlog.md`).
     'protocol/ospfv3': {
         'shape': 'object',
-        'fields': {'enable': 'bool', 'router_id': 'string', 'area': 'string_list'},
+        'fields': {'enable': 'bool', 'router_id': 'string', 'timers': 'object',
+                   'global_bfd': 'object', 'graceful_restart': 'object', 'area': 'string_list',
+                   'export_rules': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # A scalar level holds no entries, so the parse reads it as one object and the container table names no
+    # row for it. None of these levels declares a field the provider marks sensitive, so no
+    # `VALUE_VARIABLES` row is needed for them.
+    'protocol/ospfv3/timers': {
+        'shape': 'object',
+        'fields': {'lsa_interval': 'number', 'spf_calculation_delay': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/global_bfd': {
+        'shape': 'object',
+        'fields': {'profile': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # `strict_l_s_a_checking` is the provider spelling, and `XML_NAME_EXCEPTIONS` is the one place that
+    # states the element name the export holds for it.
+    'protocol/ospfv3/graceful_restart': {
+        'shape': 'object',
+        'fields': {'enable': 'bool', 'grace_period': 'number', 'helper_enable': 'bool',
+                   'max_neighbor_restart_time': 'number', 'strict_l_s_a_checking': 'bool'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # An export rule is an entry, so the parse method fills this list and the property scan measures the
+    # entries against the router row.
+    'protocol/ospfv3/export_rules': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'metric': 'number', 'new_path_type': 'string', 'new_tag': 'string'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1881,8 +1921,12 @@ COVERAGE_MATRIX = (
         # states on its own. A level dict the parse builds is not a recorded object, so a field the table
         # declares for the `bgp` and `ospf` levels is grounded by the table, not by the measurement: the
         # emitter test in tests/test_coverage_matrix.py covers those, and the limit is in backlog.md.
+        # F7.3: an export rule is an entry, so the scan measures its fields, and `new_path_type` and `new_tag`
+        # join the measured set through `tests/fixtures/ospfv3.xml`. The three single-object levels hold no
+        # entry, so they stay grounded by the table.
         'properties': ('address_family_identifier', 'enable', 'interface', 'interfaces',
-                       'local_address', 'metric', 'peer', 'peer_address', 'peer_as', 'protocol',
+                       'local_address', 'metric', 'new_path_type', 'new_tag',
+                       'peer', 'peer_address', 'peer_as', 'protocol',
                        'range', 'router_type', 'static_routes', 'type',),
     }, {
         'resource': 'panos_virtual_router_static_route_ipv4',

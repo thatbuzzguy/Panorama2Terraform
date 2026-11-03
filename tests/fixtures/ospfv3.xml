@@ -49,6 +49,39 @@
                   </ospfv3>
                 </protocol>
               </entry>
+              <!-- F7.3: the four levels `PROTOCOL_SHAPE` states for `protocol/ospfv3` outside `area`. The
+                   three single-object levels read as one object, and an export rule is an entry, so the
+                   property scan measures it against the router row. -->
+              <entry name="edge-af">
+                <protocol>
+                  <ospfv3>
+                    <enable>yes</enable>
+                    <timers>
+                      <lsa-interval>120</lsa-interval>
+                      <spf-calculation-delay>20</spf-calculation-delay>
+                    </timers>
+                    <global-bfd>
+                      <profile>BFD-OSP</profile>
+                    </global-bfd>
+                    <graceful-restart>
+                      <enable>yes</enable>
+                      <grace-period>120</grace-period>
+                      <helper-enable>yes</helper-enable>
+                      <max-neighbor-restart-time>200</max-neighbor-restart-time>
+                      <!-- The provider spells this field `strict_l_s_a_checking`, so the element name is the
+                           one case `XML_NAME_EXCEPTIONS` states -->
+                      <strict-lsa-checking>yes</strict-lsa-checking>
+                    </graceful-restart>
+                    <export-rules>
+                      <entry name="static-af">
+                        <metric>10</metric>
+                        <new-path-type>internal</new-path-type>
+                        <new-tag>0</new-tag>
+                      </entry>
+                    </export-rules>
+                  </ospfv3>
+                </protocol>
+              </entry>
             </virtual-router>
           </network>
         </entry>

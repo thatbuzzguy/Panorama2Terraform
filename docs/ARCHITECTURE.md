@@ -1203,7 +1203,9 @@ refuses it in a hand-written file.
    and `hcl_value` is the only printer, so two runs on the same bytes write the same bytes.
 3. **One rule names a field.** The entry name inside a list element prints as the `name` field, the rule
    `entry_coverage.name_field` states (§3.2). The table states the provider spelling, the export spells it
-   with `-`, and `PanoramaParser._protocol_xml_name` is the one rule that turns one into the other. The key a
+   with `-`, and `PanoramaParser._protocol_xml_name` is the one rule that turns one into the other. The rule has
+   one exception: `resource_mapping.XML_NAME_EXCEPTIONS`, because the provider splits an initialism the export
+   does not (`strict_l_s_a_checking` for `strict-lsa-checking`). The key a
    parse method writes is the field the table path names (`_protocol_field_name`), so no parse method spells
    a field name of its own. Pinned by `tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner`.
 4. **The mapping is the one lookup, and the entry it cannot state is the entry the report names.**
@@ -1235,8 +1237,9 @@ refuses it in a hand-written file.
 
 The container rows for the levels this converter prints are `emitted` with the note
 `panos_virtual_router` (`container_coverage.CONTAINER_TABLE`), so the property scan measures them against the
-router row. Pinned by `tests/test_container_coverage.py`, `tests/test_coverage_matrix.py` and
-`tests/test_property_coverage.py`.
+router row. A level that holds no entry has no container row, so the scan measures nothing for it and the matrix
+row is grounded by the table instead. Pinned by `tests/test_container_coverage.py`, `tests/test_coverage_matrix.py`
+and `tests/test_property_coverage.py`.
 
 ## 5. Naming rules
 
