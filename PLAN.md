@@ -85,9 +85,16 @@ F7.7 landed: `PROTOCOL_SHAPE` states the four `auth_profile` levels the pinned p
 methods read them through `_protocol_branch`, and a field the provider marks `sensitive` prints as the variable
 reference the entry names. One `ospfv3` entry states `ah` or `esp`, not both, which `terraform validate` reports.
 
+F7.8 landed: the six routing-profile filter containers sit outside the `protocol` object, so
+`resource_mapping.FILTER_SHAPE` states their shape with the same row shape an existing config container uses,
+and the measured provider schema gives a resource for all six, so every `container_coverage.CONTAINER_TABLE`
+row for them is `emitted` with the provider type in its note. `parse_filter_containers` reads the six paths
+through `FILTER_TABLE`, `generate_filter_containers` writes one block per entry in `filters.tf`, and the gate
+rule `filter_blocks` reads the same table. The redistribution entry's `match` and `set` rows state leaf fields
+only, so the walk stops there; the levels inside them are in `backlog.md`.
+
 Open for Epic 7: the levels `PROTOCOL_SHAPE` does not state, which no parse method reads — the `ospf` fields
-outside `area` and `auth_profile`, and the filter containers (route maps, prefix lists, community lists, access
-lists). They are in `backlog.md`.
+outside `area` and `auth_profile`. They are in `backlog.md`.
 
 ## Housekeeping — repository layout (open)
 
@@ -105,7 +112,8 @@ The item list, and the pins that read a path, are in `backlog.md`.
 
 Epic 6 is closed, so the next feature is the open Epic 7 work: the routing levels
 `resource_mapping.PROTOCOL_SHAPE` does not state, each of which needs a row and a parse method before an
-emitter, a gate rule, or the report can read it. The gated pieces that stay held are in `backlog.md`: the
+emitter, a gate rule, or the report can read it. F7.8 closed the filter containers with their own table
+(`FILTER_SHAPE`), so the open work is the `ospf` fields only. The gated pieces that stay held are in `backlog.md`: the
 four `*_policy_rules` types wait for the F3.5 rulebase decision, and a config entry inside a stack needs a
 provider location shape before the emitter can write a block for it. The layout work waits for the open
 feature work to be committed, because it renames the paths those tests read.

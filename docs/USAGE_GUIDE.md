@@ -209,6 +209,7 @@ directory, so a table row names the file, not the path.
 | `security_profile_groups.tf` | Profile group resources |
 | `security_profiles.tf` | Inventory only: names and descriptions, with the resource name the emitter would use |
 | `interfaces.tf`, `zones.tf`, `virtual_routers.tf`, `monitor_profiles.tf`, `vpn.tf` | Network and VPN resources |
+| `filters.tf` | Routing-profile filter containers, one resource per entry (F7.8) |
 | `read_through.tf` | One `data` block per name a reference needed and the run did not read. Written only for a run that declares `--data-blocks` (F5.5) |
 | `imports.tf` | One `import` block per entry the run declares, as `to` and `id`: the block address, and base64 of the location object plus the entry name. Written only for a run that declares `--import-blocks` and has a block to write (F6.4) |
 | `actions.tf` | One `action` block per action the pinned provider schema declares, for each unit the manifest names: the commit, then the push. Written last, and only when it has content (F6.7, F6.10.4) |

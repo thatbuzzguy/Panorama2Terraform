@@ -959,6 +959,7 @@ name the two sets: the `.tf` files the reader read, and the four records at the 
 | `scope_blocks` | a name written inside a scope block's `location` names a scope this run declares, by the type that defines that scope | FAIL |
 | `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
 | `protocol_object` | every `protocol` object on a `panos_virtual_router` block matches its `PROTOCOL_SHAPE` row (§4.9) | FAIL |
+| `filter_blocks` | every filter container block matches its `FILTER_SHAPE` row (§4.10) | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a variable this run declares (F6.6) | FAIL |
 | `data_files` | every data file reads as its declared rows and agrees with the rules that produced it (F6.8) | FAIL |
@@ -1048,6 +1049,15 @@ and the tables are the whole input. Pinned by `tests/test_protocol_object.py`, o
 `::test_the_shape_table_is_the_measured_provider_shape` for the table itself. The gate order is pinned by
 `::test_the_rule_runs_after_actions_in_the_gate_order`, and the goldens by the run inside
 `::test_a_one_of_level_prints_one_key`.
+
+`filter_blocks` (F7.8) reads a filter container block against `resource_mapping.FILTER_SHAPE` (§4.10), through
+the same block reader and the same field reader. Two findings, each read from the file text: a level, a field,
+or a value must be the shape the row states, and an element inside a `[` container states the name the row
+reads as the entry name. `location` is the placement fact, so the rule reads the fields at the block's own
+level and not the sub-block; `location_present` is the rule that asks for it. The row states no `selects` and
+no `sensitive` field, so the choice rule and the sensitive rule cannot fire for a filter block. Pinned by
+`tests/test_filter_containers.py`, one test per finding, and `::test_the_gate_reads_the_run_and_reports_nothing`
+for the gate order.
 
 - A WARN does not fail the gate: a placeholder is correct output that still needs
   an operator action, so the run exits 0.
@@ -1296,6 +1306,45 @@ path cannot match, so `PROTOCOL_SHAPE` grounds that level. F7.7: the four `auth_
 container rows, so the scan measures a profile entry against the router row, and an `md5` entry inside a
 profile entry is not in the scan scope, so `key` stays grounded by the table. Pinned by
 `tests/test_container_coverage.py`, `tests/test_coverage_matrix.py` and `tests/test_property_coverage.py`.
+
+### 4.10 The filter containers (F7.8)
+
+The six routing-profile filter containers sit outside the `protocol` object, so each one is its own resource
+block. `resource_mapping.FILTER_SHAPE` is the one table that states their shape, with the same row shape an
+existing config container uses: `shape`, `fields`, `selects`, `sensitive`. `resource_mapping.FILTER_TABLE` is
+the reader both the parse method and the gate rule use, so no second table names a filter shape, and
+`SHAPE_TO_SCHEMA` is the one mapping between a table word and the schema word for both tables.
+
+`resource_mapping.FILTER_TYPES` is the lookup from a container path to the provider type, and
+`container_coverage.CONTAINER_TABLE` holds one `emitted` row per container whose note names the same type, so
+the decision has one owner. `FILTER_PATHS` is the sorted set of the six entry rows, which `COVERAGE_MATRIX`
+reads as the property scope: a filter entry is a section entry, so the scan measures it against its own row,
+and the properties that row declares are the entry row's fields without the entry name.
+
+Three things the filter table states, or does not state:
+
+1. **`selects` is empty for every row**, because the pinned provider declares each filter choice as optional
+   fields and not as required-exactly-one. Three of those levels are the ones `terraform validate` refuses to
+   hold more than one attribute — `access-list/type/ipv4/ipv4_entries/source_address`,
+   `prefix-list/type/ipv4/ipv4_entries/prefix`, and `redist-entry/bgp` — so a fixture entry answers each with
+   one element, and that is the fact the run pins through `terraform validate`. The choice is the provider's
+   rule, so the table states no word for it.
+2. **`sensitive` is empty for every row**, because no filter field is marked `sensitive` in the pinned
+   schema, so `VALUE_VARIABLES` gains no row for a filter field.
+3. **The row scope stops at a `match` or `set` row.** The redistribution entry mirrors the levels the provider
+   declares, but its `match` and `set` rows state leaf fields only, so no row stands under them and the walk
+   stops there. The six levels inside them (`match.ipv4.address`, `match.next_hop`, `match.route_source`,
+   `set.metric`, `set.ipv4`, `set.ipv6`) are recorded in `backlog.md`.
+
+The input spelling is the `-` rule with one path-keyed exception map,
+`resource_mapping.FILTER_XML_NAME_EXCEPTIONS`: the map is keyed by the container path, because the same idea
+spells differently in two containers — `extended_community_regexes` is `ec-regex` inside a community-list entry,
+and `extended_communities` is `extended-community` inside a route-map match. An entry-list field is the singular
+container element that holds its entries, so those fields are in the map too. The map holds 15 pairs, and
+`ipv4_entries` and `ipv6_entries` spell the same way in two containers, so 13 distinct spellings, and none of
+them is a spelling the `-` rule can produce. Five pairs are grounded by the fixture, because one entry states one
+entry-list spelling only; the other ten are the spellings the pango source measures. Pinned by
+`tests/test_filter_containers.py`.
 
 ## 5. Naming rules
 

@@ -20,17 +20,20 @@ Real Terraform resources for:
 - Zones, interfaces (physical, subinterface, VLAN, loopback, tunnel, aggregate),
   virtual routers, logical routers, static routes, PBF path monitoring profiles
 - IKE and IPsec crypto profiles, IKE gateways, IPsec tunnels
+- Routing-profile filter containers: access lists, as-path access lists, prefix lists, community lists, BGP
+  route maps and redistribution route maps, one resource per entry in `filters.tf`
 
 Report-only, because the provider has no v2 resource or the body is not parsed:
 
 - Application filters, application override rules, QoS profiles, IPsec
   tunnel monitor profiles
 - Routing levels the shape table does not state, so no parse method reads them and a run prints nothing for
-  them: the `ospf` levels outside `area` and `auth_profile`, and the filter containers (route maps, prefix
-  lists, community lists, access lists). BGP, OSPF, OSPFv3 and RIP print as the `protocol` object on
-  `panos_virtual_router` ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9), so only the entries that object
+  them: the `ospf` levels outside `area` and `auth_profile`. BGP, OSPF, OSPFv3 and RIP print as the `protocol`
+  object on `panos_virtual_router` ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9), so only the entries that object
   cannot express are reported. An auth profile entry prints, and each field the provider marks `sensitive`
-  prints as the reference to the variable the entry names, because no generated file holds the value.
+  prints as the reference to the variable the entry names, because no generated file holds the value. The
+  filter containers print as their own block ([ARCHITECTURE.md](ARCHITECTURE.md) §4.10), because the provider
+  declares a resource for each one.
 - Security profile bodies, log forwarding profiles, schedules
 - Address types with no `panos_address` attribute, and the second protocol leg of
   a dual-protocol service

@@ -26,6 +26,7 @@ that document instead of restating the rule.
 | Cross-source shadow scan (the fact, the line shape, the heading) | `ARCHITECTURE.md` §3.2, and `shadow_coverage.py` |
 | Emit order, location, reference resolution, policy chains, reports, gate | `ARCHITECTURE.md` §4 |
 | The protocol object shape, the one-of mapping, and what prints | `ARCHITECTURE.md` §4.9, and `resource_mapping.PROTOCOL_SHAPE` |
+| The filter container shape, the row scope, and the path-keyed input spellings | `ARCHITECTURE.md` §4.10, and `resource_mapping.FILTER_SHAPE` |
 | Local resource naming | `ARCHITECTURE.md` §5 |
 | Determinism | `ARCHITECTURE.md` §6 |
 | Provider type per object kind | `RESOURCE_MAPPING.md`, and `resource_mapping.py` |
