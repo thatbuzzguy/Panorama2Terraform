@@ -1195,7 +1195,7 @@ VALUE_VARIABLES = {
 # `shape` is one of `SHAPE_WORDS`. `fields` states the field name -> the shape word, in the print order.
 # `selects` is the mapping from the report value to the key a `one_of` level prints; an empty `selects`
 # means the level is not a one-of choice. `sensitive` names the fields the provider marks sensitive.
-SHAPE_WORDS = ('string', 'bool', 'number', 'object', 'string_list', 'one_of', 'block')
+SHAPE_WORDS = ('string', 'bool', 'number', 'object', 'string_list', 'member_list', 'one_of', 'block')
 
 # The reader states a `[` container as `string_list`, so that word covers a list of objects as well as a
 # list of strings; `one_of` is the `object` shape with the extra rule that it states exactly one key.
@@ -1203,6 +1203,10 @@ SHAPE_WORDS = ('string', 'bool', 'number', 'object', 'string_list', 'one_of', 'b
 # it by presence, so the value is the empty object and the block prints it (`value_shape` reads `{}` as an
 # object, which is why the gate treats `block` as `object`). A field the export does not state has no value,
 # so presence is the whole shape rule.
+# `member_list` is the `string_list` shape with the extra rule that its members are values, which is what the
+# provider declares for a field whose type is `['list', 'string']` (F7.6). A shape word is what the table
+# states, so the reader's own inverse keeps reading the family word: `sanity_checks.SHAPE_READS_AS` is the one
+# place that states which word a specialization reads back as.
 PROTOCOL_TYPE = 'panos_virtual_router'
 PROTOCOL_FIELD = 'protocol'
 
@@ -1218,11 +1222,13 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset(),
     },
+    # F7.6: `policy` is the fifth level the provider declares for `bgp`, so the row states it and the reader
+    # fills it. `auth_profile` stays a `sensitive` row with no reader (`backlog.md`, F7.7).
     'protocol/bgp': {
         'shape': 'object',
         'fields': {'enable': 'bool', 'local_as': 'string', 'router_id': 'string',
                    'peer_group': 'string_list', 'redist_rules': 'string_list',
-                   'auth_profile': 'string_list'},
+                   'auth_profile': 'string_list', 'policy': 'object'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1723,6 +1729,569 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset({'key'}),
     },
+    # F7.6: the `policy` levels `parse_bgp` reads, measured 2026-11-02 against the pinned provider 2.0.14.
+    'protocol/bgp/policy': {
+        'shape': 'object',
+        'fields': {
+            'aggregation': 'object', 'conditional_advertisement': 'object', 'export': 'object',
+            'import': 'object',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation': {
+        'shape': 'object',
+        'fields': {'address': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address': {
+        'shape': 'string_list',
+        'fields': {
+            'advertise_filters': 'string_list', 'aggregate_route_attributes': 'object',
+            'as_set': 'bool', 'enable': 'bool', 'name': 'string', 'prefix': 'string',
+            'summary': 'bool', 'suppress_filters': 'string_list',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/advertise_filters': {
+        'shape': 'string_list',
+        'fields': {
+            'enable': 'bool', 'match': 'object', 'name': 'string',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/advertise_filters/match': {
+        'shape': 'object',
+        'fields': {
+            'address_prefix': 'string_list', 'as_path': 'object', 'community': 'object',
+            'extended_community': 'object', 'from_peer': 'member_list', 'med': 'number',
+            'nexthop': 'member_list', 'route_table': 'string',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/advertise_filters/match/address_prefix': {
+        'shape': 'string_list',
+        'fields': {'exact': 'bool', 'name': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/advertise_filters/match/as_path': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/advertise_filters/match/community': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/advertise_filters/match/extended_community': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/aggregate_route_attributes': {
+        'shape': 'object',
+        'fields': {
+            'as_path': 'one_of', 'as_path_limit': 'number', 'community': 'one_of',
+            'extended_community': 'one_of', 'local_preference': 'number', 'med': 'number',
+            'nexthop': 'string', 'origin': 'string', 'weight': 'number',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/as_path': {
+        'shape': 'one_of',
+        'fields': {'none': 'block', 'prepend': 'number'},
+        'selects': {'none': 'none', 'prepend': 'prepend'},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/as_path/none': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/community': {
+        'shape': 'one_of',
+        'fields': {
+            'append': 'member_list', 'none': 'block', 'overwrite': 'member_list',
+            'remove_all': 'block', 'remove_regex': 'string',
+        },
+        'selects': { 'append': 'append', 'none': 'none', 'overwrite': 'overwrite',
+                  'remove-all': 'remove_all',
+                  'remove-regex': 'remove_regex'},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/community/none': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/community/remove_all': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/extended_community': {
+        'shape': 'one_of',
+        'fields': {
+            'append': 'member_list', 'none': 'block', 'overwrite': 'member_list',
+            'remove_all': 'block', 'remove_regex': 'string',
+        },
+        'selects': { 'append': 'append', 'none': 'none', 'overwrite': 'overwrite',
+                  'remove-all': 'remove_all',
+                  'remove-regex': 'remove_regex'},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/extended_community/none': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/extended_community/remove_all': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/suppress_filters': {
+        'shape': 'string_list',
+        'fields': {
+            'enable': 'bool', 'match': 'object', 'name': 'string',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/suppress_filters/match': {
+        'shape': 'object',
+        'fields': {
+            'address_prefix': 'string_list', 'as_path': 'object', 'community': 'object',
+            'extended_community': 'object', 'from_peer': 'member_list', 'med': 'number',
+            'nexthop': 'member_list', 'route_table': 'string',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/suppress_filters/match/address_prefix': {
+        'shape': 'string_list',
+        'fields': {'exact': 'bool', 'name': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/suppress_filters/match/as_path': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/suppress_filters/match/community': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/aggregation/address/suppress_filters/match/extended_community': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement': {
+        'shape': 'object',
+        'fields': {'policy': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement/policy': {
+        'shape': 'string_list',
+        'fields': {
+            'advertise_filters': 'string_list', 'enable': 'bool', 'name': 'string',
+            'non_exist_filters': 'string_list', 'used_by': 'member_list',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement/policy/advertise_filters': {
+        'shape': 'string_list',
+        'fields': {
+            'enable': 'bool', 'match': 'object', 'name': 'string',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement/policy/advertise_filters/match': {
+        'shape': 'object',
+        'fields': {
+            'address_prefix': 'string_list', 'as_path': 'object', 'community': 'object',
+            'extended_community': 'object', 'from_peer': 'member_list', 'med': 'number',
+            'nexthop': 'member_list', 'route_table': 'string',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement/policy/advertise_filters/match/address_prefix': {
+        'shape': 'string_list',
+        'fields': {'name': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement/policy/advertise_filters/match/as_path': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement/policy/advertise_filters/match/community': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement/policy/advertise_filters/match/extended_community': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement/policy/non_exist_filters': {
+        'shape': 'string_list',
+        'fields': {
+            'enable': 'bool', 'match': 'object', 'name': 'string',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement/policy/non_exist_filters/match': {
+        'shape': 'object',
+        'fields': {
+            'address_prefix': 'string_list', 'as_path': 'object', 'community': 'object',
+            'extended_community': 'object', 'from_peer': 'member_list', 'med': 'number',
+            'nexthop': 'member_list', 'route_table': 'string',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement/policy/non_exist_filters/match/address_prefix': {
+        'shape': 'string_list',
+        'fields': {'name': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement/policy/non_exist_filters/match/as_path': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement/policy/non_exist_filters/match/community': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/conditional_advertisement/policy/non_exist_filters/match/extended_community': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export': {
+        'shape': 'object',
+        'fields': {'rules': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules': {
+        'shape': 'string_list',
+        'fields': {
+            'action': 'one_of', 'enable': 'bool', 'match': 'object', 'name': 'string',
+            'used_by': 'member_list',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/action': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'allow': 'allow', 'deny': 'deny'},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/action/allow': {
+        'shape': 'object',
+        'fields': {'update': 'object'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/action/allow/update': {
+        'shape': 'object',
+        'fields': {
+            'as_path': 'one_of', 'as_path_limit': 'number', 'community': 'one_of',
+            'extended_community': 'one_of', 'local_preference': 'number', 'med': 'number',
+            'nexthop': 'string', 'origin': 'string',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/action/allow/update/as_path': {
+        'shape': 'one_of',
+        'fields': {
+            'none': 'block', 'prepend': 'number', 'remove': 'block',
+            'remove_and_prepend': 'number',
+        },
+        'selects': { 'none': 'none', 'prepend': 'prepend', 'remove': 'remove',
+                  'remove-and-prepend': 'remove_and_prepend'},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/action/allow/update/as_path/none': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/action/allow/update/as_path/remove': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/action/allow/update/community': {
+        'shape': 'one_of',
+        'fields': {
+            'append': 'member_list', 'none': 'block', 'overwrite': 'member_list',
+            'remove_all': 'block', 'remove_regex': 'string',
+        },
+        'selects': { 'append': 'append', 'none': 'none', 'overwrite': 'overwrite',
+                  'remove-all': 'remove_all',
+                  'remove-regex': 'remove_regex'},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/action/allow/update/community/none': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/action/allow/update/community/remove_all': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/action/allow/update/extended_community': {
+        'shape': 'one_of',
+        'fields': {
+            'append': 'member_list', 'none': 'block', 'overwrite': 'member_list',
+            'remove_all': 'block', 'remove_regex': 'string',
+        },
+        'selects': { 'append': 'append', 'none': 'none', 'overwrite': 'overwrite',
+                  'remove-all': 'remove_all',
+                  'remove-regex': 'remove_regex'},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/action/allow/update/extended_community/none': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/action/allow/update/extended_community/remove_all': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/action/deny': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/match': {
+        'shape': 'object',
+        'fields': {
+            'address_prefix': 'string_list', 'as_path': 'object', 'community': 'object',
+            'extended_community': 'object', 'from_peer': 'member_list', 'med': 'number',
+            'nexthop': 'member_list', 'route_table': 'string',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/match/address_prefix': {
+        'shape': 'string_list',
+        'fields': {'exact': 'bool', 'name': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/match/as_path': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/match/community': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/export/rules/match/extended_community': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import': {
+        'shape': 'object',
+        'fields': {'rules': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules': {
+        'shape': 'string_list',
+        'fields': {
+            'action': 'one_of', 'enable': 'bool', 'match': 'object', 'name': 'string',
+            'used_by': 'member_list',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/action': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'allow': 'allow', 'deny': 'deny'},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/action/allow': {
+        'shape': 'object',
+        'fields': {'dampening': 'string', 'update': 'object'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/action/allow/update': {
+        'shape': 'object',
+        'fields': {
+            'as_path': 'one_of', 'as_path_limit': 'number', 'community': 'one_of',
+            'extended_community': 'one_of', 'local_preference': 'number', 'med': 'number',
+            'nexthop': 'string', 'origin': 'string', 'weight': 'number',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/action/allow/update/as_path': {
+        'shape': 'one_of',
+        'fields': {'none': 'block', 'remove': 'block'},
+        'selects': { 'none': 'none', 'remove': 'remove'},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/action/allow/update/as_path/none': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/action/allow/update/as_path/remove': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/action/allow/update/community': {
+        'shape': 'one_of',
+        'fields': {
+            'append': 'member_list', 'none': 'block', 'overwrite': 'member_list',
+            'remove_all': 'block', 'remove_regex': 'string',
+        },
+        'selects': { 'append': 'append', 'none': 'none', 'overwrite': 'overwrite',
+                  'remove-all': 'remove_all',
+                  'remove-regex': 'remove_regex'},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/action/allow/update/community/none': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/action/allow/update/community/remove_all': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/action/allow/update/extended_community': {
+        'shape': 'one_of',
+        'fields': {
+            'append': 'member_list', 'none': 'block', 'overwrite': 'member_list',
+            'remove_all': 'block', 'remove_regex': 'string',
+        },
+        'selects': { 'append': 'append', 'none': 'none', 'overwrite': 'overwrite',
+                  'remove-all': 'remove_all',
+                  'remove-regex': 'remove_regex'},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/action/allow/update/extended_community/none': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/action/allow/update/extended_community/remove_all': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/action/deny': {
+        'shape': 'block',
+        'fields': {},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/match': {
+        'shape': 'object',
+        'fields': {
+            'address_prefix': 'string_list', 'as_path': 'object', 'community': 'object',
+            'extended_community': 'object', 'from_peer': 'member_list', 'med': 'number',
+            'nexthop': 'member_list', 'route_table': 'string',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/match/address_prefix': {
+        'shape': 'string_list',
+        'fields': {'exact': 'bool', 'name': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/match/as_path': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/match/community': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/policy/import/rules/match/extended_community': {
+        'shape': 'object',
+        'fields': {'regex': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
 }
 
 
@@ -2149,11 +2718,16 @@ COVERAGE_MATRIX = (
         # F7.5: `authentication`, `bfd`, `default_route` and `mode` join the measured set through a `rip`
         # interface entry, which this row covers. `bfd` is measured as the field of the entry, not as the
         # level inside it, because the level dict the parse builds is not a recorded object.
-        'properties': ('address_family_identifier', 'authentication', 'bfd', 'default_route',
+        # F7.6: the four policy entry levels this row covers join the measured set. A policy level inside an
+        # entry is not in the scan scope, so its fields stay grounded by the table, and a member list is read
+        # as the field of the entry that holds it.
+        'properties': ('action', 'address_family_identifier', 'advertise_filters',
+                       'aggregate_route_attributes', 'as_set', 'authentication', 'bfd', 'default_route',
                        'enable', 'interface', 'interfaces',
-                       'local_address', 'metric', 'mode', 'new_path_type', 'new_tag',
-                       'peer', 'peer_address', 'peer_as', 'protocol',
-                       'range', 'router_type', 'static_routes', 'type', 'virtual_link',),
+                       'local_address', 'match', 'metric', 'mode', 'new_path_type', 'new_tag',
+                       'non_exist_filters', 'peer', 'peer_address', 'peer_as', 'prefix', 'protocol',
+                       'range', 'router_type', 'static_routes', 'summary', 'suppress_filters', 'type',
+                       'used_by', 'virtual_link',),
     }, {
         'resource': 'panos_virtual_router_static_route_ipv4',
         'xml_element': 'static-route/entry',

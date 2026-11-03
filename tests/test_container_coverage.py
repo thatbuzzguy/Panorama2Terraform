@@ -51,10 +51,22 @@ EXPECTED_FINDINGS = [
 
 
 def _segments_of_method(cls, method_name: str) -> set[str]:
-    """Tag segments the method names, including the ones it hands to a helper."""
+    """Tag segments the method names, including the ones it hands to a helper.
+
+    F7.6: a row path is the input's spelling of a level the method states as a table path, so each segment is
+    also read through `_protocol_xml_name`, the one rule that turns a table name into the tag the input spells.
+    """
     segments: set[str] = set()
     pending = [method_name]
     seen: set[str] = set()
+    spell = getattr(cls, '_protocol_xml_name', None)
+
+    def add(path: str) -> None:
+        for part in path.split('/'):
+            segments.add(part)
+            if spell is not None:
+                segments.add(spell(part))
+
     while pending:
         name = pending.pop()
         if name in seen:
@@ -64,11 +76,11 @@ def _segments_of_method(cls, method_name: str) -> set[str]:
         for node in ast.walk(tree):
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 if PATH_STRING_RE.match(node.value):
-                    segments.update(node.value.split('/'))
+                    add(node.value)
             elif isinstance(node, ast.JoinedStr):
                 for part in node.values:
                     if isinstance(part, ast.Constant) and PATH_STRING_RE.match(part.value):
-                        segments.update(part.value.split('/'))
+                        add(part.value)
                     elif isinstance(part, ast.FormattedValue):
                         segments.add('entry')  # the entry placeholder
             elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)

@@ -17,6 +17,8 @@ Pins:
   state;
 - the `rip` levels as the rows that state them, the choice an entry states inside itself, and the block a
   real run writes for them (F7.5);
+- the `policy` levels as the rows that state them, the `member_list` word for a field whose members are values,
+  and the block a real run writes for the four entry levels (F7.6);
 - a sensitive field as the variable reference, and `VALUE_VARIABLES` as the one shape owner for a printed
   value;
 - one negative test per gate finding, the gate reporting no finding on a run, and two runs writing the
@@ -93,7 +95,9 @@ def _schema_level(node: dict) -> str:
 
 
 # A `SHAPE_WORDS` word as the schema states it. A level word is a nesting mode, and a leaf word is a type.
-WORD_TO_SCHEMA = {'string_list': 'list', 'object': 'single', 'one_of': 'single', 'block': 'single'}
+# `member_list` is the word for a field whose type is `['list', 'string']`, so it reads as the leaf type `list`.
+WORD_TO_SCHEMA = {'string_list': 'list', 'member_list': 'list', 'object': 'single', 'one_of': 'single',
+                  'block': 'single'}
 
 
 # --- 1. the table against the live provider schema ---------------------------
@@ -106,7 +110,8 @@ def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
     row states only the fields the parse method that reaches the level reads, except the three `auth_profile`
     rows, which state the `sensitive` decision for a level no parse method reads (`backlog.md`, F7.7). F7.4
     added the four area sub-levels, which `_protocol_areas` reads, and F7.5 added the `rip` levels, which
-    `parse_rip` reads.
+    `parse_rip` reads. F7.6 added the 78 `policy` levels, which `parse_bgp` reads, and the `member_list` word
+    for the fields the schema declares as `['list', 'string']`.
     """
     for path, row in sorted(resource_mapping.PROTOCOL_SHAPE.items()):
         node = _schema_node(provider_schema, path)
@@ -125,11 +130,12 @@ def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
         # F7.1 rule: the fields the row declares as sensitive are the ones the provider marks sensitive.
         sensitive = {field for field, attribute in attributes.items() if attribute.get('sensitive')}
         assert row['sensitive'] == frozenset(sensitive & set(row['fields'])), (path, row['sensitive'])
-        # A `one_of` row's alternatives are the schema's attributes, and each one is a row in the table.
+        # A `one_of` row's alternatives are the schema's attributes. Each one is the field the row states, or the
+        # row the table states for it when the alternative names a level (F7.6).
         if row['selects']:
             assert set(row['selects'].values()) == set(attributes), (path, row['selects'])
             for key in row['selects'].values():
-                assert f'{path}/{key}' in resource_mapping.PROTOCOL_SHAPE, (path, key)
+                assert key in row['fields'] or f'{path}/{key}' in resource_mapping.PROTOCOL_SHAPE, (path, key)
 
 
 def test_the_sensitive_rows_are_the_reference_only_names():
@@ -174,7 +180,7 @@ def test_the_table_is_the_only_shape_owner(converter_module):
                ('_parse_router', 'parse_bgp', 'parse_ospf', 'parse_ospfv3', 'parse_rip', '_protocol_areas',
                 '_protocol_level', '_protocol_field', '_protocol_choice', '_protocol_interface',
                 '_protocol_field_name', '_protocol_xml_name', '_protocol_entries', '_protocol_body',
-                '_protocol_presence_choice', '_protocol_presence_fields')]
+                '_protocol_branch', '_protocol_presence_choice', '_protocol_presence_fields')]
     offenders = {}
     for owner in owners:
         for node in ast.walk(ast.parse(textwrap.dedent(inspect.getsource(owner)))):
@@ -263,11 +269,16 @@ def test_the_rip_levels_are_rows_the_parse_reads():
 
 
 def test_value_shape_is_the_reader_inverse_for_every_shape_word():
-    """`value_shape` reads back each shape word the table states, including `number` and `block` (F6.7, F7.1)."""
+    """`value_shape` reads back each shape word the table states, including `number` and `block` (F6.7, F7.1).
+
+    A specialization reads back as the family word the reader reads, which `sanity_checks.SHAPE_READS_AS` states
+    in one place: `one_of` and `block` are object values, and a `member_list` is a `[` value whose members are
+    values and not entries.
+    """
     samples = {'string': '"host"', 'bool': 'true', 'number': '10', 'object': '{}',
-               'string_list': '["a"]', 'one_of': '{ebgp = {}}', 'block': '{}'}
+               'string_list': '["a"]', 'member_list': '["a"]', 'one_of': '{ebgp = {}}', 'block': '{}'}
     for word, text in samples.items():
-        expected = 'object' if word in ('one_of', 'block') else word
+        expected = sanity_checks.SHAPE_READS_AS.get(word, word)
         assert sanity_checks.value_shape(text) == expected, (word, text)
     assert set(samples) == set(resource_mapping.SHAPE_WORDS), resource_mapping.SHAPE_WORDS
 
@@ -293,6 +304,24 @@ def test_the_one_of_mapping_is_the_decision_the_report_prints():
         'normal': 'normal', 'nssa': 'nssa', 'stub': 'stub'}
     assert resource_mapping.protocol_row('protocol/ospfv3/area/interface/link_type')['selects'] == {
         'point-to-point': 'p2p', 'broadcast': 'broadcast', 'p2mp': 'p2mp'}
+    # F7.6: the policy choice levels are the levels `terraform validate` refuses to hold 2 attributes (provider
+    # 2.0.14, Terraform 1.16.2, measured 2026-11-02), so each states `one_of` with the identity mapping, where
+    # the key is the spelling the export states and the value is the provider name. `action` is the only one
+    # whose alternatives name levels, so its mapping is the identity over the two rows for them.
+    for path in ('protocol/bgp/policy/aggregation/address/aggregate_route_attributes/as_path',
+                 'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/community',
+                 'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/extended_community'):
+        row = resource_mapping.protocol_row(path)
+        assert row['shape'] == 'one_of', path
+        assert row['selects'] == {key.replace('_', '-'): key for key in row['fields']}, path
+    for side in ('export', 'import'):
+        action = f'protocol/bgp/policy/{side}/rules/action'
+        assert resource_mapping.protocol_row(action)['selects'] == {'allow': 'allow', 'deny': 'deny'}, side
+        assert resource_mapping.protocol_row(f'{action}/deny')['shape'] == 'block', side
+        for level in ('as_path', 'community', 'extended_community'):
+            row = resource_mapping.protocol_row(f'{action}/allow/update/{level}')
+            assert row['shape'] == 'one_of', (side, level)
+            assert row['selects'] == {key.replace('_', '-'): key for key in row['fields']}, (side, level)
     # A nexthop belongs to the chosen sub-shape, and two of them exist only under `ebgp`.
     assert resource_mapping.protocol_row('protocol/bgp/peer_group/type/ebgp')['fields'] == {
         'export_nexthop': 'string', 'import_nexthop': 'string', 'remove_private_as': 'bool'}
@@ -313,6 +342,21 @@ def test_a_one_of_level_prints_one_key():
     findings = _findings(good.replace('ebgp = {\n              export_nexthop = "self"\n            }',
                                       'made_up = {}'))
     assert len(findings) == 1 and 'is not a key PROTOCOL_SHAPE selects' in findings[0].detail, findings
+    # F7.6: a choice level whose alternatives are values is read by the same rule. The level states one key, and
+    # the field rule reads the value the row states for that key, so the walk never enters a value.
+    value_choice = ('  protocol = {\n    bgp = {\n      policy = {\n        aggregation = {\n          address = [\n'
+                    '            {\n              name = "a1"\n              aggregate_route_attributes = {\n'
+                    '                community = {\n                  append = [ "1:10" ]\n                }\n'
+                    '              }\n            }\n          ]\n        }\n      }\n    }\n  }\n')
+    assert _findings(value_choice) == [], value_choice
+    base = ('protocol panos_virtual_router.default_00000000 '
+            'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/community ')
+    one_key = '                  append = [ "1:10" ]\n'
+    findings = _findings(value_choice.replace(
+        one_key, one_key + '                  remove_all = {}\n'))
+    assert [f.detail for f in findings] == [base + 'states 2 keys, which a one_of level cannot'], findings
+    findings = _findings(value_choice.replace('append = [ "1:10" ]', 'made_up = { x = "1" }'))
+    assert [f.detail for f in findings] == [base + 'key made_up is not a key PROTOCOL_SHAPE selects'], findings
     # The run prints one key, so a run reports nothing.
     files = {str(p.relative_to(GOLDEN_DIR / 'kitchen_sink')): p.read_text(encoding='utf-8')
               for p in sorted((GOLDEN_DIR / 'kitchen_sink').rglob('*.tf'))}
@@ -469,6 +513,159 @@ def test_an_rip_level_prints_the_shape_the_table_states(tmp_path):
     # The gate reads the same table, so the block the run wrote reports no finding.
     findings = sanity_checks.check_protocol_object(files)
     assert findings == [], findings
+
+
+def test_a_policy_block_prints_the_shape_the_table_states(tmp_path):
+    """F7.6: the whole `protocol` field a run writes for `tests/fixtures/bgp_policy.xml`.
+
+    Field order is the table order. A `member_list` field prints as its values, because a member is a value and
+    not an entry, so no level row stands under it. A `block` field prints `{}`, because the export states the
+    level by presence, and the `one_of` level prints the one key its mapping selects, so `deny` prints as the
+    empty block. The export rule whose choice element states no alternative is not printed, so the file holds no
+    half of it and the report names it once.
+    """
+    expected = (
+        '  protocol = {\n' + '    bgp = {\n' + '      enable = true\n'
+        '      local_as = "65001"\n' + '      policy = {\n' + '        aggregation = {\n'
+        '          address = [\n' + '            {\n' + '              advertise_filters = [\n'
+        '                {\n' + '                  enable = true\n'
+        '                  match = {\n' + '                    address_prefix = [\n'
+        '                      {\n' + '                        exact = true\n'
+        '                        name = "agg-prefix"\n' + '                      }\n'
+        '                    ]\n' + '                    as_path = {\n'
+        '                      regex = "65001.*"\n' + '                    }\n'
+        '                    community = {\n' + '                      regex = "1:1"\n'
+        '                    }\n' + '                    extended_community = {\n'
+        '                      regex = "1:2"\n' + '                    }\n'
+        '                    from_peer = [ "192.0.2.1", "192.0.2.2" ]\n'
+        '                    med = 150\n' + '                    nexthop = [ "198.51.100.7" ]\n'
+        '                    route_table = "unicast"\n' + '                  }\n'
+        '                  name = "agg-advertises"\n' + '                }\n' + '              ]\n'
+        '              aggregate_route_attributes = {\n' + '                as_path = {\n'
+        '                  prepend = 5\n' + '                }\n'
+        '                as_path_limit = 5\n' + '                community = {\n'
+        '                  append = [ "1:10" ]\n' + '                }\n'
+        '                extended_community = {\n' + '                  remove_regex = "2:.*"\n'
+        '                }\n' + '                local_preference = 200\n'
+        '                med = 300\n' + '                nexthop = "198.51.100.9"\n'
+        '                origin = "igp"\n' + '                weight = 100\n' + '              }\n'
+        '              as_set = true\n' + '              enable = true\n'
+        '              name = "agg-10.0.0.0-8"\n' + '              prefix = "10.0.0.0/8"\n'
+        '              summary = true\n' + '              suppress_filters = [\n'
+        '                {\n' + '                  enable = true\n'
+        '                  match = {\n' + '                    address_prefix = [\n'
+        '                      {\n' + '                        exact = false\n'
+        '                        name = "agg-suppressed-prefix"\n' + '                      }\n'
+        '                    ]\n' + '                  }\n'
+        '                  name = "agg-suppresses"\n' + '                }\n' + '              ]\n'
+        '            }\n' + '          ]\n' + '        }\n'
+        '        conditional_advertisement = {\n' + '          policy = [\n' + '            {\n'
+        '              advertise_filters = [\n' + '                {\n'
+        '                  enable = true\n' + '                  match = {\n'
+        '                    address_prefix = [\n' + '                      {\n'
+        '                        name = "cond-prefix"\n' + '                      }\n'
+        '                    ]\n' + '                  }\n'
+        '                  name = "cond-advertises"\n' + '                }\n' + '              ]\n'
+        '              enable = true\n' + '              name = "cond-10.0.0.0-16"\n'
+        '              non_exist_filters = [\n' + '                {\n'
+        '                  enable = true\n' + '                  match = {\n'
+        '                    address_prefix = [\n' + '                      {\n'
+        '                        name = "cond-absent-prefix"\n' + '                      }\n'
+        '                    ]\n' + '                  }\n'
+        '                  name = "cond-non-exist"\n' + '                }\n' + '              ]\n'
+        '              used_by = [ "agg-10.0.0.0-8" ]\n' + '            }\n' + '          ]\n'
+        '        }\n' + '        export = {\n' + '          rules = [\n' + '            {\n'
+        '              action = {\n' + '                allow = {\n'
+        '                  update = {\n' + '                    as_path = {\n'
+        '                      remove = {}\n' + '                    }\n'
+        '                    community = {\n' + '                      append = [ "4:1" ]\n'
+        '                    }\n' + '                    local_preference = 150\n'
+        '                    med = 80\n' + '                    nexthop = "198.51.100.11"\n'
+        '                    origin = "egp"\n' + '                  }\n' + '                }\n'
+        '              }\n' + '              enable = true\n' + '              match = {\n'
+        '                address_prefix = [\n' + '                  {\n'
+        '                    exact = true\n' + '                    name = "export-prefix"\n'
+        '                  }\n' + '                ]\n'
+        '                from_peer = [ "192.0.2.1" ]\n' + '              }\n'
+        '              name = "export-allow"\n' + '              used_by = [ "cond-10.0.0.0-16" ]\n'
+        '            }\n' + '          ]\n' + '        }\n' + '        import = {\n'
+        '          rules = [\n' + '            {\n' + '              action = {\n'
+        '                deny = {}\n' + '              }\n' + '              enable = true\n'
+        '              match = {\n' + '                address_prefix = [\n'
+        '                  {\n' + '                    exact = true\n'
+        '                    name = "import-prefix"\n' + '                  }\n'
+        '                ]\n' + '                nexthop = [ "198.51.100.12" ]\n'
+        '              }\n' + '              name = "import-deny"\n'
+        '              used_by = [ "agg-10.0.0.0-8" ]\n' + '            }\n' + '          ]\n'
+        '        }\n' + '      }\n' + '    }\n' + '  }\n'
+    )
+    files = _run('bgp_policy.xml', tmp_path)
+    block = files['virtual_routers.tf']
+    assert expected in block, block
+    # The entry the file cannot hold is named by the report, and the file holds no half of it.
+    report = files['MANUAL_SETUP_REPORT.txt']
+    assert ('router policy-vr: rules export-no-action '
+            '(panos_virtual_router - action states no key PROTOCOL_SHAPE selects)') in report, report
+    # F7.6: the policy `address` level is not an address-object section, so the report names no address object
+    # for the entry the address rule would otherwise read.
+    assert 'Address Objects With No v2 Attribute' not in report, report
+    assert 'export-no-action' not in block, block
+    # The gate reads the same table, so the block the run wrote reports no finding.
+    findings = sanity_checks.check_protocol_object(files)
+    assert findings == [], findings
+
+
+def test_member_list_is_the_word_for_a_field_whose_members_are_values():
+    """F7.6: `member_list` is the `string_list` shape with values as members, and one place states the reading.
+
+    `SHAPE_READS_AS` is the only place that states which word the field reader reads each specialization as, so
+    the gate compares a value against the family word the reader can read while the table still states the
+    specialization. `SHAPE_LEVELS` is the set of words that name a level the walk enters, and a member list names
+    no level, so rule 4 cannot ask a member for a `name`.
+    """
+    fields = {field for row in resource_mapping.PROTOCOL_SHAPE.values()
+              for field, word in row['fields'].items() if word == 'member_list'}
+    assert fields == {'append', 'from_peer', 'nexthop', 'overwrite', 'used_by'}, fields
+    assert sanity_checks.SHAPE_READS_AS['member_list'] == 'string_list', sanity_checks.SHAPE_READS_AS
+    assert sanity_checks.SHAPE_LEVELS == ('object', 'one_of', 'string_list'), sanity_checks.SHAPE_LEVELS
+    # `nexthop` is a string at the aggregate level and a member list at the match level, so the word is the
+    # field's shape at the row that states it, not the field name.
+    assert resource_mapping.protocol_row('protocol/bgp/policy/aggregation/address/aggregate_route_attributes')[
+        'fields']['nexthop'] == 'string'
+    assert resource_mapping.protocol_row('protocol/bgp/policy/export/rules/match')['fields']['nexthop'] == (
+        'member_list')
+
+
+def test_the_gate_reads_a_member_list_as_values_and_not_as_entries(tmp_path):
+    """F7.6: the walk reads a `[` value whose members are values against the row that states the field.
+
+    The rule refuses a member list printed as a string, and it does not walk a member list, so a member is never
+    asked for a `name`. The choice inside the same entry is read by the same rule as any other `one_of` level:
+    the entry states one key, and that key is one the row selects.
+    """
+    good = ('  protocol = {\n    bgp = {\n      policy = {\n        export = {\n          rules = [\n'
+            '            {\n              name = "r1"\n              used_by = [ "a", "b" ]\n'
+            '              action = {\n                allow = {}\n              }\n            }\n'
+            '          ]\n        }\n      }\n    }\n  }\n')
+    assert _findings(good) == [], good
+    findings = _findings(good.replace('used_by = [ "a", "b" ]', 'used_by = "a"'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/bgp/policy/export/rules '
+        'used_by is not a member_list value'], findings
+    findings = _findings(good.replace('action = {\n                allow = {}\n              }',
+                                      'action = {\n                allow = {}\n'
+                                      '                deny = {}\n              }'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/bgp/policy/export/rules/action '
+        'states 2 keys, which a one_of level cannot'], findings
+    findings = _findings(good.replace('allow = {}', 'approve = {}'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/bgp/policy/export/rules/action '
+        'key approve is not a key PROTOCOL_SHAPE selects'], findings
+    # The block the run wrote for the new fixture is the positive half: the rule reads the whole subtree and
+    # reports nothing, including the two levels the export states by presence.
+    files = _run('bgp_policy.xml', tmp_path)
+    assert sanity_checks.check_protocol_object(files) == [], files['virtual_routers.tf']
 
 
 def test_the_gate_reads_a_scalar_level_against_the_row_it_states():

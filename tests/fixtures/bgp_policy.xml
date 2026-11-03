@@ -1,0 +1,206 @@
+<?xml version="1.0"?>
+<config version="10.0.0" urldb="paloaltonetworks">
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <network>
+            <virtual-router>
+              <entry name="policy-vr">
+                <protocol>
+                  <!-- F7.6: the `policy` level and the four levels inside it that hold entries. Every field
+                       the row states for an entry is stated here, so the property scan measures the whole row.
+                       The field order is the order the provider schema declares. -->
+                  <bgp>
+                    <enable>yes</enable>
+                    <local-as>65001</local-as>
+                    <policy>
+                      <aggregation>
+                        <address>
+                          <entry name="agg-10.0.0.0-8">
+                            <enable>yes</enable>
+                            <prefix>10.0.0.0/8</prefix>
+                            <summary>yes</summary>
+                            <as-set>yes</as-set>
+                            <advertise-filters>
+                              <entry name="agg-advertises">
+                                <enable>yes</enable>
+                                <match>
+                                  <address-prefix>
+                                    <entry name="agg-prefix">
+                                      <exact>yes</exact>
+                                    </entry>
+                                  </address-prefix>
+                                  <as-path>
+                                    <regex>65001.*</regex>
+                                  </as-path>
+                                  <community>
+                                    <regex>1:1</regex>
+                                  </community>
+                                  <extended-community>
+                                    <regex>1:2</regex>
+                                  </extended-community>
+                                  <!-- A `member_list` field: the members are values, not entries -->
+                                  <from-peer>
+                                    <member>192.0.2.1</member>
+                                    <member>192.0.2.2</member>
+                                  </from-peer>
+                                  <nexthop>
+                                    <member>198.51.100.7</member>
+                                  </nexthop>
+                                  <med>150</med>
+                                  <route-table>unicast</route-table>
+                                </match>
+                              </entry>
+                            </advertise-filters>
+                            <suppress-filters>
+                              <entry name="agg-suppresses">
+                                <enable>yes</enable>
+                                <match>
+                                  <address-prefix>
+                                    <entry name="agg-suppressed-prefix">
+                                      <exact>no</exact>
+                                    </entry>
+                                  </address-prefix>
+                                </match>
+                              </entry>
+                            </suppress-filters>
+                            <aggregate-route-attributes>
+                              <!-- A `one_of` level: the provider reads one alternative, so the export states
+                                   one. These three state the number, the member list, and the string
+                                   alternative, and the export rule below states the block alternative. -->
+                              <as-path>
+                                <prepend>5</prepend>
+                              </as-path>
+                              <as-path-limit>5</as-path-limit>
+                              <community>
+                                <append>
+                                  <member>1:10</member>
+                                </append>
+                              </community>
+                              <extended-community>
+                                <remove-regex>2:.*</remove-regex>
+                              </extended-community>
+                              <local-preference>200</local-preference>
+                              <med>300</med>
+                              <nexthop>198.51.100.9</nexthop>
+                              <origin>igp</origin>
+                              <weight>100</weight>
+                            </aggregate-route-attributes>
+                          </entry>
+                        </address>
+                      </aggregation>
+                      <conditional-advertisement>
+                        <policy>
+                          <entry name="cond-10.0.0.0-16">
+                            <enable>yes</enable>
+                            <used-by>
+                              <member>agg-10.0.0.0-8</member>
+                            </used-by>
+                            <advertise-filters>
+                              <entry name="cond-advertises">
+                                <enable>yes</enable>
+                                <match>
+                                  <address-prefix>
+                                    <entry name="cond-prefix">
+                                      <exact>yes</exact>
+                                    </entry>
+                                  </address-prefix>
+                                </match>
+                              </entry>
+                            </advertise-filters>
+                            <non-exist-filters>
+                              <entry name="cond-non-exist">
+                                <enable>yes</enable>
+                                <match>
+                                  <address-prefix>
+                                    <entry name="cond-absent-prefix">
+                                      <exact>no</exact>
+                                    </entry>
+                                  </address-prefix>
+                                </match>
+                              </entry>
+                            </non-exist-filters>
+                          </entry>
+                        </policy>
+                      </conditional-advertisement>
+                      <export>
+                        <rules>
+                          <entry name="export-allow">
+                            <enable>yes</enable>
+                            <used-by>
+                              <member>cond-10.0.0.0-16</member>
+                            </used-by>
+                            <match>
+                              <address-prefix>
+                                <entry name="export-prefix">
+                                  <exact>yes</exact>
+                                </entry>
+                              </address-prefix>
+                              <from-peer>
+                                <member>192.0.2.1</member>
+                              </from-peer>
+                            </match>
+                            <!-- The one choice level in the policy subtree, and the identity mapping -->
+                            <action>
+                              <allow>
+                                <update>
+                                  <as-path>
+                                    <remove/>
+                                  </as-path>
+                                  <community>
+                                    <append>
+                                      <member>4:1</member>
+                                    </append>
+                                  </community>
+                                  <local-preference>150</local-preference>
+                                  <med>80</med>
+                                  <nexthop>198.51.100.11</nexthop>
+                                  <origin>egp</origin>
+                                </update>
+                              </allow>
+                            </action>
+                          </entry>
+                          <!-- F7.6: a choice element that states none of the alternatives the provider
+                               requires has no `.tf` shape, so the report names the entry that holds it -->
+                          <entry name="export-no-action">
+                            <enable>yes</enable>
+                            <action/>
+                          </entry>
+                        </rules>
+                      </export>
+                      <import>
+                        <rules>
+                          <entry name="import-deny">
+                            <enable>yes</enable>
+                            <used-by>
+                              <member>agg-10.0.0.0-8</member>
+                            </used-by>
+                            <match>
+                              <address-prefix>
+                                <entry name="import-prefix">
+                                  <exact>yes</exact>
+                                </entry>
+                              </address-prefix>
+                              <nexthop>
+                                <member>198.51.100.12</member>
+                              </nexthop>
+                            </match>
+                            <!-- The alternative with no attribute of its own, so the print states it by presence -->
+                            <action>
+                              <deny/>
+                            </action>
+                          </entry>
+                        </rules>
+                      </import>
+                    </policy>
+                  </bgp>
+                </protocol>
+              </entry>
+            </virtual-router>
+          </network>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

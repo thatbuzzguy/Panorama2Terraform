@@ -267,6 +267,42 @@ def test_the_scan_measures_a_rip_entry_and_not_a_level_inside_it(converter_modul
         assert field in router_row['properties'], router_row['properties']
 
 
+def test_the_scan_measures_a_policy_entry_and_not_a_level_inside_it(converter_module, tmp_path):
+    """F7.6: an entry at one of the four policy levels is in the scan scope, and a level inside it is not.
+
+    The four entry levels the container table names are measured against the router row, so the properties their
+    rows declare join the measured set. A filter entry lives inside an address entry, so its section path holds
+    an `entry` segment a row path cannot match, and the level stays grounded by the table. The export rule the
+    file cannot hold is read by the report, so it has no unused property and the scan reports nothing for it.
+    """
+    parser = run_pipeline(converter_module, 'bgp_policy.xml', tmp_path)
+    assert parser is not None, 'bgp_policy.xml'
+    ledger = parser.ledger
+    entry = next(e for e in ledger.entries() if e.get('name') == 'agg-10.0.0.0-8')
+    row = entry_coverage.matrix_row_for(
+        container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source))
+    assert row is not None and row['resource'] == 'panos_virtual_router', row
+    recorded = ledger.mark_for(entry)['captured']
+    assert isinstance(recorded, entry_coverage.RecordingDict), recorded
+    assert sorted(set(recorded.used_keys()) - entry_coverage.NON_FIELD_KEYS) == [
+        'advertise_filters', 'aggregate_route_attributes', 'as_set', 'enable', 'prefix', 'summary',
+        'suppress_filters'], recorded.used_keys()
+    inner = next(e for e in ledger.entries() if e.get('name') == 'agg-advertises')
+    path = container_coverage.section_path(ledger.parents[inner], ledger.parents, ledger.source)
+    assert entry_coverage.matrix_row_for(path) is None, path
+    # F7.6: the policy `address` level is covered by the policy row and not by the address row, so the address
+    # rule reads no object for it, and the mark the protocol walk wrote is the one the scan reads.
+    assert ledger.destination(entry) == 'emitted', ledger.destination(entry)
+    router_row = next(r for r in ROWS if r['resource'] == 'panos_virtual_router')
+    for field in ('action', 'advertise_filters', 'aggregate_route_attributes', 'as_set', 'match',
+                  'non_exist_filters', 'prefix', 'summary', 'suppress_filters', 'used_by'):
+        assert field in router_row['properties'], router_row['properties']
+    assert ledger.property_findings() == [], ledger.property_findings()
+    assert entry_coverage.covering_row(
+        container_coverage.section_path(ledger.parents[entry], ledger.parents)).path == (
+        'protocol/bgp/policy/aggregation/address')
+
+
 # --- 3. The scan -----------------------------------------------------------
 
 def test_scan_reports_the_properties_no_output_read(converter_module, tmp_path):

@@ -442,6 +442,62 @@ def test_parse_rip_reads_the_levels_the_table_states(make_parser):
     assert rows[0]["container"].endswith('protocol/rip/interfaces'), rows[0]["container"]
 
 
+def test_parse_bgp_reads_the_policy_levels_the_table_states(make_parser):
+    """`parse_bgp` reads the `policy` level and its four entry levels as their rows state them (F7.6).
+
+    `policy` is a `single` level, so `_protocol_level` reads it with no field name of its own, and the four
+    levels inside it that hold entries are filled through the path the row names. A level inside an entry is
+    filled by `_protocol_body`, which reaches it through the table, so the code states no path for it. A
+    `member_list` field is read by `_protocol_level`, because its value is the members the element holds and not
+    entries. The export rule whose `action` element states no alternative is not put in the printed list, so the
+    report names it.
+    """
+    p = _parser(make_parser, "bgp_policy.xml")
+    policy = p.parse_virtual_routers()[0]["protocol"]["bgp"]["policy"]
+    address = policy["aggregation"]["address"][0]
+    assert (address["name"], address["prefix"], address["summary"], address["as_set"]) == (
+        "agg-10.0.0.0-8", "10.0.0.0/8", True, True), address
+    # A choice level is the one key the export states, and the value is what the field reader reads for the
+    # alternative: a value alternative is the value, so the read holds no dict for it (F7.6). The key is the
+    # spelling the export states, so the print applies the row's mapping to it.
+    choice = address["aggregate_route_attributes"]
+    assert tuple(list(choice[name]) for name in ("as_path", "community", "extended_community")) == (
+        ["prepend"], ["append"], ["remove-regex"]), choice
+    assert (choice["as_path"]["prepend"], choice["community"]["append"],
+            choice["extended_community"]["remove-regex"]) == (5, ["1:10"], "2:.*"), choice
+    filter_entry = address["advertise_filters"][0]
+    # The members are values, so a member list is the list `_protocol_field` read, with no entry inside it.
+    assert (filter_entry["match"]["from_peer"], filter_entry["match"]["nexthop"]) == (
+        ["192.0.2.1", "192.0.2.2"], ["198.51.100.7"]), filter_entry
+    # An entry inside an entry belongs to the level the field names, not to the level above it.
+    assert [entry["name"] for entry in filter_entry["match"]["address_prefix"]] == ["agg-prefix"], filter_entry
+    assert [entry["name"] for entry in address["suppress_filters"]] == ["agg-suppresses"], address
+    cond = policy["conditional_advertisement"]["policy"][0]
+    assert (cond["name"], cond["used_by"]) == ("cond-10.0.0.0-16", ["agg-10.0.0.0-8"]), cond
+    export = policy["export"]["rules"][0]
+    # `action` is the one choice level in the subtree, and its mapping is the identity, so the value the export
+    # states is the key the print states.
+    assert list(export["action"]) == ["allow"], export["action"]
+    assert str(export["action"]["allow"]["update"]["as_path"]["remove"]) == "{}", export["action"]
+    assert [entry["name"] for entry in policy["import"]["rules"]] == ["import-deny"], policy["import"]["rules"]
+    assert str(policy["import"]["rules"][0]["action"]["deny"]) == "{}", policy["import"]["rules"][0]
+    # The four entry levels the container table names are the levels the property scan measures, so the entries
+    # at them are marked.
+    for name in ("agg-10.0.0.0-8", "cond-10.0.0.0-16", "export-allow", "import-deny"):
+        element = next(e for e in p.ledger.entries() if e.get("name") == name)
+        assert p.ledger.mark_for(element) is not None, name
+
+    rows = entry_coverage.protocol_report_rows(p.ledger)
+    assert [(row["router"], row["level"], row["name"]) for row in rows] == [
+        ("policy-vr", "rules", "export-no-action")], rows
+    assert rows[0]["detail"] == (
+        'panos_virtual_router - action states no key PROTOCOL_SHAPE selects'), rows[0]
+    # The entry the file cannot hold is a property entry, so the report reads its captured fields.
+    assert rows[0]["fields"] == ('action', 'enable', 'match'), rows[0]
+    # The container table states no row for a level inside an entry, so the scan scope is the entry level.
+    assert rows[0]["container"].endswith('protocol/bgp/policy/export/rules'), rows[0]["container"]
+
+
 def test_parse_rip_absent(make_parser):
     """A router with no RIP element has no `rip` level, so nothing prints for it (F7.5)."""
     p = _parser(make_parser, "zones.xml")

@@ -600,12 +600,21 @@ def check_import_blocks(files: dict[str, str]) -> list[Finding]:
     return findings
 
 
+# A shape word as the field reader reads it (F7.6). `value_shape` reads a shape family, so a specialization
+# reads back as its family word: `one_of` and `block` are object values, and `member_list` is a `[` value.
+# `SHAPE_LEVELS` is the set of words that name a level the walk enters. A `member_list` names no level,
+# because its members are values and not entries, and a `block` field names a level that states no fields.
+SHAPE_READS_AS = {'one_of': 'object', 'block': 'object', 'member_list': 'string_list'}
+SHAPE_LEVELS = ('object', 'one_of', 'string_list')
+
+
 def value_shape(raw: str) -> str:
     """The value shape a field states, as the one field reader read it (F6.7).
 
     The shapes `ACTION_SCHEMA` and `PROTOCOL_SHAPE` declare: `string`, `number`, `string_list`, `bool`,
-    `object`, and the `one_of` and `block` shapes as `object`, because a one-of level is an object value
-    that states one key and a `block` field is an object value that states none. The reader keeps the raw
+    `object`, and each specialization as its family word through `SHAPE_READS_AS` above, because a one-of level
+    is an object value that states one key, a `block` field is an object value that states none, and a
+    `member_list` is a `[` value whose members are values. The reader keeps the raw
     text so the opening character states the shape, which makes this the reader's own inverse and no second
     table names the shapes.
     """
@@ -756,9 +765,10 @@ def check_protocol_object(files: dict[str, str]) -> list[Finding]:
     0. A `protocol` the field reader can read as a name but not as a field, which is the block shape the
        provider refuses.
     1. A level the shape table states no row for, a field the row does not declare, or a value whose shape
-       the reader reads differently from the shape the row states. `one_of` and `block` are read as `object`,
-       because a one-of level is an object that states one key and a `block` field is an object that states
-       nothing but its presence.
+       the reader reads differently from the shape the row states. A specialization is read as its family word
+       through `SHAPE_READS_AS`, because the field reader reads the family: `one_of` and `block` are read as
+       `object`, and `member_list` is read as `string_list`. The walk enters only the words in
+       `SHAPE_LEVELS`, so a member list is never walked and rule 4 reads only an entry list.
     2. A `one_of` level that states no key, or more than one key, or a key the row's mapping does not
        state. `terraform validate` accepts a `{ ... }` value for `protocol`, so the gate is the rule that
        keeps a one-of level to the one key the provider can read.
@@ -841,6 +851,11 @@ def _protocol_level_findings(block, path: str, raw: str, findings: list) -> None
                 f'protocol {block.address} {path} key {key} is not a key PROTOCOL_SHAPE selects',
             ))
             return
+        if key in row['fields']:
+            # F7.6: the alternative is a value the row states, so the field rule reads it and the walk does
+            # not enter a value.
+            _protocol_field_findings(block, path, fields, findings)
+            return
         _protocol_level_findings(block, f'{path}/{key}', fields[key], findings)
         return
     _protocol_field_findings(block, path, fields, findings)
@@ -865,13 +880,13 @@ def _protocol_field_findings(block, path: str, fields: dict, findings: list) -> 
                     f'protocol {block.address} {path} {field} prints a sensitive value as a literal',
                 ))
             continue
-        word = 'object' if declares in ('one_of', 'block') else declares
+        word = SHAPE_READS_AS.get(declares, declares)
         if value_shape(value) != word:
             findings.append(Finding(
                 'protocol_object', FAIL, block.file, block.line,
                 f'protocol {block.address} {path} {field} is not a {declares} value',
             ))
-        elif declares in ('object', 'one_of', 'string_list'):
+        elif declares in SHAPE_LEVELS:
             _protocol_level_findings(block, f'{path}/{field}', value, findings)
 
 
