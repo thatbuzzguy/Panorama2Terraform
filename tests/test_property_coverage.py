@@ -210,6 +210,33 @@ def test_the_scan_measures_an_export_rule_and_not_a_scalar_level(converter_modul
     assert not isinstance(level['protocol']['ospfv3']['timers'], entry_coverage.RecordingDict), level
 
 
+def test_the_scan_measures_an_ospf_export_rule_and_not_a_scalar_level(converter_module, tmp_path):
+    """F7.9: the `ospf` export rule is in the scan scope, and the three single-object levels are not.
+
+    `CONTAINER_TABLE` names `protocol/ospf/export-rules`, so the export rule the fixture states is measured
+    against the router row, and the properties the row declares are the fields the emitter reads from it. The
+    three single-object levels hold no entry, so `_protocol_level` builds them as plain dicts, which record
+    nothing, and those rows are grounded by the table instead. The fixture states every field the four new rows
+    declare, so the run reports no finding.
+    """
+    parser = run_pipeline(converter_module, 'ospf.xml', tmp_path)
+    assert parser is not None, 'ospf.xml'
+    ledger = parser.ledger
+    rule = next(e for e in ledger.entries() if e.get('name') == 'export-static')
+    path = container_coverage.section_path(ledger.parents[rule], ledger.parents, ledger.source)
+    assert entry_coverage.covering_row(path).path == 'protocol/ospf/export-rules', path
+    row = entry_coverage.matrix_row_for(path)
+    assert row is not None and row['resource'] == 'panos_virtual_router', row
+    recorded = ledger.mark_for(rule)['captured']
+    assert isinstance(recorded, entry_coverage.RecordingDict), recorded
+    assert sorted(set(recorded.used_keys()) - entry_coverage.NON_FIELD_KEYS) == [
+        'metric', 'new_path_type', 'new_tag'], recorded.used_keys()
+    level = ledger.mark_for(next(e for e in ledger.entries() if e.get('name') == 'default'))['captured']
+    for field in ('timers', 'global_bfd', 'graceful_restart'):
+        assert not isinstance(level['protocol']['ospf'][field], entry_coverage.RecordingDict), field
+    assert ledger.property_findings() == [], ledger.property_findings()
+
+
 def test_the_scan_measures_the_area_level_and_not_an_entry_inside_an_entry(converter_module, tmp_path):
     """F7.4: the area dict is in the scan scope, and the entries inside a property level are not.
 

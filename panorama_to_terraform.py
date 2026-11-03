@@ -2127,11 +2127,16 @@ class PanoramaParser:
         return level
 
     def parse_ospf(self, router: ET.Element) -> dict:
-        """Build the `ospf` level of one router's protocol object (F7.1).
+        """Build the `ospf` level of one router's protocol object (F7.1, F7.9).
 
         The area rule is `_protocol_areas`, the same reader `parse_ospfv3` uses. An interface at the
         `protocol/ospf` level has no provider field, so it is marked for the report and the manual report
         prints it.
+
+        F7.9: the three `bool` fields and the three single-object levels are fields the row states, so
+        `_protocol_level` reads them with no field name of its own. `export_rules` is a `string_list` level,
+        so this method states its path and `_protocol_branch` fills it with the entries the export holds, the
+        same rule `parse_ospfv3` uses.
         """
         ospf_path = 'protocol/ospf'
         ospf = router.find(ospf_path)
@@ -2150,6 +2155,10 @@ class PanoramaParser:
         # fills it, and `md5` is the entry level inside the profile entry that `_protocol_body` fills through
         # the table. The path is the only name this method states.
         self._protocol_branch(ospf_path, level, ospf, 'protocol/ospf/auth_profile')
+        # F7.9: `export_rules` is the other entry level this method fills through the table. The three
+        # single-object levels hold no entry, so they are read by `_protocol_level` through the row fields,
+        # and this method states no path for them.
+        self._protocol_branch(ospf_path, level, ospf, 'protocol/ospf/export_rules')
         return level
 
     def parse_ospfv3(self, router: ET.Element) -> dict:

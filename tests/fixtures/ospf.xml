@@ -9,8 +9,36 @@
               <entry name="default">
                 <protocol>
                   <ospf>
+                    <!-- F7.9: the fields the `protocol/ospf` row declares. One entry states every field its
+                         row declares, so the property scan has no unused property for it. The print order is
+                         the row's field order. -->
                     <enable>yes</enable>
                     <router-id>10.0.0.1</router-id>
+                    <allow-redist-default-route>yes</allow-redist-default-route>
+                    <reject-default-route>no</reject-default-route>
+                    <rfc1583>yes</rfc1583>
+                    <timers>
+                      <lsa-interval>120</lsa-interval>
+                      <spf-calculation-delay>20</spf-calculation-delay>
+                    </timers>
+                    <global-bfd>
+                      <profile>BFD-OSPF</profile>
+                    </global-bfd>
+                    <graceful-restart>
+                      <enable>yes</enable>
+                      <grace-period>120</grace-period>
+                      <helper-enable>yes</helper-enable>
+                      <max-neighbor-restart-time>200</max-neighbor-restart-time>
+                      <!-- `strict_l_s_a_checking` is the one spelling the `-` rule cannot produce -->
+                      <strict-lsa-checking>yes</strict-lsa-checking>
+                    </graceful-restart>
+                    <export-rules>
+                      <entry name="export-static">
+                        <metric>10</metric>
+                        <new-path-type>internal</new-path-type>
+                        <new-tag>0</new-tag>
+                      </entry>
+                    </export-rules>
                     <area>
                       <entry name="0.0.0.0">
                         <!-- F7.2: the fields of the chosen body live inside the chosen element, so this flag
