@@ -77,9 +77,13 @@ F7.5 landed: `PROTOCOL_SHAPE` states the `rip` levels the pinned provider declar
 table's names. An interface entry fills the choice it states inside itself, so the same reader that fills a
 chosen body also fills an entry.
 
-Open for Epic 7: the levels `PROTOCOL_SHAPE` does not state, which no parse method reads — the BGP `policy`,
-the auth profile bodies, and the filter containers (route maps, prefix lists, community lists, access lists).
-They are in `backlog.md`.
+F7.6 landed: `PROTOCOL_SHAPE` states the `policy` level the pinned provider declares on `protocol.bgp` and the
+78 rows of its subtree, `parse_bgp` reads the four levels that hold entries, and a `member_list` field prints as
+the values its element holds. Nine policy levels accept one attribute, so they are `one_of` rows.
+
+Open for Epic 7: the levels `PROTOCOL_SHAPE` does not state, which no parse method reads — the auth profile
+bodies, and the filter containers (route maps, prefix lists, community lists, access lists). They are in
+`backlog.md`.
 
 ## Housekeeping — repository layout (open)
 

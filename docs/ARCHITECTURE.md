@@ -1194,7 +1194,11 @@ table names a shape. A level is printable only when a parse method reads it and 
 `protocol` dict from the fields the `protocol` row states, and `_protocol_areas` is the area rule the two OSPF
 levels share. F7.4 put the four area sub-levels into the table, so the rule fills the entries of
 `virtual_link`, `neighbor` and `nssa_ext_range` through `_protocol_entries`, and the choice inside a chosen
-body through `_protocol_body`. F7.5 put the `rip` levels into the table. A level the table states no row for is
+body through `_protocol_body`. F7.5 put the `rip` levels into the table. F7.6 put the `policy` subtree into the
+table: `policy` is a `single` level with four children, and the four levels below it that hold entries are the
+four the container table names, so `parse_bgp` fills them through `_protocol_branch`, which walks the path's
+segments and states no field name of its own. A level inside an entry is filled by `_protocol_body`, so the code
+states no path for it and the container table states no row for it. A level the table states no row for is
 read by no method, so it prints nothing and the gate refuses it in a hand-written file.
 
 1. **`protocol` prints as one field of the block**: `protocol = { ... }`. `terraform validate` accepts the
@@ -1202,8 +1206,9 @@ read by no method, so it prints nothing and the gate refuses it in a hand-writte
    a field. Pinned by `tests/test_protocol_object.py::test_protocol_prints_as_an_object_field_not_a_block`.
 2. **One table path is one nesting level of the printed value.** A `single` level prints as an object, a
    `list` level prints one object per element, a `one_of` level prints the one key the row's mapping states,
-   and a `block` field prints `{}`, because the export states it by presence. Field order is the table order
-   and `hcl_value` is the only printer, so two runs on the same bytes write the same bytes.
+   a `block` field prints `{}`, because the export states it by presence, and a `member_list` field prints as
+   the values the element holds, because a member is a value and not an entry (rule 9). Field order is the table
+   order and `hcl_value` is the only printer, so two runs on the same bytes write the same bytes.
 3. **One rule names a field.** The entry name inside a list element prints as the `name` field, the rule
    `entry_coverage.name_field` states (§3.2). The table states the provider spelling, the export spells it
    with `-`, and `PanoramaParser._protocol_xml_name` is the one rule that turns one into the other. The rule has
@@ -1247,6 +1252,28 @@ read by no method, so it prints nothing and the gate refuses it in a hand-writte
 8. **A sensitive field prints as the variable reference**, through `VALUE_VARIABLES`
    (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2), and the run holds no value for it, so no generated file states
    one. `SHAPE_WORDS` is the word list the table uses, and `sanity_checks.value_shape` is its reader inverse.
+   A specialization is read back as its family word through `sanity_checks.SHAPE_READS_AS`, and
+   `sanity_checks.SHAPE_LEVELS` states which words name a level the walk enters, so a member list is never
+   walked. Pinned by `tests/test_protocol_object.py::test_value_shape_is_the_reader_inverse_for_every_shape_word`.
+
+9. **A `member_list` field is a `[` value whose members are values.** The provider declares 27 fields as
+   `['list', 'string']` (`from_peer`, `nexthop`, `append`, `overwrite`, `used_by`), which `string_list` already
+   covers as a `[` value, so the table needs the word `member_list` to say that the level holds no entry. The
+   field reader reads the `member` children, the print writes them as the list, and rule 4 never reaches a
+   member. Pinned by
+   `tests/test_protocol_object.py::test_member_list_is_the_word_for_a_field_whose_members_are_values`
+   and `tests/test_protocol_object.py::test_the_gate_reads_a_member_list_as_values_and_not_as_entries`.
+
+10. **A choice level can state its alternatives as values.** `terraform validate` (Terraform 1.16.2, provider
+    2.0.14) refuses a policy level that states more than one of the attributes it declares, so the nine levels
+    `aggregate_route_attributes/{as_path,community,extended_community}` and
+    `{export,import}/rules/action/allow/update/{as_path,community,extended_community}` are `one_of` rows with the
+    identity mapping, and the three levels that hold them state those fields as `one_of`. When the chosen
+    alternative is a field the row states, the field reader reads it and the print writes the value as it was
+    read, so the walk never enters a value. A mapping key is the spelling the export states, so
+    `remove-regex` and `remove-and-prepend` are keys. Pinned by
+    `tests/test_protocol_object.py::test_the_one_of_mapping_is_the_decision_the_report_prints` and
+    `tests/test_protocol_object.py::test_a_one_of_level_prints_one_key`.
 
 The container rows for the levels this converter prints are `emitted` with the note
 `panos_virtual_router` (`container_coverage.CONTAINER_TABLE`), so the property scan measures them against the
