@@ -1,14 +1,19 @@
 # To Do
 
-F7.12 is complete and committed: `selects` is the one place `PROTOCOL_SHAPE` states a choice, the two rows that
-hold a choice the provider reads as exactly one now state it (`protocol/ospfv3/auth_profile` and
-`protocol/bgp/peer_group/peer/peer_address`), and the gate rule `protocol_object` reads the choice at the level
-the walk enters and at each entry of a `string_list` row, so a level or an entry that states both alternatives,
-or none, is a FAIL finding. Epic 7 is closed.
+Epic 7 is closed, so the current feature is the repository layout (`PLAN.md`, Housekeeping): the root holds
+`conftest.py`, the flat module set, `quick_start.sh`, and `sample_panorama_config.xml`, and each index names
+every document under it. The item list and the pins that read a path are in `backlog.md`. Pieces:
 
-The next feature is the repository layout (`PLAN.md`, Housekeeping): the root holds `conftest.py`, the flat
-module set, `quick_start.sh`, and `sample_panorama_config.xml`, and each index names every document under it.
-The item list and the pins that read a path are in `backlog.md`.
+- [ ] State the layout as a rule in `PLAN.md` and `docs/ARCHITECTURE.md`, so the rule has one owner document.
+- [ ] Decide the import rule for the tool's modules, then move the 20 flat modules to `src/`.
+- [ ] Move the developer scripts to `tools/`, and the sample input and the sample output to `examples/`.
+- [ ] Move `conftest.py` once the layout rule names where the helpers the tests read live.
+- [ ] Update the pins that read a path, and the two readme indexes, then run the suite and check no golden
+  moved.
+
+F7.13 is complete and committed (`931ceec`): `selects` is the one place either shape table states a choice, so
+the 14 filter rows the measurement names state it, and the gate reads a filter choice at the block's own level.
+Nothing stays open from that slice.
 
 ## Rules the write path keeps
 

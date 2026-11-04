@@ -35,7 +35,9 @@ through the table, the emitter prints them in the row's field order, and the gat
 `filter_blocks` read a printed object against the same rows. F7.12 decided how the table states a choice the
 provider reads as exactly one: `selects` is the one place the table states it, because the schema states no fact
 for a choice, and the gate reads the rule at the level the walk enters and at each entry of a `string_list` row.
-The rules are in `docs/ARCHITECTURE.md` §4.9 and §4.10, and the coverage is in `docs/COVERAGE_MATRIX.md`.
+F7.13 applied the same rule and the same wording to `FILTER_SHAPE`, which states the choice for the 14 rows the
+measurement names, and the gate reads a filter choice at the block's own level as well. The rules are in
+`docs/ARCHITECTURE.md` §4.9 and §4.10, and the coverage is in `docs/COVERAGE_MATRIX.md`.
 
 ## Goals
 

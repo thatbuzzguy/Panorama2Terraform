@@ -406,11 +406,11 @@ Completed work is not recorded here; the git history and the owner document hold
   (1), and `protocol/ospfv3/area/interface` (9). Every field the provider declares for those six
   levels is read and printed, and none is marked sensitive, so no `VALUE_VARIABLES` row is
   needed. The gaps that stay are the choice levels: `selects` is the one place a row states a choice the
-  provider reads as exactly one (F7.12), so the two rows that hold such a choice state it
-  (`protocol/bgp/peer_group/peer/peer_address` and `protocol/ospfv3/auth_profile`), and the three filter levels
-  that state their alternatives as fields are recorded below. Measured 2026-11-03 against
-  provider 2.0.14. A level becomes printable when a parse method reads it and the table has a row
-  for it, because the emitter, the gate and the report all read that table.
+  provider reads as exactly one (F7.12), so the two protocol rows that hold such a choice state it
+  (`protocol/bgp/peer_group/peer/peer_address` and `protocol/ospfv3/auth_profile`), and the same rule serves the
+  filter table (F7.13). Measured 2026-11-03 against provider 2.0.14. A level becomes printable when a parse
+  method reads it and the table has a row for it, because the emitter, the gate and the report all read that
+  table.
 - Decision for the redistribution route-map entry (F7.8): the row scope stops at the `match`
   and `set` rows, because those two rows state leaf fields only. The six levels inside them —
   `match.ipv4.address`, `match.next_hop`, `match.route_source`, `set.metric`, `set.ipv4`,
@@ -420,18 +420,6 @@ Completed work is not recorded here; the git history and the owner document hold
   entry for `type` (`regular`, `extended`, `large`), so `FILTER_XML_NAME_EXCEPTIONS` is grounded
   by the five pairs the fixture states, and the other ten pairs are the spellings the pango
   source measures.
-- Open: the filter table states no `selects`, so the choice rule (F7.12) reads no choice for a filter block,
-  even though the provider reads three filter levels as exactly one. Measured by F7.8 with `terraform validate`
-  (provider 2.0.14): `access-list/type/ipv4/ipv4_entries/source_address` (`address` or `entry`),
-  `prefix-list/type/ipv4/ipv4_entries/prefix` (`entry` or `network`) and
-  `route-maps/redistribution/redist-entry/bgp` (`ospf`, `ospfv3`, `rib` or `rip`) each refuse more than one
-  attribute, so a fixture entry answers each with one element and the run validates. Those rows state their
-  alternatives as fields, so the choice rule cannot count them, and a hand-written filter block that states two
-  alternatives is not refused. To close it, either those three rows state the choice as `selects` as well as
-  fields, or the choice rule reads a choice stated as fields. The pins that assert `selects` is empty for every
-  filter row change with that decision: `tests/test_filter_containers.py` pins them through
-  `test_the_filter_table_is_the_measured_provider_shape`, `test_the_row_scope_is_the_decision_acceptance_states`
-  and `test_the_choice_levels_state_one_key_in_the_run`.
 - Read-through is opt-in per declared scope (F5.5). A plain string already applies, because
   Panorama resolves an object name through its own inheritance at commit time, and one `data` block
   is one plan-time API call. A `data` block for a name that does not exist fails at plan, not at

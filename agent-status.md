@@ -2,33 +2,28 @@
 
 ## Current position
 
-F7.12 is complete and committed on `development` (`42ff08e`), which closes Epic 7. `selects` is the one place
-`PROTOCOL_SHAPE` states a choice the provider reads as exactly one, because the schema states no fact for a
-choice: it declares every alternative as an optional attribute of a `single` level, so no shape word can state
-the choice. Two rows state it: `protocol/bgp/peer_group/peer/peer_address`, where the choice is the whole value,
-and `protocol/ospfv3/auth_profile`, where the choice is two of the four fields the entry states. The gate rule
-`protocol_object` reads the choice through one helper (`_shape_choice_findings`) at the level the walk enters and
-at each entry of a `string_list` row, so a level or an entry that states both alternatives, or none, is a FAIL
-finding. `SHAPE_WORDS`, `SHAPE_TO_SCHEMA`, `SHAPE_READS_AS` and `SHAPE_LEVELS` are unchanged, so `value_shape`
-still reads both levels as an object value.
+F7.13 is complete and committed on `development` (`931ceec`), which closes the last open piece of Epic 7.
+`selects` is the one place either shape table states a choice the provider reads as exactly one, so the filter
+rows that hold one state it there: 14 rows, measured 2026-11-03 with `terraform validate` (provider 2.0.14,
+Terraform 1.16.2) — the levels that refuse more than one of their alternatives and also refuse none. The schema
+states no fact for a choice, because it declares every alternative as an optional attribute of a `single` level,
+so no shape word can state it: `SHAPE_WORDS`, `SHAPE_TO_SCHEMA`, `SHAPE_READS_AS` and `SHAPE_LEVELS` are
+unchanged, a filter choice row keeps the word the measurement gives it (`object`), and `one_of` keeps its meaning
+as the word for a row whose whole value is the choice. Each filter mapping is the identity, because the export
+spells the provider key at a filter choice level, so `FILTER_XML_NAME_EXCEPTIONS` gained no row.
 
-Finding wording: `states N keys, which is not the one key PROTOCOL_SHAPE selects` is the one wording for the
-count, so it covers 0 keys and more than one key for both shapes. The wording for a key a row does not select is
-unchanged.
+The gate reads the choice at every level the walk enters, and for a filter block the block's own level is the
+entry row the walk enters, so `check_filter_blocks` reads the choice there before the field rule. One helper
+(`_shape_choice_findings`) serves both tables, so one wording covers both: `filter {address} {path} states N
+keys, which is not the one key FILTER_SHAPE selects`, where N is the number of selected keys the level, the
+entry, or the block states. A hand-written filter block that states two alternatives, or none, is one FAIL
+finding.
 
-Measured 2026-11-03 with `terraform validate` (provider 2.0.14, Terraform 1.16.2): `peer_address` refuses 2
-attributes when one (and only one) is required, and it refuses none; the `ospfv3` profile entry refuses `ah` and
-`esp` together, and it refuses none. `local_address` and `subsequent_address_family_identifier` accept 2
-attributes, so they are not choices.
+The print path is unchanged: the fixture answers each choice level it covers with one element, so the run prints
+the one alternative the input states and reports `PASS (0 FAIL, 0 WARN)`. No golden moved, and no fixture was
+extended, because the fixture already states one alternative per choice level.
 
-The suite is 1441 tests, all green (1439 at the start of this slice), and `ruff check .` is clean. No golden
-moved, because the print path is unchanged: a run that states one alternative prints one key. The gate reads the
-`tests/fixtures/bgp.xml` and `tests/fixtures/auth_profile.xml` runs with no finding, and the corpus run reports
-`PASS (0 FAIL, 0 WARN)`.
-
-The filter table is the asymmetry that stays: the three filter levels the provider reads as exactly one state
-their alternatives as fields and no `selects`, so the choice rule cannot fire for a filter block. It is recorded
-in `backlog.md`.
+The suite is 1443 tests, all green (1441 at the start of this slice), and `ruff check .` is clean.
 
 The next feature is the repository layout (`PLAN.md`, Housekeeping): the root holds `conftest.py`, the flat
 module set, `quick_start.sh`, and `sample_panorama_config.xml`, and each index names every document under it.
@@ -36,18 +31,21 @@ The item list and the pins that read a path are in `backlog.md`.
 
 ### Pins that changed
 
-- `tests/test_protocol_object.py` gained `test_the_choice_rows_state_the_choice_the_provider_reads` (the two rows
-  read against the live schema) and `test_the_choice_rule_reads_a_level_and_an_entry` (the gate for a choice
-  inside an entry and for a choice that is the whole value, the field rule for a key that is not an alternative,
-  and the print path).
-- `test_the_table_is_the_only_shape_owner` reads `_shape_choice_findings` as a shape owner, and the table pin
-  reads `selects` as the attributes that form the choice, which can be a subset of the row's fields.
-- Four pins that state the finding wording changed with it, and the peer pin moved from a limit pin to a violation
-  pin.
-- `docs/ARCHITECTURE.md` §4.9 rule 7 states the choice rule, §4.10 rule 1 states why the filter rows cannot be
-  read by it, and `README.md` and `docs/RESOURCE_MAPPING.md` name `selects` as the place a table states a choice.
-- `tests/test_filter_containers.py` states the filter wording for the recorded decision, so the choice rule reads
-  nothing for a filter block.
+- `tests/test_filter_containers.py` gained `test_the_choice_rows_are_the_levels_the_provider_reads_as_exactly_one`
+  (the 14 measured rows against the live schema, the identity mapping, the whole-value or part-of-value fact, and
+  that no filter row is a `one_of` row) and
+  `test_the_gate_reads_the_choice_at_the_level_the_walk_enters` (two alternatives, none, and one for every
+  measured row, and the choice read before the field rule for `redist-entry`).
+- `test_the_filter_table_is_the_measured_provider_shape` reads `selects` as the attributes that form the choice,
+  each an optional attribute the provider declares and a field the row states, instead of as an empty fact.
+  `sensitive` stays empty for every filter row.
+- `test_the_row_scope_is_the_decision_acceptance_states` keeps the row scope, and
+  `test_the_choice_levels_state_one_key_in_the_run` now covers the 5 choice levels the fixture states (11 of the
+  14 are pinned through the table and the gate). The finding helper `_findings` reads the container through
+  `_container_of`, so a pin can state a finding at a level below the block's own level.
+- `docs/ARCHITECTURE.md` §4.9 rule 7 and §4.10 rule 1 state the rule for both tables, `README.md` names the
+  choice in the `filter_blocks` row of the gate table, and `docs/RESOURCE_MAPPING.md` names `redist-entry` as the
+  filter row that states the choice inside its fields. `backlog.md` no longer holds the closed asymmetry.
 
 ## Rules to keep when writing documents
 
