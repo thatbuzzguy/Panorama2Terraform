@@ -61,10 +61,16 @@ name, and no module builds a path. `pyproject.toml` `[tool.pytest.ini_options] p
 only place the path is stated for tests; `testpaths = ["tests"]` keeps discovery at the repository root,
 where no test file sits. A run from `src/` gets the same namespace from Python's script-directory rule, so an
 entry point adds no path code. The project is standard library only, so every import stays offline and
-deterministic, and there is no package build. `tools/` needs no rule, because `tools/build_kitchen_sink.py`
+deterministic, and there is no package build. `tools/` needs no import rule, because `tools/build_kitchen_sink.py`
 assembles the fixture corpus from committed files and imports no tool module: it is a developer tool, not an
-entry point, so it does not use `xml_input`. `tools/quick_start.sh` runs the sample input and is a
-demonstration, not part of the converter.
+entry point, so it does not use `xml_input` and states the F3.8 checks itself, and the tool takes no
+command-line path. It is a generator, not a pin: `tests/fixtures/kitchen_sink.xml` is the record the golden set
+and the corpus pins read, and the record is curated by hand, so the tool prints the tree it assembles and writes
+no file. Its read rule is the two F3.8 checks read on the committed bytes, so a fixture that declares a DTD, or
+that the parse cannot read, is skipped by rule and not by name, and the record is not an input. `tools/` is not
+on the test path, so `tests/test_build_kitchen_sink.py` reads the tool's functions through `importlib` on the
+path `tests/conftest.py` builds once. `tools/quick_start.sh` runs the sample input and is a demonstration, not
+part of the converter.
 
 A pin that reads a module source reads it through the import rule (`Path(module.__file__)`) or through the
 paths `tests/conftest.py` builds once. The writer scan reads the `src/` set: the single writer

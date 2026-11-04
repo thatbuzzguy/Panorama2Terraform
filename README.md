@@ -520,6 +520,10 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   `COVERAGE_MATRIX`, `EMITTED_TYPES` and `LOCATION_SCHEMA` entries with `FILTER_TYPES` as the one decision owner,
   the parse read and the print, the path-keyed input spellings with every pair grounded by a fixture entry and
   read from a real run, and each violation type of the gate rule
+- `tests/test_build_kitchen_sink.py` - the fixture assembler (`tools/`): the read rule read on the committed
+  bytes, so a hostile fixture is skipped by rule and not by name and the tool's decision agrees with `xml_input`
+  for every committed fixture; the rule that the tool names no fixture except its own record, writes no file,
+  and is a generator rather than a pin on the record; the three merge cases; and the byte rule between two runs
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are

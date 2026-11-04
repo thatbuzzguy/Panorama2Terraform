@@ -24,6 +24,7 @@ import split_device_groups
 TESTS_DIR = Path(__file__).parent
 REPO_ROOT = TESTS_DIR.parent
 SRC_DIR = REPO_ROOT / "src"
+TOOLS_DIR = REPO_ROOT / "tools"
 EXAMPLES_DIR = REPO_ROOT / "examples"
 SAMPLE_CONFIG = EXAMPLES_DIR / "sample_panorama_config.xml"
 FIXTURES_DIR = TESTS_DIR / "fixtures"
