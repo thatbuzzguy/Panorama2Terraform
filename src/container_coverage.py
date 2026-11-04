@@ -254,6 +254,12 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                  level='sub-shape'),
     ContainerRow('parse_interfaces', 'layer3/units', 'emitted',
                  'panos_ethernet_layer3_subinterface', level='sub-shape'),
+    # An aggregate subinterface is a `units` entry inside an aggregate entry, so the two general sub-shape
+    # rows above cannot name it: the same method reads that shape under `aggregate-ethernet` and emits it as
+    # the aggregate subinterface type. `entry_coverage.covering_row` takes the longest match, so this row
+    # covers an aggregate entry and `layer3/units` still covers the ethernet shape.
+    ContainerRow('parse_interfaces', 'network/interface/aggregate-ethernet/entry/layer3/units', 'emitted',
+                 'panos_aggregate_layer3_subinterface', level='sub-shape'),
     ContainerRow('parse_interfaces', 'layer3/ip', 'nested-block',
                  'nested block; parent type from INTERFACE_RESOURCE_TYPES', level='sub-shape'),
     ContainerRow('parse_qos_profiles', 'class', 'report', 'no v2 resource',

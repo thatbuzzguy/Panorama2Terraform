@@ -32,6 +32,17 @@ def _blocks(text: str) -> dict[str, str]:
     return out
 
 
+def _block_types(text: str) -> dict[str, str]:
+    """Resource type keyed by the resource `name` attribute, for the shape the emitter chose."""
+    types = {}
+    for m in RESOURCE_RE.finditer(text):
+        body = text[m.end():text.find('\n}', m.end())]
+        name = re.search(r'^  name = "([^"]+)"', body, re.M)
+        if name:
+            types[name.group(1)] = m.group(1)
+    return types
+
+
 def test_every_kind_emits_its_resource_type(tmp_path):
     """Each parsed kind emits the provider resource type for that kind."""
     text = _generate('interfaces_other.xml', tmp_path)
@@ -69,6 +80,19 @@ def test_subinterface_parents_resolve_to_declared_resources(tmp_path):
         r'resource "panos_aggregate_layer3_subinterface" "([^"]+)"', text).group(1)
     assert f'parent = panos_aggregate_interface.{ae_group_local}.name' in blocks['ae1.101']
     assert f'parent = panos_aggregate_layer3_subinterface.{ae_sub_local}.name' in blocks['ae1.101.20']
+
+
+def test_the_aggregate_shape_choice_is_the_entry_the_scan_measures(tmp_path):
+    """The aggregate subinterface type comes from the entry inside the aggregate entry.
+
+    The emitter takes the type from `INTERFACE_RESOURCE_TYPES` for a `units` entry, and from the name rule
+    for an aggregate entry whose name already carries a unit. The container row covers the first, so the type
+    the run prints for `ae1.101.20` is the type the property scan measures through that row.
+    """
+    types = _block_types(_generate('interfaces_other.xml', tmp_path))
+    assert types['ae1'] == 'panos_aggregate_interface', types
+    assert types['ae1.101'] == 'panos_aggregate_layer3_subinterface', types
+    assert types['ae1.101.20'] == 'panos_aggregate_layer3_subinterface', types
 
 
 def test_aggregate_group_has_no_parent_or_tag(tmp_path):
