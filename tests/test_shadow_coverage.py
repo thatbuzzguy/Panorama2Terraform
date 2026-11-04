@@ -12,7 +12,9 @@ Six groups, one per acceptance rule:
 3. The ledger names the source of each entry as row data, and the entry line does not
    print it, so the entry-line bytes are unchanged for a one-source run.
 4. The shadow section in `CONVERSION_REPORT.txt`: its own section after the property
-   section, the fixed line shape, the F3.9 grouping, no console line, no exit-code change.
+   section, the fixed line shape, the F3.9 grouping, no exit-code change. And the console line:
+   the shape `container_coverage.console_line` states, with the parent source named by its report
+   value, the minimum actionable field, while the parent line stays in the report.
 5. Determinism: two runs on the same two sources write the same bytes. The record rule
    (one record per source read, in read order, and the round trip) is pinned in
    `tests/test_provenance.py`, and the entry-line rule is pinned in
@@ -275,24 +277,88 @@ def test_the_shadow_lines_are_grouped_by_the_f3_9_scope_rule(converter_module, f
     assert header in report[report.index('Entry lines are grouped by'):], report
 
 
-def test_the_console_prints_no_shadow_line_and_the_exit_code_is_unchanged(
-        converter_module, fetch_module, tmp_path, monkeypatch):
-    """The console prints the gap lines only (backlog rule); a shadow is an operator
-    action, so the F4.1 gate still decides the exit code."""
-    out = tmp_path / 'out'
-    monkeypatch.setenv(fetch_module.API_KEY_ENV, 'test-key')
-    monkeypatch.setattr(fetch_module, 'network_producer', _producer(fetch_module))
+def _run_and_console(converter_module, fetch_module, argv, monkeypatch):
+    """Run the pipeline in process and return (exit code, console text, parser).
+
+    `conftest.run_pipeline` redirects the console, so a console pin needs the run here. The parser is
+    hooked the same way `run_pipeline` hooks it, so the console text and the ledger come from one run
+    (F4.4: the scan measures the reads that run made).
+    """
+    captured = {}
+    original_init = converter_module.PanoramaParser.__init__
+
+    def init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        captured['parser'] = self
+
     saved_argv = list(sys.argv)
-    sys.argv = ['panorama_to_terraform.py'] + _argv(out, tmp_path / 'cache')
+    converter_module.PanoramaParser.__init__ = init
     try:
+        sys.argv = ['panorama_to_terraform.py'] + list(argv)
         with contextlib.redirect_stdout(io.StringIO()) as console:
             code = converter_module.main()
     finally:
+        converter_module.PanoramaParser.__init__ = original_init
         sys.argv = saved_argv
+    return code, console.getvalue(), captured.get('parser')
+
+
+def test_the_console_prints_the_shadow_line_and_the_exit_code_is_unchanged(
+        converter_module, fetch_module, tmp_path, monkeypatch):
+    """The console prints one line per shadow, in the shape `container_coverage.console_line` states,
+    and a shadow is an operator action, so the F4.1 gate still decides the exit code.
+
+    The source field a console line may name is the minimum actionable part of the provenance record: the
+    source name. The operator's action for a shadow is to open the source that holds the parent entry, and
+    the name identifies it. The path, the kind, the request, the cache entry, the size and the hash stay in
+    `SOURCE.txt` (F5.3): a printed line protects nothing. The parent line stays in the report, because the
+    shape names one position.
+    """
+    cache = _seed_cache(fetch_module, tmp_path / 'cache', (CHILD_PATH, PARENT_PATH))
+    out = tmp_path / 'out'
+    code, console, parser = _run_and_console(converter_module, fetch_module, _argv(out, cache), monkeypatch)
     assert code == 0, 'a shadow does not change the exit code (AC-2.4)'
-    assert 'parent source' not in console.getvalue(), console.getvalue()
+    findings = shadow_coverage.shadow_findings(parser.ledger, _parent_ledger(fetch_module, cache))
+    assert findings, 'the pair must trip a shadow'
+    generator = converter_module.TerraformGenerator(str(out), {})
+    block = shadow_coverage.console_lines(findings, generator._report_scope_path)
+    for line in block:
+        assert line in console, line
+    finding = findings[0]
+    parts = block[1][len(container_coverage.CONSOLE_PREFIX):].split('  ')
+    assert parts == [container_coverage.scope_part(finding, generator._report_scope_path),
+                     container_coverage.position_part(finding['line']),
+                     entry_coverage.entry_identity(finding), shadow_coverage.shadow_fact(finding)], parts
+    # The source part names the source name only, never the path and never a record field.
+    assert finding['parent_source'] in parts[3], parts
+    assert CHILD_PATH not in parts[3] and PARENT_PATH not in parts[3], parts
+    for field in ('sha256', 'cache_entry', 'size', 'kind', 'request'):
+        assert field not in parts[3], (parts[3], f'a console line carries no {field}')
+    # The report line keeps the parent line, which the console shape has no room for.
+    assert f'(parent line {PARENT_LINE})' in shadow_coverage.shadow_line(finding), shadow_coverage.shadow_line(finding)
+    assert '(parent line' not in parts[3], parts[3]
+    # The shadow scan states its fact phrase and its block header and calls the shape, so it owns no shape.
     assert not hasattr(shadow_coverage, 'console_line'), 'the shadow scan owns no console wording'
-    assert shadow_coverage.SHADOW_HEADING in (out / entry_coverage.REPORT_FILE).read_text(encoding='utf-8')
+    report = (out / entry_coverage.REPORT_FILE).read_text(encoding='utf-8')
+    assert shadow_coverage.SHADOW_HEADING in report, report
+    assert shadow_coverage.shadow_line(finding) in _shadow_block(report), report
+
+
+def test_the_console_prints_no_shadow_block_for_a_run_with_no_parent(converter_module, fetch_module,
+                                                                     tmp_path, monkeypatch):
+    """AC-5: a run with no declared parent has no shadow, so it prints nothing new, and the exit code is
+    unchanged. An empty block prints no header."""
+    cache = _seed_cache(fetch_module, tmp_path / 'cache', (CHILD_PATH,))
+    out = tmp_path / 'out'
+    code, console, parser = _run_and_console(
+        converter_module, fetch_module,
+        ['--source', 'api', '--host', HOST, '--cache-dir', str(cache), '--path', f'/{CHILD_PATH}',
+         '--output-dir', str(out)], monkeypatch)
+    assert code == 0
+    generator = converter_module.TerraformGenerator(str(out), {})
+    assert shadow_coverage.console_lines(shadow_coverage.shadow_findings(parser.ledger, None),
+                                         generator._report_scope_path) == []
+    assert 'Shadow findings' not in console, console
 
 
 # --- 5. Determinism and the exit code ---------------------------------------

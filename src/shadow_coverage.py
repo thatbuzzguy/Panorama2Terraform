@@ -20,15 +20,24 @@ inherited name stays a plain string in the child object and the parent entry is
 invisible. The declared parent source makes the name visible, and this scan names it.
 
 Usage:
-    from shadow_coverage import shadow_findings, shadow_line
+    from shadow_coverage import shadow_findings, shadow_line, console_lines
     findings = shadow_findings(ledger, parent_ledger)
-    for finding in findings:
-        print(shadow_line(finding))
+    for line in console_lines(findings, report_scope_path):   # the console block, one line per finding
+        print(line)
+
+The report line shape is fixed below, and the console line shape is stated once in
+`container_coverage.console_line`: this module states its fact phrase and its block header and calls that
+function, so it defines no second shape.
 """
 
+import container_coverage
 import entry_coverage
 
 SHADOW_HEADING = 'Entries That Repeat a Parent Entry Name'
+
+# The fact phrase a shadow line states, on the report and on the console, so the two cannot disagree.
+# The source is named by its report value, never by its path (F4.2 rule 6): the path is in the record.
+PARENT_SOURCE_LABEL = 'parent source'
 
 SHADOW_RULE = (
     'A child entry whose name repeats a parent entry name in the same matrix row is '
@@ -83,15 +92,44 @@ def shadow_findings(ledger, parent_ledger) -> list:
     return sorted(findings, key=lambda row: (row['line'] or 0, row['container'], row['name']))
 
 
+def shadow_fact(finding: dict) -> str:
+    """The fact part for a shadow: the source that holds the parent entry, by its report value.
+
+    The minimum actionable field, because the operator's action for a shadow is to open the source that
+    holds the parent entry, and the name is what identifies it. A console line cannot carry the
+    provenance record (F5.3), so the path, the kind, the request, the cache entry, the size and the hash
+    stay in `SOURCE.txt`, and the parent line stays in the report, because a console line names one
+    position (the child entry's line). Pinned by `tests/test_shadow_coverage.py`.
+    """
+    return f'{PARENT_SOURCE_LABEL}: {finding["parent_source"]}'
+
+
 def shadow_line(finding: dict) -> str:
     """One shadow line: the child entry, the matrix row that covers it, the parent entry.
 
     The shape is fixed (F5.4 AC-4.2), and the section prints no path: a source is named
     by its report value, the same rule the other report bodies follow (F4.2 rule 6).
     """
-    name = f'{finding["container"]}/{finding["name"]}'
     line = f'{finding["line"] if finding["line"] is not None else 0}'
     parent_line = finding['parent_line'] if finding['parent_line'] is not None else 0
-    parts = [f'  line {line:>4}  ', f'{name:<38} ', f'{finding["resource"]:<32} ',
-             f'parent source: {finding["parent_source"]} (parent line {parent_line})']
+    parts = [f'  line {line:>4}  ', f'{entry_coverage.entry_identity(finding):<38} ',
+             f'{finding["resource"]:<32} ',
+             f'{PARENT_SOURCE_LABEL}: {finding["parent_source"]} (parent line {parent_line})']
     return ''.join(parts).rstrip()
+
+
+def console_lines(findings: list, scope_path) -> list:
+    """The console block for the shadows: the header, then one line per finding.
+
+    Empty when there is nothing to say, so a run with no declared parent prints nothing new. The line
+    names the child entry and the parent source name, and it names no matrix row and no parent line,
+    because the console shape has no room for either (`docs/ARCHITECTURE.md` §3.2).
+    """
+    if not findings:
+        return []
+    lines = [f'Shadow findings ({len(findings)}):']
+    lines.extend(container_coverage.console_line(container_coverage.scope_part(finding, scope_path),
+                                                 container_coverage.position_part(finding['line']),
+                                                 entry_coverage.entry_identity(finding), shadow_fact(finding))
+                 for finding in findings)
+    return lines

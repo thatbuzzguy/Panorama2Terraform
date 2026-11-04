@@ -16,6 +16,10 @@ Three groups of checks:
 3. The report. A section the table does not cover produces one finding, sorted
    by tag chain then line, naming the file name only. An absent container is not
    a finding. A finding does not change the exit code.
+4. The console line shape. `console_line` is the one place the shape is stated, so no
+   module defines a second one, and the scans whose fact names two identities or a second
+   position state no console wording at all. `docs/ARCHITECTURE.md` §3.2 states the shape once
+   and points at the function.
 
 Path matching is by segment presence: a method may reach a container through a
 helper, so a row path matches when the method, or a method it calls, names each
@@ -32,7 +36,7 @@ from pathlib import Path
 
 import container_coverage
 import xml_input
-from conftest import FIXTURES_DIR, REPO_ROOT, run_script
+from conftest import FIXTURES_DIR, REPO_ROOT, SRC_DIR, run_script
 
 # A path-like string constant in a parse method: a tag name or a tag chain.
 PATH_STRING_RE = re.compile(r'^[A-Za-z0-9_.\-/]+$')
@@ -342,12 +346,55 @@ def test_report_bytes_are_identical_between_runs(tmp_path):
 
 
 def test_console_lists_the_findings(tmp_path):
-    """A run with findings says so on the console."""
+    """A run with findings says so on the console, one line per finding in the shape order.
+
+    A container finding names a container, not one entry, so its identity part is the container path,
+    and the report section names its source rather than a scope, so the scope part is empty.
+    """
     _, _, findings = _scan(UNKNOWN_FIXTURE)
     stdout = _convert(UNKNOWN_FIXTURE, tmp_path)['proc'].stdout
-    assert f'Entry Coverage: {len(findings)} container(s) the parser does not read' in stdout
-    for finding in findings:
-        assert container_coverage.console_line(finding) in stdout, finding
+    block = container_coverage.console_lines(findings)
+    for line in block:
+        assert line in stdout, line
+    for finding, line in zip(findings, block[1:]):
+        parts = line[len(container_coverage.CONSOLE_PREFIX):].split('  ')
+        assert parts == [container_coverage.position_part(finding.line), finding.path,
+                         container_coverage.finding_fact(finding)], parts
+
+
+def test_the_console_line_shape_is_stated_in_one_place():
+    """AC-1 and AC-2: one function states the shape, so no module defines a second one.
+
+    The shape is the four parts, in order: scope, position, identity, fact. A scan module states its
+    fact phrase and its block header and calls the shape. The scans whose fact names two identities, or a
+    second position, print in the report only, so they own no console wording.
+    """
+    shape = Path(container_coverage.__file__).read_text(encoding='utf-8')
+    assert 'def console_line(scope: str, position: str, identity: str, fact: str) -> str:' in shape
+    texts = {path.name: path.read_text(encoding='utf-8') for path in sorted(SRC_DIR.glob('*.py'))}
+    assert not [name for name, text in texts.items()
+                if name != 'container_coverage.py' and 'CONSOLE_PREFIX' in text], \
+        'no module builds the console prefix'
+    assert sorted(name for name, text in texts.items()
+                  if 'container_coverage.console_line(' in text) == \
+        ['entry_coverage.py', 'shadow_coverage.py'], 'the shape is the only line builder'
+    for name in ('ownership.py', 'reference_edges.py', 'state_coverage.py'):
+        assert 'def console_line' not in texts[name] and 'def console_lines' not in texts[name], \
+            (name, 'the report-only scans state no console wording')
+    for name in ('entry_coverage.py', 'shadow_coverage.py'):
+        assert 'def console_line(' not in texts[name], (name, 'the block states the fact, not the shape')
+
+
+def test_the_architecture_document_states_the_console_line_shape_once():
+    """AC-9: §3.2 states the shape once, names the function that holds it, and no longer says the console
+    prints the gap lines only or prints no shadow line.
+    """
+    doc = (REPO_ROOT / 'docs' / 'ARCHITECTURE.md').read_text(encoding='utf-8')
+    assert '  - <scope>  <position>  <identity>  <fact>' in doc, doc
+    assert 'container_coverage.console_line' in doc, 'the document names the one place'
+    assert 'The console prints the gap lines only' not in doc
+    assert 'The console prints no shadow line' not in doc
+    assert doc.count('  - <scope>  <position>  <identity>  <fact>') == 1, 'the shape is stated once'
 
 
 def test_no_coverage_output_when_there_is_nothing_to_report(tmp_path):

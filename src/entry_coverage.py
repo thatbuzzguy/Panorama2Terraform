@@ -38,6 +38,10 @@ Report order is fixed: rows are sorted by line, then object type, then name, so
 the same input produces the same bytes. The report names the source name only, never
 the path (F4.2 rule 6); the path is in the provenance record (F5.3). The label is
 `container_coverage.SOURCE_LABEL`.
+
+The report line shape and the fact phrases are stated here. The console line shape is stated in one
+place, `container_coverage.console_line`, so the console wording here builds the parts and calls it:
+this module states no second shape (`docs/ARCHITECTURE.md` §3.2).
 """
 
 import re
@@ -80,6 +84,11 @@ REPORT_FILE = 'CONVERSION_REPORT.txt'
 REPORT_HEADING = 'PER-ENTRY CONVERSION REPORT'
 GAP_HEADING = 'Entries That Produced No Output'
 PROPERTY_HEADING = 'Captured Properties No Output Read'
+
+# The two words a fact part starts with, stated once so the report line and the console line state the
+# same fact (`docs/ARCHITECTURE.md` §3.2).
+CAPTURED_LABEL = 'captured'
+NO_OUTPUT_READ = 'no output read'
 
 # One matrix row per emitted type, keyed by resource name, so the property scan can
 # find the row that covers an entry. `row_detail` gives the resource name for the
@@ -453,14 +462,24 @@ class EntryLedger:
 # The wording functions take a row dict, so the generator can group rows with the
 # F3.9 scope rule (`TerraformGenerator._report_scope_path`) and print the scope in
 # front of each line. Grouping stays in one place.
+#
+# The report line shapes are the fixed-width ones `docs/ARCHITECTURE.md` §3.2 states. The console line
+# shape is stated in one place, `container_coverage.console_line`, so the functions here build only the
+# parts: the identity, the position, the scope, and the fact. A console line has no room for the
+# fixed-width matrix-row column, so the matrix row stays in the report.
+
+# The row identity the report names: object type, then entry name (F4.3 rule 2). The console line names
+# the same identity, so a console line and a report row name the same entry.
+def entry_identity(row: dict) -> str:
+    return f'{row["container"]}/{row["name"]}'
+
 
 def entry_line(row: dict) -> str:
     """One report line: line, object type, name, destination, detail, captured fields."""
-    name = f'{row["container"]}/{row["name"]}'
     line = f'{row["line"] if row["line"] is not None else 0}'
-    parts = [f'  line {line:>4}  ', f'{name:<38} ', f'{row["destination"]:<12} ',
+    parts = [f'  line {line:>4}  ', f'{entry_identity(row):<38} ', f'{row["destination"]:<12} ',
              f'{row["detail"]:<36} ']
-    parts.append('captured: ' + (', '.join(row['fields']) if row['fields'] else 'name only'))
+    parts.append(f'{CAPTURED_LABEL}: ' + (', '.join(row['fields']) if row['fields'] else 'name only'))
     if row['property_entries']:
         parts.append(f'  property entries: {row["property_entries"]}')
     if row.get('vsys'):
@@ -486,35 +505,68 @@ def gap_lines(ledger: EntryLedger) -> list:
 
 
 def property_line(row: dict) -> str:
-    """One property scan line: line, object type, name, the properties no output read."""
-    name = f'{row["container"]}/{row["name"]}'
+    """One property scan line: line, object type, name, the properties no output read.
+
+    The matrix row is a fixed-width column, so it is on the report line and not on the console line
+    (`docs/ARCHITECTURE.md` §3.2).
+    """
     line = f'{row["line"] if row["line"] is not None else 0}'
-    parts = [f'  line {line:>4}  ', f'{name:<38} ', f'{row["resource"]:<32} ',
-             'no output read: ' + ', '.join(row['unused_properties'])]
+    parts = [f'  line {line:>4}  ', f'{entry_identity(row):<38} ', f'{row["resource"]:<32} ',
+             property_fact(row)]
     if row.get('vsys'):
         parts.append(f'  [{row["vsys"]}]')
     return ''.join(parts).rstrip()
 
 
-def console_lines(ledger: EntryLedger, scope_path) -> list:
-    """Console wording for a run with gaps. Empty when there is nothing to say.
+def property_fact(row: dict) -> str:
+    """The fact part for a property finding: the properties no output read.
 
-    `scope_path` is the F3.9 grouping rule, so a console line names the scope the
-    report groups the entry under.
+    The scan measures the keys of the object the parse method built (F4.3 rule 4), so the console line
+    names them as parsed-object key names, never as an XML tag.
+    """
+    return f'{NO_OUTPUT_READ}: ' + ', '.join(row['unused_properties'])
+
+
+def gap_fact(row: dict) -> str:
+    """The fact part for a gap row: the destination, the detail, the captured fields, and the count.
+
+    Captured fields are the parsed-object key names (F4.3 rule 5), so a console line may name them.
+    """
+    fact = (f'{row["destination"]}  {row["detail"] or "no detail"}  '
+            f'{CAPTURED_LABEL}: ' + (', '.join(row['fields']) or 'name only'))
+    if row['property_entries']:
+        fact += f'  property entries: {row["property_entries"]}'
+    return fact
+
+
+def console_lines(ledger: EntryLedger, scope_path) -> list:
+    """The console block for the gap rows: the header, then one line per gap.
+
+    Empty when there is nothing to say, so a run with no gap prints nothing new. `scope_path` is the
+    F3.9 grouping rule, so a console line names the scope the report groups the entry under.
     """
     gaps = ledger.gaps()
     if not gaps:
         return []
     lines = [f'Per-entry report gaps ({len(gaps)}):']
-    for row in gaps:
-        scope = ' / '.join(label if not value else f'{label}: {value}'
-                           for _level, label, value in scope_path(row))
-        name = f'{row["container"]}/{row["name"]}'
-        line = row['line'] if row['line'] is not None else 'position unknown'
-        detail = row['detail'] or 'no detail'
-        fields = ', '.join(row['fields']) or 'name only'
-        parts = [f'  - {scope}  line {line}  {name}  {row["destination"]}  {detail}  captured: {fields}']
-        if row['property_entries']:
-            parts.append(f'  property entries: {row["property_entries"]}')
-        lines.append(''.join(parts))
+    lines.extend(container_coverage.console_line(container_coverage.scope_part(row, scope_path),
+                                                 container_coverage.position_part(row['line']),
+                                                 entry_identity(row), gap_fact(row))
+                 for row in gaps)
+    return lines
+
+
+def property_console_lines(findings: list, scope_path) -> list:
+    """The console block for the property findings: the header, then one line per finding.
+
+    Empty when there is nothing to say, so a run with no property finding prints nothing new. The line
+    names no matrix row, so the block names the entry and the fact and the report keeps the row.
+    """
+    if not findings:
+        return []
+    lines = [f'Property findings ({len(findings)}):']
+    lines.extend(container_coverage.console_line(container_coverage.scope_part(row, scope_path),
+                                                 container_coverage.position_part(row['line']),
+                                                 entry_identity(row), property_fact(row))
+                 for row in findings)
     return lines
