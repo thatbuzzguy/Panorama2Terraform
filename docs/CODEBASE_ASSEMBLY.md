@@ -156,8 +156,10 @@ file.
 6. **`disable_override` does not choose the owner.** It names the entry no descendant may override,
    so a second entry with the same name contradicts the flag and is an operator decision. The value
    is the string the parse read, and the row states `unknown` for a matrix row that does not name the
-   property (`backlog.md`), and for a declared parent source, which the run reads as entry names and not
-   as objects.
+   property, and for a declared parent source, which the run reads as entry names and not as objects.
+   The nine rows that name the property are in `docs/COVERAGE_MATRIX.md`, and each is a type the pinned
+   provider declares the flag for
+   (`tests/test_resource_mapping.py::test_the_flag_rows_are_the_types_the_provider_declares_it_for`).
 7. **What the rule can say per entry** is `kind`: `declared`, `definition`, `override`, `ambiguous`.
    The case the rule cannot decide is a report finding, in its own section after the shadow section
    and before the state sections. A finding is an operator action, so it does not change the exit
@@ -176,10 +178,13 @@ Pinned by `tests/test_ownership.py`, including
 `::test_the_findings_are_grouped_by_the_f3_9_scope_rule`, and
 `::test_a_finding_does_not_change_the_exit_code_and_the_console_prints_no_line`.
 
-The decision this section asked for is settled. The service leg is closed: the parse captures
-`disable-override` for a service entry and the emitter prints it, so the `panos_service` matrix row
-names the property
-(`tests/test_ownership.py::test_the_service_row_names_the_property_the_emitter_reads`). The edge list
+The decision this section asked for is settled, and the extraction gap it named is closed: the seven rows whose
+entries can carry the flag now name the property, so the record states the flag as the parse read it for every
+entry such a row covers. One helper states the print shape for the nine rows
+(`tests/test_ownership.py::test_the_seven_emitters_print_the_flag`, and the shape rule in
+`docs/COVERAGE_MATRIX.md`). Pins: `tests/test_ownership.py::test_the_service_row_names_the_property_the_emitter_reads`
+and `::test_a_group_row_states_the_flag_as_the_parse_read_it`; the row set against the provider is
+`tests/test_resource_mapping.py::test_the_flag_rows_are_the_types_the_provider_declares_it_for`. The edge list
 (§5) is the next gap, and it now has the owner fact to build on.
 
 ## 5. The reference between units as data (F6.3, landed), and the outputs rule (F6.9, decided)

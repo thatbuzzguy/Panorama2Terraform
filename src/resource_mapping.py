@@ -3931,7 +3931,7 @@ COVERAGE_MATRIX = (
         'fixture': 'address_groups.xml',
         'output_file': 'address_groups.tf',
         'emitter': ('generate_address_groups',),
-        'properties': ('description', 'dynamic_filter', 'static_members',),
+        'properties': ('description', 'disable_override', 'dynamic_filter', 'static_members',),
     }, {
         'resource': 'panos_administrative_tag',
         'xml_element': 'tag/entry',
@@ -3940,7 +3940,7 @@ COVERAGE_MATRIX = (
         'fixture': 'tags.xml',
         'output_file': 'tags.tf',
         'emitter': ('generate_tags',),
-        'properties': ('color', 'comments', 'description',),
+        'properties': ('color', 'comments', 'description', 'disable_override',),
     }, {
         'resource': 'panos_application_group',
         'xml_element': 'application-group/entry',
@@ -3949,7 +3949,7 @@ COVERAGE_MATRIX = (
         'fixture': 'application_groups.xml',
         'output_file': 'application_groups.tf',
         'emitter': ('generate_application_groups',),
-        'properties': ('members',),
+        'properties': ('disable_override', 'members',),
     }, {
         'resource': 'panos_custom_url_category',
         'xml_element': 'custom-url-category/entry',
@@ -3958,7 +3958,7 @@ COVERAGE_MATRIX = (
         'fixture': 'custom_url_categories.xml',
         'output_file': 'custom_url_categories.tf',
         'emitter': ('generate_custom_url_categories',),
-        'properties': ('description', 'list', 'type',),
+        'properties': ('description', 'disable_override', 'list', 'type',),
     }, {
         'resource': 'panos_external_dynamic_list',
         'xml_element': 'external-list/entry',
@@ -3967,7 +3967,7 @@ COVERAGE_MATRIX = (
         'fixture': 'external_lists.xml',
         'output_file': 'external_lists.tf',
         'emitter': ('generate_external_lists',),
-        'properties': ('fields', 'type',),
+        'properties': ('disable_override', 'fields', 'type',),
     }, {
         'resource': 'panos_service',
         'xml_element': 'service/entry',
@@ -3985,7 +3985,7 @@ COVERAGE_MATRIX = (
         'fixture': 'service_groups.xml',
         'output_file': 'service_groups.tf',
         'emitter': ('generate_service_groups',),
-        'properties': ('members',),
+        'properties': ('disable_override', 'members',),
     }, {
         'resource': 'panos_security_policy_rules',
         'xml_element': 'security/rules/entry',
@@ -4086,6 +4086,7 @@ COVERAGE_MATRIX = (
         'emitter': ('generate_security_profile_groups',),
         'properties': (
             'data_filtering',
+            'disable_override',
             'file_blocking',
             'gtp',
             'sctp',

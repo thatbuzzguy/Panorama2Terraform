@@ -7,6 +7,8 @@
           <member>http</member>
           <member>https</member>
         </members>
+        <!-- F4.4: the flag field the row names, read through `_get_text` -->
+        <disable-override>no</disable-override>
       </entry>
     </application-group>
   </shared>

@@ -8,7 +8,8 @@ Seven groups, one per rule in `ownership.py` (`docs/CODEBASE_ASSEMBLY.md` §4):
 3. The owner rule. The ancestor entry owns the name, the export states the relation in two
    cases only, and the rule can say four things about an entry.
 4. The service leg F6.2 closes: the parse captures the flag, the emitter prints it, and the
-   `panos_service` row names it.
+   `panos_service` row names it. F4.4: the seven rows that can carry the flag name it too, so the
+   record states the value as the parse read it for their entries, and the print shape is one helper.
 5. The record shape: the declared fields, the declared order, and the refusal rule.
 6. Determinism, and the rule that a data file is written only when it has content.
 7. The report section, the console, and the exit codes.
@@ -34,7 +35,7 @@ import state_coverage
 import state_input
 import unit_manifest
 import xml_input
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, run_main, run_pipeline, run_script, tf_files
+from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, file_text, run_main, run_pipeline, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 RECORD = ownership.OWNERSHIP_FILE
@@ -452,6 +453,57 @@ def test_the_service_row_names_the_property_the_emitter_reads(converter_module, 
         if mark and isinstance(mark['captured'], entry_coverage.RecordingDict):
             measured.update(mark['captured'].used_keys())
     assert 'disable_override' in measured, measured
+
+
+# F4.4: the seven rows that name the flag. The tuple names the fixture, the matrix row, the entry that
+# carries the flag, the field the print rule puts the flag after (the entry's descriptive field, or
+# `name` when the block prints no descriptive field), and the value the export states.
+SEVEN_ROWS = (
+    ('tags.xml', 'panos_administrative_tag', 'env-prod', 'comments', 'yes'),
+    ('address_groups.xml', 'panos_address_group', 'Web-Servers', 'description', 'yes'),
+    ('application_groups.xml', 'panos_application_group', 'web-apps', 'name', 'no'),
+    ('custom_url_categories.xml', 'panos_custom_url_category', 'blocked-sites', 'description', 'yes'),
+    ('external_lists.xml', 'panos_external_dynamic_list', 'ip-with-expand', 'name', 'yes'),
+    ('security_profile_groups.xml', 'panos_security_profile_group', 'Strict-Profile', 'name', 'yes'),
+    ('service_groups.xml', 'panos_service_group', 'Web-Services', 'name', 'yes'),
+)
+
+
+def test_the_seven_emitters_print_the_flag(converter_module, tmp_path):
+    """F4.4: one helper states the shape for the nine rows, so the seven print the line the address and
+    service rows print: the string after the entry's descriptive field, or after `name` when the block
+    prints no descriptive field. An entry the export gives no value prints nothing.
+    """
+    for fixture, resource, entry, field, value in SEVEN_ROWS:
+        out = tmp_path / fixture
+        _pipeline(converter_module, FIXTURES_DIR / fixture, out)
+        row = entry_coverage.MATRIX_BY_RESOURCE[resource]
+        text = file_text(tf_files(out), row['output_file'])
+        blocks = [part for part in text.split('\n\n')
+                  if f'resource "{resource}"' in part and f'  name = "{entry}"' in part]
+        assert blocks, (fixture, text)
+        lines = [line for line in blocks[0].split('\n') if line.startswith('  ')]
+        flag = f'  disable_override = "{value}"'
+        assert flag in lines, (fixture, blocks[0])
+        before = [line for line in lines if line.startswith(f'  {field} = ')]
+        assert before and lines.index(before[0]) < lines.index(flag), (fixture, blocks[0])
+        if fixture == 'tags.xml':
+            # the second entry carries no flag element, so it prints no line
+            plain = next(part for part in text.split('\n\n') if 'name = "web"' in part)
+            assert 'disable_override' not in plain, plain
+
+
+def test_a_group_row_states_the_flag_as_the_parse_read_it(converter_module, tmp_path):
+    """F4.4: a row that names the property states the value the parse read, so a group row no longer
+    states `unknown`: `yes` for the entry the export carries, `no` for the entry it does not.
+    """
+    rows = _scan(converter_module, FIXTURES_DIR / 'tags.xml', tmp_path / 'out')
+    assert _row(rows, 'env-prod', SHARED)['override'] == 'yes'
+    assert _row(rows, 'web', SHARED)['override'] == 'no'
+    for resource in ('panos_address_group', 'panos_service_group', 'panos_application_group',
+                     'panos_custom_url_category', 'panos_external_dynamic_list',
+                     'panos_security_profile_group'):
+        assert 'disable_override' in entry_coverage.MATRIX_BY_RESOURCE[resource]['properties'], resource
 
 
 def test_the_goldens_are_byte_identical(tmp_path):

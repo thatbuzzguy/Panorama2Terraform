@@ -101,6 +101,17 @@ keep it honest:
   fails when a row declares a property no output reads. A property captured but not
   read is a finding, not a declaration: the report prints it (§3.2).
 
+A row that names `disable_override` names a property the pinned provider declares
+for its type. Nine rows name it: `panos_address` (F3.4), `panos_service` (F6.2),
+and the seven the parse reads through `_get_text` (F4.4). One
+helper states the print shape for all nine,
+`TerraformGenerator.emit_disable_override`: the string, printed after the entry's
+descriptive field, or after `name` when the block prints no descriptive field, and
+only when the value is `yes` or `no`, so an entry with no value prints nothing. The
+row set against the provider is pinned by
+`tests/test_resource_mapping.py::test_the_flag_rows_are_the_types_the_provider_declares_it_for`,
+and the shape by `tests/test_ownership.py::test_the_seven_emitters_print_the_flag`.
+
 The six scope rows (F6.5) add two facts the other rows do not state:
 
 - The sub-block a scope row places itself in comes from `SCOPE_PLACEMENT`, and each key it names is a

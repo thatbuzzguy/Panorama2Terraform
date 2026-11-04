@@ -12,12 +12,14 @@ produces against the panos provider v2:
   intentionally does not emit (the body is not parsed, F2.9). A
   not-emitted row must correspond to a type that really exists, so the
   report entry can name the real resource.
+- FLAG_ROWS: the coverage matrix rows that name `disable_override` (F4.4),
+  held against the live provider schema in both directions.
 """
 
 import pytest
 
 from conftest import emitted_types
-from resource_mapping import EMITTED_TYPES, NOT_EMITTED_TYPES, REPORT_ONLY_TYPES
+from resource_mapping import COVERAGE_MATRIX, EMITTED_TYPES, NOT_EMITTED_TYPES, REPORT_ONLY_TYPES
 
 
 def test_emitted_types_match_goldens():
@@ -62,3 +64,30 @@ def test_not_emitted_is_genuinely_present(rtype, provider_schema):
         f"{rtype!r} is marked not-emitted but does not exist in the provider "
         f"schema; it belongs in REPORT_ONLY_TYPES"
     )
+
+
+# F4.4: the matrix rows that name `disable_override`, and the provider fact behind them. Measured
+# 2026-11-04 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14`, terraform v1.16.2):
+# 128 resources, 25 of them declare the flag, and the nine below are the emitted ones among them.
+FLAG_ROWS = {
+    "panos_address", "panos_address_group", "panos_administrative_tag", "panos_application_group",
+    "panos_custom_url_category", "panos_external_dynamic_list", "panos_security_profile_group",
+    "panos_service", "panos_service_group",
+}
+
+
+def test_the_flag_rows_are_the_types_the_provider_declares_it_for(provider_schema):
+    """F4.4: a row may name `disable_override` only for a type the pinned provider declares it for.
+
+    The pin is the set in both directions: no row names a property the provider does not have, and an
+    emitted type the provider declares the flag for is not a row that omits it. A row that does not name
+    the property states `unknown` in `OWNERSHIP.json` (`src/ownership.py` rule 5), so `panos_ike_gateway`
+    stays `unknown`: it is an emitted type, and the provider does not declare the flag for it.
+    """
+    named = {row["resource"] for row in COVERAGE_MATRIX if "disable_override" in row["properties"]}
+    declared = {rtype for rtype, schema in provider_schema.items()
+                if "disable_override" in (schema.get("block") or {}).get("attributes", {})}
+    provider_types = {rtype for rtype in EMITTED_TYPES if rtype in declared}
+    assert named == FLAG_ROWS, sorted(named)
+    assert named == provider_types, (sorted(named), sorted(provider_types))
+    assert "panos_ike_gateway" in EMITTED_TYPES and "panos_ike_gateway" not in declared

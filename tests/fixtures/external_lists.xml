@@ -41,7 +41,9 @@
         </type>
       </entry>
       <!-- F3.4: expand_domain is a domain-only field; on an ip list the
-           emitter must not write it (the v2 ip sub-shape has no such field) -->
+           emitter must not write it (the v2 ip sub-shape has no such field).
+           F4.4: this entry also carries the flag, so the emitter prints it after
+           the name, because the entry has no descriptive field of its own -->
       <entry name="ip-with-expand">
         <type>
           <ip>
@@ -49,6 +51,7 @@
             <expand-domain>yes</expand-domain>
           </ip>
         </type>
+        <disable-override>yes</disable-override>
       </entry>
       <!-- predefined-url sub-shape, five-minute recurring flag -->
       <entry name="panw-url-list">

@@ -8,6 +8,8 @@
           <member>TCP-8080</member>
         </members>
         <description>Web services</description>
+        <!-- F4.4: the flag field the row names, read through `_get_text` -->
+        <disable-override>yes</disable-override>
       </entry>
     </service-group>
   </shared>

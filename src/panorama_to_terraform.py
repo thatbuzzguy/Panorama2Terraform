@@ -563,7 +563,10 @@ class PanoramaParser:
                 'name': name,
                 **self.identity_of(tag),
                 'color': self._get_text(tag, 'color'),
-                'comments': self._get_text(tag, 'comments')
+                'comments': self._get_text(tag, 'comments'),
+                # F4.4: the `panos_administrative_tag` row names the property, so the parse reads the
+                # entry field here and the emitter reads the key
+                'disable_override': self._get_text(tag, 'disable-override')
             }))
 
         return tags
@@ -619,7 +622,10 @@ class PanoramaParser:
                 **self.identity_of(cat),
                 'type': self._get_text(cat, 'type'),
                 'list': url_list,
-                'description': self._get_text(cat, 'description')
+                'description': self._get_text(cat, 'description'),
+                # F4.4: the row names the property, so the flag is read through the same helper as
+                # the other fields of this entry
+                'disable_override': self._get_text(cat, 'disable-override')
             }))
 
         return categories
@@ -646,7 +652,10 @@ class PanoramaParser:
             app_groups.append(self.mark(ag, {
                 'name': name,
                 **self.identity_of(ag),
-                'members': members
+                'members': members,
+                # F4.4: the row names the property, so the flag is read through the same helper as
+                # the other fields of this entry
+                'disable_override': self._get_text(ag, 'disable-override')
             }))
 
         return app_groups
@@ -711,6 +720,9 @@ class PanoramaParser:
                 # attribute name (url, description, exception_list, recurring,
                 # expand_domain, certificate_profile)
                 'fields': {},
+                # F4.4: the flag is a field of the entry, not of the sub-shape, so the
+                # provider takes it at the block's own level
+                'disable_override': self._get_text(ext_list, 'disable-override'),
             })
 
             type_elem = ext_list.find('type')
@@ -883,7 +895,10 @@ class PanoramaParser:
                 **self.identity_of(grp),
                 'static_members': members,
                 'dynamic_filter': filter_expr,
-                'description': self._get_text(grp, 'description')
+                'description': self._get_text(grp, 'description'),
+                # F4.4: the row names the property, so the flag is read through the same helper as
+                # the other fields of this entry
+                'disable_override': self._get_text(grp, 'disable-override')
             }))
 
         return groups
@@ -1014,7 +1029,10 @@ class PanoramaParser:
                 'name': name,
                 **self.identity_of(grp),
                 'members': members,
-                'description': self._get_text(grp, 'description')
+                'description': self._get_text(grp, 'description'),
+                # F4.4: the row names the property, so the flag is read through the same helper as
+                # the other fields of this entry
+                'disable_override': self._get_text(grp, 'disable-override')
             }))
 
         return groups
@@ -1894,7 +1912,10 @@ class PanoramaParser:
                 'vulnerability': self._get_members(grp, 'vulnerability'),
                 'url_filtering': self._get_members(grp, 'url-filtering'),
                 'file_blocking': self._get_members(grp, 'file-blocking'),
-                'wildfire_analysis': self._get_members(grp, 'wildfire-analysis')
+                'wildfire_analysis': self._get_members(grp, 'wildfire-analysis'),
+                # F4.4: the row names the property, so the flag is read through the same helper as
+                # the other fields of this entry
+                'disable_override': self._get_text(grp, 'disable-override')
             }))
 
         return groups
@@ -3936,10 +3957,7 @@ variable "panos_password" {
             if addr.get('description'):
                 out.add(addr, f'  description = {self.escape_string(addr["description"])}\n')
 
-            disable = (addr.get('disable_override') or '').strip().lower()
-            if disable in ('yes', 'no'):
-                # v2 takes the "yes"/"no" string, not a bool (verified 2.0.14)
-                out.add(addr, f'  disable_override = "{disable}"\n')
+            self.emit_disable_override(out, addr)
 
             value = (addr.get('value') or '').strip()
             if value:
@@ -3960,6 +3978,19 @@ variable "panos_password" {
             out.add(addr, '}\n\n')
 
         out.write()
+
+    def emit_disable_override(self, out: 'UnitText', obj: dict) -> None:
+        """Print the `disable_override` line for one entry: the one shape every row uses (F3.4, F6.2).
+
+        The provider takes the string, not a bool (verified against 2.0.14). The line prints after the
+        entry's descriptive field, or after `name` when the block prints no descriptive field, and only
+        when the value is `yes` or `no`, so an entry that carries nothing prints nothing. Every matrix
+        row that names the property reads the key through this one helper, which is what the property
+        scan measures (F4.4).
+        """
+        disable = (obj.get('disable_override') or '').strip().lower()
+        if disable in ('yes', 'no'):
+            out.add(obj, f'  disable_override = "{disable}"\n')
 
     @staticmethod
     def _address_type_attribute(addr_type: str) -> str:
@@ -4001,6 +4032,8 @@ variable "panos_password" {
 
             if grp.get('description'):
                 out.add(grp, f'  description = {self.escape_string(grp["description"])}\n')
+
+            self.emit_disable_override(out, grp)
 
             if static_members:
                 # F2.6: members declared in this run become references;
@@ -4052,11 +4085,7 @@ variable "panos_password" {
             if svc.get('description'):
                 out.add(svc, f'  description = {self.escape_string(svc["description"])}\n')
 
-            disable = (svc.get('disable_override') or '').strip().lower()
-            if disable in ('yes', 'no'):
-                # F6.2: the same shape panos_address writes (F3.4). v2 takes the "yes"/"no" string,
-                # not a bool (verified 2.0.14).
-                out.add(svc, f'  disable_override = "{disable}"\n')
+            self.emit_disable_override(out, svc)
 
             # v2 protocol is a nested object: protocol = { tcp = { ... } }
             protocols = svc.get('protocols') or {}
@@ -4137,6 +4166,10 @@ variable "panos_password" {
             out.add(grp, self.location_block('panos_service_group', grp, resource_name))
             out.add(grp, f'  name = {self.escape_string(grp["name"])}\n')
 
+            # F4.4: the row names the property, and the block prints no descriptive field, so the
+            # flag prints after the name
+            self.emit_disable_override(out, grp)
+
             if grp.get('members'):
                 # F2.6: members declared in this run become references;
                 # F3.2, F6.10.2: resolve inside the referrer's own unit
@@ -4188,6 +4221,10 @@ variable "panos_password" {
             if tag_text:
                 out.add(tag, f'  comments = {self.escape_string(tag_text)}\n')
 
+            # F4.4: the row names the property, and the tag text is the entry's descriptive field,
+            # so the flag prints after it
+            self.emit_disable_override(out, tag)
+
             out.add(tag, '}\n\n')
 
         out.write()
@@ -4215,6 +4252,8 @@ variable "panos_password" {
             if cat.get('description'):
                 out.add(cat, f'  description = {self.escape_string(cat["description"])}\n')
 
+            self.emit_disable_override(out, cat)
+
             if cat.get('list'):
                 sites_str = ', '.join([self.escape_string(url) for url in cat['list']])
                 out.add(cat, f'  list = [{sites_str}]\n')
@@ -4239,6 +4278,10 @@ variable "panos_password" {
             out.add(ag, f'resource "panos_application_group" "{resource_name}" {{\n')
             out.add(ag, self.location_block('panos_application_group', ag, resource_name))
             out.add(ag, f'  name = {self.escape_string(ag["name"])}\n')
+
+            # F4.4: the row names the property, and the block prints no descriptive field, so the
+            # flag prints after the name
+            self.emit_disable_override(out, ag)
 
             if ag.get('members'):
                 members_str = ', '.join([self.escape_string(m) for m in ag['members']])
@@ -4294,6 +4337,10 @@ variable "panos_password" {
             out.add(ext_list, f'resource "panos_external_dynamic_list" "{resource_name}" {{\n')
             out.add(ext_list, self.location_block('panos_external_dynamic_list', ext_list, resource_name))
             out.add(ext_list, f'  name = {self.escape_string(ext_list["name"])}\n')
+
+            # F4.4: the row names the property, and the fields the sub-shape holds print inside the
+            # type object, so the flag prints after the name, at the block's own level
+            self.emit_disable_override(out, ext_list)
 
             # v2 type is a nested object keyed by list type
             lt = ext_list.get('type') or 'ip'
@@ -5299,6 +5346,10 @@ variable "panos_password" {
             out.add(grp, f'resource "panos_security_profile_group" "{resource_name}" {{\n')
             out.add(grp, self.location_block('panos_security_profile_group', grp, resource_name))
             out.add(grp, f'  name = {self.escape_string(grp["name"])}\n')
+
+            # F4.4: the row names the property, and the block prints no descriptive field, so the
+            # flag prints after the name
+            self.emit_disable_override(out, grp)
 
             for category in categories:
                 members = grp.get(category)
