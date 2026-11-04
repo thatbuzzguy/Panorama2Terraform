@@ -16,8 +16,9 @@ is not emitted:
 - QoS profiles -> report (no v2 resource);
 - IPsec tunnel monitor profiles -> report (no v2 resource:
   panos_monitor_profile is a different PAN-OS object);
-- schedules -> report (panos_schedule exists, but only entry names are
-  parsed and v2.0.14 has no monthly schedule support);
+- schedules -> report (panos_schedule exists, but it declares no description
+  and the day and time ranges are not parsed, and v2.0.14 has no monthly
+  schedule support);
 - log forwarding profiles -> report (v2 resource exists, body not parsed);
 - zone protection profiles -> report (v2 resource exists, body not parsed);
 - location-type address objects -> report (F3.4: panos_address has no
@@ -151,7 +152,7 @@ def test_pbf_monitor_profiles_emit_real_v2_resources(tmp_path):
 # --- Report-only areas: explicit MANUAL_SETUP_REPORT.txt ---------------------
 
 def test_report_only_areas_go_to_manual_setup_report(tmp_path):
-    """The five report areas name their data and reason in the report."""
+    """Each report area names its data and its reason in the report."""
     out = _convert('kitchen_sink.xml', tmp_path)
     report = (out / 'MANUAL_SETUP_REPORT.txt').read_text(encoding='utf-8')
 
@@ -160,6 +161,12 @@ def test_report_only_areas_go_to_manual_setup_report(tmp_path):
     assert 'Override-443' in report
     assert 'port=8443' in report
     assert 'application=https' in report
+
+    # Application filters: no v2 resource, filter fields listed. The report is the output for
+    # this container, so the line prints the description the parse read (F4.4).
+    assert '--- Application Filters (no v2 resource: panos_application_filter) ---' in report
+    assert 'high-risk-web' in report
+    assert 'description=Filter high risk web applications' in report
 
     # QoS profiles: no v2 resource, profile and class details listed
     assert '--- QoS Profiles (no v2 resource) ---' in report
@@ -172,9 +179,10 @@ def test_report_only_areas_go_to_manual_setup_report(tmp_path):
     assert 'TM-Default' in report
     assert 'panos_monitor_profile' in report
 
-    # Schedules: v2 resource exists, entry body not parsed
+    # Schedules: v2 resource exists, entry body not parsed. `panos_schedule` declares no
+    # description, so the report line prints the description the parse read (F4.4).
     assert '--- Schedules (v2 resource exists, not emitted) ---' in report
-    assert 'Business-Hours: type=recurring, entries=Weekdays' in report
+    assert 'Business-Hours (Business hours): type=recurring, entries=Weekdays' in report
     assert 'panos_schedule' in report
 
     # Log forwarding: v2 resource exists, body not parsed

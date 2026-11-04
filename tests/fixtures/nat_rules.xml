@@ -46,6 +46,42 @@
                   </destination-translation>
                   <description>Inbound NAT for web</description>
                 </entry>
+                <!-- F4.4: the service field in member-list form, one member. The text form above
+                     is the other form the export states. -->
+                <entry name="Member-Form-NAT">
+                  <from>
+                    <member>Untrust</member>
+                  </from>
+                  <to-interface>DMZ</to-interface>
+                  <source>
+                    <member>any</member>
+                  </source>
+                  <destination>
+                    <member>Public-IP</member>
+                  </destination>
+                  <service>
+                    <member>service-http</member>
+                  </service>
+                  <description>NAT stated as one member</description>
+                </entry>
+                <!-- F4.4: a member list the v2 string field cannot hold, so the block names it -->
+                <entry name="Multi-Member-NAT">
+                  <from>
+                    <member>Untrust</member>
+                  </from>
+                  <to-interface>DMZ</to-interface>
+                  <source>
+                    <member>any</member>
+                  </source>
+                  <destination>
+                    <member>Public-IP</member>
+                  </destination>
+                  <service>
+                    <member>service-http</member>
+                    <member>service-https</member>
+                  </service>
+                  <description>NAT stated as two members</description>
+                </entry>
               </rules>
             </nat>
           </pre-rulebase>

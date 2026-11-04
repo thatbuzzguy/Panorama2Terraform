@@ -682,6 +682,9 @@ class PanoramaParser:
                 'technology': self._get_members(af, 'technology'),
                 'risk': self._get_members(af, 'risk'),
                 'evasive': self._get_text(af, 'evasive'),
+                # F4.4: the field is printed by the manual report, which is the output for a `report`
+                # container, so the report line reads it through the captured object
+                'description': self._get_text(af, 'description'),
                 'excessive_bandwidth_use': self._get_text(af, 'excessive-bandwidth-use'),
                 'prone_to_misuse': self._get_text(af, 'prone-to-misuse'),
                 'is_saas': self._get_text(af, 'is-saas'),
@@ -1061,6 +1064,11 @@ class PanoramaParser:
                 'destination_addresses': self._get_members(rule, 'destination'),
                 'applications': self._get_members(rule, 'application'),
                 'services': self._get_members(rule, 'service'),
+                # F4.4: the profile group reference reaches the provider as
+                # `profile_setting.group`, so the parse keeps the members under the parsed-object
+                # key the row names. No reference scope names a profile group, so the names stay
+                # brown-field strings.
+                'profile_group': self._get_members(rule, 'profile/group'),
                 'action': self._get_text(rule, 'action'),
                 'description': self._get_text(rule, 'description')
             })
@@ -1100,7 +1108,9 @@ class PanoramaParser:
                 'destination_zone': self._get_text(rule, 'to-interface'),
                 'source_addresses': self._get_members(rule, 'source'),
                 'destination_addresses': self._get_members(rule, 'destination'),
-                'service': self._get_text(rule, 'service'),
+                # F4.4: `panos_nat_policy_rules.rules.service` is a string, so the member form
+                # reaches the field as one name; the helper is what reads both export forms
+                'service': self._get_single_value(rule, 'service'),
                 'description': self._get_text(rule, 'description')
             })
 
@@ -1155,7 +1165,10 @@ class PanoramaParser:
                 'name': name,
                 **self.identity_of(sched),
                 'schedule_type': None,
-                'recurring': []
+                'recurring': [],
+                # F4.4: `panos_schedule` declares no description, so the manual report is the
+                # output that reads this field
+                'description': self._get_text(sched, 'description')
             })
 
             # Check for recurring schedule
@@ -2832,6 +2845,23 @@ class PanoramaParser:
                 members.append(member.text)
         return members
 
+    def _get_single_value(self, element: ET.Element, path: str) -> str | list[str] | None:
+        """Read a field the provider holds as one value, in either export form.
+
+        The export states such a field as text or as a member list. `_get_text` answers the
+        whitespace between the element and its members for the member form, so this helper takes
+        the members when the element holds them. One member is the value the field can hold; more
+        than one is the set it cannot hold, so the parse keeps the list and the emitter prints the
+        `# NOTE:` line that names it (F2.9: never a silent drop).
+        """
+        elem = element.find(path)
+        if elem is None:
+            return None
+        members = [member.text for member in elem.findall('member') if member.text]
+        if not members:
+            return elem.text
+        return members[0] if len(members) == 1 else members
+
 
 class HclRef:
     """A raw HCL expression (e.g. a resource reference) emitted verbatim.
@@ -4457,6 +4487,11 @@ variable "panos_password" {
                 if rule.get('services'):
                     rule_obj['services'] = [
                         self.name_ref(s, SERVICE_SCOPES, referrer=rule) for s in rule['services']]
+                if rule.get('profile_group'):
+                    # The provider holds the profile group reference inside the `profile_setting`
+                    # object (v2.0.14 declares `profile_setting.group` as a list of strings). No
+                    # reference scope names a profile group, so the names stay brown-field strings.
+                    rule_obj['profile_setting'] = {'group': list(rule['profile_group'])}
                 rule_obj['action'] = rule.get('action', 'allow')
                 if rule.get('log_start'):
                     rule_obj['log_start'] = True
@@ -4527,9 +4562,17 @@ variable "panos_password" {
                     rule_obj['destination_addresses'] = [
                         self.name_ref(a, ADDR_SCOPES, referrer=rule)
                         for a in rule['destination_addresses']]
-                if rule.get('service'):
-                    rule_obj['service'] = self.name_ref(
-                        rule['service'], SERVICE_SCOPES, referrer=rule)
+                service = rule.get('service')
+                if service:
+                    if isinstance(service, list):
+                        # The provider field takes one string, so a member list cannot be
+                        # printed as the field (v2.0.14 schema). The set is named in the block
+                        # instead of being dropped (F2.9).
+                        out.add(rule, '  # NOTE: service ' + ', '.join(service) +
+                                 ' is a member list; the v2 field takes one name, '
+                                 'so review manually\n')
+                    else:
+                        rule_obj['service'] = self.name_ref(service, SERVICE_SCOPES, referrer=rule)
                 if rule.get('disabled'):
                     rule_obj['disabled'] = True
 
@@ -5451,9 +5494,12 @@ variable "panos_password" {
         if application_filters:
             lines.append('--- Application Filters (no v2 resource: panos_application_filter) ---')
             for af in application_filters:
+                # The report is the output for this container, so it reads the field it prints
+                # through the captured object (F4.4).
                 lines.append(f"  {af.get('name')} (dg: {af.get('device_group')}): "
                              f"category={af.get('category')}, risk={af.get('risk')}, "
-                             f"evasive={af.get('evasive')}")
+                             f"evasive={af.get('evasive')}"
+                             + (f", description={af['description']}" if af.get('description') else ''))
             lines.append('')
 
         if manual_key_tunnels:
@@ -5509,13 +5555,17 @@ variable "panos_password" {
             lines.append('--- Schedules (v2 resource exists, not emitted) ---')
             for sched in schedules:
                 entries = ','.join(e['name'] for e in sched.get('recurring', [])) or '-'
+                # The report is the output for this container, so it reads the field it prints
+                # through the captured object (F4.4). `panos_schedule` declares no description.
                 lines.append(
-                    f"  {sched['name']}: type={sched.get('schedule_type')}, "
-                    f"entries={entries}")
-            lines.append('  The v2 resource panos_schedule exists, but only the')
-            lines.append('  entry names are parsed (day and time ranges are not')
-            lines.append('  captured), and v2.0.14 does not model monthly')
-            lines.append('  schedules. Configure via the Panorama GUI or CLI.')
+                    f"  {sched['name']}"
+                    + (f" ({sched['description']})" if sched.get('description') else '')
+                    + f": type={sched.get('schedule_type')}, entries={entries}")
+            lines.append('  The v2 resource panos_schedule exists, but the parse')
+            lines.append('  reads the entry name, the description and the schedule')
+            lines.append('  type only (day and time ranges are not captured), and')
+            lines.append('  v2.0.14 does not model monthly schedules. Configure via')
+            lines.append('  the Panorama GUI or CLI.')
             lines.append('')
 
         if log_settings:
@@ -6688,8 +6738,8 @@ def main():
         # Application filters have no v2 resource: they go to the manual setup report
         tf_gen.generate_external_lists(external_lists)
         # F2.9: schedules go to the manual setup report (v2 resource
-        # exists, but only entry names are parsed and v2.0.14 has no
-        # monthly schedule support)
+        # exists, but the parse reads the name, the description and the
+        # type only, and v2.0.14 has no monthly schedule support)
 
         # Address and Service objects
         tf_gen.generate_address_objects(addresses)

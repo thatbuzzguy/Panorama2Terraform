@@ -3869,8 +3869,9 @@ NOT_EMITTED_TYPES = {
         'body is not captured; real emission needs profile parsing (Epic 3)'
     ),
     'panos_schedule': (
-        'only the entry names are parsed; the day/time ranges are not '
-        'captured, and v2.0.14 has no monthly schedule support'
+        'the parse reads the entry name, the description and the schedule '
+        'type; the day/time ranges are not captured, and v2.0.14 has no '
+        'monthly schedule support'
     ),
 }
 
@@ -4003,6 +4004,9 @@ COVERAGE_MATRIX = (
             'disabled',
             'log_end',
             'log_start',
+            # F4.4: the parsed-object key the emitter reads for the profile group reference,
+            # printed as `profile_setting.group`
+            'profile_group',
             'services',
             'source_addresses',
             'source_zones',

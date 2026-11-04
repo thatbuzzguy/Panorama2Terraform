@@ -17,6 +17,10 @@ Four groups:
    (`docs/ARCHITECTURE.md` §3.2): the scope, the position, the entry, the fact. No matrix row, because
    a console line has no room for a column. The fact names the properties as the parsed-object key
    names. A run with no finding prints nothing new, and the report bytes are unchanged.
+6. The four parser extraction gaps, one pin per gap: the fixture entry, the read the parse made, and the
+   output that prints the field. A `report` container has no matrix row, so its field is closed by the
+   report writer reading what it prints; an `emitted` container is closed by the emitter reading the key and
+   the row naming it in the same change.
 
 The scan scope is the entries a matrix row covers. A report, inventory, bookkeeping,
 count-only, or nested-block container has no matrix row, so the scan does not report it;
@@ -28,7 +32,7 @@ by `PROTOCOL_SHAPE` instead of by the row.
 import container_coverage
 import entry_coverage
 import xml_input
-from conftest import FIXTURES_DIR, run_pipeline, run_script
+from conftest import FIXTURES_DIR, run_pipeline, run_script, written_bytes
 from resource_mapping import COVERAGE_MATRIX, protocol_row
 
 ROWS = list(COVERAGE_MATRIX)
@@ -681,6 +685,126 @@ def test_the_console_prints_no_property_block_for_a_run_with_no_finding(tmp_path
     code, console = _console('tags.xml', tmp_path)
     assert code == 0
     assert 'Property findings' not in console, console
+
+
+def _gap_run(converter_module, tmp_path, fixture):
+    """Run one gap fixture in process. Returns (ledger, the manual report text, the `.tf` text).
+
+    The read record is a run-time measurement, so the run must be in process. The report and the `.tf`
+    file are the two outputs that can read a captured field, so the pin reads both.
+    """
+    out = tmp_path / fixture
+    parser = run_pipeline(converter_module, fixture, out)
+    assert parser is not None, fixture
+    written = written_bytes(out)
+    report = written.get('MANUAL_SETUP_REPORT.txt', b'').decode(encoding='utf-8')
+    tf = '\n'.join(text.decode(encoding='utf-8') for text in written.values())
+    return parser.ledger, report, tf
+
+
+def _gap_mark(ledger, name):
+    """The mark for one entry, and the captured fields the parse kept for it."""
+    entry = next(e for e in ledger.entries() if e.get('name') == name)
+    mark = ledger.mark_for(entry)
+    assert mark is not None, name
+    return entry, mark
+
+
+# --- 6. The four parser extraction gaps ------------------------------------
+
+def test_the_report_reads_the_application_filter_description_it_prints(converter_module, tmp_path):
+    """Gap 1: `panos_application_filter` is not a resource, so the report is the output for the entry.
+
+    `parse_application_filters` keeps `description` in the object it marks, read through `_get_text` like the
+    other text fields of that entry, and the report line prints it through the captured object, so the read
+    record names the key as a property an output used. The `application-filter` container is a `report` row,
+    so `matrix_row_for` answers None and the scan measures nothing for it: the report reading what it prints
+    is the only rule that can keep a field honest in a container with no matrix row.
+    """
+    ledger, report, _tf = _gap_run(converter_module, tmp_path, 'application_filters.xml')
+    entry, mark = _gap_mark(ledger, 'high-risk-web')
+    assert 'description' in ledger.captured_fields(mark), ledger.captured_fields(mark)
+    line = next(line for line in report.splitlines() if 'high-risk-web' in line)
+    assert 'description=Filter high risk web applications' in line, line
+    assert 'description' in mark['captured'].used_keys(), mark['captured'].used_keys()
+    path = container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source)
+    assert entry_coverage.matrix_row_for(path) is None, path
+    assert ledger.property_findings() == [], ledger.property_findings()
+
+
+def test_the_report_reads_the_schedule_description_it_prints(converter_module, tmp_path):
+    """Gap 2: `panos_schedule` exists but declares no `description`, so the report prints the field.
+
+    Measured 2026-11-04 against the pinned provider: `panos_schedule` declares `disable_override`, `location`,
+    `name` and `schedule_type` only, so no emitter can print a description and the `schedule` container stays
+    a `report` row. `parse_schedules` reads the field through `_get_text`, and the report line prints it
+    through the captured object, so the read record names it as a property an output used. An entry with no
+    value prints no field, and the captured set keeps such a field out (F4.3 rule 3).
+    """
+    ledger, report, _tf = _gap_run(converter_module, tmp_path, 'schedules.xml')
+    entry, mark = _gap_mark(ledger, 'Business-Hours')
+    assert 'description' in ledger.captured_fields(mark), ledger.captured_fields(mark)
+    line = next(line for line in report.splitlines() if 'Business-Hours' in line)
+    assert 'Business-Hours (Business hours): type=recurring' in line, line
+    assert 'description' in mark['captured'].used_keys(), mark['captured'].used_keys()
+    path = container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source)
+    assert entry_coverage.matrix_row_for(path) is None, path
+    _entry, plain_mark = _gap_mark(ledger, 'One-Time')
+    # No value, so no captured field (F4.3 rule 3), and the line prints none
+    assert 'description' not in ledger.captured_fields(plain_mark), ledger.captured_fields(plain_mark)
+    plain_line = next(line for line in report.splitlines() if 'One-Time' in line)
+    assert plain_line == '  One-Time: type=non-recurring, entries=-', plain_line
+    assert ledger.property_findings() == [], ledger.property_findings()
+
+
+def test_the_security_rule_row_measures_the_profile_group_the_emitter_prints(converter_module, tmp_path):
+    """Gap 3: the profile group reference is expressible, so the row names it and the emitter reads it.
+
+    `parse_security_rules` reads the group members through `_get_members(rule, 'profile/group')`, and
+    `generate_security_rules` prints them as `profile_setting = { group = [ ... ] }`, the shape the pinned
+    provider declares (`profile_setting.group` is a list of strings). The row names the parsed-object key
+    `profile_group`, so the emitter read and the declared property are the same key, and the corpus entry is
+    the measurement. No profile-group reference scope exists, so the names stay brown-field strings.
+    """
+    ledger, _report, tf = _gap_run(converter_module, tmp_path, 'security_rules.xml')
+    entry, mark = _gap_mark(ledger, 'Block-Risky-Apps')
+    assert ledger.captured_fields(mark) == (
+        'action', 'applications', 'destination_addresses', 'destination_zones', 'disabled',
+        'log_end', 'log_start', 'profile_group', 'services', 'source_addresses', 'source_zones'), \
+        ledger.captured_fields(mark)
+    assert 'profile_group' in mark['captured'].used_keys(), mark['captured'].used_keys()
+    row = entry_coverage.matrix_row_for(
+        container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source))
+    assert row['resource'] == 'panos_security_policy_rules', row
+    assert 'profile_group' in row['properties'], row['properties']
+    assert 'profile_setting = {\n        group = [ "Strict-Profile" ]\n      }' in tf, tf
+    assert ledger.property_findings() == [], ledger.property_findings()
+
+
+def test_the_nat_service_is_read_in_both_export_forms(converter_module, tmp_path):
+    """Gap 4: the string field reads the text form and the one-member form; a longer list is reported.
+
+    Before the fix the parse read the member form as the whitespace between the element and its members.
+    `panos_nat_policy_rules.rules.service` is a string (pinned provider, measured 2026-11-04), so one member
+    reaches the field as the name, and more than one member is the set the field cannot hold: the block prints
+    the `# NOTE:` line that names the members, so the field is printed or reported, never dropped. Both forms
+    are read by the row's emitter, so `test_measured_reads_equal_the_declared_properties` holds for `service`
+    and the run reports no finding for either entry.
+    """
+    ledger, _report, tf = _gap_run(converter_module, tmp_path, 'nat_rules.xml')
+    forms = {
+        'Outbound-NAT': ('text form', 'service = "any"'),
+        'Member-Form-NAT': ('one member', 'service = "service-http"'),
+        'Multi-Member-NAT': ('two members', '# NOTE: service service-http, service-https'),
+    }
+    for name, (_form, printed) in forms.items():
+        entry, mark = _gap_mark(ledger, name)
+        assert ledger.captured_fields(mark) and 'service' in ledger.captured_fields(mark), name
+        assert 'service' in mark['captured'].used_keys(), (name, mark['captured'].used_keys())
+        assert printed in tf, (name, tf)
+    assert ledger.property_findings() == [], ledger.property_findings()
+    row = next(r for r in ROWS if r['resource'] == 'panos_nat_policy_rules')
+    assert 'service' in row['properties'], row['properties']
 
 
 def test_the_console_shape_moves_no_report_bytes(converter_module, tmp_path):

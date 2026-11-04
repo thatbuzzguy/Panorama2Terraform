@@ -198,6 +198,18 @@ Two levels sit beside the matrix:
   row covers, so a report, inventory, bookkeeping, count-only, or nested-block
   container is not a finding: it has no row, and only a row can name the properties an
   emitter reads. Those field gaps are recorded in [`../backlog.md`](../backlog.md).
+  A `report` container is honest only when the report line reads the field it prints through the
+  captured object, because the report is the only output for that entry. Four parser extraction gaps
+  closed on 2026-11-04, one pin per gap in `tests/test_property_coverage.py`:
+  `::test_the_report_reads_the_application_filter_description_it_prints` (the provider declares no
+  `panos_application_filter`, so the report prints the description),
+  `::test_the_report_reads_the_schedule_description_it_prints` (`panos_schedule` declares no
+  description, so the report prints it),
+  `::test_the_security_rule_row_measures_the_profile_group_the_emitter_prints` (the row names
+  `profile_group`, and the emitter prints it as `profile_setting = { group = [ ... ] }`, the shape the
+  pinned provider declares), and
+  `::test_the_nat_service_is_read_in_both_export_forms` (`service` is a string, so one member is the
+  value the field can hold, and more than one member prints the `# NOTE:` line that names them).
    F7.11 completed the six `PROTOCOL_SHAPE` entry rows the router reads, so the router row declares
    a property for each field those rows state, and the scan measures each entry that states them.
    A level inside an entry is not a measured entry: the entry that holds it is, so the fields inside

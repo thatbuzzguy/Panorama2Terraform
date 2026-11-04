@@ -48,6 +48,9 @@ resource "panos_security_policy_rules" "block_risky_apps_1c5ae6ef" {
       destination_addresses = [ "any" ]
       applications = [ "torrent" ]
       services = [ "application-default" ]
+      profile_setting = {
+        group = [ "Strict-Profile" ]
+      }
       action = "deny"
       log_end = true
       disabled = true
