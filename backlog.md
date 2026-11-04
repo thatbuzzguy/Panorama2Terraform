@@ -11,6 +11,13 @@ Completed work is not recorded here; the git history and the owner document hold
   reads an operator's export. Leave it alone unless it ever takes a
   command-line path.
 
+- The same tool cannot rebuild `tests/fixtures/kitchen_sink.xml` while the hostile fixtures sit in
+  the corpus, because it parses every `.xml` file in the directory and two of them are not
+  well-formed XML (`hostile_bad_control_char.xml`, `hostile_xxe.xml`). Measured 2026-11-04: the
+  committed file is also not the tool's output for the current fixture set, because it holds no
+  `ip-with-expand` entry. A rebuild needs the tool to skip the files it cannot parse, and the
+  golden set for the case must be regenerated from a run in the same commit.
+
 - Property gaps the scan does not report, because the container that holds them has
   no matrix row: only an `emitted` container can name the properties an emitter reads.
   The scan scope rule pins this in
@@ -38,12 +45,6 @@ Completed work is not recorded here; the git history and the owner document hold
   - Schedule `description` is not extracted.
   - Security rule profile group references are not extracted.
   - NAT rule `service` in member-list form is captured as whitespace text; only text form works.
-  - `disable-override` is extracted for `panos_address` (F3.4) and for `panos_service` (F6.2).
-    The pinned schema declares the flag for 25 types, so a matrix row that does not name the
-    property states `unknown` in `OWNERSHIP.json`. The parsed types that can carry the flag are not
-    extracted: `panos_address_group`, `panos_administrative_tag`, `panos_application_group`,
-    `panos_custom_url_category`, `panos_external_dynamic_list`, `panos_security_profile_group`,
-    `panos_service_group`.
   - Regions are parsed but reach no output: `parse_regions` returns objects
     that only the console count uses. Recorded by F3.10 (`docs/ARCHITECTURE.md`
     §2.4). The per-entry report lists each region row as a gap, so the operator sees

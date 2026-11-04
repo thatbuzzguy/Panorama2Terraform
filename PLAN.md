@@ -67,15 +67,16 @@ path writes one directory per unit the manifest names.
 
 ## Sequencing
 
-The next feature is the parse extraction gaps `backlog.md` names: confirm each gap in a fixture through the
+The next feature is the parse extraction gaps that `backlog.md` names: confirm each gap in a fixture through the
 report that names it, then read the field in the parse method and name it in the matrix row in the same change,
-so the property scan measures the row through a corpus entry. The coverage row for the aggregate subinterface
-container is landed, so the scan measures `panos_aggregate_layer3_subinterface` through a fixture entry and the
-parity test names one row with no read of its own. The gated pieces that stay held are also in `backlog.md`: the
-four `*_policy_rules` types wait for the F3.5 rulebase decision, and a config entry inside a stack needs a
-provider location shape before the emitter can write a block for it. The rows that state fewer fields than the
-pinned provider declares for their level are the choice levels, which state their alternatives as `selects`
-keys.
+so the property scan measures the row through a corpus entry. The `disable-override` gap is closed: nine matrix
+rows name the property, one helper states the print shape for them, and `OWNERSHIP.json` states the flag as the
+parse read it for their entries. The coverage row for the aggregate subinterface container is landed, so the scan
+measures `panos_aggregate_layer3_subinterface` through a fixture entry and the parity test names one row with no
+read of its own. The gated pieces that stay held are also in `backlog.md`: the four `*_policy_rules` types wait
+for the F3.5 rulebase decision, and a config entry inside a stack needs a provider location shape before the
+emitter can write a block for it. The rows that state fewer fields than the pinned provider declares for their
+level are the choice levels, which state their alternatives as `selects` keys.
 
 ## Out of Scope (tracked in backlog.md)
 
