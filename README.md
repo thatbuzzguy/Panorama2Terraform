@@ -404,7 +404,7 @@ both counts.
 | `scope_blocks` | a name inside a scope block's `location` names a scope the run declares, by the type that defines it | FAIL |
 | `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
 | `protocol_object` | every `protocol` object on a `panos_virtual_router` block matches the `PROTOCOL_SHAPE` row for its level, prints as a field, and states the one key a row selects | FAIL |
-| `filter_blocks` | every filter container block matches the `FILTER_SHAPE` row for its level, and an element inside a `[` container states the name the row reads as the entry name | FAIL |
+| `filter_blocks` | every filter container block matches the `FILTER_SHAPE` row for its level, states the one key a row selects, and an element inside a `[` container states the name the row reads as the entry name | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable the run declares | FAIL |
 | `data_files` | every data file reads as its declared rows, and the data agrees with the naming rule, the joins, the order rule, and its printed form | FAIL |
@@ -513,7 +513,8 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   the variable reference, `VALUE_VARIABLES` as the one shape owner, each violation type of the gate rule, and
   the byte rule between two runs
 - `tests/test_filter_containers.py` - the six routing-profile filter containers: `FILTER_SHAPE` against the live
-  provider schema, the row scope that stops at a `match` or `set` row, the six `CONTAINER_TABLE`,
+  provider schema, the 14 rows that state an exactly-one choice and the gate refusing two of them or none, the
+  row scope that stops at a `match` or `set` row, the six `CONTAINER_TABLE`,
   `COVERAGE_MATRIX`, `EMITTED_TYPES` and `LOCATION_SCHEMA` entries with `FILTER_TYPES` as the one decision owner,
   the parse read and the print, the path-keyed input spellings, and each violation type of the gate rule
 - `ruff check .` - lint

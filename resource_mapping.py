@@ -2718,9 +2718,14 @@ PROTOCOL_SHAPE: dict[str, dict] = {
 # `terraform providers schema -json` and pinned by tests/test_filter_containers.py.
 #
 # The container row is the level the resource block prints, so its `fields` are the properties the
-# `COVERAGE_MATRIX` row declares for that resource. `selects` is empty for every row: the provider declares
-# each choice level as optional fields, not as required-exactly-one, so `one_of` is not the word for it.
-# `sensitive` is empty: no filter field is marked sensitive in the schema, so `VALUE_VARIABLES` gains no row.
+# `COVERAGE_MATRIX` row declares for that resource. `selects` states the choice for the 14 rows that
+# `terraform validate` (provider 2.0.14, Terraform 1.16.2, measured 2026-11-03) reads as exactly one attribute,
+# and it is empty for the rest. The schema states no word for a choice, because it declares each alternative as
+# an optional attribute of a `single` level, so the shape word stays `object` for a filter choice row and
+# `one_of` keeps its meaning: the word for a row whose whole value is the choice. Each mapping is the identity,
+# because the export spells the provider key at a filter choice level. `redist-entry` is the filter case where
+# the choice is part of the value, because the row also states `name` and `description`. `sensitive` is empty:
+# no filter field is marked sensitive in the schema, so `VALUE_VARIABLES` gains no row.
 #
 # The redistribution route-map entry is mirrored to the `match` and `set` levels, and those rows state leaf
 # fields only: the levels inside them (`match.ipv4.address`, `match.next_hop`, `match.route_source`,
@@ -2740,7 +2745,7 @@ FILTER_SHAPE: dict[str, dict] = {
         'fields': {
         'ipv4': 'object', 'ipv6': 'object'
         },
-        'selects': {},
+        'selects': {'ipv4': 'ipv4', 'ipv6': 'ipv6'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/access-list/type/ipv4': {
@@ -2764,7 +2769,7 @@ FILTER_SHAPE: dict[str, dict] = {
         'fields': {
         'address': 'string', 'entry': 'object'
         },
-        'selects': {},
+        'selects': {'address': 'address', 'entry': 'entry'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/access-list/type/ipv4/ipv4_entries/destination_address/entry': {
@@ -2780,7 +2785,7 @@ FILTER_SHAPE: dict[str, dict] = {
         'fields': {
         'address': 'string', 'entry': 'object'
         },
-        'selects': {},
+        'selects': {'address': 'address', 'entry': 'entry'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/access-list/type/ipv4/ipv4_entries/source_address/entry': {
@@ -2812,7 +2817,7 @@ FILTER_SHAPE: dict[str, dict] = {
         'fields': {
         'address': 'string', 'entry': 'object'
         },
-        'selects': {},
+        'selects': {'address': 'address', 'entry': 'entry'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/access-list/type/ipv6/ipv6_entries/source_address/entry': {
@@ -2854,7 +2859,7 @@ FILTER_SHAPE: dict[str, dict] = {
         'fields': {
         'ipv4': 'object', 'ipv6': 'object'
         },
-        'selects': {},
+        'selects': {'ipv4': 'ipv4', 'ipv6': 'ipv6'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/prefix-list/type/ipv4': {
@@ -2878,7 +2883,7 @@ FILTER_SHAPE: dict[str, dict] = {
         'fields': {
         'entry': 'object', 'network': 'string'
         },
-        'selects': {},
+        'selects': {'entry': 'entry', 'network': 'network'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/prefix-list/type/ipv4/ipv4_entries/prefix/entry': {
@@ -2910,7 +2915,7 @@ FILTER_SHAPE: dict[str, dict] = {
         'fields': {
         'entry': 'object', 'network': 'string'
         },
-        'selects': {},
+        'selects': {'entry': 'entry', 'network': 'network'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/prefix-list/type/ipv6/ipv6_entries/prefix/entry': {
@@ -2935,7 +2940,7 @@ FILTER_SHAPE: dict[str, dict] = {
         'fields': {
         'extended': 'object', 'large': 'object', 'regular': 'object'
         },
-        'selects': {},
+        'selects': {'extended': 'extended', 'large': 'large', 'regular': 'regular'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/community-list/type/extended': {
@@ -3122,7 +3127,8 @@ FILTER_SHAPE: dict[str, dict] = {
         'bgp': 'object', 'connected_static': 'object', 'description': 'string', 'name': 'string', 'ospf': 'object',
         'ospfv3': 'object', 'rip': 'object'
         },
-        'selects': {},
+        'selects': {'bgp': 'bgp', 'connected_static': 'connected_static', 'ospf': 'ospf',
+                     'ospfv3': 'ospfv3', 'rip': 'rip'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp': {
@@ -3130,7 +3136,7 @@ FILTER_SHAPE: dict[str, dict] = {
         'fields': {
         'ospf': 'object', 'ospfv3': 'object', 'rib': 'object', 'rip': 'object'
         },
-        'selects': {},
+        'selects': {'ospf': 'ospf', 'ospfv3': 'ospfv3', 'rib': 'rib', 'rip': 'rip'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp/ospf': {
@@ -3274,7 +3280,7 @@ FILTER_SHAPE: dict[str, dict] = {
         'fields': {
         'bgp': 'object', 'ospf': 'object', 'ospfv3': 'object', 'rib': 'object', 'rip': 'object'
         },
-        'selects': {},
+        'selects': {'bgp': 'bgp', 'ospf': 'ospf', 'ospfv3': 'ospfv3', 'rib': 'rib', 'rip': 'rip'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static/bgp': {
@@ -3444,7 +3450,7 @@ FILTER_SHAPE: dict[str, dict] = {
         'fields': {
         'bgp': 'object', 'rib': 'object', 'rip': 'object'
         },
-        'selects': {},
+        'selects': {'bgp': 'bgp', 'rib': 'rib', 'rip': 'rip'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf/bgp': {
@@ -3550,7 +3556,7 @@ FILTER_SHAPE: dict[str, dict] = {
         'fields': {
         'bgp': 'object', 'rib': 'object'
         },
-        'selects': {},
+        'selects': {'bgp': 'bgp', 'rib': 'rib'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospfv3/bgp': {
@@ -3624,7 +3630,7 @@ FILTER_SHAPE: dict[str, dict] = {
         'fields': {
         'bgp': 'object', 'ospf': 'object', 'rib': 'object'
         },
-        'selects': {},
+        'selects': {'bgp': 'bgp', 'ospf': 'ospf', 'rib': 'rib'},
         'sensitive': frozenset(),
     },
     'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip/bgp': {

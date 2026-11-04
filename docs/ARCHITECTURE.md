@@ -1053,15 +1053,16 @@ and the tables are the whole input. Pinned by `tests/test_protocol_object.py`, o
 `::test_a_one_of_level_prints_one_key`.
 
 `filter_blocks` (F7.8) reads a filter container block against `resource_mapping.FILTER_SHAPE` (§4.10), through
-the same block reader and the same field reader. Two findings, each read from the file text: a level, a field,
-or a value must be the shape the row states, and an element inside a `[` container states the name the row
-reads as the entry name. `location` is the placement fact, so the rule reads the fields at the block's own
-level and not the sub-block; `location_present` is the rule that asks for it. The row states no `selects` and
-no `sensitive` field, so the choice rule and the sensitive rule cannot fire for a filter block: the three filter
-levels `terraform validate` reads as exactly one state their alternatives as fields (§4.10 rule 1), which is
-recorded in `backlog.md`. Pinned by
-`tests/test_filter_containers.py`, one test per finding, and `::test_the_gate_reads_the_run_and_reports_nothing`
-for the gate order.
+the same block reader and the same field reader. Three findings, each read from the file text: a level, a field,
+or a value must be the shape the row states; a row that states `selects` names the attributes the provider reads
+as exactly one, and the choice is read at the level or the entry the walk enters, which for a filter block
+includes the block's own level, so a hand-written filter block that states two alternatives is refused (F7.13);
+and an element inside a `[` container states the name the row reads as the entry name. `location` is the
+placement fact, so the rule reads the fields at the block's own level and not the sub-block; `location_present`
+is the rule that asks for it. The table states no `sensitive` field, so the sensitive rule cannot fire for a
+filter block. The choice is read before the field rule, as in `_shape_level_findings`, so a selected key is not
+read twice. Pinned by `tests/test_filter_containers.py`, one test per finding, and
+`::test_the_gate_reads_the_run_and_reports_nothing` for the gate order.
 
 - A WARN does not fail the gate: a placeholder is correct output that still needs
   an operator action, so the run exits 0.
@@ -1242,7 +1243,9 @@ attributes the provider reads as exactly one, and the gate reads that rule at th
 each entry of a `string_list` row. The two rows that gained it are `protocol/bgp/peer_group/peer/peer_address`,
 where the choice is the whole value, and `protocol/ospfv3/auth_profile`, where the choice is two of the four
 fields the entry states. `SHAPE_WORDS`, `SHAPE_TO_SCHEMA`, `SHAPE_READS_AS` and `SHAPE_LEVELS` did not change,
-because `value_shape` reads both levels as an object value.
+because `value_shape` reads both levels as an object value. F7.13 read the same rule for the filter table
+(§4.10), which states the choice for the 14 rows the measurement names, so the gate reads a filter choice at the
+block's own level as well as at each level below.
 
 1. **`protocol` prints as one field of the block**: `protocol = { ... }`. `terraform validate` accepts the
    value and refuses the block shape, so the gate rule reports a `protocol` the field reader cannot read as
@@ -1300,9 +1303,9 @@ because `value_shape` reads both levels as an object value.
    the `ospfv3` profile entry, and refuses none for both. The print path is unchanged: a run that states one
    alternative prints one key. Pinned by
    `tests/test_protocol_object.py::test_the_choice_rows_state_the_choice_the_provider_reads` and
-   `tests/test_protocol_object.py::test_the_choice_rule_reads_a_level_and_an_entry`. The three filter levels the
-   provider reads as exactly one state their alternatives as fields and no `selects`, which is the same rule for
-   the filter table recorded in `backlog.md`.
+   `tests/test_protocol_object.py::test_the_choice_rule_reads_a_level_and_an_entry`. The same rule and the same
+   wording serve the filter table (F7.13), where the gate also reads the choice at the block's own level, which
+   is the entry row the walk enters for a filter block (§4.10 rule 1).
 8. **A sensitive field prints as the variable reference**, through `VALUE_VARIABLES`
    (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2), and no generated file states the value. F7.7: the run can
    read a value for such a field inside an entry, and the name it prints is the §5 name of the entry
@@ -1376,17 +1379,21 @@ the decision has one owner. `FILTER_PATHS` is the sorted set of the six entry ro
 reads as the property scope: a filter entry is a section entry, so the scan measures it against its own row,
 and the properties that row declares are the entry row's fields without the entry name.
 
-Three things the filter table states, or does not state:
+Three things the filter table states:
 
-1. **`selects` is empty for every row**, because the pinned provider declares each filter choice as optional
-   fields, so the table states the alternatives as fields. Three of those levels are the ones `terraform validate`
-   refuses to hold more than one attribute — `access-list/type/ipv4/ipv4_entries/source_address`,
-   `prefix-list/type/ipv4/ipv4_entries/prefix`, and `redist-entry/bgp` — so a fixture entry answers each with
-   one element, and that is the fact the run pins through `terraform validate`. The schema states no fact for a
-   choice (F7.12), so a row states a choice the provider reads as exactly one as `selects`, which is why these
-   three rows cannot be read by the choice rule: they state their alternatives as fields. The choice rule counts
-   only the keys `selects` states, so a hand-written filter block that states two alternatives is not refused.
-   That asymmetry is recorded in `backlog.md`.
+1. **`selects` is the one place either table states a choice** (F7.12), so the filter rows that hold one state
+   it there. Measured 2026-11-03 with `terraform validate` (provider 2.0.14, Terraform 1.16.2), 14 filter rows
+   are levels the provider reads as exactly one attribute: each refuses more than one of its alternatives and
+   also refuses none. The schema states no fact for a choice, because it declares every alternative as an
+   optional attribute of a `single` level, so no shape word carries it and `SHAPE_WORDS`, `SHAPE_TO_SCHEMA`,
+   `SHAPE_READS_AS` and `SHAPE_LEVELS` did not change: a filter choice row keeps the word the measurement gives
+   it (`object`), and `one_of` keeps its meaning as the word for a row whose whole value is the choice. The
+   choice is the identity, because the export spells the provider key at a filter choice level, so
+   `FILTER_XML_NAME_EXCEPTIONS` gained no row. `redist-entry` is the filter case where the choice is part of the
+   value, because the row also states `name` and `description`; the other 13 state only their alternatives. The
+   choice is data in the row, so one rule (`_shape_choice_findings`) reads both tables and one wording covers
+   both, and the gate reads it at the block's own level as well as at each level below (§4.6). The fixture
+   answers each choice level it covers with one element, so the run prints one alternative and reports nothing.
 2. **`sensitive` is empty for every row**, because no filter field is marked `sensitive` in the pinned
    schema, so `VALUE_VARIABLES` gains no row for a filter field.
 3. **The row scope stops at a `match` or `set` row.** The redistribution entry mirrors the levels the provider

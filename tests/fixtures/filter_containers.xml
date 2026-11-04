@@ -3,10 +3,9 @@
      FILTER_SHAPE declares, so the property scan measures the whole row. The entry sits inside a
      template, so the block prints a location.
 
-     Each choice the provider enforces as exactly-one (source_address, prefix, and the redistribution
-     protocol level) states one alternative here, because `terraform validate` refuses a level that
-     states more than one. The pinned schema declares those alternatives as optional fields, so
-     FILTER_SHAPE states no `selects` row for them: the choice is the provider's, not the table's. -->
+     Each choice level FILTER_SHAPE states as `selects` holds one element here, because the provider reads
+     that level as exactly one attribute, so the run prints the one alternative the input states and the gate
+     reports no finding for it (F7.13). -->
 <config version="10.0.0" urldb="paloaltonetworks">
   <templates>
     <entry name="FW-Template">
