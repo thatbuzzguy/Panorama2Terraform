@@ -1492,9 +1492,11 @@ spells differently in two containers — `extended_community_regexes` is `ec-reg
 and `extended_communities` is `extended-community` inside a route-map match. An entry-list field is the singular
 container element that holds its entries, so those fields are in the map too. The map holds 15 pairs, and
 `ipv4_entries` and `ipv6_entries` spell the same way in two containers, so 13 distinct spellings, and none of
-them is a spelling the `-` rule can produce. Five pairs are grounded by the fixture, because one entry states one
-entry-list spelling only; the other ten are the spellings the pango source measures. Pinned by
-`tests/test_filter_containers.py`.
+them is a spelling the `-` rule can produce. Each pair is grounded by an entry in
+`tests/fixtures/filter_containers.xml`, because one entry states one choice alternative, so a container that
+holds a choice holds one entry per alternative the fixture states. The pin reads the pair from a real run: the
+entry states the element the exception names, the block the run wrote for that entry prints the name the row
+declares, and `terraform validate` accepts the block. Pinned by `tests/test_filter_containers.py`.
 
 ## 5. Naming rules
 

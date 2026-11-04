@@ -17,7 +17,9 @@ Pins:
 - the six `CONTAINER_TABLE` rows, the six `COVERAGE_MATRIX` rows, the six `EMITTED_TYPES` entries and the six
   `LOCATION_SCHEMA` rows, with `FILTER_TYPES` pinned against the `CONTAINER_TABLE` row notes so the decision
   has one owner;
-- the parse read, the emitter print, the gate rule, and the path-keyed input spellings measured from pango;
+- the parse read, the emitter print, the gate rule, and the path-keyed input spellings: the map holds 15 pairs,
+  and one fixture entry states each one, so a pair is grounded by the element the entry holds and by the field
+  name the run printed for it, read from the run's output and validated against the pinned provider;
 - the choice rows: the 14 levels `terraform validate` reads as exactly one, the gate refusing a choice level
   that states two of them or none, and the run printing the one key each choice level states;
 - one negative test per gate rule, and the gate reporting no finding on a real run.
@@ -29,18 +31,22 @@ import re
 import textwrap
 from pathlib import Path
 
+import pytest
+
 import container_coverage
 import entry_coverage
 import import_blocks
 import resource_mapping
 import sanity_checks
 import xml_input
-from conftest import FIXTURES_DIR, GOLDEN_DIR, run_script, tf_files
+from conftest import FIXTURES_DIR, GOLDEN_DIR, TERRAFORM, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 FIXTURE = 'filter_containers.xml'
 
-# The six containers, and the entry the fixture holds for each one.
+# The six containers, and the entry the coverage matrix row names for each one. The fixture holds more entries
+# than this, because one entry states one choice alternative, so the input-spelling pairs are stated by the
+# other entries. A pin that reads the fixture reads the entries through `_fixture_entries`.
 ENTRIES = {
     'network/routing-profile/filters/access-list': 'ACL-Filter',
     'network/routing-profile/filters/as-path-access-list': 'ASPath-Filter',
@@ -86,10 +92,45 @@ def _row(path: str) -> dict:
     return row
 
 
-def _fixture_entries() -> dict:
-    """The fixture entry for each container, as the parse sees it."""
-    source = xml_input.parse_xml(FIXTURES_DIR / FIXTURE)
-    return {path: source.root.findall(f'.//{path}/entry')[0] for path in resource_mapping.FILTER_PATHS}
+def _fixture_entries(source=None) -> dict:
+    """The fixture entries for each container, in the order the fixture holds them.
+
+    One entry states one choice alternative, so a container that holds a choice holds one entry per
+    alternative the fixture states, and each input-spelling pair is stated inside one of those entries.
+    `source` is the tree a pin already parsed, so a pin that reads the ledger's marks reads the same elements
+    it marked.
+    """
+    if source is None:
+        source = xml_input.parse_xml(FIXTURES_DIR / FIXTURE)
+    return {path: source.root.findall(f'.//{path}/entry') for path in resource_mapping.FILTER_PATHS}
+
+
+def _entry_level(entry, path: str):
+    """The element the entry holds at the level `path` names, read through the table's spelling rule.
+
+    None when the entry does not state the level, so a pin can tell which fixture entry carries which
+    spelling. The walk takes the level it is reading as the key for the spelling rule, which is the key the
+    parse method takes, and it follows the same rule the parse follows for a `string_list` field: the entries
+    it holds are its own children (F7.6), so the next part is read from the entry inside the element the
+    field names.
+    """
+    table = resource_mapping.FILTER_TABLE
+    container = _container_of(path)
+    node = entry
+    level = container
+    for part in path[len(container):].split('/'):
+        if not part:
+            continue
+        shape = table.row(level)['fields'][part]
+        node = node.find(table.xml_name(part, level))
+        if node is None:
+            return None
+        level = f'{level}/{part}'
+        if shape == 'string_list':
+            node = node.find('entry')
+            if node is None:
+                return None
+    return node
 
 
 def _stated(path: str, entry) -> list:
@@ -153,6 +194,18 @@ def _findings(path: str, body: str) -> list:
 def _detail(path: str, text: str) -> str:
     """A finding as the rule states it: the block address, then the level, then the field."""
     return f'filter {resource_mapping.FILTER_TYPES[_container_of(path)]}.filter_00000000 {path} {text}'
+
+
+def _printed_blocks(tf: dict) -> dict:
+    """The filter blocks a run wrote, keyed by the entry name the block prints.
+
+    The pin reads the run's output the way the gate reads it, so the field reader is the one the gate rule
+    uses. A block is found by the entry it prints, not by its resource type, because a container that holds a
+    choice can hold more than one entry.
+    """
+    return {import_blocks.fields_at(block.body).get('name', '').strip('"'): block
+            for block in sanity_checks.blocks(tf, ('resource',))
+            if block.rtype in set(resource_mapping.FILTER_TYPES.values())}
 
 
 def _field_value(level: str, field: str, indent: int) -> str:
@@ -398,25 +451,27 @@ def test_the_parse_marks_every_entry_it_reads(converter_module, xml_input_module
 
     The entry sits inside a template, so the mark holds the scope facts the emitter reads to choose the
     sub-block, and the captured fields are the entry row's fields without the entry name, which is what the
-    property scan measures for the covering matrix row.
+    property scan measures for the covering matrix row. The pin reads every entry the fixture holds, so an
+    entry that states one choice alternative is measured the same way as the entry the matrix row names.
     """
     source = xml_input_module.parse_xml(FIXTURES_DIR / FIXTURE)
     parser = converter_module.PanoramaParser(source)
     parser.parse_filter_containers()
-    for path, name in sorted(ENTRIES.items()):
-        entry = next(e for e in parser.ledger.entries() if e.get('name') == name)
-        mark = parser.ledger.mark_for(entry)
-        assert mark is not None, name
-        row = entry_coverage.matrix_row_for(container_coverage.section_path(
-            parser.ledger.parents[entry], parser.ledger.parents, source))
-        assert row is not None and row['resource'] == resource_mapping.FILTER_TYPES[path], name
-        assert entry_coverage.covering_row(container_coverage.section_path(
-            parser.ledger.parents[entry], parser.ledger.parents, source)).destination == 'emitted', name
-        assert set(container_coverage.SCOPE_FACT_KEYS) <= set(mark['captured']), name
-        assert parser.ledger.captured_fields(mark) == tuple(sorted(
-            field for field in _row(path)['fields'] if field != 'name')), name
-        # The fixture states every property the row declares, so the scan measures the whole row.
-        assert set(_stated(path, entry)) <= set(parser.ledger.captured_fields(mark)), name
+    for path, entries in sorted(_fixture_entries(source).items()):
+        for entry in entries:
+            name = entry.get('name')
+            mark = parser.ledger.mark_for(entry)
+            assert mark is not None, name
+            row = entry_coverage.matrix_row_for(container_coverage.section_path(
+                parser.ledger.parents[entry], parser.ledger.parents, source))
+            assert row is not None and row['resource'] == resource_mapping.FILTER_TYPES[path], name
+            assert entry_coverage.covering_row(container_coverage.section_path(
+                parser.ledger.parents[entry], parser.ledger.parents, source)).destination == 'emitted', name
+            assert set(container_coverage.SCOPE_FACT_KEYS) <= set(mark['captured']), name
+            assert parser.ledger.captured_fields(mark) == tuple(sorted(
+                field for field in _row(path)['fields'] if field != 'name')), name
+            # The fixture states every property the row declares, so the scan measures the whole row.
+            assert set(_stated(path, entry)) <= set(parser.ledger.captured_fields(mark)), name
 
 
 # --- 4. the emitter print ---------------------------------------------------
@@ -426,24 +481,25 @@ def test_the_emitter_prints_the_fields_the_entry_row_declares(tmp_path):
 
     A level the row states as `object` prints as one object, a `string_list` level prints one object per
     element, and the block prints the entry name first and then the fields the input states, in sorted order.
+    The pin reads every entry the fixture holds, so the entries that state an input spelling are printed by the
+    same rule as the entry the matrix row names.
     """
     files = _run(FIXTURE, tmp_path)
-    text = files['filters.tf']
+    blocks = _printed_blocks(tf_files(tmp_path))
     entries = _fixture_entries()
     for path in resource_mapping.FILTER_PATHS:
-        resource = resource_mapping.FILTER_TYPES[path]
-        blocks = [block for block in sanity_checks.blocks({'filters.tf': text}, ('resource',))
-                  if block.rtype == resource]
-        assert len(blocks) == 1, (resource, len(blocks))
-        # `location` is the placement sub-block, which the shape rule leaves to `location_present`.
-        printed = {key: value for key, value in import_blocks.fields_at(blocks[0].body).items()
-                   if key != 'location'}
-        assert set(printed) == {'name'} | set(_stated(path, entries[path])), (path, sorted(printed))
-        assert list(printed) == sorted(printed, key=lambda key: (key != 'name', key)), (path, list(printed))
-        for field, shape_word in _row(path)['fields'].items():
-            if field in printed:
-                reads_as = sanity_checks.SHAPE_READS_AS.get(shape_word, shape_word)
-                assert sanity_checks.value_shape(printed[field]) == reads_as, (path, field, shape_word)
+        for entry in entries[path]:
+            name = entry.get('name')
+            block = blocks[name]
+            # `location` is the placement sub-block, which the shape rule leaves to `location_present`.
+            printed = {key: value for key, value in import_blocks.fields_at(block.body).items()
+                       if key != 'location'}
+            assert set(printed) == {'name'} | set(_stated(path, entry)), (path, name, sorted(printed))
+            assert list(printed) == sorted(printed, key=lambda key: (key != 'name', key)), (path, list(printed))
+            for field, shape_word in _row(path)['fields'].items():
+                if field in printed:
+                    reads_as = sanity_checks.SHAPE_READS_AS.get(shape_word, shape_word)
+                    assert sanity_checks.value_shape(printed[field]) == reads_as, (path, field, shape_word)
     # The per-entry report is the same mark the parse wrote, so it names the entry and its properties.
     report = files['CONVERSION_REPORT.txt']
     for path, name in sorted(ENTRIES.items()):
@@ -459,45 +515,55 @@ def test_the_choice_levels_state_one_key_in_the_run(tmp_path):
     The parse reads the fields the entry states, so the run can only print the one alternative the input
     states. The fixture answers each choice level it covers with one element, and the gate reads the blocks the
     run wrote with no finding, which `test_the_gate_reads_the_run_and_reports_nothing` pins for the whole run.
+    The pin walks the entries the fixture holds, because one entry states one alternative.
     """
-    files = _run(FIXTURE, tmp_path)
-    blocks = {block.rtype: block for block in sanity_checks.blocks(
-        {'filters.tf': files['filters.tf']}, ('resource',))}
-    source = xml_input.parse_xml(FIXTURES_DIR / FIXTURE)
+    _run(FIXTURE, tmp_path)
+    blocks = _printed_blocks(tf_files(tmp_path))
     table = resource_mapping.FILTER_TABLE
+    entries = _fixture_entries()
     covered = []
     for path in sorted(CHOICE_ROWS):
         container = _container_of(path)
-        node = source.root.findall(f'.//{container}/entry')[0]
-        for part in path[len(container):].split('/'):
-            if not part:
-                continue
-            children = node.findall(table.xml_name(part, container))
-            if not children:
+        entry, node = None, None
+        for fixture_entry in entries[container]:
+            found = _entry_level(fixture_entry, path)
+            if found is not None:
+                entry, node = fixture_entry, found
                 break
-            node = children[0]
-        else:
-            covered.append(path)
-            alternatives = set(table.row(path)['selects'].values())
-            stated = [child.tag for child in node if child.tag in alternatives]
-            assert len(stated) == 1, (path, stated)
-            printed = _printed_level(blocks[resource_mapping.FILTER_TYPES[container]], path)
-            assert [key for key in printed if key in alternatives] == stated, (path, printed, stated)
-    # The fixture covers 5 of the 14, so the other 9 are pinned through the table and the gate.
-    assert covered == [
+        if entry is None:
+            continue
+        covered.append(path)
+        alternatives = set(table.row(path)['selects'].values())
+        stated = [child.tag for child in node if child.tag in alternatives]
+        assert len(stated) == 1, (path, entry.get('name'), stated)
+        printed = _printed_level(blocks[entry.get('name')], path)
+        assert [key for key in printed if key in alternatives] == stated, (path, printed, stated)
+    # The fixture covers 10 of the 14, so the other 4 are pinned through the table and the gate.
+    assert covered == sorted([
         'network/routing-profile/filters/access-list/type',
+        'network/routing-profile/filters/access-list/type/ipv4/ipv4_entries/source_address',
+        'network/routing-profile/filters/access-list/type/ipv6/ipv6_entries/source_address',
         'network/routing-profile/filters/community-list/type',
         'network/routing-profile/filters/prefix-list/type',
+        'network/routing-profile/filters/prefix-list/type/ipv4/ipv4_entries/prefix',
+        'network/routing-profile/filters/prefix-list/type/ipv6/ipv6_entries/prefix',
         'network/routing-profile/filters/route-maps/redistribution/redist-entry',
-        'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp'], covered
+        'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp',
+        'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf']), covered
 
 
 def test_the_gate_reads_the_run_and_reports_nothing(tmp_path):
-    """The blocks the run wrote for the six containers report no finding, and the report states the check."""
+    """The blocks the run wrote for the six containers report no finding, and the report states the check.
+
+    The run's summary is the whole gate, so the pin that reads the fixture's entries also reads the count the
+    run reported: no FAIL and no WARN for a fixture that states one alternative per choice level.
+    """
     files = _run(FIXTURE, tmp_path)
     assert sanity_checks.check_filter_blocks(tf_files(tmp_path)) == [], tf_files(tmp_path)
     line = next(line for line in files['SANITY_REPORT.txt'].split('\n') if line.startswith('filter_blocks'))
     assert 'PASS' in line, files['SANITY_REPORT.txt']
+    assert next(line for line in files['SANITY_REPORT.txt'].split('\n')
+                if line.startswith('Result:')) == 'Result: PASS (0 FAIL, 0 WARN)', files['SANITY_REPORT.txt']
     assert sanity_checks.CHECK_ORDER.index('filter_blocks') == (
         sanity_checks.CHECK_ORDER.index('protocol_object') + 1), sanity_checks.CHECK_ORDER
 
@@ -621,10 +687,9 @@ def test_the_path_keyed_exceptions_are_the_spellings_the_input_uses():
     `ec-regex` inside a community-list entry and `extended-community` inside a route-map match. An entry-list
     field is the singular container element that holds the entries, so those fields are in the map too. The map
     holds 15 pairs, and `ipv4_entries` and `ipv6_entries` spell the same way in two containers, so 13 distinct
-    spellings, and every one of them is a spelling the `-` rule cannot produce. Five of them are in the fixture,
-    because the provider requires exactly one alternative per choice, so one entry states one entry-list spelling
-    only; the other ten are the spellings the pango source measures. `XML_NAME_EXCEPTIONS` stays the protocol
-    table's own map.
+    spellings, and every one of them is a spelling the `-` rule cannot produce. Every pair is grounded by a
+    fixture entry, which the pin below reads from a real run. `XML_NAME_EXCEPTIONS` stays the protocol table's
+    own map.
     """
     pairs = sorted((container, field, word) for container, words in
                    resource_mapping.FILTER_XML_NAME_EXCEPTIONS.items() for field, word in words.items())
@@ -640,14 +705,54 @@ def test_the_path_keyed_exceptions_are_the_spellings_the_input_uses():
     # A field with no exception follows the `-` rule.
     assert resource_mapping.FILTER_TABLE.xml_name('as_path_access_list', redist) == 'as-path-access-list'
     assert resource_mapping.XML_NAME_EXCEPTIONS == {'strict_l_s_a_checking': 'strict-lsa-checking'}
-    fixture = (FIXTURES_DIR / FIXTURE).read_text(encoding='utf-8')
-    grounded = [pair for pair in pairs if f'<{pair[2]}>' in fixture]
-    assert grounded == [
-        ('network/routing-profile/filters/access-list', 'ipv4_entries', 'ipv4-entry'),
-        ('network/routing-profile/filters/as-path-access-list', 'aspath_entries', 'aspath-entry'),
-        ('network/routing-profile/filters/community-list', 'communities', 'community'),
-        ('network/routing-profile/filters/community-list', 'regular_entries', 'regular-entry'),
-        ('network/routing-profile/filters/prefix-list', 'ipv4_entries', 'ipv4-entry')], grounded
+
+
+def test_the_run_prints_the_field_for_each_pair_the_fixture_states(tmp_path):
+    """Every pair the map holds is grounded: an entry states the input spelling, and the run prints the row's.
+
+    The map is the fact, and the ground is a real run. For each pair the pin finds the fixture entry that holds
+    the element the exception names, then reads the block the run wrote for that entry through the same field
+    reader the gate rule uses, and checks that the key the run printed is the name the row declares and not the
+    spelling the input states. The provider must accept the block, so the pin runs `terraform validate` on the
+    output the run wrote, through the check the CLI runs on `--validate`. The pin reads the pairs through the
+    map, the fixture and the run, so it states no copy of the map and no list of grounded pairs.
+    """
+    if TERRAFORM is None:
+        pytest.skip('terraform binary not found (the CI terraform-gate job provides it)')
+    _run(FIXTURE, tmp_path)
+    units = sanity_checks.unit_directories(tmp_path)
+    assert units, 'the run wrote no unit directory'
+    for unit in units:
+        check = sanity_checks.check_terraform(tmp_path / unit, TERRAFORM, unit)
+        assert check.result == 'PASS' and not check.findings, [f.render() for f in check.findings]
+    table = resource_mapping.FILTER_TABLE
+    entries = _fixture_entries()
+    blocks = _printed_blocks(tf_files(tmp_path))
+    pairs = sorted((container, field, word) for container, words in
+                   resource_mapping.FILTER_XML_NAME_EXCEPTIONS.items() for field, word in words.items())
+    grounded = []
+    for container, field, word in pairs:
+        # The pair is stated by the level that declares the field, and by the entry that holds the element.
+        level_path, entry = None, None
+        for candidate in sorted(p for p in resource_mapping.FILTER_SHAPE
+                                if _container_of(p) == container and field in _row(p)['fields']):
+            for fixture_entry in entries[container]:
+                level = _entry_level(fixture_entry, candidate)
+                stated = level.find(table.xml_name(field, candidate)) if level is not None else None
+                if stated is not None and stated.tag == word:
+                    level_path, entry = candidate, fixture_entry
+                    break
+            if level_path:
+                break
+        assert level_path is not None, (container, field, word)
+        assert table.xml_name(field, level_path) == word, (level_path, field, word)
+        printed = _printed_level(blocks[entry.get('name')], level_path)
+        # The run prints the name the row declares, never the spelling the input states.
+        assert field in printed, (level_path, field, sorted(printed))
+        assert word not in printed, (level_path, word, sorted(printed))
+        grounded.append((container, field, word))
+    # Every pair is grounded by the run, so no pair is a spelling the pango source measures alone.
+    assert grounded == pairs, [pair for pair in pairs if pair not in grounded]
 
 
 def test_the_golden_case_holds_a_real_run_for_the_six_containers():
