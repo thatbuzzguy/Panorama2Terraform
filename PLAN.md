@@ -77,12 +77,18 @@ The shadow parent index key is closed: `shadow_coverage.parent_index` keys each 
 and the report line names which parent entry the child repeats. The rule that the first parent row wins is
 replaced by one finding per parent entry, in the parent report order.
 
-The next feature is the `tools/build_kitchen_sink.py` rebuild finding, in `to-do.md`: the tool reads the whole
-corpus while the corpus pins read the fixtures that are not hostile, and the committed fixture is not what the
-tool writes. The gated pieces that stay held are also in `backlog.md`: the four `*_policy_rules` types wait for
-the F3.5 rulebase decision, and a config entry inside a stack needs a provider location shape before the emitter
-can write a block for it. The rows that state fewer fields than the pinned provider declares for their level are
-the choice levels, which state their alternatives as `selects` keys.
+The `tools/build_kitchen_sink.py` rebuild finding is closed: the tool is a generator, not a pin. It reads the
+fixtures the F3.8 input rule accepts, skips a hostile fixture by rule and not by name, prints the tree it
+assembles, and writes no file, so `tests/fixtures/kitchen_sink.xml` stays the record that the golden set and the
+corpus pins read, and the record is curated by hand. The rule is in `docs/ARCHITECTURE.md` §1.1 and in
+`tools/README.md`, and `tests/test_build_kitchen_sink.py` pins it.
+
+The next feature is the `count-only` field gap for `parse_regions`, in `to-do.md`: the parse returns region
+objects that only the console count uses, so no output reads a region field. The gated pieces that stay held are
+also in `backlog.md`: the four `*_policy_rules` types wait for the F3.5 rulebase decision, and a config entry
+inside a stack needs a provider location shape before the emitter can write a block for it. The rows that state
+fewer fields than the pinned provider declares for their level are the choice levels, which state their
+alternatives as `selects` keys.
 
 ## Out of Scope (tracked in backlog.md)
 

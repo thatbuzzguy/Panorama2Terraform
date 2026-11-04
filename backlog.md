@@ -5,11 +5,6 @@ Completed work is not recorded here; the git history and the owner document hold
 
 ## Tech Debt
 
-- The `tools/build_kitchen_sink.py` finding is promoted to the current feature in `to-do.md`: the tool reads
-  the whole corpus, the corpus pins read the fixtures that are not hostile, and the committed fixture is not
-  what the tool writes. The F3.8 decision that the tool is a developer script stands, so the open question is
-  the file set it reads and whether the committed fixture is its output.
-
 - Property gaps the scan does not report, because the container that holds them has
   no matrix row: only an `emitted` container can name the properties an emitter reads.
   The scan scope rule pins this in
