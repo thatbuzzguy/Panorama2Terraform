@@ -2,36 +2,38 @@
 
 ## Current position
 
-The record directory and the prune action are complete and committed on `development` (`c85c0bc`); this
-tracking markdown is the next commit. Decision: the record directory is the output directory, so `SOURCE.txt`
-stays a codebase root-set file named through `write_path.root_path`, and the prune action reads the record
-file the same run wrote. A record directory of its own, or one beside the cache, would be a third file set and
-would need a third path builder.
+The filter input-spelling grounding is complete and committed on `development` (`244ddef`); this tracking
+markdown is the next commit. Decision: a pair of `FILTER_XML_NAME_EXCEPTIONS` is a fact only when the run
+reads it, so `tests/fixtures/filter_containers.xml` holds one entry per choice alternative the fixture states,
+not one entry per container. All 15 pairs are grounded, so no pair is a spelling the pango source measures
+alone, and no pair stays in `backlog.md` as ungroundable. No exception row is added, removed, or reworded.
 
-- The action is `provenance.prune(record_file, cache_dir)`: it reads the record file through `parse_records`,
-  decides through `prunable_entries`, and removes what the decision names. It states no second decision and
-  builds no path. `prunable_entries` is unchanged.
-- `--prune-cache` is an opt-in flag that gates a run step, following the `--data-blocks` and
-  `--import-blocks` precedent, and applies to `--source api` only (argument error, exit 2), because a file
-  record states `-` for the cache field. `main()` runs the step after the record is written and after the
-  gate.
-- Exit codes: the gate still decides; a prune that removes nothing changes nothing; a record the action cannot
-  read is a refusal and exits 1 with a message that names the record file; a cache directory that holds no
-  entry is not a refusal. The run prints one line per pruned entry, and only when it removed something.
-- Pins changed: the new group 6 of `tests/test_provenance.py` (the referenced entry kept, the unreferenced
-  entry pruned, the action reads the record file and not the record objects it built, the two-record file
-  case, a record that cannot be read, a run that does not declare the action, the exit codes, the argument
-  rule), and `tests/test_write_path.py::test_the_record_directory_is_the_output_directory_for_the_prune`. No
-  existing pin changed, and no golden moved, because the action writes no output.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1461 tests (about 3 minutes).
+- The fixture gains 5 entries: `ACL-Filter-v6`, `Prefix-Filter-v6`, `Community-Filter-Extended`,
+  `Community-Filter-Large`, and `Redist-Filter-Set`. The last one states the 4 redist pairs in one `set`,
+  because `aspath_prepends` is reachable only through a `set` row under a `bgp` child level. The fixture now
+  holds 11 entries.
+- Pins changed in `tests/test_filter_containers.py`: `_fixture_entries` reads every entry per container, and
+  `_entry_level` walks a level the way the parse walks it, so the entry inside a `string_list` element is read
+  at the level the row names it (F7.6). The parse mark pin, the emitter print pin, the choice pin and the gate
+  pin read every entry; the choice pin covers 10 of the 14 choice rows, where it covered 5, and the gate pin
+  states the run's summary as `PASS (0 FAIL, 0 WARN)`. The new pin
+  `test_the_run_prints_the_field_for_each_pair_the_fixture_states` reads each pair from the run's output and
+  runs `terraform validate` on the output the run wrote; the hand-written list of 5 grounded pairs is removed
+  from `test_the_path_keyed_exceptions_are_the_spellings_the_input_uses`.
+- Goldens: only `tests/golden/filter_containers/fw_template_00a08cdc/filters.tf` changed, and it is the bytes
+  of a real run. `docs/ARCHITECTURE.md` §4.10 rule 3 and `README.md` state the grounding as the pin states it.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1462 tests (about 2 minutes).
 
 The housekeeping layout rule is unchanged: `docs/ARCHITECTURE.md` §1.1 is its owner document, `AGENTS.md`
 names the tracking markdown set, and each index names every document under it (commits `ccf93a3` and
 `b3465f1`).
 
-The next piece is the gate choice-word open item: `FILTER_XML_NAME_EXCEPTIONS` holds 15 pairs, and the
-fixture grounds five; the other ten need a fixture that states one alternative and still passes
-`terraform validate`.
+The next feature is the coverage row the corpus cannot measure, which `backlog.md` names:
+`panos_aggregate_layer3_subinterface`. The container table maps an aggregate interface entry to the ethernet
+subinterface row, so no entry reaches the aggregate row and the parity pin names it as one of the two rows
+with no read of its own (`tests/test_property_coverage.py`). The feature is to decide whether an aggregate
+entry is covered by its own row, then state it with a fixture entry that reads `type = aggregate`, so the scan
+measures the row through a real entry and the goldens move with it.
 
 ## Rules to keep when writing documents
 
