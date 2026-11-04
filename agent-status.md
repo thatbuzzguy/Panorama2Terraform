@@ -2,48 +2,29 @@
 
 ## Current position
 
-Housekeeping is complete and committed on `development` (`ccf93a3`). The repository layout is now a rule with
-one owner document, `docs/ARCHITECTURE.md` §1.1, and the files that broke it are moved.
+The `lib_docs/` reference decision is complete and committed on `development` (`0e4ca83`); this tracking
+markdown is the next commit. Decision: remove the reference from `AGENTS.md`; add no cheat sheet.
 
-- Import rule: `src/` is one flat namespace, so a module in `src/` imports its siblings by plain module name
-  and no module builds a path. `pyproject.toml` `[tool.pytest.ini_options] pythonpath = ["src"]` is the only
-  place a test path is stated, and it resolves from the rootdir, so a run from any directory reads the same
-  namespace. A run gets the same namespace from Python's script-directory rule, so no entry point adds path
-  code. No module, test or script states a second path rule.
-- Test-layout rule: `tests/` is flat: the test files sit beside `fixtures/` and `golden/`, and
-  `tests/conftest.py` is the one shared helper file, so the layout does not change again.
-  `testpaths = ["tests"]` keeps discovery at the root, where no test file sits.
-- Moved with `git mv`: the 20 tool modules to `src/`, `conftest.py` to `tests/conftest.py`,
-  `quick_start.sh` to `tools/quick_start.sh`, and `sample_panorama_config.xml` to `examples/`.
-  `examples/README.md` and `tools/README.md` are the indexes for those two directories, so every file in the
-  repo is named by an index. `AGENTS.md` names the tracking markdown set.
-- No golden byte moved: a golden pins only `.tf` bytes and names no path, so the move moved no golden.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1443 tests (184 to 200 seconds). The entry point
-  runs from `src/` with no path code, and `tools/quick_start.sh` runs from any directory.
+- The tool imports only the standard library, so no library set exists that a cheat sheet could name: no
+  runtime package in `requirements.txt`, and every import in `src/` is the standard library or a sibling in
+  the flat `src/` namespace.
+- The facts the cheat sheets promised are already held. The code and its tests rely on the standard-library
+  facts (`xml.etree`/expat, `urllib.request`), and the provider facts are held by the pins, `backlog.md`
+  "Design Decisions (provider facts, re-measured 2026-10-31)", and `docs/RESOURCE_MAPPING.md`. A cheat sheet
+  would be a second copy of a table, which the document rule forbids.
+- `AGENTS.md` keeps one direction that states the standard-library rule, so the reference is not re-added by
+  habit.
+- No pin changed: no test reads `AGENTS.md` or scans the root markdown or an index, so the rule that a file
+  outside an index is a finding is unchanged by this slice.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1443 tests (about 3 minutes).
 
-### Pins that changed
+The housekeeping layout rule is unchanged: `docs/ARCHITECTURE.md` §1.1 is its owner document, `AGENTS.md`
+names the tracking markdown set, and each index names every document under it (commits `ccf93a3` and
+`b3465f1`).
 
-- `tests/conftest.py` no longer loads a module by file path: it reads the `src/` namespace `pythonpath` states,
-  builds the paths once (`TESTS_DIR`, `REPO_ROOT`, `SRC_DIR`, `EXAMPLES_DIR`), returns the imported modules from
-  the fixtures, and `run_script` resolves a module name under `SRC_DIR`.
-- The pins that read a module source now read it through `SRC_DIR` or `Path(module.__file__)`:
-  `tests/test_write_path.py` (the writer scan reads `SRC_DIR.glob('*.py')`, excludes only `src/write_path.py`,
-  and reads `src/panorama_to_terraform.py`), `tests/test_reference_edges.py` (`SRC_MODULES`),
-  `tests/test_safe_input.py`, `tests/test_robustness.py`, `tests/test_sanity_gate.py`,
-  `tests/test_entry_coverage.py`, `tests/test_source_fetch.py`, `tests/test_import_blocks.py`,
-  `tests/test_commit_actions.py`.
-- `pyproject.toml` gained `pythonpath = ["src"]` and `[tool.ruff] src = ["src", "tests"]`, so first-party
-  import grouping and the existing import order in the test files stay valid after the move.
-- `.gitignore`: the `examples/**/*.xml` exception now matches the moved sample input, the corpus comment names
-  the test corpus by its new path, and `terraform_example/` is ignored because the quick start writes it.
-- Documents and indexes: `docs/ARCHITECTURE.md` §1.1, `README.md`, `docs/README.md`, `docs/USAGE_GUIDE.md`,
-  `docs/DEVICE_GROUP_SPLITTING.md`, `examples/README.md`, `tools/README.md`, `AGENTS.md`, and the two command
-  lines in `tests/test_golden_files.py` and `examples/example_interface_report.txt`. No rule, table, shape,
-  naming rule or gate rule changed.
-
-The next feature is the open items in `backlog.md`, in this order: the `lib_docs/` reference decision, the
-console line shape (which also decides the source field for a shadow line), the record directory and the prune
-action, and the gate choice-word open item.
+The next piece is the console line shape in `to-do.md`: the console can print a property finding and a
+shadow line, and the shadow line names a source, so the source field is decided with it. After it: the
+record directory and the prune action, then the gate choice-word open item.
 
 ## Rules to keep when writing documents
 

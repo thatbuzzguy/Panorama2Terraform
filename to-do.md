@@ -13,9 +13,12 @@ Housekeeping (the repository layout) is complete and committed in `ccf93a3`. Its
 
 The current feature is the open items `backlog.md` names. Pieces, in the order they can be done:
 
-- [ ] `AGENTS.md` points to `lib_docs/` for API cheat sheets. Add the cheat sheets, or remove the reference.
-- [ ] The console line shape, so the console can print a property finding and a shadow line. The shadow line
-      also names a source, so decide the source field with it.
+- [x] `AGENTS.md` points to `lib_docs/` for API cheat sheets. Decision: remove the reference, not add the
+      cheat sheets, and state the standard-library rule in its place (`AGENTS.md`, commit `0e4ca83`). The
+      tool imports only the standard library, so the reference names no library set, and a `lib_docs/`
+      directory at the root would be a finding against the layout rule.
+- [ ] Current piece: the console line shape, so the console can print a property finding and a shadow line.
+      The shadow line also names a source, so decide the source field with it.
 - [ ] The record directory, then the prune action. A record is written per output directory, so the prune
       action needs the directory decided first; it reads a record file, not one record.
 - [ ] The gate choice-word open item: `FILTER_XML_NAME_EXCEPTIONS` holds 15 pairs, and the fixture grounds

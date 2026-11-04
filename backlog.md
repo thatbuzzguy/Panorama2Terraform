@@ -45,9 +45,6 @@ Completed work is not recorded here; the git history and the owner document hold
   and the parity test names it as the one unmeasured row. A fixture entry that reaches
   the aggregate shape closes this.
 
-- `AGENTS.md` points to `lib_docs/` for API cheat sheets. The directory is not in the
-  repo. Add the cheat sheets, or remove the reference.
-
 - Parser extraction gaps found by the parse unit tests (each drops data; fix each
   when a report confirms it in a fixture):
   - Application filter `description` is not extracted.
