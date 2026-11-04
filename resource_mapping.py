@@ -1242,8 +1242,12 @@ VALUE_VARIABLES = {
 # for the leaf words.
 #
 # `shape` is one of `SHAPE_WORDS`. `fields` states the field name -> the shape word, in the print order.
-# `selects` is the mapping from the report value to the key a `one_of` level prints; an empty `selects`
-# means the level is not a one-of choice. `sensitive` names the fields the provider marks sensitive.
+# `selects` is the mapping from the report value to the key a `one_of` level prints, and it is the one place
+# the table states a choice (F7.12): the keys it names are the attributes the provider reads as exactly one.
+# An empty `selects` means the row states no choice, so no choice rule reaches it. The choice can be the whole
+# value, which is the `one_of` row where `selects` names every attribute the provider declares for the level,
+# or part of a value, where the row also states other fields and the choice is read per entry (F7.12).
+# `sensitive` names the fields the provider marks sensitive.
 SHAPE_WORDS = ('string', 'bool', 'number', 'object', 'string_list', 'member_list', 'one_of', 'block')
 
 # Each shape word as the provider schema states it: a level word is a nesting mode, and a leaf word is a
@@ -1514,10 +1518,15 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset(),
     },
+    # F7.12: the provider reads this level as exactly one of its two attributes, so the row states the choice as
+    # `selects`. Measured 2026-11-03 with `terraform validate` (provider 2.0.14, Terraform 1.16.2): the level
+    # refuses 2 attributes when one is required, and it refuses none. The choice is the whole value, so `selects`
+    # names every attribute the provider declares here, and the identity holds because the export spells the
+    # provider key.
     'protocol/bgp/peer_group/peer/peer_address': {
         'shape': 'object',
         'fields': {'fqdn': 'string', 'ip': 'string'},
-        'selects': {},
+        'selects': {'fqdn': 'fqdn', 'ip': 'ip'},
         'sensitive': frozenset(),
     },
     # F7.11: the seven fields the row did not state. `set_community` and `set_extended_community` are a
@@ -1814,10 +1823,13 @@ PROTOCOL_SHAPE: dict[str, dict] = {
     # the row states the alternatives as `selects` keys, and each alternative that declares an attribute is its
     # own row. `none` declares no attribute, so it is the `block` field inside the row that holds it. Every
     # alternative holds only `key`, which the provider marks `sensitive`.
+    # F7.12: the entry itself states exactly one of the two alternatives, which `terraform validate` reads as one
+    # (and only one), so the row states the choice as `selects` over two of the four attributes the provider
+    # declares for the entry. The two that are not alternatives stay fields.
     'protocol/ospfv3/auth_profile': {
         'shape': 'string_list',
         'fields': {'name': 'string', 'spi': 'string', 'ah': 'one_of', 'esp': 'object'},
-        'selects': {},
+        'selects': {'ah': 'ah', 'esp': 'esp'},
         'sensitive': frozenset(),
     },
     'protocol/ospfv3/auth_profile/ah': {
