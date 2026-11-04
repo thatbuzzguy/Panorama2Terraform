@@ -399,14 +399,13 @@ Completed work is not recorded here; the git history and the owner document hold
   not state is not read. A filter container is not inside the `protocol` object, so its levels are measured
   through `FILTER_SHAPE` instead (§4.10).
 - Routing levels and fields `PROTOCOL_SHAPE` does not state are not read, so they reach no output and no
-  report row. F7.9 closed the `ospf` list. The list that stays is the `ospfv3` fields
-  (`allow_redist_default_route`, `disable_transit_traffic`, `reject_default_route`), the `bgp` fields
-  (`allow_redist_default_route`, `dampening_profile`, `ecmp_multi_as`, `enforce_first_as`, `global_bfd`,
-  `install_route`, `reject_default_route`, and the `routing_options` level with its 7 attributes), and the two
-  redistribution profile lists. Measured 2026-11-03 against provider 2.0.14: each of the fields is a `bool`
-  leaf, `dampening_profile` is a `list`, and `routing_options` is a `single` level. None is marked sensitive.
-  A level becomes printable when a parse method reads it and the table has a row for it, because the emitter,
-  the gate and the report all read that table. Epic 7 keeps the list.
+  report row. F7.10 closed the `ospfv3` fields, the `bgp` fields and the two redistribution profile lists. The
+  gaps that stay are the rows that state fewer fields than the provider declares for their level:
+  `protocol/bgp/peer_group` (2 fields), `protocol/bgp/peer_group/peer` (9), `protocol/bgp/redist_rules` (7),
+  `protocol/ospf/area/interface` (8), `protocol/ospfv3/area` (1), and `protocol/ospfv3/area/interface` (9), plus
+  the auth profile choice levels. Measured 2026-11-03 against provider 2.0.14: each missing name is a leaf, and
+  none is marked sensitive. A level becomes printable when a parse method reads it and the table has a row for
+  it, because the emitter, the gate and the report all read that table. Epic 7 keeps the list.
 - Decision for the redistribution route-map entry (F7.8): the row scope stops at the `match` and `set` rows,
   because those two rows state leaf fields only. The six levels inside them — `match.ipv4.address`,
   `match.next_hop`, `match.route_source`, `set.metric`, `set.ipv4`, `set.ipv6` — are therefore not table rows,

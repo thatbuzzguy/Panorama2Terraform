@@ -2,72 +2,82 @@
 
 ## Current position
 
-F7.9 is complete and committed on `development` (`afcaefb`). `PROTOCOL_SHAPE` states the four
-`protocol/ospf` levels outside `area` (`timers`, `global_bfd`, `graceful_restart`, `export_rules`) and the
-seven fields the `ospf` row did not state, which the pinned provider declares (2026-11-03, provider 2.0.14,
-Terraform 1.16.2): `rfc1583`, `allow_redist_default_route`, and `reject_default_route` as `bool` fields, and
-the three single-object levels plus the one entry level. `parse_ospf` reads them through the table: the three
-`bool` fields and the three single-object levels are row fields read by `_protocol_level`, so the method
-states one path, `protocol/ospf/export_rules`, and `_protocol_branch` fills it.
+F7.10 is complete and committed on `development` (`d39ae84`). `PROTOCOL_SHAPE` gained 16 rows: the 10 levels
+inside the two redistribution profile lists, the `protocol/bgp/dampening_profile` entry level, and the 5 `bgp`
+single levels (`global_bfd`, `routing_options`, and its three sub-levels). The `protocol`, `protocol/bgp` and
+`protocol/ospfv3` rows gained the 13 fields the pinned provider declares (2026-11-03, provider 2.0.14,
+Terraform 1.16.2). `parse_redist_profile` and `parse_redist_profile_ipv6` read the two lists, `parse_bgp` reads
+the `bgp` fields through the row and states one path for the dampening entry level, and the emitter prints them
+in the row's field order.
 
-The suite is 1428 tests, all green (1423 at the start of this slice), and `ruff check .` is clean.
+The suite is 1435 tests, all green (1428 at the start of this slice), and `ruff check .` is clean.
 
 No golden moved, because no golden case states a value for one of the new fields: the bytes a run writes for
 the four golden cases are unchanged, and a golden is regenerated only from a real run. A real run on
-`tests/fixtures/ospf.xml` reports `PASS (0 FAIL, 0 WARN)` and `terraform validate` accepts the block it
-writes. The property scan measures the `ospf` export rule entry through the new container row and reports no
-finding for the fixture.
+`tests/fixtures/virtual_routers.xml`, `tests/fixtures/bgp.xml` and `tests/fixtures/ospfv3.xml` reports
+`PASS (0 FAIL, 0 WARN)`, and `terraform validate` accepts the blocks each run writes. The property scan
+measures the three entries against the router row and reports no finding for the three fixtures.
 
-The next feature is F7.10: the fields the rows do not state (`to-do.md`).
+The next feature is the rest of Epic 7: the rows that state fewer fields than the provider declares for their
+level (`peer_group`, `peer`, `redist_rules`, `area`, `area/interface`, and the auth profile choice levels), and
+the gate gap F7.7 recorded (no word for a choice between two levels).
 
-`acceptance.md` holds F7.9's criteria and must be overwritten for the next one.
+`acceptance.md` holds F7.10's criteria and must be overwritten for the next one.
 
-### Decision 1: every one of the seven fields is a row field, so none is refused
+### Decision 1: every measured field is a row field, so none is refused
 
-The pinned provider declares all seven, so all seven join the `protocol/ospf` row. `rfc1583`,
-`allow_redist_default_route` and `reject_default_route` are leaf values of type `bool`, not blocks: the
-provider declares no attributes under them, so the row states `bool` and the field reader reads `yes` or `no`
-the way it already reads `enable`. No `ospf` field is marked sensitive, so the row states an empty `sensitive`
-set and no `VALUE_VARIABLES` row is needed.
+The pinned provider declares every field measured for the three levels, so all 13 join the rows and the 16 new
+rows state the levels the parse reads. No new field is marked sensitive, so each new row states an empty
+`sensitive` set and `VALUE_VARIABLES` gained no row. The two `action` alternatives are `block` fields and not a
+`one_of` choice, because the provider declares both as optional, so `selects` stays empty for the level.
 
 ### Decision 2: field order is the print order
 
-The row's field order is the order the block prints. The two fields the row already stated keep their order,
-the three `bool` fields follow in the order the schema names them, then the three single-object levels in the
-order the `ospfv3` row states them, then the entry levels in the same order. A run that states no value for a
-new field prints the same bytes as before, so the order rule moved no golden.
+The row's field order is the order the block prints. The fields a row already stated keep their order, the new
+fields follow in the order the schema names them, and a new entry row states `name` first, because the entry name
+is the first field the block prints. A run that states no value for a new field prints the same bytes as before,
+so the order rule moved no golden.
 
-### Decision 3: a single-object level gains no container row
+### Decision 3: only an entry level gets a container row
 
-The three single-object levels hold no entry, so the property scan measures nothing for them and the container
-table names no row for them: `PROTOCOL_SHAPE` grounds those rows. `export_rules` is an entry level, so the
-table gained `protocol/ospf/export-rules` as an `emitted` sub-shape row naming `panos_virtual_router`, and the
-scan measures the entry the fixture states against the router row. The properties the row for
-`panos_virtual_router` declares did not move: the `ospf` export rule reads the three names the `ospfv3` and
-`rip` export rules already read.
+The three entry levels (`protocol/redist-profile`, `protocol/redist-profile-ipv6`,
+`protocol/bgp/dampening-profile`) gained `emitted` sub-shape rows naming `panos_virtual_router`, so the scan
+measures their entries against the router row. The single levels inside an entry (`action`, `filter`,
+`filter/bgp`, `filter/ospf`) hold no entry, so no row names them and the table grounds them. The properties the
+row for `panos_virtual_router` declares gained the 7 names the three entries measure: `filter`, `priority`,
+`cutoff`, `decay_half_life_reachable`, `decay_half_life_unreachable`, `max_hold_time`, `reuse`.
 
-### Decision 4: the parse states one path
+### Decision 4: the method names come from the row fields
 
-`parse_ospf` states `protocol/ospf/export_rules` only. The three single-object levels and the three `bool`
-fields are read through the row fields, so the method names no field. The registration in
-`tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py` was already there, so
-this slice changed no helper.
+`_parse_router` calls a parse method for each field the `protocol` row states, so the two entry levels needed
+`parse_redist_profile` and `parse_redist_profile_ipv6`, named by the two fields. Both read through
+`_protocol_entry_level`, which states the path and no field name; `_protocol_branch` is the same rule for an
+entry level inside a level dict. Both methods are registered in `tests/test_entry_coverage.py::_parse_every` and
+`tests/test_multi_vsys_location.py`.
 
 ### Pins that changed
 
-- `tests/test_protocol_object.py` gained `test_the_ospf_scalar_levels_are_rows_the_parse_reads` (the row, the
-  field order, the four rows, and the container rows),
-  `test_an_ospf_level_prints_the_shape_the_table_states` (the whole `protocol` field from a real run, and the
-  gate reading it), and `test_the_gate_reads_an_ospf_level_against_the_row_it_states` (the gate accepts the
-  seven fields and refuses `disable_transit_traffic`, which the provider declares for `ospfv3` and not for
-  `ospf`). The spelling pin now reads `protocol/ospf/export_rules` as well as the `ospfv3` path.
+- `tests/test_protocol_object.py` gained `test_the_redist_profile_rows_are_the_levels_the_two_methods_read` (the
+  rows, the field order, `action` as two `block` fields with no `selects`, and the container rows),
+  `test_a_redist_profile_entry_prints_the_shape_the_table_states` and
+  `test_a_bgp_level_prints_the_fields_the_table_added` (the blocks from a real run), and
+  `test_the_gate_reads_a_redist_profile_entry_against_the_row_it_states` (the gate accepts the entry and refuses
+  a `block`, a `number` and a `member_list` value stated the wrong way).
+- The pin that refused `redist_profile` because the row did not state it now refuses a field the entry row does
+  not state, so `test_the_rule_reports_an_undeclared_field_and_a_wrong_shape` reads the shape finding instead.
+- `test_the_table_is_the_only_shape_owner` gained the two methods and the helper as owners.
+- `test_the_ospfv3_scalar_levels_are_rows_the_parse_reads`,
+  `test_an_ospfv3_scalar_level_prints_the_shape_the_table_states` and
+  `test_member_list_is_the_word_for_a_field_whose_members_are_values` restate the fields F7.10 added.
 - `tests/test_property_coverage.py` gained
-  `test_the_scan_measures_an_ospf_export_rule_and_not_a_scalar_level`.
-- `tests/test_parse_network.py` gained `test_parse_ospf_reads_the_levels_the_table_states`.
-- `tests/fixtures/ospf.xml` states the three `bool` fields and the four new levels, with one entry that states
-  every field its row declares.
-- `docs/ARCHITECTURE.md` §4.9 records the F7.9 levels and the scan scope.
-- The suite gained 5 tests (1428 green).
+  `test_the_scan_measures_a_redist_profile_entry_and_a_dampening_entry`.
+- `tests/test_parse_network.py` gained `test_parse_redist_profile_entries_read_the_levels_the_table_states` and
+  `test_parse_bgp_reads_the_fields_the_table_added`, and
+  `test_parse_ospfv3_reads_the_levels_the_table_states` reads the three new fields.
+- The three fixtures state every field each new row declares.
+- `docs/ARCHITECTURE.md` §4.9 records the F7.10 levels, the scan scope, and the `member_list` count;
+  `docs/RESOURCE_MAPPING.md` and `docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md` restate the read claim.
+- The suite gained 7 tests (1435 green).
 
 ## Rules to keep when writing documents
 
@@ -152,7 +162,8 @@ output directory, so
   because `covering_row` cannot match a section path that holds an entry segment, so the table grounds that level.
   `_protocol_areas` is the area rule the two OSPF levels share, `_protocol_branch` walks the
   segments between a
-    level dict and an entry level, `_protocol_entries` fills a `string_list` level, and
+    level dict and an entry level, `_protocol_entries` fills a `string_list` level, `_protocol_entry_level` (F7.10)
+fills an entry level the row states as a field, because its entries live under the element the field names, and
   `_protocol_body` fills the
     three shapes a level dict cannot hold: the choice the export states by presence, the
   entries inside the level,

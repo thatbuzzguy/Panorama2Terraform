@@ -1218,8 +1218,14 @@ the four `ospf` levels outside `area` into the table (`timers`, `global_bfd`, `g
 `export_rules`) and the three fields the `ospf` row did not state (`rfc1583`,
 `allow_redist_default_route`, `reject_default_route`), which the provider declares as `bool` values and not
 as blocks, so `parse_ospf` reads them through the row and states one path for the entry level, which
-`_protocol_branch` fills. Field order is the print order, so the order the row states is the order the block
-prints.
+`_protocol_branch` fills. F7.10 put the two redistribution profile lists into the `protocol` row as entry
+levels and the dampening profile into the `bgp` row, and completed the `protocol`, `protocol/bgp` and
+`protocol/ospfv3` rows against the measurement. An entry level the row states as a field is read by
+`_protocol_entry_level`, which states the path and no field name, and the methods the field names give
+(`parse_redist_profile`, `parse_redist_profile_ipv6`) call it; `_protocol_branch` is the same rule for an entry
+level inside a level dict. `action` states its two alternatives as `block` fields and no `selects`, because the
+provider declares both as optional, so no choice rule reaches it. Field order is the print order, so the order
+the row states is the order the block prints.
 
 1. **`protocol` prints as one field of the block**: `protocol = { ... }`. `terraform validate` accepts the
    value and refuses the block shape, so the gate rule reports a `protocol` the field reader cannot read as
@@ -1284,8 +1290,10 @@ prints.
    `tests/test_variables.py::test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_only`
    and `tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`.
 
-9. **A `member_list` field is a `[` value whose members are values.** The provider declares 27 fields as
-   `['list', 'string']` (`from_peer`, `nexthop`, `append`, `overwrite`, `used_by`), which `string_list` already
+9. **A `member_list` field is a `[` value whose members are values.** The provider declares 45 fields as
+   `['list', 'string']`: the five `from_peer`, `nexthop`, `append`, `overwrite`, `used_by` names F7.6 recorded,
+   and the nine names F7.10 added inside a redist profile entry (`area`, `community`, `destination`,
+   `extended_community`, `interface`, `path_type`, `tag`, `type`), which `string_list` already
    covers as a `[` value, so the table needs the word `member_list` to say that the level holds no entry. The
    field reader reads the `member` children, the print writes them as the list, and rule 4 never reaches a
    member. Pinned by
@@ -1312,7 +1320,11 @@ path cannot match, so `PROTOCOL_SHAPE` grounds that level. F7.7: the four `auth_
 container rows, so the scan measures a profile entry against the router row, and an `md5` entry inside a
 profile entry is not in the scan scope, so `key` stays grounded by the table. F7.9: `protocol/ospf/export-rules`
 is a container row, so the scan measures an `ospf` export rule entry against the router row, and the three
-single-object levels stay grounded by the table, because they hold no entry. Pinned by
+single-object levels stay grounded by the table, because they hold no entry. F7.10: the three entry levels
+(`protocol/redist-profile`, `protocol/redist-profile-ipv6`, `protocol/bgp/dampening-profile`) are container rows,
+so a redist profile entry and a dampening entry are measured against the router row, and the single levels
+inside an entry (`action`, `filter`, `filter/bgp`, `filter/ospf`) hold no entry, so they stay grounded by the
+table. Pinned by
 `tests/test_container_coverage.py`, `tests/test_coverage_matrix.py` and `tests/test_property_coverage.py`.
 
 ### 4.10 The filter containers (F7.8)
