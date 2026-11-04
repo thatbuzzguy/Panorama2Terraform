@@ -2,33 +2,34 @@
 
 ## Current position
 
-The shadow parent index key is complete and committed on `development` (`249462c`); this tracking markdown is
-the next commit. `docs/ARCHITECTURE.md` §3.2 is the owner document for the shadow scan, and the key rule it
-states is the one the scan reads through.
+The `tools/build_kitchen_sink.py` rebuild finding is complete and committed on `development` (`7f30691`); this
+tracking markdown is the next commit. `docs/ARCHITECTURE.md` §1.1 is the owner document for the tool's place in
+the layout, and `tools/README.md` states the rule as the index row.
 
-- `shadow_coverage.parent_index` keys each parent entry through `state_coverage.ownership_key`, read with the
-  five facts the parent row declares. That is the project's one identity key rule, which `ownership.row_key`
-  already reads its order through, so the scan states no second key rule.
-- The scan compares a child entry with the first two positions of the key (the matrix row and the entry name),
-  because the child names its own scope. One finding names one parent entry, so the rule that the first parent
-  row wins is replaced by one finding per parent entry, and report order gains the parent entry as the
-  tie-break, in the parent report order.
-- The report line gains the `parent entry` field: the parent scope read through the F3.9 grouping rule, then the
-  parent entry identity. `shadow_line` takes the grouping rule as an argument, the same argument `console_lines`
-  takes. The console line keeps its fact as the parent source name only, because the console shape names one
-  position, one identity and one fact.
-- Measured 2026-11-04: `tests/fixtures/ownership_parent.xml` holds `Printer-Pool` under the `panos_address` row
-  in `Parent-DG` (line 18) and in `Child-DG` (line 26), the two keys differ at the `device_group` position, and
-  the fixture run reports `PASS (0 FAIL, 0 WARN)`. No fixture is added, so no corpus pin moved and no golden
-  moved.
-- Pins in `tests/test_shadow_coverage.py` groups 2, 4, 5 and 6: the key read through the rule, the two findings
-  for one child entry, the line shape with the parent entry field, the console fact, the offline run that reads
-  both cache entries, and the byte rule between two runs.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1476 tests (about 2 minutes).
+- The tool is a generator, not a pin. It prints the tree it assembles and writes no file, so a run cannot change
+  `tests/fixtures/kitchen_sink.xml`, which the golden set and the corpus pins read. The record is curated by
+  hand, so its bytes are not the tool's output.
+- The read rule is the F3.8 input rule read on the committed bytes: a fixture that declares a DTD, or that the
+  parse cannot read, is hostile input, so the tool skips it by rule and not by name, and it names no fixture in
+  its source except its own record. The tool takes no command-line path, so the accepted decision that the tool
+  calls `ET.parse` directly on repository files stands.
+- The record is not an input, and the name-list exclusion for `tests/fixtures/address_objects_dg_override.xml`
+  is gone: the merge joins entries by name, and the tool no longer answers for the record, so the duplicate-name
+  fixture is material like any other fixture.
+- Pins in `tests/test_build_kitchen_sink.py`: the tool's decision agrees with `xml_input` for every committed
+  fixture, the tool names no fixture except its own record, the rule answers for a fixture the test writes and
+  not for a `<!DOCTYPE` inside a comment, the read set is the set the corpus pins read less the record, the tool
+  writes no file and a run leaves the record byte-identical, the output for the committed set is not the record
+  with the two facts that keep it so pinned as data, the three merge cases, and the byte rule between two runs.
+- Measured 2026-11-04 on the committed corpus: 70 XML fixtures, 67 the input rule accepts, 66 the tool reads, 3
+  it skips; the tool's output is 3125 lines and 356 entries, and the record is 983 lines and 106 entries, with
+  15 comments and 11 entry names no committed fixture carries.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1487 tests (about 2 minutes). No fixture changed, so
+  no golden moved and no corpus pin moved.
 
-The next feature is the `tools/build_kitchen_sink.py` rebuild finding, which `to-do.md` names. The open items
-that stay in `backlog.md` are the certificate container row, the credential rule single statement, and the
-`count-only` container field gaps.
+The next feature is the `count-only` field gap for `parse_regions`, which `to-do.md` names. The open items that
+stay in `backlog.md` are the credential rule single statement, the nested-block `parent` read rule, and the
+certificate container row.
 
 ## Rules to keep when writing documents
 
@@ -86,6 +87,12 @@ same commit.
   forbidden word. The writer scan reads the `src/` set and excludes `src/write_path.py` (the single writer);
   `tests/conftest.py` is the test harness, so it sits outside the set. The pin for the outputs rule is group 7
   of `tests/test_reference_edges.py`; the pins for the file shape are `tests/test_write_path.py`.
+- The fixture assembler is a generator, not a pin, so no document or test may claim that its output is the
+  committed fixture. Its read rule is the two F3.8 checks read on the committed bytes, so a hostile fixture is
+  skipped by rule and not by name, and the tool names no fixture in its source except its own record. `tools/`
+  is not on the test path, so `tests/test_build_kitchen_sink.py` reads the tool's functions through `importlib`
+  on the path `tests/conftest.py` builds once, and the tool writes no file, so a run cannot change the record the
+  goldens read.
 - The block reader in `sanity_checks.py` serves every kind, and the same field reader serves
 the fields inside a
     container value and the elements of a list value, so a new block shape uses them rather
