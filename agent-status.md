@@ -2,35 +2,37 @@
 
 ## Current position
 
-The `count-only` field gap for `parse_regions` is complete and committed on `development` (`20d5920`); this
-tracking markdown is the next commit. `docs/COVERAGE_MATRIX.md` §1 is the owner document for the rule, and
+The `nested-block` field rule for `parent` is complete and committed on `development` (`1d0786a`); this tracking
+markdown is the next commit. `docs/COVERAGE_MATRIX.md` §1 is the owner document for the rule, and
 `docs/ARCHITECTURE.md` §2.4 states the destination fact and links to it.
 
-- The rule: a `count-only` row has no matrix row and no report section, so the per-entry report line is the only
-  output its entry reaches, and the line is honest only when it prints the value of each field it names, read
-  through the captured object, in the sorted field order the report already uses. That read is the property use
-  the property scan counts.
+- The rule: a `nested-block` entry line names only the fields the print reads through the captured object,
+  because a nested block prints only the attributes its type declares. `parent` is not one of those fields: it is
+  a fact of the parent entry, and the child's own name states the parent part, which the `name` line prints as
+  the row identity. `parent` stays a captured property for the kinds whose matrix row declares it, where the
+  emitter reads it through the child object and prints `parent = <parent entry>.name`.
 - The measurement that decided it, 2026-11-04 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14`
-  through `tests/conftest.py::provider_schemas`): 128 resources and 128 data sources, none names `region`, and
-  `panos_address` declares no `region` attribute, so no emitter can read a region field and the row cannot
-  become an `emitted` row. No emitter was built.
-- Code: `entry_coverage.PRINTS_VALUE_KINDS` is the rule as data, `captured_part` states the captured part of a
-  line, `report_value` is the one shape for one printed value, and `row_for` carries the captured object so
-  `protocol_report_rows` no longer sets it by hand. `entry_line` and `gap_fact` read the same captured part, so
-  the console fact and the report line use the same words. The console line shape and the exit codes are
-  unchanged, and a `count-only` row is still a gap row.
-- Pins: `tests/test_property_coverage.py` group 6 gains gap 6,
-  `test_the_report_line_reads_the_region_addresses_it_prints`, so the group names six gaps and one pin per gap.
-  `test_scan_scope_is_the_entries_a_matrix_row_covers` now shows the scan scope rule against the nested-block
-  `parent` gap, which is still open, and no longer claims the region field is unread.
-- The regions fixture run reports `PASS (0 FAIL, 0 WARN)` and the report names the entry as
-  `captured: addresses=[US, CA, MX]`.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1488 tests (about 2 minutes). No fixture changed and
-  no `.tf` output changed, so no golden moved and no corpus pin moved.
+  through `tests/conftest.py::provider_schemas`): 128 resources and 128 data sources, and three resource types
+  declare a `parent` attribute — `panos_ethernet_layer3_subinterface`, `panos_aggregate_layer3_subinterface`, and
+  `panos_device_group_parent`. `panos_ethernet_interface`, the type the virtual-wire block prints, declares none,
+  so no line of that block can print a parent. No emitter was built.
+- Code: `parse_interfaces` records no `parent` value for an entry in
+  `network/interface/virtual-wire/units`, so `entry_coverage.captured_fields` names `comment, mode, type` for
+  `ethernet1/4.1`: the printed comment line, the block key from `mode`, and the type from
+  `INTERFACE_RESOURCE_TYPES`. The print reads the parent part through the name, which is the row identity.
+  `PRINTS_VALUE_KINDS`, the report line shape, the console line shape, and the exit codes are unchanged, and the
+  `nested-block` destination kind is unchanged.
+- Pins: `tests/test_property_coverage.py` group 6 gains gap 7,
+  `test_the_nested_block_line_names_only_the_fields_the_emitter_reads`, so the group names seven gaps and one pin
+  per gap. `test_scan_scope_is_the_entries_a_matrix_row_covers` names the shape instead of an unread field, and
+  `tests/test_parse_network.py::test_parse_virtual_wire_units` reads the name, not the field.
+- `tests/fixtures/interfaces_ethernet.xml` gained a comment on `ethernet1/4.1`, so the rule is measured by a real
+  run. That run reports `PASS (0 FAIL, 0 WARN)` and the entry line reads `captured: comment, mode, type`.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1489 tests (about 3 minutes). No golden moved: the
+  golden set pins `.tf` paths and bytes only, and no golden holds the interfaces fixture.
 
-The next feature is the `nested-block` `parent` read rule, which `to-do.md` names. The open items that stay in
-`backlog.md` are the credential rule single statement, the bookkeeping field rule, and the certificate container
-row.
+The next feature is the `bookkeeping` `devices` and `templates` fields rule, which `to-do.md` names. The open
+items that stay in `backlog.md` are the credential rule single statement and the certificate container row.
 
 ## Rules to keep when writing documents
 
@@ -65,7 +67,10 @@ row.
   it must stay data: no writer branch may decide the shape per kind. A row that prints a value must carry the
   captured object through `row_for`, because `fields` holds the names only, and the value shape is
   `report_value`. A read through the recorded object is what the property scan counts, so a rule that prints a
-  value is a rule about a read, and the pin that holds it must run the pipeline, not build a row by hand.
+  value is a rule about a read, and the pin that holds it must run the pipeline, not build a row by hand. A kind
+that names field names must name only fields a read reaches: for a `nested-block` row the print is the only
+output its entry reaches, so the names come from the read record (`docs/COVERAGE_MATRIX.md` §1, pinned by
+`tests/test_property_coverage.py::test_the_nested_block_line_names_only_the_fields_the_emitter_reads`).
 - The write path landed (`docs/CODEBASE_ASSEMBLY.md` §14): the run writes one directory per
 unit the manifest
     names, and the codebase root holds the root set. A new file shape must name which set it
