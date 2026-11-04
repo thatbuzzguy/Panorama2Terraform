@@ -1,23 +1,41 @@
 # To Do
 
-Epic 7 is closed, so the current feature is the repository layout (`PLAN.md`, Housekeeping): the root holds
-`conftest.py`, the flat module set, `quick_start.sh`, and `sample_panorama_config.xml`, and each index names
-every document under it. The item list and the pins that read a path are in `backlog.md`. Pieces:
+Housekeeping (the repository layout) is complete and committed in `ccf93a3`. Its pieces:
 
-- [ ] State the layout as a rule in `PLAN.md` and `docs/ARCHITECTURE.md`, so the rule has one owner document.
-- [ ] Decide the import rule for the tool's modules, then move the 20 flat modules to `src/`.
-- [ ] Move the developer scripts to `tools/`, and the sample input and the sample output to `examples/`.
-- [ ] Move `conftest.py` once the layout rule names where the helpers the tests read live.
-- [ ] Update the pins that read a path, and the two readme indexes, then run the suite and check no golden
-  moved.
+- [x] Import rule decided and stated in `docs/ARCHITECTURE.md` §1.1 before the move (`src/` flat namespace,
+      `pythonpath = ["src"]`, the script-directory rule for a run).
+- [x] Test-layout rule stated: `tests/` stays flat, `tests/conftest.py` is the one shared helper file, so no
+      test file moves.
+- [x] Discovery checked with the rootdir at the repository root (`testpaths = ["tests"]`, `pythonpath` applied
+      before `tests/conftest.py` is imported).
+- [x] The pins that read a module path read it through `SRC_DIR` or `Path(module.__file__)`.
+- [x] The move as one `git mv` commit, the indexes for `examples/` and `tools/`, `.gitignore`, and `AGENTS.md`.
 
-F7.13 is complete and committed (`931ceec`): `selects` is the one place either shape table states a choice, so
-the 14 filter rows the measurement names state it, and the gate reads a filter choice at the block's own level.
-Nothing stays open from that slice.
+The current feature is the open items `backlog.md` names. Pieces, in the order they can be done:
+
+- [ ] `AGENTS.md` points to `lib_docs/` for API cheat sheets. Add the cheat sheets, or remove the reference.
+- [ ] The console line shape, so the console can print a property finding and a shadow line. The shadow line
+      also names a source, so decide the source field with it.
+- [ ] The record directory, then the prune action. A record is written per output directory, so the prune
+      action needs the directory decided first; it reads a record file, not one record.
+- [ ] The gate choice-word open item: `FILTER_XML_NAME_EXCEPTIONS` holds 15 pairs, and the fixture grounds
+      five. The other ten need a fixture that states one alternative and still passes `terraform validate`.
+
+## Rules the layout keeps
+
+- `docs/ARCHITECTURE.md` §1.1 is the owner document for the layout. `AGENTS.md` names the tracking markdown
+  set, and each index names every document under it, so a file outside an index is a finding.
+- Import rule: `src/` is one flat namespace, so a module in `src/` imports its siblings by plain name and no
+  module builds a path. `pyproject.toml` `pythonpath = ["src"]` is the only place a test path is stated, and
+  a run gets the same namespace from Python's script-directory rule, so no entry point adds path code. No
+  module, test or script states a second path rule.
+- Test-layout rule: `tests/` is flat. The test files sit beside `fixtures/` and `golden/`, and
+  `tests/conftest.py` is the one shared helper file, so the layout does not change again.
+  `pyproject.toml` `testpaths = ["tests"]` keeps discovery at the root.
 
 ## Rules the write path keeps
 
-- One function writes a file (`write_path.py`), so the LF rule is enforced once (`ARCHITECTURE.md` §6), and the
+- One function writes a file (`src/write_path.py`), so the LF rule is enforced once (`ARCHITECTURE.md` §6), and the
   two path builders name the two sets. No module writes a file outside it.
 - The gate reads the `.tf` files for the block rules and the four records read by the data rule; the two file sets
   stay distinct. A new file shape must name which set it belongs to.
