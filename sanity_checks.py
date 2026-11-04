@@ -774,8 +774,9 @@ def check_protocol_object(files: dict[str, str]) -> list[Finding]:
     2. A row that states `selects` names the attributes that form an exactly-one choice, and the level or the
        entry states exactly one of them: a `one_of` level that states no key, or more than one key, or a key the
        mapping does not state. `terraform validate` accepts a `{ ... }` value for `protocol`, so the gate is the
-       rule that keeps a choice to the one key the provider can read (F7.12). The same helper serves the filter
-       table, which states no choice, so the rule never fires for a filter block.
+       rule that keeps a choice to the one key the provider can read (F7.12). The same helper serves both shape
+       tables, so one wording covers both, and for a filter block the choice is read at the block's own level as
+       well (F7.13).
     3. A field the row marks `sensitive` printed as a literal. No generated file may state the value, so
        the block prints the variable reference for it.
     4. An element inside a `[` container that states no `name`, which is the field the row reads as the
@@ -814,8 +815,7 @@ def _shape_choice_findings(block, path: str, fields: dict, findings: list, table
     choice is part of the value for a row that also states other fields, where those keys are read by the field
     rule. A `string_list` row holds entries, so the choice is read inside each entry. The provider reads the
     choice as exactly one (`terraform validate`, provider 2.0.14, measured 2026-11-03), so a level or an entry
-    that states a different number is a finding. The filter table states no choice, so this reads nothing for a
-    filter block.
+    that states a different number is a finding. Both tables state a choice this way, so one wording covers both.
 
     Returns True when the choice is read here, so the field rule does not read the same key twice.
     """
@@ -933,14 +933,15 @@ def check_filter_blocks(files: dict[str, str]) -> list[Finding]:
 
     1. A level the table states no row for, a field the row does not declare, or a value whose shape the
        reader reads differently from the shape the row states.
-    2. An element inside a `[` container that states no `name`, which is the field the row reads for the
+    2. The exactly-one choice a row states as `selects`, at the level or entry the walk enters, which for a
+       filter block includes the block's own level (F7.13).
+    3. An element inside a `[` container that states no `name`, which is the field the row reads for the
        entry name.
 
     `location` is the placement fact, so the rule reads the fields at the block's own level and not the
-    sub-block: `location_present` is the rule that asks for it. `FILTER_SHAPE` states no `selects` and no
-    `sensitive` row, so the choice rule and the sensitive rule never fire for a filter block, and no filter
-    field is marked sensitive by the provider. The three filter levels the provider reads as exactly one state
-    their alternatives as fields, so the same rule for the filter table is recorded in `backlog.md`.
+    sub-block: `location_present` is the rule that asks for it. The choice is read before the field rule, as in
+    `_shape_level_findings`, so a selected key is not read twice. `sensitive` is empty for every filter row, so
+    the sensitive rule never fires for a filter block: no filter field is marked sensitive by the provider.
 
     The rule reads no data file: the block text and the table are the whole input.
     """
@@ -952,7 +953,9 @@ def check_filter_blocks(files: dict[str, str]) -> list[Finding]:
             continue
         # `location` is the placement sub-block, not a field the container row declares.
         fields = {key: value for key, value in import_blocks.fields_at(block.body).items() if key != 'location'}
-        _shape_field_findings(block, path, fields, findings, table)
+        # The entry row is the level the walk enters for a filter block, so the choice is read here too.
+        if not _shape_choice_findings(block, path, fields, findings, table):
+            _shape_field_findings(block, path, fields, findings, table)
     return findings
 
 def check_references(files: dict[str, str]) -> list[Finding]:

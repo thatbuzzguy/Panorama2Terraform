@@ -9,19 +9,17 @@ shape. `tests/test_protocol_object.py` is where the one-shape-owner rule is pinn
 Pins:
 
 - the table against the live provider schema: one row per level the converter prints, the field names the
-  provider declares, and the shape word for each field. `selects` is empty for every row, because the provider
-  declares each filter choice as optional fields, so the choice rule (F7.12) cannot fire for a filter block; the
-  three levels `terraform validate` reads as exactly one state their alternatives as fields, which `backlog.md`
-  records as the same rule for the filter table. `sensitive` is empty, because no filter field is marked
-  sensitive, so `VALUE_VARIABLES` gains no row for a filter field;
+  provider declares, and the shape word for each field. `selects` states the choice for the 14 rows that
+  `terraform validate` reads as exactly one attribute, and it is empty for the rest; `sensitive` is empty,
+  because no filter field is marked sensitive, so `VALUE_VARIABLES` gains no row for a filter field;
 - the row scope: the redistribution entry is mirrored to the `match` and `set` levels, and those rows state
   leaf fields only, so the walk stops at them;
 - the six `CONTAINER_TABLE` rows, the six `COVERAGE_MATRIX` rows, the six `EMITTED_TYPES` entries and the six
   `LOCATION_SCHEMA` rows, with `FILTER_TYPES` pinned against the `CONTAINER_TABLE` row notes so the decision
   has one owner;
 - the parse read, the emitter print, the gate rule, and the path-keyed input spellings measured from pango;
-- the three choice levels the provider enforces as exactly-one, which the table states as optional fields and
-  the fixture answers with one element, so `terraform validate` accepts the run;
+- the choice rows: the 14 levels `terraform validate` reads as exactly one, the gate refusing a choice level
+  that states two of them or none, and the run printing the one key each choice level states;
 - one negative test per gate rule, and the gate reporting no finding on a real run.
 """
 
@@ -50,6 +48,29 @@ ENTRIES = {
     'network/routing-profile/filters/community-list': 'Community-Filter',
     'network/routing-profile/filters/route-maps/bgp/bgp-entry': 'RouteMap-Filter',
     'network/routing-profile/filters/route-maps/redistribution/redist-entry': 'Redist-Filter',
+}
+
+# F7.13: the filter rows `terraform validate` (provider 2.0.14, Terraform 1.16.2, measured 2026-11-03) reads as
+# exactly one attribute. Each row is written as `FILTER_SHAPE` names it, and the names are the fields the row
+# states that form the choice. The schema states no word for a choice, because it declares every alternative as
+# an optional attribute of a `single` level, so the choice is what `terraform validate` enforces.
+CHOICE_ROWS = {
+    'network/routing-profile/filters/access-list/type': ('ipv4', 'ipv6'),
+    'network/routing-profile/filters/access-list/type/ipv4/ipv4_entries/destination_address': ('address', 'entry'),
+    'network/routing-profile/filters/access-list/type/ipv4/ipv4_entries/source_address': ('address', 'entry'),
+    'network/routing-profile/filters/access-list/type/ipv6/ipv6_entries/source_address': ('address', 'entry'),
+    'network/routing-profile/filters/community-list/type': ('extended', 'large', 'regular'),
+    'network/routing-profile/filters/prefix-list/type': ('ipv4', 'ipv6'),
+    'network/routing-profile/filters/prefix-list/type/ipv4/ipv4_entries/prefix': ('entry', 'network'),
+    'network/routing-profile/filters/prefix-list/type/ipv6/ipv6_entries/prefix': ('entry', 'network'),
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry': (
+        'bgp', 'connected_static', 'ospf', 'ospfv3', 'rip'),
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp': ('ospf', 'ospfv3', 'rib', 'rip'),
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/connected_static': (
+        'bgp', 'ospf', 'ospfv3', 'rib', 'rip'),
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospf': ('bgp', 'rib', 'rip'),
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/ospfv3': ('bgp', 'rib'),
+    'network/routing-profile/filters/route-maps/redistribution/redist-entry/rip': ('bgp', 'ospf', 'rib'),
 }
 
 
@@ -125,12 +146,62 @@ def _findings(path: str, body: str) -> list:
     the block's own level, and the closing brace at column 0.
     """
     return sanity_checks.check_filter_blocks({
-        'filters.tf': f'resource "{resource_mapping.FILTER_TYPES[path]}" "filter_00000000" {{\n{body}}}\n'})
+        'filters.tf': f'resource "{resource_mapping.FILTER_TYPES[_container_of(path)]}" '
+        f'"filter_00000000" {{\n{body}}}\n'})
 
 
 def _detail(path: str, text: str) -> str:
     """A finding as the rule states it: the block address, then the level, then the field."""
     return f'filter {resource_mapping.FILTER_TYPES[_container_of(path)]}.filter_00000000 {path} {text}'
+
+
+def _field_value(level: str, field: str, indent: int) -> str:
+    """One field value written as the shape its row states, so the choice finding is the only finding.
+
+    A level the walk enters must state the one key its row selects, so an alternative that is a level is
+    written with one key when that level is a choice row too, and an element inside a `[` container states the
+    name rule 4 asks for.
+    """
+    row = _row(level)
+    shape = row['fields'][field]
+    pad = ' ' * (indent + 2)
+    child = resource_mapping.FILTER_TABLE.row(f'{level}/{field}')
+    if shape == 'object' and child is not None and child['selects']:
+        key = sorted(child['selects'])[0]
+        return ('{\n' + pad + f'{key} = ' + _field_value(f'{level}/{field}', key, indent + 2) + '\n'
+                + ' ' * indent + '}')
+    if shape == 'string':
+        return '"v"'
+    if shape == 'number':
+        return '1'
+    if shape == 'bool':
+        return 'true'
+    if shape == 'string_list':
+        return (f'[\n{pad}{{\n{" " * (indent + 4)}name = "e1"\n{" " * (indent + 4)}}}\n{" " * indent}]')
+    return '{}'
+
+
+def _choice_block_body(path: str, keys: tuple) -> str:
+    """A hand-written filter block body that states `keys` at the level `path` names (F7.13).
+
+    Each level is written at its own indent, which is the one rule `fields_at` reads, so the block can trip the
+    choice finding at `path` and nothing else.
+    """
+    container = _container_of(path)
+
+    def write(level: str, parts: list, indent: int) -> str:
+        pad = ' ' * indent
+        if not parts:
+            return ''.join(f'{pad}{key} = {_field_value(level, key, indent)}\n' for key in keys)
+        part = parts[0]
+        shape = _row(level)['fields'][part]
+        body = write(f'{level}/{part}', parts[1:], indent + (4 if shape == 'string_list' else 2))
+        if shape == 'string_list':
+            return (f'{pad}{part} = [\n{" " * (indent + 2)}{{\n{" " * (indent + 4)}name = "e1"\n'
+                    f'{body}{" " * (indent + 4)}}}\n{pad}]\n')
+        return f'{pad}{part} = {{\n{body}{pad}}}\n'
+
+    return write(container, [p for p in path[len(container):].split('/') if p], 2)
 
 
 # --- 1. the table against the live provider schema ---------------------------
@@ -164,9 +235,11 @@ def _schema_node(provider_schema: dict, path: str) -> dict:
 def test_the_filter_table_is_the_measured_provider_shape(provider_schema):
     """Every filter row, field and shape word is a fact the provider declares for the pinned provider.
 
-    `selects` is empty for every row, because the provider declares each filter choice as optional fields and
-    not as required-exactly-one, so the choice rule (F7.12) reads no choice for a filter block, and
-    `sensitive` is empty for every row, because no filter field is marked
+    A row that states `selects` states an exactly-one choice as data, and the schema states no word for it: it
+    declares every alternative as an optional attribute of a `single` level, so the shape word for a filter
+    choice row is `object` as it is for every other filter level, and the choice is a rule the gate reads from
+    `selects` and not a shape word. Each key `selects` names is a field the row states, so the choice is the
+    whole value or part of it. `sensitive` is empty for every row, because no filter field is marked
     sensitive: so `VALUE_VARIABLES` gains no row for a filter field.
     """
     for path, row in sorted(resource_mapping.FILTER_SHAPE.items()):
@@ -178,7 +251,9 @@ def test_the_filter_table_is_the_measured_provider_shape(provider_schema):
         for field, shape_word in row['fields'].items():
             assert _schema_level(attributes[field]) == resource_mapping.SHAPE_TO_SCHEMA.get(
                 shape_word, shape_word), (path, field, shape_word)
-        assert row['selects'] == {}, (path, row['selects'])
+        for key in row['selects']:
+            assert key in row['fields'], (path, key, row['fields'])
+            assert attributes[key].get('optional'), (path, key)
         assert row['sensitive'] == frozenset(), (path, row['sensitive'])
 
 
@@ -209,20 +284,48 @@ def test_the_row_scope_is_the_decision_acceptance_states():
         # A row that states leaf fields only has no row under it, so the walk stops there.
         assert not [child for child in resource_mapping.FILTER_SHAPE if child.startswith(path + '/')], path
 
-    # The three levels the provider enforces as exactly-one are rows that state their alternatives as fields,
-    # so `selects` states nothing for them and the choice rule (F7.12) cannot read them; `backlog.md` records the
-    # same rule for the filter table. The fixture answers each with one element, which is why
-    # `terraform validate` accepts the run.
-    choices = {
-        'network/routing-profile/filters/access-list/type/ipv4/ipv4_entries/source_address': 'address',
-        'network/routing-profile/filters/prefix-list/type/ipv4/ipv4_entries/prefix': 'entry',
-        redist + '/bgp': 'ospf',
-    }
-    for path, chosen in choices.items():
+    # The choice rows are pinned by `test_the_choice_rows_are_the_levels_the_provider_reads_as_exactly_one`, so
+    # this pin keeps the row scope only.
+    for path in sorted(CHOICE_ROWS):
         row = _row(path)
-        assert row['shape'] == 'object' and row['selects'] == {}, (path, row)
+        assert row['shape'] == 'object', (path, row['shape'])
         assert len(row['fields']) > 1, (path, row['fields'])
-        assert chosen in row['fields'], (path, row['fields'])
+        assert set(CHOICE_ROWS[path]) <= set(row['fields']), (path, row['fields'])
+
+
+def test_the_choice_rows_are_the_levels_the_provider_reads_as_exactly_one(provider_schema):
+    """F7.13: the filter rows that state `selects` are the 14 the measurement names, and no others.
+
+    Measured 2026-11-03 with `terraform validate` (provider 2.0.14, Terraform 1.16.2): each of the 14 refuses
+    more than one of its alternatives and also refuses none, so the provider reads the level as exactly one.
+    `selects` is the one place either table states a choice, so a rule that read "a choice stated as fields"
+    would need to say which fields form it, which is a second place that states it. Each mapping is the
+    identity, because the export spells the provider key at a filter choice level, so
+    `FILTER_XML_NAME_EXCEPTIONS` gained no row and no shape word changed.
+    """
+    measured = sorted(CHOICE_ROWS)
+    assert sorted(p for p, row in resource_mapping.FILTER_SHAPE.items() if row['selects']) == measured
+    for path, alternatives in sorted(CHOICE_ROWS.items()):
+        row = _row(path)
+        assert row['selects'] == {key: key for key in alternatives}, (path, row['selects'])
+        # Every alternative is a field the row states, so the choice is the whole value or part of it.
+        assert sorted(row['selects']) == sorted(alternatives), (path, row['selects'])
+        attributes = _schema_node(provider_schema, path)['nested_type'].get('attributes', {})
+        for key in row['selects']:
+            assert key in row['fields'] and attributes[key].get('optional'), (path, key)
+    # The choice is the whole value for 13 rows, and part of it for the redist entry, which also states the
+    # entry name and the description.
+    whole = [p for p, row in resource_mapping.FILTER_SHAPE.items()
+            if row['selects'] and set(row['selects']) == set(row['fields'])]
+    assert len(whole) == 13, whole
+    redist = 'network/routing-profile/filters/route-maps/redistribution/redist-entry'
+    assert set(_row(redist)['selects']) < set(_row(redist)['fields']), _row(redist)['fields']
+    assert sorted(set(_row(redist)['fields']) - set(_row(redist)['selects'])) == ['description', 'name'], (
+        _row(redist)['fields'])
+    # No filter row is a `one_of` row, because the schema declares each alternative as an optional attribute of
+    # a `single` level, so `one_of` keeps its meaning and `SHAPE_READS_AS` is unchanged.
+    assert not [p for p, row in resource_mapping.FILTER_SHAPE.items() if row['shape'] == 'one_of']
+    assert sanity_checks.SHAPE_READS_AS.get('one_of') == 'object', sanity_checks.SHAPE_READS_AS
 
 
 # --- 2. the tables that name the six containers -----------------------------
@@ -351,25 +454,42 @@ def test_the_emitter_prints_the_fields_the_entry_row_declares(tmp_path):
 
 
 def test_the_choice_levels_state_one_key_in_the_run(tmp_path):
-    """The three choice levels the provider enforces as exactly-one print one key each.
+    """The print path: each choice level the run reaches prints the one key `selects` names.
 
-    `selects` states nothing for them, because the pinned schema declares each alternative as an optional
-    field, so the choice rule (F7.12) reads no choice for a filter block. The fixture answers each with one
-    element, and `terraform validate` accepts the run for that reason.
+    The parse reads the fields the entry states, so the run can only print the one alternative the input
+    states. The fixture answers each choice level it covers with one element, and the gate reads the blocks the
+    run wrote with no finding, which `test_the_gate_reads_the_run_and_reports_nothing` pins for the whole run.
     """
-    text = _run(FIXTURE, tmp_path)['filters.tf']
-    blocks = {block.rtype: block for block in sanity_checks.blocks({'filters.tf': text}, ('resource',))}
-    redist = 'network/routing-profile/filters/route-maps/redistribution/redist-entry'
-    choices = {
-        'network/routing-profile/filters/access-list/type/ipv4/ipv4_entries/source_address': 'address',
-        'network/routing-profile/filters/prefix-list/type/ipv4/ipv4_entries/prefix': 'entry',
-        redist + '/bgp': 'ospf',
-    }
-    for path, chosen in choices.items():
-        row = _row(path)
-        assert len(row['fields']) > 1 and row['selects'] == {}, (path, row)
-        block = blocks[resource_mapping.FILTER_TYPES[_container_of(path)]]
-        assert list(_printed_level(block, path)) == [chosen], (path, _printed_level(block, path))
+    files = _run(FIXTURE, tmp_path)
+    blocks = {block.rtype: block for block in sanity_checks.blocks(
+        {'filters.tf': files['filters.tf']}, ('resource',))}
+    source = xml_input.parse_xml(FIXTURES_DIR / FIXTURE)
+    table = resource_mapping.FILTER_TABLE
+    covered = []
+    for path in sorted(CHOICE_ROWS):
+        container = _container_of(path)
+        node = source.root.findall(f'.//{container}/entry')[0]
+        for part in path[len(container):].split('/'):
+            if not part:
+                continue
+            children = node.findall(table.xml_name(part, container))
+            if not children:
+                break
+            node = children[0]
+        else:
+            covered.append(path)
+            alternatives = set(table.row(path)['selects'].values())
+            stated = [child.tag for child in node if child.tag in alternatives]
+            assert len(stated) == 1, (path, stated)
+            printed = _printed_level(blocks[resource_mapping.FILTER_TYPES[container]], path)
+            assert [key for key in printed if key in alternatives] == stated, (path, printed, stated)
+    # The fixture covers 5 of the 14, so the other 9 are pinned through the table and the gate.
+    assert covered == [
+        'network/routing-profile/filters/access-list/type',
+        'network/routing-profile/filters/community-list/type',
+        'network/routing-profile/filters/prefix-list/type',
+        'network/routing-profile/filters/route-maps/redistribution/redist-entry',
+        'network/routing-profile/filters/route-maps/redistribution/redist-entry/bgp'], covered
 
 
 def test_the_gate_reads_the_run_and_reports_nothing(tmp_path):
@@ -403,6 +523,45 @@ def test_the_gate_refuses_a_value_read_as_another_shape():
     assert _findings(path, good) == [], good
     findings = _findings(path, good.replace('type = {', 'type = "ipv4"'))
     assert [f.detail for f in findings] == [_detail(path, 'type is not a object value')], findings
+
+
+def test_the_gate_reads_the_choice_at_the_level_the_walk_enters():
+    """Rule 2 for the filter table: the choice a row states as `selects` is read at the level it states (F7.13).
+
+    For a filter block the block's own level is the entry row the walk enters, so `check_filter_blocks` reads
+    the choice there before the field rule, as `_shape_level_findings` does at every level below. One helper
+    (`_shape_choice_findings`) serves both tables, so the finding wording is the one F7.12 states, read through
+    the table object. Every one of the 14 measured rows is read for the number the provider refuses: more than
+    one alternative, and none. A level that states one alternative is not a finding.
+    """
+    for path, alternatives in sorted(CHOICE_ROWS.items()):
+        findings = _findings(path, _choice_block_body(path, alternatives))
+        assert [f.detail for f in findings] == [
+            _detail(path, f'states {len(alternatives)} keys, which is not the one key FILTER_SHAPE selects')], (
+            path, findings)
+        assert [f.check for f in findings] == ['filter_blocks'], (path, findings)
+        findings = _findings(path, _choice_block_body(path, ()))
+        assert [f.detail for f in findings] == [
+            _detail(path, 'states 0 keys, which is not the one key FILTER_SHAPE selects')], (path, findings)
+        for key in alternatives:
+            assert _findings(path, _choice_block_body(path, (key,))) == [], (path, key)
+    # The choice is part of the value for the redist entry row, so the choice rule reads only the alternatives
+    # and the field rule reads `name` and `description`: the same key is not read twice.
+    redist = 'network/routing-profile/filters/route-maps/redistribution/redist-entry'
+    entry = '  name = "Redist-Filter"\n  description = "the lab redist"\n'
+    assert _findings(redist, entry + _choice_block_body(redist, ('bgp',))) == []
+    findings = _findings(redist, entry + _choice_block_body(redist, ('bgp', 'rip')))
+    assert [f.detail for f in findings] == [
+        _detail(redist, 'states 2 keys, which is not the one key FILTER_SHAPE selects')], findings
+    # A choice level that states no alternative is the same finding, so the field rule does not read the level
+    # twice: the choice finding is the one finding the block trips.
+    findings = _findings(redist, entry + '  made_up = {}\n')
+    assert [f.detail for f in findings] == [
+        _detail(redist, 'states 0 keys, which is not the one key FILTER_SHAPE selects')], findings
+    # With one alternative stated, the field rule still reads the fields the row declares.
+    findings = _findings(redist, entry + _choice_block_body(redist, ('bgp',)) + '  made_up = {}\n')
+    assert [f.detail for f in findings] == [
+        _detail(redist, 'made_up is not a field FILTER_SHAPE declares')], findings
 
 
 def test_the_gate_reads_a_match_level_as_leaf_fields_only():
