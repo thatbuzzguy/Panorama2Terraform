@@ -2,43 +2,53 @@
 
 ## Current position
 
-The `disable-override` extraction gap is complete and committed on `development` (`363f36a`); this tracking
-markdown is the next commit. Decision: the seven matrix rows that can carry the flag name it, so their parse
-methods read the entry field through `_get_text` and their emitters read the key through one helper, and
-`OWNERSHIP.json` states the flag as the parse read it for their entries.
+The four parser extraction gaps `backlog.md` names are complete and committed on `development`
+(`f38253c`); this tracking markdown is the next commit. Each gap was confirmed in a fixture through the output
+that reads it before it was fixed, one pin per gap.
 
-- Measured 2026-11-04 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14`, terraform v1.16.2,
-  `terraform providers schema -json`): 128 resources, 25 of them declare `disable_override` as an optional
-  string, and the nine rows that name the property are the emitted ones among them. `panos_ike_gateway` does
-  not declare it, so its row still states `unknown` (rule 5). Read the schema at `block.attributes`.
-- One print shape: `TerraformGenerator.emit_disable_override` writes the string after the entry's descriptive
-  field, or after `name` when the block prints no descriptive field, and only when the value is `yes` or `no`.
-  Nine sites call it, so no second shape rule exists.
-- Pins: `tests/test_parse_objects.py::test_the_seven_parse_methods_read_the_flag`,
-  `tests/test_ownership.py::test_the_seven_emitters_print_the_flag`,
-  `tests/test_ownership.py::test_a_group_row_states_the_flag_as_the_parse_read_it`, and
-  `tests/test_resource_mapping.py::test_the_flag_rows_are_the_types_the_provider_declares_it_for`. The corpus
-  findings did not move, because a captured field an output reads is not a finding.
-- Documents: `docs/COVERAGE_MATRIX.md` is the owner for the row set and the print shape, and
-  `docs/CODEBASE_ASSEMBLY.md` §4 rule 6 and the `FLAG_KEY` comment in `src/ownership.py` link to it.
-- Goldens: one golden moved, `tests/golden/kitchen_sink/shared_45ca31c3/tags.tf`, from a real run, because the
-  `env-prod` entry in `tests/fixtures/kitchen_sink.xml` now carries the flag. Each of the seven row fixtures
-  holds one entry that carries it.
-- The run for each of the seven fixtures reports `PASS (0 FAIL, 0 WARN)`, and `terraform validate` passes for
-  the output it writes. The kitchen-sink run keeps the one warning it had before, the placeholder in `vpn.tf`.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1468 tests (about 2 minutes).
+- Application filter `description`: `parse_application_filters` reads the field through `_get_text`, and
+  `generate_manual_setup_report` prints it through the captured object. Confirmed in
+  `tests/fixtures/application_filters.xml` (`high-risk-web`). Measured 2026-11-04 against the pinned provider
+  (`PaloAltoNetworks/panos ~> 2.0.14`, terraform v1.16.2, `terraform providers schema -json`):
+  `panos_application_filter` is absent from the 128 resources, so the container stays a `report` row and the
+  report is the only output for its entries.
+- Schedule `description`: same rule. Confirmed in `tests/fixtures/schedules.xml` (`Business-Hours`).
+  `panos_schedule` declares `disable_override`, `location`, `name` and `schedule_type` only, so no emitter can
+  print a description; the `NOT_EMITTED_TYPES` reason and the report wording now name what the parse reads. An
+  entry with no value prints no field, and `captured_fields` keeps such a field out (F4.3 rule 3), so the plain
+  entry is pinned on both sides.
+- Security rule profile group: `parse_security_rules` reads `profile/group` through `_get_members` as the
+  parsed-object key `profile_group`, and `generate_security_rules` prints
+  `profile_setting = { group = [ ... ] }`, the shape the provider declares for
+  `panos_security_policy_rules.rules.nested_type`. Confirmed in `tests/fixtures/security_rules.xml`
+  (`Block-Risky-Apps`) and in `tests/fixtures/kitchen_sink.xml`, which is the fixture whose golden moved.
+  `REFERENCE_SCOPES` names no profile group, so the names stay brown-field strings.
+- NAT rule `service`: `PanoramaParser._get_single_value` reads a field the provider holds as one value in
+  either export form. Confirmed in `tests/fixtures/nat_rules.xml`, which now holds one entry per form.
+  `panos_nat_policy_rules.rules.service` is a string, so more than one member prints the `# NOTE:` line that
+  names them instead of being dropped.
+- Pins: one per gap in group 6 of `tests/test_property_coverage.py`, each naming the fixture entry, the parse
+  read, the line the output prints, and the scan scope; plus the parse-read pins in
+  `tests/test_parse_objects.py::test_parse_application_filters` and
+  `tests/test_parse_rules.py::test_parse_schedules` and `test_parse_nat_rules`, and the report-line pins in
+  `tests/test_real_or_report.py`. `CORPUS_FINDINGS` did not move, because a captured field an output reads is
+  not a finding.
+- Documents: `docs/COVERAGE_MATRIX.md` §1 states the rule that a `report` line reads the field it prints through
+  the captured object, and `docs/RESOURCE_MAPPING.md` states the schedule reason.
+- Goldens: one golden moved, `tests/golden/kitchen_sink/production_dg_6ce3cc69/security_rules.tf`, from a real
+  run. Reports are not goldens.
+- The four fixtures each report `PASS (0 FAIL, 0 WARN)`, and `terraform validate` passes for the output the run
+  writes. The kitchen-sink run keeps the one warning it had before, the placeholder in `vpn.tf`.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1472 tests (about 2 minutes).
 
 The housekeeping layout rule is unchanged: `docs/ARCHITECTURE.md` §1.1 is its owner document, `AGENTS.md`
 names the tracking markdown set, and each index names every document under it (commits `ccf93a3` and
 `b3465f1`).
 
-The next piece is the rest of the parse extraction gaps `backlog.md` names: the application filter
-`description`, the schedule `description`, the security rule profile group references, and the NAT rule
-`service` in member-list form. A gap is fixed only when a report confirms it in a fixture, so the work starts
-by naming the fixture that holds each one. The certificate container row decision stays held in `backlog.md`,
-because it needs an emitter before a row can name a type, and the same file records that
-`tools/build_kitchen_sink.py` cannot rebuild the kitchen-sink fixture while the hostile fixtures are in the
-corpus.
+The next gap the rule can confirm is the application override rule: the parse captures `description` and
+`destination_addresses` for its entry, and the report line prints the rule without reading either. The open items
+that stay in `backlog.md` are the shadow parent index key, the certificate container row, the
+`tools/build_kitchen_sink.py` finding, and the credential rule single statement.
 
 ## Rules to keep when writing documents
 

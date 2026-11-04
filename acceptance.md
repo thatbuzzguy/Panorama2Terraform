@@ -1,58 +1,39 @@
-# Decision — the `disable-override` extraction for the seven rows — acceptance criteria
+# Decision — the application override report line — acceptance criteria
 
-This slice closes the parser extraction gap `backlog.md` names for the property scan (F4.4): seven matrix
-rows name no property for `disable-override`, so `OWNERSHIP.json` states `unknown` for an entry of those
-types even when the export carries the flag. The seven are `panos_address_group`, `panos_administrative_tag`,
-`panos_application_group`, `panos_custom_url_category`, `panos_external_dynamic_list`,
-`panos_security_profile_group`, `panos_service_group`.
+This slice applies the rule `docs/COVERAGE_MATRIX.md` §1 states to the next `report` container: a report line must
+read the field it prints through the captured object. The container is the application override rule.
 
 ## Facts measured before the change
 
-- Measured 2026-11-04 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14`, terraform v1.16.2,
-  `terraform providers schema -json`): 128 resources, and 25 of them declare `disable_override` as an
-  optional string. All seven types above are among the 25, so the provider can hold the flag for each of
-  them and the emitter can print it as an argument.
-- `panos_ike_gateway`, which `tests/test_ownership.py` pins as `unknown`, is not among the 25: the rule
-  that states `unknown` for a row that does not name the property is unchanged.
-- Two rows name the property today: `panos_address` (F3.4) and `panos_service` (F6.2). Both read the flag
-  through the parse, and both emitters print it as the string after `description`, only when the value is
-  `yes` or `no`. That shape is the shape the seven follow.
-- The entry-mark rule (F4.3) and the read record (F4.4) are unchanged: a key the parse method read off the
-  XML element is not a property an output used, so a row that names the property needs the emitter to read
-  the key, and the property scan measures the read through a fixture entry.
+- Measured 2026-11-04 by running the tool on `tests/fixtures/application_override_rules.xml`. The per-entry report
+  names `Override-443` as a `report` entry with `captured: application, description, destination_addresses,
+  destination_zones, disabled, port, protocol, source_addresses, source_zones`.
+- `MANUAL_SETUP_REPORT.txt` prints the line
+  `Override-443: from=['Trust'] to=['Untrust'] source=['Internal-Network'] port=8443 protocol=tcp
+  application=https disabled=False`, so the line reads eight captured keys and leaves `description` and
+  `destination_addresses` unread. The fixture entry carries both (`<description>Override 8443 as HTTPS</description>`,
+  and one `destination` member).
+- `panos_application_override_rule` is not a resource in the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14`,
+  terraform v1.16.2, 128 resources, read at `block.attributes`), so no emitter can read the container and the
+  report is the only output for its entries.
+- The scan cannot measure this: a `report` container has no matrix row, so `matrix_row_for` answers `None` for it.
+  The rule is held by a pin, not by the scan.
 
 ## Decision
 
-1. Extraction rule: the seven parse methods read the flag through `_get_text(entry, 'disable-override')`,
-   the same helper every other field in those methods reads through. The captured key is the parsed-object
-   key `disable_override`, the name the matrix row and `OWNERSHIP.json` use. `parse_address_objects` keeps
-   its child-element branch, because that method walks the entry's children for its value type, and no
-   second rule is added.
-2. Print rule: one generator helper states the shape once — `disable_override = "yes"`, printed after the
-   entry's descriptive field, or after `name` when the block prints no descriptive field, and only when the
-   value is `yes` or `no`. The nine sites (the two that print today plus the seven) call that helper, so no
-   second shape rule appears. An entry with no value prints nothing.
-3. The seven matrix rows name `disable_override` in `properties` in the same change.
+1. `generate_manual_setup_report` prints `description` and `destination_addresses` on the override rule line,
+   through the captured object, in the field order the report already uses for its other override fields.
+2. A captured field with no value prints no field, so an entry with no description prints nothing for it (F4.3
+   rule 3). The pin must cover both an entry with the value and one without.
 
 ## Acceptance criteria
 
-1. Each of the seven parse methods keeps the flag in the object it marks, read through `_get_text`: the
-   entry that carries `yes` in the fixture reads `yes`, and an entry that carries nothing reads `''`.
-2. Each of the seven emitters reads the key and prints the string in the shape the helper states, after its
-   descriptive field, so `test_declared_property_is_a_key_the_emitter_reads` grounds the row.
-3. A fixture entry carries `disable-override` for each of the seven rows, so the property scan measures the
-   read through a corpus entry and `test_measured_reads_equal_the_declared_properties` holds for the seven
-   rows. The corpus findings do not move: a captured field an output reads is not a finding.
-4. `OWNERSHIP.json` states the flag as the parse read it: `yes` for an entry the fixture carries, and `no`
-   for a row that declares the property with no value. `panos_ike_gateway` still states `unknown`, because
-   its row does not name the property.
-5. The provider fact is pinned against the live schema: the set of matrix rows that name the property is
-   the set of emitted types the provider declares it for, and the pin names the seven.
-6. Goldens: the committed golden that holds a fixture entry carrying the flag moves, and it moves from a
-   real run. `test_golden_files.py` and `test_terraform_validate.py` pass for the bytes that run wrote.
-7. The entry-mark rule stays green, and the sanity gate reports `PASS (0 FAIL, 0 WARN)` for the fixture the
-   run reports on.
-8. `ruff check .` is clean and `python3 -m pytest` passes.
-9. `docs/COVERAGE_MATRIX.md` states the property-level change and names the pin; `docs/CODEBASE_ASSEMBLY.md`
-   §4 rule 6 states which rows name the property; `src/ownership.py` names them in the `FLAG_KEY` comment;
-   `backlog.md` loses the closed item, and `to-do.md` and `agent-status.md` carry the decision.
+1. The report line for `Override-443` names the description the parse read, and the captured object records the
+   read as an output use.
+2. `destination_addresses` is read the same way, so the captured object shows no unused captured key for the entry.
+3. An entry that carries neither field prints neither, and its captured object records no read for them.
+4. The pin is one test in group 6 of `tests/test_property_coverage.py`, in the shape of
+   `test_the_report_reads_the_application_filter_description_it_prints`: it names the fixture entry, the parse read,
+   the line the report prints, and the scan scope. Extend the parse-read pin in `tests/test_parse_objects.py` or
+   `tests/test_parse_rules.py`, and the report pin in `tests/test_real_or_report.py`.
+5. `ruff check .` is clean, `python3 -m pytest` passes, and the fixture run reports `PASS (0 FAIL, 0 WARN)`.

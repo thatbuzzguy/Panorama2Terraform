@@ -31,7 +31,15 @@ Completed work is not recorded here; the git history and the owner document hold
     child object, so the read is not recorded on the child.
   - `bookkeeping` (association table and scope facts): `devices`, `templates`.
   These are not findings today, and each one needs a rule before it can become one: an
-  emitter must exist, or the report writer must read the field it names.
+  emitter must exist, or the report writer must read the field it names. The rule now exists
+  for `report` containers (`docs/COVERAGE_MATRIX.md` §1), which is what closed the application
+  filter and schedule description gaps. The other containers still have no output that can read
+  their fields. The `report` container whose fields the rule can measure next is the application
+  override rule: `parse_application_override_rules` captures `description` and `destination_addresses` for
+  `Override-443` in `tests/fixtures/application_override_rules.xml` (measured 2026-11-04 through the run's
+  `captured:` line), and the report line for that entry reads neither. The pin that holds the rule is
+  `tests/test_property_coverage.py::test_the_report_reads_the_application_filter_description_it_prints`, so the
+  next piece adds the same pin for this container.
 
 - The shadow parent index is keyed by (matrix row, entry name), so a parent name the export
   declares in two scopes gives one key and the first parent row wins, in report order. Identity
@@ -40,11 +48,13 @@ Completed work is not recorded here; the git history and the owner document hold
   finding today, and the parent scope is not a row key.
 
 - Parser extraction gaps found by the parse unit tests (each drops data; fix each
-  when a report confirms it in a fixture):
-  - Application filter `description` is not extracted.
-  - Schedule `description` is not extracted.
-  - Security rule profile group references are not extracted.
-  - NAT rule `service` in member-list form is captured as whitespace text; only text form works.
+  when a report confirms it in a fixture). What stays:
+  - The `profile_name` column in the per-entry report cannot be pinned for the certificate container, because
+    no parse method reads its entries. Measured 2026-11-04: `panos_certificate` is a data source only (no
+    resource), so the container cannot become an `emitted` row, and the corpus holds one certificate entry in
+    `tests/fixtures/unknown_containers.xml`, which the report counts as `unaccounted`. The pin that would hold
+    the rule is `tests/test_container_coverage.py::test_report_declares_the_profile_name_column`, never written.
+    It needs a parse method for the container and a fixture entry that carries `profile-name`.
   - Regions are parsed but reach no output: `parse_regions` returns objects
     that only the console count uses. Recorded by F3.10 (`docs/ARCHITECTURE.md`
     §2.4). The per-entry report lists each region row as a gap, so the operator sees
