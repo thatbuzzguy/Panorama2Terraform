@@ -147,7 +147,7 @@ only the router, peer groups and peers. That gap is recorded in
 
 ## Types that exist in v2 but are not emitted
 
-The parser captures only the name and description for these objects. An
+The parser captures only part of the body for these objects. An
 empty profile resource would be a misconfigured object, so the captured data
 stays in `MANUAL_SETUP_REPORT.txt` with the reason:
 
@@ -155,7 +155,7 @@ stays in `MANUAL_SETUP_REPORT.txt` with the reason:
 |---|---|
 | `panos_log_forwarding_profile` | the `match_list` body is not captured |
 | `panos_zone_protection_profile` | the SIP/UDP/TCP/ICMP/DNS options body is not captured |
-| `panos_schedule` | only the entry names are parsed; v2.0.14 has no monthly schedule support |
+| `panos_schedule` | the parse reads the name, the description and the schedule type; the day and time ranges are not captured, and v2.0.14 has no monthly schedule support |
 
 Security profile bodies (antivirus, anti-spyware, vulnerability, URL
 filtering, file blocking, WildFire, zone protection) follow the same

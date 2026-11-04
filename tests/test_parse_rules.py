@@ -26,6 +26,9 @@ def test_parse_security_rules(make_parser):
 
     block = by_name["Block-Risky-Apps"]
     assert block["action"] == "deny"
+    # F4.4: the profile group reference is a captured field, read through `_get_members`
+    # and printed by the emitter as `profile_setting.group`
+    assert block["profile_group"] == ["Strict-Profile"]
     assert block["disabled"] is True
     assert block["log_end"] is True
     assert block["log_start"] is False
@@ -35,7 +38,7 @@ def test_parse_nat_rules(make_parser):
     p = _parser(make_parser, "nat_rules.xml")
     rules = p.parse_nat_rules()
     by_name = {r["name"]: r for r in rules}
-    assert list(by_name) == ["Outbound-NAT", "Inbound-Web-NAT"]
+    assert list(by_name) == ["Outbound-NAT", "Inbound-Web-NAT", "Member-Form-NAT", "Multi-Member-NAT"]
 
     outbound = by_name["Outbound-NAT"]
     assert outbound["source_translation_type"] == "dynamic-ip-and-port"
@@ -52,6 +55,14 @@ def test_parse_nat_rules(make_parser):
     assert inbound["destination_translation_address"] == "10.1.1.10"
     assert inbound["destination_translation_port"] == "80"
 
+    # F4.4: the service field in both export forms. One member is the value the v2 string
+    # field can hold; two members are the set it cannot hold, so the parse keeps the list and
+    # the emitter prints the `# NOTE:` line that names it.
+    member = by_name["Member-Form-NAT"]
+    assert member["service"] == "service-http"
+    multi = by_name["Multi-Member-NAT"]
+    assert multi["service"] == ["service-http", "service-https"]
+
 
 def test_parse_schedules(make_parser):
     p = _parser(make_parser, "schedules.xml")
@@ -61,10 +72,14 @@ def test_parse_schedules(make_parser):
     biz = by_name["Business-Hours"]
     assert biz["schedule_type"] == "recurring"
     assert [e["name"] for e in biz["recurring"]] == ["Weekdays"]
+    # F4.4: `panos_schedule` declares no description, so the manual report is the output that
+    # reads this field
+    assert biz["description"] == "Business hours"
 
     one = by_name["One-Time"]
     assert one["schedule_type"] == "non-recurring"
     assert one["recurring"] == []
+    assert one["description"] is None
 
 
 def test_parse_decryption_rules(make_parser):

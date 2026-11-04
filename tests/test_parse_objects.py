@@ -61,6 +61,9 @@ def test_parse_application_filters(make_parser):
     assert filters[0]["category"] == ["web-proxy", "file-transfer"]
     assert filters[0]["risk"] == ["high"]
     assert filters[0]["evasive"] == "yes"
+    # F4.4: `panos_application_filter` is not a provider resource, so the manual report is the
+    # output that reads this field
+    assert filters[0]["description"] == "Filter high risk web applications"
 
 
 def test_parse_external_lists(make_parser):
