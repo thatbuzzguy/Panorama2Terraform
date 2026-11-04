@@ -1,20 +1,28 @@
 # To Do
 
-The current feature is the report-read rule applied to the next `report` container: the application override rule.
+The current feature is the shadow parent index key, which `backlog.md` recorded and this feature promotes. The
+shadow scan (`F5.4`, `src/shadow_coverage.py`) keys the parent index by (matrix row, entry name), so two parent
+entries that carry the same name under the same row give one key and the first parent row wins in report order.
+Identity is (device group, vsys, type, name) (`docs/ARCHITECTURE.md` §2.1), so a key that also named the parent
+scope would say which parent entry the child repeats.
+
 Pieces:
 
-- [ ] Confirm the gap through a run: `parse_application_override_rules` captures `description` and
-      `destination_addresses` for `Override-443` in `tests/fixtures/application_override_rules.xml`, and the report
-      line prints neither. Add an entry that carries neither field, so the pin covers both sides.
-- [ ] Print both fields on the report line through the captured object, in the field order the report already uses
-      for its override fields.
-- [ ] Pin the rule in group 6 of `tests/test_property_coverage.py` in the shape of
-      `test_the_report_reads_the_application_filter_description_it_prints`: the fixture entry, the parse read, the
-      line the report prints, and the scan scope. Extend the parse read pin and the report pin.
+- [ ] Measure the case through a run. `tests/fixtures/ownership_parent.xml` holds two `Printer-Pool` entries under
+      the `panos_address` row in two device groups (measured 2026-11-04), so `parent_index` gives one key and the
+      first parent row in report order wins. The shadow pins read `tests/fixtures/scope_parent.xml` as the parent
+      source, so the case needs an entry there too.
+- [ ] Add the parent scope to the key in `shadow_coverage.parent_index`, so one key names the parent entry the
+      child repeats. The scope is the identity fact `docs/ARCHITECTURE.md` §2.1 states, not a name the scan
+      guesses.
+- [ ] Pin the rule in `tests/test_shadow_coverage.py`: the two parent entries, the child entry, the key, and the
+      finding the scan reports. State the rule in `docs/ARCHITECTURE.md` §3.2, the owner document for the scan.
+- [ ] A key that names the parent scope can pick a different parent entry, and the shadow line prints the parent
+      line, so the report and console pins move with it. The printed set pins in `tests/test_shadow_coverage.py`
+      and `tests/test_container_coverage.py` change in the same commit, from a real run.
 
-The rule this feature rests on is in `docs/COVERAGE_MATRIX.md` §1: a `report` line reads the field it prints through
-the captured object, because a `report` container has no matrix row. `panos_application_override_rule` is not a
-resource in the pinned provider, so no emitter can read this container.
+The rule this feature rests on is in `docs/ARCHITECTURE.md` §2.1 and §3.2. The scan scope rule is
+`docs/ARCHITECTURE.md` §3.2 and `docs/COVERAGE_MATRIX.md` §1: only an entry a matrix row covers is a finding.
 
 ## Rules the layout keeps
 

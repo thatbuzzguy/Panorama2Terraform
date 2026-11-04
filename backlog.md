@@ -23,8 +23,6 @@ Completed work is not recorded here; the git history and the owner document hold
   The scan scope rule pins this in
   `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers`.
   Measured on the corpus:
-  - `report` containers: `description` and `destination_addresses` on an application
-    override rule. The report prints the rule but does not read these fields.
   - `count-only` (`parse_regions`): `addresses`. Nothing reads a region at all.
   - `nested-block` (a layer-3 subinterface inside its parent interface row): `parent`.
     The nested block prints the parent name from the parent object, not through the
@@ -32,20 +30,9 @@ Completed work is not recorded here; the git history and the owner document hold
   - `bookkeeping` (association table and scope facts): `devices`, `templates`.
   These are not findings today, and each one needs a rule before it can become one: an
   emitter must exist, or the report writer must read the field it names. The rule now exists
-  for `report` containers (`docs/COVERAGE_MATRIX.md` §1), which is what closed the application
-  filter and schedule description gaps. The other containers still have no output that can read
-  their fields. The `report` container whose fields the rule can measure next is the application
-  override rule: `parse_application_override_rules` captures `description` and `destination_addresses` for
-  `Override-443` in `tests/fixtures/application_override_rules.xml` (measured 2026-11-04 through the run's
-  `captured:` line), and the report line for that entry reads neither. The pin that holds the rule is
-  `tests/test_property_coverage.py::test_the_report_reads_the_application_filter_description_it_prints`, so the
-  next piece adds the same pin for this container.
-
-- The shadow parent index is keyed by (matrix row, entry name), so a parent name the export
-  declares in two scopes gives one key and the first parent row wins, in report order. Identity
-  is (device group, vsys, type, name) (`docs/ARCHITECTURE.md` §2.1), so a key that also named the
-  parent scope would say which parent entry the child repeats. Not built: one child entry is one
-  finding today, and the parent scope is not a row key.
+  for `report` containers (`docs/COVERAGE_MATRIX.md` §1), which closed the application filter, the schedule,
+  and the application override gaps; measured 2026-11-04 no `report` container in the corpus has a captured
+  field no output read. The other containers still have no output that can read their fields.
 
 - Parser extraction gaps found by the parse unit tests (each drops data; fix each
   when a report confirms it in a fixture). What stays:

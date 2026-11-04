@@ -68,13 +68,17 @@ path writes one directory per unit the manifest names.
 ## Sequencing
 
 The rule that keeps a `report` container honest is in `docs/COVERAGE_MATRIX.md` §1: the report line reads the field
-it prints through the captured object, because a `report` container has no row. The next gap that rule can confirm
-is the application override rule: `parse_application_override_rules` captures `description` and
-`destination_addresses` for its fixture entry, and the report line prints the entry without reading either, so the
-pin that holds the rule needs a case for this container. The gated pieces that stay held are also in `backlog.md`:
-the four `*_policy_rules` types wait for the F3.5 rulebase decision, and a config entry inside a stack needs a
-provider location shape before the emitter can write a block for it. The rows that state fewer fields than the
-pinned provider declares for their level are the choice levels, which state their alternatives as `selects` keys.
+it prints through the captured object, because a `report` container has no row. Measured 2026-11-04 the rule holds
+for every `report` container in the corpus, so the work that used it is closed. Containers with no matrix row still
+have field gaps the scan cannot report (`backlog.md`), and each needs a rule before it can become a finding.
+
+The next feature is the shadow parent index key, in `to-do.md`: `shadow_coverage.parent_index` keys by
+(matrix row, entry name), so a parent name the export declares in two scopes gives one key and the first parent row
+wins, in report order. Identity is (device group, vsys, type, name) (`docs/ARCHITECTURE.md` §2.1), so the key needs
+the parent scope. The gated pieces that stay held are also in `backlog.md`: the four `*_policy_rules` types wait for
+the F3.5 rulebase decision, and a config entry inside a stack needs a provider location shape before the emitter can
+write a block for it. The rows that state fewer fields than the pinned provider declares for their level are the
+choice levels, which state their alternatives as `selects` keys.
 
 ## Out of Scope (tracked in backlog.md)
 
