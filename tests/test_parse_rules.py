@@ -159,13 +159,23 @@ def test_parse_pbf_rules(make_parser):
 def test_parse_application_override_rules(make_parser):
     p = _parser(make_parser, "application_override_rules.xml")
     rules = p.parse_application_override_rules()
-    assert len(rules) == 1
-    rule = rules[0]
-    assert rule["name"] == "Override-443"
+    by_name = {r["name"]: r for r in rules}
+    assert list(by_name) == ["Override-443", "Override-RDP"]
+
+    rule = by_name["Override-443"]
     assert rule["source_zones"] == ["Trust"]
     assert rule["destination_zones"] == ["Untrust"]
     assert rule["source_addresses"] == ["Internal-Network"]
+    # F4.4: the two fields the report line reads through the captured object
+    assert rule["destination_addresses"] == ["any"]
+    assert rule["description"] == "Override 8443 as HTTPS"
     assert rule["port"] == "8443"
     assert rule["protocol"] == "tcp"
     assert rule["application"] == "https"
     assert rule["disabled"] is False
+
+    # F4.4: the entry that carries neither field, so the report pin covers both sides. The parse keeps the
+    # empty shape for it, which `captured_fields` keeps out of the captured set (F4.3 rule 3).
+    plain = by_name["Override-RDP"]
+    assert plain["destination_addresses"] == []
+    assert plain["description"] is None

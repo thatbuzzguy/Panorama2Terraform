@@ -199,7 +199,7 @@ Two levels sit beside the matrix:
   container is not a finding: it has no row, and only a row can name the properties an
   emitter reads. Those field gaps are recorded in [`../backlog.md`](../backlog.md).
   A `report` container is honest only when the report line reads the field it prints through the
-  captured object, because the report is the only output for that entry. Four pins hold the rule, one per
+  captured object, because the report is the only output for that entry. Five pins hold the rule, one per
   container, in `tests/test_property_coverage.py`:
   `::test_the_report_reads_the_application_filter_description_it_prints` (the provider declares no
   `panos_application_filter`, so the report prints the description),
@@ -207,9 +207,14 @@ Two levels sit beside the matrix:
   description, so the report prints it),
   `::test_the_security_rule_row_measures_the_profile_group_the_emitter_prints` (the row names
   `profile_group`, and the emitter prints it as `profile_setting = { group = [ ... ] }`, the shape the
-  pinned provider declares), and
+  pinned provider declares),
   `::test_the_nat_service_is_read_in_both_export_forms` (`service` is a string, so one member is the
-  value the field can hold, and more than one member prints the `# NOTE:` line that names them).
+  value the field can hold, and more than one member prints the `# NOTE:` line that names them), and
+  `::test_the_report_reads_the_application_override_fields_it_prints` (the provider declares no
+  `panos_application_override_rule`, so the report prints `description` and `destination_addresses`).
+  The shape of that line is stated once, as `OVERRIDE_REPORT_FIELDS` in `src/panorama_to_terraform.py`:
+  the line prints the fields it reads through the captured object in that order, and a field the entry
+  carries no value for prints nothing (F4.3 rule 3).
    F7.11 completed the six `PROTOCOL_SHAPE` entry rows the router reads, so the router row declares
    a property for each field those rows state, and the scan measures each entry that states them.
    A level inside an entry is not a measured entry: the entry that holds it is, so the fields inside

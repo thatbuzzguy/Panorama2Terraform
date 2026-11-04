@@ -156,11 +156,14 @@ def test_report_only_areas_go_to_manual_setup_report(tmp_path):
     out = _convert('kitchen_sink.xml', tmp_path)
     report = (out / 'MANUAL_SETUP_REPORT.txt').read_text(encoding='utf-8')
 
-    # Application override rules: no v2 resource, rule details listed
+    # Application override rules: no v2 resource, rule details listed. The report is the output for
+    # this container, so the line prints the two fields the parse read (F4.4).
     assert '--- Application Override Rules (no v2 resource) ---' in report
     assert 'Override-443' in report
     assert 'port=8443' in report
     assert 'application=https' in report
+    assert "destination=['any']" in report
+    assert 'description=Override 8443 as HTTPS' in report
 
     # Application filters: no v2 resource, filter fields listed. The report is the output for
     # this container, so the line prints the description the parse read (F4.4).
