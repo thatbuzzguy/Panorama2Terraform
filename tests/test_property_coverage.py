@@ -166,13 +166,14 @@ def test_parse_time_read_is_not_a_property_use(converter_module):
 def test_measured_reads_equal_the_declared_properties(converter_module, tmp_path):
     """For each matrix row, the properties the outputs read equal the row's declared list.
 
-    Two rows have no read of their own to measure:
-    `panos_aggregate_layer3_subinterface`, because the container table maps an aggregate
-    subinterface to the ethernet subinterface row, so no corpus entry reaches it; and
-    `panos_device_group_parent`, because the entry that feeds the parent record is covered by the
-    device group row (F6.5 decision 4: one entry can feed two blocks, and the scan measures an
-    entry against the row that covers its container). Both are grounded by the emitter test in
-    tests/test_coverage_matrix.py, and the table limit is recorded in backlog.md.
+    One row has no read of its own to measure: `panos_device_group_parent`, because the entry that
+    feeds the parent record is covered by the device group row (F6.5 decision 4: one entry can feed two
+    blocks, and the scan measures an entry against the row that covers its container). It is grounded by
+    the emitter test in tests/test_coverage_matrix.py.
+
+    `panos_aggregate_layer3_subinterface` was the second exception, and the row in the test below is what
+    closed it: the container table now names the aggregate subinterface container, so a corpus entry
+    reaches the row and its properties are measured through that entry.
 
     `panos_vsys` is measured with the empty set: its block carries the entry name and the location
     only, so the row declares no property and parity holds only while a fixture places a virtual
@@ -184,13 +185,52 @@ def test_measured_reads_equal_the_declared_properties(converter_module, tmp_path
             measured.setdefault(resource, set()).update(keys)
 
     unmeasured = sorted({row['resource'] for row in ROWS} - set(measured))
-    assert unmeasured == ['panos_aggregate_layer3_subinterface', 'panos_device_group_parent'], \
-        unmeasured
+    assert unmeasured == ['panos_device_group_parent'], unmeasured
 
     drift = {row['resource']: (sorted(row['properties']), sorted(measured[row['resource']]))
              for row in ROWS
              if row['resource'] in measured and set(row['properties']) != measured[row['resource']]}
     assert drift == {}, drift
+
+
+def test_the_scan_measures_an_aggregate_subinterface_through_the_aggregate_row(converter_module, tmp_path):
+    """The row that closed the second exception: the aggregate subinterface entry is measured by its own row.
+
+    `parse_interfaces` reaches an aggregate subinterface with the same relative pattern it uses for the
+    ethernet shape, so `covering_row` needs a row for the aggregate container: the longest match covers
+    `ae1.101.20`, and `layer3/units` still covers the ethernet entry. The matrix element names the same
+    container the table row names, plus the entry inside it, so the entry the element test reads is the entry
+    the scan measures.
+
+    `ae1.101` is an aggregate entry whose name carries a unit, so the table covers it with the group row:
+    the row shape cannot state a name fact, and the emitter reaches the subinterface type for it through the
+    name rule. The group row keeps the properties the run reads from that entry.
+    """
+    parser = run_pipeline(converter_module, 'interfaces_other.xml', tmp_path)
+    assert parser is not None, 'interfaces_other.xml'
+    ledger = parser.ledger
+    sub = next(e for e in ledger.entries() if e.get('name') == 'ae1.101.20')
+    path = container_coverage.section_path(ledger.parents[sub], ledger.parents, ledger.source)
+    row = entry_coverage.covering_row(path)
+    assert row.path == 'network/interface/aggregate-ethernet/entry/layer3/units', path
+    assert entry_coverage.matrix_row_for(path)['resource'] == 'panos_aggregate_layer3_subinterface', path
+
+    matrix_row = next(r for r in ROWS if r['resource'] == 'panos_aggregate_layer3_subinterface')
+    # The element column states the row's container from the `network` root, plus the entry inside it.
+    container = row.path.removeprefix('network/interface/')
+    assert matrix_row['xml_element'] == container + '/entry', (row.path, matrix_row['xml_element'])
+    assert matrix_row['xml_name'] == sub.get('name'), matrix_row['xml_name']
+
+    recorded = ledger.mark_for(sub)['captured']
+    assert isinstance(recorded, entry_coverage.RecordingDict), recorded
+    assert sorted(set(recorded.used_keys()) - entry_coverage.NON_FIELD_KEYS) == \
+        sorted(matrix_row['properties']), recorded.used_keys()
+    assert ledger.property_findings() == [], ledger.property_findings()
+
+    group = next(e for e in ledger.entries() if e.get('name') == 'ae1.101')
+    group_row = entry_coverage.covering_row(
+        container_coverage.section_path(ledger.parents[group], ledger.parents, ledger.source))
+    assert entry_coverage.row_detail(group_row) == 'panos_aggregate_interface', group_row
 
 
 def test_the_scan_measures_an_export_rule_and_not_a_scalar_level(converter_module, tmp_path):

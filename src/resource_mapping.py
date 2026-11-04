@@ -4209,9 +4209,12 @@ COVERAGE_MATRIX = (
         ),
     }, {
         'resource': 'panos_aggregate_layer3_subinterface',
-        'xml_element': 'aggregate-ethernet/entry',
-        'xml_name': 'ae1.101',
-        'emitted_name': 'ae1.101',
+        # The element is the container the property scan measures this type through: the `units`
+        # entry inside an aggregate entry. `ae1.101` is an aggregate entry whose name carries a unit,
+        # so the emitter reaches the same type for it through the name rule, and the group row covers it.
+        'xml_element': 'aggregate-ethernet/entry/layer3/units/entry',
+        'xml_name': 'ae1.101.20',
+        'emitted_name': 'ae1.101.20',
         'fixture': 'interfaces_other.xml',
         'output_file': 'interfaces.tf',
         'emitter': ('generate_interfaces',),
