@@ -2,72 +2,52 @@
 
 ## Current position
 
-F7.11 is complete and committed on `development` (`d8b7277`). The six `PROTOCOL_SHAPE` rows that stated fewer
-fields than provider 2.0.14 declares now state every field for their level: `protocol/bgp/peer_group` (2),
-`protocol/bgp/peer_group/peer` (9), `protocol/bgp/redist_rules` (7), `protocol/ospf/area/interface` (8),
-`protocol/ospfv3/area` (1), and `protocol/ospfv3/area/interface` (9). Seven new rows state the `single` levels
-inside those entries. `parse_bgp` and `_protocol_areas` read the new fields through the row fields, the emitter
-prints them in the row's order, and the gate reads them against the same rows, so no new rule was needed.
+F7.12 is complete and committed on `development` (`42ff08e`), which closes Epic 7. `selects` is the one place
+`PROTOCOL_SHAPE` states a choice the provider reads as exactly one, because the schema states no fact for a
+choice: it declares every alternative as an optional attribute of a `single` level, so no shape word can state
+the choice. Two rows state it: `protocol/bgp/peer_group/peer/peer_address`, where the choice is the whole value,
+and `protocol/ospfv3/auth_profile`, where the choice is two of the four fields the entry states. The gate rule
+`protocol_object` reads the choice through one helper (`_shape_choice_findings`) at the level the walk enters and
+at each entry of a `string_list` row, so a level or an entry that states both alternatives, or none, is a FAIL
+finding. `SHAPE_WORDS`, `SHAPE_TO_SCHEMA`, `SHAPE_READS_AS` and `SHAPE_LEVELS` are unchanged, so `value_shape`
+still reads both levels as an object value.
 
-The suite is 1439 tests, all green (1435 at the start of this slice), and `ruff check .` is clean.
+Finding wording: `states N keys, which is not the one key PROTOCOL_SHAPE selects` is the one wording for the
+count, so it covers 0 keys and more than one key for both shapes. The wording for a key a row does not select is
+unchanged.
 
-No golden moved, because the four golden cases state no value for a new field, so the bytes a run writes are
-unchanged, and a golden is regenerated only from a real run. A real run on `tests/fixtures/bgp.xml`,
-`tests/fixtures/ospf.xml` and `tests/fixtures/ospfv3.xml` reports `PASS (0 FAIL, 0 WARN)`, and
-`terraform validate` accepts the blocks each run writes. The property scan measures the six entries against the
-router row and reports no finding.
+Measured 2026-11-03 with `terraform validate` (provider 2.0.14, Terraform 1.16.2): `peer_address` refuses 2
+attributes when one (and only one) is required, and it refuses none; the `ospfv3` profile entry refuses `ah` and
+`esp` together, and it refuses none. `local_address` and `subsequent_address_family_identifier` accept 2
+attributes, so they are not choices.
 
-The next feature is F7.12: the word the table has for a level the provider reads as a choice between two
-attributes of one level.
+The suite is 1441 tests, all green (1439 at the start of this slice), and `ruff check .` is clean. No golden
+moved, because the print path is unchanged: a run that states one alternative prints one key. The gate reads the
+`tests/fixtures/bgp.xml` and `tests/fixtures/auth_profile.xml` runs with no finding, and the corpus run reports
+`PASS (0 FAIL, 0 WARN)`.
 
-### Decision 1: every measured field is read and printed
+The filter table is the asymmetry that stays: the three filter levels the provider reads as exactly one state
+their alternatives as fields and no `selects`, so the choice rule cannot fire for a filter block. It is recorded
+in `backlog.md`.
 
-None of the 36 fields is marked `sensitive`, so no field needs the variable reference and no `VALUE_VARIABLES`
-row. Each is a leaf the parse reads through the row, or a `single` level that needs its own row. The two
-`['list', 'string']` fields (`set_community`, `set_extended_community`) are `member_list` fields, so their
-members are values and no level row stands under the redist rule row.
-
-### Decision 2: field order is the print order
-
-The fields each row already stated keep their order, and the fields a row gained follow in the order the schema
-names them. A new entry row states `name` first. The pins that read a block from a real run print the new fields
-after the fields the row already stated.
-
-### Decision 3: a level inside an entry is not a measured entry
-
-The seven `single` levels inside an entry hold no entry, so `CONTAINER_TABLE` states no row for them: the scan
-measures the field of the entry that holds the level. An interface entry sits inside an area entry, so its
-section path holds an `entry` segment `covering_row` cannot match, and the fields the two interface rows declare
-stay grounded by the table, so the row for `panos_virtual_router` gained 16 properties and no property for an
-interface field.
-
-### Decision 4: the choice the table cannot state is the F7.12 word
-
-`terraform validate` (Terraform 1.16.2, provider 2.0.14) accepts 2 attributes inside `connection_options` and
-inside `subsequent_address_family_identifier`, so both are `object` rows and no choice is involved. The provider
-refuses 2 attributes for `peer_address` when one is required (`ip` or `fqdn`), so the fixture states one
-attribute, and the gate cannot refuse a block that states both: `SHAPE_WORDS` has no word for a choice between
-two attributes of one level. The same gap holds for `ah` or `esp` in an `ospfv3` auth profile entry. Both are in
-`backlog.md`, and `tests/test_protocol_object.py::test_the_gate_reads_a_peer_against_the_rows_it_states` pins the
-current behaviour.
+The next feature is the repository layout (`PLAN.md`, Housekeeping): the root holds `conftest.py`, the flat
+module set, `quick_start.sh`, and `sample_panorama_config.xml`, and each index names every document under it.
+The item list and the pins that read a path are in `backlog.md`.
 
 ### Pins that changed
 
-- `tests/test_protocol_object.py` gained `test_the_six_rows_are_the_whole_measurement` (the six rows against the
-  live schema, the field order, the seven levels as rows with no container row, and the exception table) and
-  `test_the_gate_reads_a_peer_against_the_rows_it_states` (the gate accepts the new fields, refuses a value read
-  the wrong way and a field the row does not declare, and records the choice limit).
-- `test_a_peer_prints_inside_its_peer_group` pins the whole print for the peer group entry, the peer entry and the
-  redist rule entry, and the two OSPF print tests pin the fields the interface rows gained.
-- `tests/test_parse_network.py` gained `test_parse_bgp_reads_the_fields_the_six_rows_added`, and
-  `test_parse_bgp_enabled` reads a `metric` the fixture now states.
-- `tests/test_property_coverage.py` gained
-  `test_the_scan_measures_the_six_rows_and_not_a_level_inside_an_entry`.
-- The three fixtures state every field the rows declare for their entries, and `peer_address` states one
-  attribute.
-- `docs/ARCHITECTURE.md` §4.9 records the six completed rows and the choice limit, and
-  `docs/COVERAGE_MATRIX.md` records the scan scope for a level inside an entry.
-- The suite gained 4 tests (1439 green).
+- `tests/test_protocol_object.py` gained `test_the_choice_rows_state_the_choice_the_provider_reads` (the two rows
+  read against the live schema) and `test_the_choice_rule_reads_a_level_and_an_entry` (the gate for a choice
+  inside an entry and for a choice that is the whole value, the field rule for a key that is not an alternative,
+  and the print path).
+- `test_the_table_is_the_only_shape_owner` reads `_shape_choice_findings` as a shape owner, and the table pin
+  reads `selects` as the attributes that form the choice, which can be a subset of the row's fields.
+- Four pins that state the finding wording changed with it, and the peer pin moved from a limit pin to a violation
+  pin.
+- `docs/ARCHITECTURE.md` §4.9 rule 7 states the choice rule, §4.10 rule 1 states why the filter rows cannot be
+  read by it, and `README.md` and `docs/RESOURCE_MAPPING.md` name `selects` as the place a table states a choice.
+- `tests/test_filter_containers.py` states the filter wording for the recorded decision, so the choice rule reads
+  nothing for a filter block.
 
 ## Rules to keep when writing documents
 
@@ -86,7 +66,7 @@ current behaviour.
 - Completed epic, phase, feature and task detail is removed from the tracking markdown after
   the work is committed; `AGENTS.md` states the rule.
 
-## Watch for Epic 7 and the write path
+## Watch for the shape tables and the write path
 
 - The write path landed (`docs/CODEBASE_ASSEMBLY.md` §14): the run writes one directory per
 unit the manifest
@@ -108,27 +88,27 @@ through the
 table (`tests/test_variables.py::_reference_names`). The test that pins the declaration set
 reads the
     names the table records with no value (`tests/test_variables.py`), and the test that pins
-  the report rule carves
+the report rule carves
     the `README.md` file-inventory exception. A change to a shape word moves both pins in the
-  same commit.
+same commit.
 - A rule that pins an absence by scanning module sources cannot read a source that names the
 words it
     forbids, so a scan reads the tool's own modules, and the test name and the module docstring
-  carry no
+carry no
     forbidden word. The writer scan excludes `write_path.py` (the single writer) and
-  `conftest.py` (the test
+`conftest.py` (the test
     harness). The pin for the outputs rule is group 7 of `tests/test_reference_edges.py`; the
-  pins for the file
+pins for the file
   shape are `tests/test_write_path.py`.
 - The block reader in `sanity_checks.py` serves every kind, and the same field reader serves
 the fields inside a
     container value and the elements of a list value, so a new block shape uses them rather
-  than writing a second
+than writing a second
   reader.
 - A test that reads the `.tf` set reads it as the gate reads it, keyed by the path from the
 output directory, so
     a run that names two units is not read as one file. A plan check that runs writes a
-  `.terraform` cache inside
+`.terraform` cache inside
   the directory it ran on, so a pin that reads a corpus run uses a copy of it.
 - A field reader must read at the block's own level and stop at the closing quote, or a
   sub-block field or an escaped quote answers for the block's field. Both are pinned in
@@ -172,10 +152,14 @@ fills an entry level the row states as a field, because its entries live under t
   fields only is the walk's stop point, so a field inside it is a gate finding: the redistribution entry's
   `match` and `set` rows are that case, and the six levels inside them are in `backlog.md`. A `sensitive` field
   cannot name itself, so `_protocol_fields` carries the name of the entry that holds the level: an entry names
-  itself, and a level inside an entry prints the reference the entry that holds it names. One entry states `ah`
-  or `esp` for an `ospfv3` profile, and one filter entry states one alternative for the three levels
-  `terraform validate` refuses to hold more than one (`source_address`, `prefix`, and the redistribution entry's
-  `bgp`), so the table states no word for those choices.
+  itself, and a level inside an entry prints the reference the entry that holds it names. F7.12: `selects` is the
+  one place a row states a choice the provider reads as exactly one, so the level or the entry states one of the
+  keys `selects` names, and the gate reads that rule at the level the walk enters and at each entry of a
+  `string_list` row through `_shape_choice_findings`. The two rows that state it are `peer_address`, where the
+  choice is the whole value, and the `ospfv3` auth profile entry, where the choice is two of the entry's fields.
+  The three filter levels `terraform validate` refuses to hold more than one (`source_address`, `prefix`, and the
+  redistribution entry's `bgp`) state their alternatives as fields and no `selects`, so the choice rule reads
+  nothing for a filter block; that decision is in `backlog.md`.
 - The parse method that takes the router element is named in the test helpers that call it for
 each router:
     `tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py`. A new
@@ -197,13 +181,13 @@ per-entry
   field again.
 - One place decides the shape of a value: `resource_mapping.VALUE_VARIABLES`, read at the print
   site. A new field a table row maps must be read by the emitter, the gate and the `.tfvars`
-    writer through the same table, and the table must cover every field `LOCATION_SCHEMA`
+  writer through the same table, and the table must cover every field `LOCATION_SCHEMA`
   declares.
 - The §5 naming rule lives in `naming.py`. No module may define a second one;
   `TerraformGenerator.sanitize_name` is a delegate and the data modules take the rule as an
   argument.
 - One place decides the shape of a reference field: `TerraformGenerator.name_ref`, read at the
-print site.
+ print site.
     The mechanism for a name it cannot resolve is the plain name it returns, so a write path
   that runs the
   rule per unit changes the corpus pin lists, not the rule.
@@ -225,11 +209,11 @@ the
 - The prune action still needs the record directory decided. A state record references nothing,
   so it prunes nothing, and the prune rule reads a record file, not one record.
 - A coverage fact that comes from a run must be read from the run's ledger, so the scan tests
-run
+  run
   the pipeline in process.
 - A cycle test needs two units that each declare a name the other one uses, because the rule
-resolves a
+  resolves a
   name only inside the unit that declared it (`tests/fixtures/reference_cycle.xml`).
 - The LF rule is a byte rule, so the goldens and the no-change tests change with the write
-path. The rule is in
+  path. The rule is in
   the one write function, and `docs/ARCHITECTURE.md` §6 states it.

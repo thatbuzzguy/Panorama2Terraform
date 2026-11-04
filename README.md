@@ -403,7 +403,7 @@ both counts.
 | `import_blocks` | every `import` block agrees with the `resource` block it names: the type, the local name, the entry name, and the location | FAIL; WARN for a rule type the shape cannot state |
 | `scope_blocks` | a name inside a scope block's `location` names a scope the run declares, by the type that defines it | FAIL |
 | `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
-| `protocol_object` | every `protocol` object on a `panos_virtual_router` block matches the `PROTOCOL_SHAPE` row for its level, prints as a field, and states the one key a choice level declares | FAIL |
+| `protocol_object` | every `protocol` object on a `panos_virtual_router` block matches the `PROTOCOL_SHAPE` row for its level, prints as a field, and states the one key a row selects | FAIL |
 | `filter_blocks` | every filter container block matches the `FILTER_SHAPE` row for its level, and an element inside a `[` container states the name the row reads as the entry name | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable the run declares | FAIL |

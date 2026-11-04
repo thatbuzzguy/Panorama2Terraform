@@ -29,6 +29,14 @@ object attribute, so the BGP, OSPF and OSPFv3 levels are an emitter shape and no
 prints the levels the shape table states (`docs/ARCHITECTURE.md` §4.9). And a value the parse cannot carry has one shape: the block
 prints the variable reference, never the value. Both rules are in `backlog.md`.
 
+Epic 7 (routing output through the protocol object) is closed. `resource_mapping.PROTOCOL_SHAPE` states the
+levels the tool prints, `FILTER_SHAPE` states the six filter containers outside it, the routing methods read them
+through the table, the emitter prints them in the row's field order, and the gate rules `protocol_object` and
+`filter_blocks` read a printed object against the same rows. F7.12 decided how the table states a choice the
+provider reads as exactly one: `selects` is the one place the table states it, because the schema states no fact
+for a choice, and the gate reads the rule at the level the walk enters and at each entry of a `string_list` row.
+The rules are in `docs/ARCHITECTURE.md` §4.9 and §4.10, and the coverage is in `docs/COVERAGE_MATRIX.md`.
+
 ## Goals
 
 | Goal | Description | Definition of Done |
@@ -51,71 +59,6 @@ and the test that holds it. The unit rule, the owner rule, the edge rule, the or
 block rule, the scope object rule, the site rule, and the action rule are all landed, and the write
 path writes one directory per unit the manifest names.
 
-## Epic 7 — Routing output through the protocol object (Goal 2) — open
-
-The pinned provider (2.0.14) has no standalone BGP or OSPF resource, but `panos_virtual_router` declares
-`protocol` as an object attribute that carries `bgp`, `ospf`, `ospfv3`, `rip`, and the two redistribution
-profile lists. F7.1 landed: `resource_mapping.PROTOCOL_SHAPE` states the levels the tool prints, the emitter
-prints them inside the router block, the gate rule `protocol_object` reads a printed object against the
-table, and `MANUAL_SETUP_REPORT.txt` names the entries the object cannot express. The rules are in
-`docs/ARCHITECTURE.md` §4.9.
-
-F7.2 landed: `parse_ospfv3` reads the `ospfv3` area subtree through the same shape table, and `_protocol_areas`
-is the area rule the two OSPF levels share, so the same reader, emitter and gate rule serve both.
-
-F7.3 landed: `PROTOCOL_SHAPE` states the four `ospfv3` levels outside `area` that the pinned provider declares,
-so the emitter prints them, the gate rule reads them, and the property scan measures the export-rule entries.
-`resource_mapping.XML_NAME_EXCEPTIONS` is the one exception to the field name to element name rule.
-
-F7.4 landed: `PROTOCOL_SHAPE` states the four area sub-levels for both routing levels, so `_protocol_areas`
-reads the entries of `virtual_link`, `neighbor` and `nssa_ext_range`, and the `default_route` choice the export
-states by presence. `selects` is the one place that maps the value the export states to the key the print
-states, so the export spelling `no` prints as `disable`.
-
-F7.5 landed: `PROTOCOL_SHAPE` states the `rip` levels the pinned provider declares, `parse_rip` reads them, and
-`_parse_router` builds the `protocol` dict from the fields the `protocol` row states, so the level names are the
-table's names. An interface entry fills the choice it states inside itself, so the same reader that fills a
-chosen body also fills an entry.
-
-F7.6 landed: `PROTOCOL_SHAPE` states the `policy` level the pinned provider declares on `protocol.bgp` and the
-78 rows of its subtree, `parse_bgp` reads the four levels that hold entries, and a `member_list` field prints as
-the values its element holds. Nine policy levels accept one attribute, so they are `one_of` rows.
-
-F7.7 landed: `PROTOCOL_SHAPE` states the four `auth_profile` levels the pinned provider declares, the four level
-methods read them through `_protocol_branch`, and a field the provider marks `sensitive` prints as the variable
-reference the entry names. One `ospfv3` entry states `ah` or `esp`, not both, which `terraform validate` reports.
-
-F7.8 landed: the six routing-profile filter containers sit outside the `protocol` object, so
-`resource_mapping.FILTER_SHAPE` states their shape with the same row shape an existing config container uses,
-and the measured provider schema gives a resource for all six, so every `container_coverage.CONTAINER_TABLE`
-row for them is `emitted` with the provider type in its note. `parse_filter_containers` reads the six paths
-through `FILTER_TABLE`, `generate_filter_containers` writes one block per entry in `filters.tf`, and the gate
-rule `filter_blocks` reads the same table. The redistribution entry's `match` and `set` rows state leaf fields
-only, so the walk stops there; the levels inside them are in `backlog.md`.
-
-F7.9 landed: `PROTOCOL_SHAPE` states the four `protocol/ospf` levels outside `area` that the pinned provider
-declares (`timers`, `global_bfd`, `graceful_restart`, `export_rules`) and the seven fields the `ospf` row did
-not state, so `parse_ospf` reads them through the table, the emitter prints them in the row's field order, the
-gate rule reads them against the row, and the property scan measures the export-rule entries through the new
-container row.
-
-F7.10 landed: `PROTOCOL_SHAPE` gained the 16 rows for the two redistribution profile lists, the dampening
-profile entry level and the five `bgp` single levels, and the `protocol`, `protocol/bgp` and `protocol/ospfv3`
-rows gained the 13 fields the pinned provider declares. `parse_redist_profile` and `parse_redist_profile_ipv6`
-are the methods the `protocol` row's field names give, and they read through `_protocol_entry_level`; the emitter
-prints the fields in the row's order, the gate reads them against their rows, and the property scan measures the
-three entries through the three new container rows.
-
-F7.11 landed: the six entry rows that held the report decision (`peer_group`, `peer`, `redist_rules`, the two
-`area/interface` rows, and the `ospfv3` `area` row) state every field the pinned provider declares for their
-level, and seven new rows state the `single` levels inside those entries. The parse, the emitter and the gate read
-the new fields through the rows with no new rule, and the property scan measures the six entries against the
-router row.
-
-Open for Epic 7: the gate word for a level the provider reads as a choice between two attributes, which F7.7 and
-F7.11 recorded. The rows that state fewer fields than the provider declares are now the choice levels, which
-state their alternatives as `selects` keys. Both are in `backlog.md`.
-
 ## Housekeeping — repository layout (open)
 
 The layout is a rule, not a habit. The root holds `AGENTS.md`, the two readme indexes (`README.md`,
@@ -130,14 +73,11 @@ The item list, and the pins that read a path, are in `backlog.md`.
 
 ## Sequencing
 
-Epic 7 is open: the rows that state fewer fields than the pinned provider declares for their level, each of
-which needs the decision before an emitter, a gate rule, or the report can read it. F7.8 closed the filter
-containers with their own table (`FILTER_SHAPE`), F7.9 closed the `ospf` levels, and F7.10 closed the `ospfv3`
-fields, the `bgp` fields and the two redistribution profile lists, so the open work is the row subsets and the
-gate word for a choice between two levels. The gated pieces that stay
-held are in `backlog.md`: the four `*_policy_rules` types wait for the F3.5 rulebase decision, and a config
-entry inside a stack needs a provider location shape before the emitter can write a block for it. The layout
-work waits for the open feature work to be committed, because it renames the paths those tests read.
+Epic 7 is closed, so the open work is the repository layout, which renames the paths the tests read. The gated
+pieces that stay held are in `backlog.md`: the four `*_policy_rules` types wait for the F3.5 rulebase decision,
+and a config entry inside a stack needs a provider location shape before the emitter can write a block for it.
+The rows that state fewer fields than the pinned provider declares for their level are the choice levels, which
+state their alternatives as `selects` keys.
 
 ## Out of Scope (tracked in backlog.md)
 

@@ -1,26 +1,14 @@
 # To Do
 
-F7.11 is complete and committed: the six `PROTOCOL_SHAPE` entry rows now state every field the pinned provider
-declares for their level, seven new rows state the `single` levels inside those entries, the three routing
-fixtures state every field their entries declare, and the property scan measures the six entries through the
-router row. The next feature is the gate word for a choice the provider reads between two attributes of one
-level.
+F7.12 is complete and committed: `selects` is the one place `PROTOCOL_SHAPE` states a choice, the two rows that
+hold a choice the provider reads as exactly one now state it (`protocol/ospfv3/auth_profile` and
+`protocol/bgp/peer_group/peer/peer_address`), and the gate rule `protocol_object` reads the choice at the level
+the walk enters and at each entry of a `string_list` row, so a level or an entry that states both alternatives,
+or none, is a FAIL finding. Epic 7 is closed.
 
-## Next feature, in order (Epic 7 slices)
-
-Each slice states a shape-table row for the levels it names, adds the parse method that reads them,
-then the emitter, then the gate rule, then registers the new method in the test helpers that call a parse
-method for every router (`tests/test_entry_coverage.py::_parse_every`,
-`tests/test_multi_vsys_location.py`). `SHAPE_TO_SCHEMA` is the pin between a table word and the schema
-word, so every new row is pinned against the live provider schema. A row that states a level the provider
-does not declare is a report decision, not a table row.
-
-1. **F7.12 — the gate word for a choice the schema cannot state**: the table has no word for a level the
-   provider reads as a choice between two attributes, so the gate does not refuse a hand-written file that states
-   both `ah` and `esp` in one `ospfv3` auth profile entry (F7.7), or a `peer` block that states both `ip` and
-   `fqdn` for `peer_address` (F7.11, measured with `terraform validate`). Decide the word, or the rule, before
-   the gate can refuse it. The choice levels that are still a subset of the measurement are the `one_of` rows and
-   the auth profile levels.
+The next feature is the repository layout (`PLAN.md`, Housekeeping): the root holds `conftest.py`, the flat
+module set, `quick_start.sh`, and `sample_panorama_config.xml`, and each index names every document under it.
+The item list and the pins that read a path are in `backlog.md`.
 
 ## Rules the write path keeps
 
