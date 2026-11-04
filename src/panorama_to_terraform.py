@@ -24,7 +24,7 @@ reported, not dropped. The type list is in docs/RESOURCE_MAPPING.md; this docstr
 does not restate it.
 
 Usage:
-    python3 panorama_to_terraform.py <input_file.xml> [--output-dir <dir>] [--validate]
+    python3 src/panorama_to_terraform.py <input_file.xml> [--output-dir <dir>] [--validate]
 
 See docs/USAGE_GUIDE.md for the flags, the report files, and the post-run gate.
 """

@@ -14,11 +14,11 @@ including the multi-virtual-router case, is in
 
 ```bash
 # 1. One XML file per device group
-python3 split_device_groups.py panorama_export.xml
+python3 src/split_device_groups.py panorama_export.xml
 
 # 2. Convert each file
-python3 panorama_to_terraform.py split_configs/DG-Internet.xml --output-dir internet-tf
-python3 panorama_to_terraform.py split_configs/DG-DMZ.xml --output-dir dmz-tf
+python3 src/panorama_to_terraform.py split_configs/DG-Internet.xml --output-dir internet-tf
+python3 src/panorama_to_terraform.py split_configs/DG-DMZ.xml --output-dir dmz-tf
 ```
 
 The default output directory is `split_configs` inside the input file's
@@ -74,7 +74,7 @@ to check and no gate run.
 ## Output example
 
 ```
-$ python3 split_device_groups.py panorama_export.xml
+$ python3 src/split_device_groups.py panorama_export.xml
 
 Found 3 device groups:
   - DG-Internet
@@ -103,11 +103,11 @@ exits non-zero. Convert such an export directly.
 ## Batch conversion
 
 ```bash
-python3 split_device_groups.py panorama_export.xml
+python3 src/split_device_groups.py panorama_export.xml
 
 for xml in split_configs/*.xml; do
     base=$(basename "$xml" .xml)
-    python3 panorama_to_terraform.py "$xml" --output-dir "${base}-tf"
+    python3 src/panorama_to_terraform.py "$xml" --output-dir "${base}-tf"
 done
 ```
 

@@ -12,12 +12,12 @@ import pytest
 
 import sanity_checks
 import unit_manifest
-from conftest import file_text, tf_files
+from conftest import FIXTURES_DIR, REPO_ROOT, SRC_DIR, file_text, tf_files
 
-REPO_ROOT = Path(__file__).parent.parent
-CONVERTER = REPO_ROOT / 'panorama_to_terraform.py'
-SPLITTER = REPO_ROOT / 'split_device_groups.py'
-FIXTURES_DIR = REPO_ROOT / 'tests' / 'fixtures'
+# The layout rule (`docs/ARCHITECTURE.md` §1.1): the entry points are tool modules, so the test reads them
+# from the `src/` namespace, through the paths conftest builds once.
+CONVERTER = SRC_DIR / 'panorama_to_terraform.py'
+SPLITTER = SRC_DIR / 'split_device_groups.py'
 
 # A unique marker so a leak is detectable even in shared environments.
 XXE_SECRET_PATH = Path('/tmp/panos2tf_secret')

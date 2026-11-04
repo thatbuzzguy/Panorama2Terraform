@@ -33,7 +33,7 @@ from pathlib import Path
 import container_coverage
 import entry_coverage
 import xml_input
-from conftest import FIXTURES_DIR, REPO_ROOT, run_pipeline, run_script
+from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_pipeline, run_script
 
 GAP_FIXTURE = 'entry_gaps.xml'
 UNKNOWN_FIXTURE = 'unknown_containers.xml'
@@ -201,7 +201,7 @@ def test_corpus_entries_in_a_covered_container_are_all_marked(converter_module):
     defines a scope and the report shows it as bookkeeping. `unknown_containers.xml`
     is the other exception: its containers have no table row to report against.
     """
-    for path in sorted(FIXTURES_DIR.glob('*.xml')) + [REPO_ROOT / 'sample_panorama_config.xml']:
+    for path in sorted(FIXTURES_DIR.glob('*.xml')) + [SAMPLE_CONFIG]:
         try:
             parser = converter_module.PanoramaParser(xml_input.parse_xml(path))
         except (ET.ParseError, xml_input.UnsafeInputError):

@@ -31,11 +31,12 @@ import pytest
 import sanity_checks
 import unit_manifest
 import write_path
-from conftest import FIXTURES_DIR, REPO_ROOT, SAMPLE_CONFIG, run_script, tf_files
+from conftest import FIXTURES_DIR, REPO_ROOT, SAMPLE_CONFIG, SRC_DIR, run_script, tf_files
 
 TERRAFORM = shutil.which("terraform")
-CONVERTER = REPO_ROOT / "panorama_to_terraform.py"
-SPLITTER = REPO_ROOT / "split_device_groups.py"
+# The layout rule (`docs/ARCHITECTURE.md` §1.1): the entry points are tool modules, so they sit in `src/`.
+CONVERTER = SRC_DIR / "panorama_to_terraform.py"
+SPLITTER = SRC_DIR / "split_device_groups.py"
 
 # The fixtures that produce output. The hostile fixtures fail before they write
 # a file, so the gate never sees them (tests/test_robustness.py pins that path).

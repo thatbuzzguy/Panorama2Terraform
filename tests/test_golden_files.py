@@ -10,7 +10,7 @@ set: only `.tf` files are, because report wording changes often and a
 byte-for-byte report pin makes a wording edit look like a behavior change.
 
 Regenerating a golden after an intended change:
-    python3 panorama_to_terraform.py <source.xml> --output-dir /tmp/gold
+    python3 src/panorama_to_terraform.py <source.xml> --output-dir /tmp/gold
     cp /tmp/gold/*.tf tests/golden/<case>/
 """
 

@@ -42,7 +42,7 @@ import panorama_to_terraform as converter_module
 import resource_mapping
 import sanity_checks
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, TERRAFORM, parts, run_script, tf_files
+from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, SRC_DIR, TERRAFORM, parts, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 ACTIONS = commit_actions.ACTIONS_FILE
@@ -355,7 +355,7 @@ def test_the_field_mapping_is_the_one_mapping():
     `filter_field` and the gate reads it through `field_fact`.
     """
     for name in ('commit_actions.py', 'sanity_checks.py'):
-        text = Path(name).read_text(encoding='utf-8')
+        text = (SRC_DIR / name).read_text(encoding='utf-8')
         for field in ('device_groups', 'templates', 'template_stacks'):
             hits = [line for line in text.split('\n') if field in line]
             assert hits == [], (name, field, hits)
@@ -368,7 +368,7 @@ def test_the_answer_table_is_the_one_answer():
     """The action rule reads the fact-to-type answer through `SCOPE_ANSWER`, so it defines no second table,
     and the `device_group` row is read by the action rule, not by the scope rule.
     """
-    source = Path('sanity_checks.py').read_text(encoding='utf-8')
+    source = (SRC_DIR / 'sanity_checks.py').read_text(encoding='utf-8')
     check = source[source.index('def check_actions'):]
     code = check[check.index('"""', check.index('"""') + 3) + 3:]
     assert code.count('SCOPE_ANSWER.get') == 1, code
@@ -395,7 +395,7 @@ def test_no_module_defines_a_second_naming_rule():
     """
     assert not any(hasattr(commit_actions, name) for name in ('sanitize', 'sanitize_name', 'name_ref'))
     assert not any(hasattr(commit_actions, name) for name in ('resolve', 'resolve_reference'))
-    source = Path('commit_actions.py').read_text(encoding='utf-8')
+    source = (SRC_DIR / 'commit_actions.py').read_text(encoding='utf-8')
     assert 'import naming' not in source, 'the rule is taken as an argument'
     docstring = source.split('"""')[1]
     assert 'naming.py' in docstring, 'the rule is named in the module docstring'
@@ -406,7 +406,7 @@ def test_the_action_rule_reads_no_data_file():
     row. F6.8 added the data rule for the four data files, so the two file sets are separate: a block rule
     reads a `.tf` file, and the data rule reads a record.
     """
-    source = Path('sanity_checks.py').read_text(encoding='utf-8')
+    source = (SRC_DIR / 'sanity_checks.py').read_text(encoding='utf-8')
     check = source[source.index('def check_actions'):source.index('def check_references')]
     for name in ('MANIFEST', 'manifest', 'parse_rows', 'unit_manifest', 'OWNERSHIP', 'SITE_DATA'):
         assert name not in check, name

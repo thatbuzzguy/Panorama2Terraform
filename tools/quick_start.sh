@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quick start: run the converter on the sample config and show what to do next.
+# Quick start: run the converter on the committed sample export and show what to do next.
 # This script demonstrates the workflow. It is not part of the converter.
 
 set -e
@@ -9,13 +9,19 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-if [ ! -f "panorama_to_terraform.py" ]; then
-    echo "Error: panorama_to_terraform.py not found in the current directory."
+# The layout rule (`docs/ARCHITECTURE.md` §1.1): the tool's modules are in `src/` and the sample input is in
+# `examples/`. Both are read from the repository root, so the script runs from any directory.
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CONVERTER="$REPO_ROOT/src/panorama_to_terraform.py"
+SAMPLE="$REPO_ROOT/examples/sample_panorama_config.xml"
+
+if [ ! -f "$CONVERTER" ]; then
+    echo "Error: src/panorama_to_terraform.py not found under the repository root."
     exit 1
 fi
 
-if [ ! -f "sample_panorama_config.xml" ]; then
-    echo "Error: sample_panorama_config.xml not found in the current directory."
+if [ ! -f "$SAMPLE" ]; then
+    echo "Error: examples/sample_panorama_config.xml not found under the repository root."
     exit 1
 fi
 
@@ -30,7 +36,7 @@ fi
 echo "Running the example conversion..."
 echo ""
 
-python3 panorama_to_terraform.py sample_panorama_config.xml \
+python3 "$CONVERTER" "$SAMPLE" \
     --output-dir terraform_example $VALIDATE_FLAG
 
 echo ""
@@ -51,4 +57,4 @@ echo "  5. terraform plan"
 echo "  6. terraform apply"
 echo ""
 echo "The exit code is 1 when a gate check FAILs, so a failed run does not look"
-echo "like a success. See docs/USAGE_GUIDE.md for the flags and the reports."
+echo "like a success. See docs/USAGE_GUIDE.md in the repository root for the flags and the reports."

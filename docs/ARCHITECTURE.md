@@ -14,6 +14,8 @@ a design rule enforced by construction.
 
 ## 1. Modules
 
+Every file in this table is a module in `src/`, except the test harness, which is in `tests/` (§1.1).
+
 | File | Role | Rule it keeps |
 |---|---|---|
 | `panorama_to_terraform.py` | The converter: `PanoramaParser` (model), `TerraformGenerator` (model and write), `main()` (order) | the parser consumes only the producer contract (`ParsedSource`); it reads no file and opens no connection itself, so a source is either the file producer or the api producer |
@@ -35,10 +37,39 @@ a design rule enforced by construction.
 | `site_data.py` | The site as data (F6.6): one row per site that names a value, as `SITE_DATA.json` (§3.7), and the `.tfvars` written from the rows | the row joins to §3.4 on `directory`, so no second unit rule exists; the module resolves no name and names no value the run did not print; the `.tfvars` is the printed form of the data, not the generator's state; `parse_rows` refuses a shape it does not declare; the name is the §5 rule read through `naming.py` |
 | `import_blocks.py` | The import block (F6.4): one block per entry, as `imports.tf` (§4.8), and the id shape | the block is built from the same data the resource block uses, so this module states no location rule and no naming rule; the id is the base64 JSON object the provider documents, and `decode_id` refuses a shape it does not declare; the four `*_policy_rules` types are the rows `LOCATION_SCHEMA` declares `rulebase` for, so no second table names them |
 | `write_path.py` | The write path (F6.10.3): the one function that writes a file, and the two path builders, one per file set (§6) | the LF rule is enforced here and nowhere else, so no module of the tool writes a file outside it; `bytes` are written without translation, because the cache holds the bytes the input door parsed; the module states no unit rule and no naming rule, because a per-unit file names its unit only by its directory (§14 of `CODEBASE_ASSEMBLY.md`) |
-| `conftest.py`, `tests/` | The gate | each rule in this document names the test that pins it |
+| `tests/conftest.py` | The test harness and the paths the tests read the layout through | the tests call the same implementation the tool uses, so a rule is stated once; each rule in this document names the test that pins it |
 
-`tools/build_kitchen_sink.py` assembles the fixture corpus from committed files.
-It is a developer tool, not an entry point, so it does not use `xml_input`.
+### 1.1 The repository layout
+
+The layout is a rule, and this section is its owner document. `AGENTS.md` names the tracking markdown set,
+and the four readme indexes (`README.md`, `docs/README.md`, `examples/README.md`, `tools/README.md`) name
+every document under them, so a file outside an index is a finding.
+
+- The root holds `AGENTS.md`, the readme indexes, the tracking markdown, the two license files
+  (`LICENSE-AGPL` and `LICENSE-COMMERCIAL`), and the two tool-config files (`pyproject.toml`, which states
+  the rules below, and `requirements.txt`, the pinned development tools). The root index names each of them.
+- `docs/` holds every other document. `tests/` holds every test. `src/` holds the tool's modules.
+  `tools/` holds the developer scripts. `examples/` holds the sample input and the two example text files.
+  Each directory that holds files names them through its own index.
+- The canonical sample output is the golden set `tests/golden/`, which pins the bytes of a real run.
+  `terraform_output/` is only the default value of `--output-dir` and holds no committed sample.
+- `tests/` is flat: the test files sit beside `fixtures/` and `golden/`, and `tests/conftest.py` is the one
+  shared helper file. No test is grouped by rule area, so the layout does not change again.
+
+The import rule: `src/` is one flat namespace, so a module in `src/` imports its siblings by plain module
+name, and no module builds a path. `pyproject.toml` `[tool.pytest.ini_options] pythonpath = ["src"]` is the
+only place the path is stated for tests; `testpaths = ["tests"]` keeps discovery at the repository root,
+where no test file sits. A run from `src/` gets the same namespace from Python's script-directory rule, so an
+entry point adds no path code. The project is standard library only, so every import stays offline and
+deterministic, and there is no package build. `tools/` needs no rule, because `tools/build_kitchen_sink.py`
+assembles the fixture corpus from committed files and imports no tool module: it is a developer tool, not an
+entry point, so it does not use `xml_input`. `tools/quick_start.sh` runs the sample input and is a
+demonstration, not part of the converter.
+
+A pin that reads a module source reads it through the import rule (`Path(module.__file__)`) or through the
+paths `tests/conftest.py` builds once. The writer scan reads the `src/` set: the single writer
+`src/write_path.py` is the exception, and the test harness is not a tool module, so it is outside the set
+(`tests/test_write_path.py`).
 
 ## 2. Data model
 

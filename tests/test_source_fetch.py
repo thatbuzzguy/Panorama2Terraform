@@ -37,7 +37,7 @@ import pytest
 
 import container_coverage
 import xml_input
-from conftest import FIXTURES_DIR, REPO_ROOT, run_main, run_pipeline, run_script
+from conftest import FIXTURES_DIR, SRC_DIR, run_main, run_pipeline, run_script
 
 FETCH_FIXTURE = 'api_response.xml'
 
@@ -544,7 +544,7 @@ def test_source_fetch_imports_are_standard_library(fetch_module):
     planned pan-os-python producer was dropped because the SDK cannot enforce the
     redirect rule (see backlog.md), so nothing in the project imports a third-party
     module."""
-    tree = ast.parse((REPO_ROOT / 'source_fetch.py').read_text(encoding='utf-8'))
+    tree = ast.parse((SRC_DIR / 'source_fetch.py').read_text(encoding='utf-8'))
     # The shared door (`xml_input`) and the one writer (`write_path`) are local modules, not dependencies.
     local = {'xml_input', 'write_path'}
     top_level = set()
@@ -560,6 +560,6 @@ def test_source_fetch_imports_are_standard_library(fetch_module):
             top_level.add(name)
     allowed = {'hashlib', 'os', 'ssl', 'urllib', 'dataclasses', 'pathlib', 'typing'}
     assert top_level <= allowed, top_level - allowed
-    source = (REPO_ROOT / 'source_fetch.py').read_text(encoding='utf-8')
+    source = (SRC_DIR / 'source_fetch.py').read_text(encoding='utf-8')
     assert 'import panos' not in source and 'requests' not in source
     assert fetch_module.SOURCE_KIND == 'api'

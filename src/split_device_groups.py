@@ -285,8 +285,8 @@ def split_panorama_config(input_file: str, output_dir: str = None,
     print(f"\n✓ Successfully split {len(device_groups)} device groups")
     print("\nNext steps:")
     print(f"  1. cd {output_dir}")
-    print("  2. Run panorama_to_terraform.py on each XML file:")
-    print("     python3 panorama_to_terraform.py <device-group>.xml --output-dir <device-group>-tf")
+    print("  2. Run src/panorama_to_terraform.py on each XML file:")
+    print("     python3 src/panorama_to_terraform.py <device-group>.xml --output-dir <device-group>-tf")
 
     return True
 
@@ -297,15 +297,15 @@ def main():
         epilog='''
 Examples:
   # Split Panorama export into separate device group configs
-  python3 split_device_groups.py panorama_export.xml
+  python3 src/split_device_groups.py panorama_export.xml
 
   # Specify custom output directory
-  python3 split_device_groups.py panorama_export.xml --output-dir ./device-groups
+  python3 src/split_device_groups.py panorama_export.xml --output-dir ./device-groups
 
   # Then convert each device group separately
-  python3 panorama_to_terraform.py device-groups/DG-Internet.xml --output-dir internet-tf
-  python3 panorama_to_terraform.py device-groups/DG-DMZ.xml --output-dir dmz-tf
-  python3 panorama_to_terraform.py device-groups/DG-Guest.xml --output-dir guest-tf
+  python3 src/panorama_to_terraform.py device-groups/DG-Internet.xml --output-dir internet-tf
+  python3 src/panorama_to_terraform.py device-groups/DG-DMZ.xml --output-dir dmz-tf
+  python3 src/panorama_to_terraform.py device-groups/DG-Guest.xml --output-dir guest-tf
 
 Use Case:
   When you have a Panorama managing multiple HA pairs (each with its own

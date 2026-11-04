@@ -1,4 +1,8 @@
-please read *all* the markdown files in the root directory
+please read *all* the markdown files in the root directory. The set is the tracking markdown
+(`PLAN.md`, `backlog.md`, `to-do.md`, `acceptance.md`, `agent-status.md`), this file, and the readme indexes
+(`README.md`, `docs/README.md`, `examples/README.md`, `tools/README.md`). Every other document lives in
+`docs/`. Each index names every document under it, so a file outside an index is a finding. The layout rule,
+and where the tool's modules, tests, scripts and example files live, is `docs/ARCHITECTURE.md` §1.1.
 
 please consider these directions:
     - focus on one goal at a time and finish each task before moving on.

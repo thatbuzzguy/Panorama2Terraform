@@ -1,7 +1,7 @@
 # Resource Mapping: Converter Output -> Provider v2 Types
 
 The machine-readable table lives in
-[`resource_mapping.py`](../resource_mapping.py). This document records the
+[`../src/resource_mapping.py`](../src/resource_mapping.py). This document records the
 rationale for each decision. The companion coverage matrix — which
 Panorama XML element feeds each emitted type, and the fixture that
 proves it — is in [`COVERAGE_MATRIX.md`](./COVERAGE_MATRIX.md). The document

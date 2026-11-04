@@ -4,6 +4,9 @@
 [tool.ruff]
 line-length = 120
 target-version = "py39"
+# Where ruff looks for first-party modules, so the import order stays the same after the layout move:
+# the tool's modules in `src/`, and the test harness in `tests/`.
+src = ["src", "tests"]
 
 [tool.ruff.lint]
 # Baseline rule set for the lint gate.
@@ -12,5 +15,9 @@ target-version = "py39"
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4"]
 
 [tool.pytest.ini_options]
+# The layout rule (`docs/ARCHITECTURE.md` §1.1): `tests/` holds every test, so the root holds none and
+# `testpaths` keeps discovery at the repository root. `pythonpath` is the one place the test path is
+# stated: every tool module is imported by plain name from the `src/` namespace.
 testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = "-q"

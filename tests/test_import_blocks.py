@@ -28,7 +28,7 @@ import import_blocks
 import panorama_to_terraform as module
 import sanity_checks
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, file_text, parts, run_script, tf_files
+from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, SRC_DIR, file_text, parts, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 IMPORTS = import_blocks.IMPORT_FILE
@@ -241,7 +241,7 @@ def test_the_id_states_the_location_the_block_states(tmp_path):
 
 def test_the_module_defines_no_location_rule_and_no_naming_rule():
     """`import_blocks` states the id shape, the row shape, and the order: it resolves no name and picks no location."""
-    source = Path('import_blocks.py').read_text(encoding='utf-8')
+    source = (SRC_DIR / 'import_blocks.py').read_text(encoding='utf-8')
     for rule in ('def location_data', 'def sanitize_name', 'def name_ref', 'def declare_block_name'):
         assert rule not in source
 
