@@ -1,28 +1,31 @@
 # To Do
 
-The current feature is the `count-only` field gap for `parse_regions`, which `backlog.md` names: regions are
-parsed but reach no output, so the property scan cannot measure a read for a region field, and no rule yet states
-what a `count-only` container may claim. `docs/ARCHITECTURE.md` §2.4 records the parse fact (F3.10).
+The current feature is the `nested-block` `parent` read rule, which `backlog.md` names: `parse_interfaces` keeps
+`parent` for a layer-3 subinterface inside its parent interface row, and the nested block prints the parent name
+from the parent object, not through the child object, so no output reads the field on the child. The scan cannot
+report it, because a `nested-block` container has no matrix row, and the pin that shows the rule against this gap
+is `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers`.
 
 Pieces:
 
-- [ ] Decide what the rule states for a `count-only` row. Today the per-entry report lists each region row as a
-      gap, so the operator sees it, and the parse writes no output for a region. A gap becomes a finding only
-      when a rule exists: either an emitter exists for the container, or the report writer reads the field it
-      names.
-- [ ] Decide which reader the rule names. `docs/COVERAGE_MATRIX.md` §1 states the rule for a `report` container:
-      the report line reads the field it prints through the captured object. A `count-only` row has no such
-      reader, so the scan scope stays the entries an `emitted` row covers
-      (`tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers`).
-- [ ] Decide the pin before the code: the scan-scope pin already holds that a `count-only` row is outside the
-      scan scope, so a rule that reports a `count-only` field gap must change the row kind first, and a row that
-      moves from `count-only` to `emitted` changes the property scan, the per-entry report and the `.tf` goldens
-      together.
-- [ ] No fixture change until the rule states what a region output is, because the corpus pins are keyed by
-      fixture name and the goldens read the bytes of a run on the fixture.
+- [ ] Decide what the rule names as the output that reads the field for a nested block. Two shapes are possible:
+      the print reads `parent` through the child object, so the recorded read lands on the entry the report names;
+      or the rule states that the field belongs to the parent entry, which its emitter already reads, and the key
+      on the child is not the child's own field.
+- [ ] Decide whether the child can carry the field at all. A nested block writes no resource of its own, so the
+      print reads through the parent object. If the rule needs a read through the child object, the print changes,
+      and the `.tf` goldens move with it in the same commit.
+- [ ] Decide the pin before the code, in the shape of the group 6 pins in `tests/test_property_coverage.py`: the
+      fixture entry, the read the parse made, and the output that prints the field. A nested-block row has no
+      matrix row, so the pin is the only thing that can keep the field honest.
+- [ ] No fixture change until the rule states what a nested-block output reads, because the corpus pins are keyed
+      by fixture name and the goldens read the bytes of a run on the fixture.
+- [ ] `bookkeeping` (`devices`, `templates`) is the same shape in another kind, so the rule must say whether a
+      scope fact and an association table are fields an output reads or facts the run records without a captured
+      object. Do not write that rule before the nested-block rule decides what a read is.
 
-The rule this feature rests on is `docs/COVERAGE_MATRIX.md` §1 for the report container, and
-`docs/ARCHITECTURE.md` §2.4 for the regions parse.
+The rules this feature rests on are `docs/COVERAGE_MATRIX.md` §1 for the scan scope and the output that reads a
+field, and `docs/ARCHITECTURE.md` §2.4 and §3.1 for the destination kinds.
 
 ## Rules the layout keeps
 
