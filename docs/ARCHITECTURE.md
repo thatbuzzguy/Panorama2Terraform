@@ -1224,8 +1224,13 @@ levels and the dampening profile into the `bgp` row, and completed the `protocol
 `_protocol_entry_level`, which states the path and no field name, and the methods the field names give
 (`parse_redist_profile`, `parse_redist_profile_ipv6`) call it; `_protocol_branch` is the same rule for an entry
 level inside a level dict. `action` states its two alternatives as `block` fields and no `selects`, because the
-provider declares both as optional, so no choice rule reaches it. Field order is the print order, so the order
-the row states is the order the block prints.
+provider declares both as optional, so no choice rule reaches it. F7.11 completed the six entry
+rows that held the report decision (`peer_group`, `peer`, `redist_rules`, the two
+`area/interface` rows, and the `ospfv3` `area` row), so each of those rows states every field
+the provider declares for its level, and the seven `single` levels inside those entries are rows
+the walk enters. Field order is the print order, so the order the row states is the order the
+block prints: a completed row keeps the order it already stated and appends the fields it gained
+in the order the schema names them.
 
 1. **`protocol` prints as one field of the block**: `protocol = { ... }`. `terraform validate` accepts the
    value and refuses the block shape, so the gate rule reports a `protocol` the field reader cannot read as
@@ -1307,9 +1312,12 @@ the row states is the order the block prints.
     identity mapping, and the three levels that hold them state those fields as `one_of`. When the chosen
     alternative is a field the row states, the field reader reads it and the print writes the value as it was
     read, so the walk never enters a value. A mapping key is the spelling the export states, so
-    `remove-regex` and `remove-and-prepend` are keys. Pinned by
-    `tests/test_protocol_object.py::test_the_one_of_mapping_is_the_decision_the_report_prints` and
-    `tests/test_protocol_object.py::test_a_one_of_level_prints_one_key`.
+    `remove-regex` and `remove-and-prepend` are keys. The provider can also enforce exactly one
+    of two attributes of one level, which the schema has no word for, so a row that states both
+    fields cannot be refused by the gate: `peer_address` (`ip` or `fqdn`) is measured 2026-11-03
+    and recorded in [`../backlog.md`](../backlog.md). Pinned by
+    `tests/test_protocol_object.py::test_the_one_of_mapping_is_the_decision_the_report_prints`
+    and `tests/test_protocol_object.py::test_a_one_of_level_prints_one_key`.
 
 The container rows for the levels this converter prints are `emitted` with the note
 `panos_virtual_router` (`container_coverage.CONTAINER_TABLE`), so the property scan measures them against the
@@ -1326,6 +1334,10 @@ so a redist profile entry and a dampening entry are measured against the router 
 inside an entry (`action`, `filter`, `filter/bgp`, `filter/ospf`) hold no entry, so they stay grounded by the
 table. Pinned by
 `tests/test_container_coverage.py`, `tests/test_coverage_matrix.py` and `tests/test_property_coverage.py`.
+F7.11: the seven `single` levels inside the peer entry have no container row, because none of
+them holds an entry, so the scan measures the fields of the entry that holds the level. An
+interface entry is inside an area entry, so its section path holds an `entry` segment a row path
+cannot match, and the two interface rows stay grounded by the table.
 
 ### 4.10 The filter containers (F7.8)
 

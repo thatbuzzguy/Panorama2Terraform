@@ -2,82 +2,72 @@
 
 ## Current position
 
-F7.10 is complete and committed on `development` (`d39ae84`). `PROTOCOL_SHAPE` gained 16 rows: the 10 levels
-inside the two redistribution profile lists, the `protocol/bgp/dampening_profile` entry level, and the 5 `bgp`
-single levels (`global_bfd`, `routing_options`, and its three sub-levels). The `protocol`, `protocol/bgp` and
-`protocol/ospfv3` rows gained the 13 fields the pinned provider declares (2026-11-03, provider 2.0.14,
-Terraform 1.16.2). `parse_redist_profile` and `parse_redist_profile_ipv6` read the two lists, `parse_bgp` reads
-the `bgp` fields through the row and states one path for the dampening entry level, and the emitter prints them
-in the row's field order.
+F7.11 is complete and committed on `development` (`d8b7277`). The six `PROTOCOL_SHAPE` rows that stated fewer
+fields than provider 2.0.14 declares now state every field for their level: `protocol/bgp/peer_group` (2),
+`protocol/bgp/peer_group/peer` (9), `protocol/bgp/redist_rules` (7), `protocol/ospf/area/interface` (8),
+`protocol/ospfv3/area` (1), and `protocol/ospfv3/area/interface` (9). Seven new rows state the `single` levels
+inside those entries. `parse_bgp` and `_protocol_areas` read the new fields through the row fields, the emitter
+prints them in the row's order, and the gate reads them against the same rows, so no new rule was needed.
 
-The suite is 1435 tests, all green (1428 at the start of this slice), and `ruff check .` is clean.
+The suite is 1439 tests, all green (1435 at the start of this slice), and `ruff check .` is clean.
 
-No golden moved, because no golden case states a value for one of the new fields: the bytes a run writes for
-the four golden cases are unchanged, and a golden is regenerated only from a real run. A real run on
-`tests/fixtures/virtual_routers.xml`, `tests/fixtures/bgp.xml` and `tests/fixtures/ospfv3.xml` reports
-`PASS (0 FAIL, 0 WARN)`, and `terraform validate` accepts the blocks each run writes. The property scan
-measures the three entries against the router row and reports no finding for the three fixtures.
+No golden moved, because the four golden cases state no value for a new field, so the bytes a run writes are
+unchanged, and a golden is regenerated only from a real run. A real run on `tests/fixtures/bgp.xml`,
+`tests/fixtures/ospf.xml` and `tests/fixtures/ospfv3.xml` reports `PASS (0 FAIL, 0 WARN)`, and
+`terraform validate` accepts the blocks each run writes. The property scan measures the six entries against the
+router row and reports no finding.
 
-The next feature is the rest of Epic 7: the rows that state fewer fields than the provider declares for their
-level (`peer_group`, `peer`, `redist_rules`, `area`, `area/interface`, and the auth profile choice levels), and
-the gate gap F7.7 recorded (no word for a choice between two levels).
+The next feature is F7.12: the word the table has for a level the provider reads as a choice between two
+attributes of one level.
 
-`acceptance.md` holds F7.10's criteria and must be overwritten for the next one.
+### Decision 1: every measured field is read and printed
 
-### Decision 1: every measured field is a row field, so none is refused
-
-The pinned provider declares every field measured for the three levels, so all 13 join the rows and the 16 new
-rows state the levels the parse reads. No new field is marked sensitive, so each new row states an empty
-`sensitive` set and `VALUE_VARIABLES` gained no row. The two `action` alternatives are `block` fields and not a
-`one_of` choice, because the provider declares both as optional, so `selects` stays empty for the level.
+None of the 36 fields is marked `sensitive`, so no field needs the variable reference and no `VALUE_VARIABLES`
+row. Each is a leaf the parse reads through the row, or a `single` level that needs its own row. The two
+`['list', 'string']` fields (`set_community`, `set_extended_community`) are `member_list` fields, so their
+members are values and no level row stands under the redist rule row.
 
 ### Decision 2: field order is the print order
 
-The row's field order is the order the block prints. The fields a row already stated keep their order, the new
-fields follow in the order the schema names them, and a new entry row states `name` first, because the entry name
-is the first field the block prints. A run that states no value for a new field prints the same bytes as before,
-so the order rule moved no golden.
+The fields each row already stated keep their order, and the fields a row gained follow in the order the schema
+names them. A new entry row states `name` first. The pins that read a block from a real run print the new fields
+after the fields the row already stated.
 
-### Decision 3: only an entry level gets a container row
+### Decision 3: a level inside an entry is not a measured entry
 
-The three entry levels (`protocol/redist-profile`, `protocol/redist-profile-ipv6`,
-`protocol/bgp/dampening-profile`) gained `emitted` sub-shape rows naming `panos_virtual_router`, so the scan
-measures their entries against the router row. The single levels inside an entry (`action`, `filter`,
-`filter/bgp`, `filter/ospf`) hold no entry, so no row names them and the table grounds them. The properties the
-row for `panos_virtual_router` declares gained the 7 names the three entries measure: `filter`, `priority`,
-`cutoff`, `decay_half_life_reachable`, `decay_half_life_unreachable`, `max_hold_time`, `reuse`.
+The seven `single` levels inside an entry hold no entry, so `CONTAINER_TABLE` states no row for them: the scan
+measures the field of the entry that holds the level. An interface entry sits inside an area entry, so its
+section path holds an `entry` segment `covering_row` cannot match, and the fields the two interface rows declare
+stay grounded by the table, so the row for `panos_virtual_router` gained 16 properties and no property for an
+interface field.
 
-### Decision 4: the method names come from the row fields
+### Decision 4: the choice the table cannot state is the F7.12 word
 
-`_parse_router` calls a parse method for each field the `protocol` row states, so the two entry levels needed
-`parse_redist_profile` and `parse_redist_profile_ipv6`, named by the two fields. Both read through
-`_protocol_entry_level`, which states the path and no field name; `_protocol_branch` is the same rule for an
-entry level inside a level dict. Both methods are registered in `tests/test_entry_coverage.py::_parse_every` and
-`tests/test_multi_vsys_location.py`.
+`terraform validate` (Terraform 1.16.2, provider 2.0.14) accepts 2 attributes inside `connection_options` and
+inside `subsequent_address_family_identifier`, so both are `object` rows and no choice is involved. The provider
+refuses 2 attributes for `peer_address` when one is required (`ip` or `fqdn`), so the fixture states one
+attribute, and the gate cannot refuse a block that states both: `SHAPE_WORDS` has no word for a choice between
+two attributes of one level. The same gap holds for `ah` or `esp` in an `ospfv3` auth profile entry. Both are in
+`backlog.md`, and `tests/test_protocol_object.py::test_the_gate_reads_a_peer_against_the_rows_it_states` pins the
+current behaviour.
 
 ### Pins that changed
 
-- `tests/test_protocol_object.py` gained `test_the_redist_profile_rows_are_the_levels_the_two_methods_read` (the
-  rows, the field order, `action` as two `block` fields with no `selects`, and the container rows),
-  `test_a_redist_profile_entry_prints_the_shape_the_table_states` and
-  `test_a_bgp_level_prints_the_fields_the_table_added` (the blocks from a real run), and
-  `test_the_gate_reads_a_redist_profile_entry_against_the_row_it_states` (the gate accepts the entry and refuses
-  a `block`, a `number` and a `member_list` value stated the wrong way).
-- The pin that refused `redist_profile` because the row did not state it now refuses a field the entry row does
-  not state, so `test_the_rule_reports_an_undeclared_field_and_a_wrong_shape` reads the shape finding instead.
-- `test_the_table_is_the_only_shape_owner` gained the two methods and the helper as owners.
-- `test_the_ospfv3_scalar_levels_are_rows_the_parse_reads`,
-  `test_an_ospfv3_scalar_level_prints_the_shape_the_table_states` and
-  `test_member_list_is_the_word_for_a_field_whose_members_are_values` restate the fields F7.10 added.
+- `tests/test_protocol_object.py` gained `test_the_six_rows_are_the_whole_measurement` (the six rows against the
+  live schema, the field order, the seven levels as rows with no container row, and the exception table) and
+  `test_the_gate_reads_a_peer_against_the_rows_it_states` (the gate accepts the new fields, refuses a value read
+  the wrong way and a field the row does not declare, and records the choice limit).
+- `test_a_peer_prints_inside_its_peer_group` pins the whole print for the peer group entry, the peer entry and the
+  redist rule entry, and the two OSPF print tests pin the fields the interface rows gained.
+- `tests/test_parse_network.py` gained `test_parse_bgp_reads_the_fields_the_six_rows_added`, and
+  `test_parse_bgp_enabled` reads a `metric` the fixture now states.
 - `tests/test_property_coverage.py` gained
-  `test_the_scan_measures_a_redist_profile_entry_and_a_dampening_entry`.
-- `tests/test_parse_network.py` gained `test_parse_redist_profile_entries_read_the_levels_the_table_states` and
-  `test_parse_bgp_reads_the_fields_the_table_added`, and
-  `test_parse_ospfv3_reads_the_levels_the_table_states` reads the three new fields.
-- The three fixtures state every field each new row declares.
-- `docs/ARCHITECTURE.md` §4.9 records the F7.10 levels, the scan scope, and the `member_list` count;
-  `docs/RESOURCE_MAPPING.md` and `docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md` restate the read claim.
-- The suite gained 7 tests (1435 green).
+  `test_the_scan_measures_the_six_rows_and_not_a_level_inside_an_entry`.
+- The three fixtures state every field the rows declare for their entries, and `peer_address` states one
+  attribute.
+- `docs/ARCHITECTURE.md` §4.9 records the six completed rows and the choice limit, and
+  `docs/COVERAGE_MATRIX.md` records the scan scope for a level inside an entry.
+- The suite gained 4 tests (1439 green).
 
 ## Rules to keep when writing documents
 

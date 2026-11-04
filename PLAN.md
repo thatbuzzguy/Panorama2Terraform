@@ -106,10 +106,15 @@ are the methods the `protocol` row's field names give, and they read through `_p
 prints the fields in the row's order, the gate reads them against their rows, and the property scan measures the
 three entries through the three new container rows.
 
-Open for Epic 7: the rows that state fewer fields than the provider declares for their level
-(`protocol/bgp/peer_group`, `protocol/bgp/peer_group/peer`, `protocol/bgp/redist_rules`,
-`protocol/ospf/area/interface`, `protocol/ospfv3/area`, `protocol/ospfv3/area/interface`), and the gate word for
-a choice between two levels that F7.7 recorded. They are in `backlog.md`.
+F7.11 landed: the six entry rows that held the report decision (`peer_group`, `peer`, `redist_rules`, the two
+`area/interface` rows, and the `ospfv3` `area` row) state every field the pinned provider declares for their
+level, and seven new rows state the `single` levels inside those entries. The parse, the emitter and the gate read
+the new fields through the rows with no new rule, and the property scan measures the six entries against the
+router row.
+
+Open for Epic 7: the gate word for a level the provider reads as a choice between two attributes, which F7.7 and
+F7.11 recorded. The rows that state fewer fields than the provider declares are now the choice levels, which
+state their alternatives as `selects` keys. Both are in `backlog.md`.
 
 ## Housekeeping — repository layout (open)
 

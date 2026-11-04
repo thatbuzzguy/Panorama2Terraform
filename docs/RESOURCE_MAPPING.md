@@ -127,9 +127,10 @@ shape is `FILTER_SHAPE` rather than `PROTOCOL_SHAPE` (`docs/ARCHITECTURE.md` §4
 
 The parser reads only the levels `PROTOCOL_SHAPE` or `FILTER_SHAPE` states, so a level or a field the tables
 do not state is not captured. F7.10 closed the two redistribution profile lists, the `bgp` fields and the
-`ospfv3` fields. The gaps that stay are the rows that state fewer fields than the provider declares for their
-level: `peer_group`, `peer`, `redist_rules`, `area`, `area/interface`, and the auth profile choice levels.
-Those gaps are recorded in [`../backlog.md`](../backlog.md).
+`ospfv3` fields, and F7.11 closed the six entry rows: `peer_group`, `peer`, `redist_rules`, the `ospfv3` `area`,
+and the `area/interface` row for each OSPF level. The gaps that stay are the choice levels, which state their
+alternatives as `selects` keys and no fields. Those gaps are recorded in
+[`../backlog.md`](../backlog.md).
 
 | Type | Why there is no v2 target |
 |---|---|
