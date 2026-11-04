@@ -199,8 +199,8 @@ Two levels sit beside the matrix:
   container is not a finding: it has no row, and only a row can name the properties an
   emitter reads. Those field gaps are recorded in [`../backlog.md`](../backlog.md).
   A `report` container is honest only when the report line reads the field it prints through the
-  captured object, because the report is the only output for that entry. Four parser extraction gaps
-  closed on 2026-11-04, one pin per gap in `tests/test_property_coverage.py`:
+  captured object, because the report is the only output for that entry. Four pins hold the rule, one per
+  container, in `tests/test_property_coverage.py`:
   `::test_the_report_reads_the_application_filter_description_it_prints` (the provider declares no
   `panos_application_filter`, so the report prints the description),
   `::test_the_report_reads_the_schedule_description_it_prints` (`panos_schedule` declares no
