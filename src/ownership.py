@@ -213,7 +213,8 @@ def scan_row(ledger, entry, matrix_row: dict, groups: dict) -> dict:
 def decide(rows: list) -> list:
     """Assign `kind`, `owner`, and the reason for one group of entries that share a name.
 
-    `rows` is the rows that share (matrix row, entry name) — the key `shadow_coverage.py` uses.
+    `rows` is the rows that share the (matrix row, entry name) part of the identity key
+    `shadow_coverage.py` reads through `state_coverage.ownership_key`.
     Only rows whose unit can sit in one inheritance chain are one object (rule 3); the others are
     each their own object, so each is `declared`.
     """

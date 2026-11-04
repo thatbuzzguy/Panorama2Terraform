@@ -128,9 +128,10 @@ The six scope rows (F6.5) add two facts the other rows do not state:
   `tests/test_scope_objects.py::test_scope_shape_is_the_provider_shape` against the live provider
   schema, and `::test_scope_shape_covers_the_properties_the_rows_declare` against the rows.
 
-The row is also the key of the cross-source shadow scan (F5.4): a child entry name that
-repeats a parent entry name is a finding only when both entries are covered by the same row,
-so the same name under a different row is not a shadow. Pinned by
+The row is the part of the cross-source shadow scan key the scan compares (F5.4): a child entry name
+that repeats a parent entry name is a finding only when both entries are covered by the same row, so
+the same name under a different row is not a shadow. The rest of the key is the declared scope facts, and
+the key rule is the one `ARCHITECTURE.md` §3.2 states. Pinned by
 `tests/test_shadow_coverage.py::test_the_matrix_row_is_the_key_not_the_name_alone`, and the scan
 scope is the same rule (`::test_the_scan_scope_is_the_f4_4_rule`).
 

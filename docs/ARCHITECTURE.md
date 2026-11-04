@@ -25,7 +25,7 @@ Every file in this table is a module in `src/`, except the test harness, which i
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy` |
 | `container_coverage.py` | The container table (§3.1) and the section rule | the table is data, so a parse method cannot exist without a row |
 | `entry_coverage.py` | The per-entry report (§3.2) | a destination comes from the table row, or from the mark when the method knows better; `name_field` is the one rule for the field that carries an entry name into a block, so the emitter, the gate, and the matrix test read the same rule |
-| `shadow_coverage.py` | The cross-source shadow scan (§3.2): a child entry name that repeats a parent entry name | the key is the matrix row, not the name alone; both sources are read with the same row rule, so no second naming rule exists; a run with no declared parent has no parent to read |
+| `shadow_coverage.py` | The cross-source shadow scan (§3.2): a child entry name that repeats a parent entry name | the key is `state_coverage.ownership_key` read with the facts the parent row declares, so one key names one parent entry; the scan compares the matrix row and entry name part of the key; both sources are read with the same row rule, so no second naming rule exists |
 | `state_input.py` | The state producer (F5.6): a Terraform state document read as a reference source, through the same door | the two byte checks run on the state bytes, and only the parse step is chosen by the kind, so a `<!DOCTYPE` inside a JSON value is not a refusal; a document the identity key cannot read is an input refusal; the state source writes no output, so no `.tf` byte changes |
 | `state_coverage.py` | The state scan (§3.2): the ownership fact and the drift fact | the matrix row is the same table the property scan uses, keyed by the resource type; the ownership key is §2.1 identity with the declared facts, never the `Shared` fallback; the scan is not an output, so it reads captured values without recording |
 | `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state; one block reader serves every block kind a rule reads, so a fact about a block is reported once; the plan check runs once per unit directory the record names, so the report prints one result per unit and names the directory it ran on |
@@ -398,23 +398,34 @@ Six rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
 report prints it in its own section after the property section:
 
 ```text
-  line <source line>  <object type>/<entry name>  <matrix row>  parent source: <parent name> (parent line <n>)
+  line <source line>  <object type>/<entry name>  <matrix row>  parent entry: <parent scope> / <object type>/<entry name>  parent source: <parent name> (parent line <n>)
 ```
 
+The `parent entry` field names which parent entry the child repeats: the parent scope read through the
+F3.9 grouping rule, then the parent entry identity. The child entry name and the parent entry name are
+the same text, so this field is what tells the two entries apart. One finding names one parent entry, so
+a child entry whose name matches parent entries in two scopes gives one finding per parent entry: no
+parent entry is dropped, and report order puts the findings for one child entry in the parent report
+order.
+
 A child entry is a shadow when its name repeats a parent entry name and both entries are covered
-by the same matrix row. The key is the matrix row, not the name alone, so a shadow is a fact
-within one container kind: an address that repeats a shared address of the same name is a shadow,
-and a service group with the same name is not. The scan scope is the rule above, and the parent
-source is read with the same container helpers and the same row rule, so no second naming rule
-exists. A run with no declared parent has no parent to read, so it prints no shadow section. The
-second source is what makes the name visible: a per-device-group run cannot see its parent, so an
-inherited name stays a plain string and the parent entry is invisible. The console prints the shadow
-line too, in the shape at the end of this section, and its source field is the minimum actionable
-part of the record: the parent source named by its report value, because the operator's action is to
-open that source, and the name identifies it. The path is in the provenance record (§3.3), and the
-parent line stays in the report, because the shape names one position. A shadow is an operator
-action, so it does not change the exit code. Pinned by
-`tests/test_shadow_coverage.py`, including the fixed line shape, the row key, the scan scope, the
+by the same matrix row. The matrix row is the part of the key the scan compares, so a shadow is a
+fact within one container kind: an address that repeats a shared address of the same name is a
+shadow, and a service group with the same name is not. The key itself is the ownership key rule
+this section states below for the state scan, read with the facts the parent row declares, so the key
+names the parent scope and one key is one parent entry; the child entry is compared on the matrix
+row and entry name part, because the child names its own scope. The scan scope is the rule above,
+and the parent source is read with the same container helpers and the same row rule, so no second
+naming rule exists. A run with no declared parent has no parent to read, so it prints no shadow
+section. The second source is what makes the name visible: a per-device-group run cannot see its
+parent, so an inherited name stays a plain string and the parent entry is invisible. The console
+prints the shadow line too, in the shape at the end of this section, and its source field is the
+minimum actionable part of the record: the parent source named by its report value, because the
+operator's action is to open that source, and the name identifies it. The path is in the provenance
+record (§3.3), and the parent entry and the parent line stay in the report, because the shape names
+one position and one identity. A shadow is an operator action, so it does not change the exit code.
+Pinned by `tests/test_shadow_coverage.py`, including the fixed line shape, the parent entry field, the
+key read through `state_coverage.ownership_key`, one finding per parent entry, the scan scope, the
 grouping, the console line and its source field, and the no-parent run.
 
 **The repeated-name scan** (F6.2) prints its findings in its own section, after the shadow section and
@@ -1611,8 +1622,9 @@ module builds a path for a file it does not own: the two builders name the two s
   `::test_the_file_names_no_timestamp_and_no_path`). The goldens are the bytes of a run that declares no
   import block, so the default stays pinned
   (`::test_a_run_that_declares_no_import_blocks_writes_the_golden_bytes`).
-- The shadow scan sorts findings by line, then object type, then name, and the parent index keeps
-  the first parent row for a key, so two runs on the same two sources write the same bytes
+- The shadow scan sorts findings by line, then object type, then name, then the parent entry the finding
+  names in the parent report order, so two runs on the same two sources write the same bytes. The parent
+  index keys by identity, so one key holds one parent entry and no parent row is dropped
   (`tests/test_shadow_coverage.py::test_two_runs_on_the_same_sources_write_the_same_bytes`).
 - The state scan keeps the first state entry for an ownership key, in document order, and sorts
   findings by line, then object type, then name, so two runs on the same arguments and the same
