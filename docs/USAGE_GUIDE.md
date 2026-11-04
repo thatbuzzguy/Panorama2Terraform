@@ -98,8 +98,9 @@ python3 src/panorama_to_terraform.py --source api --host panorama --path /device
 - The second source is what the shadow scan reads. A run that reads one device group cannot see the
   parent it inherits from, so an inherited name stays a string. The report lists a child entry whose
   name repeats a parent entry name within the same coverage matrix row, in the shadow section of
-  `CONVERSION_REPORT.txt`, with the parent source and the parent line. The section prints only when
-  it has a finding, and a finding is an operator action: it does not change the exit code.
+  `CONVERSION_REPORT.txt`, with the parent entry (the parent scope and the entry identity), the parent source,
+  and the parent line. The section prints only when it has a finding, and a finding is an operator action: it
+  does not change the exit code.
 - An API response is an envelope (`response/result/config`). The converter reads the
   `config` element inside it, so the conversion is the same as for an export file.
 

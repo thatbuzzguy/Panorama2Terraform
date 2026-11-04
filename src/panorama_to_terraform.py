@@ -5760,13 +5760,14 @@ variable "panos_password" {
         # F5.4: the cross-source shadow scan. A child entry name that repeats a parent
         # entry name is an operator action, not a broken output, so it does not change
         # the exit code (the F4.1 gate does). The section prints only when there is a
-        # finding, and the console prints no shadow line.
+        # finding, and the console prints one line per finding in the shape
+        # `container_coverage.console_line` states.
         if shadows:
             lines.extend(['', f'--- {shadow_coverage.SHADOW_HEADING} ---', shadow_coverage.SHADOW_RULE])
             for path, group in self._group_by_scope(shadows):
                 lines.append(self._report_section_header(path))
                 for row in group:
-                    lines.append(shadow_coverage.shadow_line(row))
+                    lines.append(shadow_coverage.shadow_line(row, self._report_scope_path))
 
         # F6.2: the ownership scan. A repeated name the rule cannot decide is an operator action, not
         # a broken output, so it does not change the exit code (the F4.1 gate does). The section prints

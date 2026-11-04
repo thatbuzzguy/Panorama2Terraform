@@ -448,8 +448,10 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   the response wrapper, the key-free cache name, `--offline`, the https rules, and the
   key from the environment. No test calls the network
 - `tests/test_shadow_coverage.py` - the cross-source shadow scan: the per-scope shape in the
-  scan, the shadow fact (the matrix row is the key), the report section and its line shape,
-  the CLI argument rules, and the offline run reading both cache entries
+  scan, the shadow fact (the key is `state_coverage.ownership_key` read with the facts the parent row
+  declares, so it names the parent scope), the report section and its line shape with the parent entry
+  field, one finding per parent entry, the report order, the console line, the CLI argument rules, and the
+  offline run reading both cache entries
 - `tests/test_provenance.py` - the provenance record (`SOURCE.txt`): the fields, the record
   read back as data, one record per source the run read, the `Source:` label for both sources,
   the rule that a cache entry is not pruned while a written record references it, and the record
