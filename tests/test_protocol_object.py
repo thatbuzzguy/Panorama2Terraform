@@ -104,14 +104,17 @@ WORD_TO_SCHEMA = resource_mapping.SHAPE_TO_SCHEMA
 def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
     """Every row, field, shape word, `selects` key, and `sensitive` flag is a fact the provider declares.
 
-    The table states the levels this converter prints, so it is a subset of the schema: `protocol` also
-    declares the two redist profile lists, which the converter does not print and the gate does not check. A
-    row states only the fields the parse method that reaches the level reads. F7.4 added the four area
+    The table states the levels this converter prints, so a row can be a subset of the schema for its level: a
+    row states only the fields the parse method that reaches the level reads. F7.10 completed the `protocol`,
+    `protocol/bgp` and `protocol/ospfv3` rows against the measurement, so the subset is now only the rows the
+    report decision recorded: `peer_group`, `peer`, `redist_rules`, `area`, `area/interface`, and the auth
+    profile choice levels. F7.4 added the four area
     sub-levels, which `_protocol_areas` reads, F7.5 added the `rip` levels, which `parse_rip` reads, F7.6
     added the 78 `policy` levels, which `parse_bgp` reads, the `member_list` word for the fields the schema
     declares as `['list', 'string']`, F7.7 added the `ospfv3` auth profile levels, which `parse_ospfv3`
-    reads, and F7.9 added the four `ospf` levels outside `area`, which `parse_ospf` reads: every row in the
-    table is now a level a parse method reads.
+    reads, F7.9 added the four `ospf` levels outside `area`, which `parse_ospf` reads, and F7.10 added the
+    sixteen new rows: the ten redist profile levels, the dampening profile entry level, and the five `bgp`
+    single levels. Every row in the table is a level a parse method reads.
     """
     for path, row in sorted(resource_mapping.PROTOCOL_SHAPE.items()):
         node = _schema_node(provider_schema, path)
@@ -160,6 +163,8 @@ def test_the_table_is_the_only_shape_owner(converter_module):
     builds the `protocol` dict from the fields the `protocol` row states, so the levels are the table's names
     there too. `name` is the field the rule reads for the entry name, and `protocol` is the table's own
     `PROTOCOL_FIELD`: those two are the names the rule has to state.
+    F7.10 added the two methods the `protocol` row names for the redist profile lists and the path-only helper
+    they read through, so those three are owners too.
     """
     # Both shape tables are shape owners, so a field name written as a string constant in a reader, an emitter
     # or a gate branch is a second owner for either table (F7.8).
@@ -183,10 +188,12 @@ def test_the_table_is_the_only_shape_owner(converter_module):
     parser = converter_module.PanoramaParser
     owners += [getattr(generator, name) for name in ('generate_virtual_routers', '_protocol_fields', 'printed_value')]
     owners += [getattr(parser, name) for name in
-               ('_parse_router', 'parse_bgp', 'parse_ospf', 'parse_ospfv3', 'parse_rip', '_protocol_areas',
+               ('_parse_router', 'parse_bgp', 'parse_ospf', 'parse_ospfv3', 'parse_rip',
+                'parse_redist_profile', 'parse_redist_profile_ipv6', '_protocol_areas',
                 '_protocol_level', '_protocol_field', '_protocol_choice', '_protocol_interface',
                 '_protocol_field_name', '_protocol_xml_name', '_protocol_entries', '_protocol_body',
-                '_protocol_branch', '_protocol_presence_choice', '_protocol_presence_fields')]
+                '_protocol_branch', '_protocol_presence_choice', '_protocol_presence_fields',
+                '_protocol_entry_level')]
     offenders = {}
     for owner in owners:
         for node in ast.walk(ast.parse(textwrap.dedent(inspect.getsource(owner)))):
@@ -253,10 +260,13 @@ def test_the_ospfv3_scalar_levels_are_rows_the_parse_reads():
     the shape decision and the measurement scope: a single-object level holds no entry, so the scan measures
     nothing for it and the container table names no row for it, while an export rule is an entry.
     F7.4 names the two entry levels the area rule reads: a neighbor entry, and a virtual link.
+    F7.10 added the three `bool` fields the row did not state, so they are the fields after the levels, in the
+    order the schema names them.
     """
     level = resource_mapping.protocol_row('protocol/ospfv3')
     assert [field for field in level['fields'] if field not in ('enable', 'router_id', 'area')] == [
-        'timers', 'global_bfd', 'graceful_restart', 'export_rules', 'auth_profile'], level['fields']
+        'timers', 'global_bfd', 'graceful_restart', 'export_rules', 'auth_profile',
+        'allow_redist_default_route', 'disable_transit_traffic', 'reject_default_route'], level['fields']
     for path, shape in (('protocol/ospfv3/timers', 'object'),
                         ('protocol/ospfv3/global_bfd', 'object'),
                         ('protocol/ospfv3/graceful_restart', 'object'),
@@ -315,6 +325,62 @@ def test_the_rip_levels_are_rows_the_parse_reads():
     rows = [row.path for row in container_coverage.CONTAINER_TABLE if row.path.startswith('protocol/rip/')]
     assert sorted(rows) == ['protocol/rip/auth-profile', 'protocol/rip/export-rules',
                             'protocol/rip/interfaces'], rows
+
+
+def test_the_redist_profile_rows_are_the_levels_the_two_methods_read():
+    """F7.10: the two redistribution profile lists are `protocol` fields, and the levels inside an entry are
+    rows the two methods the field names give read.
+
+    `test_the_shape_table_is_the_measured_provider_shape` pins every row against the schema, so this test pins
+    the shape decision and the measurement scope. `action` states its two alternatives as `block` fields and no
+    `selects`, because the provider declares both as optional, so the gate reads the level as an object. The two
+    entry rows differ by one field: the provider names the routing level inside `filter` as `ospf` for the IPv4
+    list and `ospfv3` for the IPv6 list. A `member_list` field holds values, so no row stands under it.
+    The three entry levels are in the scan scope, so they have a container row naming the method that reads
+    them, and the single levels inside an entry hold no entry, so no row names them.
+    """
+    level = resource_mapping.protocol_row('protocol')
+    assert level['fields'] == {
+        'bgp': 'object', 'ospf': 'object', 'ospfv3': 'object', 'rip': 'object',
+        'redist_profile': 'string_list', 'redist_profile_ipv6': 'string_list'}, level['fields']
+    # `name` is first because the entry name is the first field the block prints, and the fields a row gains
+    # follow in the order the schema names them.
+    for path in ('protocol/redist_profile', 'protocol/redist_profile_ipv6'):
+        row = resource_mapping.protocol_row(path)
+        assert row['shape'] == 'string_list', path
+        assert list(row['fields']) == ['name', 'action', 'filter', 'priority'], row['fields']
+        assert row['selects'] == {} and row['sensitive'] == frozenset(), path
+        # The scan scope row names the method the field name gives.
+        container = next(r for r in container_coverage.CONTAINER_TABLE if r.path == path.replace('_', '-'))
+        assert container.method == f'parse_{path.rsplit("/", 1)[-1]}', container
+    assert resource_mapping.protocol_row('protocol/redist_profile/action')['fields'] == {
+        'no_redist': 'block', 'redist': 'block'}, 'action states no choice'
+    assert resource_mapping.protocol_row('protocol/redist_profile/action')['selects'] == {}
+    for path in ('protocol/redist_profile/filter', 'protocol/redist_profile_ipv6/filter'):
+        row = resource_mapping.protocol_row(path)
+        assert list(row['fields']) == ['bgp', 'destination', 'interface', 'nexthop',
+                                       'ospf' if 'ipv6' not in path else 'ospfv3', 'type'], row['fields']
+        assert all(word == 'member_list' for name, word in row['fields'].items()
+                   if name not in ('bgp', 'ospf', 'ospfv3')), row['fields']
+    for path in ('protocol/redist_profile/filter/bgp', 'protocol/redist_profile_ipv6/filter/bgp'):
+        assert list(resource_mapping.protocol_row(path)['fields']) == [
+            'community', 'extended_community'], path
+    assert list(resource_mapping.protocol_row('protocol/redist_profile/filter/ospf')['fields']) == [
+        'area', 'path_type', 'tag']
+    assert list(resource_mapping.protocol_row('protocol/redist_profile_ipv6/filter/ospfv3')['fields']) == [
+        'area', 'path_type', 'tag']
+    # The three entry levels are the rows the scan scope names; the single levels inside an entry are not.
+    entry_rows = sorted(row.path for row in container_coverage.CONTAINER_TABLE
+                        if row.path.startswith(('protocol/redist', 'protocol/bgp/dampening')))
+    assert entry_rows == ['protocol/bgp/dampening-profile', 'protocol/redist-profile',
+                          'protocol/redist-profile-ipv6'], entry_rows
+    assert next(r for r in container_coverage.CONTAINER_TABLE
+                if r.path == 'protocol/bgp/dampening-profile').method == 'parse_bgp'
+    inside = {row.path for row in container_coverage.CONTAINER_TABLE}
+    for path in ('protocol/redist-profile/action', 'protocol/redist-profile/filter',
+                 'protocol/redist-profile/filter/bgp', 'protocol/redist-profile/filter/ospf',
+                 'protocol/redist-profile-ipv6/filter', 'protocol/redist-profile-ipv6/filter/ospfv3'):
+        assert path not in inside, path
 
 
 def test_the_auth_profile_rows_are_the_levels_the_four_methods_read():
@@ -611,7 +677,8 @@ def test_an_ospfv3_scalar_level_prints_the_shape_the_table_states(tmp_path):
 
     Field order is the table order, a `single` level prints as one object, and a `string_list` level prints one
     object per element. `tests/fixtures/ospfv3.xml` states every field the four rows declare, so the pin is the
-    whole block the run wrote for that router.
+    whole block the run wrote for that router. F7.10 states the three `bool` fields the row added in the fixture,
+    so the pin prints them after the levels, in the order the row states them.
     """
     expected = ('  protocol = {\n    ospfv3 = {\n      enable = true\n      timers = {\n'
                 '        lsa_interval = 120\n        spf_calculation_delay = 20\n      }\n'
@@ -620,7 +687,8 @@ def test_an_ospfv3_scalar_level_prints_the_shape_the_table_states(tmp_path):
                 '        helper_enable = true\n        max_neighbor_restart_time = 200\n'
                 '        strict_l_s_a_checking = true\n      }\n      export_rules = [\n        {\n'
                 '          name = "static-af"\n          metric = 10\n          new_path_type = "internal"\n'
-                '          new_tag = "0"\n        }\n      ]\n    }\n  }\n')
+                '          new_tag = "0"\n        }\n      ]\n      allow_redist_default_route = true\n'
+                '      disable_transit_traffic = true\n      reject_default_route = false\n    }\n  }\n')
     files = _run('ospfv3.xml', tmp_path)
     parts = files['virtual_routers.tf'].split('resource "panos_virtual_router" ')
     assert len(parts) == 3, parts
@@ -663,6 +731,70 @@ def test_an_rip_level_prints_the_shape_the_table_states(tmp_path):
             '(panos_virtual_router - default_route states no key PROTOCOL_SHAPE selects)') in report, report
     assert 'ethernet1/4' not in block, block
     # The gate reads the same table, so the block the run wrote reports no finding.
+    findings = sanity_checks.check_protocol_object(files)
+    assert findings == [], findings
+
+
+def test_a_redist_profile_entry_prints_the_shape_the_table_states(tmp_path):
+    """F7.10: the two redistribution profile entries print as the rows `PROTOCOL_SHAPE` states for them.
+
+    Field order is the table order, and `name` prints first because the entry name is the first field the block
+    prints. A `block` field prints the empty object the export states by presence, and a `member_list` field
+    prints as its values, because a member is a value and not an entry. The two entries differ by the routing
+    level inside `filter`, which the provider names `ospf` for the IPv4 list and `ospfv3` for the IPv6 list. Each
+    entry states every field its row declares, so the pin is the whole block the run wrote for that router.
+    """
+    expected = (
+        '  protocol = {\n    redist_profile = [\n      {\n        name = "RP-Internal"\n'
+        '        action = {\n          redist = {}\n        }\n        filter = {\n'
+        '          bgp = {\n            community = [ "100:1" ]\n'
+        '            extended_community = [ "192.168.1.1:2" ]\n          }\n'
+        '          destination = [ "10.20.0.0/16" ]\n          interface = [ "ethernet1/1" ]\n'
+        '          nexthop = [ "192.168.1.254" ]\n          ospf = {\n'
+        '            area = [ "0.0.0.0" ]\n            path_type = [ "internal" ]\n'
+        '            tag = [ "1" ]\n          }\n          type = [ "internal" ]\n        }\n'
+        '        priority = 10\n      }\n    ]\n    redist_profile_ipv6 = [\n      {\n'
+        '        name = "RP6-Internal"\n        action = {\n          no_redist = {}\n        }\n'
+        '        filter = {\n          bgp = {\n            community = [ "100:2" ]\n'
+        '            extended_community = [ "192.168.1.1:3" ]\n          }\n'
+        '          destination = [ "10.20.0.0/16" ]\n          interface = [ "ethernet1/2" ]\n'
+        '          nexthop = [ "192.168.1.254" ]\n          ospfv3 = {\n'
+        '            area = [ "0.0.1.0" ]\n            path_type = [ "external" ]\n'
+        '            tag = [ "2" ]\n          }\n          type = [ "external" ]\n        }\n'
+        '        priority = 20\n      }\n    ]\n  }\n')
+    files = _run('virtual_routers.xml', tmp_path)
+    block = files['virtual_routers.tf']
+    assert expected in block, block
+    # The gate reads the same table, so the block the run wrote reports no finding.
+    findings = sanity_checks.check_protocol_object(files)
+    assert findings == [], findings
+
+
+def test_a_bgp_level_prints_the_fields_the_table_added(tmp_path):
+    """F7.10: the eight `bgp` fields the row gained print in the order the schema names them, and the dampening
+    entry prints as its row states it.
+
+    Field order is the table order, so the fields the row already stated print before the new ones. The dampening
+    entry is an entry level, so `name` prints first inside it and the six fields follow in the schema order. A
+    field the export states as `no` prints as false, the same rule as `passive`.
+    """
+    expected = (
+        '      allow_redist_default_route = true\n      dampening_profile = [\n        {\n'
+        '          name = "DAMP-Branch"\n          cutoff = 1500\n'
+        '          decay_half_life_reachable = 60\n          decay_half_life_unreachable = 120\n'
+        '          enable = true\n          max_hold_time = 3000\n          reuse = 750\n        }\n      ]\n'
+        '      ecmp_multi_as = true\n      enforce_first_as = false\n      global_bfd = {\n'
+        '        profile = "BFD-BGP"\n      }\n      install_route = true\n'
+        '      reject_default_route = false\n      routing_options = {\n        aggregate = {\n'
+        '          aggregate_med = true\n        }\n        as_format = "2-byte"\n'
+        '        confederation_member_as = "65010"\n        default_local_preference = 200\n'
+        '        graceful_restart = {\n          enable = true\n          local_restart_time = 180\n'
+        '          max_peer_restart_time = 240\n          stale_route_time = 300\n        }\n        med = {\n'
+        '          always_compare_med = true\n          deterministic_med_comparison = false\n        }\n'
+        '        reflector_cluster_id = "10.0.0.1"\n      }\n    }\n  }\n')
+    files = _run('bgp.xml', tmp_path)
+    block = files['virtual_routers.tf']
+    assert expected in block, block
     findings = sanity_checks.check_protocol_object(files)
     assert findings == [], findings
 
@@ -770,14 +902,18 @@ def test_a_policy_block_prints_the_shape_the_table_states(tmp_path):
 def test_member_list_is_the_word_for_a_field_whose_members_are_values():
     """F7.6: `member_list` is the `string_list` shape with values as members, and one place states the reading.
 
-    `SHAPE_READS_AS` is the only place that states which word the field reader reads each specialization as, so
+    `SHAPE_READS_AS` is the only place that states which word the reader reads each specialization as, so
     the gate compares a value against the family word the reader can read while the table still states the
     specialization. `SHAPE_LEVELS` is the set of words that name a level the walk enters, and a member list names
     no level, so rule 4 cannot ask a member for a `name`.
+    F7.10 added the nine member list fields the redist profile rows state.
     """
     fields = {field for row in resource_mapping.PROTOCOL_SHAPE.values()
               for field, word in row['fields'].items() if word == 'member_list'}
-    assert fields == {'append', 'from_peer', 'nexthop', 'overwrite', 'used_by'}, fields
+    assert fields == {'append', 'from_peer', 'nexthop', 'overwrite', 'used_by',
+                      # F7.10: the levels inside a redist profile entry state their values as members.
+                      'area', 'community', 'destination', 'extended_community', 'interface',
+                      'path_type', 'tag', 'type'}, fields
     assert sanity_checks.SHAPE_READS_AS['member_list'] == 'string_list', sanity_checks.SHAPE_READS_AS
     assert sanity_checks.SHAPE_LEVELS == ('object', 'one_of', 'string_list'), sanity_checks.SHAPE_LEVELS
     # `nexthop` is a string at the aggregate level and a member list at the match level, so the word is the
@@ -891,6 +1027,47 @@ def test_the_gate_reads_an_ospf_level_against_the_row_it_states():
     assert [f.detail for f in findings] == [
         'protocol panos_virtual_router.default_00000000 protocol/ospf/export_rules '
         'element states no name'], findings
+
+
+def test_the_gate_reads_a_redist_profile_entry_against_the_row_it_states():
+    """F7.10: the walk reads the three entry levels the table added, with the shapes their rows state.
+
+    A hand-written block that states an entry's fields is not a finding: `name` is the entry name, `priority` is
+    a number, `action` is an object whose two `block` fields are the values the export states by presence, and a
+    `member_list` field inside `filter` is values and not entries. `action` states no choice, because the
+    provider declares both alternatives as optional, so the rule reads the level as an object. The positive half
+    read from a real run is `test_a_redist_profile_entry_prints_the_shape_the_table_states`.
+    """
+    good = ('  protocol = {\n    redist_profile = [\n        {\n          name = "RP"\n          priority = 10\n'
+            '          action = {\n            redist = {}\n          }\n          filter = {\n'
+            '            bgp = {\n              community = [ "100:1" ]\n            }\n'
+            '            destination = [ "10.20.0.0/16" ]\n            ospf = {\n'
+            '              area = [ "0.0.0.0" ]\n            }\n          }\n        }\n      ]\n    }\n  }\n')
+    assert _findings(good) == [], good
+    findings = _findings(good.replace('action = {\n            redist = {}\n          }',
+                                      'action = {\n            redist = true\n          }'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/redist_profile/action '
+        'redist is not a block value'], findings
+    findings = _findings(good.replace('priority = 10', 'priority = "10"'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/redist_profile '
+        'priority is not a number value'], findings
+    findings = _findings(good.replace('destination = [ "10.20.0.0/16" ]', 'destination = "10.20.0.0/16"'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/redist_profile/filter '
+        'destination is not a member_list value'], findings
+    # An element inside the entry list is an entry, so the entry name is the field the row reads for it.
+    findings = _findings(good.replace('{\n          name = "RP"\n          priority = 10',
+                                      '{\n          priority = 10'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/redist_profile '
+        'element states no name'], findings
+    # The dampening entry is read by the same rule, through the row the `bgp` row names.
+    damp = ('  protocol = {\n    bgp = {\n      dampening_profile = [\n        {\n'
+            '          name = "DAMP"\n          cutoff = 1500\n          reuse = 750\n        }\n      ]\n'
+            '    }\n  }\n')
+    assert _findings(damp) == [], damp
 
 
 def test_a_choice_body_prints_the_fields_it_declares(tmp_path):
@@ -1189,12 +1366,16 @@ def test_the_rule_reports_an_undeclared_field_and_a_wrong_shape():
     findings = _findings('  protocol = {\n    bgp = {\n      peer_group = {\n'
                          '        name = "PG"\n      }\n    }\n  }\n')
     assert len(findings) == 1 and 'peer_group is not a string_list value' in findings[0].detail, findings
-    # A level the table states no row for is the same finding: `protocol` declares the two redist profile
-    # lists in the provider, but the table states only the levels this converter prints, so the rule refuses a
-    # level outside it. `rip` is a row now (F7.5), so the rule reads it against its row instead, which
+    # A level the table states no row for is the same finding. F7.10 made the two redist profile lists rows, so
+    # the rule reads them against their rows: the field a row does not state inside an entry is the finding, and
+    # a `list` level printed as an object is the same shape finding as `peer_group` above. `rip` is a row now
+    # (F7.5), so the rule reads it against its row instead, which
     # `test_the_gate_reads_a_choice_inside_an_entry_level` pins.
+    findings = _findings('  protocol = {\n    redist_profile = [\n        {\n'
+                         '          name = "R1"\n          made_up = "y"\n        }\n      ]\n    }\n  }\n')
+    assert len(findings) == 1 and 'made_up is not a field' in findings[0].detail, findings
     findings = _findings('  protocol = {\n    redist_profile = {\n      name = "R1"\n    }\n  }\n')
-    assert len(findings) == 1 and 'redist_profile is not a field' in findings[0].detail, findings
+    assert len(findings) == 1 and 'redist_profile is not a string_list value' in findings[0].detail, findings
 
 
 def test_the_rule_reports_a_list_element_with_no_name():

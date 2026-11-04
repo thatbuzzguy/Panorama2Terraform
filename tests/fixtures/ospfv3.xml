@@ -110,6 +110,11 @@
                         <new-tag>0</new-tag>
                       </entry>
                     </export-rules>
+                    <!-- F7.10: the three `bool` fields the row now states. A field the export states as `no`
+                         prints as false, which is the same rule as `passive` above. -->
+                    <allow-redist-default-route>yes</allow-redist-default-route>
+                    <disable-transit-traffic>yes</disable-transit-traffic>
+                    <reject-default-route>no</reject-default-route>
                   </ospfv3>
                 </protocol>
               </entry>

@@ -47,6 +47,46 @@
                         <address-family-identifier>ipv4-unicast</address-family-identifier>
                       </entry>
                     </redist-rules>
+                    <!-- F7.10: the five `bool` fields and the two single-object levels the row now states, and
+                         the dampening entry that states every field its row declares. The entry is in the
+                         property scan scope, so the run measures its fields against the router row. -->
+                    <allow-redist-default-route>yes</allow-redist-default-route>
+                    <ecmp-multi-as>yes</ecmp-multi-as>
+                    <enforce-first-as>no</enforce-first-as>
+                    <install-route>yes</install-route>
+                    <reject-default-route>no</reject-default-route>
+                    <global-bfd>
+                      <profile>BFD-BGP</profile>
+                    </global-bfd>
+                    <routing-options>
+                      <aggregate>
+                        <aggregate-med>yes</aggregate-med>
+                      </aggregate>
+                      <as-format>2-byte</as-format>
+                      <confederation-member-as>65010</confederation-member-as>
+                      <default-local-preference>200</default-local-preference>
+                      <graceful-restart>
+                        <enable>yes</enable>
+                        <local-restart-time>180</local-restart-time>
+                        <max-peer-restart-time>240</max-peer-restart-time>
+                        <stale-route-time>300</stale-route-time>
+                      </graceful-restart>
+                      <med>
+                        <always-compare-med>yes</always-compare-med>
+                        <deterministic-med-comparison>no</deterministic-med-comparison>
+                      </med>
+                      <reflector-cluster-id>10.0.0.1</reflector-cluster-id>
+                    </routing-options>
+                    <dampening-profile>
+                      <entry name="DAMP-Branch">
+                        <cutoff>1500</cutoff>
+                        <decay-half-life-reachable>60</decay-half-life-reachable>
+                        <decay-half-life-unreachable>120</decay-half-life-unreachable>
+                        <enable>yes</enable>
+                        <max-hold-time>3000</max-hold-time>
+                        <reuse>750</reuse>
+                      </entry>
+                    </dampening-profile>
                   </bgp>
                 </protocol>
               </entry>

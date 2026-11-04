@@ -362,6 +362,59 @@ def test_the_scan_measures_an_auth_profile_entry_and_not_the_entry_inside_it(con
     assert ledger.property_findings() == [], ledger.property_findings()
 
 
+def test_the_scan_measures_a_redist_profile_entry_and_a_dampening_entry(
+        converter_module, tmp_path):
+    """F7.10: the three entry levels the shape table added are in the scan scope, and the levels inside them
+    are not.
+
+    The `protocol` row states the two redistribution profile lists as `string_list` fields and the `bgp` row
+    states the dampening profile as one, so the three levels gain a `CONTAINER_TABLE` row and the scan measures
+    the fields each row declares against the router row. A `single` level inside an entry (`action`, `filter`,
+    `filter/bgp`, `filter/ospf`) holds no entry, so `_protocol_level` builds it as a plain dict, which records
+    nothing, and the container table names no row for it: the table grounds it. The properties the router row
+    declares gain only what an entry measures.
+    """
+    parser = run_pipeline(converter_module, 'virtual_routers.xml', tmp_path)
+    assert parser is not None, 'virtual_routers.xml'
+    ledger = parser.ledger
+    for entry_name, row_path in (('RP-Internal', 'protocol/redist-profile'),
+                                 ('RP6-Internal', 'protocol/redist-profile-ipv6')):
+        entry = next(e for e in ledger.entries() if e.get('name') == entry_name)
+        path = container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source)
+        assert entry_coverage.covering_row(path).path == row_path, path
+        row = entry_coverage.matrix_row_for(path)
+        assert row is not None and row['resource'] == 'panos_virtual_router', row
+        recorded = ledger.mark_for(entry)['captured']
+        assert isinstance(recorded, entry_coverage.RecordingDict), recorded
+        assert sorted(set(recorded.used_keys()) - entry_coverage.NON_FIELD_KEYS) == [
+            'action', 'filter', 'priority'], recorded.used_keys()
+        for field in ('action', 'filter'):
+            assert not isinstance(recorded[field], entry_coverage.RecordingDict), field
+    # The dampening entry is measured by the same rule, through the row the `bgp` row names.
+    bgp_parser = run_pipeline(converter_module, 'bgp.xml', tmp_path)
+    assert bgp_parser is not None, 'bgp.xml'
+    entry = next(e for e in bgp_parser.ledger.entries() if e.get('name') == 'DAMP-Branch')
+    path = container_coverage.section_path(bgp_parser.ledger.parents[entry],
+                                           bgp_parser.ledger.parents, bgp_parser.ledger.source)
+    assert entry_coverage.covering_row(path).path == 'protocol/bgp/dampening-profile', path
+    recorded = bgp_parser.ledger.mark_for(entry)['captured']
+    assert sorted(set(recorded.used_keys()) - entry_coverage.NON_FIELD_KEYS) == [
+        'cutoff', 'decay_half_life_reachable', 'decay_half_life_unreachable', 'enable',
+        'max_hold_time', 'reuse'], recorded.used_keys()
+    # A level inside an entry holds no entry, so no row names it and the table grounds it.
+    row_paths = {row.path for row in container_coverage.CONTAINER_TABLE}
+    for path in ('protocol/redist-profile/action', 'protocol/redist-profile/filter',
+                 'protocol/redist-profile/filter/bgp', 'protocol/redist-profile/filter/ospf',
+                 'protocol/redist-profile-ipv6/filter', 'protocol/redist-profile-ipv6/filter/ospfv3'):
+        assert path not in row_paths, path
+    router_row = next(r for r in ROWS if r['resource'] == 'panos_virtual_router')
+    for field in ('action', 'cutoff', 'decay_half_life_reachable', 'decay_half_life_unreachable',
+                  'enable', 'filter', 'max_hold_time', 'priority', 'reuse'):
+        assert field in router_row['properties'], router_row['properties']
+    for ledger in (parser.ledger, bgp_parser.ledger):
+        assert ledger.property_findings() == [], ledger.property_findings()
+
+
 # --- 3. The scan -----------------------------------------------------------
 
 def test_scan_reports_the_properties_no_output_read(converter_module, tmp_path):

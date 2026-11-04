@@ -166,6 +166,44 @@ def test_parse_virtual_routers_device_level(make_parser):
     assert device["interfaces"] == ["ethernet1/4"]
 
 
+def test_parse_redist_profile_entries_read_the_levels_the_table_states(make_parser):
+    """The two methods the `protocol` row's field names give read the two redist profile lists (F7.10).
+
+    `_parse_router` calls a parse method for each field the `protocol` row states, so the two entry levels are
+    read by `parse_redist_profile` and `parse_redist_profile_ipv6` through `_protocol_entry_level`, which states
+    the path and no field name. `action` holds the two `block` fields the export states by presence, and a
+    `member_list` field inside `filter` is the values the element holds, because a member is not an entry. The
+    entry is marked, so the property scan measures it against the router row.
+    """
+    p = _parser(make_parser, "virtual_routers.xml")
+    routers = {r["name"]: r for r in p.parse_virtual_routers()}
+    protocol = routers["vr-redist"]["protocol"]
+    assert (len(protocol["redist_profile"]), len(protocol["redist_profile_ipv6"])) == (1, 1), protocol
+
+    entry = protocol["redist_profile"][0]
+    assert entry["name"] == "RP-Internal" and entry["priority"] == 10, entry
+    # A `block` field is the empty object the export states by presence, so an alternative the entry does not
+    # state reads as no value. The provider declares both alternatives as optional, so `action` states no choice.
+    assert str(entry["action"]["redist"]) == "{}" and entry["action"]["no_redist"] == "", entry["action"]
+    assert entry["filter"]["bgp"] == {"community": ["100:1"], "extended_community": ["192.168.1.1:2"]}, entry
+    assert (entry["filter"]["destination"], entry["filter"]["interface"],
+            entry["filter"]["nexthop"], entry["filter"]["type"]) == (
+        ["10.20.0.0/16"], ["ethernet1/1"], ["192.168.1.254"], ["internal"]), entry["filter"]
+    assert entry["filter"]["ospf"] == {"area": ["0.0.0.0"], "path_type": ["internal"],
+                                       "tag": ["1"]}, entry["filter"]
+    inner = protocol["redist_profile_ipv6"][0]
+    # The same shape for the IPv6 list, with the routing level inside `filter` named as the provider names it.
+    assert str(inner["action"]["no_redist"]) == "{}" and inner["action"]["redist"] == "", inner["action"]
+    assert inner["filter"]["bgp"] == {"community": ["100:2"], "extended_community": ["192.168.1.1:3"]}, inner
+    assert inner["filter"]["ospfv3"] == {"area": ["0.0.1.0"], "path_type": ["external"],
+                                         "tag": ["2"]}, inner["filter"]
+    # The entry is the object the ledger records, so it carries the five scope facts of the router that holds it.
+    assert entry["template"] == "FW-Template" and entry["device_group"] == "Shared", entry
+    for name in ("RP-Internal", "RP6-Internal"):
+        element = next(e for e in p.ledger.entries() if e.get("name") == name)
+        assert p.ledger.mark_for(element) is not None, name
+
+
 def test_parse_logical_routers(make_parser):
     p = _parser(make_parser, "logical_routers.xml")
     lrouters = p.parse_logical_routers()
@@ -230,6 +268,38 @@ def test_parse_bgp_enabled(make_parser):
     assert redist["address_family_identifier"] == "ipv4-unicast"
     # The export states no metric, so a number field with no value is empty and prints nothing (F7.1).
     assert redist["metric"] == ""
+
+
+def test_parse_bgp_reads_the_fields_the_table_added(make_parser):
+    """`parse_bgp` reads the eight `protocol/bgp` fields F7.10 added as the row states them.
+
+    Five are `bool` values and two are `single` levels, so `_protocol_level` reads them with no field name of its
+    own, and `dampening_profile` is the entry level the method states as a path through `_protocol_branch`. The
+    entry is marked, so the property scan measures its six fields against the router row. A field the export
+    states as `no` reads as false, the same rule as `passive`.
+    """
+    p = _parser(make_parser, "bgp.xml")
+    bgp = {r["name"]: r for r in p.parse_virtual_routers()}["default"]["protocol"]["bgp"]
+    assert (bgp["allow_redist_default_route"], bgp["ecmp_multi_as"], bgp["enforce_first_as"],
+            bgp["install_route"], bgp["reject_default_route"]) == (
+        True, True, False, True, False), bgp
+    assert bgp["global_bfd"] == {"profile": "BFD-BGP"}, bgp["global_bfd"]
+    assert bgp["routing_options"] == {
+        "aggregate": {"aggregate_med": True},
+        "as_format": "2-byte",
+        "confederation_member_as": "65010",
+        "default_local_preference": 200,
+        "graceful_restart": {"enable": True, "local_restart_time": 180,
+                             "max_peer_restart_time": 240, "stale_route_time": 300},
+        "med": {"always_compare_med": True, "deterministic_med_comparison": False},
+        "reflector_cluster_id": "10.0.0.1"}, bgp["routing_options"]
+    damp = bgp["dampening_profile"][0]
+    assert damp["name"] == "DAMP-Branch", damp
+    assert (damp["cutoff"], damp["decay_half_life_reachable"], damp["decay_half_life_unreachable"],
+            damp["enable"], damp["max_hold_time"], damp["reuse"]) == (
+        1500, 60, 120, True, 3000, 750), damp
+    element = next(e for e in p.ledger.entries() if e.get("name") == "DAMP-Branch")
+    assert p.ledger.mark_for(element) is not None, "a dampening profile is a marked entry"
 
 
 def test_parse_bgp_keeps_a_peer_no_group_names_for_the_report(make_parser):
@@ -423,6 +493,10 @@ def test_parse_ospfv3_reads_the_levels_the_table_states(make_parser):
     assert p.ledger.mark_for(element) is not None, 'an export rule is a marked entry'
     assert rule["name"] == "static-af"
     assert (rule["metric"], rule["new_path_type"], rule["new_tag"]) == (10, "internal", "0"), rule
+    # F7.10: the three `bool` fields the row gained are read through the row, and a field the export states as
+    # `no` reads as false.
+    assert (ospfv3["allow_redist_default_route"], ospfv3["disable_transit_traffic"],
+            ospfv3["reject_default_route"]) == (True, True, False), ospfv3
 
 
 def test_parse_rip_reads_the_levels_the_table_states(make_parser):
