@@ -129,7 +129,9 @@ The parser reads only the levels `PROTOCOL_SHAPE` or `FILTER_SHAPE` states, so a
 do not state is not captured. F7.10 closed the two redistribution profile lists, the `bgp` fields and the
 `ospfv3` fields, and F7.11 closed the six entry rows: `peer_group`, `peer`, `redist_rules`, the `ospfv3` `area`,
 and the `area/interface` row for each OSPF level. The gaps that stay are the choice levels, which state their
-alternatives as `selects` keys and no fields. Those gaps are recorded in
+alternatives as `selects` keys, and `value_shape` reads each of them as an object value: `selects` states the
+choice the provider reads as exactly one, and the two rows that state it inside their fields are `peer_address`
+and the `ospfv3` `auth_profile` entry (F7.12). Those gaps are recorded in
 [`../backlog.md`](../backlog.md).
 
 | Type | Why there is no v2 target |

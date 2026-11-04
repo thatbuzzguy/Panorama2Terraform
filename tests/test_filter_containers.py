@@ -10,7 +10,9 @@ Pins:
 
 - the table against the live provider schema: one row per level the converter prints, the field names the
   provider declares, and the shape word for each field. `selects` is empty for every row, because the provider
-  declares each filter choice as optional fields, and `sensitive` is empty, because no filter field is marked
+  declares each filter choice as optional fields, so the choice rule (F7.12) cannot fire for a filter block; the
+  three levels `terraform validate` reads as exactly one state their alternatives as fields, which `backlog.md`
+  records as the same rule for the filter table. `sensitive` is empty, because no filter field is marked
   sensitive, so `VALUE_VARIABLES` gains no row for a filter field;
 - the row scope: the redistribution entry is mirrored to the `match` and `set` levels, and those rows state
   leaf fields only, so the walk stops at them;
@@ -163,7 +165,8 @@ def test_the_filter_table_is_the_measured_provider_shape(provider_schema):
     """Every filter row, field and shape word is a fact the provider declares for the pinned provider.
 
     `selects` is empty for every row, because the provider declares each filter choice as optional fields and
-    not as required-exactly-one, and `sensitive` is empty for every row, because no filter field is marked
+    not as required-exactly-one, so the choice rule (F7.12) reads no choice for a filter block, and
+    `sensitive` is empty for every row, because no filter field is marked
     sensitive: so `VALUE_VARIABLES` gains no row for a filter field.
     """
     for path, row in sorted(resource_mapping.FILTER_SHAPE.items()):
@@ -207,8 +210,9 @@ def test_the_row_scope_is_the_decision_acceptance_states():
         assert not [child for child in resource_mapping.FILTER_SHAPE if child.startswith(path + '/')], path
 
     # The three levels the provider enforces as exactly-one are rows that state their alternatives as fields,
-    # so `selects` states nothing for them: the choice is the provider's, not the table's. The fixture answers
-    # each with one element, which is why `terraform validate` accepts the run.
+    # so `selects` states nothing for them and the choice rule (F7.12) cannot read them; `backlog.md` records the
+    # same rule for the filter table. The fixture answers each with one element, which is why
+    # `terraform validate` accepts the run.
     choices = {
         'network/routing-profile/filters/access-list/type/ipv4/ipv4_entries/source_address': 'address',
         'network/routing-profile/filters/prefix-list/type/ipv4/ipv4_entries/prefix': 'entry',
@@ -350,8 +354,8 @@ def test_the_choice_levels_state_one_key_in_the_run(tmp_path):
     """The three choice levels the provider enforces as exactly-one print one key each.
 
     `selects` states nothing for them, because the pinned schema declares each alternative as an optional
-    field, so the choice is the provider's rule and not the table's. The fixture answers each with one element,
-    and `terraform validate` accepts the run for that reason.
+    field, so the choice rule (F7.12) reads no choice for a filter block. The fixture answers each with one
+    element, and `terraform validate` accepts the run for that reason.
     """
     text = _run(FIXTURE, tmp_path)['filters.tf']
     blocks = {block.rtype: block for block in sanity_checks.blocks({'filters.tf': text}, ('resource',))}
