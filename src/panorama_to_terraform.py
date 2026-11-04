@@ -2910,6 +2910,24 @@ REFERENCE_SCOPES = tuple(sorted({
     *TAG_SCOPES, *IKE_CRYPTO_SCOPES, *IPSEC_CRYPTO_SCOPES, *IKE_GATEWAY_SCOPES,
 }))
 
+# F4.4: the field order the manual report line states for an application override rule, which is the
+# order the report already used for the fields it printed. The report is the only output for this
+# container, so the line prints the fields it reads through the captured object, in this order, and a
+# field the entry carries no value for prints nothing (F4.3 rule 3). `port` and `protocol` are the two
+# fields whose empty value the report prints as `any`, because an export that states no value for them
+# means any port or any protocol.
+OVERRIDE_REPORT_FIELDS = (
+    ('from', 'source_zones'),
+    ('to', 'destination_zones'),
+    ('source', 'source_addresses'),
+    ('destination', 'destination_addresses'),
+    ('port', 'port'),
+    ('protocol', 'protocol'),
+    ('application', 'application'),
+    ('disabled', 'disabled'),
+    ('description', 'description'),
+)
+
 
 class UnitText:
     """One `.tf` file's text, held per unit directory (F6.10.3, `docs/CODEBASE_ASSEMBLY.md` §14).
@@ -5438,7 +5456,7 @@ variable "panos_password" {
                                      zone_protection_profiles: Optional[list[dict]] = None,
                                      report_only_addresses: Optional[list[dict]] = None,
                                      dual_protocol_services: Optional[list[dict]] = None,
-                                     entry_coverage: str = ''):
+                                     entry_report: str = ''):
         """Write MANUAL_SETUP_REPORT.txt for items that are not emitted (F2.9)
 
         Two buckets, one report:
@@ -5452,12 +5470,15 @@ variable "panos_password" {
 
         The parsed data is preserved here instead of being emitted as .tf
         resources, so nothing is silently dropped (see resource_mapping.py).
+
+        `entry_report` is the section text the caller built, not the module, so the module name
+        `entry_coverage` stays readable inside the method.
         """
         if not (protocol_report or application_filters or manual_key_tunnels
                 or application_override_rules or qos_profiles
                 or tunnel_monitor_profiles or schedules or log_settings
                 or zone_protection_profiles or report_only_addresses
-                or dual_protocol_services or entry_coverage or self._location_reports):
+                or dual_protocol_services or entry_report or self._location_reports):
             return
 
         lines = ['MANUAL SETUP REPORT', '=' * 60, '']
@@ -5514,14 +5535,19 @@ variable "panos_password" {
         if application_override_rules:
             lines.append('--- Application Override Rules (no v2 resource) ---')
             for rule in application_override_rules:
-                lines.append(
-                    f"  {rule.get('name')}: from={rule.get('source_zones')} "
-                    f"to={rule.get('destination_zones')} "
-                    f"source={rule.get('source_addresses')} "
-                    f"port={rule.get('port') or 'any'} "
-                    f"protocol={rule.get('protocol') or 'any'} "
-                    f"application={rule.get('application')} "
-                    f"disabled={rule.get('disabled')}")
+                # The report is the only output for this container, so the line prints the fields it reads
+                # through the captured object (F4.4, `docs/COVERAGE_MATRIX.md` §1). One rule states the
+                # shape: `OVERRIDE_REPORT_FIELDS` is the field order, and a field the entry carries no
+                # value for prints nothing (F4.3 rule 3). `port` and `protocol` state `any` for the empty
+                # field, which is what the export means.
+                parts = [f"  {rule.get('name')}:"]
+                for label, key in OVERRIDE_REPORT_FIELDS:
+                    value = rule.get(key)
+                    if value not in entry_coverage.EMPTY_FIELD_VALUES:
+                        parts.append(f'{label}={value}')
+                    elif key in ('port', 'protocol'):
+                        parts.append(f'{label}=any')
+                lines.append(' '.join(parts))
             lines.append('  Configure via the Panorama GUI or CLI.')
             lines.append('')
 
@@ -5676,8 +5702,8 @@ variable "panos_password" {
 
         # F4.2: entry coverage. A section the parse side does not read is
         # stated here so the operator sees what the conversion cannot cover.
-        if entry_coverage:
-            lines.append(entry_coverage)
+        if entry_report:
+            lines.append(entry_report)
             lines.append('')
 
         lines.append('End of report.')
@@ -6801,7 +6827,7 @@ def main():
                 s for s in services
                 if len(TerraformGenerator.dropped_service_protocols(s.get('protocols') or {})) > 0
             ],
-            entry_coverage=container_coverage.render_section(coverage_findings, panorama.source.name),
+            entry_report=container_coverage.render_section(coverage_findings, panorama.source.name),
         )
 
         # F5.5: the read-through blocks, the unit's file, written before the

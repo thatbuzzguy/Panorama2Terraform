@@ -1,6 +1,6 @@
 """F4.4 property-level coverage: what a matrix row reads, and what no output read.
 
-Four groups:
+Six groups:
 
 1. The read record. `mark` stores the captured object as a `RecordingDict`, which records
    the keys an output reads from it. The record starts when the run starts the outputs, so
@@ -17,10 +17,10 @@ Four groups:
    (`docs/ARCHITECTURE.md` §3.2): the scope, the position, the entry, the fact. No matrix row, because
    a console line has no room for a column. The fact names the properties as the parsed-object key
    names. A run with no finding prints nothing new, and the report bytes are unchanged.
-6. The four parser extraction gaps, one pin per gap: the fixture entry, the read the parse made, and the
-   output that prints the field. A `report` container has no matrix row, so its field is closed by the
-   report writer reading what it prints; an `emitted` container is closed by the emitter reading the key and
-   the row naming it in the same change.
+6. The five field gaps the scan cannot measure, one pin per gap: the fixture entry, the read the
+   parse made, and the output that prints the field. A `report` container has no matrix row, so its
+   field is closed by the report writer reading what it prints; an `emitted` container is closed by
+   the emitter reading the key and the row naming it in the same change.
 
 The scan scope is the entries a matrix row covers. A report, inventory, bookkeeping,
 count-only, or nested-block container has no matrix row, so the scan does not report it;
@@ -554,12 +554,13 @@ def test_scan_reports_the_properties_no_output_read(converter_module, tmp_path):
 def test_scan_scope_is_the_entries_a_matrix_row_covers(converter_module, tmp_path):
     """A field gap in a container the matrix does not cover is not a scan finding.
 
-    Both fixtures hold a captured field no output read, in a report or count-only
-    container. The gap is real, so it stays in backlog.md, but the scan does not report
-    it: only an emitted container has a matrix row, and a matrix row is what names the
-    properties an emitter reads.
+    The fixture holds a captured field no output read, in a `count-only` container. The gap is real, so it
+    stays in backlog.md, but the scan does not report it: only an emitted container has a matrix row, and a
+    matrix row is what names the properties an emitter reads. A `report` container has no row either, so its
+    field is honest only when the report line reads what it prints; that is the rule group 6 pins, and
+    measured 2026-11-04 no `report` container in the corpus has a captured field no output read.
     """
-    for fixture in ('application_override_rules.xml', 'regions.xml'):
+    for fixture in ('regions.xml',):
         parser = run_pipeline(converter_module, fixture, tmp_path)
         assert parser is not None, fixture
         ledger = parser.ledger
@@ -710,7 +711,7 @@ def _gap_mark(ledger, name):
     return entry, mark
 
 
-# --- 6. The four parser extraction gaps ------------------------------------
+# --- 6. The five field gaps the scan cannot measure ------------------------------------
 
 def test_the_report_reads_the_application_filter_description_it_prints(converter_module, tmp_path):
     """Gap 1: `panos_application_filter` is not a resource, so the report is the output for the entry.
@@ -805,6 +806,57 @@ def test_the_nat_service_is_read_in_both_export_forms(converter_module, tmp_path
     assert ledger.property_findings() == [], ledger.property_findings()
     row = next(r for r in ROWS if r['resource'] == 'panos_nat_policy_rules')
     assert 'service' in row['properties'], row['properties']
+
+
+def test_the_report_reads_the_application_override_fields_it_prints(converter_module, tmp_path):
+    """Gap 5: `panos_application_override_rule` is not a resource, so the report is the output for the entry.
+
+    `parse_application_override_rules` keeps `description` and `destination_addresses` in the object it
+    marks, read through `_get_text` and `_get_members` like the other fields of that entry, and the report
+    line prints both through the captured object, so the read record names the keys as properties an output
+    used. The `application-override/rules` container is a `report` row, so `matrix_row_for` answers None and
+    the scan measures nothing for it: the report reading what it prints is the only rule that can keep a
+    field honest in a container with no matrix row. The line shape lives in one place,
+    `panorama_to_terraform.OVERRIDE_REPORT_FIELDS`.
+
+    The fixture holds one entry that carries neither field, so the pin covers both sides: a field the entry
+    carries no value for is not a captured field (F4.3 rule 3), and the line prints neither. Measured
+    2026-11-04, this closed the last `report` container in the corpus with a captured field no output read.
+    """
+    ledger, report, _tf = _gap_run(converter_module, tmp_path, 'application_override_rules.xml')
+    entry, mark = _gap_mark(ledger, 'Override-443')
+    fields = ledger.captured_fields(mark)
+    assert 'description' in fields and 'destination_addresses' in fields, fields
+    line = next(line for line in report.splitlines() if 'Override-443' in line)
+    assert line == (
+        "  Override-443: from=['Trust'] to=['Untrust'] source=['Internal-Network'] "
+        "destination=['any'] port=8443 protocol=tcp application=https disabled=False "
+        "description=Override 8443 as HTTPS"), line
+    for key in ('description', 'destination_addresses'):
+        assert key in mark['captured'].used_keys(), (key, mark['captured'].used_keys())
+    path = container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source)
+    assert entry_coverage.matrix_row_for(path) is None, path
+
+    # The other side: an entry that carries neither field prints neither, and names neither as a captured
+    # field. The entry is still marked, because `mark` stores the captured object by reference (F4.3 rule 4).
+    plain_entry, plain_mark = _gap_mark(ledger, 'Override-RDP')
+    plain_fields = ledger.captured_fields(plain_mark)
+    assert 'description' not in plain_fields and 'destination_addresses' not in plain_fields, plain_fields
+    plain_line = next(line for line in report.splitlines() if 'Override-RDP' in line)
+    assert plain_line == (
+        "  Override-RDP: from=['Trust'] to=['Untrust'] source=['Internal-Network'] "
+        "port=3389 protocol=tcp application=rdp disabled=False"), plain_line
+    plain_path = container_coverage.section_path(ledger.parents[plain_entry], ledger.parents, ledger.source)
+    assert entry_coverage.matrix_row_for(plain_path) is None, plain_path
+    assert ledger.property_findings() == [], ledger.property_findings()
+
+    # The corpus copy of the same entry carries both fields, so the run reports no finding for it. The
+    # fixture still has findings in containers that have a matrix row, and those are the pinned set.
+    kitchen = run_pipeline(converter_module, 'kitchen_sink.xml', tmp_path / 'kitchen_sink')
+    assert kitchen is not None, 'kitchen_sink.xml'
+    findings = kitchen.ledger.property_findings()
+    assert not [f for f in findings if f['name'] == 'Override-443'], findings
+    assert _finding_rows(kitchen.ledger) == CORPUS_FINDINGS['kitchen_sink.xml'], findings
 
 
 def test_the_console_shape_moves_no_report_bytes(converter_module, tmp_path):

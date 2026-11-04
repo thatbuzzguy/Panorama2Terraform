@@ -25,6 +25,23 @@
                   <application>https</application>
                   <description>Override 8443 as HTTPS</description>
                 </entry>
+                <!-- F4.4: the entry that carries neither field the report line prints, so the pin covers
+                     both sides. No `destination` member and no `description`, so the parse captures no value
+                     for either field (F4.3 rule 3) and the line prints neither. -->
+                <entry name="Override-RDP">
+                  <from>
+                    <member>Trust</member>
+                  </from>
+                  <to>
+                    <member>Untrust</member>
+                  </to>
+                  <source>
+                    <member>Internal-Network</member>
+                  </source>
+                  <port>3389</port>
+                  <protocol>tcp</protocol>
+                  <application>rdp</application>
+                </entry>
               </rules>
             </application-override>
           </pre-rulebase>
