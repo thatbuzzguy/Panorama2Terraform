@@ -5,18 +5,10 @@ Completed work is not recorded here; the git history and the owner document hold
 
 ## Tech Debt
 
-- `tools/build_kitchen_sink.py` still calls `ET.parse` directly. Accepted
-  (F3.8): it is a developer tool that assembles the kitchen-sink fixture
-  from files already committed to this repository, not an entry point that
-  reads an operator's export. Leave it alone unless it ever takes a
-  command-line path.
-
-- The same tool cannot rebuild `tests/fixtures/kitchen_sink.xml` while the hostile fixtures sit in
-  the corpus, because it parses every `.xml` file in the directory and two of them are not
-  well-formed XML (`hostile_bad_control_char.xml`, `hostile_xxe.xml`). Measured 2026-11-04: the
-  committed file is also not the tool's output for the current fixture set, because it holds no
-  `ip-with-expand` entry. A rebuild needs the tool to skip the files it cannot parse, and the
-  golden set for the case must be regenerated from a run in the same commit.
+- The `tools/build_kitchen_sink.py` finding is promoted to the current feature in `to-do.md`: the tool reads
+  the whole corpus, the corpus pins read the fixtures that are not hostile, and the committed fixture is not
+  what the tool writes. The F3.8 decision that the tool is a developer script stands, so the open question is
+  the file set it reads and whether the committed fixture is its output.
 
 - Property gaps the scan does not report, because the container that holds them has
   no matrix row: only an `emitted` container can name the properties an emitter reads.
