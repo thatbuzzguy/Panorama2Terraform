@@ -16,14 +16,16 @@ Four groups:
 
 The scan scope is the entries a matrix row covers. A report, inventory, bookkeeping,
 count-only, or nested-block container has no matrix row, so the scan does not report it;
-those field gaps stay in backlog.md.
+those field gaps stay in backlog.md. F7.11: an entry the parse reaches through a field the parent row names is
+not measured either, such as an interface entry inside an area entry, so the fields its row declares are grounded
+by `PROTOCOL_SHAPE` instead of by the row.
 """
 
 import container_coverage
 import entry_coverage
 import xml_input
 from conftest import FIXTURES_DIR, run_pipeline, run_script
-from resource_mapping import COVERAGE_MATRIX
+from resource_mapping import COVERAGE_MATRIX, protocol_row
 
 ROWS = list(COVERAGE_MATRIX)
 
@@ -416,6 +418,75 @@ def test_the_scan_measures_a_redist_profile_entry_and_a_dampening_entry(
 
 
 # --- 3. The scan -----------------------------------------------------------
+
+def test_the_scan_measures_the_six_rows_and_not_a_level_inside_an_entry(converter_module, tmp_path):
+    """F7.11: the entry levels the six rows completed are in the scan scope, and a level inside an entry is not.
+
+    The peer group entry, the peer entry, and the redist rule entry are entries whose container a row covers, so
+    the fields their rows gained join the measured set. `bfd`, `connection_options` and
+    `subsequent_address_family_identifier` are measured as the fields of the peer entry, because
+    `_protocol_level` builds a `single` level as a plain dict, which records nothing. The peer the fixture puts
+    at the `bgp` level is covered by the row `CONTAINER_TABLE` states for `protocol/bgp/peer`, which is the
+    same level the shape table states as `protocol/bgp/peer_group/peer`. An interface entry sits
+    inside an area entry, so its section path holds an `entry` segment a row path cannot match: the eight fields
+    the two interface rows gained stay grounded by the table, so the router row declares no property for them.
+    The `ospfv3` area entry is in scope, so its new field is measured against the row.
+    """
+    parser = run_pipeline(converter_module, 'bgp.xml', tmp_path)
+    assert parser is not None, 'bgp.xml'
+    ledger = parser.ledger
+    measured = (
+        ('PG-Branch', 'protocol/bgp/peer-group',
+         ['aggregated_confed_as_path', 'enable', 'peer', 'soft_reset_with_stored_info', 'type']),
+        ('10.55.0.2', 'protocol/bgp/peer',
+         ['address_family_identifier', 'bfd', 'connection_options', 'enable', 'enable_mp_bgp',
+          'enable_sender_side_loop_detection', 'local_address', 'max_prefixes', 'peer_address', 'peer_as',
+          'peering_type', 'reflector_client', 'subsequent_address_family_identifier']),
+        ('redist-static', 'protocol/bgp/redist-rules',
+         ['address_family_identifier', 'enable', 'metric', 'route_table', 'set_as_path_limit',
+          'set_community', 'set_extended_community', 'set_local_preference', 'set_med', 'set_origin']),
+    )
+    for entry_name, row_path, keys in measured:
+        entry = next(e for e in ledger.entries() if e.get('name') == entry_name)
+        path = container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source)
+        assert entry_coverage.covering_row(path).path == row_path, path
+        recorded = ledger.mark_for(entry)['captured']
+        assert isinstance(recorded, entry_coverage.RecordingDict), recorded
+        assert sorted(set(recorded.used_keys()) - entry_coverage.NON_FIELD_KEYS) == keys, recorded.used_keys()
+        # A `single` level inside an entry is a plain dict, so it records nothing on its own.
+        for field in ('bfd', 'connection_options', 'subsequent_address_family_identifier'):
+            assert not isinstance(recorded.get(field), entry_coverage.RecordingDict), field
+        assert ledger.property_findings() == [], ledger.property_findings()
+
+    # An interface entry is inside an area entry, so the scan does not measure it.
+    ospf = run_pipeline(converter_module, 'ospf.xml', tmp_path)
+    assert ospf is not None, 'ospf.xml'
+    interface = next(e for e in ospf.ledger.entries() if e.get('name') == 'ethernet1/2')
+    path = container_coverage.section_path(ospf.ledger.parents[interface], ospf.ledger.parents, ospf.ledger.source)
+    assert entry_coverage.matrix_row_for(path) is None, path
+    router_row = next(r for r in ROWS if r['resource'] == 'panos_virtual_router')
+    for field in ('dead_counts', 'gr_delay', 'hello_interval', 'retransmit_interval', 'transit_delay'):
+        assert field in protocol_row('protocol/ospf/area/interface')['fields'], field
+        assert field in protocol_row('protocol/ospfv3/area/interface')['fields'], field
+        assert field not in router_row['properties'], router_row['properties']
+    # `instance_id` is the one field the `ospfv3` interface row states that the `ospf` row does not.
+    assert 'instance_id' in protocol_row('protocol/ospfv3/area/interface')['fields']
+    assert 'instance_id' not in router_row['properties'], router_row['properties']
+    assert ospf.ledger.property_findings() == [], ospf.ledger.property_findings()
+    # The `ospfv3` area entry is in scope, so `authentication` is measured through it.
+    ospfv3 = run_pipeline(converter_module, 'ospfv3.xml', tmp_path)
+    assert ospfv3 is not None, 'ospfv3.xml'
+    area = next(e for e in ospfv3.ledger.entries() if e.get('name') == '0.0.0.0')
+    path = container_coverage.section_path(ospfv3.ledger.parents[area], ospfv3.ledger.parents,
+                                           ospfv3.ledger.source)
+    assert entry_coverage.covering_row(path).path == 'protocol/ospfv3/area', path
+    recorded = ospfv3.ledger.mark_for(area)['captured']
+    assert sorted(set(recorded.used_keys()) - entry_coverage.NON_FIELD_KEYS) == [
+        'authentication', 'interface', 'range', 'type', 'virtual_link'], recorded.used_keys()
+    assert ospfv3.ledger.property_findings() == [], ospfv3.ledger.property_findings()
+
+
+
 
 def test_scan_reports_the_properties_no_output_read(converter_module, tmp_path):
     """The corpus findings, pinned.

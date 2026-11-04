@@ -266,8 +266,9 @@ def test_parse_bgp_enabled(make_parser):
     assert redist["name"] == "redist-static"
     assert redist["enable"] is True
     assert redist["address_family_identifier"] == "ipv4-unicast"
-    # The export states no metric, so a number field with no value is empty and prints nothing (F7.1).
-    assert redist["metric"] == ""
+    # F7.11: the fixture states the number fields the row gained, so they read as numbers. A field the export
+    # does not state is still empty and prints nothing, which the report peer pins.
+    assert redist["metric"] == 10
 
 
 def test_parse_bgp_reads_the_fields_the_table_added(make_parser):
@@ -315,6 +316,44 @@ def test_parse_bgp_keeps_a_peer_no_group_names_for_the_report(make_parser):
         ("default", "peer", "10.55.0.9")], rows
     # The captured object is the same object the parse marked, so the report and the scan read one record.
     assert rows[0]["captured"]["peer_as"] == "65003"
+    # F7.11: this entry states only three of the fields its row declares, so a field the export does not state
+    # reads empty, which is the rule that keeps an empty field out of the file (F4.3 rule 3).
+    assert rows[0]["captured"]["max_prefixes"] == "", rows[0]["captured"]
+
+
+def test_parse_bgp_reads_the_fields_the_six_rows_added(make_parser):
+    """F7.11: `parse_bgp` reads the fields the `peer_group`, `peer` and `redist_rules` rows gained as the rows
+    state them, and reads the three `single` levels inside a peer entry through their own rows.
+
+    `parse_bgp` states a path and no field name, so the row is the only owner of these names. A `single` level
+    inside an entry is built as a plain dict, so the property scan measures the field of the entry that holds it
+    and not the fields inside it. A `number` field the provider declares as a `string` (`max_prefixes`) reads as
+    text, and a `member_list` field is the members the element holds.
+    """
+    p = _parser(make_parser, "bgp.xml")
+    bgp = {r["name"]: r for r in p.parse_virtual_routers()}["default"]["protocol"]["bgp"]
+    group = bgp["peer_group"][0]
+    assert group["aggregated_confed_as_path"] is True and group["soft_reset_with_stored_info"] is False, group
+    peer = group["peer"][0]
+    assert (peer["address_family_identifier"], peer["max_prefixes"], peer["peering_type"],
+            peer["reflector_client"]) == ("ipv4-unicast", "65536", "non-default", "non-default"), peer
+    assert (peer["enable_mp_bgp"], peer["enable_sender_side_loop_detection"]) == (True, True), peer
+    assert peer["bfd"] == {"profile": "BFD-BGP"}, peer["bfd"]
+    assert peer["connection_options"] == {
+        "authentication": "simple", "hold_time": "180", "idle_hold_time": 30,
+        "incoming_bgp_connection": {"allow": True, "remote_port": 179},
+        "keep_alive_interval": "60", "min_route_adv_interval": 30, "multihop": 1,
+        "open_delay_time": 5, "outgoing_bgp_connection": {"allow": True, "local_port": 1024}}, \
+        peer["connection_options"]
+    assert peer["subsequent_address_family_identifier"] == {"multicast": True, "unicast": True}, peer
+    rule = bgp["redist_rules"][0]
+    assert (rule["route_table"], rule["set_origin"]) == ("1", "igp"), rule
+    assert (rule["set_as_path_limit"], rule["set_local_preference"], rule["set_med"]) == (64, 200, 100), rule
+    assert rule["set_community"] == ["1:10", "2:20"], rule["set_community"]
+    assert rule["set_extended_community"] == ["1:1000"], rule["set_extended_community"]
+    # The three levels inside the entry are read through the rows, so they hold no mark of their own.
+    for key in ("bfd", "connection_options", "subsequent_address_family_identifier"):
+        assert not isinstance(peer[key], entry_coverage.RecordingDict), peer[key]
 
 
 def test_parse_bgp_absent(make_parser):

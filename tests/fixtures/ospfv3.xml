@@ -40,6 +40,8 @@
                         </range>
                         <!-- F7.2: an interface inside an area prints inside the area element -->
                         <interface>
+                          <!-- F7.11: the same eight fields the `ospf` row gained, plus `instance_id`, which the
+                               provider declares for this level only. -->
                           <entry name="ethernet1/2">
                             <enable>yes</enable>
                             <passive>no</passive>
@@ -49,6 +51,17 @@
                             <neighbor>
                               <entry name="10.0.0.2"/>
                             </neighbor>
+                            <authentication>ipsec</authentication>
+                            <bfd>
+                              <profile>BFD-OSPF</profile>
+                            </bfd>
+                            <dead-counts>40</dead-counts>
+                            <gr-delay>10</gr-delay>
+                            <hello-interval>10</hello-interval>
+                            <instance-id>1</instance-id>
+                            <priority>1</priority>
+                            <retransmit-interval>200</retransmit-interval>
+                            <transit-delay>5</transit-delay>
                           </entry>
                         </interface>
                         <!-- F7.4: the provider declares `instance_id` for a virtual link in this level only -->
@@ -58,6 +71,10 @@
                             <neighbor-id>10.0.0.3</neighbor-id>
                           </entry>
                         </virtual-link>
+                        <!-- F7.11: `authentication` is the one field the `protocol/ospfv3/area` row gained, so
+                             the row is now the whole measurement. Field order is the row's order, so it prints
+                             after the levels the row already stated. -->
+                        <authentication>ipsec</authentication>
                       </entry>
                       <!-- F7.4: a `default-route` element with no child states neither choice the provider
                            requires, so the area entry that holds it has no `.tf` shape and the report names it -->
