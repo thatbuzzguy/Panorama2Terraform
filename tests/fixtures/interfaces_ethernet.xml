@@ -2,7 +2,12 @@
 <!-- F3.3: ethernet kinds. The physical L3 entry, a subinterface unit
      (units/entry), and the virtual-wire container. The provider has no
      virtual-wire resource type, so the virtual-wire entry emits as
-     panos_ethernet_interface with a virtual_wire block. -->
+     panos_ethernet_interface with a virtual_wire block.
+
+     F4.4: the virtual-wire unit carries a comment, so the per-entry report line names
+     a field the print reads and prints. `parent` is not a field for that entry: the
+     type the block prints declares no parent attribute, and the name states the parent
+     part, so the line names only what the print reads. -->
 <config version="10.0.0" urldb="paloaltonetworks">
   <devices>
     <entry name="localhost.localdomain">
@@ -52,6 +57,7 @@
                     <virtual-wire>
                       <tag>200</tag>
                     </virtual-wire>
+                    <comment>Wire unit on ethernet1/4</comment>
                   </entry>
                 </units>
               </virtual-wire>

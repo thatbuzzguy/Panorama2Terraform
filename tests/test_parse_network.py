@@ -97,14 +97,22 @@ def test_parse_ethernet_subinterface_units(make_parser):
 
 
 def test_parse_virtual_wire_units(make_parser):
-    """F3.3: the virtual-wire container is parsed as individual entries."""
+    """F3.3: the virtual-wire container is parsed as individual entries.
+
+    F4.4: the parse keeps no `parent` value for a nested-block entry. The type the block prints
+    (`panos_ethernet_interface`) declares no `parent` attribute, so `parent` is not a property the entry can
+    carry: it is a fact of the parent entry, and the child's name states the parent part. The rule is in
+    `docs/COVERAGE_MATRIX.md` §1.
+    """
     p = _parser(make_parser, "interfaces_ethernet.xml")
     by_name = {i["name"]: i for i in p.parse_interfaces()}
 
     vw = by_name["ethernet1/4.1"]
     assert vw["type"] == "ethernet"
     assert vw["mode"] == "virtual-wire"
-    assert vw["parent"] == "ethernet1/4"
+    # No value, so the key is not a captured field (F4.3 rule 3).
+    assert vw["parent"] is None, vw["parent"]
+    assert vw["comment"] == "Wire unit on ethernet1/4"
 
     # An ethernet entry that is itself in virtual-wire or tap mode keeps
     # that mode; the provider has no separate resource type for them.

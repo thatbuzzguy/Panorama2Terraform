@@ -1519,7 +1519,14 @@ class PanoramaParser:
                 'virtual_router': None,
                 'management_profile': None,
                 'comment': self._get_text(iface, 'comment'),
-                'parent': name.split('.')[0] if '.' in name else None,
+                # F4.4: `parent` is not a field for a nested-block entry, so it stays empty here. The
+                # pinned provider declares no `parent` attribute on `panos_ethernet_interface`, so no line of
+                # this block can print a parent. The parent is a fact of the parent entry, and for a unit name
+                # the child's own name states it (`ethernet1/4.1` is unit 1 of `ethernet1/4`), which the print
+                # reads through the name: the name is the row identity. The entry line therefore names only the
+                # fields the print reads: `mode` for the block key, `type` for the parent type, and `comment`
+                # when the entry carries one (`docs/COVERAGE_MATRIX.md` §1).
+                'parent': None,
             })
             interfaces.append(iface_obj)
 

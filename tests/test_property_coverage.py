@@ -22,11 +22,13 @@ Six groups:
    field is closed by the report writer reading what it prints; an `emitted` container is closed by
    the emitter reading the key and the row naming it in the same change; a `count-only` container is
    closed by the report line printing the value it names, because the entry line is the only output
-   its entry reaches. Six pins, one per container.
+   its entry reaches; a `nested-block` container is closed by the entry line naming only the fields
+   the print reads, because a nested block prints only what its type declares. Seven pins, one per gap.
 
 The scan scope is the entries a matrix row covers. A report, inventory, bookkeeping,
 count-only, or nested-block container has no matrix row, so the scan does not report it;
-those field gaps stay in backlog.md. F7.11: an entry the parse reaches through a field the parent row names is
+`docs/COVERAGE_MATRIX.md` §1 names the output that reads the field for each shape, and the shape with
+no rule (`bookkeeping`) stays in backlog.md. F7.11: an entry the parse reaches through a field the parent row names is
 not measured either, such as an interface entry inside an area entry, so the fields its row declares are grounded
 by `PROTOCOL_SHAPE` instead of by the row.
 """
@@ -557,10 +559,12 @@ def test_scan_scope_is_the_entries_a_matrix_row_covers(converter_module, tmp_pat
     """A field gap in a container the matrix does not cover is not a scan finding.
 
     The scan measures the entries a matrix row covers, so a container with no row cannot produce a finding:
-    nothing there names a property an emitter reads. The nested-block fixture holds such a gap today, so the
-    pin can show the rule against a real gap: `parse_interfaces` keeps `parent` for the layer-3 subinterface
-    inside its parent interface row, and the nested block prints the parent name from the parent object, not
-    through the child object, so no output reads the field on the child. The gap stays in backlog.md.
+    nothing there names a property an emitter reads. The nested-block fixture holds such a container, so the
+    pin can show the rule against a real one: `parse_interfaces` marks the virtual-wire unit `ethernet1/4.1`,
+    and the type the block prints declares no `parent` attribute, so `parent` is not a property that entry can
+    carry — the name states the parent part. The rule that keeps its line honest is the one
+    `docs/COVERAGE_MATRIX.md` §1 states for this shape, and gap 7 pins it:
+    `::test_the_nested_block_line_names_only_the_fields_the_emitter_reads`.
 
     The `count-only` row is in the same scope, so the scan measures nothing for a region entry either. Its
     field is not a gap today: the per-entry report line is the only output that entry reaches, and it prints
@@ -574,8 +578,10 @@ def test_scan_scope_is_the_entries_a_matrix_row_covers(converter_module, tmp_pat
     assert ledger.property_findings() == [], ledger.property_findings()
     entry = next(e for e in ledger.entries() if e.get('name') == 'ethernet1/4.1')
     mark = ledger.mark_for(entry)
-    assert 'parent' in ledger.captured_fields(mark), ledger.captured_fields(mark)
-    assert 'parent' not in mark['captured'].used_keys(), mark['captured'].used_keys()
+    fields = ledger.captured_fields(mark)
+    assert fields == ('comment', 'mode', 'type'), fields
+    # Every field the line names is a field the print reads, so the line is honest.
+    assert set(fields) <= set(mark['captured'].used_keys()), mark['captured'].used_keys()
     path = container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source)
     assert entry_coverage.covering_row(path).destination == 'nested-block', path
     assert entry_coverage.matrix_row_for(path) is None, path
@@ -916,6 +922,54 @@ def test_the_report_line_reads_the_region_addresses_it_prints(converter_module, 
     assert row in ledger.gaps(), row
     assert entry_coverage.gap_fact(row).endswith('captured: addresses=[US, CA, MX]'), \
         entry_coverage.gap_fact(row)
+
+
+def test_the_nested_block_line_names_only_the_fields_the_emitter_reads(converter_module, tmp_path):
+    """Gap 7: a `nested-block` row has no matrix row, so the entry line is the only output its entry reaches.
+
+    `docs/COVERAGE_MATRIX.md` §1 states the shape for this kind: the line names only the fields the print reads
+    through the captured object, because a nested block can print only the attributes its type declares.
+    Measured 2026-11-04 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14` through
+    `tests/conftest.py::provider_schemas`), three resource types declare a `parent` attribute
+    (`panos_ethernet_layer3_subinterface`, `panos_aggregate_layer3_subinterface`, `panos_device_group_parent`)
+    and `panos_ethernet_interface` declares none, so no line of the block for `ethernet1/4.1` can print a
+    parent. `parent` is therefore not a property of that entry: it is a fact of the parent entry, and the unit
+    name states the part, which the `name` line prints as the row identity. So `parse_interfaces` keeps no
+    `parent` value for the entry, and the line names `comment`, `mode` and `type` — the comment line, the block
+    key `virtual_wire = {}`, and the resource type from `INTERFACE_RESOURCE_TYPES`. `matrix_row_for` answers
+    None for the row, so the pin is the only thing that can keep a `nested-block` field honest.
+
+    The other side of the rule is measured on the same fixture: `parent` stays a captured property for a kind
+    whose row declares it, and the emitter reads it through the child object and prints it
+    (`tests/test_interfaces.py::test_ethernet_subinterface_unit_emits_with_parent_reference`).
+    """
+    out = tmp_path / 'interfaces_ethernet'
+    parser = run_pipeline(converter_module, 'interfaces_ethernet.xml', out)
+    assert parser is not None, 'interfaces_ethernet.xml'
+    ledger = parser.ledger
+    entry, mark = _gap_mark(ledger, 'ethernet1/4.1')
+    fields = ledger.captured_fields(mark)
+    assert fields == ('comment', 'mode', 'type'), fields
+
+    report = written_bytes(out)[entry_coverage.REPORT_FILE].decode(encoding='utf-8')
+    line = next(line for line in report.splitlines() if 'ethernet1/4.1' in line)
+    # The scope part is the last part of the line, so the captured part is read inside it.
+    assert 'captured: comment, mode, type  [vsys1]' in line, line
+    for key in fields:
+        assert key in mark['captured'].used_keys(), (key, mark['captured'].used_keys())
+
+    # The three fields reach the block: the printed line, the block key, the resource type.
+    tf = '\n'.join(text.decode(encoding='utf-8') for text in written_bytes(out).values())
+    start = tf.index('name = "ethernet1/4.1"')
+    block = tf[start:tf.index('}\n\n', start)]
+    assert 'comment = "Wire unit on ethernet1/4"' in block, block
+    assert 'virtual_wire = {}' in block, block
+    assert 'parent' not in block, block
+
+    path = container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source)
+    assert entry_coverage.covering_row(path).destination == 'nested-block', path
+    assert entry_coverage.matrix_row_for(path) is None, path
+    assert ledger.property_findings() == [], ledger.property_findings()
 
 
 def test_the_console_shape_moves_no_report_bytes(converter_module, tmp_path):
