@@ -49,7 +49,7 @@ document.
 | `panos_loopback_interface` | `loopback/units/entry` | `1` | `loopback.1` | `interfaces_other.xml` | `interfaces.tf` |
 | `panos_tunnel_interface` | `tunnel/units/entry` | `1` | `tunnel.1` | `interfaces_other.xml` | `interfaces.tf` |
 | `panos_aggregate_interface` | `aggregate-ethernet/entry` | `ae1` | `ae1` | `interfaces_other.xml` | `interfaces.tf` |
-| `panos_aggregate_layer3_subinterface` | `aggregate-ethernet/entry` | `ae1.101` | `ae1.101` | `interfaces_other.xml` | `interfaces.tf` |
+| `panos_aggregate_layer3_subinterface` | `aggregate-ethernet/entry/layer3/units/entry` | `ae1.101.20` | `ae1.101.20` | `interfaces_other.xml` | `interfaces.tf` |
 | `panos_virtual_router` | `virtual-router/entry` | `default` | `default` | `virtual_routers.xml` | `virtual_routers.tf` |
 | `panos_virtual_router_static_route_ipv4` | `static-route/entry` | `default-gw` | `default-gw` | `virtual_routers.xml` | `virtual_routers.tf` |
 | `panos_zone` | `zone/entry` | `trust` | `trust` | `zones.xml` | `zones.tf` |
@@ -130,10 +130,16 @@ finding, and a state resource whose type has no row is not in the index. Pinned 
 `tests/test_state_coverage.py::test_the_matrix_row_is_the_same_table_the_property_scan_uses` and
 `::test_the_scan_scope_is_the_f4_4_rule_on_both_sides`.
 
-One row has no corpus entry to measure: `panos_aggregate_layer3_subinterface`,
-because the container table maps an aggregate subinterface to the ethernet
-subinterface row. That row is grounded by the emitter check only, and the table
-limit is recorded in [`../backlog.md`](../backlog.md).
+Every row is measured through a corpus entry. `panos_aggregate_layer3_subinterface` was the row that showed
+the table limit: `parse_interfaces` reaches an aggregate subinterface with the same relative pattern it uses
+for the ethernet shape, so the container table names that container
+(`network/interface/aggregate-ethernet/entry/layer3/units`), and the longest match covers the entry inside an
+aggregate entry. The element column states the same container, plus the entry inside it, so the entry the
+element test reads is the entry the scan measures. `ae1.101` is an aggregate entry whose name carries a unit,
+so the group row covers it, and the emitter reaches the subinterface type for it through the name rule.
+Pinned by
+`tests/test_property_coverage.py::test_the_scan_measures_an_aggregate_subinterface_through_the_aggregate_row`,
+and the parity test now names one row with no read of its own: `panos_device_group_parent`.
 
 ## Testing methodology
 

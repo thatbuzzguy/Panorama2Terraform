@@ -1,95 +1,56 @@
-# Decision — grounding the filter exception pairs — acceptance criteria
+# Decision — the container row for an aggregate subinterface — acceptance criteria
 
-This slice closes the open item `backlog.md` names for `docs/ARCHITECTURE.md` §4.10 rule 3:
-`FILTER_XML_NAME_EXCEPTIONS` holds 15 path-keyed pairs, and the fixture grounds five. A pair is grounded
-when a fixture entry states the input spelling and the run prints the table spelling for it, so the pair is
-a fact a real run read, not a spelling the pango source measures. This slice extends
-`tests/fixtures/filter_containers.xml` so every pair is stated by an entry, and moves the pin from a text
-search to the pair the run prints.
+This slice closes the open item `backlog.md` names for the property scan (F4.4):
+`panos_aggregate_layer3_subinterface` is one of the two matrix rows with no read of its own. The cause is the
+container table: `parse_interfaces` reads the aggregate subinterface container
+(`network/interface/aggregate-ethernet/entry/layer3/units`) through the same relative pattern it uses for the
+ethernet shape, and the table has no row for it, so the general `layer3/units` sub-shape row covers the entry
+and the scan measures it against `panos_ethernet_layer3_subinterface`.
 
-## Facts
+## Facts before the change
 
-- `FILTER_XML_NAME_EXCEPTIONS` is keyed by the container path, because one provider field name spells two
-  ways in the input. It holds 15 pairs across 5 containers, and `ipv4_entries` and `ipv6_entries` spell the
-  same way in two containers, so 13 distinct spellings. None is a spelling the `-` rule can produce.
-- `resource_mapping.FILTER_SHAPE` is the one table that states a filter level's fields, and
-  `ShapeTable.xml_name` is the one rule that turns a table name into the element the input spells, so the
-  parse reads the element through the exception map (`_protocol_xml_name`) and the emitter prints the table
-  name. A parse method states a path and never spells a field name (`docs/ARCHITECTURE.md` §4.9 rule 3).
-  `XML_NAME_EXCEPTIONS` stays the protocol table's own map, and no new exception row is added here: the
-  pairs are already in the map, so this slice grounds them and changes no mapping.
-- The choice rule (F7.12, F7.13): a row that states `selects` is a level the provider reads as exactly one
-  attribute, so one entry can state one alternative. The entry-list fields of a choice container are under
-  the chosen alternative, so one entry states one entry-list spelling only. That is why a pair is grounded
-  by an entry and not by one entry per container: the fixture needs one entry per pair, or one entry that
-  states several spellings under one chosen alternative.
-- `tests/fixtures/filter_containers.xml` is a golden case (`tests/test_golden_files.py` case
-  `filter_containers`), so extending it moves the `.tf` goldens. A golden is the bytes of a real run and is
-  never edited by hand.
-- The pin machinery already in `tests/test_filter_containers.py` reads a run the way the gate reads it:
-  `_run` runs the converter, `sanity_checks.blocks` and `import_blocks.fields_at` read the printed fields,
-  and `_printed_level` walks a level inside a printed block. `sanity_checks.check_terraform` is the validate
-  check the CLI runs on `--validate`, and `test_terraform_validate_filters_succeeds` calls it per unit
-  directory. The grounding pin reads the pair through that machinery, so it cannot restate a table row by
-  hand.
+- `parse_interfaces` reaches the aggregate subinterface two ways: an entry under `aggregate-ethernet` whose
+  name already carries a unit (`ae1.101`), and an entry under `layer3/units` inside an aggregate entry
+  (`ae1.101.20`). Only the second is a container the table can name, because the first is a name fact the row
+  shape cannot state.
+- `entry_coverage.covering_row` takes the longest matching row, so a row for the aggregate subinterface
+  container is the row that covers a nested aggregate entry, and the aggregate group row still covers the
+  entries directly under `aggregate-ethernet`.
+- The emitter prints both shapes as `panos_aggregate_layer3_subinterface` (`INTERFACE_RESOURCE_TYPES` for a
+  `units` entry, the name rule for `ae1.101`), so no emitter change is needed: the table row is missing.
+- `test_measured_reads_equal_the_declared_properties` compares the properties the row declares with the keys
+  the run read from the entries that row covers. The aggregate group row declares 8 properties, and the
+  `parent` read comes from `ae1.101`, which stays covered by that row, so the group row keeps its list.
 
-## Criteria
+## Decision
 
-1. Every one of the 15 pairs is stated by an entry in `tests/fixtures/filter_containers.xml`. Each entry
-   states the element the exception names, and the row that declares the field states the provider spelling.
-   No exception row is added, removed, or reworded, and no mapping is restated.
-2. One entry states one alternative per choice level, so the choice rule still holds for every entry the
-   fixture adds: each choice level the entry reaches states exactly one key.
-3. A real run on the extended fixture reports `PASS (0 FAIL, 0 WARN)`; `terraform validate` accepts every
-   block the run wrote for the fixture, including the blocks written for the new entries.
-4. The grounding pin is the pair the run prints, read from the run's output: for each pair, the fixture
-   entry states the input spelling, and the block the run wrote for that entry prints the field name the row
-   declares. The pin asserts all 15 pairs are grounded, and it runs `terraform validate` on the output the
-   run wrote (skip when the terraform binary is absent, as the existing validate pins do). It states no
-   hand-written list of pairs.
-5. A pair that cannot be grounded — the provider refuses the combination in every entry shape — stays in
-   `backlog.md` with the reason, and the pin states the grounded set as what the run read, so the count is
-   the measurement, not an assumption.
-6. The pins that already read the fixture stay honest with more than one entry per container: the parse mark
-   pin, the emitter print pin, the choice pin, and the property grounding pin read the entries the fixture
-   holds, not one entry per container. The scan scope, the row scope decision, and the writer scan are
-   unchanged.
-7. The goldens for the filter case are regenerated from a real run, and every other golden is unchanged.
-8. `docs/ARCHITECTURE.md` §4.10 rule 3 states the grounding as the pin states it, and
-   `docs/COVERAGE_MATRIX.md` keeps naming the entry each matrix row reads. `README.md` names the test that
-   pins the map.
-9. `ruff check .` is clean and `python3 -m pytest` passes. No test count appears in a document other than
-   `agent-status.md`.
-10. The commit message follows the `git log` style, uses ASD-STE100, and states which pairs are grounded and
-   which are not. The tracking markdown is a second commit.
+`CONTAINER_TABLE` covers the aggregate subinterface container with its own `emitted` sub-shape row that names
+`panos_aggregate_layer3_subinterface`. The ethernet sub-shape rows keep the shape they state for the ethernet
+container. The matrix row for `panos_aggregate_layer3_subinterface` names the fixture entry the scan measures
+through that row: `ae1.101.20` in `tests/fixtures/interfaces_other.xml`.
 
-## Result
+## Acceptance criteria
 
-Met, and no pair is ungroundable. The fixture holds 11 entries, so all 15 pairs are stated by an entry:
-
-- access-list: `ACL-Filter` states `ipv4-entry`, `ACL-Filter-v6` states `ipv6-entry`.
-- as-path-access-list: `ASPath-Filter` states `aspath-entry`.
-- prefix-list: `Prefix-Filter` states `ipv4-entry`, `Prefix-Filter-v6` states `ipv6-entry`.
-- community-list: `Community-Filter` states `regular-entry` and `community`,
-  `Community-Filter-Extended` states `extended-entry` and `ec-regex`,
-  `Community-Filter-Large` states `large-entry` and `lc-regex`.
-- redist-entry: `Redist-Filter-Set` states `aspath-prepend`, `extended-community`, `large-community` and
-  `regular-community` in one `set`, which grounds the 4 redist pairs in one entry.
-
-Criterion 2 holds for every entry the fixture adds: each choice level a new entry reaches states one key.
-Criterion 3 holds: the run reports `Result: PASS (0 FAIL, 0 WARN)`, and `terraform validate` passes for the
-3 unit directories the manifest names.
-
-Pins: `tests/test_filter_containers.py`. The new pin
-`test_the_run_prints_the_field_for_each_pair_the_fixture_states` reads the pairs through the map, the fixture
-and the run, and validates the output the run wrote, so no pair is measured from the pango source alone; the
-hand-written list of 5 grounded pairs is removed from
-`test_the_path_keyed_exceptions_are_the_spellings_the_input_uses`. The map facts (15 pairs, 13 distinct
-spellings, the `xml_name` results for the two containers that spell one idea two ways) are unchanged. The
-scan scope, the row scope decision, the writer scan and the property grounding pins read the same rule with
-more entries.
-
-The goldens are regenerated from a real run, so `tests/golden/filter_containers/fw_template_00a08cdc/filters.tf`
-is the only golden that changed. `ruff check .` is clean and `python3 -m pytest` passes 1462 tests.
-
-Code commit: `244ddef`.
+1. `CONTAINER_TABLE` holds one row for `parse_interfaces` reading
+   `network/interface/aggregate-ethernet/entry/layer3/units`, with destination `emitted`, the provider type in
+   its note, and level `sub-shape`. `test_every_row_path_is_read_by_its_method` reads the path through the
+   segments the method names.
+2. `entry_coverage.covering_row` answers that row for `ae1.101.20`, so `matrix_row_for` answers the matrix row
+   for `panos_aggregate_layer3_subinterface` for the entry. The pin states both.
+3. The fixture entry is marked by `parse_interfaces`, and the run prints it as a
+   `panos_aggregate_layer3_subinterface` block in `interfaces.tf` with `parent` and `tag`.
+4. The matrix row names that entry: `xml_element` is the container path the parse reads plus `entry`,
+   `xml_name` is `ae1.101.20`, and `emitted_name` is `ae1.101.20`, so `test_fixture_contains_the_row_element`
+   reads the entry the property scan measures.
+5. `test_measured_reads_equal_the_declared_properties` measures the aggregate subinterface row through the
+   corpus, so the unmeasured set is `['panos_device_group_parent']`, and the docstring names one row instead
+   of two.
+6. No golden moves. The aggregate subinterface entry is a property level, so the entry report shows the count
+   on the `ae1.101` row, the run writes the same `.tf` bytes, and the property scan reports no finding for the
+   entry. A golden that does move must come from a real run and be stated in `agent-status.md`.
+7. The run accepts the fixture: the sanity gate reports `PASS (0 FAIL, 0 WARN)` for
+   `tests/fixtures/interfaces_other.xml`, and `terraform validate` passes for the block the run writes for the
+   entry in the kitchen-sink case.
+8. `ruff check .` is clean and `python3 -m pytest` passes.
+9. `docs/COVERAGE_MATRIX.md` states the row as the pin states it, `backlog.md` loses the closed item, and
+   `to-do.md` and `agent-status.md` carry the decision.

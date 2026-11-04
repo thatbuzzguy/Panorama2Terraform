@@ -32,14 +32,6 @@ Completed work is not recorded here; the git history and the owner document hold
   parent scope would say which parent entry the child repeats. Not built: one child entry is one
   finding today, and the parent scope is not a row key.
 
-- `panos_aggregate_layer3_subinterface` has no corpus entry to measure: the container
-  table maps an aggregate subinterface to the ethernet subinterface row, so no entry
-  reaches it. That row's properties are grounded in the emitter source only
-  (`tests/test_coverage_matrix.py::test_declared_property_is_a_key_the_emitter_reads`),
-  and the parity test names it as the one unmeasured row. A fixture entry that reaches the aggregate shape
-  closes this, and the decision it needs is whether `CONTAINER_TABLE` covers an aggregate interface entry with
-  its own row or keeps the ethernet subinterface row. The work is in scope as the feature `PLAN.md` names.
-
 - Parser extraction gaps found by the parse unit tests (each drops data; fix each
   when a report confirms it in a fixture):
   - Application filter `description` is not extracted.

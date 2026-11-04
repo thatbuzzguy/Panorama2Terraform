@@ -2,38 +2,40 @@
 
 ## Current position
 
-The filter input-spelling grounding is complete and committed on `development` (`244ddef`); this tracking
-markdown is the next commit. Decision: a pair of `FILTER_XML_NAME_EXCEPTIONS` is a fact only when the run
-reads it, so `tests/fixtures/filter_containers.xml` holds one entry per choice alternative the fixture states,
-not one entry per container. All 15 pairs are grounded, so no pair is a spelling the pango source measures
-alone, and no pair stays in `backlog.md` as ungroundable. No exception row is added, removed, or reworded.
+The coverage row for the aggregate subinterface container is complete and committed on `development`
+(`90fa615`); this tracking markdown is the next commit. Decision: `CONTAINER_TABLE` covers the container
+`parse_interfaces` reads inside an aggregate entry with its own row, so the longest match measures an aggregate
+subinterface entry through the aggregate row, and the general `layer3/units` sub-shape row still covers the
+ethernet shape. A row shape cannot state a name fact, so the group entry whose name carries a unit (`ae1.101`)
+stays measured through the group row.
 
-- The fixture gains 5 entries: `ACL-Filter-v6`, `Prefix-Filter-v6`, `Community-Filter-Extended`,
-  `Community-Filter-Large`, and `Redist-Filter-Set`. The last one states the 4 redist pairs in one `set`,
-  because `aspath_prepends` is reachable only through a `set` row under a `bgp` child level. The fixture now
-  holds 11 entries.
-- Pins changed in `tests/test_filter_containers.py`: `_fixture_entries` reads every entry per container, and
-  `_entry_level` walks a level the way the parse walks it, so the entry inside a `string_list` element is read
-  at the level the row names it (F7.6). The parse mark pin, the emitter print pin, the choice pin and the gate
-  pin read every entry; the choice pin covers 10 of the 14 choice rows, where it covered 5, and the gate pin
-  states the run's summary as `PASS (0 FAIL, 0 WARN)`. The new pin
-  `test_the_run_prints_the_field_for_each_pair_the_fixture_states` reads each pair from the run's output and
-  runs `terraform validate` on the output the run wrote; the hand-written list of 5 grounded pairs is removed
-  from `test_the_path_keyed_exceptions_are_the_spellings_the_input_uses`.
-- Goldens: only `tests/golden/filter_containers/fw_template_00a08cdc/filters.tf` changed, and it is the bytes
-  of a real run. `docs/ARCHITECTURE.md` §4.10 rule 3 and `README.md` state the grounding as the pin states it.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1462 tests (about 2 minutes).
+- The row is `network/interface/aggregate-ethernet/entry/layer3/units`, destination `emitted`, level
+  `sub-shape`, note `panos_aggregate_layer3_subinterface`.
+- The matrix row for that type names the entry the scan measures through the row: `ae1.101.20` in
+  `tests/fixtures/interfaces_other.xml`. The element column is that container plus the entry inside it, so
+  `test_fixture_contains_the_row_element` and the property scan read the same entry. No fixture changed, and
+  no emitter changed.
+- Pins changed: the parity test names one unmeasured row (`panos_device_group_parent`);
+  `tests/test_property_coverage.py::test_the_scan_measures_an_aggregate_subinterface_through_the_aggregate_row`
+  pins the row, the entry it measures, and the group row for `ae1.101`;
+  `tests/test_interfaces.py::test_the_aggregate_shape_choice_is_the_entry_the_scan_measures` pins the type the
+  run prints for the entry inside the aggregate entry.
+- Goldens: no golden changed. The aggregate subinterface entry is a property level, so the entry report shows the
+  count on the `ae1.101` row, and the `.tf` bytes are the same. `docs/COVERAGE_MATRIX.md` states the row and the
+  element as the pins state them.
+- The run for `tests/fixtures/interfaces_other.xml` reports `PASS (0 FAIL, 0 WARN)`, and `terraform validate`
+  passes for the output it writes.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1464 tests (about 3 minutes).
 
 The housekeeping layout rule is unchanged: `docs/ARCHITECTURE.md` §1.1 is its owner document, `AGENTS.md`
 names the tracking markdown set, and each index names every document under it (commits `ccf93a3` and
 `b3465f1`).
 
-The next feature is the coverage row the corpus cannot measure, which `backlog.md` names:
-`panos_aggregate_layer3_subinterface`. The container table maps an aggregate interface entry to the ethernet
-subinterface row, so no entry reaches the aggregate row and the parity pin names it as one of the two rows
-with no read of its own (`tests/test_property_coverage.py`). The feature is to decide whether an aggregate
-entry is covered by its own row, then state it with a fixture entry that reads `type = aggregate`, so the scan
-measures the row through a real entry and the goldens move with it.
+The next feature is the parse extraction gaps `backlog.md` names. A gap is fixed only when a report confirms it
+in a fixture, so the work starts by naming the fixture that holds each gap: `OWNERSHIP.json` states `unknown`
+for the seven parsed types that can carry `disable-override`, because their matrix rows do not name the
+property. The certificate container row decision stays held in `backlog.md`, because it needs an emitter before
+a row can name a type.
 
 ## Rules to keep when writing documents
 
@@ -152,12 +154,12 @@ each router:
     `tests/test_entry_coverage.py::_parse_every` and `tests/test_multi_vsys_location.py`. A new
   level method
   must be added there, or the corpus checks run no method for it.
-- A container row that moves from `report` to `emitted` changes the property scan scope, the
-per-entry
-    report, and the `.tf` goldens together, so it cannot be a print-only change. A moved row
-  must be
-    `emitted` with the provider type in its note, because the matrix row and the report both
-  read the note.
+- A container row that moves from `report` to `emitted` changes the property scan scope, the per-entry report,
+  and the `.tf` goldens together, so it cannot be a print-only change. A moved row must be `emitted` with the
+  provider type in its note, because the matrix row and the report both read the note. A row must also name the
+  type the emitter prints for the entries in that container, so the matrix element names an entry inside the
+  container the row names: a shape the emitter reaches through a name fact is not a container the row can
+  state, and no entry measures such a row.
 - `SCOPE_PLACEMENT` and the location sub-block are one fact: a new scope type needs both the
   placement key and the `SCOPE_ANSWER` entry, and the emitter reads the placement key as the
   location, so a new row cannot place itself in a scope it does not name. A config type has no
