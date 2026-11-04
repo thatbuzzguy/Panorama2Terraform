@@ -40,6 +40,7 @@ python3 src/panorama_to_terraform.py export.xml --output-dir out
 | `--source file\|api` | Where the input comes from. Default `file` |
 | `--host HOST` | Panorama host for `--source api`. Required with `--source api` |
 | `--cache-dir DIR` | Where fetched responses are kept. Default `panorama_cache` |
+| `--prune-cache` | Remove the cache entries no record this run wrote references. Off by default, and applies to `--source api` (F5.3 rule 4) |
 | `--path /PATH` | Scope path for `--source api`: read one scope instead of the whole config, as `/<container>` or `/<container>/entry/<name>`. The first segment must name a scope container |
 | `--parent /PATH` | Parent scope path for `--source api`, read as the second source for the shadow scan. Needs `--path` |
 | `--offline` | Read the cache only: no request, no key |
@@ -81,6 +82,13 @@ python3 src/panorama_to_terraform.py --source api --host panorama --path /device
 - A stored response is the bytes the parser read, so the report lines name the lines of
   that file. The report names the cache entry as the source, and `SOURCE.txt` records the
   request identity and the entry the run read.
+- `--prune-cache` removes the cache entries no record this run wrote references. It is off by default, so
+  a run that declares nothing keeps its cache. The record is the reference, so the action reads the record
+  file in the output directory through `parse_records` and decides through `provenance.prunable_entries`;
+  `provenance.prune` is the action. It applies to `--source api` only (exit 2), because a file record states
+  `-` for the cache field and references nothing. A record the action cannot read is a refusal (exit 1), and
+  a cache directory that holds no entry has nothing to prune. The action writes no output, so what the gate
+  counts and the exit code the gate decides do not change.
 - `--path` reads one scope instead of the whole config, and `--parent` reads the parent scope as
   the second source. Both apply to `--source api` only, and `--parent` needs `--path`: a
   whole-config source holds its own parent, so the tool does not guess which scope a file run
@@ -214,7 +222,7 @@ directory, so a table row names the file, not the path.
 | `imports.tf` | One `import` block per entry the run declares, as `to` and `id`: the block address, and base64 of the location object plus the entry name. Written only for a run that declares `--import-blocks` and has a block to write (F6.4) |
 | `actions.tf` | One `action` block per action the pinned provider schema declares, for each unit the manifest names: the commit, then the push. Written last, and only when it has content (F6.7, F6.10.4) |
 | `README.md` | Deployment steps for the generated directory, plus the section that names `imports.tf`, `SITE_DATA.json` and `site.auto.tfvars` (F6.10.4) |
-| `SOURCE.txt` | One record per source the run read, as `field: value` data: kind, name, path, scope, request, cache_entry, size, and the SHA-256 hex of the parsed bytes |
+| `SOURCE.txt` | One record per source the run read, as `field: value` data: kind, name, path, scope, request, cache_entry, size, and the SHA-256 hex of the parsed bytes. Written at the codebase root, which is the output directory, and it is the file the `--prune-cache` action reads |
 | `MANUAL_SETUP_REPORT.txt` | Report-only configuration, plus a section for a container no parse method reads, and the routing entries the `protocol` object cannot express ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9) |
 | `INTERFACE_MIGRATION_REPORT.txt` | Interface and IP inventory |
 | `VPN_MIGRATION_REPORT.txt` | VPN inventory and the pre-shared key actions |
@@ -262,10 +270,15 @@ sha256: 9b1c...
   line prints. A state source names the workspace the run declared, or `whole-config` when it
   declares none.
 - `request` and `cache_entry` are the key-free request identity and the entry it names, for
-  an api source. A file source and a state source write `-` for both, so a state record references
-  nothing and prunes nothing. The record never names the API key.
+  an api source. A file source and a state source write `-` for both, so a file record and a state
+  record reference nothing: the `--prune-cache` action prunes nothing for them and protects nothing.
+  The record never names the API key.
 - `size` and `sha256` are measured on the bytes the input door parsed, so the record names
   the bytes the report lines describe, not a file that changed after the run.
+- The record directory is the output directory, so the action reads the record file the same run wrote.
+  `SOURCE.txt` is a codebase root-set file ([CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) §14), and no
+  module states a path rule for a record directory. `--prune-cache` is the step that reads that file, and
+  the run prints one line per entry it removed, only when it removed something.
 - The rule lives in `provenance.py`, and the report bodies keep the rule that a report names
   the source name only, never the path
   ([ARCHITECTURE.md](ARCHITECTURE.md) §3.3). The label the report bodies use is `Source:`.

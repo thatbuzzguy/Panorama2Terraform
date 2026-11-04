@@ -748,7 +748,10 @@ a run with no network passes CI.
    report files, `README.md`, `SOURCE.txt`. The records stay at the root, because the edge record needs the
    whole unit set and a reader cannot find a per-unit file before it knows the directory name (§3 rule 5). A
    report is read by no gate rule, so it cannot be a per-unit file a rule would have to read per unit, and one
-   run reads one source, so `SOURCE.txt` is one record file.
+   run reads one source, so `SOURCE.txt` is one record file. The record directory is the output directory: the
+   prune action reads the record file the same run wrote, so no record directory exists, and a record directory
+   of its own would be a third set while `write_path.py` states two builders, one per set. The record rule and
+   the action it gates are in `ARCHITECTURE.md` §3.3.
 
    **The two sets are distinct**, and every file the run writes names one set: the block set is the `.tf`
    files, the data set is the four records, and the printed form is compared and not counted (§9 rule 4, and

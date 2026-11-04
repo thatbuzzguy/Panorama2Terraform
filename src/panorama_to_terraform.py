@@ -6337,6 +6337,15 @@ def main():
         default=source_fetch.DEFAULT_CACHE_DIR,
         help=f'cache directory for API responses (default: {source_fetch.DEFAULT_CACHE_DIR})',
     )
+    # F5.3 rule 4: the prune action is an opt-in that gates a run step, following the `--data-blocks`
+    # and `--import-blocks` precedent, so a run that declares nothing keeps its cache. The reference it
+    # reads is the record file the run wrote, so it applies to the source kind that has a cache.
+    parser.add_argument(
+        '--prune-cache',
+        action='store_true',
+        help='remove the cache entries no record this run wrote references. Off by default, and '
+             'applies to --source api, because a file record references no cache entry (F5.3 rule 4)',
+    )
     parser.add_argument(
         '--offline',
         action='store_true',
@@ -6369,6 +6378,10 @@ def main():
             parser.error('--source file needs an input file')
         if args.offline or args.insecure:
             parser.error('--offline and --insecure apply to --source api, and a file source reads no network')
+        # F5.3 rule 4: the prune acts on a cache entry a record references, and a file record states `-`
+        # for the cache field, so a file run has nothing to prune.
+        if args.prune_cache:
+            parser.error('--prune-cache applies to --source api, and a file record references no cache entry')
         # F5.4: a file is one source and holds its own scopes, so a declared scope path
         # has nothing to name.
         if args.path or args.parent:
@@ -6890,7 +6903,26 @@ def main():
 
         # F4.1: a FAIL finding is a broken output, so the conversion reports it
         # with a non-zero exit code instead of writing files and exiting 0.
-        return 1 if report.failed else 0
+        code = 1 if report.failed else 0
+
+        # F5.3 rule 4: the prune runs last, because the reference is the record file the run wrote,
+        # and it is the file the gate does not read, so the code the gate decided does not move. The
+        # action reads that file back through `parse_records`, so the reference stays data. A record the
+        # action cannot read is a refusal, so the run exits 1, and the message names the record file, not
+        # the input file. A prune that removes nothing prints nothing and changes nothing.
+        if args.prune_cache:
+            try:
+                pruned = provenance.prune(record_file, args.cache_dir)
+            except ValueError as e:
+                print(f"Error: {e}")
+                return 1
+            if pruned:
+                print()
+                print(f"Cache prune: {len(pruned)} entries no written record referenced")
+                for entry in pruned:
+                    print(f"  - {entry.name}")
+
+        return code
 
     except ET.ParseError as e:
         print(f"Error: Failed to parse XML file: {e}")
