@@ -9,17 +9,16 @@ Completed work is not recorded here; the git history and the owner document hold
   no matrix row: only an `emitted` container can name the properties an emitter reads.
   The scan scope rule pins this in
   `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers`.
-  Measured on the corpus:
-  - `nested-block` (a layer-3 subinterface inside its parent interface row): `parent`.
-    The nested block prints the parent name from the parent object, not through the
-    child object, so the read is not recorded on the child.
-  - `bookkeeping` (association table and scope facts): `devices`, `templates`.
+  Measured on the corpus: `bookkeeping` (association table and scope facts): `devices`, `templates`.
   These are not findings today, and each one needs a rule before it can become one: an
   emitter must exist, or the output that reaches the entry must read the field it names. The rule now exists
   for `report` containers (`docs/COVERAGE_MATRIX.md` §1), which closed the application filter, the schedule,
-  and the application override gaps, and for a `count-only` container, which closed the regions `addresses`
-  gap: measured 2026-11-04 no `report` or `count-only` container in the corpus has a captured field no output
-  read. The `nested-block` and `bookkeeping` containers still have no output that can read their fields.
+  and the application override gaps, for a `count-only` container, which closed the regions `addresses` gap,
+  and for a `nested-block` container, which closed the `parent` gap on
+  `tests/fixtures/interfaces_ethernet.xml`: `parent` is a fact of the parent entry, not a property of the child,
+  so the entry line names only the fields the print reads. Measured 2026-11-04 no `report`, `count-only`, or
+  `nested-block` container in the corpus has a captured field no output read. The `bookkeeping` container still
+  has no output that can read its fields.
 
 - Parser extraction gaps found by the parse unit tests (each drops data; fix each
   when a report confirms it in a fixture). What stays:

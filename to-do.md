@@ -1,31 +1,29 @@
 # To Do
 
-The current feature is the `nested-block` `parent` read rule, which `backlog.md` names: `parse_interfaces` keeps
-`parent` for a layer-3 subinterface inside its parent interface row, and the nested block prints the parent name
-from the parent object, not through the child object, so no output reads the field on the child. The scan cannot
-report it, because a `nested-block` container has no matrix row, and the pin that shows the rule against this gap
-is `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers`.
+The current feature is the `bookkeeping` `devices` and `templates` fields rule, which `backlog.md` names:
+`parse_associations` keeps `devices` and `templates`, and no output reads them, because a `bookkeeping` row has
+no matrix row. The rule `docs/COVERAGE_MATRIX.md` §1 states for a container outside the scan scope is that the
+output which reaches the entry must read the field it names. The `nested-block` rule decided what a read is:
+`parent` is a fact of the parent entry, so the child carries no value for it and the entry line names only what
+the print reads. This feature can now say whether an association table and a scope fact are fields an output
+reads, or facts the run records without a captured object.
 
 Pieces:
 
-- [ ] Decide what the rule names as the output that reads the field for a nested block. Two shapes are possible:
-      the print reads `parent` through the child object, so the recorded read lands on the entry the report names;
-      or the rule states that the field belongs to the parent entry, which its emitter already reads, and the key
-      on the child is not the child's own field.
-- [ ] Decide whether the child can carry the field at all. A nested block writes no resource of its own, so the
-      print reads through the parent object. If the rule needs a read through the child object, the print changes,
-      and the `.tf` goldens move with it in the same commit.
-- [ ] Decide the pin before the code, in the shape of the group 6 pins in `tests/test_property_coverage.py`: the
-      fixture entry, the read the parse made, and the output that prints the field. A nested-block row has no
-      matrix row, so the pin is the only thing that can keep the field honest.
-- [ ] No fixture change until the rule states what a nested-block output reads, because the corpus pins are keyed
-      by fixture name and the goldens read the bytes of a run on the fixture.
-- [ ] `bookkeeping` (`devices`, `templates`) is the same shape in another kind, so the rule must say whether a
-      scope fact and an association table are fields an output reads or facts the run records without a captured
-      object. Do not write that rule before the nested-block rule decides what a read is.
+- [ ] Decide what a `bookkeeping` row names. A `captured_fields` set names the keys of the object the parse
+      method built, so a fact the run records without a captured object cannot be a captured field. Say whether
+      `devices` and `templates` are fields an output reads, or facts the report records as bookkeeping.
+- [ ] Decide the pin, in the shape of the group 6 pins in `tests/test_property_coverage.py`: the fixture entry,
+      the read the parse made, and the output that prints the field or states that no output can read it. A
+      `bookkeeping` row has no matrix row, so the pin is the only thing that can keep the field honest.
+- [ ] No fixture change until the rule states what a `bookkeeping` output reads, because the corpus pins are
+      keyed by fixture name and the goldens read the bytes of a run on the fixture.
+- [ ] Check the entry name and the five scope facts against the decision: they are the row identity
+      (`entry_coverage.NON_FIELD_KEYS`), so a rule that calls an association table a field must say why it is
+      not an identity fact.
 
 The rules this feature rests on are `docs/COVERAGE_MATRIX.md` §1 for the scan scope and the output that reads a
-field, and `docs/ARCHITECTURE.md` §2.4 and §3.1 for the destination kinds.
+field, and `docs/ARCHITECTURE.md` §2.2, §2.4 and §3.1 for the scope facts and the destination kinds.
 
 ## Rules the layout keeps
 
