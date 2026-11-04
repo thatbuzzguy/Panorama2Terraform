@@ -9,12 +9,10 @@ venv/
 .terraform.lock.hcl
 
 # Customer data - DON'T commit actual configs!
-# Exception: the project's own test corpus (tests/fixtures, examples) and the
-# sample config the quick start runs on.
+# Exception: the project's own test corpus (`tests/fixtures`) and the committed sample input in `examples/`.
 *.xml
 !examples/**/*.xml
 !tests/**/*.xml
-!sample_panorama_config.xml
 
 # IDE
 .vscode/
@@ -27,12 +25,15 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Generated converter output
+# Generated converter output. The layout rule (`docs/ARCHITECTURE.md` §1.1) states that `examples/` holds the
+# sample input and the example text files only: the canonical sample output is the golden set, so no run
+# output is committed here.
 test_output/
 output_*/
 split_configs/
 *-tf/
 terraform_output/
+terraform_example/
 
 # Cached API responses: fetched customer data, and the CI cache the tests build
 panorama_cache/

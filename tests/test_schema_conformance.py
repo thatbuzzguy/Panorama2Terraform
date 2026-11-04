@@ -54,7 +54,7 @@ EMITTED_BLOCKS = _blocks_for_type(GOLDEN_DIR)
 EMITTED_TYPES = sorted(EMITTED_BLOCKS)
 
 
-# The provider_schema fixture comes from conftest.py (shared with
+# The provider_schema fixture comes from tests/conftest.py (shared with
 # tests/test_resource_mapping.py). It verifies against the provider version
 # declared in the golden provider.tf.
 

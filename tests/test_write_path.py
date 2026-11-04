@@ -35,9 +35,11 @@ import sanity_checks
 import site_data
 import unit_manifest
 import write_path
-from conftest import FIXTURES_DIR, GOLDEN_DIR, REPO_ROOT, run_script
+from conftest import FIXTURES_DIR, GOLDEN_DIR, SRC_DIR, run_script
 
-CONVERTER = 'panorama_to_terraform.py'
+# The layout rule (`docs/ARCHITECTURE.md` §1.1): `src/` holds the tool's modules, so the pins that read a
+# module source read it through `SRC_DIR`, and the scan reads the `src/` set.
+CONVERTER = SRC_DIR / 'panorama_to_terraform.py'
 KITCHEN = 'kitchen_sink.xml'
 
 # The codebase root set, as the decision states it: the four records, the report files, README.md,
@@ -351,9 +353,10 @@ def test_one_function_writes_bytes_and_no_other_module_writes_a_file():
     assert 'import os' not in source, 'the write path never names the platform line ending'
 
     writers = []
-    for path in sorted(REPO_ROOT.glob('*.py')):
-        if path.name in ('write_path.py', 'conftest.py'):
-            # The single writer, and the test harness that builds a schema workdir, are not the tool.
+    for path in sorted(SRC_DIR.glob('*.py')):
+        if path.name == 'write_path.py':
+            # The single writer is not a writer itself. The test harness is outside this set: `tests/` holds
+            # the tests, and `src/` holds the tool's modules (`docs/ARCHITECTURE.md` §1.1).
             continue
         for line in path.read_text(encoding='utf-8').splitlines():
             # `write_file` is the single writer, so a module that calls it is not a writer itself.

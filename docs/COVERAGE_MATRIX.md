@@ -1,7 +1,7 @@
 # Coverage Matrix: Provider Resource <-> Panorama XML Element
 
 The machine-readable matrix lives in
-[`../resource_mapping.py`](../resource_mapping.py) as `COVERAGE_MATRIX`.
+[`../src/resource_mapping.py`](../src/resource_mapping.py) as `COVERAGE_MATRIX`.
 These tests enforce it: [`../tests/test_coverage_matrix.py`](../tests/test_coverage_matrix.py).
 
 The matrix is the tracked source of truth for **which Panorama XML

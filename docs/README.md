@@ -34,9 +34,10 @@ that document instead of restating the rule.
 | Migration workflow | `MIGRATION_GUIDE.md` |
 | Device group to template join | `DEVICE_GROUP_SPLITTING.md` |
 | Codebase unit, ownership, order between units, import blocks, scope objects, site data, commit action, the write path | `CODEBASE_ASSEMBLY.md` §3 to §10 and §14, and the modules `unit_manifest.py`, `ownership.py`, `reference_edges.py`, `import_blocks.py`, `site_data.py`, `commit_actions.py`, `write_path.py` |
+| Repository layout: the directories, the import rule, the flat test rule | `ARCHITECTURE.md` §1.1, `AGENTS.md` (the tracking set), and the four readme indexes (`README.md`, this file, `../examples/README.md`, `../tools/README.md`) |
 
 The machine-readable tables are code, not documents:
-[`../resource_mapping.py`](../resource_mapping.py),
-[`../container_coverage.py`](../container_coverage.py), and the entry marks in
-[`../entry_coverage.py`](../entry_coverage.py). A document explains a table and
+[`../src/resource_mapping.py`](../src/resource_mapping.py),
+[`../src/container_coverage.py`](../src/container_coverage.py), and the entry marks in
+[`../src/entry_coverage.py`](../src/entry_coverage.py). A document explains a table and
 never restates it row by row.

@@ -28,9 +28,8 @@ is not emitted:
 
 from pathlib import Path
 
-from test_policy_order import _check_chain_semantics, _rule_blocks
-
 from conftest import FIXTURES_DIR, file_text, run_script, tf_files
+from test_policy_order import _check_chain_semantics, _rule_blocks
 
 # The legacy comment-only placeholder text must be gone from all output.
 PLACEHOLDER_TEXT = 'Manual Terraform configuration is required'

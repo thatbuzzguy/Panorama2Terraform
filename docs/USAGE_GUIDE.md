@@ -31,7 +31,7 @@ package: it uses `urllib`, so the https rules below are the tool's own.
 ## Running the converter
 
 ```bash
-python3 panorama_to_terraform.py export.xml --output-dir out
+python3 src/panorama_to_terraform.py export.xml --output-dir out
 ```
 
 | Argument | Meaning |
@@ -63,9 +63,9 @@ checks through the same boundary, and a refusal is written to no cache entry.
 
 ```bash
 export PANOS_API_KEY=...
-python3 panorama_to_terraform.py --source api --host panorama --output-dir out
-python3 panorama_to_terraform.py --source api --host panorama --offline --output-dir out
-python3 panorama_to_terraform.py --source api --host panorama --path /device-group/entry/Production-DG \
+python3 src/panorama_to_terraform.py --source api --host panorama --output-dir out
+python3 src/panorama_to_terraform.py --source api --host panorama --offline --output-dir out
+python3 src/panorama_to_terraform.py --source api --host panorama --path /device-group/entry/Production-DG \
   --parent /shared --output-dir out
 ```
 
@@ -98,7 +98,7 @@ python3 panorama_to_terraform.py --source api --host panorama --path /device-gro
 ### Reading a state document
 
 ```bash
-python3 panorama_to_terraform.py export.xml --state production.tfstate --workspace production --output-dir out
+python3 src/panorama_to_terraform.py export.xml --state production.tfstate --workspace production --output-dir out
 ```
 
 - The state document is a reference source: the run reads it for two facts and writes no output from
@@ -126,7 +126,7 @@ python3 panorama_to_terraform.py export.xml --state production.tfstate --workspa
 ### Read-through data blocks (opt-in)
 
 ```bash
-python3 panorama_to_terraform.py export.xml --data-blocks panos_address,panos_zone --output-dir out
+python3 src/panorama_to_terraform.py export.xml --data-blocks panos_address,panos_zone --output-dir out
 ```
 
 - Off by default. A run that declares no read-through scope keeps the plain-string rule, so the
@@ -148,7 +148,7 @@ python3 panorama_to_terraform.py export.xml --data-blocks panos_address,panos_zo
 ### Import blocks (opt-in)
 
 ```bash
-python3 panorama_to_terraform.py export.xml --import-blocks --output-dir out
+python3 src/panorama_to_terraform.py export.xml --import-blocks --output-dir out
 ```
 
 - Off by default. A run that does not declare it writes no `imports.tf`, so the generated `.tf` files
@@ -168,8 +168,8 @@ python3 panorama_to_terraform.py export.xml --import-blocks --output-dir out
 
 ## Quick start script
 
-`quick_start.sh` runs the converter on the committed sample export
-(`sample_panorama_config.xml`) and prints the next steps. It is a demonstration,
+`tools/quick_start.sh` runs the converter on the committed sample input
+(`examples/sample_panorama_config.xml`) and prints the next steps. It is a demonstration,
 not part of the converter. It adds `--validate` when the terraform binary is
 present, so the gate runs the terraform check when it can.
 
@@ -179,7 +179,7 @@ The splitter is optional pre-processing. It writes one XML file per device
 group.
 
 ```bash
-python3 split_device_groups.py export.xml --output-dir split_output
+python3 src/split_device_groups.py export.xml --output-dir split_output
 ```
 
 | Argument | Meaning |

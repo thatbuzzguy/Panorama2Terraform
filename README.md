@@ -20,7 +20,7 @@ that has no v2 resource.
 ## Quick start
 
 ```bash
-python3 panorama_to_terraform.py your_export.xml --output-dir terraform_output
+python3 src/panorama_to_terraform.py your_export.xml --output-dir terraform_output
 
 cd terraform_output/<unit directory>     # one directory per unit the manifest names
 terraform init
@@ -36,14 +36,14 @@ state, so a plan runs inside the unit directory.
 Split a Panorama export into one XML file per device group:
 
 ```bash
-python3 split_device_groups.py your_export.xml --output-dir split_output
+python3 src/split_device_groups.py your_export.xml --output-dir split_output
 ```
 
 Read a Terraform state document as a reference source, so the report names which entries another
 workspace already owns and which owned value this run does not match:
 
 ```bash
-python3 panorama_to_terraform.py your_export.xml --state production.tfstate --workspace production
+python3 src/panorama_to_terraform.py your_export.xml --state production.tfstate --workspace production
 ```
 
 The state document writes no output, so the generated `.tf` files are the same as without it; the
@@ -53,7 +53,7 @@ Read a name the run cannot resolve as a provider data source instead of a plain 
 you declare:
 
 ```bash
-python3 panorama_to_terraform.py your_export.xml --data-blocks panos_address,panos_zone
+python3 src/panorama_to_terraform.py your_export.xml --data-blocks panos_address,panos_zone
 ```
 
 A run that declares no read-through scope keeps the plain-string rule. A run that declares one
@@ -66,7 +66,7 @@ Write one `import` block per entry, so the first plan for a directory reads
 `N to import, 0 to add, 0 to change, 0 to destroy` for the entries the parse models:
 
 ```bash
-python3 panorama_to_terraform.py your_export.xml --import-blocks
+python3 src/panorama_to_terraform.py your_export.xml --import-blocks
 ```
 
 Off by default. A run that declares it writes `imports.tf`, one block per entry, in unit order then
@@ -93,13 +93,13 @@ entry is a WARN finding. The rule is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 | VPN | `panos_ike_crypto_profile`, `panos_ike_gateway`, `panos_ipsec_crypto_profile`, `panos_ipsec_tunnel` (proxy-ids merged into the tunnel) |
 
 The mapping and rationale are in
-[`resource_mapping.py`](resource_mapping.py) and
+[`src/resource_mapping.py`](src/resource_mapping.py) and
 [`docs/RESOURCE_MAPPING.md`](docs/RESOURCE_MAPPING.md).
 
 The provider-resource <-> Panorama-XML-element coverage matrix — one
 row per emitted type with the XML element, fixture, and expected name,
 enforced by `tests/test_coverage_matrix.py` — is in
-[`COVERAGE_MATRIX`](resource_mapping.py) (machine-readable, 34 rows) and
+[`COVERAGE_MATRIX`](src/resource_mapping.py) (machine-readable, 34 rows) and
 [`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md) (table + method).
 
 ## Dependency wiring
@@ -147,7 +147,7 @@ resource "panos_address" "web_server_1_11f477f4" {
 Provider v2 places every resource with the required `location` argument,
 and the sub-blocks one type accepts differ from the next. The converter
 takes the choice from the source scope the export declares and from
-[`LOCATION_SCHEMA`](resource_mapping.py), the verified v2.0.14 shape per
+[`LOCATION_SCHEMA`](src/resource_mapping.py), the verified v2.0.14 shape per
 emitted type. The branch order is in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.2:
 
@@ -212,26 +212,26 @@ a source. The other files are the unit set, and the run writes one directory per
 
 - `SOURCE.txt` - what the run read, as `field: value` data, one record per source read: the
   source kind, the name, the path, the scope, the request identity, the cache entry, the size,
-  and the SHA-256 hex of the bytes the input door parsed ([`provenance.py`](provenance.py))
+  and the SHA-256 hex of the bytes the input door parsed ([`src/provenance.py`](src/provenance.py))
 - `CODEBASE_MANIFEST.json` - one row per unit (one declared scope), as data: the five scope facts,
   the directory name, the entry count, and the names the unit references from outside itself
-  ([`unit_manifest.py`](unit_manifest.py)). Every run writes it when it has content
+  ([`src/unit_manifest.py`](src/unit_manifest.py)). Every run writes it when it has content
 - `OWNERSHIP.json` - one row per entry a coverage matrix row covers, as data: the matrix row, the
   entry name, the source, the five scope facts, the declaring unit, the owning unit, what the owner
   rule can say about the entry, and the `disable_override` flag as the parse read it
-  ([`ownership.py`](ownership.py)). Every run writes it when it has content, and the two data files
+  ([`src/ownership.py`](src/ownership.py)). Every run writes it when it has content, and the two data files
   join on the unit directory
 - `REFERENCE_EDGES.json` - one row per reference pair, as data: the unit that uses a name another unit
   owns, the unit that owns it, the coverage matrix row, and the entry name
-  ([`reference_edges.py`](reference_edges.py)). Every run writes it when it has content, and the row
+  ([`src/reference_edges.py`](src/reference_edges.py)). Every run writes it when it has content, and the row
   joins to the manifest on the unit directory and to the ownership record on (`type`, `entry`)
 - `SITE_DATA.json` - one row per site that names a value, as data: the unit directory and the variable
-  names with their values ([`site_data.py`](site_data.py)). Every run writes it when it has content, and the
+  names with their values ([`src/site_data.py`](src/site_data.py)). Every run writes it when it has content, and the
   row joins to the manifest on the unit directory. The values are the pairs the emitter recorded when it
-  applied the value-to-variable table ([`resource_mapping.py`](resource_mapping.py) `VALUE_VARIABLES`)
+  applied the value-to-variable table ([`src/resource_mapping.py`](src/resource_mapping.py) `VALUE_VARIABLES`)
 - `site.auto.tfvars` - the `.tfvars` written from the site data rows, one file per unit inside the directory
   that row names, one line per variable in name order
-  ([`site_data.py`](site_data.py)). Terraform loads a `*.auto.tfvars` file automatically, so
+  ([`src/site_data.py`](src/site_data.py)). Terraform loads a `*.auto.tfvars` file automatically, so
   `terraform.tfvars` stays the operator's own file for the credentials, which the tool never writes. Written
   only when it has content. The gate rule `data_files` reads the record through `parse_rows` and compares
   the printed form with `render_tfvars`; the printed form is not one of the four data files, so the report
@@ -242,23 +242,23 @@ a source. The other files are the unit set, and the run writes one directory per
 - `scope.tf` - The scope objects the export declares: one `resource` block per scope entry for
   `panos_device_group`, `panos_device_group_parent`, `panos_template`, `panos_template_stack`,
   `panos_template_variable`, and `panos_vsys`, written by every run that has a scope entry, before the
-  object files, and in the F3.9 level order ([`resource_mapping.py`](resource_mapping.py)
+  object files, and in the F3.9 level order ([`src/resource_mapping.py`](src/resource_mapping.py)
   `SCOPE_LEVEL_ORDER`). A device membership prints as the list of objects the provider takes, and the
   PAN-OS "this device" placeholder names no firewall, so it never enters a printed list
   ([`docs/CODEBASE_ASSEMBLY.md`](docs/CODEBASE_ASSEMBLY.md) §8)
 - `imports.tf` - one `import` block per entry the run declares, as `to` and `id`
-  ([`import_blocks.py`](import_blocks.py)). Written only for a run that declares `--import-blocks` and
+  ([`src/import_blocks.py`](src/import_blocks.py)). Written only for a run that declares `--import-blocks` and
   has a block to write, and the gate rule reads it because it is a `.tf` file
 - `actions.tf` - the commit and push actions: one block per action the pinned schema declares, for each unit the
   manifest names, and each block names the fact its own unit selects
-  ([`commit_actions.py`](commit_actions.py)). Written by every run that has such a unit, as the last `.tf` file,
+  ([`src/commit_actions.py`](src/commit_actions.py)). Written by every run that has such a unit, as the last `.tf` file,
   and the push block prints after the commit block for the same unit and shares its address. A unit whose fact no
   filter and no push type can name writes no block, and the file is written only when it has content
   ([`docs/CODEBASE_ASSEMBLY.md`](docs/CODEBASE_ASSEMBLY.md) §10). The push block states no `devices`, because the
   tool names no serial, so the provider pushes to all devices in the target
 - `MANUAL_SETUP_REPORT.txt` - everything above that must be configured
   manually, plus a section for a container no parse method reads
-  ([`container_coverage.py`](container_coverage.py))
+  ([`src/container_coverage.py`](src/container_coverage.py))
 - `INTERFACE_MIGRATION_REPORT.txt` - interface and IP inventory
 - `VPN_MIGRATION_REPORT.txt` - VPN inventory; **pre-shared keys are
   placeholders and must be set before apply**
@@ -267,11 +267,11 @@ a source. The other files are the unit set, and the run writes one directory per
   a section for a captured field no output read, for an entry a coverage matrix
   row covers ([`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md)); a section for a child entry
   name that repeats a parent entry name, for a run that reads a declared parent source
-  ([`shadow_coverage.py`](shadow_coverage.py)); a section for a repeated name the ownership rule cannot
-  decide ([`ownership.py`](ownership.py)); two sections for an entry another workspace already
+  ([`src/shadow_coverage.py`](src/shadow_coverage.py)); a section for a repeated name the ownership rule cannot
+  decide ([`src/ownership.py`](src/ownership.py)); two sections for an entry another workspace already
   owns and for an owned value this run does not match, for a run that reads a declared state document
-  ([`state_coverage.py`](state_coverage.py)); the file names the input file name, not its path
-  ([`entry_coverage.py`](entry_coverage.py))
+  ([`src/state_coverage.py`](src/state_coverage.py)); the file names the input file name, not its path
+  ([`src/entry_coverage.py`](src/entry_coverage.py))
 
 The three grouped reports are grouped by the scope the export declares: device
 group first, then the template or the device the entry sits in, then the
@@ -329,7 +329,7 @@ which fetches over https and keeps a cached copy. The response is an envelope
 before the parse. A cached entry lets a later run work with `--offline`, which needs no
 key. The key is read from `PANOS_API_KEY`, never from a command line. `--path` reads one scope
 instead of the whole config, and `--parent` declares the parent scope the run reads as a second
-source, which is what the shadow scan reads ([`shadow_coverage.py`](shadow_coverage.py)); both
+source, which is what the shadow scan reads ([`src/shadow_coverage.py`](src/shadow_coverage.py)); both
 apply to the api source only. The arguments are in
 [docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md); the rules are in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §3.
@@ -522,6 +522,11 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
 Run counts are not stated here. They change with every feature and are
 recorded in the git history and in `agent-status.md`.
 
+`tests/` is flat: the test files sit beside `fixtures/` and `golden/`, and `tests/conftest.py` is the one
+shared helper file. `pyproject.toml` `testpaths = ["tests"]` keeps discovery at the root, and
+`pythonpath = ["src"]` is the only place a test path is stated, so a test imports a tool module by name.
+The rule is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1.1.
+
 ## Documentation
 
 The full index is [`docs/README.md`](docs/README.md). Each rule lives in one
@@ -545,8 +550,27 @@ document; the others link to it.
 - [`docs/DUAL-LICENSING-EXPLAINED.md`](docs/DUAL-LICENSING-EXPLAINED.md) - the
   two license options
 
-Example output is in [`examples/`](examples/): the pointer to the pinned golden
+Example input and example output are in [`examples/`](examples/), and its index is
+[`examples/README.md`](examples/README.md): the committed sample input, the pointer to the pinned golden
 sample, and a real report from the kitchen-sink fixture.
+
+The developer scripts are in [`tools/`](tools/), and its index is
+[`tools/README.md`](tools/README.md): the quick start script and the fixture corpus builder.
+
+## Repository layout
+
+The layout rule is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1.1, which is the owner document. The
+root holds `AGENTS.md`, the readme indexes (this file, [`docs/README.md`](docs/README.md),
+[`examples/README.md`](examples/README.md), and [`tools/README.md`](tools/README.md)), the
+tracking markdown ([`PLAN.md`](PLAN.md), [`backlog.md`](backlog.md), [`to-do.md`](to-do.md),
+[`acceptance.md`](acceptance.md), [`agent-status.md`](agent-status.md)), the two license files
+([LICENSE-AGPL](LICENSE-AGPL) and [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL)), and the two tool-config files
+([`pyproject.toml`](pyproject.toml), which states the layout rules, and
+[`requirements.txt`](requirements.txt), the pinned development tools). `docs/` holds every other
+document, `tests/` holds every test, `src/` holds the tool's modules, `tools/` holds the developer scripts,
+and `examples/` holds the sample input and the two example text files. The canonical sample output is the
+golden set `tests/golden/`, so `terraform_output/` is only the default value of `--output-dir` and holds no
+committed sample.
 
 ## License
 

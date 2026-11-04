@@ -1,11 +1,12 @@
-"""Shared test fixtures and module loading.
+"""Shared test fixtures and the layout paths the tests read.
 
-The two converter scripts live at the repository root and are not an
-installed package. Load them by file path so tests run from any directory.
+The tool's modules live in `src/` and are not an installed package. The import rule is in
+`docs/ARCHITECTURE.md` §1.1: `src/` is one flat namespace, so a test imports a module by plain name, and
+`pyproject.toml` `pythonpath = ["src"]` is the only place the path is stated for tests. This file builds the
+paths a test reads the layout through, and states no second path rule.
 """
 
 import contextlib
-import importlib.util
 import io
 import json
 import re
@@ -16,12 +17,17 @@ from pathlib import Path
 
 import pytest
 
+import panorama_to_terraform
 import sanity_checks
+import split_device_groups
 
-REPO_ROOT = Path(__file__).parent
-SAMPLE_CONFIG = REPO_ROOT / "sample_panorama_config.xml"
-FIXTURES_DIR = REPO_ROOT / "tests" / "fixtures"
-GOLDEN_DIR = REPO_ROOT / "tests" / "golden"
+TESTS_DIR = Path(__file__).parent
+REPO_ROOT = TESTS_DIR.parent
+SRC_DIR = REPO_ROOT / "src"
+EXAMPLES_DIR = REPO_ROOT / "examples"
+SAMPLE_CONFIG = EXAMPLES_DIR / "sample_panorama_config.xml"
+FIXTURES_DIR = TESTS_DIR / "fixtures"
+GOLDEN_DIR = TESTS_DIR / "golden"
 TERRAFORM = shutil.which("terraform")
 
 # Every `resource "panos_x" "y" {` line in a Terraform file.
@@ -147,26 +153,16 @@ def provider_data_schemas(provider_schemas) -> dict:
     return provider_schemas["data_source_schemas"]
 
 
-def _load_module(alias: str, filename: str):
-    """Load a root-level script as a module under a stable name."""
-    path = REPO_ROOT / filename
-    spec = importlib.util.spec_from_file_location(alias, path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[alias] = module
-    spec.loader.exec_module(module)
-    return module
-
-
 @pytest.fixture(scope="session")
 def converter_module():
-    """The panorama_to_terraform script as an importable module."""
-    return _load_module("panorama_to_terraform", "panorama_to_terraform.py")
+    """The converter module in the `src/` namespace, read through the import rule (§1.1)."""
+    return panorama_to_terraform
 
 
 @pytest.fixture(scope="session")
 def splitter_module():
-    """The split_device_groups script as an importable module."""
-    return _load_module("split_device_groups", "split_device_groups.py")
+    """The splitter module in the `src/` namespace, read through the import rule (§1.1)."""
+    return split_device_groups
 
 
 @pytest.fixture(scope="session")
@@ -204,10 +200,17 @@ def make_parser(converter_module, xml_input_module):
     return _make
 
 
-def run_script(filename: str, *args: str) -> subprocess.CompletedProcess:
-    """Run a repository script as a subprocess. Returns the process result."""
+def run_script(module_name, *args: str) -> subprocess.CompletedProcess:
+    """Run a tool module as a subprocess. Returns the process result.
+
+    `module_name` is a module name in the `src/` namespace (`docs/ARCHITECTURE.md` §1.1), so the path is
+    built once here and every test names the module, not the directory. A path is used as given.
+    """
+    path = Path(module_name)
+    if not path.is_absolute():
+        path = SRC_DIR / path
     return subprocess.run(
-        [sys.executable, str(REPO_ROOT / filename), *args],
+        [sys.executable, str(path), *args],
         capture_output=True,
         text=True,
         cwd=REPO_ROOT,

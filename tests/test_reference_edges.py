@@ -35,7 +35,7 @@ import sanity_checks
 import state_coverage
 import state_input
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, run_main, run_pipeline, run_script
+from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, SRC_DIR, run_main, run_pipeline, run_script
 
 CONVERTER = 'panorama_to_terraform.py'
 RECORD = reference_edges.EDGE_FILE
@@ -48,10 +48,10 @@ GROUPING = 'report_grouping.xml'
 STATE_FIXTURE = 'state_workspace.json'
 WORKSPACE = 'production'
 
-# F6.9 pins an absence, so the scan is the test. It reads the tool's own modules at the repository root,
-# not the tests, because a source that names a forbidden word cannot be scanned by the test that holds the
-# rule, so the test name and the module docstring carry none of them.
-ROOT_MODULES = sorted(Path(reference_edges.__file__).parent.glob('*.py'))
+# F6.9 pins an absence, so the scan is the test. It reads the tool's own modules, which `src/` holds
+# (`docs/ARCHITECTURE.md` §1.1), not the tests, because a source that names a forbidden word cannot be scanned
+# by the test that holds the rule, so the test name and the module docstring carry none of them.
+SRC_MODULES = sorted(SRC_DIR.glob('*.py'))
 MECHANISM_TOKENS = ('outputs.tf', 'remote_state', 'terraform_remote_state')
 
 # The edge set across the fixture corpus, measured through the run, in the order the four fields sort
@@ -741,7 +741,7 @@ def test_the_mechanism_defines_no_writer_and_no_reader(tmp_path):
     the existing pins: the plain name in `tests/test_data_blocks.py`, the pair in group 1 here, and the
     order in group 4 here.
     """
-    for path in ROOT_MODULES:
+    for path in SRC_MODULES:
         for token in MECHANISM_TOKENS:
             assert token not in path.read_text(encoding='utf-8'), (path.name, token)
     assert 'output' not in sanity_checks.BLOCK_KINDS, 'the gate reads no output block'

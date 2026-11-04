@@ -27,13 +27,13 @@ from pathlib import Path
 
 import pytest
 
-from conftest import file_text, parts, tf_files
+from conftest import FIXTURES_DIR, SAMPLE_CONFIG, SRC_DIR, file_text, parts, tf_files
 
-REPO_ROOT = Path(__file__).parent.parent
-CONVERTER = REPO_ROOT / 'panorama_to_terraform.py'
-SPLITTER = REPO_ROOT / 'split_device_groups.py'
-SAMPLE = REPO_ROOT / 'sample_panorama_config.xml'
-FIXTURES_DIR = REPO_ROOT / 'tests' / 'fixtures'
+# The layout rule (`docs/ARCHITECTURE.md` §1.1): the entry points are tool modules, so the test reads them
+# from the `src/` namespace, through the paths conftest builds once.
+CONVERTER = SRC_DIR / 'panorama_to_terraform.py'
+SPLITTER = SRC_DIR / 'split_device_groups.py'
+SAMPLE = SAMPLE_CONFIG
 
 # A minimal Panorama body, reused to build inputs of an exact size.
 BODY = (

@@ -1,7 +1,7 @@
 Real output of the converter on tests/fixtures/kitchen_sink.xml.
 Regenerate it with:
 
-  python3 panorama_to_terraform.py tests/fixtures/kitchen_sink.xml --output-dir /tmp/ks_out
+  python3 src/panorama_to_terraform.py tests/fixtures/kitchen_sink.xml --output-dir /tmp/ks_out
 
 The .tf output for the same fixture is pinned under tests/golden/kitchen_sink/.
 
