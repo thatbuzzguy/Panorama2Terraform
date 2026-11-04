@@ -294,6 +294,8 @@
       <entry name="env-prod">
         <color>green</color>
         <comments>Production environment</comments>
+        <!-- F4.4: the flag field the seven rows name, read through `_get_text` -->
+        <disable-override>yes</disable-override>
       </entry>
       <entry name="web">
         <color>blue</color>

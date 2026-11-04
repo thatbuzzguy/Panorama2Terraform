@@ -1,56 +1,58 @@
-# Decision — the container row for an aggregate subinterface — acceptance criteria
+# Decision — the `disable-override` extraction for the seven rows — acceptance criteria
 
-This slice closes the open item `backlog.md` names for the property scan (F4.4):
-`panos_aggregate_layer3_subinterface` is one of the two matrix rows with no read of its own. The cause is the
-container table: `parse_interfaces` reads the aggregate subinterface container
-(`network/interface/aggregate-ethernet/entry/layer3/units`) through the same relative pattern it uses for the
-ethernet shape, and the table has no row for it, so the general `layer3/units` sub-shape row covers the entry
-and the scan measures it against `panos_ethernet_layer3_subinterface`.
+This slice closes the parser extraction gap `backlog.md` names for the property scan (F4.4): seven matrix
+rows name no property for `disable-override`, so `OWNERSHIP.json` states `unknown` for an entry of those
+types even when the export carries the flag. The seven are `panos_address_group`, `panos_administrative_tag`,
+`panos_application_group`, `panos_custom_url_category`, `panos_external_dynamic_list`,
+`panos_security_profile_group`, `panos_service_group`.
 
-## Facts before the change
+## Facts measured before the change
 
-- `parse_interfaces` reaches the aggregate subinterface two ways: an entry under `aggregate-ethernet` whose
-  name already carries a unit (`ae1.101`), and an entry under `layer3/units` inside an aggregate entry
-  (`ae1.101.20`). Only the second is a container the table can name, because the first is a name fact the row
-  shape cannot state.
-- `entry_coverage.covering_row` takes the longest matching row, so a row for the aggregate subinterface
-  container is the row that covers a nested aggregate entry, and the aggregate group row still covers the
-  entries directly under `aggregate-ethernet`.
-- The emitter prints both shapes as `panos_aggregate_layer3_subinterface` (`INTERFACE_RESOURCE_TYPES` for a
-  `units` entry, the name rule for `ae1.101`), so no emitter change is needed: the table row is missing.
-- `test_measured_reads_equal_the_declared_properties` compares the properties the row declares with the keys
-  the run read from the entries that row covers. The aggregate group row declares 8 properties, and the
-  `parent` read comes from `ae1.101`, which stays covered by that row, so the group row keeps its list.
+- Measured 2026-11-04 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14`, terraform v1.16.2,
+  `terraform providers schema -json`): 128 resources, and 25 of them declare `disable_override` as an
+  optional string. All seven types above are among the 25, so the provider can hold the flag for each of
+  them and the emitter can print it as an argument.
+- `panos_ike_gateway`, which `tests/test_ownership.py` pins as `unknown`, is not among the 25: the rule
+  that states `unknown` for a row that does not name the property is unchanged.
+- Two rows name the property today: `panos_address` (F3.4) and `panos_service` (F6.2). Both read the flag
+  through the parse, and both emitters print it as the string after `description`, only when the value is
+  `yes` or `no`. That shape is the shape the seven follow.
+- The entry-mark rule (F4.3) and the read record (F4.4) are unchanged: a key the parse method read off the
+  XML element is not a property an output used, so a row that names the property needs the emitter to read
+  the key, and the property scan measures the read through a fixture entry.
 
 ## Decision
 
-`CONTAINER_TABLE` covers the aggregate subinterface container with its own `emitted` sub-shape row that names
-`panos_aggregate_layer3_subinterface`. The ethernet sub-shape rows keep the shape they state for the ethernet
-container. The matrix row for `panos_aggregate_layer3_subinterface` names the fixture entry the scan measures
-through that row: `ae1.101.20` in `tests/fixtures/interfaces_other.xml`.
+1. Extraction rule: the seven parse methods read the flag through `_get_text(entry, 'disable-override')`,
+   the same helper every other field in those methods reads through. The captured key is the parsed-object
+   key `disable_override`, the name the matrix row and `OWNERSHIP.json` use. `parse_address_objects` keeps
+   its child-element branch, because that method walks the entry's children for its value type, and no
+   second rule is added.
+2. Print rule: one generator helper states the shape once — `disable_override = "yes"`, printed after the
+   entry's descriptive field, or after `name` when the block prints no descriptive field, and only when the
+   value is `yes` or `no`. The nine sites (the two that print today plus the seven) call that helper, so no
+   second shape rule appears. An entry with no value prints nothing.
+3. The seven matrix rows name `disable_override` in `properties` in the same change.
 
 ## Acceptance criteria
 
-1. `CONTAINER_TABLE` holds one row for `parse_interfaces` reading
-   `network/interface/aggregate-ethernet/entry/layer3/units`, with destination `emitted`, the provider type in
-   its note, and level `sub-shape`. `test_every_row_path_is_read_by_its_method` reads the path through the
-   segments the method names.
-2. `entry_coverage.covering_row` answers that row for `ae1.101.20`, so `matrix_row_for` answers the matrix row
-   for `panos_aggregate_layer3_subinterface` for the entry. The pin states both.
-3. The fixture entry is marked by `parse_interfaces`, and the run prints it as a
-   `panos_aggregate_layer3_subinterface` block in `interfaces.tf` with `parent` and `tag`.
-4. The matrix row names that entry: `xml_element` is the container path the parse reads plus `entry`,
-   `xml_name` is `ae1.101.20`, and `emitted_name` is `ae1.101.20`, so `test_fixture_contains_the_row_element`
-   reads the entry the property scan measures.
-5. `test_measured_reads_equal_the_declared_properties` measures the aggregate subinterface row through the
-   corpus, so the unmeasured set is `['panos_device_group_parent']`, and the docstring names one row instead
-   of two.
-6. No golden moves. The aggregate subinterface entry is a property level, so the entry report shows the count
-   on the `ae1.101` row, the run writes the same `.tf` bytes, and the property scan reports no finding for the
-   entry. A golden that does move must come from a real run and be stated in `agent-status.md`.
-7. The run accepts the fixture: the sanity gate reports `PASS (0 FAIL, 0 WARN)` for
-   `tests/fixtures/interfaces_other.xml`, and `terraform validate` passes for the block the run writes for the
-   entry in the kitchen-sink case.
+1. Each of the seven parse methods keeps the flag in the object it marks, read through `_get_text`: the
+   entry that carries `yes` in the fixture reads `yes`, and an entry that carries nothing reads `''`.
+2. Each of the seven emitters reads the key and prints the string in the shape the helper states, after its
+   descriptive field, so `test_declared_property_is_a_key_the_emitter_reads` grounds the row.
+3. A fixture entry carries `disable-override` for each of the seven rows, so the property scan measures the
+   read through a corpus entry and `test_measured_reads_equal_the_declared_properties` holds for the seven
+   rows. The corpus findings do not move: a captured field an output reads is not a finding.
+4. `OWNERSHIP.json` states the flag as the parse read it: `yes` for an entry the fixture carries, and `no`
+   for a row that declares the property with no value. `panos_ike_gateway` still states `unknown`, because
+   its row does not name the property.
+5. The provider fact is pinned against the live schema: the set of matrix rows that name the property is
+   the set of emitted types the provider declares it for, and the pin names the seven.
+6. Goldens: the committed golden that holds a fixture entry carrying the flag moves, and it moves from a
+   real run. `test_golden_files.py` and `test_terraform_validate.py` pass for the bytes that run wrote.
+7. The entry-mark rule stays green, and the sanity gate reports `PASS (0 FAIL, 0 WARN)` for the fixture the
+   run reports on.
 8. `ruff check .` is clean and `python3 -m pytest` passes.
-9. `docs/COVERAGE_MATRIX.md` states the row as the pin states it, `backlog.md` loses the closed item, and
-   `to-do.md` and `agent-status.md` carry the decision.
+9. `docs/COVERAGE_MATRIX.md` states the property-level change and names the pin; `docs/CODEBASE_ASSEMBLY.md`
+   §4 rule 6 states which rows name the property; `src/ownership.py` names them in the `FLAG_KEY` comment;
+   `backlog.md` loses the closed item, and `to-do.md` and `agent-status.md` carry the decision.

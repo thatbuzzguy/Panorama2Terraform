@@ -8,6 +8,8 @@
           <member>Web-Server-2</member>
         </static>
         <description>All web servers</description>
+        <!-- F4.4: the flag field the row names, read through `_get_text` -->
+        <disable-override>yes</disable-override>
       </entry>
       <entry name="Dynamic-Web">
         <dynamic>

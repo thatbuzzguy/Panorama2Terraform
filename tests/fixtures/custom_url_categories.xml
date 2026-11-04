@@ -9,6 +9,8 @@
           <member>bad.example.org</member>
         </list>
         <description>Blocked websites</description>
+        <!-- F4.4: the flag field the row names, read through `_get_text` -->
+        <disable-override>yes</disable-override>
       </entry>
     </custom-url-category>
   </shared>

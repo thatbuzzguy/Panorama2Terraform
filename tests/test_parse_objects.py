@@ -178,3 +178,31 @@ def test_parse_service_groups(make_parser):
     assert groups[0]["name"] == "Web-Services"
     assert groups[0]["members"] == ["service-http", "TCP-8080"]
     assert groups[0]["description"] == "Web services"
+    assert groups[0]["disable_override"] == "yes"
+
+
+# F4.4: the seven matrix rows that name `disable_override`, and the entry in each row's fixture that
+# carries the flag. The pin is the read the parse made, so the value `OWNERSHIP.json` states for these
+# rows is the value the export states, not `unknown`. The last field names an entry in the same fixture
+# that carries no flag element, so the pin also holds the cleared read: `_get_text` reads None for a
+# field the export does not state.
+FLAG_READS = (
+    ("tags.xml", "parse_tags", "env-prod", "yes", "web"),
+    ("address_groups.xml", "parse_address_groups", "Web-Servers", "yes", "Dynamic-Web"),
+    ("application_groups.xml", "parse_application_groups", "web-apps", "no", None),
+    ("custom_url_categories.xml", "parse_custom_url_categories", "blocked-sites", "yes", None),
+    ("external_lists.xml", "parse_external_lists", "ip-with-expand", "yes", "threat-ips"),
+    ("security_profile_groups.xml", "parse_security_profile_groups", "Strict-Profile", "yes", None),
+    ("service_groups.xml", "parse_service_groups", "Web-Services", "yes", None),
+)
+
+
+def test_the_seven_parse_methods_read_the_flag(make_parser):
+    """F4.4: each of the seven rows names the property, so its parse method reads the entry field
+    through `_get_text`, the same helper the other fields of that entry read through.
+    """
+    for fixture, method, entry, value, unflagged in FLAG_READS:
+        by_name = {obj["name"]: obj for obj in getattr(make_parser(fixture), method)()}
+        assert by_name[entry]["disable_override"] == value, (fixture, entry)
+        if unflagged:
+            assert by_name[unflagged]["disable_override"] is None, (fixture, unflagged)

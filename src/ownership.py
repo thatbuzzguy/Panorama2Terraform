@@ -85,8 +85,9 @@ FACT_KEYS = unit_manifest.FACT_KEYS
 KINDS = ('declared', 'definition', 'override', 'ambiguous')
 OVERRIDE_VALUES = ('yes', 'no', 'unknown')
 
-# The flag, as the parse key. Only `panos_address` and `panos_service` capture it, so a row for
-# another matrix row states `unknown` (the extraction gap in `backlog.md`).
+# The flag, as the parse key. A matrix row that names it is a row whose parse method reads the entry field
+# and whose emitter prints it. A row that does not name it states `unknown` (rule 5). The nine rows that name
+# it, the print shape, and the pin against the provider are in `docs/COVERAGE_MATRIX.md`.
 FLAG_KEY = 'disable_override'
 
 FINDING_HEADING = 'Repeated Names That Need an Operator Decision'

@@ -15,6 +15,8 @@
         <url-filtering>
           <member>URL-Default</member>
         </url-filtering>
+        <!-- F4.4: the flag field the row names, read through `_get_text` -->
+        <disable-override>yes</disable-override>
       </entry>
     </profile-group>
   </shared>
