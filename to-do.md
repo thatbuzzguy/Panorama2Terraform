@@ -3,9 +3,9 @@
 The current feature is the parse extraction gaps that `backlog.md` names, in the order the rule allows: a gap
 is fixed only when a report confirms it in a fixture. Pieces:
 
-- [ ] Confirm each gap in a fixture through the report it names, and state which fixture holds it. Start with
-      `disable-override`: `OWNERSHIP.json` states `unknown` for the seven parsed types that can carry the flag,
-      because their matrix rows do not name the property.
+- [ ] Confirm each gap that stays in a fixture through the report it names, and state which fixture holds it:
+      the application filter `description`, the schedule `description`, the security rule profile group
+      references, and the NAT rule `service` in member-list form.
 - [ ] For each confirmed gap, read the field in the parse method and name it in the matrix row in the same
       change, so the property scan measures the row through a corpus entry and the parity pin holds.
 - [ ] Keep the entry-mark rule green: a parse method that reads an entry must mark it, so a field added to a

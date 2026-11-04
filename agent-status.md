@@ -2,40 +2,43 @@
 
 ## Current position
 
-The coverage row for the aggregate subinterface container is complete and committed on `development`
-(`90fa615`); this tracking markdown is the next commit. Decision: `CONTAINER_TABLE` covers the container
-`parse_interfaces` reads inside an aggregate entry with its own row, so the longest match measures an aggregate
-subinterface entry through the aggregate row, and the general `layer3/units` sub-shape row still covers the
-ethernet shape. A row shape cannot state a name fact, so the group entry whose name carries a unit (`ae1.101`)
-stays measured through the group row.
+The `disable-override` extraction gap is complete and committed on `development` (`363f36a`); this tracking
+markdown is the next commit. Decision: the seven matrix rows that can carry the flag name it, so their parse
+methods read the entry field through `_get_text` and their emitters read the key through one helper, and
+`OWNERSHIP.json` states the flag as the parse read it for their entries.
 
-- The row is `network/interface/aggregate-ethernet/entry/layer3/units`, destination `emitted`, level
-  `sub-shape`, note `panos_aggregate_layer3_subinterface`.
-- The matrix row for that type names the entry the scan measures through the row: `ae1.101.20` in
-  `tests/fixtures/interfaces_other.xml`. The element column is that container plus the entry inside it, so
-  `test_fixture_contains_the_row_element` and the property scan read the same entry. No fixture changed, and
-  no emitter changed.
-- Pins changed: the parity test names one unmeasured row (`panos_device_group_parent`);
-  `tests/test_property_coverage.py::test_the_scan_measures_an_aggregate_subinterface_through_the_aggregate_row`
-  pins the row, the entry it measures, and the group row for `ae1.101`;
-  `tests/test_interfaces.py::test_the_aggregate_shape_choice_is_the_entry_the_scan_measures` pins the type the
-  run prints for the entry inside the aggregate entry.
-- Goldens: no golden changed. The aggregate subinterface entry is a property level, so the entry report shows the
-  count on the `ae1.101` row, and the `.tf` bytes are the same. `docs/COVERAGE_MATRIX.md` states the row and the
-  element as the pins state them.
-- The run for `tests/fixtures/interfaces_other.xml` reports `PASS (0 FAIL, 0 WARN)`, and `terraform validate`
-  passes for the output it writes.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1464 tests (about 3 minutes).
+- Measured 2026-11-04 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14`, terraform v1.16.2,
+  `terraform providers schema -json`): 128 resources, 25 of them declare `disable_override` as an optional
+  string, and the nine rows that name the property are the emitted ones among them. `panos_ike_gateway` does
+  not declare it, so its row still states `unknown` (rule 5). Read the schema at `block.attributes`.
+- One print shape: `TerraformGenerator.emit_disable_override` writes the string after the entry's descriptive
+  field, or after `name` when the block prints no descriptive field, and only when the value is `yes` or `no`.
+  Nine sites call it, so no second shape rule exists.
+- Pins: `tests/test_parse_objects.py::test_the_seven_parse_methods_read_the_flag`,
+  `tests/test_ownership.py::test_the_seven_emitters_print_the_flag`,
+  `tests/test_ownership.py::test_a_group_row_states_the_flag_as_the_parse_read_it`, and
+  `tests/test_resource_mapping.py::test_the_flag_rows_are_the_types_the_provider_declares_it_for`. The corpus
+  findings did not move, because a captured field an output reads is not a finding.
+- Documents: `docs/COVERAGE_MATRIX.md` is the owner for the row set and the print shape, and
+  `docs/CODEBASE_ASSEMBLY.md` §4 rule 6 and the `FLAG_KEY` comment in `src/ownership.py` link to it.
+- Goldens: one golden moved, `tests/golden/kitchen_sink/shared_45ca31c3/tags.tf`, from a real run, because the
+  `env-prod` entry in `tests/fixtures/kitchen_sink.xml` now carries the flag. Each of the seven row fixtures
+  holds one entry that carries it.
+- The run for each of the seven fixtures reports `PASS (0 FAIL, 0 WARN)`, and `terraform validate` passes for
+  the output it writes. The kitchen-sink run keeps the one warning it had before, the placeholder in `vpn.tf`.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1468 tests (about 2 minutes).
 
 The housekeeping layout rule is unchanged: `docs/ARCHITECTURE.md` §1.1 is its owner document, `AGENTS.md`
 names the tracking markdown set, and each index names every document under it (commits `ccf93a3` and
 `b3465f1`).
 
-The next feature is the parse extraction gaps `backlog.md` names. A gap is fixed only when a report confirms it
-in a fixture, so the work starts by naming the fixture that holds each gap: `OWNERSHIP.json` states `unknown`
-for the seven parsed types that can carry `disable-override`, because their matrix rows do not name the
-property. The certificate container row decision stays held in `backlog.md`, because it needs an emitter before
-a row can name a type.
+The next piece is the rest of the parse extraction gaps `backlog.md` names: the application filter
+`description`, the schedule `description`, the security rule profile group references, and the NAT rule
+`service` in member-list form. A gap is fixed only when a report confirms it in a fixture, so the work starts
+by naming the fixture that holds each one. The certificate container row decision stays held in `backlog.md`,
+because it needs an emitter before a row can name a type, and the same file records that
+`tools/build_kitchen_sink.py` cannot rebuild the kitchen-sink fixture while the hostile fixtures are in the
+corpus.
 
 ## Rules to keep when writing documents
 
