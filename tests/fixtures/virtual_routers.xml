@@ -29,6 +29,98 @@
               </ip>
             </routing-table>
           </entry>
+          <!-- F7.10: the two redistribution profile lists the `protocol` row states. Each entry states every
+               field its row declares, so the property scan measures it against the router row. The levels inside
+               an entry (`action`, `filter`, `filter/bgp`, `filter/ospf`) hold no entry, so the scan measures
+               nothing for them and the table grounds those rows. One entry states `redist` and the other states
+               `no-redist`, because the provider declares both as optional, so the table states them as `block`
+               fields and not as a choice. -->
+          <entry name="vr-redist">
+            <protocol>
+              <redist-profile>
+                <entry name="RP-Internal">
+                  <priority>10</priority>
+                  <action>
+                    <redist/>
+                  </action>
+                  <filter>
+                    <bgp>
+                      <community>
+                        <member>100:1</member>
+                      </community>
+                      <extended-community>
+                        <member>192.168.1.1:2</member>
+                      </extended-community>
+                    </bgp>
+                    <destination>
+                      <member>10.20.0.0/16</member>
+                    </destination>
+                    <interface>
+                      <member>ethernet1/1</member>
+                    </interface>
+                    <nexthop>
+                      <member>192.168.1.254</member>
+                    </nexthop>
+                    <ospf>
+                      <area>
+                        <member>0.0.0.0</member>
+                      </area>
+                      <path-type>
+                        <member>internal</member>
+                      </path-type>
+                      <tag>
+                        <member>1</member>
+                      </tag>
+                    </ospf>
+                    <type>
+                      <member>internal</member>
+                    </type>
+                  </filter>
+                </entry>
+              </redist-profile>
+              <redist-profile-ipv6>
+                <entry name="RP6-Internal">
+                  <priority>20</priority>
+                  <action>
+                    <no-redist/>
+                  </action>
+                  <filter>
+                    <bgp>
+                      <community>
+                        <member>100:2</member>
+                      </community>
+                      <extended-community>
+                        <member>192.168.1.1:3</member>
+                      </extended-community>
+                    </bgp>
+                    <destination>
+                      <member>10.20.0.0/16</member>
+                    </destination>
+                    <interface>
+                      <member>ethernet1/2</member>
+                    </interface>
+                    <nexthop>
+                      <member>192.168.1.254</member>
+                    </nexthop>
+                    <ospfv3>
+                      <area>
+                        <member>0.0.1.0</member>
+                      </area>
+                      <path-type>
+                        <member>external</member>
+                      </path-type>
+                      <tag>
+                        <member>2</member>
+                      </tag>
+                    </ospfv3>
+                    <type>
+                      <member>external</member>
+                    </type>
+                  </filter>
+                </entry>
+              </redist-profile-ipv6>
+            </protocol>
+          </entry>
         </virtual-router>
       </network>
     </entry>

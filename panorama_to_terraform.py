@@ -2055,6 +2055,10 @@ class PanoramaParser:
         report and the manual report prints it. The same rule holds for every entry this method reads:
         an entry the `.tf` cannot express is marked for the report and is not put in the printed list, so
         the report names it and the file holds no half of it.
+
+        F7.10: the five `bool` fields and the two single-object levels the row now states are read by
+        `_protocol_level`, so this method states no path for them. `dampening_profile` is the entry level the
+        row states, so this method states its path and `_protocol_branch` fills it.
         """
         bgp_path = 'protocol/bgp'
         bgp = router.find(bgp_path)
@@ -2124,6 +2128,10 @@ class PanoramaParser:
         # fills it. The path is the only name this method states; `secret` is read as a field, and the print
         # site turns it into the variable reference.
         self._protocol_branch(bgp_path, level, bgp, 'protocol/bgp/auth_profile')
+        # F7.10: `dampening_profile` is the other entry level this method fills through the table. The five
+        # `bool` fields and the two single-object levels are row fields, so `_protocol_level` reads them with no
+        # field name of its own, and the levels inside `routing_options` hold no entry.
+        self._protocol_branch(bgp_path, level, bgp, 'protocol/bgp/dampening_profile')
         return level
 
     def parse_ospf(self, router: ET.Element) -> dict:
@@ -2226,6 +2234,24 @@ class PanoramaParser:
         self._protocol_branch(rip_path, level, rip, 'protocol/rip/auth_profile')
         return level
 
+    def parse_redist_profile(self, router: ET.Element) -> list:
+        """Build the entries of one router's `redist_profile` level (F7.10).
+
+        The `protocol` row states this level as a `string_list` field, so `_parse_router` calls this method by
+        the field's name. The path is the only name this method states: `_protocol_entry_level` reads each entry
+        through the row, so the key an entry holds is the field the path names, and each entry is marked, which is
+        what puts its fields in the property scan.
+        """
+        return self._protocol_entry_level(router, 'protocol/redist_profile')
+
+    def parse_redist_profile_ipv6(self, router: ET.Element) -> list:
+        """The same shape for the IPv6 list, read through the row the table states for it (F7.10).
+
+        The two rows differ by one field: the provider names the routing level inside `filter` as `ospf` for the
+        IPv4 list and `ospfv3` for the IPv6 list, so the reader states two paths and spells no field name.
+        """
+        return self._protocol_entry_level(router, 'protocol/redist_profile_ipv6')
+
     def _protocol_areas(self, container: ET.Element, base: str) -> dict:
         """One routing level and its area entries, read as `PROTOCOL_SHAPE` states them (F7.1, F7.2).
 
@@ -2299,6 +2325,23 @@ class PanoramaParser:
                 return
         entries = source.findall(f'./{self._protocol_xml_name(segments[-1])}/entry')
         self._protocol_entries(path, holder[self._protocol_field_name(path)], entries)
+
+    def _protocol_entry_level(self, router: ET.Element, path: str) -> list:
+        """The entries of one entry level that the `protocol` row states as a field (F7.10).
+
+        `path` is the table path, so the caller states a path and no field name: the element it reads is the
+        element the last segment names, and the entries go through `_protocol_entries`, the same rule the routing
+        methods use. An entry level inside a level dict reaches this rule through `_protocol_branch`; a level the
+        row states as an object is read by `_protocol_level`, because its entries live under the element the field
+        names.
+        """
+        field = self._protocol_field_name(path)
+        container = router.find(f'{resource_mapping.PROTOCOL_FIELD}/{self._protocol_xml_name(field)}')
+        if container is None:
+            return []
+        entries: list = []
+        self._protocol_entries(path, entries, container.findall('./entry'))
+        return entries
 
     def _protocol_entries(self, path: str, holder: list, entries,
                          table: Optional[resource_mapping.ShapeTable] = None) -> None:

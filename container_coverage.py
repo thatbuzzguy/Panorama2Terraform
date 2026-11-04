@@ -345,6 +345,17 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                   level='sub-shape'),
     ContainerRow('parse_rip', 'protocol/rip/auth-profile', 'emitted', 'panos_virtual_router',
                   level='sub-shape'),
+    # F7.10: the three entry levels the shape table states for the redistribution profile lists and for the
+    # dampening profile. Each is inside the router entry, so the scan measures its entries against the router
+    # row. The levels inside an entry (`action`, `filter`, `filter/bgp`, `filter/ospf`) hold no entry, so no row
+    # names them, and the row path is the input's spelling of the path the parse states, the same rule as
+    # `protocol/rip/interfaces`.
+    ContainerRow('parse_redist_profile', 'protocol/redist-profile', 'emitted', 'panos_virtual_router',
+                  level='sub-shape'),
+    ContainerRow('parse_redist_profile_ipv6', 'protocol/redist-profile-ipv6', 'emitted',
+                  'panos_virtual_router', level='sub-shape'),
+    ContainerRow('parse_bgp', 'protocol/bgp/dampening-profile', 'emitted', 'panos_virtual_router',
+                  level='sub-shape'),
     ContainerRow('parse_virtual_routers', 'routing-table/ip/static-route', 'emitted',
                  'panos_virtual_router_static_route_ipv4', level='sub-shape'),
     ContainerRow('parse_ipsec_tunnels', 'auto-key/proxy-id', 'nested-block',

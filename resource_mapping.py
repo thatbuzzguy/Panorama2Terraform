@@ -1272,19 +1272,146 @@ PROTOCOL_FIELD = 'protocol'
 XML_NAME_EXCEPTIONS = {'strict_l_s_a_checking': 'strict-lsa-checking'}
 
 PROTOCOL_SHAPE: dict[str, dict] = {
+    # F7.10: the two redistribution profile lists are levels the provider declares for `protocol`, so the row
+    # states them and the two methods named by the field names read them (`_parse_router` calls a parse method
+    # for each field this row states). Field order is the print order, so the fields the row already stated keep
+    # their order and the two new entry levels are appended in the order the schema names them.
     'protocol': {
         'shape': 'object',
-        'fields': {'bgp': 'object', 'ospf': 'object', 'ospfv3': 'object', 'rip': 'object'},
+        'fields': {'bgp': 'object', 'ospf': 'object', 'ospfv3': 'object', 'rip': 'object',
+                   'redist_profile': 'string_list', 'redist_profile_ipv6': 'string_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # An entry level: the export holds one entry per profile, so the parse marks each entry and the property
+    # scan measures its fields against the router row. `name` is first because the entry name is the first field
+    # the block prints, and the rest follow in the order the schema names them. The two rows are the same shape
+    # except for the one routing level inside `filter`, which the provider names differently for the two lists.
+    # `action` states its two alternatives as `block` fields, not as `selects` keys: the provider declares both
+    # as optional, so the gate reads the level as an object and no choice rule reaches it.
+    'protocol/redist_profile': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'action': 'object', 'filter': 'object', 'priority': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/redist_profile/action': {
+        'shape': 'object',
+        'fields': {'no_redist': 'block', 'redist': 'block'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # The members of a `member_list` field are values, so no level row stands under it and the walk never
+    # enters it (`sanity_checks.SHAPE_READS_AS`).
+    'protocol/redist_profile/filter': {
+        'shape': 'object',
+        'fields': {'bgp': 'object', 'destination': 'member_list', 'interface': 'member_list',
+                   'nexthop': 'member_list', 'ospf': 'object', 'type': 'member_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/redist_profile/filter/bgp': {
+        'shape': 'object',
+        'fields': {'community': 'member_list', 'extended_community': 'member_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/redist_profile/filter/ospf': {
+        'shape': 'object',
+        'fields': {'area': 'member_list', 'path_type': 'member_list', 'tag': 'member_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/redist_profile_ipv6': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'action': 'object', 'filter': 'object', 'priority': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/redist_profile_ipv6/action': {
+        'shape': 'object',
+        'fields': {'no_redist': 'block', 'redist': 'block'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/redist_profile_ipv6/filter': {
+        'shape': 'object',
+        'fields': {'bgp': 'object', 'destination': 'member_list', 'interface': 'member_list',
+                   'nexthop': 'member_list', 'ospfv3': 'object', 'type': 'member_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # The same `bgp` level the IPv4 row states, because the provider declares the same two lists for both
+    # families; only the routing level inside `filter` differs.
+    'protocol/redist_profile_ipv6/filter/bgp': {
+        'shape': 'object',
+        'fields': {'community': 'member_list', 'extended_community': 'member_list'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/redist_profile_ipv6/filter/ospfv3': {
+        'shape': 'object',
+        'fields': {'area': 'member_list', 'path_type': 'member_list', 'tag': 'member_list'},
         'selects': {},
         'sensitive': frozenset(),
     },
     # F7.6: `policy` is the fifth level the provider declares for `bgp`, so the row states it and the reader
     # fills it. F7.7 put the `auth_profile` level into the table, so the reader fills it too.
+    # F7.10 added the eight fields the row did not state, which the provider declares for this level: five
+    # `bool` values, two `single` levels, and the `dampening_profile` entry level. The fields the row already
+    # stated keep their order, and the new fields follow in the order the schema names them.
     'protocol/bgp': {
         'shape': 'object',
         'fields': {'enable': 'bool', 'local_as': 'string', 'router_id': 'string',
                    'peer_group': 'string_list', 'redist_rules': 'string_list',
-                   'auth_profile': 'string_list', 'policy': 'object'},
+                   'auth_profile': 'string_list', 'policy': 'object',
+                   'allow_redist_default_route': 'bool', 'dampening_profile': 'string_list',
+                   'ecmp_multi_as': 'bool', 'enforce_first_as': 'bool', 'global_bfd': 'object',
+                   'install_route': 'bool', 'reject_default_route': 'bool',
+                   'routing_options': 'object'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # An entry level, so the parse marks each entry and the property scan measures its fields against the router
+    # row. The two single-object levels below hold no entry, so no container row names them.
+    'protocol/bgp/dampening_profile': {
+        'shape': 'string_list',
+        'fields': {'name': 'string', 'cutoff': 'number', 'decay_half_life_reachable': 'number',
+                   'decay_half_life_unreachable': 'number', 'enable': 'bool', 'max_hold_time': 'number',
+                   'reuse': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/global_bfd': {
+        'shape': 'object',
+        'fields': {'profile': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/routing_options': {
+        'shape': 'object',
+        'fields': {'aggregate': 'object', 'as_format': 'string', 'confederation_member_as': 'string',
+                   'default_local_preference': 'number', 'graceful_restart': 'object', 'med': 'object',
+                   'reflector_cluster_id': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/routing_options/aggregate': {
+        'shape': 'object',
+        'fields': {'aggregate_med': 'bool'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/routing_options/graceful_restart': {
+        'shape': 'object',
+        'fields': {'enable': 'bool', 'local_restart_time': 'number', 'max_peer_restart_time': 'number',
+                   'stale_route_time': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/routing_options/med': {
+        'shape': 'object',
+        'fields': {'always_compare_med': 'bool', 'deterministic_med_comparison': 'bool'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1573,12 +1700,15 @@ PROTOCOL_SHAPE: dict[str, dict] = {
     # and `ospf` does not. A level the parse does not read has no row, so the gate refuses it.
     # F7.3: the four levels measured 2026-11-02 are the scalar levels the provider declares for this level
     # and `parse_ospfv3` reads. F7.7 added `auth_profile`, the level the same method reads through
-    # `_protocol_branch`.
+    # `_protocol_branch`. F7.10 added the three `bool` fields the row did not state, appended in the order the
+    # schema names them.
     'protocol/ospfv3': {
         'shape': 'object',
         'fields': {'enable': 'bool', 'router_id': 'string', 'timers': 'object',
                    'global_bfd': 'object', 'graceful_restart': 'object', 'area': 'string_list',
-                   'export_rules': 'string_list', 'auth_profile': 'string_list'},
+                   'export_rules': 'string_list', 'auth_profile': 'string_list',
+                   'allow_redist_default_route': 'bool', 'disable_transit_traffic': 'bool',
+                   'reject_default_route': 'bool'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -4024,12 +4154,18 @@ COVERAGE_MATRIX = (
         # F7.7: an auth profile entry is in the scan scope, so its fields join the measured set. The levels
         # inside it (`md5`, `ah`, `esp`) are read as the fields of the entry that holds them, and an `md5` entry
         # inside a profile entry is not in the scan scope, so `key` stays grounded by the table.
+        # F7.10: the three entry levels this row covers join the measured set, so `filter`, `priority` and the
+        # six `dampening_profile` fields are declared. The levels inside a redist profile entry (`action`,
+        # `filter`, `filter/bgp`) hold no entry, so they stay grounded by the table, and the `bgp` and `ospfv3`
+        # fields F7.10 added are read through the level dict, not through an entry.
         'properties': ('action', 'address_family_identifier', 'advertise_filters',
-                       'aggregate_route_attributes', 'ah', 'as_set', 'authentication', 'bfd',
-                       'default_route', 'enable', 'esp', 'interface', 'interfaces',
-                       'local_address', 'match', 'md5', 'metric', 'mode', 'new_path_type', 'new_tag',
-                       'non_exist_filters', 'password', 'peer', 'peer_address', 'peer_as', 'prefix', 'protocol',
-                       'range', 'router_type', 'secret', 'spi', 'static_routes', 'summary',
+                       'aggregate_route_attributes', 'ah', 'as_set', 'authentication', 'bfd', 'cutoff',
+                       'decay_half_life_reachable', 'decay_half_life_unreachable', 'default_route', 'enable',
+                       'esp', 'filter', 'interface', 'interfaces',
+                       'local_address', 'match', 'max_hold_time', 'md5', 'metric', 'mode', 'new_path_type',
+                       'new_tag',
+                       'non_exist_filters', 'password', 'peer', 'peer_address', 'peer_as', 'prefix', 'priority',
+                       'protocol', 'range', 'reuse', 'router_type', 'secret', 'spi', 'static_routes', 'summary',
                        'suppress_filters', 'type', 'used_by', 'virtual_link',),
     }, {
         'resource': 'panos_virtual_router_static_route_ipv4',

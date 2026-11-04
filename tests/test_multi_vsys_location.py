@@ -199,9 +199,11 @@ def test_every_parse_method_records_the_five_scope_facts(make_parser):
     device groups themselves, which are the scope, not an object inside a
     scope. Tables (associations) are not objects.
 
-    `parse_bgp`, `parse_ospf` and `parse_ospfv3` take the router element (F7.1, F7.2), so they are called with
-    each router the fixture names. A level is not an object: the entries inside it are, and they carry the
-    facts of the router that holds them.
+    `parse_bgp`, `parse_ospf`, `parse_ospfv3` and `parse_rip` take the router element (F7.1, F7.2), so they are
+    called with each router the fixture names. A level is not an object: the entries inside it are, and they carry
+    the facts of the router that holds them. F7.10 added the two methods the `protocol` row names for the
+    redistribution profile lists, which take the router element for the same reason and return the entries they
+    read.
     """
     parser = make_parser('kitchen_sink.xml')
     facts = {'device_group', 'vsys', 'template', 'vsys_device'}
@@ -212,7 +214,8 @@ def test_every_parse_method_records_the_five_scope_facts(make_parser):
     for name in sorted(dir(parser)):
         if not name.startswith('parse_') or name == 'parse_device_groups':
             continue
-        if name in ('parse_bgp', 'parse_ospf', 'parse_ospfv3', 'parse_rip'):
+        if name in ('parse_bgp', 'parse_ospf', 'parse_ospfv3', 'parse_rip',
+                    'parse_redist_profile', 'parse_redist_profile_ipv6'):
             results = [getattr(parser, name)(router) for router in routers]
         else:
             results = [getattr(parser, name)()]
