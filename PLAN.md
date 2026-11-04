@@ -29,6 +29,10 @@ object attribute, so the BGP, OSPF and OSPFv3 levels are an emitter shape and no
 prints the levels the shape table states (`docs/ARCHITECTURE.md` §4.9). And a value the parse cannot carry has one shape: the block
 prints the variable reference, never the value. Both rules are in `backlog.md`.
 
+The repository layout is a rule with one owner document, `docs/ARCHITECTURE.md` §1.1: `src/` is one flat
+namespace, `tests/` is flat with `tests/conftest.py` as the one shared helper file, and each index names every
+file under it. `AGENTS.md` names the tracking markdown set.
+
 Epic 7 (routing output through the protocol object) is closed. `resource_mapping.PROTOCOL_SHAPE` states the
 levels the tool prints, `FILTER_SHAPE` states the six filter containers outside it, the routing methods read them
 through the table, the emitter prints them in the row's field order, and the gate rules `protocol_object` and
@@ -61,25 +65,14 @@ and the test that holds it. The unit rule, the owner rule, the edge rule, the or
 block rule, the scope object rule, the site rule, and the action rule are all landed, and the write
 path writes one directory per unit the manifest names.
 
-## Housekeeping — repository layout (open)
-
-The layout is a rule, not a habit. The root holds `AGENTS.md`, the two readme indexes (`README.md`,
-`docs/README.md`) and the tracking markdown; `docs/` holds every other document; `tests/` holds every test;
-`src/` holds the tool's modules; `tools/` holds the developer scripts; `examples/` holds the sample input and
-the sample output. Each index names every document under it.
-
-`tests/` and `docs/` already hold what they should, and the canonical sample output is the golden set
-`tests/golden/` pins byte for byte, so `terraform_output/` is only the default value of `--output-dir`. The
-open work is the root: `conftest.py`, the flat module set, `quick_start.sh`, and `sample_panorama_config.xml`.
-The item list, and the pins that read a path, are in `backlog.md`.
-
 ## Sequencing
 
-Epic 7 is closed, so the open work is the repository layout, which renames the paths the tests read. The gated
-pieces that stay held are in `backlog.md`: the four `*_policy_rules` types wait for the F3.5 rulebase decision,
-and a config entry inside a stack needs a provider location shape before the emitter can write a block for it.
-The rows that state fewer fields than the pinned provider declares for their level are the choice levels, which
-state their alternatives as `selects` keys.
+The next feature is the open items in `backlog.md`: the `lib_docs/` reference decision, the console line
+shape, the prune action, and the gate choice-word open item (`FILTER_XML_NAME_EXCEPTIONS` holds 15 pairs, and
+the fixture grounds five of them). The gated pieces that stay held are also in `backlog.md`: the four
+`*_policy_rules` types wait for the F3.5 rulebase decision, and a config entry inside a stack needs a provider
+location shape before the emitter can write a block for it. The rows that state fewer fields than the pinned
+provider declares for their level are the choice levels, which state their alternatives as `selects` keys.
 
 ## Out of Scope (tracked in backlog.md)
 

@@ -2,50 +2,48 @@
 
 ## Current position
 
-F7.13 is complete and committed on `development` (`931ceec`), which closes the last open piece of Epic 7.
-`selects` is the one place either shape table states a choice the provider reads as exactly one, so the filter
-rows that hold one state it there: 14 rows, measured 2026-11-03 with `terraform validate` (provider 2.0.14,
-Terraform 1.16.2) — the levels that refuse more than one of their alternatives and also refuse none. The schema
-states no fact for a choice, because it declares every alternative as an optional attribute of a `single` level,
-so no shape word can state it: `SHAPE_WORDS`, `SHAPE_TO_SCHEMA`, `SHAPE_READS_AS` and `SHAPE_LEVELS` are
-unchanged, a filter choice row keeps the word the measurement gives it (`object`), and `one_of` keeps its meaning
-as the word for a row whose whole value is the choice. Each filter mapping is the identity, because the export
-spells the provider key at a filter choice level, so `FILTER_XML_NAME_EXCEPTIONS` gained no row.
+Housekeeping is complete and committed on `development` (`ccf93a3`). The repository layout is now a rule with
+one owner document, `docs/ARCHITECTURE.md` §1.1, and the files that broke it are moved.
 
-The gate reads the choice at every level the walk enters, and for a filter block the block's own level is the
-entry row the walk enters, so `check_filter_blocks` reads the choice there before the field rule. One helper
-(`_shape_choice_findings`) serves both tables, so one wording covers both: `filter {address} {path} states N
-keys, which is not the one key FILTER_SHAPE selects`, where N is the number of selected keys the level, the
-entry, or the block states. A hand-written filter block that states two alternatives, or none, is one FAIL
-finding.
-
-The print path is unchanged: the fixture answers each choice level it covers with one element, so the run prints
-the one alternative the input states and reports `PASS (0 FAIL, 0 WARN)`. No golden moved, and no fixture was
-extended, because the fixture already states one alternative per choice level.
-
-The suite is 1443 tests, all green (1441 at the start of this slice), and `ruff check .` is clean.
-
-The next feature is the repository layout (`PLAN.md`, Housekeeping): the root holds `conftest.py`, the flat
-module set, `quick_start.sh`, and `sample_panorama_config.xml`, and each index names every document under it.
-The item list and the pins that read a path are in `backlog.md`.
+- Import rule: `src/` is one flat namespace, so a module in `src/` imports its siblings by plain module name
+  and no module builds a path. `pyproject.toml` `[tool.pytest.ini_options] pythonpath = ["src"]` is the only
+  place a test path is stated, and it resolves from the rootdir, so a run from any directory reads the same
+  namespace. A run gets the same namespace from Python's script-directory rule, so no entry point adds path
+  code. No module, test or script states a second path rule.
+- Test-layout rule: `tests/` is flat: the test files sit beside `fixtures/` and `golden/`, and
+  `tests/conftest.py` is the one shared helper file, so the layout does not change again.
+  `testpaths = ["tests"]` keeps discovery at the root, where no test file sits.
+- Moved with `git mv`: the 20 tool modules to `src/`, `conftest.py` to `tests/conftest.py`,
+  `quick_start.sh` to `tools/quick_start.sh`, and `sample_panorama_config.xml` to `examples/`.
+  `examples/README.md` and `tools/README.md` are the indexes for those two directories, so every file in the
+  repo is named by an index. `AGENTS.md` names the tracking markdown set.
+- No golden byte moved: a golden pins only `.tf` bytes and names no path, so the move moved no golden.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1443 tests (184 to 200 seconds). The entry point
+  runs from `src/` with no path code, and `tools/quick_start.sh` runs from any directory.
 
 ### Pins that changed
 
-- `tests/test_filter_containers.py` gained `test_the_choice_rows_are_the_levels_the_provider_reads_as_exactly_one`
-  (the 14 measured rows against the live schema, the identity mapping, the whole-value or part-of-value fact, and
-  that no filter row is a `one_of` row) and
-  `test_the_gate_reads_the_choice_at_the_level_the_walk_enters` (two alternatives, none, and one for every
-  measured row, and the choice read before the field rule for `redist-entry`).
-- `test_the_filter_table_is_the_measured_provider_shape` reads `selects` as the attributes that form the choice,
-  each an optional attribute the provider declares and a field the row states, instead of as an empty fact.
-  `sensitive` stays empty for every filter row.
-- `test_the_row_scope_is_the_decision_acceptance_states` keeps the row scope, and
-  `test_the_choice_levels_state_one_key_in_the_run` now covers the 5 choice levels the fixture states (11 of the
-  14 are pinned through the table and the gate). The finding helper `_findings` reads the container through
-  `_container_of`, so a pin can state a finding at a level below the block's own level.
-- `docs/ARCHITECTURE.md` §4.9 rule 7 and §4.10 rule 1 state the rule for both tables, `README.md` names the
-  choice in the `filter_blocks` row of the gate table, and `docs/RESOURCE_MAPPING.md` names `redist-entry` as the
-  filter row that states the choice inside its fields. `backlog.md` no longer holds the closed asymmetry.
+- `tests/conftest.py` no longer loads a module by file path: it reads the `src/` namespace `pythonpath` states,
+  builds the paths once (`TESTS_DIR`, `REPO_ROOT`, `SRC_DIR`, `EXAMPLES_DIR`), returns the imported modules from
+  the fixtures, and `run_script` resolves a module name under `SRC_DIR`.
+- The pins that read a module source now read it through `SRC_DIR` or `Path(module.__file__)`:
+  `tests/test_write_path.py` (the writer scan reads `SRC_DIR.glob('*.py')`, excludes only `src/write_path.py`,
+  and reads `src/panorama_to_terraform.py`), `tests/test_reference_edges.py` (`SRC_MODULES`),
+  `tests/test_safe_input.py`, `tests/test_robustness.py`, `tests/test_sanity_gate.py`,
+  `tests/test_entry_coverage.py`, `tests/test_source_fetch.py`, `tests/test_import_blocks.py`,
+  `tests/test_commit_actions.py`.
+- `pyproject.toml` gained `pythonpath = ["src"]` and `[tool.ruff] src = ["src", "tests"]`, so first-party
+  import grouping and the existing import order in the test files stay valid after the move.
+- `.gitignore`: the `examples/**/*.xml` exception now matches the moved sample input, the corpus comment names
+  the test corpus by its new path, and `terraform_example/` is ignored because the quick start writes it.
+- Documents and indexes: `docs/ARCHITECTURE.md` §1.1, `README.md`, `docs/README.md`, `docs/USAGE_GUIDE.md`,
+  `docs/DEVICE_GROUP_SPLITTING.md`, `examples/README.md`, `tools/README.md`, `AGENTS.md`, and the two command
+  lines in `tests/test_golden_files.py` and `examples/example_interface_report.txt`. No rule, table, shape,
+  naming rule or gate rule changed.
+
+The next feature is the open items in `backlog.md`, in this order: the `lib_docs/` reference decision, the
+console line shape (which also decides the source field for a shadow line), the record directory and the prune
+action, and the gate choice-word open item.
 
 ## Rules to keep when writing documents
 
@@ -89,15 +87,11 @@ reads the
 the report rule carves
     the `README.md` file-inventory exception. A change to a shape word moves both pins in the
 same commit.
-- A rule that pins an absence by scanning module sources cannot read a source that names the
-words it
-    forbids, so a scan reads the tool's own modules, and the test name and the module docstring
-carry no
-    forbidden word. The writer scan excludes `write_path.py` (the single writer) and
-`conftest.py` (the test
-    harness). The pin for the outputs rule is group 7 of `tests/test_reference_edges.py`; the
-pins for the file
-  shape are `tests/test_write_path.py`.
+- A rule that pins an absence by scanning module sources cannot read a source that names the words it
+  forbids, so a scan reads the tool's own modules, and the test name and the module docstring carry no
+  forbidden word. The writer scan reads the `src/` set and excludes `src/write_path.py` (the single writer);
+  `tests/conftest.py` is the test harness, so it sits outside the set. The pin for the outputs rule is group 7
+  of `tests/test_reference_edges.py`; the pins for the file shape are `tests/test_write_path.py`.
 - The block reader in `sanity_checks.py` serves every kind, and the same field reader serves
 the fields inside a
     container value and the elements of a list value, so a new block shape uses them rather
