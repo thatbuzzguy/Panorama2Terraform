@@ -771,9 +771,11 @@ def check_protocol_object(files: dict[str, str]) -> list[Finding]:
        through `SHAPE_READS_AS`, because the field reader reads the family: `one_of` and `block` are read as
        `object`, and `member_list` is read as `string_list`. The walk enters only the words in
        `SHAPE_LEVELS`, so a member list is never walked and rule 4 reads only an entry list.
-    2. A `one_of` level that states no key, or more than one key, or a key the row's mapping does not
-       state. `terraform validate` accepts a `{ ... }` value for `protocol`, so the gate is the rule that
-       keeps a one-of level to the one key the provider can read.
+    2. A row that states `selects` names the attributes that form an exactly-one choice, and the level or the
+       entry states exactly one of them: a `one_of` level that states no key, or more than one key, or a key the
+       mapping does not state. `terraform validate` accepts a `{ ... }` value for `protocol`, so the gate is the
+       rule that keeps a choice to the one key the provider can read (F7.12). The same helper serves the filter
+       table, which states no choice, so the rule never fires for a filter block.
     3. A field the row marks `sensitive` printed as a literal. No generated file may state the value, so
        the block prints the variable reference for it.
     4. An element inside a `[` container that states no `name`, which is the field the row reads as the
@@ -804,6 +806,49 @@ def check_protocol_object(files: dict[str, str]) -> list[Finding]:
     return findings
 
 
+def _shape_choice_findings(block, path: str, fields: dict, findings: list, table) -> bool:
+    """The exactly-one choice a row states as `selects`, read at the level or entry the row states (F7.12).
+
+    `selects` is the one place the table states a choice, so one rule reads both shapes it can hold: the whole
+    value is the choice for a `one_of` row, where every key the value states is a key the row selects, and the
+    choice is part of the value for a row that also states other fields, where those keys are read by the field
+    rule. A `string_list` row holds entries, so the choice is read inside each entry. The provider reads the
+    choice as exactly one (`terraform validate`, provider 2.0.14, measured 2026-11-03), so a level or an entry
+    that states a different number is a finding. The filter table states no choice, so this reads nothing for a
+    filter block.
+
+    Returns True when the choice is read here, so the field rule does not read the same key twice.
+    """
+    row = table.row(path)
+    selects = row['selects']
+    if not selects:
+        return False
+    alternatives = set(selects.values())
+    if row['shape'] == 'one_of':
+        # The whole value is the choice, so a key the row does not select is the choice finding.
+        extra = [field for field in fields if field not in alternatives]
+        if extra:
+            findings.append(Finding(
+                table.rule, FAIL, block.file, block.line,
+                f'{table.word} {block.address} {path} key {extra[0]} is not a key {table.name} selects',
+            ))
+            return True
+    stated = [field for field in fields if field in alternatives]
+    if len(stated) != 1:
+        findings.append(Finding(
+            table.rule, FAIL, block.file, block.line,
+            f'{table.word} {block.address} {path} states {len(stated)} keys, which is not the one key '
+            f'{table.name} selects',
+        ))
+        return True
+    key = stated[0]
+    if key not in row['fields']:
+        # F7.6: the alternative is the row the table states for it, so the walk enters it here.
+        _shape_level_findings(block, f'{path}/{key}', fields[key], findings, table)
+        return True
+    return False
+
+
 def _shape_level_findings(block, path: str, raw: str, findings: list, table) -> None:
     """One level of a shape-table value, walked from the text the one field reader read.
 
@@ -829,13 +874,15 @@ def _shape_level_findings(block, path: str, raw: str, findings: list, table) -> 
         for element in import_blocks.elements_of(raw):
             fields = import_blocks.fields_at(import_blocks.container_body(element))
             # Rule 4: an element inside a container is an entry, and the entry name is the field the row
-            # reads for it.
+            # reads for it. Rule 2 reads the choice inside the entry, because a row can state the choice as
+            # two of its fields (F7.12).
             if 'name' not in fields:
                 findings.append(Finding(
                     table.rule, FAIL, block.file, block.line,
                     f'{table.word} {block.address} {path} element states no name',
                 ))
-            _shape_field_findings(block, path, fields, findings, table)
+            if not _shape_choice_findings(block, path, fields, findings, table):
+                _shape_field_findings(block, path, fields, findings, table)
         return
     if not raw.startswith('{'):
         findings.append(Finding(
@@ -844,27 +891,8 @@ def _shape_level_findings(block, path: str, raw: str, findings: list, table) -> 
         ))
         return
     fields = import_blocks.fields_at(import_blocks.container_body(raw))
-    if shape == 'one_of':
-        # Rule 2: the level states exactly one key, and that key is one the row's mapping states.
-        if len(fields) != 1:
-            findings.append(Finding(
-                table.rule, FAIL, block.file, block.line,
-                f'{table.word} {block.address} {path} states {len(fields)} keys, which a one_of level cannot',
-            ))
-            return
-        key = next(iter(fields))
-        if key not in row['selects'].values():
-            findings.append(Finding(
-                table.rule, FAIL, block.file, block.line,
-                f'{table.word} {block.address} {path} key {key} is not a key {table.name} selects',
-            ))
-            return
-        if key in row['fields']:
-            # F7.6: the alternative is a value the row states, so the field rule reads it and the walk does
-            # not enter a value.
-            _shape_field_findings(block, path, fields, findings, table)
-            return
-        _shape_level_findings(block, f'{path}/{key}', fields[key], findings, table)
+    # Rule 2: the choice the row states as `selects`, which is the whole value for a `one_of` row.
+    if _shape_choice_findings(block, path, fields, findings, table):
         return
     _shape_field_findings(block, path, fields, findings, table)
 
@@ -910,8 +938,9 @@ def check_filter_blocks(files: dict[str, str]) -> list[Finding]:
 
     `location` is the placement fact, so the rule reads the fields at the block's own level and not the
     sub-block: `location_present` is the rule that asks for it. `FILTER_SHAPE` states no `selects` and no
-    `sensitive` row, so the `one_of` and the sensitive rules never fire for a filter block, and no filter
-    field is marked sensitive by the provider.
+    `sensitive` row, so the choice rule and the sensitive rule never fire for a filter block, and no filter
+    field is marked sensitive by the provider. The three filter levels the provider reads as exactly one state
+    their alternatives as fields, so the same rule for the filter table is recorded in `backlog.md`.
 
     The rule reads no data file: the block text and the table are the whole input.
     """

@@ -110,7 +110,9 @@ def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
     `protocol/bgp` and `protocol/ospfv3` rows against the measurement, and F7.11 completed the six entry rows
     that held the report decision (`peer_group`, `peer`, `redist_rules`, `area`, `area/interface`), so the rows
     that are still a subset are the choice levels: the `one_of` rows, which state their alternatives as
-    `selects` keys and no fields, and the auth profile levels. `test_the_six_rows_are_the_whole_measurement`
+    `selects` keys, and the two rows F7.12 states the choice inside their fields (`peer_address` and the
+    `ospfv3` auth profile entry), which `test_the_choice_rows_state_the_choice_the_provider_reads` pins by name.
+    `test_the_six_rows_are_the_whole_measurement`
     pins the completed rows. F7.4 added the four area
     sub-levels, which `_protocol_areas` reads, F7.5 added the `rip` levels, which `parse_rip` reads, F7.6
     added the 78 `policy` levels, which `parse_bgp` reads, the `member_list` word for the fields the schema
@@ -137,12 +139,17 @@ def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
         # F7.1 rule: the fields the row declares as sensitive are the ones the provider marks sensitive.
         sensitive = {field for field, attribute in attributes.items() if attribute.get('sensitive')}
         assert row['sensitive'] == frozenset(sensitive & set(row['fields'])), (path, row['sensitive'])
-        # A `one_of` row's alternatives are the schema's attributes. Each one is the field the row states, or the
-        # row the table states for it when the alternative names a level (F7.6).
+        # F7.12: `selects` is the one place the table states a choice, so each selected key is an attribute the
+        # provider declares for the level, and each is the field the row states or the row the table states for
+        # it. A `one_of` row states the choice as every attribute its level declares, because the choice is the
+        # whole value; a row that also states other fields states the choice as part of them, so `selects` is a
+        # subset of the attributes.
         if row['selects']:
-            assert set(row['selects'].values()) == set(attributes), (path, row['selects'])
+            assert set(row['selects'].values()) <= set(attributes), (path, row['selects'])
             for key in row['selects'].values():
                 assert key in row['fields'] or f'{path}/{key}' in resource_mapping.PROTOCOL_SHAPE, (path, key)
+            if row['shape'] == 'one_of':
+                assert set(row['selects'].values()) == set(attributes), (path, row['selects'])
 
 
 def test_the_sensitive_rows_are_the_reference_only_names():
@@ -187,7 +194,7 @@ def test_the_table_is_the_only_shape_owner(converter_module):
                | set(static_route['properties']) | {'interfaces'})
     owners = [getattr(sanity_checks, name, None) for name in
               ('check_protocol_object', 'check_filter_blocks', '_shape_level_findings',
-               '_shape_field_findings', 'value_shape')]
+               '_shape_field_findings', '_shape_choice_findings', 'value_shape')]
     generator = converter_module.TerraformGenerator
     parser = converter_module.PanoramaParser
     owners += [getattr(generator, name) for name in ('generate_virtual_routers', '_protocol_fields', 'printed_value')]
@@ -566,6 +573,44 @@ def test_the_one_of_mapping_is_the_decision_the_report_prints():
             f'protocol/bgp/peer_group/type/{key}')['fields'], key
 
 
+def test_the_choice_rows_state_the_choice_the_provider_reads(provider_schema):
+    """F7.12: `selects` is the one place the table states an exactly-one choice, and the two rows gained it.
+
+    Measured 2026-11-03 with `terraform validate` (provider 2.0.14, Terraform 1.16.2): both levels refuse 2
+    attributes when one (and only one) is required, and both refuse none. The schema states no word for the
+    choice, because it declares every alternative as an optional attribute of a `single` level, so the choice is a
+    rule the gate reads from `selects` and not a shape word: `SHAPE_WORDS` and `SHAPE_TO_SCHEMA` did not change,
+    and `value_shape` still reads both levels as an object value.
+
+    The choice is the whole value for `peer_address`, where the two attributes are the choice, and part of the
+    value for the profile entry, where `name` and `spi` are attributes that are not alternatives. Both rows are
+    the identity, because the export states the provider key there.
+    """
+    peer = resource_mapping.protocol_row('protocol/bgp/peer_group/peer/peer_address')
+    assert peer['selects'] == {'fqdn': 'fqdn', 'ip': 'ip'}, peer['selects']
+    assert set(peer['selects'].values()) == set(peer['fields']), peer['fields']
+    profile = resource_mapping.protocol_row('protocol/ospfv3/auth_profile')
+    assert profile['selects'] == {'ah': 'ah', 'esp': 'esp'}, profile['selects']
+    # `name` and `spi` are fields the entry states and are not alternatives, so the choice is a subset.
+    assert set(profile['selects'].values()) < set(profile['fields']), profile['fields']
+    for path, row in (('protocol/bgp/peer_group/peer/peer_address', peer),
+                      ('protocol/ospfv3/auth_profile', profile)):
+        assert row['shape'] in sanity_checks.SHAPE_LEVELS, (path, row['shape'])
+        attributes = _schema_node(provider_schema, path)['nested_type'].get('attributes', {})
+        assert set(row['selects'].values()) <= set(attributes), (path, row['selects'])
+        # The schema declares each alternative as an optional attribute, which is why no word states the choice.
+        for key in row['selects'].values():
+            assert attributes[key].get('optional'), (path, key)
+            assert key in row['fields'], (path, key)
+    # The levels that hold a choice the provider does not read as exactly one state no choice, so the choice rule
+    # does not reach them. `redist_profile/action` is the level the export requires and the provider does not.
+    for path in ('protocol/redist_profile/action',
+                 'protocol/bgp/peer_group/peer/local_address',
+                 'protocol/bgp/peer_group/peer/subsequent_address_family_identifier'):
+        assert resource_mapping.protocol_row(path)['selects'] == {}, path
+    assert sanity_checks.SHAPE_READS_AS.get('one_of') == 'object', sanity_checks.SHAPE_READS_AS
+
+
 def test_a_one_of_level_prints_one_key():
     """The rule accepts the one key the mapping states and refuses any other shape of that level."""
     good = ('  protocol = {\n    bgp = {\n      peer_group = [\n        {\n'
@@ -590,7 +635,8 @@ def test_a_one_of_level_prints_one_key():
     one_key = '                  append = [ "1:10" ]\n'
     findings = _findings(value_choice.replace(
         one_key, one_key + '                  remove_all = {}\n'))
-    assert [f.detail for f in findings] == [base + 'states 2 keys, which a one_of level cannot'], findings
+    assert [f.detail for f in findings] == [
+        base + 'states 2 keys, which is not the one key PROTOCOL_SHAPE selects'], findings
     findings = _findings(value_choice.replace('append = [ "1:10" ]', 'made_up = { x = "1" }'))
     assert [f.detail for f in findings] == [base + 'key made_up is not a key PROTOCOL_SHAPE selects'], findings
     # The run prints one key, so a run reports nothing.
@@ -1067,7 +1113,7 @@ def test_the_gate_reads_a_member_list_as_values_and_not_as_entries(tmp_path):
                                       '                deny = {}\n              }'))
     assert [f.detail for f in findings] == [
         'protocol panos_virtual_router.default_00000000 protocol/bgp/policy/export/rules/action '
-        'states 2 keys, which a one_of level cannot'], findings
+        'states 2 keys, which is not the one key PROTOCOL_SHAPE selects'], findings
     findings = _findings(good.replace('allow = {}', 'approve = {}'))
     assert [f.detail for f in findings] == [
         'protocol panos_virtual_router.default_00000000 protocol/bgp/policy/export/rules/action '
@@ -1198,8 +1244,8 @@ def test_the_gate_reads_a_peer_against_the_rows_it_states():
     `bfd`, `connection_options` and `subsequent_address_family_identifier` are `single` levels inside the peer
     entry, so the walk enters them through the rows F7.11 added, and a `member_list` field is read as the values
     the block states. The rule still refuses a value the row does not state and a field the row does not declare,
-    so the six rows are the whole measurement for the walk as well as for the parse. The pin also records the
-    limit the gate cannot reach: a level the provider reads as a choice between two attributes.
+    so the six rows are the whole measurement for the walk as well as for the parse. The pin also reads the
+    choice `peer_address` states, which the provider reads as exactly one.
     """
     good = ('  protocol = {\n    bgp = {\n      peer_group = [\n        {\n'
             '          name = "PG"\n          aggregated_confed_as_path = true\n'
@@ -1241,16 +1287,17 @@ def test_the_gate_reads_a_peer_against_the_rows_it_states():
         'protocol panos_virtual_router.default_00000000 protocol/bgp/redist_rules '
         'set_weight is not a field PROTOCOL_SHAPE declares'], findings
 
-
-    # A level the provider reads as a choice between two attributes is a limit the gate cannot reach, so a block
-    # that states both is not a finding even though `terraform validate` refuses it (measured 2026-11-03,
-    # provider 2.0.14). `SHAPE_WORDS` has no word for that choice, which is F7.12, so this pin records the limit
-    # and moves when the table gains the word.
+    # F7.12: `peer_address` is the level the provider reads as exactly one, so a block that states both
+    # alternatives is a finding, and the fixture states one attribute because the provider requires one.
+    # Measured 2026-11-03 with `terraform validate` (provider 2.0.14), which also refuses a level that states
+    # none.
     both = (good.replace('name = "10.0.0.1"',
                          'name = "10.0.0.1"\n              peer_address = {\n'
                          '                ip = "10.0.0.2"\n                fqdn = "host.example.com"\n'
                          '              }'))
-    assert _findings(both) == [], both
+    assert [f.detail for f in _findings(both)] == [
+        'protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer/peer_address '
+        'states 2 keys, which is not the one key PROTOCOL_SHAPE selects'], both
 
 
 def test_a_choice_body_prints_the_fields_it_declares(tmp_path):
@@ -1298,7 +1345,7 @@ def test_the_gate_reads_a_choice_inside_a_body():
                                       'default_route = {}'))
     assert [f.detail for f in findings] == [
         'protocol panos_virtual_router.default_00000000 protocol/ospfv3/area/type/nssa/default_route '
-        'states 0 keys, which a one_of level cannot'], findings
+        'states 0 keys, which is not the one key PROTOCOL_SHAPE selects'], findings
     # The entries inside a `string_list` level hold the entry name, which is the field the row reads.
     findings = _findings(good.replace(
         'default_route = {\n                disable = {}\n              }',
@@ -1327,7 +1374,7 @@ def test_the_gate_reads_a_choice_inside_an_entry_level():
                                       'advertise = {}\n            disable = {}'))
     assert [f.detail for f in findings] == [
         'protocol panos_virtual_router.default_00000000 protocol/rip/interfaces/default_route '
-        'states 2 keys, which a one_of level cannot'], findings
+        'states 2 keys, which is not the one key PROTOCOL_SHAPE selects'], findings
     findings = _findings(good.replace('            advertise = {\n              metric = 10\n            }',
                                       '            no = {}'))
     assert [f.detail for f in findings] == [
@@ -1522,6 +1569,67 @@ def test_the_gate_reads_a_choice_level_inside_an_auth_profile():
     assert [f.detail for f in findings] == [
         'protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile/ah key unknown '
         'is not a key PROTOCOL_SHAPE selects'], findings
+
+
+def test_the_choice_rule_reads_a_level_and_an_entry(tmp_path):
+    """F7.12: the choice rule reads the whole-value choice and the choice inside an entry with one wording.
+
+    `peer_address` states the choice as its whole value and the `ospfv3` profile entry states it as two of its
+    four fields, so the rule counts only the keys `selects` states and reads the other keys through the field
+    rule. An entry or a level that states none of the alternatives is the same finding, because the provider
+    requires one (`terraform validate`, provider 2.0.14, Terraform 1.16.2, measured 2026-11-03). The print path
+    is unchanged: a run that states one alternative prints one key, and the gate reads those blocks with no
+    finding.
+    """
+    entry = ('  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n'
+             '          name = "AP-1"\n          spi = "100"\n          ah = {\n'
+             '            md5 = {\n              key = var.ap_1\n            }\n          }\n        }\n      ]\n'
+             '    }\n  }\n')
+    assert _findings(entry) == [], entry
+    # The finding names the level the row states, because the entry is the object the rule reads.
+    assert [f.detail for f in _findings(entry.replace(
+        '          ah = {\n            md5 = {\n              key = var.ap_1\n            }\n          }\n',
+        '          ah = {\n            md5 = {\n              key = var.ap_1\n            }\n          }\n'
+        '          esp = {\n            encryption = {\n              algorithm = "aes256"\n'
+        '              key = var.ap_1\n            }\n          }\n'))] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile '
+        'states 2 keys, which is not the one key PROTOCOL_SHAPE selects']
+    assert [f.detail for f in _findings(entry.replace(
+        '          ah = {\n            md5 = {\n              key = var.ap_1\n            }\n          }\n', ''))] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile '
+        'states 0 keys, which is not the one key PROTOCOL_SHAPE selects']
+    # `name` and `spi` are fields and not alternatives, so the field rule reads them and the choice rule counts
+    # only the keys it selects.
+    findings = _findings(entry.replace('spi = "100"', 'made_up = "100"'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile '
+        'made_up is not a field PROTOCOL_SHAPE declares'], findings
+    # The whole-value choice is the same rule.
+    level = ('  protocol = {\n    bgp = {\n      peer_group = [\n        {\n          name = "PG"\n'
+             '          peer = [\n            {\n              name = "10.0.0.1"\n              peer_address = {\n'
+             '                fqdn = "host.example.com"\n              }\n            }\n          ]\n        }\n'
+             '      ]\n    }\n  }\n')
+    assert _findings(level) == [], level
+    findings = _findings(level.replace('fqdn = "host.example.com"',
+                                       'fqdn = "host.example.com"\n                ip = "10.0.0.2"'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer/peer_address '
+        'states 2 keys, which is not the one key PROTOCOL_SHAPE selects'], findings
+    findings = _findings(level.replace(
+        'peer_address = {\n                fqdn = "host.example.com"\n              }', 'peer_address = {}'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer/peer_address '
+        'states 0 keys, which is not the one key PROTOCOL_SHAPE selects'], findings
+    # The print path prints one alternative for an export that states one, so a run reports nothing.
+    peer_run = _run('bgp.xml', tmp_path)
+    printed = peer_run['virtual_routers.tf']
+    assert 'peer_address = {\n                ip = "10.55.0.2"\n              }' in printed, printed
+    assert sanity_checks.check_protocol_object(peer_run) == [], sanity_checks.check_protocol_object(peer_run)
+    profile_run = _run('auth_profile.xml', tmp_path)
+    printed = profile_run['virtual_routers.tf']
+    # The fixture states one alternative per entry, so the run prints one key for each of the two entries.
+    assert printed.count('ah = {') == 1 and printed.count('esp = {') == 1, printed
+    assert sanity_checks.check_protocol_object(profile_run) == [], sanity_checks.check_protocol_object(profile_run)
 
 
 def test_a_sensitive_field_is_never_written_as_a_value(tmp_path):
