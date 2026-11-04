@@ -321,13 +321,11 @@ Completed work is not recorded here; the git history and the owner document hold
   `ARCHITECTURE.md` §3. The fetch layer checks the response against the request it made, so a
   per-scope shape is not guessed from what it looks like, and the container table still names no
   wrapper row.
-- Open: the pruning rule, stated in `provenance.py` (F5.3). A cache entry
-  is not pruned while a written record references it, and the reference is the `cache_entry`
-  field of a parsed record, so the rule reads data and not a printed line. The prune action
-  itself is not built: it needs the record directory decided first, because a record is
-  written per output directory and a later run cannot know which records a prune action will
-  read. A two-source run writes two records in one file, so the prune action reads a record
-  file, not one record.
+- The record directory is the output directory, so the prune action reads the record file the same run
+  wrote. The rule, the action, and the flag that gates it are in `ARCHITECTURE.md` §3.3:
+  `provenance.prunable_entries` decides, `provenance.prune` removes, and `--prune-cache` gates the step for
+  an api run, because a file record states `-` for the cache field and references nothing. A two-source run
+  writes two records in one file, so the action reads a record file, not one record.
 - Pinned by `tests/test_data_source_schema.py`: a data source schema does declare required
   attributes. For every one of the 128 data sources `location` is required, and for every data
   source that has a `name` attribute `name` is required (106 types have both; 22 have no `name`,

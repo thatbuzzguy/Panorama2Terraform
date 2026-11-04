@@ -23,9 +23,11 @@ The current feature is the open items `backlog.md` names. Pieces, in the order t
       position, one identity, one fact, so no matrix row, because a console line has no room for the
       report's fixed-width column. The source field is the minimum actionable part of the provenance
       record, the source name, and the shadow line names the parent source name.
-- [ ] Current piece: the record directory, then the prune action. A record is written per output
-      directory, so the prune action needs the directory decided first; it reads a record file, not one
-      record.
+- [x] The record directory, then the prune action (commit `c85c0bc`). Decision: the record directory is the
+      output directory, so `SOURCE.txt` stays a codebase root-set file named through `write_path.root_path`,
+      and the action reads the record file the same run wrote. A record directory of its own would be a third
+      file set and a third path builder. The action is `provenance.prune`, and `--prune-cache` gates it as a
+      run step for `--source api` only; it runs after the record is written and after the gate.
 - [ ] The gate choice-word open item: `FILTER_XML_NAME_EXCEPTIONS` holds 15 pairs, and the fixture grounds
       five. The other ten need a fixture that states one alternative and still passes `terraform validate`.
 
@@ -44,7 +46,8 @@ The current feature is the open items `backlog.md` names. Pieces, in the order t
 ## Rules the write path keeps
 
 - One function writes a file (`src/write_path.py`), so the LF rule is enforced once (`ARCHITECTURE.md` §6), and the
-  two path builders name the two sets. No module writes a file outside it.
+  two path builders name the two sets. No module writes a file outside it. The record directory is the output
+  directory, so the prune action reads the record file the same run wrote and no record directory exists.
 - The gate reads the `.tf` files for the block rules and the four records read by the data rule; the two file sets
   stay distinct. A new file shape must name which set it belongs to.
 - One place decides the shape of a value (`resource_mapping.VALUE_VARIABLES`) and one place decides the shape of

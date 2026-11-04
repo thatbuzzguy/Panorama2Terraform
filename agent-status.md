@@ -2,32 +2,36 @@
 
 ## Current position
 
-The console line shape decision is complete and committed on `development` (`5718a80`); this tracking
-markdown is the next commit. Decision: the shape is `  - <scope>  <position>  <identity>  <fact>`, stated
-once in `container_coverage.console_line`, and the source field a console line may name is the source name,
-the minimum actionable part of the provenance record.
+The record directory and the prune action are complete and committed on `development` (`c85c0bc`); this
+tracking markdown is the next commit. Decision: the record directory is the output directory, so `SOURCE.txt`
+stays a codebase root-set file named through `write_path.root_path`, and the prune action reads the record
+file the same run wrote. A record directory of its own, or one beside the cache, would be a third file set and
+would need a third path builder.
 
-- A console line names one position, one identity and one fact, so it has no room for the report's
-  fixed-width matrix-row column, for a second position, or for two identities. The matrix row, the parent
-  line and the state resource address stay in `CONVERSION_REPORT.txt`, and the record's other fields stay
-  in `SOURCE.txt`.
-- The console prints four kinds, one block per kind and one line per finding: the container coverage
-  finding, the gap entry, the property finding, and the shadow line. The ownership, state and edge scans
-  keep no console line, because their fact compares two identities or needs a second position.
-- Pins changed: `tests/test_container_coverage.py::test_console_lists_the_findings` (the container finding
-  line takes the shape order), `tests/test_shadow_coverage.py` (the no-console-line pin became the console
-  line pin), the new pins in `tests/test_container_coverage.py` (the single shape and the document),
-  `tests/test_property_coverage.py` (the console block, the parsed-object key name, the no-finding run, the
-  unchanged report bytes), and `tests/test_ownership.py` (the reason a scan keeps no console line). The gap
-  line bytes and every report line shape are unchanged, so no golden moved.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1450 tests (about 3 minutes).
+- The action is `provenance.prune(record_file, cache_dir)`: it reads the record file through `parse_records`,
+  decides through `prunable_entries`, and removes what the decision names. It states no second decision and
+  builds no path. `prunable_entries` is unchanged.
+- `--prune-cache` is an opt-in flag that gates a run step, following the `--data-blocks` and
+  `--import-blocks` precedent, and applies to `--source api` only (argument error, exit 2), because a file
+  record states `-` for the cache field. `main()` runs the step after the record is written and after the
+  gate.
+- Exit codes: the gate still decides; a prune that removes nothing changes nothing; a record the action cannot
+  read is a refusal and exits 1 with a message that names the record file; a cache directory that holds no
+  entry is not a refusal. The run prints one line per pruned entry, and only when it removed something.
+- Pins changed: the new group 6 of `tests/test_provenance.py` (the referenced entry kept, the unreferenced
+  entry pruned, the action reads the record file and not the record objects it built, the two-record file
+  case, a record that cannot be read, a run that does not declare the action, the exit codes, the argument
+  rule), and `tests/test_write_path.py::test_the_record_directory_is_the_output_directory_for_the_prune`. No
+  existing pin changed, and no golden moved, because the action writes no output.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1461 tests (about 3 minutes).
 
 The housekeeping layout rule is unchanged: `docs/ARCHITECTURE.md` §1.1 is its owner document, `AGENTS.md`
 names the tracking markdown set, and each index names every document under it (commits `ccf93a3` and
 `b3465f1`).
 
-The next piece is the record directory, then the prune action, in `to-do.md`. After it: the gate
-choice-word open item (`FILTER_XML_NAME_EXCEPTIONS` holds 15 pairs, and the fixture grounds five).
+The next piece is the gate choice-word open item: `FILTER_XML_NAME_EXCEPTIONS` holds 15 pairs, and the
+fixture grounds five; the other ten need a fixture that states one alternative and still passes
+`terraform validate`.
 
 ## Rules to keep when writing documents
 
@@ -187,8 +191,12 @@ the
   minimum is a golden change.
 - The credential rule needs one statement that covers both the fetch layer and the generated
   provider block.
-- The prune action still needs the record directory decided. A state record references nothing,
-  so it prunes nothing, and the prune rule reads a record file, not one record.
+- The prune action reads the record file the run wrote, because the record directory is the output directory
+  and `SOURCE.txt` is a codebase root-set file. `provenance.prune` decides through `prunable_entries` and
+  builds no path, so no path rule for a record directory can appear in the module that owns the record. A state
+  record references nothing, so it prunes nothing and protects nothing, and the action reads a record file, not
+  one record. `--prune-cache` is an opt-in flag that gates the step; it names no part of the layout, so the
+  no-flag scan holds, and it cannot change what the gate counts or the exit code the gate decides.
 - A coverage fact that comes from a run must be read from the run's ledger, so the scan tests
   run
   the pipeline in process.
