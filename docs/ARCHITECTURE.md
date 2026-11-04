@@ -318,7 +318,7 @@ Three rules the scan uses:
   [`../backlog.md`](../backlog.md).
 - A section no row covers is a finding. The scan reports it in
   `MANUAL_SETUP_REPORT.txt` with its source line and entry count, and prints one
-  console line per finding. An absent section is not a finding, an empty known
+  console line per finding in the shape §3.2 states. An absent section is not a finding, an empty known
   section is not a finding, and an entry container under `predefined` is not a
   finding: those entries are PAN-OS built-in definitions, not operator objects.
 - **The envelope is never a scanned container** (`container_coverage.ENVELOPE`:
@@ -389,9 +389,10 @@ Six rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
   off the XML element is not a property an output used. Only an entry a matrix row
   covers is in scope, so a report, inventory, bookkeeping, count-only, or nested-block
   container is not a finding (§3.1). Pinned by `tests/test_property_coverage.py`,
-  including the corpus findings, the parity with the matrix row, the scan scope, and the
-  report section. The console prints the gap lines only; a property finding prints in
-  the report, because it names a matrix row.
+  including the corpus findings, the parity with the matrix row, the scan scope, the report
+  section, and the console line for a finding. The console prints that line too, in the shape
+  this section states at the end: the entry, its position, and the fact, and no matrix row,
+  because a console line has no room for a fixed-width column.
 
 **The cross-source shadow scan** (F5.4) adds one finding kind, in `shadow_coverage.py`, and the
 report prints it in its own section after the property section:
@@ -407,10 +408,14 @@ and a service group with the same name is not. The scan scope is the rule above,
 source is read with the same container helpers and the same row rule, so no second naming rule
 exists. A run with no declared parent has no parent to read, so it prints no shadow section. The
 second source is what makes the name visible: a per-device-group run cannot see its parent, so an
-inherited name stays a plain string and the parent entry is invisible. The console prints no shadow
-line, and a shadow is an operator action, so it does not change the exit code. Pinned by
+inherited name stays a plain string and the parent entry is invisible. The console prints the shadow
+line too, in the shape at the end of this section, and its source field is the minimum actionable
+part of the record: the parent source named by its report value, because the operator's action is to
+open that source, and the name identifies it. The path is in the provenance record (§3.3), and the
+parent line stays in the report, because the shape names one position. A shadow is an operator
+action, so it does not change the exit code. Pinned by
 `tests/test_shadow_coverage.py`, including the fixed line shape, the row key, the scan scope, the
-grouping, and the no-parent run.
+grouping, the console line and its source field, and the no-parent run.
 
 **The repeated-name scan** (F6.2) prints its findings in its own section, after the shadow section and
 before the two state sections:
@@ -421,7 +426,8 @@ before the two state sections:
 
 The scan adds no fact kind of its own: it decides the owner for the entries §3.1 covers, and the
 report prints the case it cannot decide. Its rules are in §3.5. A finding is an operator action, so it
-does not change the exit code, which the F4.1 gate decides, and the console prints no line for it.
+does not change the exit code, which the F4.1 gate decides, and the console prints no line for it,
+because its fact compares two entries and the console shape names one identity.
 Pinned by `tests/test_ownership.py`, including the fixed line shape, the grouping, the section order,
 and the no-console-line run.
 
@@ -460,8 +466,9 @@ are not compared, and that limit is recorded in [`../backlog.md`](../backlog.md)
 the two sides hold it, so member order is part of the value. A drift fact needs an ownership fact, so
 the drift section is a subset of the ownership section. The state scan is not an output, so it reads
 captured values through the non-recording read (`entry_coverage.RecordingDict.value`) and cannot move a
-property finding. Both facts are grouped by the same F3.9 scope rule, the console prints no state line,
-and both are operator actions, so neither changes the exit code, which the F4.1 gate still decides.
+property finding. Both facts are grouped by the same F3.9 scope rule, the console prints no state line
+because each fact names two identities and a second position, and both are operator actions, so neither
+changes the exit code, which the F4.1 gate still decides.
 Pinned by `tests/test_state_coverage.py`, including the fixed line shapes, the key, the scan scope on
 both sides, the grouping, the property-read parity, and the no-state run.
 
@@ -474,6 +481,38 @@ runs on the same input write the same bytes. The gap section lists every row who
 destination writes nothing. A gap is an operator action, so it does not change the
 exit code, which the F4.1 gate still decides (§4.6). A run with no entries writes
 no report file, and a run with no gaps prints no extra console line.
+
+**The console line shape.** One function states it, `container_coverage.console_line`, and no module
+defines a second one: a scan states its fact phrase and its block header, and calls that function. A
+console line names four parts, in this order, and nothing else:
+
+```text
+  - <scope>  <position>  <identity>  <fact>
+```
+
+- `<scope>` is the F3.9 grouping rule above, so a console line names the scope the report section
+  names. A finding the report does not group prints no scope part.
+- `<position>` is one position: the entry's source line, or `position unknown`. The console keys a
+  finding on the same line number the report row keys it on, so the console line and the report row
+  name the same entry. A fact that needs a second position, such as the parent line or a state
+  resource address, keeps it in the report.
+- `<identity>` is the F4.3 row identity `<object type>/<entry name>`, or the container path for a
+  container finding, because a container finding names a container rather than one entry. One
+  identity per line, so a fact that compares two entries, or two units, stays in the report.
+- `<fact>` is the words the report line already uses for the finding, so the console and the report
+  cannot disagree. It may name the captured fields, which are the parsed-object key names, never the
+  XML tag (F4.3 rule 5), and the entries the fact covers.
+
+A console line names no fixed-width matrix-row column, so the matrix row stays in the report. The
+source field it may name is the minimum actionable part of the provenance record (§3.3): the source
+name, the same report value the report bodies use (F4.2 rule 6). The path, the kind, the request, the
+cache entry, the size and the hash are not on a console line, because a printed line protects nothing
+and the record is where the eight fields live. A block prints only when it has a finding, so a run with
+no finding in that kind prints nothing new. Four kinds print: the container coverage finding, the gap
+entry, the property finding, and the shadow line. The ownership, state and edge scans print in the
+report only, because their facts compare two identities or need a second position. Pinned by
+`tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place`,
+`tests/test_property_coverage.py`, and `tests/test_shadow_coverage.py`.
 
 ### 3.3 Provenance record
 

@@ -707,7 +707,8 @@ def test_the_findings_are_grouped_by_the_f3_9_scope_rule(converter_module, tmp_p
 
 def test_a_finding_does_not_change_the_exit_code_and_the_console_prints_no_line(converter_module, tmp_path):
     """AC-5.3: a finding is an operator action, so the F4.1 gate still decides the exit code, and the
-    console prints the gap lines only (the rule the property and shadow findings hold).
+    console prints no ownership line, because its fact names two entries and the console line shape names
+    one identity (`docs/ARCHITECTURE.md` §3.2).
     """
     out = tmp_path / 'out'
     code = run_main(converter_module, [str(FIXTURES_DIR / FIXTURE), '--output-dir', str(out)])

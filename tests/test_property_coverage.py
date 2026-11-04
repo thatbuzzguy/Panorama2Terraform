@@ -13,6 +13,10 @@ Four groups:
 4. The report section. The findings print in their own section, grouped by the F3.9 scope
    rule, byte-identical between runs. A finding is an operator action, so it does not
    change the exit code, which the F4.1 gate still decides.
+5. The console block. One line per finding in the shape `container_coverage.console_line` states
+   (`docs/ARCHITECTURE.md` §3.2): the scope, the position, the entry, the fact. No matrix row, because
+   a console line has no room for a column. The fact names the properties as the parsed-object key
+   names. A run with no finding prints nothing new, and the report bytes are unchanged.
 
 The scan scope is the entries a matrix row covers. A report, inventory, bookkeeping,
 count-only, or nested-block container has no matrix row, so the scan does not report it;
@@ -572,3 +576,80 @@ def test_finding_does_not_change_the_exit_code(tmp_path):
                         '--output-dir', str(tmp_path / 'exit'))
     assert result.returncode == 0, result.stdout + result.stderr
     assert entry_coverage.PROPERTY_HEADING in (tmp_path / 'exit' / entry_coverage.REPORT_FILE).read_text()
+
+
+# --- 5. The console block ---------------------------------------------------
+
+def _console(fixture, tmp_path):
+    """Run the converter on one fixture. Returns (exit code, console text)."""
+    result = run_script('panorama_to_terraform.py', str(FIXTURES_DIR / fixture),
+                        '--output-dir', str(tmp_path))
+    return result.returncode, result.stdout
+
+
+def test_the_console_prints_the_property_findings(converter_module, tmp_path):
+    """AC-3 and AC-5: one console line per finding, in the shape `container_coverage.console_line` states.
+
+    The line keys on the entry's source line, the position the report row keys on, and it names the fact,
+    not the matrix row, because a console line has no room for the report's fixed-width column. The block
+    prints only when it has a finding, and a finding does not change the exit code.
+    """
+    parser = run_pipeline(converter_module, FINDING_FIXTURE, tmp_path / 'run')
+    assert parser is not None
+    ledger = parser.ledger
+    generator = converter_module.TerraformGenerator(output_dir=str(tmp_path / 'gen'))
+    rows = ledger.property_findings()
+    assert rows, 'the fixture must trip a property finding'
+    block = entry_coverage.property_console_lines(rows, generator._report_scope_path)
+    code, console = _console(FINDING_FIXTURE, tmp_path / 'out')
+    assert code == 0, 'a property finding is an operator action, so the F4.1 gate decides the exit code'
+    for line in block:
+        assert line in console, line
+    for row, line in zip(rows, block[1:]):
+        parts = line[len(container_coverage.CONSOLE_PREFIX):].split('  ')
+        assert parts == [container_coverage.scope_part(row, generator._report_scope_path),
+                         container_coverage.position_part(row['line']),
+                         entry_coverage.entry_identity(row), entry_coverage.property_fact(row)], parts
+        assert row['resource'] not in line, (line, 'the console line names no matrix row')
+
+
+def test_the_console_fact_names_the_parsed_object_key_and_not_the_xml_tag(converter_module, tmp_path):
+    """AC-4: captured fields are the keys of the object the parse method built (F4.3 rule 5), so the
+    console line names a key name, not the XML spelling the value came from.
+
+    `address_objects.xml` trips a finding on `declared_type`, the key the parse built from the XML
+    attribute `type`, so the two names differ and the pin can tell them apart.
+    """
+    parser = run_pipeline(converter_module, 'address_objects.xml', tmp_path / 'run')
+    assert parser is not None
+    ledger = parser.ledger
+    entry = next(e for e in ledger.entries() if e.get('name') == 'Wildcard-Net')
+    key = 'declared_type'
+    assert key in ledger.captured_fields(ledger.mark_for(entry)), 'the fact names a parsed-object key'
+    assert entry.get('type') is not None, 'the value comes from the XML attribute `type`'
+    row = next(r for r in ledger.property_findings() if r['name'] == entry.get('name'))
+    generator = converter_module.TerraformGenerator(output_dir=str(tmp_path / 'gen'))
+    line = entry_coverage.property_console_lines([row], generator._report_scope_path)[1]
+    code, console = _console('address_objects.xml', tmp_path / 'out')
+    assert code == 0, console
+    assert line in console, line
+    assert key in line and 'type' not in line.replace(key, ''), line
+
+
+def test_the_console_prints_no_property_block_for_a_run_with_no_finding(tmp_path):
+    """AC-5: a run with no finding in this kind prints nothing new, and the exit code is unchanged."""
+    code, console = _console('tags.xml', tmp_path)
+    assert code == 0
+    assert 'Property findings' not in console, console
+
+
+def test_the_console_shape_moves_no_report_bytes(converter_module, tmp_path):
+    """AC-7: the report keeps the fixed-width line shape with the matrix row, so the console change moves
+    no report bytes and the goldens stay.
+    """
+    parser = run_pipeline(converter_module, FINDING_FIXTURE, tmp_path / 'run')
+    report = _report(tmp_path / 'out', FINDING_FIXTURE)
+    for row in parser.ledger.property_findings():
+        line = entry_coverage.property_line(row)
+        assert line in report, line
+        assert row['resource'] in line, 'the report keeps the matrix row column'

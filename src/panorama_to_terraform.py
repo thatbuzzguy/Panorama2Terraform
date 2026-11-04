@@ -6835,22 +6835,32 @@ def main():
         print(f"Provenance record: {record_file}")
 
         # F4.2: one console line per uncovered section, so a run that read an
-        # entry it cannot model is visible without opening the report.
-        if coverage_findings:
-            print(f"\n⚠️  Entry Coverage: {len(coverage_findings)} container(s) the parser does not read")
-            for finding in coverage_findings:
-                print(container_coverage.console_line(finding))
+        # entry it cannot model is visible without opening the report. Every line here
+        # is built by `container_coverage.console_line`, the one place the console line shape
+        # is stated (`docs/ARCHITECTURE.md` §3.2), and each block prints only when it has a finding.
+        coverage_console = container_coverage.console_lines(coverage_findings)
+        if coverage_console:
+            print()
+            for line in coverage_console:
+                print(line)
 
         # F4.3: entry totals, then one console line per gap entry. A gap is an
         # operator action, not a broken output, so it does not change the exit
         # code (the F4.1 gate does). No console line when the run has no gap.
+        # F4.4 and F5.4: the property and shadow blocks print too, in the report section order. A console
+        # line names the entry, its position, and its fact, and no matrix row, because a console line has
+        # no room for the report's fixed-width column; the report keeps it. The shadow line names the
+        # parent source by its name, the minimum actionable field: the path is in the provenance record.
         gap_console = entry_coverage.console_lines(panorama.ledger, tf_gen._report_scope_path)
-        if gap_console:
+        property_console = entry_coverage.property_console_lines(
+            panorama.ledger.property_findings(), tf_gen._report_scope_path)
+        shadow_console = shadow_coverage.console_lines(shadows, tf_gen._report_scope_path)
+        if gap_console or property_console or shadow_console:
             print()
-            for line in entry_coverage.summary_lines(panorama.ledger):
-                print(line)
-            for line in gap_console:
-                print(line)
+            for block in (entry_coverage.summary_lines(panorama.ledger),
+                          gap_console, property_console, shadow_console):
+                for line in block:
+                    print(line)
             print(f"Per-entry report file: {Path(args.output_dir) / entry_coverage.REPORT_FILE}")
 
         # F4.1: the gate reads the files that were written, so it reports what

@@ -31,6 +31,11 @@ read it.
 Report order is fixed: findings are sorted by tag chain, then line, so the same
 input produces the same bytes. A report body names the source name only, never the
 path (`SOURCE_LABEL`); the path is in the provenance record (`provenance.py`, F5.3).
+
+The console line shape is the third rule stated here, and the only place it is stated:
+`console_line` joins the four parts (`docs/ARCHITECTURE.md` §3.2). A scan states its own
+fact phrase and its block header and calls this function, so no module defines a second
+shape. Pinned by `tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place`.
 """
 
 import xml.etree.ElementTree as ET
@@ -548,15 +553,29 @@ SECTION_TITLE = 'Entry Coverage: Containers The Parser Does Not Read'
 # between runs that read the same bytes from different paths.
 SOURCE_LABEL = 'Source:'
 
+# The console line shape, and the marker the run prints before a block that has findings.
+# One place states them, so a finding line cannot take a second shape.
+CONSOLE_PREFIX = '  - '
+CONSOLE_WARNING = '⚠️'
+NO_PARSER_READS = 'no parse method reads this container'
+
 
 def entry_phrase(count: int) -> str:
     """'1 entry' or 'N entries'. One wording for the report and the console."""
     return f'{count} entry' if count == 1 else f'{count} entries'
 
 
+def position_part(line) -> str:
+    """The position part of a console line: the source line, or the honest statement that there is none.
+
+    The console names one position, so this is the only way a console line states where a finding is.
+    """
+    return f'line {line}' if line else 'position unknown'
+
+
 def position_phrase(finding: Finding) -> str:
     """The source line, or the honest statement that there is no line."""
-    return f'line {finding.line}' if finding.line else 'position unknown'
+    return position_part(finding.line)
 
 
 def finding_phrase(finding: Finding) -> str:
@@ -564,14 +583,57 @@ def finding_phrase(finding: Finding) -> str:
     return f'{finding.path} ({position_phrase(finding)}): {entry_phrase(finding.entries)}'
 
 
+def scope_part(row: dict, scope_path) -> str:
+    """The scope part of a console line, read through the F3.9 grouping rule.
+
+    The same rule the report section header uses, so a console line names the scope the report groups
+    the entry under. A finding the report does not group prints no scope part, so this answers ''.
+    """
+    return ' / '.join(label if not value else f'{label}: {value}'
+                      for _level, label, value in scope_path(row))
+
+
+def console_line(scope: str, position: str, identity: str, fact: str) -> str:
+    """The console line shape, stated once here: `  - <scope>  <position>  <identity>  <fact>`.
+
+    What a console line may name, and nothing else: the scope the F3.9 rule groups the entry under,
+    one position, one identity, one fact. It has no room for the report's fixed-width matrix-row
+    column, so a matrix row stays in the report; it names one position, so a second position (the
+    parent line, a state resource address) stays in the report; and it names one identity, so a fact
+    that compares two entries, or two units, stays in the report. A source is named by its report
+    value, the source name, never by its path (F4.2 rule 6): a printed line protects nothing
+    (`provenance.py`, F5.3), so the record's other fields are not on a console line. The fact is the
+    words the report line uses for the same finding, so the console and the report cannot disagree.
+
+    A module states its own fact phrase and its block header and calls this function, so no module
+    defines a second shape. A part that is empty is left out.
+    """
+    return CONSOLE_PREFIX + '  '.join(part for part in (scope, position, identity, fact) if part)
+
+
+def finding_fact(finding: Finding) -> str:
+    """The fact part for a container finding: the fact, and the entries the fact covers."""
+    return f'{NO_PARSER_READS} ({entry_phrase(finding.entries)})'
+
+
 def report_line(finding: Finding) -> str:
     """One report line for one finding."""
-    return f'  {finding_phrase(finding)} - no parse method reads this container'
+    return f'  {finding_phrase(finding)} - {NO_PARSER_READS}'
 
 
-def console_line(finding: Finding) -> str:
-    """One console line for one finding."""
-    return f'  - {finding_phrase(finding)}'
+def console_lines(findings: list[Finding]) -> list:
+    """The console block for the container findings: the header, then one line per finding.
+
+    A container finding names a container, not one entry, so its identity part is the container path,
+    and the report does not group it by the scope rule, so its scope part is empty.
+    """
+    if not findings:
+        return []
+    lines = [f'{CONSOLE_WARNING}  Entry Coverage: {len(findings)} '
+             'container(s) the parser does not read']
+    lines.extend(console_line('', position_part(finding.line), finding.path, finding_fact(finding))
+                 for finding in findings)
+    return lines
 
 
 def render_section(findings: list[Finding], source_name: str) -> str:
