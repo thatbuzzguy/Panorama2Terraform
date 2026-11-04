@@ -198,9 +198,9 @@ Two levels sit beside the matrix:
   ([`ARCHITECTURE.md`](ARCHITECTURE.md) §3.2). The scan scope is the entries a matrix
   row covers, so a report, inventory, bookkeeping, count-only, or nested-block
   container is not a finding: it has no row, and only a row can name the properties an
-  emitter reads. Those field gaps are recorded in [`../backlog.md`](../backlog.md).
+  emitter reads. A field gap in a container with no rule is recorded in [`../backlog.md`](../backlog.md).
   A container outside the scan scope is honest only when the output that reaches its entry reads the
-  field, because no finding can name a container with no row. Two shapes state that, one per kind.
+  field, because no finding can name a container with no row. Three shapes state that, one per kind.
   A `report` container is honest only when its report section reads the field it prints through the
   captured object, because that section is the only output for the entry. Five pins hold the rule, one per
   container, in `tests/test_property_coverage.py`:
@@ -230,6 +230,21 @@ Two levels sit beside the matrix:
   attribute, so no emitter can read a region field and the row cannot become an `emitted` row: the report
   line is the only output a region entry can reach. `entry_coverage.gap_fact` reads the same captured part,
   so the console fact names the same words the report line names.
+
+  A `nested-block` container has no matrix row either, so the per-entry report line is the only output its entry
+  reaches, and the line is honest only when it names the fields the print reads through the captured object.
+  `parent` is not one of those fields. Measured 2026-11-04 against the pinned provider, three resource types
+  declare a `parent` attribute: `panos_ethernet_layer3_subinterface`, `panos_aggregate_layer3_subinterface`, and
+  `panos_device_group_parent`. `panos_ethernet_interface`, the type the virtual-wire block prints, declares no
+  `parent`, so no line of that block can print a parent. `parent` is therefore a fact of the parent entry, not a
+  property of the child, and the child's own name states the parent part (`ethernet1/4.1` is unit `1` of
+  `ethernet1/4`), which the `name` line prints as the row identity. So `parse_interfaces` records no `parent`
+  value for a `nested-block` entry, and the line names the fields the print reads: `comment` (the printed line),
+  `mode` (the block key), and `type` (the type from `INTERFACE_RESOURCE_TYPES`). `parent` stays a captured
+  property for the kinds whose row declares it, where the emitter reads it through the child object and prints
+  `parent = <parent entry>.name`. One pin holds this shape, on `tests/fixtures/interfaces_ethernet.xml`:
+  `::test_the_nested_block_line_names_only_the_fields_the_emitter_reads`. The `bookkeeping` container has no rule
+  yet, so its `devices` and `templates` fields stay in `backlog.md`.
 
    F7.11 completed the six `PROTOCOL_SHAPE` entry rows the router reads, so the router row declares
    a property for each field those rows state, and the scan measures each entry that states them.

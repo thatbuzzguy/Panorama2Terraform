@@ -152,7 +152,7 @@ does not turn into an entry of its own:
 | Kind | What it means |
 |---|---|
 | Bookkeeping | an association table or a scope fact (§2.2), and a sub-shape that only selects a shape |
-| Nested block | lines written inside a parent resource block, not a resource of its own |
+| Nested block | lines written inside a parent resource block, not a resource of its own. The per-entry report line (§3.2) is the only output its entry reaches, so it names only the fields the print reads through the captured object. The honesty rule for that line is in [`COVERAGE_MATRIX.md`](COVERAGE_MATRIX.md) §1 |
 
 The per-entry report (§3.2) adds two kinds for a single entry, because a
 container row cannot state a per-entry fact:
@@ -170,7 +170,9 @@ accounted for.
 
 A captured field that no output reads is a property gap, and the property scan reports
 it for a container the matrix covers (§3.2). A destination with no matrix row has no
-declared property list, so its field gaps are recorded in `backlog.md` instead.
+declared property list, so the rule that keeps such a field honest names the output that
+reads it (`COVERAGE_MATRIX.md` §1). The gap that has no rule yet is recorded in
+`backlog.md` instead.
 
 ## 3. Parse pipeline
 
