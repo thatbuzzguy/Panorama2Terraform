@@ -26,12 +26,6 @@ Completed work is not recorded here; the git history and the owner document hold
   These are not findings today, and each one needs a rule before it can become one: an
   emitter must exist, or the report writer must read the field it names.
 
-- The console prints the gap lines only; a property finding and a shadow print in
-  `CONVERSION_REPORT.txt`, because each names a matrix row. Printing findings on
-  the console needs the console line shape decided first, so a run does not print a
-  matrix row it has no room for. A shadow line also names a source, so its shape needs
-  the source field decided with it.
-
 - The shadow parent index is keyed by (matrix row, entry name), so a parent name the export
   declares in two scopes gives one key and the first parent row wins, in report order. Identity
   is (device group, vsys, type, name) (`docs/ARCHITECTURE.md` §2.1), so a key that also named the
@@ -299,7 +293,8 @@ Completed work is not recorded here; the git history and the owner document hold
   report-only address from the same parsed object.
 - The scan scope is the entries an `emitted` container row covers, because only a row can
   name the properties an emitter reads. A finding is an operator action, so it does not
-  change the exit code. The console prints the gap lines only.
+  change the exit code. The console prints one line per finding, in the shape
+  `docs/ARCHITECTURE.md` §3.2 states, and the fact names the parsed-object key names.
 - A manual report section prints what the parse captured for it, so a captured field is
   either printed or reported as unread. The routing section prints only the entries the `protocol` object
   cannot express, read through `entry_coverage.protocol_report_rows`, so the destination comes from the

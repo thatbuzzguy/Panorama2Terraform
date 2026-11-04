@@ -2,29 +2,32 @@
 
 ## Current position
 
-The `lib_docs/` reference decision is complete and committed on `development` (`0e4ca83`); this tracking
-markdown is the next commit. Decision: remove the reference from `AGENTS.md`; add no cheat sheet.
+The console line shape decision is complete and committed on `development` (`5718a80`); this tracking
+markdown is the next commit. Decision: the shape is `  - <scope>  <position>  <identity>  <fact>`, stated
+once in `container_coverage.console_line`, and the source field a console line may name is the source name,
+the minimum actionable part of the provenance record.
 
-- The tool imports only the standard library, so no library set exists that a cheat sheet could name: no
-  runtime package in `requirements.txt`, and every import in `src/` is the standard library or a sibling in
-  the flat `src/` namespace.
-- The facts the cheat sheets promised are already held. The code and its tests rely on the standard-library
-  facts (`xml.etree`/expat, `urllib.request`), and the provider facts are held by the pins, `backlog.md`
-  "Design Decisions (provider facts, re-measured 2026-10-31)", and `docs/RESOURCE_MAPPING.md`. A cheat sheet
-  would be a second copy of a table, which the document rule forbids.
-- `AGENTS.md` keeps one direction that states the standard-library rule, so the reference is not re-added by
-  habit.
-- No pin changed: no test reads `AGENTS.md` or scans the root markdown or an index, so the rule that a file
-  outside an index is a finding is unchanged by this slice.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1443 tests (about 3 minutes).
+- A console line names one position, one identity and one fact, so it has no room for the report's
+  fixed-width matrix-row column, for a second position, or for two identities. The matrix row, the parent
+  line and the state resource address stay in `CONVERSION_REPORT.txt`, and the record's other fields stay
+  in `SOURCE.txt`.
+- The console prints four kinds, one block per kind and one line per finding: the container coverage
+  finding, the gap entry, the property finding, and the shadow line. The ownership, state and edge scans
+  keep no console line, because their fact compares two identities or needs a second position.
+- Pins changed: `tests/test_container_coverage.py::test_console_lists_the_findings` (the container finding
+  line takes the shape order), `tests/test_shadow_coverage.py` (the no-console-line pin became the console
+  line pin), the new pins in `tests/test_container_coverage.py` (the single shape and the document),
+  `tests/test_property_coverage.py` (the console block, the parsed-object key name, the no-finding run, the
+  unchanged report bytes), and `tests/test_ownership.py` (the reason a scan keeps no console line). The gap
+  line bytes and every report line shape are unchanged, so no golden moved.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1450 tests (about 3 minutes).
 
 The housekeeping layout rule is unchanged: `docs/ARCHITECTURE.md` §1.1 is its owner document, `AGENTS.md`
 names the tracking markdown set, and each index names every document under it (commits `ccf93a3` and
 `b3465f1`).
 
-The next piece is the console line shape in `to-do.md`: the console can print a property finding and a
-shadow line, and the shadow line names a source, so the source field is decided with it. After it: the
-record directory and the prune action, then the gate choice-word open item.
+The next piece is the record directory, then the prune action, in `to-do.md`. After it: the gate
+choice-word open item (`FILTER_XML_NAME_EXCEPTIONS` holds 15 pairs, and the fixture grounds five).
 
 ## Rules to keep when writing documents
 
@@ -45,6 +48,11 @@ record directory and the prune action, then the gate choice-word open item.
 
 ## Watch for the shape tables and the write path
 
+- The console line shape is stated in one place, `container_coverage.console_line` (`docs/ARCHITECTURE.md`
+  §3.2), so a scan states its fact phrase and its block header and calls it. A finding kind that prints on
+  the console must fit the four parts: one position, one identity, one fact. A source named on a console
+  line is the source name, never the path, and a fact that compares two entries or two units prints in the
+  report only.
 - The write path landed (`docs/CODEBASE_ASSEMBLY.md` §14): the run writes one directory per
 unit the manifest
     names, and the codebase root holds the root set. A new file shape must name which set it
