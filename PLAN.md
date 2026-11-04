@@ -67,9 +67,10 @@ path writes one directory per unit the manifest names.
 
 ## Sequencing
 
-The next feature is the open items in `backlog.md`: the record directory and the prune action, then the gate
-choice-word open item (`FILTER_XML_NAME_EXCEPTIONS` holds 15 pairs, and
-the fixture grounds five of them). The gated pieces that stay held are also in `backlog.md`: the four
+The next feature is the gate choice-word open item in `backlog.md` (`FILTER_XML_NAME_EXCEPTIONS` holds 15
+pairs, and the fixture grounds five of them). The record directory and the prune action are landed: the record
+is a codebase root-set file, so the action reads the record file the same run wrote, and `--prune-cache` gates
+the step for an api run. The gated pieces that stay held are also in `backlog.md`: the four
 `*_policy_rules` types wait for the F3.5 rulebase decision, and a config entry inside a stack needs a provider
 location shape before the emitter can write a block for it. The rows that state fewer fields than the pinned
 provider declares for their level are the choice levels, which state their alternatives as `selects` keys.
