@@ -17,10 +17,12 @@ Six groups:
    (`docs/ARCHITECTURE.md` §3.2): the scope, the position, the entry, the fact. No matrix row, because
    a console line has no room for a column. The fact names the properties as the parsed-object key
    names. A run with no finding prints nothing new, and the report bytes are unchanged.
-6. The five field gaps the scan cannot measure, one pin per gap: the fixture entry, the read the
+6. The field gaps the scan cannot measure, one pin per gap: the fixture entry, the read the
    parse made, and the output that prints the field. A `report` container has no matrix row, so its
    field is closed by the report writer reading what it prints; an `emitted` container is closed by
-   the emitter reading the key and the row naming it in the same change.
+   the emitter reading the key and the row naming it in the same change; a `count-only` container is
+   closed by the report line printing the value it names, because the entry line is the only output
+   its entry reaches. Six pins, one per container.
 
 The scan scope is the entries a matrix row covers. A report, inventory, bookkeeping,
 count-only, or nested-block container has no matrix row, so the scan does not report it;
@@ -554,23 +556,42 @@ def test_scan_reports_the_properties_no_output_read(converter_module, tmp_path):
 def test_scan_scope_is_the_entries_a_matrix_row_covers(converter_module, tmp_path):
     """A field gap in a container the matrix does not cover is not a scan finding.
 
-    The fixture holds a captured field no output read, in a `count-only` container. The gap is real, so it
-    stays in backlog.md, but the scan does not report it: only an emitted container has a matrix row, and a
-    matrix row is what names the properties an emitter reads. A `report` container has no row either, so its
-    field is honest only when the report line reads what it prints; that is the rule group 6 pins, and
-    measured 2026-11-04 no `report` container in the corpus has a captured field no output read.
+    The scan measures the entries a matrix row covers, so a container with no row cannot produce a finding:
+    nothing there names a property an emitter reads. The nested-block fixture holds such a gap today, so the
+    pin can show the rule against a real gap: `parse_interfaces` keeps `parent` for the layer-3 subinterface
+    inside its parent interface row, and the nested block prints the parent name from the parent object, not
+    through the child object, so no output reads the field on the child. The gap stays in backlog.md.
+
+    The `count-only` row is in the same scope, so the scan measures nothing for a region entry either. Its
+    field is not a gap today: the per-entry report line is the only output that entry reaches, and it prints
+    the value it names through the captured object, which is the rule group 6 pins on the regions fixture.
+    A `report` container has no row either, so its field is honest only when its report section reads what
+    it prints; measured 2026-11-04 no `report` container in the corpus has a captured field no output read.
     """
-    for fixture in ('regions.xml',):
-        parser = run_pipeline(converter_module, fixture, tmp_path)
-        assert parser is not None, fixture
-        ledger = parser.ledger
-        assert ledger.property_findings() == [], fixture
-        # The field gap is still there, outside the scan scope.
-        unused = {(entry.get('name'), tuple(sorted(
-            set(ledger.captured_fields(ledger.mark_for(entry)))
-            - set(ledger.mark_for(entry)['captured'].used_keys()))))
-            for entry in ledger.entries() if ledger.mark_for(entry)}
-        assert any(keys for _name, keys in unused), f'{fixture}: the scan scope check is empty'
+    parser = run_pipeline(converter_module, 'interfaces_ethernet.xml', tmp_path)
+    assert parser is not None, 'interfaces_ethernet.xml'
+    ledger = parser.ledger
+    assert ledger.property_findings() == [], ledger.property_findings()
+    entry = next(e for e in ledger.entries() if e.get('name') == 'ethernet1/4.1')
+    mark = ledger.mark_for(entry)
+    assert 'parent' in ledger.captured_fields(mark), ledger.captured_fields(mark)
+    assert 'parent' not in mark['captured'].used_keys(), mark['captured'].used_keys()
+    path = container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source)
+    assert entry_coverage.covering_row(path).destination == 'nested-block', path
+    assert entry_coverage.matrix_row_for(path) is None, path
+
+    region_parser = run_pipeline(converter_module, 'regions.xml', tmp_path / 'regions')
+    assert region_parser is not None, 'regions.xml'
+    region_ledger = region_parser.ledger
+    assert region_ledger.property_findings() == [], region_ledger.property_findings()
+    region_entry = next(e for e in region_ledger.entries() if e.get('name') == 'North-America')
+    region_path = container_coverage.section_path(region_ledger.parents[region_entry],
+                                                  region_ledger.parents, region_ledger.source)
+    assert entry_coverage.covering_row(region_path).destination == 'count-only', region_path
+    assert entry_coverage.matrix_row_for(region_path) is None, region_path
+    # The field is read by the only output the entry reaches, so there is nothing for the scan to report.
+    assert 'addresses' in region_ledger.mark_for(region_entry)['captured'].used_keys(), \
+        region_ledger.mark_for(region_entry)['captured'].used_keys()
 
 
 # --- 4. The report section ------------------------------------------------
@@ -711,7 +732,7 @@ def _gap_mark(ledger, name):
     return entry, mark
 
 
-# --- 6. The five field gaps the scan cannot measure ------------------------------------
+# --- 6. The field gaps the scan cannot measure, one pin per gap --------------------------
 
 def test_the_report_reads_the_application_filter_description_it_prints(converter_module, tmp_path):
     """Gap 1: `panos_application_filter` is not a resource, so the report is the output for the entry.
@@ -857,6 +878,44 @@ def test_the_report_reads_the_application_override_fields_it_prints(converter_mo
     findings = kitchen.ledger.property_findings()
     assert not [f for f in findings if f['name'] == 'Override-443'], findings
     assert _finding_rows(kitchen.ledger) == CORPUS_FINDINGS['kitchen_sink.xml'], findings
+
+
+def test_the_report_line_reads_the_region_addresses_it_prints(converter_module, tmp_path):
+    """Gap 6: a `count-only` row has no matrix row and no report section, so the entry line is its output.
+
+    `parse_regions` keeps `addresses` in the object it marks, and nothing else reads a region. Measured
+    2026-11-04 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14` through
+    `tests/conftest.py::provider_schemas`): 128 resources and 128 data sources, none naming a region, and
+    `panos_address` declares no `region` attribute, so no emitter can read the field and the row cannot
+    become an `emitted` row. The rule `docs/COVERAGE_MATRIX.md` §1 states is that the line prints the value
+    it names, read through the captured object, so the read record names `addresses` as a property an output
+    used and the field gap closes. `matrix_row_for` answers None for the row, so the scan measures nothing:
+    the pin is the only thing that can keep a `count-only` field honest.
+
+    `gap_fact` reads the same captured part as the report line, so the console names the value too, and the
+    console line shape is unchanged (`docs/ARCHITECTURE.md` §3.2).
+    """
+    out = tmp_path / 'regions'
+    parser = run_pipeline(converter_module, 'regions.xml', out)
+    assert parser is not None, 'regions.xml'
+    ledger = parser.ledger
+    entry, mark = _gap_mark(ledger, 'North-America')
+    assert 'addresses' in ledger.captured_fields(mark), ledger.captured_fields(mark)
+
+    report = written_bytes(out)[entry_coverage.REPORT_FILE].decode(encoding='utf-8')
+    line = next(line for line in report.splitlines() if 'North-America' in line)
+    assert 'captured: addresses=[US, CA, MX]' in line, line
+    assert 'addresses' in mark['captured'].used_keys(), mark['captured'].used_keys()
+
+    path = container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source)
+    assert entry_coverage.matrix_row_for(path) is None, path
+    assert ledger.property_findings() == [], ledger.property_findings()
+
+    # The gap row is still a gap row, and its console fact is the words the report line uses.
+    row = ledger.row_for(entry)
+    assert row in ledger.gaps(), row
+    assert entry_coverage.gap_fact(row).endswith('captured: addresses=[US, CA, MX]'), \
+        entry_coverage.gap_fact(row)
 
 
 def test_the_console_shape_moves_no_report_bytes(converter_module, tmp_path):

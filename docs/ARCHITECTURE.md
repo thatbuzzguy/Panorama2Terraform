@@ -144,7 +144,7 @@ Eight destinations. Every entry lands in one of them.
 | Emitted resource | the type is in `EMITTED_TYPES` |
 | Report entry | `REPORT_ONLY_TYPES` (no v2 resource) or `NOT_EMITTED_TYPES` (v2 resource exists, body not parsed), plus the `report_only` address entries |
 | Inventory comment | `security_profiles.tf`: names and descriptions only, with the resource name the emitter would use |
-| Count only | `parse_regions`: no resource and no report entry. The per-entry row (§3.2) records it as a gap, so the operator sees which entry it is |
+| Count only | `parse_regions`: no resource and no report entry. The per-entry report line (§3.2) is the only output its entry reaches, so it prints what the entry captured. The honesty rule for that line is in [`COVERAGE_MATRIX.md`](COVERAGE_MATRIX.md) §1 |
 
 The container table in §3.1 adds two kinds for what a parse method reads but
 does not turn into an entry of its own:
@@ -162,8 +162,9 @@ container row cannot state a per-entry fact:
 | Skipped | a parse method visited the entry and did not model it: no name, or an `id` reference pointer |
 | Unaccounted | no parse method read the entry, so no table row covers its container |
 
-The `count-only` row is the destination the converter cannot model today. It is
-recorded in `backlog.md`. The F4.3 per-entry report lists it as a gap, so the
+The `count-only` row is the destination the converter cannot model today: measured
+against the pinned provider, no resource or data source names a region, so no emitter
+can exist for a region entry. The F4.3 per-entry report lists it as a gap, so the
 operator sees which entry it is instead of the document claiming every entry is
 accounted for.
 

@@ -42,6 +42,11 @@ the path (F4.2 rule 6); the path is in the provenance record (F5.3). The label i
 The report line shape and the fact phrases are stated here. The console line shape is stated in one
 place, `container_coverage.console_line`, so the console wording here builds the parts and calls it:
 this module states no second shape (`docs/ARCHITECTURE.md` §3.2).
+
+The captured part of a line is the shape `captured_part` states: a row that reaches another output names
+the fields it captured, and a row whose kind has no other output prints the value of each field it names,
+read through the captured object. `docs/COVERAGE_MATRIX.md` §1 owns that rule, and
+`tests/test_property_coverage.py::test_the_report_line_reads_the_region_addresses_it_prints` pins it.
 """
 
 import re
@@ -61,6 +66,13 @@ DESTINATION_KINDS = container_coverage.DESTINATION_KINDS
 
 # The kinds that write nothing for the entry. A row with one of these is a gap.
 GAP_KINDS = ('count-only', 'skipped', 'unaccounted')
+
+# The gap kind whose report line must print a value, because the line is the only output its entry
+# reaches (`docs/COVERAGE_MATRIX.md` §1). A `count-only` row has no matrix row, so no property finding
+# can name it, and it has no report section, so the entry line is the only place its captured field can
+# be read. The other two gap kinds have no captured object to print: `mark_skipped` records an empty
+# object, and an `unaccounted` entry has no mark.
+PRINTS_VALUE_KINDS = ('count-only',)
 
 # Keys a parsed object carries that are not entry fields: the entry name and the
 # five scope facts.
@@ -113,8 +125,8 @@ def protocol_report_rows(ledger: 'EntryLedger') -> list:
         path = container_coverage.section_path(container, ledger.parents, ledger.source)
         if '/protocol/' not in '/' + path:
             continue
+        # `row_for` carries the captured object, so the report can read through it.
         row = ledger.row_for(entry)
-        row['captured'] = mark['captured']
         # The entry is a property level of a router, so the report names the router it belongs to: the
         # ancestor entry the router container holds, which is the block the `.tf` writes.
         node = entry
@@ -399,6 +411,9 @@ class EntryLedger:
                     'destination': destination,
                     'detail': detail,
                     'fields': self.captured_fields(mark),
+                    # The captured object itself, so a report line can read a value through the recorded
+                    # read (F4.4): `fields` is the names, and the row must carry the object to print a value.
+                    'captured': mark['captured'] if mark else {},
                     'property_entries': self.property_entry_count(entry)}
         row_data.update(self.scope(entry))
         return row_data
@@ -474,12 +489,42 @@ def entry_identity(row: dict) -> str:
     return f'{row["container"]}/{row["name"]}'
 
 
+def report_value(value) -> str:
+    """One captured value as a report line prints it.
+
+    A list is the members in the order the parse kept them; anything else is the text the parse stored.
+    One shape, so the entry line prints a value the way the report sections print it.
+    """
+    if isinstance(value, (list, tuple)):
+        return '[' + ', '.join(str(item) for item in value) + ']'
+    return str(value)
+
+
+def captured_part(row: dict) -> str:
+    """The captured part of a report line, in the sorted field order the report already uses (F4.3 rule 4).
+
+    A row that reaches another output names the fields it captured, so the line keeps the names. A row
+    whose kind prints a value (`PRINTS_VALUE_KINDS`, `docs/COVERAGE_MATRIX.md` §1) has no other output, so
+    the line is the only output its entry reaches and it prints each field's value, read through the
+    captured object: that read is the property use the property scan counts. A row with no captured field
+    says `name only`, because a field the entry carries no value for is not a captured field (F4.3 rule 3).
+    """
+    fields = row['fields']
+    if not fields:
+        return f'{CAPTURED_LABEL}: name only'
+    captured = row.get('captured')
+    if row['destination'] not in PRINTS_VALUE_KINDS or not captured:
+        return f'{CAPTURED_LABEL}: ' + ', '.join(fields)
+    return f'{CAPTURED_LABEL}: ' + ', '.join(
+        f'{key}={report_value(captured.get(key))}' for key in fields)
+
+
 def entry_line(row: dict) -> str:
     """One report line: line, object type, name, destination, detail, captured fields."""
     line = f'{row["line"] if row["line"] is not None else 0}'
     parts = [f'  line {line:>4}  ', f'{entry_identity(row):<38} ', f'{row["destination"]:<12} ',
              f'{row["detail"]:<36} ']
-    parts.append(f'{CAPTURED_LABEL}: ' + (', '.join(row['fields']) if row['fields'] else 'name only'))
+    parts.append(captured_part(row))
     if row['property_entries']:
         parts.append(f'  property entries: {row["property_entries"]}')
     if row.get('vsys'):
@@ -528,12 +573,13 @@ def property_fact(row: dict) -> str:
 
 
 def gap_fact(row: dict) -> str:
-    """The fact part for a gap row: the destination, the detail, the captured fields, and the count.
+    """The fact part for a gap row: the destination, the detail, the captured part, and the count.
 
-    Captured fields are the parsed-object key names (F4.3 rule 5), so a console line may name them.
+    The fact is the words the report line already uses for the same finding (`docs/ARCHITECTURE.md` §3.2),
+    so the console and the report cannot disagree. Captured fields are the parsed-object key names
+    (F4.3 rule 5), so a console line may name them, and a row whose kind prints a value prints the value.
     """
-    fact = (f'{row["destination"]}  {row["detail"] or "no detail"}  '
-            f'{CAPTURED_LABEL}: ' + (', '.join(row['fields']) or 'name only'))
+    fact = f'{row["destination"]}  {row["detail"] or "no detail"}  {captured_part(row)}'
     if row['property_entries']:
         fact += f'  property entries: {row["property_entries"]}'
     return fact

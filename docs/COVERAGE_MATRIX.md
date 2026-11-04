@@ -199,8 +199,10 @@ Two levels sit beside the matrix:
   row covers, so a report, inventory, bookkeeping, count-only, or nested-block
   container is not a finding: it has no row, and only a row can name the properties an
   emitter reads. Those field gaps are recorded in [`../backlog.md`](../backlog.md).
-  A `report` container is honest only when the report line reads the field it prints through the
-  captured object, because the report is the only output for that entry. Five pins hold the rule, one per
+  A container outside the scan scope is honest only when the output that reaches its entry reads the
+  field, because no finding can name a container with no row. Two shapes state that, one per kind.
+  A `report` container is honest only when its report section reads the field it prints through the
+  captured object, because that section is the only output for the entry. Five pins hold the rule, one per
   container, in `tests/test_property_coverage.py`:
   `::test_the_report_reads_the_application_filter_description_it_prints` (the provider declares no
   `panos_application_filter`, so the report prints the description),
@@ -216,6 +218,19 @@ Two levels sit beside the matrix:
   The shape of that line is stated once, as `OVERRIDE_REPORT_FIELDS` in `src/panorama_to_terraform.py`:
   the line prints the fields it reads through the captured object in that order, and a field the entry
   carries no value for prints nothing (F4.3 rule 3).
+
+  A `count-only` container has no report section, so the per-entry report line is the only output its
+  entry reaches. The line is honest only when it prints the value of each field it names, read through the
+  captured object, in the sorted field order the report already uses (`entry_coverage.captured_fields`
+  states that order), and a field the entry carries no value for prints nothing (F4.3 rule 3). One pin
+  holds the rule, on `tests/fixtures/regions.xml`:
+  `::test_the_report_line_reads_the_region_addresses_it_prints` (`parse_regions` keeps `addresses`, so the
+  line prints `captured: addresses=[US, CA, MX]`). Measured 2026-11-04 against the pinned provider, none of
+  the 128 resources or the 128 data sources names a region, and `panos_address` declares no `region`
+  attribute, so no emitter can read a region field and the row cannot become an `emitted` row: the report
+  line is the only output a region entry can reach. `entry_coverage.gap_fact` reads the same captured part,
+  so the console fact names the same words the report line names.
+
    F7.11 completed the six `PROTOCOL_SHAPE` entry rows the router reads, so the router row declares
    a property for each field those rows state, and the scan measures each entry that states them.
    A level inside an entry is not a measured entry: the entry that holds it is, so the fields inside
