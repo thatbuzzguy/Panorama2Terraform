@@ -181,6 +181,13 @@ Two levels sit beside the matrix:
   row covers, so a report, inventory, bookkeeping, count-only, or nested-block
   container is not a finding: it has no row, and only a row can name the properties an
   emitter reads. Those field gaps are recorded in [`../backlog.md`](../backlog.md).
+   F7.11 completed the six `PROTOCOL_SHAPE` entry rows the router reads, so the router row declares
+   a property for each field those rows state, and the scan measures each entry that states them.
+   A level inside an entry is not a measured entry: the entry that holds it is, so the fields inside
+   the level count as properties of that entry. An interface entry sits inside an area entry, so its
+   section path holds an `entry` segment a row path cannot match, and the two interface rows stay
+   grounded by the table. Pinned by
+   `tests/test_property_coverage.py::test_the_scan_measures_the_six_rows_and_not_a_level_inside_an_entry`.
 
 ## Maintenance duty
 

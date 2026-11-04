@@ -1,12 +1,10 @@
 # To Do
 
-F7.10 is complete and committed: `PROTOCOL_SHAPE` gained the 16 rows for the two redistribution profile lists,
-the dampening profile entry level and the five `bgp` single levels; the `protocol`, `protocol/bgp` and
-`protocol/ospfv3` rows gained the 13 fields the pinned provider declares; `parse_redist_profile` and
-`parse_redist_profile_ipv6` read the two lists through the table; `parse_bgp` states one path for the dampening
-entry level; the gate reads the new fields against their rows; and the property scan measures the three entries
-through the three new container rows. The next feature is the rest of Epic 7: the rows that state fewer fields
-than the provider declares for their level.
+F7.11 is complete and committed: the six `PROTOCOL_SHAPE` entry rows now state every field the pinned provider
+declares for their level, seven new rows state the `single` levels inside those entries, the three routing
+fixtures state every field their entries declare, and the property scan measures the six entries through the
+router row. The next feature is the gate word for a choice the provider reads between two attributes of one
+level.
 
 ## Next feature, in order (Epic 7 slices)
 
@@ -17,15 +15,12 @@ method for every router (`tests/test_entry_coverage.py::_parse_every`,
 word, so every new row is pinned against the live provider schema. A row that states a level the provider
 does not declare is a report decision, not a table row.
 
-1. **F7.11 — the rows that state fewer fields than the provider declares**: `protocol/bgp/peer_group` (2),
-   `protocol/bgp/peer_group/peer` (9), `protocol/bgp/redist_rules` (7), `protocol/ospf/area/interface` (8),
-   `protocol/ospfv3/area` (1), and `protocol/ospfv3/area/interface` (9). Measured 2026-11-03 against provider
-   2.0.14: each missing name is a leaf, and none is marked sensitive. Decide for each row whether the field is
-   read and printed, or stays a report gap. The list is in `backlog.md`.
-
-2. **F7.12 — the gate word for a choice between two levels**: the table states no word for a choice between two
-   levels, so the gate does not refuse a hand-written file that states both `ah` and `esp` in one `ospfv3` auth
-   profile entry (F7.7). Decide the word, or the rule, before the gate can refuse it.
+1. **F7.12 — the gate word for a choice the schema cannot state**: the table has no word for a level the
+   provider reads as a choice between two attributes, so the gate does not refuse a hand-written file that states
+   both `ah` and `esp` in one `ospfv3` auth profile entry (F7.7), or a `peer` block that states both `ip` and
+   `fqdn` for `peer_address` (F7.11, measured with `terraform validate`). Decide the word, or the rule, before
+   the gate can refuse it. The choice levels that are still a subset of the measurement are the `one_of` rows and
+   the auth profile levels.
 
 ## Rules the write path keeps
 

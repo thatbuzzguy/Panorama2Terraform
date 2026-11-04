@@ -398,26 +398,37 @@ Completed work is not recorded here; the git history and the owner document hold
   property scan measures the routing levels through that row (`PROTOCOL_SHAPE`), and a level the table does
   not state is not read. A filter container is not inside the `protocol` object, so its levels are measured
   through `FILTER_SHAPE` instead (§4.10).
-- Routing levels and fields `PROTOCOL_SHAPE` does not state are not read, so they reach no output and no
-  report row. F7.10 closed the `ospfv3` fields, the `bgp` fields and the two redistribution profile lists. The
-  gaps that stay are the rows that state fewer fields than the provider declares for their level:
-  `protocol/bgp/peer_group` (2 fields), `protocol/bgp/peer_group/peer` (9), `protocol/bgp/redist_rules` (7),
-  `protocol/ospf/area/interface` (8), `protocol/ospfv3/area` (1), and `protocol/ospfv3/area/interface` (9), plus
-  the auth profile choice levels. Measured 2026-11-03 against provider 2.0.14: each missing name is a leaf, and
-  none is marked sensitive. A level becomes printable when a parse method reads it and the table has a row for
-  it, because the emitter, the gate and the report all read that table. Epic 7 keeps the list.
-- Decision for the redistribution route-map entry (F7.8): the row scope stops at the `match` and `set` rows,
-  because those two rows state leaf fields only. The six levels inside them — `match.ipv4.address`,
-  `match.next_hop`, `match.route_source`, `set.metric`, `set.ipv4`, `set.ipv6` — are therefore not table rows,
-  so no parse method reads them and the gate refuses them in a hand-written file. `tests/fixtures` cannot state
-  one of the choice alternatives for the community-list `type` level and keep a valid run, because the provider
-  enforces exactly one entry for `type` (`regular`, `extended`, `large`), so `FILTER_XML_NAME_EXCEPTIONS` is
-  grounded by the five pairs the fixture states, and the other ten pairs are the spellings the pango source
-  measures.
-- Open: the provider accepts `ah` or `esp` for one `ospfv3` auth profile entry, which `terraform validate`
-  reports, and the table has no word for a choice between two levels, so the gate rule does not refuse a
-  hand-written file that states both in one entry. `tests/fixtures/auth_profile.xml` states the two levels in
-  two entries.
+- Routing levels and fields `PROTOCOL_SHAPE` does not state are not read, so they reach no
+  output and no report row. F7.10 closed the `ospfv3` fields, the `bgp` fields and the two
+  redistribution profile lists, and F7.11 closed the six entry rows that held the report
+  decision: `protocol/bgp/peer_group` (2 fields), `protocol/bgp/peer_group/peer` (9),
+  `protocol/bgp/redist_rules` (7), `protocol/ospf/area/interface` (8), `protocol/ospfv3/area`
+  (1), and `protocol/ospfv3/area/interface` (9). Every field the provider declares for those six
+  levels is read and printed, and none is marked sensitive, so no `VALUE_VARIABLES` row is
+  needed. The gaps that stay are the choice levels, which state their alternatives as `selects`
+  keys and no fields: the `one_of` rows and the auth profile levels. Measured 2026-11-03 against
+  provider 2.0.14. A level becomes printable when a parse method reads it and the table has a row
+  for it, because the emitter, the gate and the report all read that table.
+- Decision for the redistribution route-map entry (F7.8): the row scope stops at the `match`
+  and `set` rows, because those two rows state leaf fields only. The six levels inside them —
+  `match.ipv4.address`, `match.next_hop`, `match.route_source`, `set.metric`, `set.ipv4`,
+  `set.ipv6` — are therefore not table rows, so no parse method reads them and the gate refuses
+  them in a hand-written file. `tests/fixtures` cannot state one of the choice alternatives for
+  the community-list `type` level and keep a valid run, because the provider enforces exactly one
+  entry for `type` (`regular`, `extended`, `large`), so `FILTER_XML_NAME_EXCEPTIONS` is grounded
+  by the five pairs the fixture states, and the other ten pairs are the spellings the pango
+  source measures.
+- Open: the provider reads two attributes of one level as a choice, which the table has no word
+  for, so the gate rule does not refuse a hand-written file that states both. Measured 2026-11-03
+  with `terraform validate` (provider 2.0.14): an `ospfv3` auth profile entry accepts `ah` or
+  `esp`, not both, and a `peer` entry refuses a `peer_address` that states `ip` and `fqdn` ("2
+  attributes specified when one (and only one) of
+  [...peer_address.ip.<.ip,...peer_address.ip.<.fqdn] is required").
+  `tests/fixtures/auth_profile.xml` states the two levels in two entries, and
+  `tests/fixtures/bgp.xml` states one attribute for `peer_address`, so both fixtures validate.
+  The word for a choice between two fields of one level is F7.12, which F7.11 did not reach: the
+  two other `single` levels inside a peer entry (`connection_options`,
+  `subsequent_address_family_identifier`) accept more than one attribute, so they hold no choice.
 - Read-through is opt-in per declared scope (F5.5). A plain string already applies, because
   Panorama resolves an object name through its own inheritance at commit time, and one `data` block
   is one plan-time API call. A `data` block for a name that does not exist fails at plan, not at
