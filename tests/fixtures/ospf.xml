@@ -69,6 +69,10 @@
                         </range>
                         <!-- F7.1: an interface inside an area prints inside the area element -->
                         <interface>
+                          <!-- F7.11: the eight fields the `protocol/ospf/area/interface` row gained. The entry
+                               states every field its row declares, and the print order is the row's field order:
+                               the six fields the row already stated, then the eight new ones in the order the
+                               schema names them. -->
                           <entry name="ethernet1/2">
                             <enable>yes</enable>
                             <passive>no</passive>
@@ -78,6 +82,16 @@
                             <neighbor>
                               <entry name="10.0.0.2"/>
                             </neighbor>
+                            <authentication>md5</authentication>
+                            <bfd>
+                              <profile>BFD-OSPF</profile>
+                            </bfd>
+                            <dead-counts>40</dead-counts>
+                            <gr-delay>10</gr-delay>
+                            <hello-interval>10</hello-interval>
+                            <priority>1</priority>
+                            <retransmit-interval>200</retransmit-interval>
+                            <transit-delay>5</transit-delay>
                           </entry>
                           <!-- F7.1: a value the mapping cannot state makes the entry not expressible, so
                                the report names the whole entry -->

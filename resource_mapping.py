@@ -1415,9 +1415,12 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset(),
     },
+    # F7.11: the two `bool` fields the row did not state. Field order is the print order, so the four fields the
+    # row already stated keep their order and the two new fields follow in the order the schema names them.
     'protocol/bgp/peer_group': {
         'shape': 'string_list',
-        'fields': {'name': 'string', 'enable': 'bool', 'type': 'one_of', 'peer': 'string_list'},
+        'fields': {'name': 'string', 'enable': 'bool', 'type': 'one_of', 'peer': 'string_list',
+                   'aggregated_confed_as_path': 'bool', 'soft_reset_with_stored_info': 'bool'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1454,10 +1457,54 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset(),
     },
+    # F7.11: the nine fields the row did not state, in the order the schema names them. Three of them are
+    # `single` levels the parse reads through the rows below, so the row states them as `object`.
     'protocol/bgp/peer_group/peer': {
         'shape': 'string_list',
         'fields': {'name': 'string', 'enable': 'bool', 'peer_as': 'string',
-                   'local_address': 'object', 'peer_address': 'object'},
+                   'local_address': 'object', 'peer_address': 'object',
+                   'address_family_identifier': 'string', 'bfd': 'object',
+                   'connection_options': 'object', 'enable_mp_bgp': 'bool',
+                   'enable_sender_side_loop_detection': 'bool', 'max_prefixes': 'string',
+                   'peering_type': 'string', 'reflector_client': 'string',
+                   'subsequent_address_family_identifier': 'object'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # A `single` level inside an entry holds no entry, so `CONTAINER_TABLE` states no row for it and the
+    # property scan measures the field of the entry that holds it, not the fields inside it (F7.11).
+    'protocol/bgp/peer_group/peer/bfd': {
+        'shape': 'object',
+        'fields': {'profile': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/peer_group/peer/connection_options': {
+        'shape': 'object',
+        'fields': {'authentication': 'string', 'hold_time': 'string', 'idle_hold_time': 'number',
+                   'incoming_bgp_connection': 'object', 'keep_alive_interval': 'string',
+                   'min_route_adv_interval': 'number', 'multihop': 'number',
+                   'open_delay_time': 'number', 'outgoing_bgp_connection': 'object'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/peer_group/peer/connection_options/incoming_bgp_connection': {
+        'shape': 'object',
+        'fields': {'allow': 'bool', 'remote_port': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/bgp/peer_group/peer/connection_options/outgoing_bgp_connection': {
+        'shape': 'object',
+        'fields': {'allow': 'bool', 'local_port': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # The provider declares both attributes as optional, so this level states no `selects` and the gate reads it
+    # as an object: `terraform validate` accepts a block that states both of them (`acceptance.md`).
+    'protocol/bgp/peer_group/peer/subsequent_address_family_identifier': {
+        'shape': 'object',
+        'fields': {'multicast': 'bool', 'unicast': 'bool'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1473,10 +1520,16 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset(),
     },
+    # F7.11: the seven fields the row did not state. `set_community` and `set_extended_community` are a
+    # `['list', 'string']` type, so the `member_list` word states them: the members are values, so no level row
+    # stands under this row and the walk never enters it.
     'protocol/bgp/redist_rules': {
         'shape': 'string_list',
         'fields': {'name': 'string', 'enable': 'bool',
-                   'address_family_identifier': 'string', 'metric': 'number'},
+                   'address_family_identifier': 'string', 'metric': 'number',
+                   'route_table': 'string', 'set_as_path_limit': 'number',
+                   'set_community': 'member_list', 'set_extended_community': 'member_list',
+                   'set_local_preference': 'number', 'set_med': 'number', 'set_origin': 'string'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1640,10 +1693,22 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset(),
     },
+    # F7.11: the eight fields the row did not state, in the order the schema names them. `bfd` is the `single`
+    # level the row states as `object`, and the entry it belongs to is inside an area entry, so the property
+    # scan measures the entry's own fields only (F4.4 scan scope).
     'protocol/ospf/area/interface': {
         'shape': 'string_list',
         'fields': {'name': 'string', 'enable': 'bool', 'passive': 'bool',
-                   'metric': 'number', 'link_type': 'one_of', 'neighbor': 'string_list'},
+                   'metric': 'number', 'link_type': 'one_of', 'neighbor': 'string_list',
+                   'authentication': 'string', 'bfd': 'object', 'dead_counts': 'number',
+                   'gr_delay': 'number', 'hello_interval': 'number', 'priority': 'number',
+                   'retransmit_interval': 'number', 'transit_delay': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospf/area/interface/bfd': {
+        'shape': 'object',
+        'fields': {'profile': 'string'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1842,10 +1907,14 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset({'key'}),
     },
+    # F7.11: `authentication` is the one field the row did not state, so the row is now the whole measurement.
+    # Field order is the print order: the five fields the row already stated keep their order and the new field
+    # is appended.
     'protocol/ospfv3/area': {
         'shape': 'string_list',
         'fields': {'name': 'string', 'type': 'one_of', 'range': 'string_list',
-                   'interface': 'string_list', 'virtual_link': 'string_list'},
+                   'interface': 'string_list', 'virtual_link': 'string_list',
+                   'authentication': 'string'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -1940,10 +2009,22 @@ PROTOCOL_SHAPE: dict[str, dict] = {
         'selects': {},
         'sensitive': frozenset(),
     },
+    # F7.11: the same nine fields the `ospf` row gains, in the same order, plus `instance_id`, which the provider
+    # declares for this level only. An interface entry sits inside an area entry, so these fields stay grounded
+    # by the table and add no property to the row `COVERAGE_MATRIX` states for the router.
     'protocol/ospfv3/area/interface': {
         'shape': 'string_list',
         'fields': {'name': 'string', 'enable': 'bool', 'passive': 'bool',
-                   'metric': 'number', 'link_type': 'one_of', 'neighbor': 'string_list'},
+                   'metric': 'number', 'link_type': 'one_of', 'neighbor': 'string_list',
+                   'authentication': 'string', 'bfd': 'object', 'dead_counts': 'number',
+                   'gr_delay': 'number', 'hello_interval': 'number', 'instance_id': 'number',
+                   'priority': 'number', 'retransmit_interval': 'number', 'transit_delay': 'number'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'protocol/ospfv3/area/interface/bfd': {
+        'shape': 'object',
+        'fields': {'profile': 'string'},
         'selects': {},
         'sensitive': frozenset(),
     },
@@ -4158,15 +4239,27 @@ COVERAGE_MATRIX = (
         # six `dampening_profile` fields are declared. The levels inside a redist profile entry (`action`,
         # `filter`, `filter/bgp`) hold no entry, so they stay grounded by the table, and the `bgp` and `ospfv3`
         # fields F7.10 added are read through the level dict, not through an entry.
+        # F7.11: the sixteen properties a scan-scope entry measures are the fields the six rows gained. A
+        # `single` level inside an entry (`bfd`, `connection_options`, `subsequent_address_family_identifier`) is
+        # measured as the field of the peer entry that holds it, and the fields inside it are not. An interface
+        # entry sits inside an area entry, so the fields the two interface rows gained stay grounded by the
+        # table and add no property here.
         'properties': ('action', 'address_family_identifier', 'advertise_filters',
-                       'aggregate_route_attributes', 'ah', 'as_set', 'authentication', 'bfd', 'cutoff',
+                       'aggregate_route_attributes', 'aggregated_confed_as_path', 'ah', 'as_set',
+                       'authentication', 'bfd', 'connection_options', 'cutoff',
                        'decay_half_life_reachable', 'decay_half_life_unreachable', 'default_route', 'enable',
-                       'esp', 'filter', 'interface', 'interfaces',
-                       'local_address', 'match', 'max_hold_time', 'md5', 'metric', 'mode', 'new_path_type',
-                       'new_tag',
-                       'non_exist_filters', 'password', 'peer', 'peer_address', 'peer_as', 'prefix', 'priority',
-                       'protocol', 'range', 'reuse', 'router_type', 'secret', 'spi', 'static_routes', 'summary',
-                       'suppress_filters', 'type', 'used_by', 'virtual_link',),
+                       'enable_mp_bgp', 'enable_sender_side_loop_detection', 'esp', 'filter', 'interface',
+                       'interfaces',
+                       'local_address', 'match', 'max_hold_time', 'max_prefixes', 'md5', 'metric', 'mode',
+                       'new_path_type',
+                       'new_tag', 'non_exist_filters', 'password', 'peer', 'peer_address', 'peer_as',
+                       'peering_type', 'prefix',
+                       'priority', 'protocol', 'range', 'reflector_client', 'reuse', 'route_table',
+                       'router_type', 'secret', 'set_as_path_limit', 'set_community',
+                       'set_extended_community', 'set_local_preference', 'set_med', 'set_origin',
+                       'soft_reset_with_stored_info', 'spi', 'static_routes',
+                       'subsequent_address_family_identifier', 'summary', 'suppress_filters', 'type',
+                       'used_by', 'virtual_link',),
     }, {
         'resource': 'panos_virtual_router_static_route_ipv4',
         'xml_element': 'static-route/entry',

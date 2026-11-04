@@ -13,22 +13,68 @@
                     <router-id>10.0.0.1</router-id>
                     <local-as>65001</local-as>
                     <peer-group>
+                      <!-- F7.11: the two `bool` fields the `protocol/bgp/peer_group` row gained. The entry states
+                           every field its row declares, so the property scan has no unused property for it, and
+                           the print order is the row's field order: name, enable, type, the peer entries, then the
+                           two new fields. -->
                       <entry name="PG-Branch">
+                        <enable>yes</enable>
                         <type>external</type>
                         <export-nexthop>self</export-nexthop>
                         <import-nexthop>self</import-nexthop>
+                        <aggregated-confed-as-path>yes</aggregated-confed-as-path>
+                        <soft-reset-with-stored-info>no</soft-reset-with-stored-info>
                       </entry>
                     </peer-group>
                     <peer>
+                      <!-- F7.11: the nine fields the `protocol/bgp/peer_group/peer` row gained, and the four
+                           levels inside the entry the row now states: `bfd`, `connection_options` with its two
+                           connection levels, and `subsequent_address_family_identifier`. The entry states every
+                           field its row declares, so the property scan measures all of them against the router
+                           row; the levels inside the entry hold no entry, so they are read as one field. -->
                       <entry name="10.55.0.2">
+                        <enable>yes</enable>
                         <peer-as>65002</peer-as>
                         <local-address>
+                          <!-- F7.11: `peer_address` is a `single` level the provider reads as a choice, so the
+                               entry states one attribute: `terraform validate` refuses a level that states both
+                               `ip` and `fqdn`. `local_address` holds `interface` or `ip` as optional fields, so
+                               the table states it as an `object` row. -->
                           <ip>10.55.0.1</ip>
                         </local-address>
                         <peer-address>
                           <ip>10.55.0.2</ip>
                         </peer-address>
-                        <enable>yes</enable>
+                        <address-family-identifier>ipv4-unicast</address-family-identifier>
+                        <bfd>
+                          <profile>BFD-BGP</profile>
+                        </bfd>
+                        <connection-options>
+                          <authentication>simple</authentication>
+                          <hold-time>180</hold-time>
+                          <idle-hold-time>30</idle-hold-time>
+                          <incoming-bgp-connection>
+                            <allow>yes</allow>
+                            <remote-port>179</remote-port>
+                          </incoming-bgp-connection>
+                          <keep-alive-interval>60</keep-alive-interval>
+                          <min-route-adv-interval>30</min-route-adv-interval>
+                          <multihop>1</multihop>
+                          <open-delay-time>5</open-delay-time>
+                          <outgoing-bgp-connection>
+                            <allow>yes</allow>
+                            <local-port>1024</local-port>
+                          </outgoing-bgp-connection>
+                        </connection-options>
+                        <enable-mp-bgp>yes</enable-mp-bgp>
+                        <enable-sender-side-loop-detection>yes</enable-sender-side-loop-detection>
+                        <max-prefixes>65536</max-prefixes>
+                        <peering-type>non-default</peering-type>
+                        <reflector-client>non-default</reflector-client>
+                        <subsequent-address-family-identifier>
+                          <multicast>yes</multicast>
+                          <unicast>yes</unicast>
+                        </subsequent-address-family-identifier>
                         <peer-group>PG-Branch</peer-group>
                       </entry>
                       <!-- F7.1: no provider field holds a peer outside a peer group, so this entry is
@@ -42,9 +88,25 @@
                       </entry>
                     </peer>
                     <redist-rules>
+                      <!-- F7.11: the seven fields the `protocol/bgp/redist_rules` row gained. `set_community`
+                           and `set_extended_community` are `member_list` fields, so the members are values and not
+                           entries. The entry states every field its row declares. -->
                       <entry name="redist-static">
                         <enable>yes</enable>
                         <address-family-identifier>ipv4-unicast</address-family-identifier>
+                        <metric>10</metric>
+                        <route-table>1</route-table>
+                        <set-as-path-limit>64</set-as-path-limit>
+                        <set-community>
+                          <member>1:10</member>
+                          <member>2:20</member>
+                        </set-community>
+                        <set-extended-community>
+                          <member>1:1000</member>
+                        </set-extended-community>
+                        <set-local-preference>200</set-local-preference>
+                        <set-med>100</set-med>
+                        <set-origin>igp</set-origin>
                       </entry>
                     </redist-rules>
                     <!-- F7.10: the five `bool` fields and the two single-object levels the row now states, and

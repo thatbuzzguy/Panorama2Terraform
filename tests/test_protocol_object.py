@@ -9,8 +9,9 @@ Pins:
 
 - the table against the live provider schema: one row per level the converter prints, the field names the
   provider declares, the shape word for each field, the `selects` keys, and the `sensitive` flags;
-  F7.3 adds the four `ospfv3` levels outside `area` and the one spelling exception table, and F7.9 adds the
-  four `ospf` levels outside `area`;
+  F7.3 adds the four `ospfv3` levels outside `area` and the one spelling exception table, F7.9 adds the
+  four `ospf` levels outside `area`, and F7.11 pins the six entry rows that state every field the provider
+  declares for their level and the seven levels inside those entries;
 - the print shape: `protocol = { ... }` is one field of the block, and `protocol { ... }` is the shape the
   provider refuses, so the rule reports it (`tests/test_terraform_validate.py` runs the same check on a
   real run);
@@ -106,15 +107,18 @@ def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
 
     The table states the levels this converter prints, so a row can be a subset of the schema for its level: a
     row states only the fields the parse method that reaches the level reads. F7.10 completed the `protocol`,
-    `protocol/bgp` and `protocol/ospfv3` rows against the measurement, so the subset is now only the rows the
-    report decision recorded: `peer_group`, `peer`, `redist_rules`, `area`, `area/interface`, and the auth
-    profile choice levels. F7.4 added the four area
+    `protocol/bgp` and `protocol/ospfv3` rows against the measurement, and F7.11 completed the six entry rows
+    that held the report decision (`peer_group`, `peer`, `redist_rules`, `area`, `area/interface`), so the rows
+    that are still a subset are the choice levels: the `one_of` rows, which state their alternatives as
+    `selects` keys and no fields, and the auth profile levels. `test_the_six_rows_are_the_whole_measurement`
+    pins the completed rows. F7.4 added the four area
     sub-levels, which `_protocol_areas` reads, F7.5 added the `rip` levels, which `parse_rip` reads, F7.6
     added the 78 `policy` levels, which `parse_bgp` reads, the `member_list` word for the fields the schema
     declares as `['list', 'string']`, F7.7 added the `ospfv3` auth profile levels, which `parse_ospfv3`
-    reads, F7.9 added the four `ospf` levels outside `area`, which `parse_ospf` reads, and F7.10 added the
+    reads, F7.9 added the four `ospf` levels outside `area`, which `parse_ospf` reads, F7.10 added the
     sixteen new rows: the ten redist profile levels, the dampening profile entry level, and the five `bgp`
-    single levels. Every row in the table is a level a parse method reads.
+    single levels, and F7.11 added the seven levels inside the entries the six rows hold. Every row in the
+    table is a level a parse method reads.
     """
     for path, row in sorted(resource_mapping.PROTOCOL_SHAPE.items()):
         node = _schema_node(provider_schema, path)
@@ -442,6 +446,64 @@ def test_the_auth_profile_rows_are_the_levels_the_four_methods_read():
         [row.path for row in container_coverage.CONTAINER_TABLE]
 
 
+def test_the_six_rows_are_the_whole_measurement(provider_schema):
+    """F7.11: the six rows that stated fewer fields than the provider declares now state every one of them.
+
+    `test_the_shape_table_is_the_measured_provider_shape` pins each row as a subset, so this test pins the
+    decision: the six rows are no longer a subset, and no field is `sensitive`, so no `VALUE_VARIABLES` row is
+    needed for them. The seven `single` levels inside an entry are rows the walk enters, and none holds an entry,
+    so `CONTAINER_TABLE` states no row for them: the scan measures the field of the entry that holds the level,
+    not the fields inside it.
+
+    Field order is the print order, so the fields each row already stated keep their order and the fields it
+    gained follow in the order the schema names them.
+    """
+    for path in ('protocol/bgp/peer_group', 'protocol/bgp/peer_group/peer', 'protocol/bgp/redist_rules',
+                 'protocol/ospf/area/interface', 'protocol/ospfv3/area', 'protocol/ospfv3/area/interface'):
+        row = resource_mapping.protocol_row(path)
+        attributes = _schema_node(provider_schema, path)['nested_type'].get('attributes', {})
+        assert set(row['fields']) == set(attributes), (path, sorted(attributes - set(row['fields'])))
+        assert row['sensitive'] == frozenset(), (path, row['sensitive'])
+    # The order the six rows state, which is the order the block prints.
+    orders = {
+        'protocol/bgp/peer_group': ['name', 'enable', 'type', 'peer',
+                                    'aggregated_confed_as_path', 'soft_reset_with_stored_info'],
+        'protocol/bgp/peer_group/peer': ['name', 'enable', 'peer_as', 'local_address', 'peer_address',
+                                         'address_family_identifier', 'bfd', 'connection_options',
+                                         'enable_mp_bgp', 'enable_sender_side_loop_detection', 'max_prefixes',
+                                         'peering_type', 'reflector_client',
+                                         'subsequent_address_family_identifier'],
+        'protocol/bgp/redist_rules': ['name', 'enable', 'address_family_identifier', 'metric', 'route_table',
+                                      'set_as_path_limit', 'set_community', 'set_extended_community',
+                                      'set_local_preference', 'set_med', 'set_origin'],
+        'protocol/ospf/area/interface': ['name', 'enable', 'passive', 'metric', 'link_type', 'neighbor',
+                                         'authentication', 'bfd', 'dead_counts', 'gr_delay', 'hello_interval',
+                                         'priority', 'retransmit_interval', 'transit_delay'],
+        'protocol/ospfv3/area': ['name', 'type', 'range', 'interface', 'virtual_link', 'authentication'],
+        'protocol/ospfv3/area/interface': ['name', 'enable', 'passive', 'metric', 'link_type', 'neighbor',
+                                           'authentication', 'bfd', 'dead_counts', 'gr_delay', 'hello_interval',
+                                           'instance_id', 'priority', 'retransmit_interval', 'transit_delay'],
+    }
+    for path, order in orders.items():
+        assert list(resource_mapping.protocol_row(path)['fields']) == order, (path, order)
+    # The seven levels inside an entry are rows, each read as an object, and none of them holds an entry.
+    inside_entry = {row.path.replace('_', '-') for row in container_coverage.CONTAINER_TABLE}
+    for path in ('protocol/bgp/peer_group/peer/bfd', 'protocol/bgp/peer_group/peer/connection_options',
+                 'protocol/bgp/peer_group/peer/connection_options/incoming_bgp_connection',
+                 'protocol/bgp/peer_group/peer/connection_options/outgoing_bgp_connection',
+                 'protocol/bgp/peer_group/peer/subsequent_address_family_identifier',
+                 'protocol/ospf/area/interface/bfd', 'protocol/ospfv3/area/interface/bfd'):
+        assert resource_mapping.protocol_row(path)['shape'] == 'object', path
+        assert path.replace('_', '-') not in inside_entry, path
+    # `instance_id` is the one field the `ospfv3` interface row states that the `ospf` row does not.
+    ospf = resource_mapping.protocol_row('protocol/ospf/area/interface')['fields']
+    ospfv3 = resource_mapping.protocol_row('protocol/ospfv3/area/interface')['fields']
+    assert set(ospfv3) - set(ospf) == {'instance_id'}, (ospfv3, ospf)
+    # No new field needs a spelling exception, so the exception table stays as F7.3 recorded it.
+    assert resource_mapping.XML_NAME_EXCEPTIONS == {'strict_l_s_a_checking': 'strict-lsa-checking'}
+    assert len(resource_mapping.PROTOCOL_SHAPE) == 194, len(resource_mapping.PROTOCOL_SHAPE)
+
+
 def test_value_shape_is_the_reader_inverse_for_every_shape_word():
     """`value_shape` reads back each shape word the table states, including `number` and `block` (F6.7, F7.1).
 
@@ -572,6 +634,13 @@ def test_a_peer_prints_inside_its_peer_group(tmp_path):
     `tests/fixtures/bgp.xml` holds the peer at the `bgp` level with the name reference, which is the case
     the parse resolves to the peer group entry. A peer no group names has no provider field, so the report
     names it and the file prints no half of it.
+
+    F7.11: the pin is the print order the two rows state. The peer group entry prints its name, the flag, the
+    choice, the peer entries it holds, then the two `bool` fields the row gained; the peer entry prints its own
+    nine new fields after the five the row already stated. A `single` level inside the peer entry prints as one
+    object, and a `member_list` field prints its members as values, so a redist rule prints `set_community` as a
+    list of strings. The entry is in the property scan scope, so the run measures these reads against the router
+    row, and the gate reads the same table, so the block the run wrote reports no finding.
     """
     files = _run('bgp.xml', tmp_path)
     block = files['virtual_routers.tf']
@@ -579,14 +648,53 @@ def test_a_peer_prints_inside_its_peer_group(tmp_path):
     assert 'name = "PG-Branch"' in peer_section and 'name = "10.55.0.2"' in peer_section, peer_section
     # `peer_group` is no longer a field the block prints: the entry it names is the parent.
     assert 'peer_group = "PG-Branch"' not in block, block
+    # F7.11: the fields the two rows gained, in the order the rows state them.
+    expected_peer = ('        {\n          name = "PG-Branch"\n          enable = true\n          type = {\n'
+                     '            ebgp = {\n              export_nexthop = "self"\n'
+                     '              import_nexthop = "self"\n            }\n          }\n          peer = [\n'
+                     '            {\n              name = "10.55.0.2"\n              enable = true\n'
+                     '              peer_as = "65002"\n              local_address = {\n'
+                     '                ip = "10.55.0.1"\n              }\n              peer_address = {\n'
+                     '                ip = "10.55.0.2"\n              }\n'
+                     '              address_family_identifier = "ipv4-unicast"\n              bfd = {\n'
+                     '                profile = "BFD-BGP"\n              }\n              connection_options = {\n'
+                     '                authentication = "simple"\n                hold_time = "180"\n'
+                     '                idle_hold_time = 30\n                incoming_bgp_connection = {\n'
+                     '                  allow = true\n                  remote_port = 179\n                }\n'
+                     '                keep_alive_interval = "60"\n                min_route_adv_interval = 30\n'
+                     '                multihop = 1\n                open_delay_time = 5\n'
+                     '                outgoing_bgp_connection = {\n                  allow = true\n'
+                     '                  local_port = 1024\n                }\n              }\n'
+                     '              enable_mp_bgp = true\n              enable_sender_side_loop_detection = true\n'
+                     '              max_prefixes = "65536"\n              peering_type = "non-default"\n'
+                     '              reflector_client = "non-default"\n'
+                     '              subsequent_address_family_identifier = {\n                multicast = true\n'
+                     '                unicast = true\n              }\n            }\n          ]\n'
+                     '          aggregated_confed_as_path = true\n'
+                     '          soft_reset_with_stored_info = false\n        }\n      ]\n')
+    assert expected_peer in peer_section, peer_section
+    expected_rule = ('      redist_rules = [\n        {\n          name = "redist-static"\n'
+                     '          enable = true\n          address_family_identifier = "ipv4-unicast"\n'
+                     '          metric = 10\n          route_table = "1"\n          set_as_path_limit = 64\n'
+                     '          set_community = [ "1:10", "2:20" ]\n'
+                     '          set_extended_community = [ "1:1000" ]\n          set_local_preference = 200\n'
+                     '          set_med = 100\n          set_origin = "igp"\n        }\n      ]\n')
+    assert expected_rule in block, block
     # The peer the file cannot hold is named by the report, once.
     report = files['MANUAL_SETUP_REPORT.txt']
     assert 'router default: peer 10.55.0.9 (panos_virtual_router - no peer group names it)' in report, report
     assert '10.55.0.2' not in report, report
+    # The gate reads the same table, so the block the run wrote reports no finding.
+    findings = sanity_checks.check_protocol_object(files)
+    assert findings == [], findings
 
 
 def test_an_ospf_interface_inside_an_area_prints_inside_the_area(tmp_path):
-    """The provider field for an interface is inside `area`, so the file nests it there (F7.1)."""
+    """The provider field for an interface is inside `area`, so the file nests it there (F7.1).
+
+    F7.11: the fixture entry states every field the interface row declares, so the eight fields the row gained
+    print after `neighbor`, in the row order, which `test_an_ospf_level_prints_the_shape_the_table_states` pins.
+    """
     files = _run('ospf.xml', tmp_path)
     block = files['virtual_routers.tf']
     area_section = block[block.index('area = ['):block.index('\n        }\n      ]')]
@@ -617,9 +725,15 @@ def test_an_ospfv3_area_prints_the_shape_the_table_states(tmp_path):
                 '              passive = false\n              metric = 10\n              link_type = {\n'
                 '                p2p = {}\n              }\n              neighbor = [\n'
                 '                {\n                  name = "10.0.0.2"\n                }\n              ]\n'
-                '            }\n          ]\n          virtual_link = [\n'
+                '              authentication = "ipsec"\n              bfd = {\n'
+                '                profile = "BFD-OSPF"\n              }\n'
+                '              dead_counts = 40\n              gr_delay = 10\n'
+                '              hello_interval = 10\n              instance_id = 1\n'
+                '              priority = 1\n              retransmit_interval = 200\n'
+                '              transit_delay = 5\n            }\n          ]\n          virtual_link = [\n'
                 '            {\n              name = "10.0.0.2"\n              instance_id = 1\n'
-                '              neighbor_id = "10.0.0.3"\n            }\n          ]\n        }\n      ]\n'
+                '              neighbor_id = "10.0.0.3"\n            }\n          ]\n'
+                '          authentication = "ipsec"\n        }\n      ]\n'
                 '    }\n  }\n')
     block = _run('ospfv3.xml', tmp_path)['virtual_routers.tf']
     assert expected in block, block
@@ -653,7 +767,12 @@ def test_an_ospf_level_prints_the_shape_the_table_states(tmp_path):
                 '              enable = true\n              passive = false\n              metric = 10\n'
                 '              link_type = {\n                broadcast = {}\n              }\n'
                 '              neighbor = [\n                {\n                  name = "10.0.0.2"\n'
-                '                }\n              ]\n            }\n          ]\n          virtual_link = [\n'
+                '                }\n              ]\n              authentication = "md5"\n'
+                '              bfd = {\n                profile = "BFD-OSPF"\n              }\n'
+                '              dead_counts = 40\n              gr_delay = 10\n'
+                '              hello_interval = 10\n              priority = 1\n'
+                '              retransmit_interval = 200\n              transit_delay = 5\n'
+                '            }\n          ]\n          virtual_link = [\n'
                 '            {\n              name = "10.0.0.2"\n              hello_interval = 10\n'
                 '              neighbor_id = "10.0.0.3"\n              transit_area_id = "0.0.0.1"\n'
                 '            }\n          ]\n        },\n        {\n          name = "0.0.1.0"\n'
@@ -906,14 +1025,17 @@ def test_member_list_is_the_word_for_a_field_whose_members_are_values():
     the gate compares a value against the family word the reader can read while the table still states the
     specialization. `SHAPE_LEVELS` is the set of words that name a level the walk enters, and a member list names
     no level, so rule 4 cannot ask a member for a `name`.
-    F7.10 added the nine member list fields the redist profile rows state.
+    F7.10 added the nine member list fields the redist profile rows state, and F7.11 added the two a redist rule
+    states.
     """
     fields = {field for row in resource_mapping.PROTOCOL_SHAPE.values()
               for field, word in row['fields'].items() if word == 'member_list'}
     assert fields == {'append', 'from_peer', 'nexthop', 'overwrite', 'used_by',
                       # F7.10: the levels inside a redist profile entry state their values as members.
                       'area', 'community', 'destination', 'extended_community', 'interface',
-                      'path_type', 'tag', 'type'}, fields
+                      'path_type', 'tag', 'type',
+                      # F7.11: a redist rule states its communities as members, not as entries.
+                      'set_community', 'set_extended_community'}, fields
     assert sanity_checks.SHAPE_READS_AS['member_list'] == 'string_list', sanity_checks.SHAPE_READS_AS
     assert sanity_checks.SHAPE_LEVELS == ('object', 'one_of', 'string_list'), sanity_checks.SHAPE_LEVELS
     # `nexthop` is a string at the aggregate level and a member list at the match level, so the word is the
@@ -1068,6 +1190,67 @@ def test_the_gate_reads_a_redist_profile_entry_against_the_row_it_states():
             '          name = "DAMP"\n          cutoff = 1500\n          reuse = 750\n        }\n      ]\n'
             '    }\n  }\n')
     assert _findings(damp) == [], damp
+
+
+def test_the_gate_reads_a_peer_against_the_rows_it_states():
+    """F7.11: a hand-written block that states the fields the six rows gained is not a finding.
+
+    `bfd`, `connection_options` and `subsequent_address_family_identifier` are `single` levels inside the peer
+    entry, so the walk enters them through the rows F7.11 added, and a `member_list` field is read as the values
+    the block states. The rule still refuses a value the row does not state and a field the row does not declare,
+    so the six rows are the whole measurement for the walk as well as for the parse. The pin also records the
+    limit the gate cannot reach: a level the provider reads as a choice between two attributes.
+    """
+    good = ('  protocol = {\n    bgp = {\n      peer_group = [\n        {\n'
+            '          name = "PG"\n          aggregated_confed_as_path = true\n'
+            '          soft_reset_with_stored_info = false\n          peer = [\n            {\n'
+            '              name = "10.0.0.1"\n              address_family_identifier = "ipv4-unicast"\n'
+            '              bfd = {\n                profile = "BFD-BGP"\n              }\n'
+            '              connection_options = {\n                hold_time = "180"\n'
+            '                idle_hold_time = 30\n                incoming_bgp_connection = {\n'
+            '                  allow = true\n                  remote_port = 179\n                }\n              }\n'
+            '              max_prefixes = "65536"\n              enable_mp_bgp = true\n'
+            '              subsequent_address_family_identifier = {\n'
+            '                multicast = true\n              }\n'
+            '            }\n          ]\n        }\n      ]\n      redist_rules = [\n        {\n'
+            '          name = "redist-static"\n          route_table = "1"\n          set_med = 100\n'
+            '          set_community = [ "1:10" ]\n        }\n      ]\n    }\n  }\n')
+    assert _findings(good) == [], good
+    # The seven levels the walk now enters are rows, so a value the row does not state is a finding.
+    findings = _findings(good.replace('bfd = {\n                profile = "BFD-BGP"\n              }',
+                                      'bfd = "BFD-BGP"'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer bfd '
+        'is not a object value'], findings
+    findings = _findings(good.replace('idle_hold_time = 30', 'idle_hold_time = "30"'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer/connection_options '
+        'idle_hold_time is not a number value'], findings
+    # `max_prefixes` is a `string` the provider declares, so the block states it as a string.
+    findings = _findings(good.replace('max_prefixes = "65536"', 'max_prefixes = 65536'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer '
+        'max_prefixes is not a string value'], findings
+    findings = _findings(good.replace('set_community = [ "1:10" ]', 'set_community = "1:10"'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/bgp/redist_rules '
+        'set_community is not a member_list value'], findings
+    # A field the row does not declare is still a finding, so completing a row does not open the walk to any name.
+    findings = _findings(good.replace('set_med = 100', 'set_weight = 100'))
+    assert [f.detail for f in findings] == [
+        'protocol panos_virtual_router.default_00000000 protocol/bgp/redist_rules '
+        'set_weight is not a field PROTOCOL_SHAPE declares'], findings
+
+
+    # A level the provider reads as a choice between two attributes is a limit the gate cannot reach, so a block
+    # that states both is not a finding even though `terraform validate` refuses it (measured 2026-11-03,
+    # provider 2.0.14). `SHAPE_WORDS` has no word for that choice, which is F7.12, so this pin records the limit
+    # and moves when the table gains the word.
+    both = (good.replace('name = "10.0.0.1"',
+                         'name = "10.0.0.1"\n              peer_address = {\n'
+                         '                ip = "10.0.0.2"\n                fqdn = "host.example.com"\n'
+                         '              }'))
+    assert _findings(both) == [], both
 
 
 def test_a_choice_body_prints_the_fields_it_declares(tmp_path):
