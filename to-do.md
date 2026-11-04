@@ -17,10 +17,15 @@ The current feature is the open items `backlog.md` names. Pieces, in the order t
       cheat sheets, and state the standard-library rule in its place (`AGENTS.md`, commit `0e4ca83`). The
       tool imports only the standard library, so the reference names no library set, and a `lib_docs/`
       directory at the root would be a finding against the layout rule.
-- [ ] Current piece: the console line shape, so the console can print a property finding and a shadow line.
-      The shadow line also names a source, so decide the source field with it.
-- [ ] The record directory, then the prune action. A record is written per output directory, so the prune
-      action needs the directory decided first; it reads a record file, not one record.
+- [x] The console line shape, so the console can print a property finding and a shadow line, and the
+      source field for the shadow line with it (`docs/ARCHITECTURE.md` §3.2, commit `5718a80`). The shape is
+      `  - <scope>  <position>  <identity>  <fact>`, stated once in `container_coverage.console_line`: one
+      position, one identity, one fact, so no matrix row, because a console line has no room for the
+      report's fixed-width column. The source field is the minimum actionable part of the provenance
+      record, the source name, and the shadow line names the parent source name.
+- [ ] Current piece: the record directory, then the prune action. A record is written per output
+      directory, so the prune action needs the directory decided first; it reads a record file, not one
+      record.
 - [ ] The gate choice-word open item: `FILTER_XML_NAME_EXCEPTIONS` holds 15 pairs, and the fixture grounds
       five. The other ten need a fixture that states one alternative and still passes `terraform validate`.
 

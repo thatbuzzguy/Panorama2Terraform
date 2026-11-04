@@ -67,7 +67,7 @@ path writes one directory per unit the manifest names.
 
 ## Sequencing
 
-The next feature is the open items in `backlog.md`: the console line shape, the prune action, and the gate
+The next feature is the open items in `backlog.md`: the record directory and the prune action, then the gate
 choice-word open item (`FILTER_XML_NAME_EXCEPTIONS` holds 15 pairs, and
 the fixture grounds five of them). The gated pieces that stay held are also in `backlog.md`: the four
 `*_policy_rules` types wait for the F3.5 rulebase decision, and a config entry inside a stack needs a provider
