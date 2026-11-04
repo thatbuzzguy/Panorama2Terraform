@@ -1,55 +1,70 @@
-# Decision — the application override report line — acceptance criteria
+# Decision — the shadow parent index key — acceptance criteria
 
-This slice applies the rule `docs/COVERAGE_MATRIX.md` §1 states to the next `report` container: a report line
-reads the field it prints through the captured object, because a `report` container has no matrix row. The
-container is the application override rule.
+This slice decides what `shadow_coverage.parent_index` keys by, so the shadow report line can name which
+parent entry the child repeats. The scan is F5.4, in `src/shadow_coverage.py`, and `docs/ARCHITECTURE.md`
+§3.2 is the owner document for it.
 
 ## Facts measured before the change
 
-- Measured 2026-11-04 by running the tool on `tests/fixtures/application_override_rules.xml`. The per-entry
-  report names `Override-443` as a `report` entry with `captured: application, description,
-  destination_addresses, destination_zones, disabled, port, protocol, source_addresses, source_zones`.
-- `MANUAL_SETUP_REPORT.txt` prints the line
-  `Override-443: from=['Trust'] to=['Untrust'] source=['Internal-Network'] port=8443 protocol=tcp
-  application=https disabled=False`, so the line reads seven captured keys and leaves `description` and
-  `destination_addresses` unread. The fixture entry carries both: `<description>Override 8443 as
-  HTTPS</description>`, and one `destination` member.
-- Measured 2026-11-04 across the corpus: the application override rule is the only `report` container entry
-  with a captured field no output read. It is read in two fixtures (`application_override_rules.xml` and
-  `kitchen_sink.xml`), and both entries carry the same fields.
-- `panos_application_override_rule` is not a resource in the pinned provider
-  (`PaloAltoNetworks/panos ~> 2.0.14`, terraform v1.16.2, 128 resources), so no emitter can read this
-  container and the report is the only output for its entries.
-- The scan cannot measure this: a `report` container has no matrix row, so `matrix_row_for` answers `None` for
-  it. The rule is held by a pin, not by the scan.
+- Measured 2026-11-04 by reading `tests/fixtures/ownership_parent.xml` through the parse: two
+  `Printer-Pool` entries sit under the `panos_address` row, one in `Parent-DG` (line 18) and one in
+  `Child-DG` (line 26). `parent_index` answers one key for both, so the first parent row in report order
+  wins, and the report line names no parent scope, so it cannot say which of the two the child repeats.
+- Measured 2026-11-04 through the wrapper decision on `tests/fixtures/scope_parent.xml`: the parent row is
+  `address`/`Web-Server-1` at line 10, its grouping scope part is `SHARED SECTION`, and its key facts are
+  all `''`. So the parent scope is visible only as data, never as a printed field, today.
+- Measured 2026-11-04 on the same two rows of `tests/fixtures/ownership_parent.xml`: read through
+  `state_coverage.ownership_key`, the two keys differ at the `device_group` position
+  (`Parent-DG` and `Child-DG`), so the identity key is what names which parent entry.
+- The project has one identity key rule: `state_coverage.ownership_key` (§2.1 identity as the F3.9 grouping
+  rule reads it), and `ownership.row_key` reads its order through it. A ledger row carries the five declared
+  facts, so the shadow scan reads the key through that rule rather than stating a second one.
+- The shadow scan reads its own row set (`ledger.rows()`), so the key is read through the row rule the scan
+  already uses. The unit option is rejected: the shadow rule names no unit, and reading the key through
+  `unit_manifest.units` would need the §5 naming rule as an argument.
+- A per-scope response holds exactly the element the path names, so one parent path names one device group:
+  two parent entries that share a name under one row can only come from a whole-config parent source.
+  `--parent` applies to `--source api` with `--path`, so the pin reads the parent through a parse run on
+  `tests/fixtures/ownership_parent.xml` and an inline per-scope response for the child. No new fixture: the
+  corpus pins are keyed by fixture name, and the child entry is line 10 of the shape the pins build.
 
 ## Decision
 
-1. `generate_manual_setup_report` prints `description` and `destination_addresses` on the override rule line,
-   read through the captured object.
-2. One rule states the line shape: the line prints the fields the report reads through the captured object, in
-   the field order this section already uses for its override fields (the four member fields, then port,
-   protocol, application, the flag, then the description). A field the entry carries no value for prints
-   nothing, which is F4.3 rule 3, and `port` and `protocol` keep the `any` value the export means for a field
-   the entry leaves empty.
-3. The fixture gains one entry that carries neither field, so the pin covers both sides.
+1. `parent_index` keys each parent entry through `state_coverage.ownership_key(matrix row, entry name, the
+   parent row's declared facts)`, the project's one identity key rule, so the key carries the parent scope.
+   The key rule is stated once, in §3.2, and no second key rule is added.
+2. The scan compares a child entry with a parent key on the (matrix row, entry name) part, because the child
+   names its own scope: the fact is that one name sits under one row in two scopes.
+3. Two parent entries with the same name under the same row are two keys, so a child that matches both is
+   one finding per parent entry, and each finding names its own parent entry. This replaces "the first
+   parent row wins": identity is unique per entry, so no parent entry is dropped.
+4. Report order gains the parent entry as the tie-break: line, then object type, then name, then the parent
+   entry the finding names, in the parent report order.
+5. The report line gains the parent entry field: the parent scope read through the F3.9 grouping rule, then
+   the entry identity read through the F4.3 row identity rule. `shadow_line` takes the grouping rule as an
+   argument, the same argument `console_lines` takes.
+6. The console line stays as decided: its source field is the parent source name only, because the console
+   shape names one position, one identity and one fact. The parent entry stays in the report.
 
 ## Acceptance criteria
 
-1. The report line for `Override-443` names the description the parse read, and the captured object records the
-   read as an output use.
-2. `destination_addresses` is read the same way, so the captured object shows no unused captured key for the
-   entry.
-3. The fixture entry that carries neither field prints neither field, and `captured_fields` keeps both out of
-   its captured set (F4.3 rule 3).
-4. The pin is one test in group 6 of `tests/test_property_coverage.py`, in the shape of
-   `test_the_report_reads_the_application_filter_description_it_prints`: it names the fixture entry, the parse
-   read, the line the report prints, and the scan scope. Extend the parse-read pin in
-   `tests/test_parse_rules.py`, and the report pin in `tests/test_real_or_report.py`.
-5. `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers` keeps the report
-   container case through the new pin, which is the test that shows a `report` entry has no matrix row. It
-   keeps `regions.xml` for the `count-only` container, where the field gap is still open.
-6. The entry-mark rule stays green: the new fixture entry is marked by `parse_application_override_rules`,
-   which stores the captured object by reference.
-7. `ruff check .` is clean, `python3 -m pytest` passes, and the fixture run reports `PASS (0 FAIL, 0 WARN)`.
-   Reports are not goldens, so no golden moves.
+1. Key: `parent_index` on the parse run for `tests/fixtures/ownership_parent.xml` answers two
+   `panos_address` keys for `Printer-Pool`, and each key equals `state_coverage.ownership_key` read on that
+   row, so the key names the device group that holds the parent entry. The pin reads the key through data.
+2. The finding names which parent entry: one child entry against the two parent entries is two findings, and
+   the two lines name the `Parent-DG` entry and the `Child-DG` entry.
+3. Order: the two findings are in the parent report order, line 18 then line 26, so the tie-break is the
+   parent entry and the report order pins stay.
+4. Line shape: the shadow line prints the parent entry field, and the parent scope part is the F3.9 grouping
+   rule read on the parent row (`SHARED SECTION` for `tests/fixtures/scope_parent.xml`,
+   `DEVICE GROUP: Parent-DG` for the whole-config parent).
+5. The offline run that reads both cache entries finds the same shadow from the same bytes, and its report
+   line names the parent entry.
+6. A shadow does not change the exit code, and the console line gains no parent identity: its fact part stays
+   the parent source name only, so `tests/test_container_coverage.py` group 4 stays green.
+7. `tests/fixtures/ownership_parent.xml` reports `PASS (0 FAIL, 0 WARN)` and no corpus pin moves, because this
+   change adds no fixture.
+8. `ruff check .` is clean and `python3 -m pytest` passes. Reports are not goldens, so no golden moves.
+9. Pins in `tests/test_shadow_coverage.py` groups 2, 4, 5 and 6. Move the stale comment in
+   `src/panorama_to_terraform.py` that says the console prints no shadow line, and the two `src/ownership.py`
+   comments that name the key the shadow scan uses.

@@ -1,28 +1,23 @@
 # To Do
 
-The current feature is the shadow parent index key, which `backlog.md` recorded and this feature promotes. The
-shadow scan (`F5.4`, `src/shadow_coverage.py`) keys the parent index by (matrix row, entry name), so two parent
-entries that carry the same name under the same row give one key and the first parent row wins in report order.
-Identity is (device group, vsys, type, name) (`docs/ARCHITECTURE.md` §2.1), so a key that also named the parent
-scope would say which parent entry the child repeats.
+The current feature is the `tools/build_kitchen_sink.py` rebuild finding, which `backlog.md` names and this
+feature promotes. The tool assembles `tests/fixtures/kitchen_sink.xml` from the files in the corpus, so the
+corpus set and the tool's set must be the same set, and the committed fixture must be what the tool writes.
 
 Pieces:
 
-- [ ] Measure the case through a run. `tests/fixtures/ownership_parent.xml` holds two `Printer-Pool` entries under
-      the `panos_address` row in two device groups (measured 2026-11-04), so `parent_index` gives one key and the
-      first parent row in report order wins. The shadow pins read `tests/fixtures/scope_parent.xml` as the parent
-      source, so the case needs an entry there too.
-- [ ] Add the parent scope to the key in `shadow_coverage.parent_index`, so one key names the parent entry the
-      child repeats. The scope is the identity fact `docs/ARCHITECTURE.md` §2.1 states, not a name the scan
-      guesses.
-- [ ] Pin the rule in `tests/test_shadow_coverage.py`: the two parent entries, the child entry, the key, and the
-      finding the scan reports. State the rule in `docs/ARCHITECTURE.md` §3.2, the owner document for the scan.
-- [ ] A key that names the parent scope can pick a different parent entry, and the shadow line prints the parent
-      line, so the report and console pins move with it. The printed set pins in `tests/test_shadow_coverage.py`
-      and `tests/test_container_coverage.py` change in the same commit, from a real run.
+- [ ] Decide the file set the tool reads. The corpus pins read the fixtures that are not hostile
+      (`tests/test_data_file_gate.py`, `tests/test_data_blocks.py`), so the tool must skip the two files it
+      cannot parse, and that skip must be a rule the tool states, not a list of names.
+- [ ] Decide whether the committed `tests/fixtures/kitchen_sink.xml` is the tool's output. Measured
+      2026-11-04: it holds no `ip-with-expand` entry, so a rebuild from the current fixture set answers a
+      different file.
+- [ ] If the tool owns the fixture, regenerate the fixture and the golden set for the case in the same
+      commit, because the goldens are the bytes of a run on the fixture. If it does not, state what the tool
+      is for, and keep the committed file as the input.
 
-The rule this feature rests on is in `docs/ARCHITECTURE.md` §2.1 and §3.2. The scan scope rule is
-`docs/ARCHITECTURE.md` §3.2 and `docs/COVERAGE_MATRIX.md` §1: only an entry a matrix row covers is a finding.
+The rule this feature rests on is `docs/ARCHITECTURE.md` §1.1 for the layout and the F3.8 read order in
+§3. `tools/README.md` names the tool and its files.
 
 ## Rules the layout keeps
 

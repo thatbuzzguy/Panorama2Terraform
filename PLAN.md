@@ -72,13 +72,17 @@ it prints through the captured object, because a `report` container has no row. 
 for every `report` container in the corpus, so the work that used it is closed. Containers with no matrix row still
 have field gaps the scan cannot report (`backlog.md`), and each needs a rule before it can become a finding.
 
-The next feature is the shadow parent index key, in `to-do.md`: `shadow_coverage.parent_index` keys by
-(matrix row, entry name), so a parent name the export declares in two scopes gives one key and the first parent row
-wins, in report order. Identity is (device group, vsys, type, name) (`docs/ARCHITECTURE.md` §2.1), so the key needs
-the parent scope. The gated pieces that stay held are also in `backlog.md`: the four `*_policy_rules` types wait for
-the F3.5 rulebase decision, and a config entry inside a stack needs a provider location shape before the emitter can
-write a block for it. The rows that state fewer fields than the pinned provider declares for their level are the
-choice levels, which state their alternatives as `selects` keys.
+The shadow parent index key is closed: `shadow_coverage.parent_index` keys each parent entry through
+`state_coverage.ownership_key`, read with the facts the parent row declares, so the key names the parent scope
+and the report line names which parent entry the child repeats. The rule that the first parent row wins is
+replaced by one finding per parent entry, in the parent report order.
+
+The next feature is the `tools/build_kitchen_sink.py` rebuild finding, in `to-do.md`: the tool reads the whole
+corpus while the corpus pins read the fixtures that are not hostile, and the committed fixture is not what the
+tool writes. The gated pieces that stay held are also in `backlog.md`: the four `*_policy_rules` types wait for
+the F3.5 rulebase decision, and a config entry inside a stack needs a provider location shape before the emitter
+can write a block for it. The rows that state fewer fields than the pinned provider declares for their level are
+the choice levels, which state their alternatives as `selects` keys.
 
 ## Out of Scope (tracked in backlog.md)
 
