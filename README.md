@@ -516,7 +516,8 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   provider schema, the 14 rows that state an exactly-one choice and the gate refusing two of them or none, the
   row scope that stops at a `match` or `set` row, the six `CONTAINER_TABLE`,
   `COVERAGE_MATRIX`, `EMITTED_TYPES` and `LOCATION_SCHEMA` entries with `FILTER_TYPES` as the one decision owner,
-  the parse read and the print, the path-keyed input spellings, and each violation type of the gate rule
+  the parse read and the print, the path-keyed input spellings with every pair grounded by a fixture entry and
+  read from a real run, and each violation type of the gate rule
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are

@@ -5,7 +5,14 @@
 
      Each choice level FILTER_SHAPE states as `selects` holds one element here, because the provider reads
      that level as exactly one attribute, so the run prints the one alternative the input states and the gate
-     reports no finding for it (F7.13). -->
+     reports no finding for it (F7.13).
+
+     Each pair FILTER_XML_NAME_EXCEPTIONS holds is stated by one entry here, so the run reads the input
+     spelling through the exception rule and prints the spelling the row declares. One entry states one
+     choice alternative, so a container that holds a choice needs one entry per alternative it states: the
+     community-list entry cannot hold `extended` and `large` at once, so the fixture holds three entries, one
+     per type. `tests/test_filter_containers.py` reads the pair from the block the run wrote for the entry, so
+     the fixture is the ground for all 15 pairs. -->
 <config version="10.0.0" urldb="paloaltonetworks">
   <templates>
     <entry name="FW-Template">
@@ -13,6 +20,7 @@
         <routing-profile>
           <filters>
             <access-list>
+              <!-- `ipv4_entries` is the entry-list spelling the `-` rule cannot produce. -->
               <entry name="ACL-Filter">
                 <description>deny the test host</description>
                 <type>
@@ -28,7 +36,24 @@
                   </ipv4>
                 </type>
               </entry>
+              <!-- `ipv6_entries`, the other alternative of the same choice level. -->
+              <entry name="ACL-Filter-v6">
+                <description>deny the test host over ipv6</description>
+                <type>
+                  <ipv6>
+                    <ipv6-entry>
+                      <entry name="rule-1">
+                        <action>deny</action>
+                        <source-address>
+                          <address>fd00::/8</address>
+                        </source-address>
+                      </entry>
+                    </ipv6-entry>
+                  </ipv6>
+                </type>
+              </entry>
             </access-list>
+            <!-- `aspath_entries` is the entry-list spelling the `-` rule cannot produce. -->
             <as-path-access-list>
               <entry name="ASPath-Filter">
                 <description>the four-byte ASNs</description>
@@ -41,6 +66,7 @@
               </entry>
             </as-path-access-list>
             <prefix-list>
+              <!-- `ipv4_entries`, the same spelling as in the access-list container. -->
               <entry name="Prefix-Filter">
                 <description>the lab ranges</description>
                 <type>
@@ -60,8 +86,29 @@
                   </ipv4>
                 </type>
               </entry>
+              <!-- `ipv6_entries`, the other alternative of the same choice level. -->
+              <entry name="Prefix-Filter-v6">
+                <description>the lab ranges over ipv6</description>
+                <type>
+                  <ipv6>
+                    <ipv6-entry>
+                      <entry name="rule-1">
+                        <action>permit</action>
+                        <prefix>
+                          <entry>
+                            <network>fd00:1::/64</network>
+                            <greater-than-or-equal>64</greater-than-or-equal>
+                            <less-than-or-equal>128</less-than-or-equal>
+                          </entry>
+                        </prefix>
+                      </entry>
+                    </ipv6-entry>
+                  </ipv6>
+                </type>
+              </entry>
             </prefix-list>
             <community-list>
+              <!-- `communities` and `regular_entries` are the two spellings the `-` rule cannot produce. -->
               <entry name="Community-Filter">
                 <description>the lab communities</description>
                 <type>
@@ -75,6 +122,39 @@
                       </entry>
                     </regular-entry>
                   </regular>
+                </type>
+              </entry>
+              <!-- `extended_entries` and `extended_community_regexes` is `ec-regex` here, which is the
+                   spelling the same idea takes only in this container. -->
+              <entry name="Community-Filter-Extended">
+                <description>the extended community pattern</description>
+                <type>
+                  <extended>
+                    <extended-entry>
+                      <entry name="rule-1">
+                        <action>permit</action>
+                        <ec-regex>
+                          <member>^100:.*$</member>
+                        </ec-regex>
+                      </entry>
+                    </extended-entry>
+                  </extended>
+                </type>
+              </entry>
+              <!-- `large_entries` and `large_community_regexes` is `lc-regex` here. -->
+              <entry name="Community-Filter-Large">
+                <description>the large community pattern</description>
+                <type>
+                  <large>
+                    <large-entry>
+                      <entry name="rule-1">
+                        <action>permit</action>
+                        <lc-regex>
+                          <member>1|2|3</member>
+                        </lc-regex>
+                      </entry>
+                    </large-entry>
+                  </large>
                 </type>
               </entry>
             </community-list>
@@ -100,6 +180,9 @@
               </bgp>
               <redistribution>
                 <redist-entry>
+                <!-- The three community spellings and `aspath_prepends` are the plural forms the `-` rule
+                     cannot produce, and they are the spellings this container states. `redist-entry` is a
+                     choice level, so one entry states one alternative: `bgp` here, `ospf` in the entry below. -->
                 <entry name="Redist-Filter">
                   <description>the redistribution route map</description>
                   <bgp>
@@ -118,6 +201,32 @@
                       </route-map>
                     </ospf>
                   </bgp>
+                </entry>
+                <entry name="Redist-Filter-Set">
+                  <description>the set leg of the redistribution route map</description>
+                  <ospf>
+                    <bgp>
+                      <route-map>
+                        <entry name="1">
+                          <action>permit</action>
+                          <set>
+                            <aspath-prepend>
+                              <member>65001</member>
+                            </aspath-prepend>
+                            <extended-community>
+                              <member>100:200</member>
+                            </extended-community>
+                            <large-community>
+                              <member>1|2|3</member>
+                            </large-community>
+                            <regular-community>
+                              <member>100</member>
+                            </regular-community>
+                          </set>
+                        </entry>
+                      </route-map>
+                    </bgp>
+                  </ospf>
                 </entry>
                 </redist-entry>
               </redistribution>
