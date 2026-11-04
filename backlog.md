@@ -36,8 +36,9 @@ Completed work is not recorded here; the git history and the owner document hold
   table maps an aggregate subinterface to the ethernet subinterface row, so no entry
   reaches it. That row's properties are grounded in the emitter source only
   (`tests/test_coverage_matrix.py::test_declared_property_is_a_key_the_emitter_reads`),
-  and the parity test names it as the one unmeasured row. A fixture entry that reaches
-  the aggregate shape closes this.
+  and the parity test names it as the one unmeasured row. A fixture entry that reaches the aggregate shape
+  closes this, and the decision it needs is whether `CONTAINER_TABLE` covers an aggregate interface entry with
+  its own row or keeps the ethernet subinterface row. The work is in scope as the feature `PLAN.md` names.
 
 - Parser extraction gaps found by the parse unit tests (each drops data; fix each
   when a report confirms it in a fixture):
@@ -372,11 +373,7 @@ Completed work is not recorded here; the git history and the owner document hold
   and `set` rows, because those two rows state leaf fields only. The six levels inside them —
   `match.ipv4.address`, `match.next_hop`, `match.route_source`, `set.metric`, `set.ipv4`,
   `set.ipv6` — are therefore not table rows, so no parse method reads them and the gate refuses
-  them in a hand-written file. `tests/fixtures` cannot state one of the choice alternatives for
-  the community-list `type` level and keep a valid run, because the provider enforces exactly one
-  entry for `type` (`regular`, `extended`, `large`), so `FILTER_XML_NAME_EXCEPTIONS` is grounded
-  by the five pairs the fixture states, and the other ten pairs are the spellings the pango
-  source measures.
+  them in a hand-written file.
 - Read-through is opt-in per declared scope (F5.5). A plain string already applies, because
   Panorama resolves an object name through its own inheritance at commit time, and one `data` block
   is one plan-time API call. A `data` block for a name that does not exist fails at plan, not at

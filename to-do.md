@@ -11,25 +11,17 @@ Housekeeping (the repository layout) is complete and committed in `ccf93a3`. Its
 - [x] The pins that read a module path read it through `SRC_DIR` or `Path(module.__file__)`.
 - [x] The move as one `git mv` commit, the indexes for `examples/` and `tools/`, `.gitignore`, and `AGENTS.md`.
 
-The current feature is the open items `backlog.md` names. Pieces, in the order they can be done:
+The current feature is the coverage row the corpus cannot measure, which `backlog.md` names. Pieces, in the
+order they can be done:
 
-- [x] `AGENTS.md` points to `lib_docs/` for API cheat sheets. Decision: remove the reference, not add the
-      cheat sheets, and state the standard-library rule in its place (`AGENTS.md`, commit `0e4ca83`). The
-      tool imports only the standard library, so the reference names no library set, and a `lib_docs/`
-      directory at the root would be a finding against the layout rule.
-- [x] The console line shape, so the console can print a property finding and a shadow line, and the
-      source field for the shadow line with it (`docs/ARCHITECTURE.md` §3.2, commit `5718a80`). The shape is
-      `  - <scope>  <position>  <identity>  <fact>`, stated once in `container_coverage.console_line`: one
-      position, one identity, one fact, so no matrix row, because a console line has no room for the
-      report's fixed-width column. The source field is the minimum actionable part of the provenance
-      record, the source name, and the shadow line names the parent source name.
-- [x] The record directory, then the prune action (commit `c85c0bc`). Decision: the record directory is the
-      output directory, so `SOURCE.txt` stays a codebase root-set file named through `write_path.root_path`,
-      and the action reads the record file the same run wrote. A record directory of its own would be a third
-      file set and a third path builder. The action is `provenance.prune`, and `--prune-cache` gates it as a
-      run step for `--source api` only; it runs after the record is written and after the gate.
-- [ ] The gate choice-word open item: `FILTER_XML_NAME_EXCEPTIONS` holds 15 pairs, and the fixture grounds
-      five. The other ten need a fixture that states one alternative and still passes `terraform validate`.
+- [ ] Decide the container row for an aggregate interface entry: whether `CONTAINER_TABLE` covers it with
+      `panos_aggregate_layer3_subinterface`, or keeps the ethernet subinterface row. The choice decides the
+      scan scope for the row, so `tests/test_property_coverage.py` and `tests/test_container_coverage.py`
+      change with the decision.
+- [ ] State the row with a fixture entry that reads `type = aggregate`, so the property scan measures the
+      declared properties through a real entry and the parity pin names one row instead of two.
+- [ ] Regenerate the goldens from the run that holds the entry, and read the block it writes with
+      `terraform validate`.
 
 ## Rules the layout keeps
 
