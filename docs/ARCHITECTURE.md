@@ -29,7 +29,7 @@ Every file in this table is a module in `src/`, except the test harness, which i
 | `state_input.py` | The state producer (F5.6): a Terraform state document read as a reference source, through the same door | the two byte checks run on the state bytes, and only the parse step is chosen by the kind, so a `<!DOCTYPE` inside a JSON value is not a refusal; a document the identity key cannot read is an input refusal; the state source writes no output, so no `.tf` byte changes |
 | `state_coverage.py` | The state scan (§3.2): the ownership fact and the drift fact | the matrix row is the same table the property scan uses, keyed by the resource type; the ownership key is §2.1 identity with the declared facts, never the `Shared` fallback; the scan is not an output, so it reads captured values without recording |
 | `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state; one block reader serves every block kind a rule reads, so a fact about a block is reported once; the plan check runs once per unit directory the record names, so the report prints one result per unit and names the directory it ran on |
-| `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4) | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line |
+| `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4), and the prune action `--prune-cache` gates | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line; the record file is a codebase root-set file, so the action reads the record file the same run wrote |
 | `naming.py` | The §5 sanitizing rule, stated in one module (F6.6): the shape a PAN-OS name takes when it becomes a Terraform name, and the `var.` text a block prints for a site value | one rule, three callers: the local name of a block, the unit directory name, and the variable name of a site value. The gate reads it without the generator, so `TerraformGenerator.sanitize_name` is a delegate and every other module takes the rule as an argument or reads it here |
 | `unit_manifest.py` | The unit as data (F6.1): one row per declared scope, as `CODEBASE_MANIFEST.json` (§3.4) | the rows come from the ledger, so the module adds no parse data; it takes the §5 naming rule as an argument, so no second naming rule exists; the reference names arrive from §4.3, so this module resolves no name |
 | `ownership.py` | The owner of a repeated name (F6.2): one row per entry a matrix row covers, as `OWNERSHIP.json` (§3.5), and the report finding for a case the rule cannot decide | the row scope is the F4.4 rule read through the report row, so no second scope rule exists; the identity key and the naming rule are read through `state_coverage` and `unit_manifest`, so no second key or naming rule exists; `disable_override` names the entry that cannot be overridden, not the owner; the scan reads a captured value without recording |
@@ -524,7 +524,7 @@ reopen, so a report line can be checked against the file it describes. Eight fie
 apply to the source kind is `-`, so one shape reads. Records are separated by one blank line, which
 is the whole record shape. The rule lives in `provenance.py`.
 
-Four rules the record keeps:
+Five rules the record keeps:
 
 - **The record is data.** One `field: value` line per field, in the fixed order, with no
   prose and no timestamp, so two runs on the same bytes write the same record.
@@ -548,15 +548,30 @@ Four rules the record keeps:
   `tests/test_provenance.py::test_a_file_run_record_names_bytes_a_reader_can_reopen`,
   `::test_an_api_run_record_names_the_request_identity_and_the_cache_entry`, and
   `tests/test_state_input.py::test_the_producer_states_the_record_facts`.
-- **The pruning rule.** A cache entry is not pruned while a written record references it, so
-  the reference is the `cache_entry` field of a parsed record, never a printed line. A shadow
-  line prints a source name, and that printed line protects nothing. A state record has no request
-  and no cache entry, so it references nothing and prunes nothing (F5.6).
-  `provenance.prunable_entries` states the rule; no command runs the prune yet (see
-  [`../backlog.md`](../backlog.md)). Pinned by
-  `tests/test_provenance.py::test_the_reference_is_data_not_a_printed_line`,
+- **The pruning rule, and the action that runs it.** A cache entry is not pruned while a written record
+  references it, so the reference is the `cache_entry` field of a parsed record, never a printed line. A
+  shadow line prints a source name, and that printed line protects nothing. A state record has no request
+  and no cache entry, so it references nothing and prunes nothing (F5.6). `provenance.prunable_entries` is
+  the decision, and `provenance.prune` is the action that runs it: it reads the record file back through
+  `parse_records` and removes what the decision names. `--prune-cache` gates the step, off by default, and
+  applies to `--source api` only (exit 2), because a file record states `-` for the cache field. The step
+  runs after the record is written, because the written record is the reference, and after the gate, so the
+  exit code the gate decided does not move: a prune that removes nothing changes nothing, and a record the
+  action cannot read is a refusal (exit 1). A cache directory that holds no entry has nothing to prune, so
+  it is not a refusal. The run prints one line per entry the action removed, and prints nothing when it
+  removed nothing, because the action is not a finding kind and the console shape belongs to findings.
+  Pinned by `tests/test_provenance.py::test_the_reference_is_data_not_a_printed_line`,
   `::test_a_printed_parent_source_is_not_a_reference`, and
-  `tests/test_state_input.py::test_a_state_record_references_nothing_so_it_prunes_nothing`.
+  `tests/test_state_input.py::test_a_state_record_references_nothing_so_it_prunes_nothing`; the action is
+  pinned by group 6 of `tests/test_provenance.py`.
+- **The record directory.** The record directory is the output directory, so the action reads the record
+  file the same run wrote and no record directory exists. `SOURCE.txt` is a codebase root-set file, named
+  through `write_path.root_path`, and the two-set decision is in
+  [`CODEBASE_ASSEMBLY.md`](CODEBASE_ASSEMBLY.md) §14, the owner document for the file sets. A record
+  directory of its own would be a third set, and `write_path.py` states two builders, one per set, so the
+  module that owns the record states no path rule: the caller names the record path through the builder for
+  the set the record belongs to. Pinned by
+  `tests/test_write_path.py::test_the_record_directory_is_the_output_directory_for_the_prune`.
 
 The record names no credential: the `request` field is the key-free identity the cache name
 is hashed from, for both requests of a two-source run (F5.2 key rule, pinned by

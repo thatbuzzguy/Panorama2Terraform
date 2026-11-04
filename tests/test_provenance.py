@@ -1,6 +1,6 @@
 """F5.3 provenance record: what one run read, and the report label that names it.
 
-Five groups, one per acceptance rule:
+Six groups, one per acceptance rule:
 
 1. What the record states: the eight fields, the values a file run and an api run write,
    and the byte facts measured by the door.
@@ -11,8 +11,12 @@ Five groups, one per acceptance rule:
    reference is read as data, not from a printed line.
 5. Determinism and the gate: two runs on the same bytes write the same record, a refusal
    writes no record, and the gate still decides the exit code.
+6. The record directory and the prune action: the record is a codebase root-set file, so the
+   action reads the record file the same run wrote; what it removes, what it keeps, what it
+   refuses, and what it cannot change.
 
-No test calls the network: every api run uses an injected producer.
+No test calls the network: every api run uses an injected producer, or reads a seeded cache
+with `--offline`.
 """
 
 import dataclasses
@@ -25,8 +29,9 @@ import container_coverage
 import entry_coverage
 import provenance
 import sanity_checks
+import write_path
 import xml_input
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, file_text, run_main, run_script, tf_files
+from conftest import FIXTURES_DIR, SAMPLE_CONFIG, file_text, run_main, run_script, tf_files, written_bytes
 
 FETCH_FIXTURE = 'api_response.xml'
 UNKNOWN_FIXTURE = 'unknown_containers.xml'
@@ -358,3 +363,221 @@ def test_the_record_is_not_a_gate_input_and_the_exit_code_is_unchanged(tmp_path)
     assert report.file_count == len(tf_files(out)), 'the block reader counts the unit set'
     assert report.data_file_count == 2, 'the record is not one of the four data files'
     assert report.result_of('terraform') == 'NOT RUN'
+
+
+def _stale_entry(cache) -> Path:
+    """A cache entry the run did not read, so no written record references it."""
+    cache.mkdir(parents=True, exist_ok=True)
+    entry = cache / 'stale-entry.xml'
+    entry.write_bytes(_bytes())
+    return entry
+
+
+def _prune_run(converter_module, fetch_module, cache, out, monkeypatch, extra_args=()):
+    """Run the converter with the prune action declared. Returns the exit code.
+
+    Every run here reads a seeded cache with `--offline`, so no test calls the network.
+    """
+    monkeypatch.setenv(fetch_module.API_KEY_ENV, SECRET_KEY)
+    request = fetch_module.ApiRequest(host=HOST)
+    cache.mkdir(parents=True, exist_ok=True)
+    (cache / request.cache_name()).write_bytes(_bytes())
+    return run_main(converter_module, ['--source', 'api', '--host', HOST, '--cache-dir', str(cache),
+                                       '--offline', *extra_args, '--prune-cache',
+                                       '--output-dir', str(out)])
+
+
+# --- 6. The record directory, and the prune action -----------------------------
+
+def test_the_prune_keeps_an_entry_a_written_record_references(converter_module, fetch_module, tmp_path, monkeypatch):
+    """AC-9: the action removes nothing that a written record references.
+
+    The entry the run reads is the entry its own record references, so a run on a cache that holds
+    only that entry removes nothing.
+    """
+    cache, out = tmp_path / 'cache', tmp_path / 'out'
+    assert _prune_run(converter_module, fetch_module, cache, out, monkeypatch) == 0
+    entry = cache / fetch_module.ApiRequest(host=HOST).cache_name()
+    assert entry.is_file(), 'a referenced entry is not pruned'
+    reference = provenance.parse_records((out / provenance.PROVENANCE_FILE).read_text(encoding='utf-8'))[0]
+    assert reference.cache_entry == entry.name, 'the reference is the field of the written record'
+
+
+def test_the_prune_removes_an_entry_no_written_record_references(converter_module, fetch_module, tmp_path, monkeypatch):
+    """AC-9: the action removes what `prunable_entries` names, and nothing else."""
+    cache, out = tmp_path / 'cache', tmp_path / 'out'
+    stale = _stale_entry(cache)
+    assert _prune_run(converter_module, fetch_module, cache, out, monkeypatch) == 0
+    assert not stale.is_file(), 'an unreferenced entry is pruned'
+    kept = [path.name for path in cache.iterdir() if path.is_file()]
+    assert kept == [fetch_module.ApiRequest(host=HOST).cache_name()], 'only the referenced entry stays'
+
+
+def test_the_prune_reads_the_record_file_and_not_the_records_the_run_built(tmp_path):
+    """The reference is the written record file, so a record file that names another entry protects that
+    entry and leaves the entry the run read prunable. The action reads the file through `parse_records`.
+    """
+    out = tmp_path / 'out'
+    out.mkdir()
+    cache = tmp_path / 'cache'
+    cache.mkdir()
+    own = cache / 'the-entry-the-run-read'
+    own.write_bytes(_bytes())
+    other = cache / 'the-entry-the-written-record-names'
+    other.write_bytes(_bytes())
+
+    record = provenance.ProvenanceRecord(kind='api', name='source', path='-', scope=xml_input.DEFAULT_SCOPE,
+                                         request=provenance.ABSENT, cache_entry=other.name,
+                                         size=len(_bytes()), sha256=hashlib.sha256(_bytes()).hexdigest())
+    record_file = write_path.root_path(out, provenance.PROVENANCE_FILE)
+    write_path.write_file(record_file, provenance.render(record))
+    assert provenance.prune(record_file, cache) == [own], 'the reference is the record file the action reads'
+    assert other.is_file(), 'the entry the written record names stays'
+    assert provenance.parse_records(record_file.read_text(encoding='utf-8')) == [record]
+
+
+def test_the_prune_reads_a_record_file_with_two_records(converter_module, fetch_module, tmp_path, monkeypatch):
+    """The two-record case: one file holds two records, so the action keeps both entries and prunes an
+    entry neither record references.
+    """
+    cache, out = _run_pair(converter_module, fetch_module, tmp_path, monkeypatch)
+    records = provenance.parse_records((out / provenance.PROVENANCE_FILE).read_text(encoding='utf-8'))
+    assert len(records) == 2, records
+    kept = [cache / record.cache_entry for record in records]
+    stale = _stale_entry(cache)
+    assert run_main(converter_module, ['--source', 'api', '--host', HOST, '--cache-dir', str(cache),
+                                       '--path', f'/{CHILD_PATH}', '--parent', f'/{PARENT_PATH}',
+                                       '--offline', '--prune-cache', '--output-dir', str(out)]) == 0
+    for entry in kept:
+        assert entry.is_file(), f'the record file references {entry.name}'
+    assert not stale.is_file(), 'one file, two records, and an entry neither names is pruned'
+
+
+def test_a_record_the_prune_cannot_read_is_refused(tmp_path):
+    """AC-6: the record is data, so a record file that is not the declared shape, or no record file, is a
+    refusal, and the refusal names the record file rather than an input file. A refusal prunes nothing.
+    """
+    out = tmp_path / 'out'
+    out.mkdir()
+    cache = tmp_path / 'cache'
+    cache.mkdir()
+    entry = cache / 'an-entry'
+    entry.write_bytes(_bytes())
+
+    bad = out / provenance.PROVENANCE_FILE
+    write_path.write_file(bad, 'kind: file\nnote: the run read this from the network\n')
+    with pytest.raises(ValueError) as refused:
+        provenance.prune(bad, cache)
+    assert str(bad) in str(refused.value), 'the refusal names the record file'
+    assert entry.is_file(), 'a refusal prunes nothing'
+
+    missing = out / 'no-record-here.txt'
+    with pytest.raises(ValueError) as refused:
+        provenance.prune(missing, cache)
+    assert str(missing) in str(refused.value), 'a record file the action cannot read is a refusal'
+    assert entry.is_file(), 'a refusal prunes nothing'
+
+    # A cache directory that holds nothing has nothing to prune, so it is not a refusal.
+    assert provenance.prune(bad, tmp_path / 'no-cache') == []
+
+
+def test_a_refused_record_exits_one_and_a_prune_that_removes_nothing_changes_nothing(
+        converter_module, fetch_module, tmp_path, monkeypatch):
+    """AC-6: the gate decides the exit code, and the prune cannot move it. A record the action cannot read
+    is a refusal, so the run exits 1.
+    """
+    cache, clean = tmp_path / 'cache', tmp_path / 'clean'
+    assert _prune_run(converter_module, fetch_module, cache, clean, monkeypatch) == 0, \
+        'a prune that removes nothing does not change the code'
+    report = sanity_checks.run_checks(clean)
+    assert not report.failed, 'the gate still decides'
+    assert report.data_file_count == 2, 'the record is not a gate input'
+    assert not report.findings('data_files')
+
+    # The stand-in is the refusal the same action raises, so the run's exit code for a refusal is pinned.
+    def refuse(record_file, cache_dir):
+        raise ValueError(f'cannot read the record: {record_file}')
+
+    monkeypatch.setattr(provenance, 'prune', refuse)
+    assert _prune_run(converter_module, fetch_module, cache, tmp_path / 'refused', monkeypatch) == 1
+
+
+def test_a_run_that_does_not_declare_the_action_keeps_the_cache_and_writes_the_same_bytes(
+        converter_module, fetch_module, tmp_path, monkeypatch):
+    """AC-5 and AC-7: the action is opt-in. A run that declares nothing keeps its cache and prints nothing
+    new, and the cache is no output, so the same run with the action writes the same bytes.
+    """
+    monkeypatch.setenv(fetch_module.API_KEY_ENV, SECRET_KEY)
+    cache = tmp_path / 'cache'
+    cache.mkdir()
+    entry = cache / fetch_module.ApiRequest(host=HOST).cache_name()
+    entry.write_bytes(_bytes())
+    stale = _stale_entry(cache)
+
+    off = tmp_path / 'off'
+    assert run_main(converter_module, ['--source', 'api', '--host', HOST, '--cache-dir', str(cache),
+                                       '--offline', '--output-dir', str(off)]) == 0
+    assert stale.is_file(), 'a run that declares no action keeps its cache'
+    on = tmp_path / 'on'
+    assert run_main(converter_module, ['--source', 'api', '--host', HOST, '--cache-dir', str(cache),
+                                       '--offline', '--prune-cache', '--output-dir', str(on)]) == 0
+    assert not stale.is_file(), 'the run that declares the action prunes it'
+    assert written_bytes(off) == written_bytes(on), 'the action writes no output, so the goldens stay'
+
+
+def test_the_console_prints_the_pruned_entries_only_when_it_removed_something(
+        converter_module, fetch_module, tmp_path, monkeypatch):
+    """AC-7: one line per pruned entry, and no line when the action removed nothing or was not declared.
+    The run is offline on a seeded cache, so no test calls the network.
+    """
+    cache = tmp_path / 'cache'
+    cache.mkdir()
+    (cache / fetch_module.ApiRequest(host=HOST).cache_name()).write_bytes(_bytes())
+    stale = _stale_entry(cache)
+
+    argv = ['--source', 'api', '--host', HOST, '--cache-dir', str(cache), '--offline']
+    off = run_script('panorama_to_terraform.py', *argv, '--output-dir', str(tmp_path / 'off'))
+    assert off.returncode == 0, off.stdout + off.stderr
+    assert 'Cache prune' not in off.stdout, 'a run that declares no action prints nothing about the cache'
+
+    on = run_script('panorama_to_terraform.py', *argv, '--prune-cache', '--output-dir', str(tmp_path / 'on'))
+    assert on.returncode == 0, on.stdout + on.stderr
+    assert not stale.is_file()
+    block = [line for line in on.stdout.splitlines() if 'Cache prune' in line or stale.name in line]
+    assert len(block) == 2, on.stdout
+
+    # The same run again removes nothing, so it prints nothing new.
+    again = run_script('panorama_to_terraform.py', *argv, '--prune-cache', '--output-dir', str(tmp_path / 'again'))
+    assert again.returncode == 0, again.stdout + again.stderr
+    assert 'Cache prune' not in again.stdout, again.stdout
+
+
+def test_the_prune_flag_applies_to_the_api_source_only(tmp_path):
+    """AC-4: a file record states `-` for the cache field, so a file run has nothing to prune and the flag
+    is an argument error (exit 2). The flag names no part of the layout, so the no-flag scan is unchanged.
+    """
+    out = tmp_path / 'out'
+    result = run_script('panorama_to_terraform.py', str(FIXTURES_DIR / UNKNOWN_FIXTURE),
+                        '--prune-cache', '--output-dir', str(out))
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert not out.exists(), 'an argument error writes no record'
+
+    help_text = run_script('panorama_to_terraform.py', '--help').stdout
+    assert '--prune-cache' in help_text, help_text
+    assert not hasattr(provenance, 'add_arguments'), 'the rule owner states no flag; the CLI does'
+
+
+def test_a_state_record_protects_no_entry_when_the_action_runs(converter_module, fetch_module, tmp_path, monkeypatch):
+    """F5.6 read through the action: the state record states `-` for its two request fields, so it
+    references nothing and protects nothing, and the entry the api record references stays.
+    """
+    cache, out = tmp_path / 'cache', tmp_path / 'out'
+    stale = _stale_entry(cache)
+    assert _prune_run(converter_module, fetch_module, cache, out, monkeypatch,
+                      extra_args=('--state', str(FIXTURES_DIR / 'state_workspace.json'),
+                                  '--workspace', 'production')) == 0
+    records = provenance.parse_records((out / provenance.PROVENANCE_FILE).read_text(encoding='utf-8'))
+    assert [record.kind for record in records] == ['api', 'state'], records
+    assert records[1].cache_entry == provenance.ABSENT, 'the state record references nothing'
+    assert not stale.is_file(), 'the state record protected nothing'
+    assert (cache / fetch_module.ApiRequest(host=HOST).cache_name()).is_file(), 'the api record protects its entry'

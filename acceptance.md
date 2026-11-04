@@ -1,123 +1,116 @@
-# Decision — the console line shape and the shadow source field — acceptance criteria
+# Decision — the record directory, and the prune action — acceptance criteria
 
-This slice closes the open backlog item: the console prints the gap lines only, because a
-property finding and a shadow print in `CONVERSION_REPORT.txt` and each names a matrix row. To print
-them on the console the line shape must be decided first, so a run does not print a row it has no
-room for, and the shadow line must be given its source field with the shape.
+This slice closes the open backlog item: the pruning rule is stated in `provenance.py` but no action runs
+it. The action needs the record directory decided first, because a record is written per output directory
+and a run must know which record file the prune reads. This slice decides the directory, then builds the
+action that reads that record file and removes the entries no written record references.
 
 ## Facts
 
-- The console prints, in order: the parse `Found:` counts, one line per container coverage finding,
-  the per-entry summary lines plus one line per gap entry, the gate summary, the next steps. A
-  property finding and a shadow print only in `CONVERSION_REPORT.txt`.
-- The report line shapes are fixed-width and name the matrix row (F4.3 rule 2, F4.4, F5.4):
-  `  line <n>  <object type>/<entry name>  <matrix row>  <fact>`. A console line is one narrow line,
-  so it has no room for a column.
-- A report row is keyed per entry, and the position it names is the entry's opening line (F4.3,
-  `backlog.md`). Captured fields are the keys of the object the parse method built, not the XML tag.
-- The provenance record holds eight fields (`provenance.py`, F5.3), and its pruning rule states that
-  a printed line protects nothing. A console line cannot carry the record.
-- `docs/ARCHITECTURE.md` §3.2 is the owner document for the line shapes, and §3.2 states the shape once
-  per report kind.
-- Console pins found before deciding (`grep -rn "console" tests/`): `test_container_coverage.py::test_console_lists_the_findings`
-  (the container finding line), `test_entry_coverage.py::test_console_reports_the_gaps_and_prints_nothing_extra`
-  (the gap line), `test_shadow_coverage.py::test_the_console_prints_no_shadow_line_and_the_exit_code_is_unchanged`,
-  `test_state_coverage.py::test_the_console_prints_no_state_line_and_the_exit_code_is_unchanged`,
-  `test_ownership.py::test_a_finding_does_not_change_the_exit_code_and_the_console_prints_no_line`,
-  `test_reference_edges.py::test_a_cycle_does_not_change_the_exit_code_and_the_console_prints_no_line`,
-  `test_sanity_gate.py::test_console_summary_reports_the_result`, `test_data_blocks.py`, `test_data_file_gate.py`,
-  `test_write_path.py` (the one writer, so a console test writes no file).
+- The record is `SOURCE.txt`, written on every completed run. `docs/CODEBASE_ASSEMBLY.md` §14 names it in
+  the codebase root set, and `tests/test_write_path.py` pins that every file the run wrote names exactly
+  one of the two sets, so a record directory of its own would be a third set and would need a third path
+  builder. `write_path.py` states two builders, `unit_path` and `root_path`, and no module builds a path
+  for a file it does not own.
+- A record is data. `parse_records` reads a record file, so the reference a prune acts on is the
+  `cache_entry` field of a parsed record, never a printed line. A record line that is not a declared
+  field, or a field the record must state, is refused through `ValueError`.
+- `provenance.prunable_entries(cache_dir, records)` is the decision: it names the entries no record
+  references. A record for a source with no cache entry (a file source, a state source) references
+  nothing, so it prunes nothing.
+- The cache directory is `--cache-dir` (default `panorama_cache`), and a cache entry name is the request
+  identity without the key. The cache holds bytes, so it is written by the fetch layer, not by the write
+  path. The single-writer scan forbids a module writing a file; it does not forbid removing one.
+- The exit codes are: an argument rule violation is 2; an input or record refusal is 1; the gate FAIL is
+  1; a WARN does not change the code. An opt-in action that writes no output cannot change what the gate
+  counts, so it cannot change the code it decides.
+- The project's opt-in precedent is `--data-blocks` (F5.5) and `--import-blocks` (F6.4): a flag that
+  gates a step, off by default, so a run that declares nothing writes the same bytes. No flag names the
+  output layout (`tests/test_write_path.py`).
 
 ## Decision
 
-**The console line shape**, stated in one place (`container_coverage.console_line`):
+**The record directory is the output directory itself.** `SOURCE.txt` stays the record file, and it stays
+in the codebase root set, so `write_path.root_path` names it. The three candidates and why two are
+rejected:
 
-```text
-  - <scope>  <position>  <identity>  <fact>
-```
+1. The output directory itself — chosen. The record describes the whole run, which is what §14 says a
+   root-set file does, and the run already knows its own output directory. No new set, no new builder,
+   no new file shape.
+2. A dedicated record directory named for the output directory — rejected. It is a third file set, so the
+   pin that every file names exactly one set fails, and `write_path.py` would need a third builder, which
+   its rule 2 forbids.
+3. A records directory beside the cache — rejected. The cache holds bytes the door parsed and is not a
+   set the gate reads; a record set placed there would be read by no rule, and it would split one run's
+   output across two roots. The record must be read by the run that wrote it, so it stays with the run's
+   output.
 
-A console line may name four things, and nothing else:
+Consequence for the prune: the run reads the record file it wrote in its own output directory, so there is
+no guesswork about which records the action reads. One record file per run, and a two-source run holds two
+records in it, so the action reads the file through `parse_records`, not one record.
 
-1. `<scope>` — the F3.9 grouping rule, the scope the report section names. A finding the report does
-   not group (the container coverage section, which names its source instead) prints no scope part.
-2. `<position>` — one position, the entry's source line, or `position unknown`. The console keys a
-   finding on the same line number the report row keys it on, so the console line and the report row
-   name the same entry. A console line names one position only, so a fact that needs a second
-   position (the parent line, the state resource address) keeps it in the report.
-3. `<identity>` — the F4.3 row identity `<object type>/<entry name>`, or the container path for a
-   container finding, because a container finding names a container rather than one entry. One identity
-   per line: a fact that compares two entries, or two units, has no room.
-4. `<fact>` — the finding's fact phrase, in the words its report line already uses, so the console and
-   the report cannot disagree. The fact may name captured fields, and they are the parsed-object key
-   names, never the XML tag; it may name the entries the fact covers.
+**The prune is an opt-in CLI option that gates a run step**: `--prune-cache`, off by default. It is not a
+separate command, because the reference it acts on is the record the same run wrote. Argument rule: it
+applies to `--source api` only, because a file run reads no cache and its record references nothing; for
+`--source file` it is an argument error (exit 2), following the `--offline` and `--insecure` rule. The
+step runs after the record is written, because the written record is the reference, and after the gate, so
+the exit code the gate decides does not move.
 
-A console line may not name a fixed-width matrix-row column, so the matrix row stays in the report.
-The source field a console line may name is the minimum actionable part of the record: the source name,
-the same report value the report bodies use (F4.2 rule 6). Never the path, and never a record field.
-For the shadow line that field is the parent source name: the operator's action is to open the source
-that holds the parent entry, and the name identifies it; the path is in `SOURCE.txt` and the parent line
-stays in the report.
-
-**Which findings print.** The container coverage finding, the gap entry, the property finding, and the
-shadow line. The ownership, state and edge scans keep no console line: their fact names two identities
-(an entry and its ancestor, or two units) or a second position, which the shape forbids, so they print
-in the report only. A block prints only when it has a finding; a run with no finding in that kind prints
-nothing new. Existing console lines are unchanged, except the container finding line, which is
-deliberately migrated to the shape order.
-
-**What stays in `CONVERSION_REPORT.txt`.** Every fixed-width report line shape, the matrix row column,
-the parent line, the state resource address, and the provenance record. The console change moves no
-report bytes, so the goldens do not move.
+**Exit codes.** A prune that removes nothing changes nothing. A record file the action cannot read is a
+refusal, so it exits 1, and the message names the record file, not the input file. A cache directory that
+holds nothing is not a refusal: there is nothing to prune. A run that does not declare the action is
+unchanged.
 
 ## Criteria
 
-1. One function states the shape (`container_coverage.console_line(scope, position, identity, fact)`), and
-   no other module in `src/` defines a console line or builds the console prefix. A scan module states
-   only its fact phrase and its block header, and calls the shape.
-2. A test reads `src/` and pins criterion 1, and pins that the scans that keep no console line own no
-   console wording (`ownership`, `state_coverage`, `reference_edges`).
-3. The shape names no matrix row: the property console line pins a finding by its entry and its fact
-   and prints no matrix row name.
-4. The fact names captured fields as parsed-object key names, never an XML tag, and the shadow console
-   line names the source name only — no path, no record field — while the report line keeps the parent
-   line.
-5. A run that trips a property finding and a shadow line prints both on the console, one line per
-   finding, keyed on the same line number the report row names. A run with no finding in that kind prints
-   nothing new.
-6. A finding does not change the exit code: the F4.1 gate still decides it, and a WARN still does not
-   fail the gate.
-7. `CONVERSION_REPORT.txt` bytes are unchanged by the console change, so the report line shapes and the
-   goldens stay. The report test pins the unchanged shapes.
-8. The new tests call the module functions and compare the run's console with them; they do not restate
-   the shape rule as a literal string.
-9. `docs/ARCHITECTURE.md` §3.2 states the shape once, names the function that holds it, and stops saying
-   the console prints no property or shadow line. `backlog.md` closes the two lines it decides here.
-10. `ruff check .` is clean and `python3 -m pytest` passes (baseline 1443 tests).
-11. The commit message starts with `Decision:` or `F5.4:` in the `git log` style, uses ASD-STE100, and
-   states the shape, the source field, and the migrated console line. The tracking markdown is a second
-   commit.
+1. `provenance.py` states the record directory: `SOURCE.txt` is a codebase root-set file named through
+   `write_path.root_path`, and the module owns no path rule of its own. `docs/CODEBASE_ASSEMBLY.md` §14
+   stays the owner document for the two sets, and `docs/ARCHITECTURE.md` §3.3 states the record rule and
+   links to it.
+2. The prune action lives in `provenance.py`, with the rule it acts on. It reads the record file through
+   `parse_records`, decides through `prunable_entries`, and removes what that function names. It builds no
+   path and states no second decision.
+3. `prunable_entries` is unchanged: a referenced entry is not prunable, an unreferenced entry is prunable,
+   and a record with no cache entry prunes nothing.
+4. `--prune-cache` is an opt-in flag that gates the step, off by default, and it names no part of the
+   layout, so the no-flag scan still holds. It applies to `--source api` only (exit 2 for `--source file`).
+5. `main()` order is unchanged except the new step: the record is written, the gate runs, the prune runs
+   last. A run that does not declare the action writes the same bytes and keeps the cache.
+6. Exit codes: the gate still decides the code; a prune that removes nothing does not change it; a record
+   file that cannot be read is a refusal and exits 1 with a message that names the record file; the record
+   is not a gate input, so `data_file_count` and `file_count` are unchanged.
+7. The console prints the pruned entries only when the action ran and removed something. A run that
+   declares nothing prints nothing new.
+8. Tests are offline and deterministic, and drive the cache directory through fixtures the way
+   `tests/test_source_fetch.py` and `tests/test_provenance.py` do: an injected producer, or a seeded cache
+   read with `--offline`. No test calls the network.
+9. Pins: the record directory (the root set, the one builder); a referenced entry not pruned; an
+   unreferenced entry pruned; the two-record file case (two sources, one file); a record that cannot be
+   read; a run that does not declare the action is unchanged; the argument rule (exit 2); the exit-code
+   behaviour.
+10. `ruff check .` is clean and `python3 -m pytest` passes (baseline 1450 tests). Goldens are unchanged,
+    because a default run writes the same bytes.
+11. The commit message follows the `git log` style, uses ASD-STE100, and states the decision, the action
+    shape, and the pins. The tracking markdown is a second commit.
 
 ## Result
 
-Met. 1450 tests pass (1443 before) and `ruff check .` is clean.
+Met.
 
-- The shape is stated in one place, `container_coverage.console_line(scope, position, identity, fact)`,
-  and pinned by `tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place`:
-  no other module in `src/` builds the console prefix, `entry_coverage.py` and `shadow_coverage.py` call
-  the shape, and the ownership, state and edge scans state no console wording.
-- The source field is the parent source name, the minimum actionable part of the record. Pinned by
-  `tests/test_shadow_coverage.py::test_the_console_prints_the_shadow_line_and_the_exit_code_is_unchanged`:
-  the line names the name, not the path and not a record field, and the report line keeps the parent line.
-- The console, before: the container finding line, the summary and gap lines, the gate summary. After: the
-  same four finding blocks in the report section order, each printing only when it has a finding. The gap
-  line bytes are unchanged, because the existing gap line is already an instance of the shape. The property
-  block and the shadow block are new (`Property findings (N):`, `Shadow findings (N):`).
-- Two deliberate migrations. The container finding line takes the shape order, so it changed from
-  `  - <path> (<position>): <count>` to `  - <position>  <path>  <fact> (<count>)`, and the per-entry
-  summary now prints when any finding block has content, not only when there is a gap. The container block
-  header moved from `main()` into `container_coverage.console_lines`, so the bytes are unchanged.
-- Tests added: `test_container_coverage.py` (the single-shape pin, the doc pin), `test_property_coverage.py`
-  (the console block, the parsed-object key name, the no-finding run, the unchanged report bytes),
-  `test_shadow_coverage.py` (the console line and its source field, the no-parent run). Each test calls the
-  module function and compares the run's console with it.
-- No golden changed: the report line shapes are unchanged, so a run writes the same bytes.
+- The record directory is the output directory, and `SOURCE.txt` stays a codebase root-set file named
+  through `write_path.root_path`. `provenance.py` states no path rule: the caller names the record path, and
+  the action takes it as an argument. Pinned by
+  `tests/test_write_path.py::test_the_record_directory_is_the_output_directory_for_the_prune`.
+- The action is `provenance.prune(record_file, cache_dir)`: it reads the record file through
+  `parse_records`, decides through `prunable_entries`, and removes what the decision names.
+  `prunable_entries` is unchanged.
+- `--prune-cache` is an opt-in flag that gates the step, off by default, and applies to `--source api` only
+  (exit 2). `main()` runs it after the record is written and after the gate.
+- Exit codes: the gate still decides; a prune that removes nothing changes nothing; a record the action
+  cannot read is a refusal and exits 1, and the message names the record file. A cache directory that holds
+  no entry is not a refusal.
+- The console prints one line per pruned entry, and only when the action removed something.
+- Tests added: group 6 of `tests/test_provenance.py` (ten pins) and one pin in `tests/test_write_path.py`.
+  Each run drives the cache through a seeded cache read with `--offline`, or an injected producer, so no
+  test calls the network.
+- No golden changed: the action writes no output, so a default run writes the same bytes.

@@ -2,7 +2,7 @@
 file one record per source the run read, so a two-source run writes the main record and
 the parent record.
 
-Five rules, stated once here.
+Six rules, stated once here.
 
 1. What the record states, in this field order: the source kind, the source name, the
    path, the scope the source holds, the request identity, the cache entry, the size of
@@ -20,8 +20,13 @@ Five rules, stated once here.
    may have changed since the run.
 4. The pruning rule: a cache entry is not pruned while a written record references it, so
    the reference is the `cache_entry` field of a parsed record, never a printed line.
-   `prunable_entries` is the rule; no command runs the prune yet (see `backlog.md`).
-5. Records are in read order: the main source, then the declared parent, then the state
+   `prunable_entries` is the decision, and `prune` is the action that runs it: it reads the record
+   file back through `parse_records`, so the reference stays data, and removes what the decision names.
+   `--prune-cache` gates the action, and a run that does not declare it keeps its cache.
+5. The record directory is the output directory, so `SOURCE.txt` is a codebase root-set file named through
+   `write_path.root_path` (`docs/CODEBASE_ASSEMBLY.md` §14). One record file per run: the prune action reads
+   the record file the same run wrote, and this module states no path rule of its own.
+6. Records are in read order: the main source, then the declared parent, then the state
    source (F5.6). `scope` is the fact the door records, so the record does not state a naming
    rule of its own; the one definition is `xml_input.DEFAULT_SCOPE`, a per-source run states its
    declared path, and a state source states the workspace the run declared. A state source has no
@@ -35,11 +40,12 @@ The record never names the API key. It names the request identity, which is the 
 shape the cache entry is hashed from (F5.2 AC-5.4).
 
 Usage:
-    from provenance import record_for, render, render_records, parse_record, parse_records
+    from provenance import record_for, render, render_records, parse_record, parse_records, prune
     from write_path import root_path, write_file
     record = record_for(source, request=request)
     write_file(root_path(output_dir, PROVENANCE_FILE), render_records([record, parent_record, state_record]))
     reference = parse_records((output_dir / PROVENANCE_FILE).read_text())[0].cache_entry
+    pruned = prune(root_path(output_dir, PROVENANCE_FILE), cache_dir)
 """
 
 from collections.abc import Iterable
@@ -158,3 +164,34 @@ def prunable_entries(cache_dir, records: Iterable[ProvenanceRecord]) -> list[Pat
     referenced = {reference for reference in map(cache_reference, records) if reference is not None}
     cache = Path(cache_dir)
     return sorted(path for path in cache.iterdir() if path.is_file() and path.name not in referenced)
+
+
+def prune(record_file, cache_dir) -> list[Path]:
+    """The prune action for one run (rule 4): read the record file back as data, decide through
+    `prunable_entries`, and remove the entries the decision names.
+
+    The reference is the record file the run wrote, not the record objects the run built, so the action
+    reads it through `parse_records` and decides through `prunable_entries`: it states no second decision
+    and builds no path, so the caller names the record path through the builder for the set the record
+    belongs to. A record file the action cannot read is a refusal, the way a record line that is not a
+    field is a refusal, and the message names the record file. A cache directory that holds no entry has
+    nothing to prune, so it is not a refusal. The action removes files and writes none, so the single
+    writer is not involved.
+    """
+    record_path = Path(record_file)
+    if not record_path.is_file():
+        raise ValueError(f'cannot read the record: {record_path}')
+    cache = Path(cache_dir)
+    if not cache.is_dir():
+        return []
+    try:
+        records = parse_records(record_path.read_text(encoding='utf-8'))
+    except ValueError as e:
+        # The refusal names the record file, because the action reads a file and not one record.
+        raise ValueError(f'cannot read the record {record_path}: {e}') from e
+    removed = []
+    for entry in prunable_entries(cache, records):
+        entry.unlink()
+        removed.append(entry)
+    return removed
+

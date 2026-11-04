@@ -178,6 +178,28 @@ def test_the_run_writes_one_directory_per_unit_the_manifest_names(corpus_run):
                for directory in dirs), 'the printed form is written inside the unit directory its row names'
 
 
+def test_the_record_directory_is_the_output_directory_for_the_prune(corpus_run):
+    """The record is a codebase root-set file, so the record directory is the output directory and the prune
+    action reads the record file at the codebase root. A record directory of its own would be a third set, so
+    there is no third builder and no path rule in the module that owns the record: the caller names the record
+    path through the builder for the set the record belongs to.
+    """
+    assert provenance.PROVENANCE_FILE in ROOT_TEXT, 'the record names the set it belongs to'
+    record_path = write_path.root_path(corpus_run, provenance.PROVENANCE_FILE)
+    assert record_path == corpus_run / provenance.PROVENANCE_FILE, 'the record directory is the output directory'
+    assert record_path.is_file(), 'the run wrote the record at the codebase root'
+    dirs = {row['directory'] for row in _rows(corpus_run)}
+    assert sorted(p.name for p in corpus_run.iterdir() if p.is_dir()) == sorted(dirs), \
+        'no record directory: the only directories are the units'
+
+    source = Path(provenance.__file__).read_text(encoding='utf-8')
+    action = source[source.index('def prune('):]
+    assert 'parse_records' in action and 'prunable_entries' in action, \
+        'the action reads the record as data and decides through the rule it owns'
+    assert 'root_path' not in action and 'unit_path' not in action, 'the action builds no path'
+    assert not hasattr(provenance, 'add_arguments'), 'the rule owner states no flag; the CLI does'
+
+
 # --- 2. How the gate reads each set --------------------------------------------
 
 def test_the_block_reader_walks_the_tree_and_a_finding_names_the_path(corpus_run, tmp_path):
