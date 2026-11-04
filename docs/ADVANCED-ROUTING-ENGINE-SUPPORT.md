@@ -66,10 +66,11 @@ export states the default route destination as `default`.
 ## Not parsed
 
 The parser reads only the levels `resource_mapping.PROTOCOL_SHAPE` and `resource_mapping.FILTER_SHAPE`
-state. The ARE features outside those two tables are not read: dampening, MP-BGP address families,
-multicast, the two redistribution profile lists, and the routing fields the rows do not state (the `bgp`
-fields outside the levels the row states, and the `ospfv3` fields the row does not state). Configure them
-on the target after migration.
+state. The ARE features outside those two tables are not read: MP-BGP address families, multicast,
+and the fields the rows state fewer than the provider declares (`peer_group`, `peer`, `redist_rules`,
+`area`, `area/interface`, and the auth profile choice levels). Dampening, the two redistribution profile
+lists and the `ospfv3` fields are read since F7.10, so they print inside the router block. Configure the
+gaps on the target after migration.
 
 BGP, OSPF and their redistribution rules print as the object attribute `protocol` on
 `panos_virtual_router` ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9), and a filter container prints as its own

@@ -99,8 +99,17 @@ not state, so `parse_ospf` reads them through the table, the emitter prints them
 gate rule reads them against the row, and the property scan measures the export-rule entries through the new
 container row.
 
-Open for Epic 7: the levels and fields `PROTOCOL_SHAPE` does not state, which no parse method reads — the
-`ospfv3` fields, the `bgp` fields, and the two redistribution profile lists. They are in `backlog.md`.
+F7.10 landed: `PROTOCOL_SHAPE` gained the 16 rows for the two redistribution profile lists, the dampening
+profile entry level and the five `bgp` single levels, and the `protocol`, `protocol/bgp` and `protocol/ospfv3`
+rows gained the 13 fields the pinned provider declares. `parse_redist_profile` and `parse_redist_profile_ipv6`
+are the methods the `protocol` row's field names give, and they read through `_protocol_entry_level`; the emitter
+prints the fields in the row's order, the gate reads them against their rows, and the property scan measures the
+three entries through the three new container rows.
+
+Open for Epic 7: the rows that state fewer fields than the provider declares for their level
+(`protocol/bgp/peer_group`, `protocol/bgp/peer_group/peer`, `protocol/bgp/redist_rules`,
+`protocol/ospf/area/interface`, `protocol/ospfv3/area`, `protocol/ospfv3/area/interface`), and the gate word for
+a choice between two levels that F7.7 recorded. They are in `backlog.md`.
 
 ## Housekeeping — repository layout (open)
 
@@ -116,10 +125,11 @@ The item list, and the pins that read a path, are in `backlog.md`.
 
 ## Sequencing
 
-Epic 7 is open: the routing levels and fields `resource_mapping.PROTOCOL_SHAPE` does not state, each of which
-needs a row and a parse method before an emitter, a gate rule, or the report can read it. F7.8 closed the
-filter containers with their own table (`FILTER_SHAPE`), and F7.9 closed the `ospf` levels, so the open work is
-the `ospfv3` fields, the `bgp` fields, and the two redistribution profile lists. The gated pieces that stay
+Epic 7 is open: the rows that state fewer fields than the pinned provider declares for their level, each of
+which needs the decision before an emitter, a gate rule, or the report can read it. F7.8 closed the filter
+containers with their own table (`FILTER_SHAPE`), F7.9 closed the `ospf` levels, and F7.10 closed the `ospfv3`
+fields, the `bgp` fields and the two redistribution profile lists, so the open work is the row subsets and the
+gate word for a choice between two levels. The gated pieces that stay
 held are in `backlog.md`: the four `*_policy_rules` types wait for the F3.5 rulebase decision, and a config
 entry inside a stack needs a provider location shape before the emitter can write a block for it. The layout
 work waits for the open feature work to be committed, because it renames the paths those tests read.
