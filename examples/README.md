@@ -20,4 +20,5 @@ python3 src/panorama_to_terraform.py examples/sample_panorama_config.xml --outpu
 ```
 
 The developer scripts live in [`../tools/`](../tools/): `tools/quick_start.sh` runs this sample, and
-`tools/build_kitchen_sink.py` assembles the fixture corpus. Neither is part of the converter.
+`tools/build_kitchen_sink.py` prints the tree it assembles from the committed fixtures (the rule is in
+[`../tools/README.md`](../tools/README.md)). Neither is part of the converter.
