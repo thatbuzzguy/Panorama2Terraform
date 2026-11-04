@@ -10,16 +10,16 @@ Completed work is not recorded here; the git history and the owner document hold
   The scan scope rule pins this in
   `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers`.
   Measured on the corpus:
-  - `count-only` (`parse_regions`): `addresses`. Nothing reads a region at all.
   - `nested-block` (a layer-3 subinterface inside its parent interface row): `parent`.
     The nested block prints the parent name from the parent object, not through the
     child object, so the read is not recorded on the child.
   - `bookkeeping` (association table and scope facts): `devices`, `templates`.
   These are not findings today, and each one needs a rule before it can become one: an
-  emitter must exist, or the report writer must read the field it names. The rule now exists
+  emitter must exist, or the output that reaches the entry must read the field it names. The rule now exists
   for `report` containers (`docs/COVERAGE_MATRIX.md` §1), which closed the application filter, the schedule,
-  and the application override gaps; measured 2026-11-04 no `report` container in the corpus has a captured
-  field no output read. The other containers still have no output that can read their fields.
+  and the application override gaps, and for a `count-only` container, which closed the regions `addresses`
+  gap: measured 2026-11-04 no `report` or `count-only` container in the corpus has a captured field no output
+  read. The `nested-block` and `bookkeeping` containers still have no output that can read their fields.
 
 - Parser extraction gaps found by the parse unit tests (each drops data; fix each
   when a report confirms it in a fixture). What stays:
@@ -29,10 +29,6 @@ Completed work is not recorded here; the git history and the owner document hold
     `tests/fixtures/unknown_containers.xml`, which the report counts as `unaccounted`. The pin that would hold
     the rule is `tests/test_container_coverage.py::test_report_declares_the_profile_name_column`, never written.
     It needs a parse method for the container and a fixture entry that carries `profile-name`.
-  - Regions are parsed but reach no output: `parse_regions` returns objects
-    that only the console count uses. Recorded by F3.10 (`docs/ARCHITECTURE.md`
-    §2.4). The per-entry report lists each region row as a gap, so the operator sees
-    it; the parse still writes no output for a region.
 
 - Service objects with both tcp and udp legs cannot be emitted whole. The v2
   `panos_service` schema declares `protocol.tcp` and `protocol.udp`, but the

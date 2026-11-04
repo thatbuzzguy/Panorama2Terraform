@@ -2,34 +2,35 @@
 
 ## Current position
 
-The `tools/build_kitchen_sink.py` rebuild finding is complete and committed on `development` (`7f30691`); this
-tracking markdown is the next commit. `docs/ARCHITECTURE.md` §1.1 is the owner document for the tool's place in
-the layout, and `tools/README.md` states the rule as the index row.
+The `count-only` field gap for `parse_regions` is complete and committed on `development` (`20d5920`); this
+tracking markdown is the next commit. `docs/COVERAGE_MATRIX.md` §1 is the owner document for the rule, and
+`docs/ARCHITECTURE.md` §2.4 states the destination fact and links to it.
 
-- The tool is a generator, not a pin. It prints the tree it assembles and writes no file, so a run cannot change
-  `tests/fixtures/kitchen_sink.xml`, which the golden set and the corpus pins read. The record is curated by
-  hand, so its bytes are not the tool's output.
-- The read rule is the F3.8 input rule read on the committed bytes: a fixture that declares a DTD, or that the
-  parse cannot read, is hostile input, so the tool skips it by rule and not by name, and it names no fixture in
-  its source except its own record. The tool takes no command-line path, so the accepted decision that the tool
-  calls `ET.parse` directly on repository files stands.
-- The record is not an input, and the name-list exclusion for `tests/fixtures/address_objects_dg_override.xml`
-  is gone: the merge joins entries by name, and the tool no longer answers for the record, so the duplicate-name
-  fixture is material like any other fixture.
-- Pins in `tests/test_build_kitchen_sink.py`: the tool's decision agrees with `xml_input` for every committed
-  fixture, the tool names no fixture except its own record, the rule answers for a fixture the test writes and
-  not for a `<!DOCTYPE` inside a comment, the read set is the set the corpus pins read less the record, the tool
-  writes no file and a run leaves the record byte-identical, the output for the committed set is not the record
-  with the two facts that keep it so pinned as data, the three merge cases, and the byte rule between two runs.
-- Measured 2026-11-04 on the committed corpus: 70 XML fixtures, 67 the input rule accepts, 66 the tool reads, 3
-  it skips; the tool's output is 3125 lines and 356 entries, and the record is 983 lines and 106 entries, with
-  15 comments and 11 entry names no committed fixture carries.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1487 tests (about 2 minutes). No fixture changed, so
-  no golden moved and no corpus pin moved.
+- The rule: a `count-only` row has no matrix row and no report section, so the per-entry report line is the only
+  output its entry reaches, and the line is honest only when it prints the value of each field it names, read
+  through the captured object, in the sorted field order the report already uses. That read is the property use
+  the property scan counts.
+- The measurement that decided it, 2026-11-04 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14`
+  through `tests/conftest.py::provider_schemas`): 128 resources and 128 data sources, none names `region`, and
+  `panos_address` declares no `region` attribute, so no emitter can read a region field and the row cannot
+  become an `emitted` row. No emitter was built.
+- Code: `entry_coverage.PRINTS_VALUE_KINDS` is the rule as data, `captured_part` states the captured part of a
+  line, `report_value` is the one shape for one printed value, and `row_for` carries the captured object so
+  `protocol_report_rows` no longer sets it by hand. `entry_line` and `gap_fact` read the same captured part, so
+  the console fact and the report line use the same words. The console line shape and the exit codes are
+  unchanged, and a `count-only` row is still a gap row.
+- Pins: `tests/test_property_coverage.py` group 6 gains gap 6,
+  `test_the_report_line_reads_the_region_addresses_it_prints`, so the group names six gaps and one pin per gap.
+  `test_scan_scope_is_the_entries_a_matrix_row_covers` now shows the scan scope rule against the nested-block
+  `parent` gap, which is still open, and no longer claims the region field is unread.
+- The regions fixture run reports `PASS (0 FAIL, 0 WARN)` and the report names the entry as
+  `captured: addresses=[US, CA, MX]`.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1488 tests (about 2 minutes). No fixture changed and
+  no `.tf` output changed, so no golden moved and no corpus pin moved.
 
-The next feature is the `count-only` field gap for `parse_regions`, which `to-do.md` names. The open items that
-stay in `backlog.md` are the credential rule single statement, the nested-block `parent` read rule, and the
-certificate container row.
+The next feature is the `nested-block` `parent` read rule, which `to-do.md` names. The open items that stay in
+`backlog.md` are the credential rule single statement, the bookkeeping field rule, and the certificate container
+row.
 
 ## Rules to keep when writing documents
 
@@ -59,6 +60,12 @@ certificate container row.
   the console must fit the four parts: one position, one identity, one fact. A source named on a console
   line is the source name, never the path, and a fact that compares two entries or two units prints in the
   report only.
+- The captured part of a report line is stated in one place, `entry_coverage.captured_part`, so `entry_line` and
+  `gap_fact` print the same words for the same finding. `PRINTS_VALUE_KINDS` names which kinds print a value, and
+  it must stay data: no writer branch may decide the shape per kind. A row that prints a value must carry the
+  captured object through `row_for`, because `fields` holds the names only, and the value shape is
+  `report_value`. A read through the recorded object is what the property scan counts, so a rule that prints a
+  value is a rule about a read, and the pin that holds it must run the pipeline, not build a row by hand.
 - The write path landed (`docs/CODEBASE_ASSEMBLY.md` §14): the run writes one directory per
 unit the manifest
     names, and the codebase root holds the root set. A new file shape must name which set it

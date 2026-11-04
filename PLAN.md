@@ -67,28 +67,22 @@ path writes one directory per unit the manifest names.
 
 ## Sequencing
 
-The rule that keeps a `report` container honest is in `docs/COVERAGE_MATRIX.md` §1: the report line reads the field
-it prints through the captured object, because a `report` container has no row. Measured 2026-11-04 the rule holds
-for every `report` container in the corpus, so the work that used it is closed. Containers with no matrix row still
-have field gaps the scan cannot report (`backlog.md`), and each needs a rule before it can become a finding.
+The rule that keeps a container outside the scan scope honest is in `docs/COVERAGE_MATRIX.md` §1: the output that
+reaches the entry must read the field it names, because a container with no matrix row cannot produce a finding.
+Two shapes state it, one per kind. A `report` container's section reads the field it prints through the captured
+object; a `count-only` row has no section, so the per-entry report line prints the value of each field it names,
+read through the captured object. Measured 2026-11-04 both rules hold for every `report` and `count-only`
+container in the corpus, so the work that used them is closed. The `nested-block` and `bookkeeping` containers
+still have field gaps the scan cannot report (`backlog.md`), and each needs a rule before it can become a finding.
 
-The shadow parent index key is closed: `shadow_coverage.parent_index` keys each parent entry through
-`state_coverage.ownership_key`, read with the facts the parent row declares, so the key names the parent scope
-and the report line names which parent entry the child repeats. The rule that the first parent row wins is
-replaced by one finding per parent entry, in the parent report order.
-
-The `tools/build_kitchen_sink.py` rebuild finding is closed: the tool is a generator, not a pin. It reads the
-fixtures the F3.8 input rule accepts, skips a hostile fixture by rule and not by name, prints the tree it
-assembles, and writes no file, so `tests/fixtures/kitchen_sink.xml` stays the record that the golden set and the
-corpus pins read, and the record is curated by hand. The rule is in `docs/ARCHITECTURE.md` §1.1 and in
-`tools/README.md`, and `tests/test_build_kitchen_sink.py` pins it.
-
-The next feature is the `count-only` field gap for `parse_regions`, in `to-do.md`: the parse returns region
-objects that only the console count uses, so no output reads a region field. The gated pieces that stay held are
-also in `backlog.md`: the four `*_policy_rules` types wait for the F3.5 rulebase decision, and a config entry
-inside a stack needs a provider location shape before the emitter can write a block for it. The rows that state
-fewer fields than the pinned provider declares for their level are the choice levels, which state their
-alternatives as `selects` keys.
+The next feature is the `nested-block` `parent` read rule, in `to-do.md`: `parse_interfaces` keeps `parent` for a
+layer-3 subinterface inside its parent interface row, and the nested block prints the parent name from the parent
+object, so no output reads the field on the child. The rule must say whether the print reads the field through the
+child object, or whether the field belongs to the parent entry. The gated pieces that stay held in `backlog.md`
+are the four `*_policy_rules` types, which wait for the F3.5 rulebase decision, and a config entry inside a stack,
+which needs a provider location shape before the emitter can write a block for it. The rows that state fewer
+fields than the pinned provider declares for their level are the choice levels, which state their alternatives as
+`selects` keys.
 
 ## Out of Scope (tracked in backlog.md)
 
