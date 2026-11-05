@@ -38,6 +38,11 @@ panos provider v2:
                          the provider marks `sensitive`. The emitter prints from it,
                          the gate rule `protocol_object` reads it, and
                          tests/test_protocol_object.py pins it against the live schema.
+     CERTIFICATE_SHAPE  - one row per level of the two certificate containers (F7.14), read by the two
+                          certificate emitters and pinned against the live schema by
+                          tests/test_data_source_schema.py. No gate rule reads it yet.
+     RESOURCE_NAME_FIELDS - the field that carries the entry name for a type `DATA_SOURCE_SCHEMA` has no
+                          row for (F6.5 decision 4), read by `entry_coverage.name_field`.
 
 The generator emits the v2 types directly; the old v1 names
 (panos_address_object, panos_security_rule_group, ...) no longer exist
@@ -108,6 +113,17 @@ LOCATION_SCHEMA = {
         'device_group': ('name', 'panorama_device'),
         'shared': (),
         'vsys': ('name', 'ngfw_device'),
+    },
+    # F7.14: the two certificate types. Only the sub-blocks the location rule can reach are stated, the same
+    # rule as every other row. `location_data` reaches `shared` inside the device-group branch, so a row that
+    # declares no device group cannot reach it, and the provider declares no `ngfw` sub-block for either type,
+    # so an entry the export places in a device group keeps the `Shared` template placeholder (F3.6).
+    'panos_certificate_import': {
+        'template': ('name', 'panorama_device'),
+        'vsys': ('name', 'ngfw_device'),
+    },
+    'panos_certificate_profile': {
+        'template': ('name', 'panorama_device'),
     },
     'panos_custom_url_category': {
         'device_group': ('name', 'panorama_device'),
@@ -996,6 +1012,17 @@ DATA_SOURCE_SCHEMA = {
     }),
 }
 
+# F6.5 decision 4, read the other way: the field that carries the entry name for a type the data table has no
+# row for. `entry_coverage.name_field` reads `DATA_SOURCE_SCHEMA` for the name fact, so the two resource-only
+# types need a fact source of their own. `panos_certificate_import` declares `name` (F7.14);
+# `panos_virtual_router_interface` declares no name attribute, so the entry name reaches its block through the
+# field that names the object it points at. Pinned against the live schema by
+# tests/test_data_source_schema.py::test_the_name_level_asymmetries_stay_asymmetries.
+RESOURCE_NAME_FIELDS = {
+    'panos_certificate_import': 'name',
+    'panos_virtual_router_interface': 'interface',
+}
+
 # Provider v2 resource types emitted by the generator.
 EMITTED_TYPES = frozenset({
     # Objects (device-group scoped)
@@ -1017,6 +1044,11 @@ EMITTED_TYPES = frozenset({
     'panos_pbf_policy_rules',
     # Profiles (device-group scoped)
     'panos_security_profile_group',
+    # F7.14: the two certificate types. `panos_certificate_import` is the first emitted type with no data
+    # source, so the name rule reads its name fact through `RESOURCE_NAME_FIELDS`, and
+    # `panos_certificate_profile` leaves `NOT_EMITTED_TYPES` because the whole entry is readable.
+    'panos_certificate_import',
+    'panos_certificate_profile',
     # Network (template scoped)
     # F2.9: PBF path monitoring profiles (network/profiles/monitor-profile);
     # template-scoped in v2. NOT the IPsec tunnel monitor profile.
@@ -1228,6 +1260,10 @@ VALUE_VARIABLES = {
     'secret': REFERENCE_ONLY,
     'key': REFERENCE_ONLY,
     'password': REFERENCE_ONLY,
+    # F7.14: the two `sensitive` facts inside `certificate/local`, which `CERTIFICATE_SHAPE` marks. The value
+    # is read to name the variable only, so the block prints the reference and no generated file states it.
+    'private_key': REFERENCE_ONLY,
+    'passphrase': REFERENCE_ONLY,
     # The two rows for the fields the emitter prints outside a location: the provider block arguments. The table
     # covers the location fields, the `sensitive` names, and these two arguments, so the provider block prints its
     # arguments through the same rule as a location field (`generate_provider_config` calls `printed_value`). Both
@@ -3787,6 +3823,77 @@ FILTER_XML_NAME_EXCEPTIONS = {
         'regular_communities': 'regular-community', 'aspath_prepends': 'aspath-prepend'},
 }
 
+# F7.14: the two certificate containers, written from the live provider schema measured 2026-11-05.
+# One row per level the converter prints. `certificate` is the container a config section holds, so the
+# entry row is the object one resource block prints; `certificate_profile` is the same shape for the
+# profile. `certificate/local` is the one place the table states the choice the export makes by presence:
+# the provider reads `local` as exactly one of `pem` or `pkcs12`, and `terraform validate` refuses a
+# `local` stating both, so the row states no field and the caller reads the alternative from the element.
+# The two `sensitive` facts are inside `local`, which is why `VALUE_VARIABLES` holds the `private_key` and
+# `passphrase` rows: the block prints the reference, and no generated file states the value.
+# `certificate_profile/certificate` is a list the export holds as entries, because the provider reads it as
+# objects with fields; a `<member>` list names no field, so no row can state it.
+CERTIFICATE_SHAPE: dict[str, dict] = {
+    'certificate': {
+        'shape': 'object',
+        'fields': {'name': 'string', 'local': 'one_of'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'certificate/local': {
+        'shape': 'one_of',
+        'fields': {},
+        'selects': {'pem': 'pem', 'pkcs12': 'pkcs12'},
+        'sensitive': frozenset(),
+    },
+    'certificate/local/pem': {
+        'shape': 'object',
+        'fields': {'certificate': 'string', 'passphrase': 'string', 'private_key': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'passphrase', 'private_key'}),
+    },
+    'certificate/local/pkcs12': {
+        'shape': 'object',
+        'fields': {'certificate': 'string', 'passphrase': 'string'},
+        'selects': {},
+        'sensitive': frozenset({'passphrase'}),
+    },
+    'certificate_profile': {
+        'shape': 'object',
+        'fields': {
+            'name': 'string', 'block_expired_certificate': 'bool',
+            'block_timeout_certificate': 'bool', 'block_unauthenticated_certificate': 'bool',
+            'block_unknown_certificate': 'bool', 'certificate': 'string_list',
+            'certificate_status_timeout': 'number', 'crl_receive_timeout': 'number',
+            'domain': 'string', 'ocsp_exclude_nonce': 'bool', 'ocsp_receive_timeout': 'number',
+            'use_crl': 'bool', 'use_ocsp': 'bool', 'username_field': 'object',
+        },
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    # One object per entry the export holds under the profile's `certificate` level. `name` is required by
+    # the provider, so the object prints it, and the entry name is not a reference: it names the object the
+    # provider reads inside the list.
+    'certificate_profile/certificate': {
+        'shape': 'object',
+        'fields': {'name': 'string', 'default_ocsp_url': 'string',
+                   'ocsp_verify_certificate': 'string', 'template_name': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+    'certificate_profile/username_field': {
+        'shape': 'object',
+        'fields': {'subject': 'string', 'subject_alt': 'string'},
+        'selects': {},
+        'sensitive': frozenset(),
+    },
+}
+
+# The entry element each certificate shape row hangs under, so the walk that pins the reference names
+# through the table starts at the container the table names, and states no container name of its own.
+CERTIFICATE_TYPES = {'certificate': 'panos_certificate_import',
+                     'certificate_profile': 'panos_certificate_profile'}
+
 
 class ShapeTable:
     """One shape table: its rows, and the input spellings the field-name rule cannot produce.
@@ -3798,7 +3905,7 @@ class ShapeTable:
     """
 
     def __init__(self, name: str, rows: dict, exceptions: Optional[dict] = None,
-                 word: str = 'shape', rule: str = 'shape_blocks'):
+                 word: str = 'shape', rule: str = 'shape_blocks', root: str = ''):
         self.name = name
         self.rows = rows
         self.exceptions = exceptions or {}
@@ -3806,6 +3913,9 @@ class ShapeTable:
         # them, so the one reader can serve both tables without naming either one.
         self.word = word
         self.rule = rule
+        # `root` is the entry element the table's rows hang under, so a walk that reads the table does not
+        # state a container of its own.
+        self.root = root
 
     def row(self, path: str) -> Optional[dict]:
         return self.rows.get(path)
@@ -3825,9 +3935,16 @@ class ShapeTable:
         return XML_NAME_EXCEPTIONS.get(field, field.replace('_', '-'))
 
 
-# The two shape tables as the reader, the printer and the gate rule see them.
-PROTOCOL_TABLE = ShapeTable('PROTOCOL_SHAPE', PROTOCOL_SHAPE, word='protocol', rule='protocol_object')
+# The three shape tables as the reader, the printer and the gate rule see them.
+PROTOCOL_TABLE = ShapeTable('PROTOCOL_SHAPE', PROTOCOL_SHAPE, word='protocol', rule='protocol_object',
+                            root='virtual-router')
 FILTER_TABLE = ShapeTable('FILTER_SHAPE', FILTER_SHAPE, FILTER_XML_NAME_EXCEPTIONS, 'filter', 'filter_blocks')
+# `rule` names the gate rule that reads these rows. This feature states no rule for them, because the existing
+# gate rules already cover a certificate block: the type is in `EMITTED_TYPES`, the location is present, and the
+# two `sensitive` fields print as the variable reference. The name is the fact the gate feature will use, so the
+# table states it here.
+CERTIFICATE_TABLE = ShapeTable('CERTIFICATE_SHAPE', CERTIFICATE_SHAPE, word='certificate',
+                               rule='certificate_blocks', root='certificate')
 
 
 def protocol_row(path: str) -> Optional[dict]:
@@ -4105,6 +4222,43 @@ COVERAGE_MATRIX = (
             'virus',
             'vulnerability',
             'wildfire_analysis',
+        ),
+    }, {
+        # F7.14: the two certificate types. `local` is the one property the certificate row states, because the
+        # emitter prints the shape the table states for the level and reads nothing else from the entry.
+        'resource': 'panos_certificate_import',
+        'xml_element': 'certificate/entry',
+        'xml_name': 'Edge-Cert',
+        'emitted_name': 'Edge-Cert',
+        'fixture': 'certificates.xml',
+        'output_file': 'certificates.tf',
+        'emitter': ('generate_certificates',),
+        'properties': ('local',),
+    }, {
+        'resource': 'panos_certificate_profile',
+        'xml_element': 'certificate-profile/entry',
+        'xml_name': 'Strict-OCSP',
+        'emitted_name': 'Strict-OCSP',
+        'fixture': 'certificates.xml',
+        'output_file': 'certificate_profiles.tf',
+        'emitter': ('generate_certificate_profiles',),
+        'properties': (
+            'block_expired_certificate',
+            'block_timeout_certificate',
+            'block_unauthenticated_certificate',
+            'block_unknown_certificate',
+            'certificate',
+            'certificate_status_timeout',
+            'crl_receive_timeout',
+            'default_ocsp_url',
+            'domain',
+            'ocsp_exclude_nonce',
+            'ocsp_receive_timeout',
+            'ocsp_verify_certificate',
+            'template_name',
+            'use_crl',
+            'use_ocsp',
+            'username_field',
         ),
     }, {
         # F2.9: PBF path monitoring profiles are template-scoped in v2;

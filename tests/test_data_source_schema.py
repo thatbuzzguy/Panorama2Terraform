@@ -23,12 +23,22 @@ Pins:
   source that declares one (106 rows, and 22 that declare none);
 - `LOCATION_SCHEMA` stays inside the data shape for a type in both tables;
 - the 126 types that exist in both sets share the shape and the `name` fact, and the
-  four types that exist in one set only stay asymmetric (a set fact, not a `name` fact).
+  four types that exist in one set only stay asymmetric (a set fact, not a `name` fact);
+- `RESOURCE_NAME_FIELDS` states the name fact for the two resource-only types (F7.14), so `name_field` has a
+  fact source for them;
+- `CERTIFICATE_SHAPE` is the live shape for the two certificate resources (F7.14), field set and `sensitive`
+  flags only, because the shape word is how the provider reads a level and not a fact the schema declares.
 """
 
 import pytest
 
-from resource_mapping import DATA_SOURCE_SCHEMA, LOCATION_SCHEMA
+from resource_mapping import (
+    CERTIFICATE_SHAPE,
+    CERTIFICATE_TYPES,
+    DATA_SOURCE_SCHEMA,
+    LOCATION_SCHEMA,
+    RESOURCE_NAME_FIELDS,
+)
 
 
 def _fields(value: dict) -> tuple:
@@ -146,3 +156,45 @@ def test_the_name_level_asymmetries_stay_asymmetries(provider_schema,
     for rtype in data_only:
         assert rtype not in provider_schema, rtype
         assert DATA_SOURCE_SCHEMA[rtype][0], rtype
+
+
+def test_the_name_fact_for_a_resource_only_type(provider_schema):
+    """F7.14: `RESOURCE_NAME_FIELDS` is the fact source `name_field` reads when the data table has no row, so
+    the table holds exactly the asymmetric types and each row states the field the live schema declares.
+
+    `panos_certificate_import` declares `name`, so its row states `name`. `panos_virtual_router_interface`
+    declares no name attribute, so the field that carries the entry name into its block is the field that names
+    the object it points at, which is the fact the live schema states for that resource.
+    """
+    assert sorted(RESOURCE_NAME_FIELDS) == sorted(set(provider_schema) - set(DATA_SOURCE_SCHEMA)), RESOURCE_NAME_FIELDS
+    for rtype, field in RESOURCE_NAME_FIELDS.items():
+        attributes = provider_schema[rtype]['block']['attributes']
+        assert (field == 'name') == ('name' in attributes), (rtype, field)
+        assert field in attributes, (rtype, field)
+
+
+def test_the_certificate_table_is_the_live_shape(provider_schema):
+    """Every `CERTIFICATE_SHAPE` row is the shape the provider declares for its level (F7.14), read through the
+    table and not restated row by row.
+
+    The walk goes from the entry row through `CERTIFICATE_TYPES`, the table that names the type each entry row
+    belongs to, so the test states no type name of its own. `location` is the scope fact the location rule
+    prints, so an entry row states no field for it. The `sensitive` flags are the two facts the emitter and the
+    gate need: the field set is compared, and the shape word is not, because `one_of` and `string_list` say how
+    the provider reads a level, not what it declares.
+    """
+    for path, row in sorted(CERTIFICATE_SHAPE.items()):
+        segments = path.split('/')
+        attributes = provider_schema[CERTIFICATE_TYPES[segments[0]]]['block']['attributes']
+        for segment in segments[1:]:
+            attributes = attributes[segment]['nested_type']['attributes']
+        declared = {name for name in attributes if name != 'location'}
+        if row['shape'] == 'one_of':
+            # A `one_of` level states no field: the row states the alternatives, and the key the print uses for
+            # each is the name the live nested block declares, because the export states the level by presence.
+            assert sorted(row['selects']) == sorted(declared), (path, sorted(declared))
+            assert all(key == value for key, value in row['selects'].items()), path
+        else:
+            assert sorted(row['fields']) == sorted(declared), (path, sorted(declared))
+        assert row['sensitive'] == frozenset(f for f, value in attributes.items()
+                                            if value.get('sensitive')), (path, row['sensitive'])

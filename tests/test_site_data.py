@@ -111,9 +111,9 @@ def _tfvars_lines(out_dir: Path) -> list:
 
 # --- 1. the pinned table ------------------------------------------------------
 
-# The names the provider schema marks `sensitive` inside the protocol object (F7.1).
-# tests/test_protocol_object.py pins this against the live provider schema.
-REFERENCE_ONLY_NAMES = {'secret', 'key', 'password'}
+# The names the provider schema marks `sensitive`: the three inside the protocol object (F7.1) and the two
+# inside `certificate/local` (F7.14), each pinned against the live schema by the test that owns its table.
+REFERENCE_ONLY_NAMES = {'secret', 'key', 'password', 'private_key', 'passphrase'}
 
 
 def test_the_table_covers_every_field_the_location_can_state():
@@ -151,6 +151,8 @@ def test_only_the_device_field_maps_to_a_variable():
         'secret': reference,
         'key': reference,
         'password': reference,
+        'private_key': reference,
+        'passphrase': reference,
     } == resource_mapping.VALUE_VARIABLES
     assert variable != named, 'the device field holds a value; the run names `target` and holds none'
 
@@ -181,9 +183,11 @@ def test_the_table_holds_no_property():
     value for it. Neither is a property.
     F7.7: a reference-only name is a property only for the row that covers the entry the run read it in,
     because the emitter reads the field to print the reference. So the reference-only names in the matrix are
-    the fields `PROTOCOL_SHAPE` marks `sensitive` for the levels that row covers, and `key` is the exception
+    the fields the shape tables mark `sensitive` for the levels that row covers, and `key` is the exception
     the scan scope states: it is read inside an entry inside an entry, which no row covers, so the table stays
-    the only place that states it.
+    the only place that states it. F7.14 adds the second half of that rule: the two certificate names are read
+    inside `local`, which is the property the certificate row states, so they are never measured, because the
+    emitter prints the level and records nothing for the fields inside it.
     """
     allowed = {'name', 'ngfw_device', 'panorama_device', 'rulebase', 'vsys',
                'target', 'hostname'} | REFERENCE_ONLY_NAMES
@@ -194,8 +198,11 @@ def test_the_table_holds_no_property():
     # the credential, and the credential the provider reads from the environment has no row, so it cannot be a
     # declaration. `tests/test_variables.py` pins that.
     measured = {prop for row in resource_mapping.COVERAGE_MATRIX for prop in row['properties']}
-    assert measured & REFERENCE_ONLY_NAMES == {field for row in resource_mapping.PROTOCOL_SHAPE.values()
-                                               for field in row['sensitive']} - {'key'}, measured
+    tables = {field for table in (resource_mapping.PROTOCOL_TABLE, resource_mapping.CERTIFICATE_TABLE)
+              for row in table.rows.values() for field in row['sensitive']}
+    inside_local = {field for row in resource_mapping.CERTIFICATE_TABLE.rows.values()
+                    for field in row['sensitive']}
+    assert measured & REFERENCE_ONLY_NAMES == tables - {'key'} - inside_local, measured
     assert all(row['resource'] == 'panos_virtual_router'
                for row in resource_mapping.COVERAGE_MATRIX
                if set(row['properties']) & REFERENCE_ONLY_NAMES), measured
@@ -473,15 +480,16 @@ def test_the_provider_block_prints_target_only_for_a_unit_that_names_a_device(tm
     # The name is the §5 rule applied to the field, so the printed reference and the declared name agree.
     assert naming.variable_name('target') == 'target'
     """The golden bytes pin the shape: the kitchen-sink set prints the variable name for the device
-    field in the four files that carry a device location, and the sample set names no device, so it
-    holds no `var.` location field at all.
+    field in the five files that carry a device location, and the sample set names no device, so it
+    holds no `var.` location field at all. F7.14: `certificates.tf` is the fifth, because the record places a
+    certificate entry in a virtual system and the type declares a `vsys` sub-block.
     """
     for path in sorted((GOLDEN_DIR / 'sample').rglob('*.tf')):
         assert 'ngfw_device = var.' not in path.read_text(encoding='utf-8'), path
     changed = sorted({path.name for path in (GOLDEN_DIR / 'kitchen_sink').rglob('*.tf')
                       if 'ngfw_device = var.' in path.read_text(encoding='utf-8')})
-    assert changed == ['address_objects.tf', 'service_objects.tf', 'virtual_routers.tf',
-                       'zones.tf'], changed
+    assert changed == ['address_objects.tf', 'certificates.tf', 'service_objects.tf',
+                       'virtual_routers.tf', 'zones.tf'], changed
     # F6.10.4: `target` is printed only for a unit whose provider block names a device, so the golden set
     # holds the reference in three unit files and no target row in the sample set, which names no device.
     printed = sorted({Path(path).parent.name for path in (GOLDEN_DIR / 'kitchen_sink').rglob('provider.tf')
@@ -492,12 +500,20 @@ def test_the_provider_block_prints_target_only_for_a_unit_that_names_a_device(tm
     # F6.10.3: `variables.tf` is the unit's file, so the declaration set is the union the run wrote,
     # one file per unit. The set is the site value the table mapped plus the names the table records with no
     # value for it (`hostname`, §11, and `target`, F6.10.4), read through the table and the naming rule.
+    # F7.14 adds the third part: the reference name the run recorded for a `sensitive` field it read inside an
+    # entry, which is the §5 name of the entry that holds it. The record places one certificate entry in a
+    # virtual system, so the set holds that entry's name, and the name comes from the table's `sensitive` set so
+    # the pin states no field of its own.
     declared = set()
     for path in sorted((GOLDEN_DIR / 'kitchen_sink').rglob('variables.tf')):
         declared.update(sanity_checks.VARIABLE_RE.findall(path.read_text(encoding='utf-8')))
     held = {naming.variable_name(field) for field, shape in resource_mapping.VALUE_VARIABLES.items()
             if shape == resource_mapping.OPERATOR_SUPPLIED}
-    assert sorted(declared) == sorted(held | {naming.variable_name(DEVICE)}), declared
+    certificate_fields = {field for row in resource_mapping.CERTIFICATE_TABLE.rows.values()
+                          for field in row['sensitive']}
+    assert certificate_fields, 'the certificate table states the fields the run reads to name the variable'
+    assert sorted(declared) == sorted(held | {naming.variable_name(DEVICE)} |
+                                      {naming.variable_name('Vsys-Cert')}), declared
 
 
 # --- 5. the declaration set ----------------------------------------------------

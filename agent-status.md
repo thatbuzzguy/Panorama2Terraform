@@ -2,52 +2,54 @@
 
 ## Current position
 
-Piece 1 of the certificate feature — the measurement — is complete and committed on `development`. No code and no
-test changed. The measured sets are in `acceptance.md`; `backlog.md` holds the three facts the measurement
-corrected.
+Pieces 2, 3, 4 and 6 of the certificate feature are complete and committed on `development`: the two
+`CONTAINER_TABLE` rows, the two `COVERAGE_MATRIX` rows, `CERTIFICATE_SHAPE` and `CERTIFICATE_TABLE`, the two parse
+methods, the two emitters, the two `VALUE_VARIABLES` rows, the fixture, the pins, and the goldens from one real run.
+Piece 5 — what the gate reads for a certificate block — is the next task, so this commit added no gate code.
 
-Measured 2026-11-05 against provider 2.0.14 with Terraform v1.16.2, through `terraform providers schema -json`
-(the door `tests/conftest.py::provider_schemas` runs):
+The decisions this commit made:
 
-- `panos_certificate_import` declares `name`, `location` and `local`; required `name` and `location`. Nothing at
-  the block's own level is `sensitive`: the three `sensitive` facts sit inside `local`, which needs two rows in
-  `VALUE_VARIABLES` (`private_key`, `passphrase`) before an emitter can print the reference. `local` is one object
-  with the two sub-shapes `pem` and `pkcs12`, `certificate` is required inside each, and `terraform validate`
-  refuses a `local` that states both, so `selects` states that choice. Its `location` declares no `device_group`
-  and no `shared`.
-- `panos_certificate_profile` declares 15 attributes, and its resource row and its data source row are identical.
-  Required `name` and `location`; no field is `sensitive`. `certificate` is a list of objects whose `name` is
-  required, and `username_field` is an object. Its `location` declares `shared` and no `device_group` and no
-  `vsys`. It is in `DATA_SOURCE_SCHEMA`, not in `LOCATION_SCHEMA`.
-- `panos_certificate` has a data source and no resource, confirmed: 19 attributes, no `sensitive`, no
-  `device_group`, no `shared`.
-- The code as it stands: `LOCATION_SCHEMA` has no certificate row, `DATA_SOURCE_SCHEMA` has no row for
-  `panos_certificate_import`, neither type is in `EMITTED_TYPES` or `NOT_EMITTED_TYPES`, and the fixture
-  certificate entry (`edge-cert`, `tests/fixtures/unknown_containers.xml` line 47) carries `description` only,
-  which no certificate type declares.
+- Both container rows are `emitted`. `panos_certificate_profile` is emitted rather than stated in
+  `NOT_EMITTED_TYPES`, because the whole entry is readable: every field it declares is a leaf field, a list the
+  export holds as entries, or a small object. The profile's `LOCATION_SCHEMA` row states `template` only, because
+  `location_data` reaches `shared` inside the device-group branch only, so a `shared` row without a device group
+  is a fact the tool cannot use.
+- `CERTIFICATE_SHAPE` is the shape owner for both emitters, and `CERTIFICATE_TABLE` carries `root='certificate'` so
+  the reference-name walk states no container. `certificate/local` is the one row that states the choice by
+  presence, with `fields: {}` and `selects`, so `_protocol_body` fills it from the element.
+- `RESOURCE_NAME_FIELDS` is the fact source for the name field of the two types `DATA_SOURCE_SCHEMA` has no row
+  for, and `entry_coverage.name_field` falls back to it.
+- The two `sensitive` facts inside `local` print as the variable reference the entry names, so no generated file
+  states the value.
+- The objects inside a profile's `certificate` list are a `nested-block` row under the profile row, because the
+  single-segment `certificate` row would otherwise answer for them. The emitter prints each list member as plain
+  data, so no reference edge is recorded for those names.
 
-What the next agent must decide:
+What the next agent must state for a certificate block:
 
-- Can the profile row be emitted. Measured: every field the profile declares is a leaf field or a small object, so
-  a parse method can read the whole entry, and the reason `NOT_EMITTED_TYPES` exists — a partial object would
-  create a misconfigured object — does not hold for this type. Recommend `emitted`, with a `LOCATION_SCHEMA` row,
-  after the location rule is read: `location_data` reaches `shared` only inside the `device_group` branch, so a
-  row that declares `shared` without `device_group` prints the `Shared` template placeholder for an entry in
-  `<shared>`. The parse method should read the `certificate/profile` container as its own row, so the profile
-  entry is a section the report can cover.
-- Whether `tests/test_container_coverage.py::test_report_declares_the_profile_name_column` can be written now: no.
-  It needs a parse method for the container and a fixture entry that carries `profile-name`, and the committed
-  entry carries `description` only. Write it after the parse method lands, and run the pipeline for the pin,
-  because the rule is a rule about a read.
-- The `certificate` container row can be `emitted` only for an entry in a scope the row's type can place, because
-  no certificate type declares `device_group`. Either the fixture entry moves to a template or a vsys, or the row
-  stays `report` with that reason and `EXPECTED_FINDINGS` keeps the finding.
-- Whether `certificate_profile` in an EDL sub-shape prints as a reference to the emitted profile block; if it
-  does, `tests/golden/kitchen_sink/shared_45ca31c3/external_lists.tf` changes from a real run.
+- The gate reads a certificate block through `CERTIFICATE_TABLE`: the field names are the table's spellings, the
+  values are the shapes the table states, the entry name is `name` (read through `RESOURCE_NAME_FIELDS` for
+  `panos_certificate_import`, the one emitted type with no data source), and `local` prints the one alternative the
+  export states, so a block that states both `pem` and `pkcs12` is a finding the plan check reports.
+- The two fields the table marks `sensitive` print as `var.<§5 name of the entry>`, never as a value, so the rule
+  compares the printed reference against the declaration set with no value check.
+- A `local` that states no alternative prints nothing, so no block carries it; `name` and `location` are the only
+  facts the provider requires, so a certificate entry with no `local` is still emitted.
+- The `rule` name `CERTIFICATE_TABLE` states is `certificate_blocks`, which no rule function reads yet.
 
-`ruff check .` is clean, and `python3 -m pytest` passes 1497 tests.
+Pins and goldens that moved in this commit (see `acceptance.md` §Result): the container findings and the
+entry-phrasing pin, the corpus counts and the record-content counts in `tests/test_build_kitchen_sink.py`, the
+reference-only set and the pinned table and the declaration-set clause in `tests/test_site_data.py`,
+`tests/test_variables.py::_reference_names`, the ngfw pin, two new pins in `tests/test_data_source_schema.py`, and
+the grounding branch in `tests/test_coverage_matrix.py`. The goldens that moved are two new files and one
+`variables.tf`. `tests/test_edge_cases.py` and the EDL golden did not move.
 
-The gated pieces that stay in `backlog.md` are the four `*_policy_rules` types and a config entry inside a stack.
+`ruff check .` is clean and `python3 -m pytest` passes 1518 tests.
+
+The measured sets are in `acceptance.md` §Result, and the facts that stay open are in `backlog.md`.
+
+The gated pieces that stay in `backlog.md` are the four `*_policy_rules` types, a config entry inside a stack, the
+EDL reference decision, and the profile-name report column.
 
 ## Rules to keep when writing documents
 
@@ -158,8 +160,11 @@ output directory, so
   `parse_filter_containers` builds each entry dict from the fields its own row states, so the level names are the
   table's names in both. Field order is the table order, so the order a row states is the order the block
   prints, and a row change that moves the order moves the goldens. A level that holds no entry has no container row, so the property scan measures nothing
-  for it and the matrix row stays grounded by the table. An entry inside an entry is not in the scan scope either,
-  because `covering_row` cannot match a section path that holds an entry segment, so the table grounds that level.
+  for it and the matrix row stays grounded by the table. An entry inside an entry is not in the scan scope unless a
+  row names the path with the `entry` segment the parent entry is: the certificate profile's list objects are that
+  case, because the field the profile row names is also the spelling of the `certificate` section row, so the row
+  that holds the `entry` segment wins by length and the profile row measures them. Every other entry inside an entry
+  is grounded by the table instead.
   `_protocol_areas` is the area rule the two OSPF levels share, `_protocol_branch` walks the
   segments between a
     level dict and an entry level, `_protocol_entries` fills a `string_list` level, `_protocol_entry_level` (F7.10)

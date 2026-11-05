@@ -16,23 +16,27 @@ Pieces:
       which are `sensitive`. `panos_certificate` is a data source only, so the container cannot become an `emitted`
       row through a data source. Measured 2026-11-05; the sets are in `acceptance.md`, and the corrected facts are
       in `backlog.md`.
-- [ ] Decide the `certificate` container row in `resource_mapping.COVERAGE_MATRIX`: the row must be `emitted` with
-      the provider type in its note, so the property scan and the per-entry report read the same row, and
-      `tests/test_container_coverage.py::EXPECTED_FINDINGS` loses the `unaccounted` finding for
-      `device-group/entry/certificate`. Measured 2026-11-05: no certificate type declares a `device_group`
-      sub-block, so the fixture entry must sit in a scope the row's type can place, or the row stays `report`
-      with that reason and the finding stays.
-- [ ] Decide the profile row: `panos_certificate_profile` is in `DATA_SOURCE_SCHEMA` (not in
-      `LOCATION_SCHEMA`, measured 2026-11-05) but in neither `EMITTED_TYPES` nor `NOT_EMITTED_TYPES`. Emit it, or
-      state it in `NOT_EMITTED_TYPES` with the reason.
-- [ ] Write the emitter: it prints `local.pem.certificate` as the value the export states and the key as the
-      reference the §11 rule gives it, so no key value reaches a generated file, and the field order is the order the
-      row states.
+- [x] Decide the `certificate` container row in `resource_mapping.COVERAGE_MATRIX`: `emitted` with the provider
+      type in its note, so the property scan and the per-entry report read the same row. Measured 2026-11-05: no
+      certificate type declares a `device_group` sub-block, so the fixture entry sits in a scope the row's type
+      can place (a virtual system for the record entry, a template and a virtual system in
+      `tests/fixtures/certificates.xml`), and `tests/test_container_coverage.py::EXPECTED_FINDINGS` lost the
+      `unaccounted` finding for `device-group/entry/certificate`.
+- [x] Decide the profile row: `emitted`, with a `LOCATION_SCHEMA` row that states `template` only, because
+      `location_data` reaches `shared` only inside the device-group branch and the row declares no device group,
+      so a `shared` row would be a fact the tool cannot use. The whole entry is readable, so the
+      `NOT_EMITTED_TYPES` reason (a partial object) does not hold for this type. The container row is the input's
+      spelling `certificate-profile`, and the profile's `certificate` objects are a `nested-block` row under it.
+- [x] Write the emitter: it prints `local.pem.certificate` as the value the export states and the two `sensitive`
+      fields as the variable reference the entry names, so no generated file states the value, and the field order
+      is the order `CERTIFICATE_SHAPE` states. Two files, one per emitter: `certificates.tf` and
+      `certificate_profiles.tf`.
 - [ ] Say what the gate reads for a certificate block. A certificate entry has no name a reference resolves, so the
       F5.5 read-through rule cannot serve it, and the gate rule must read the block the run wrote instead.
-- [ ] Check the gate and the goldens together: a container row that moves to `emitted` changes the scan scope, the
-      per-entry report and the `.tf` goldens in the same commit, and the goldens are regenerated only from a real
-      run.
+- [x] Check the gate and the goldens together: the two rows moved to `emitted`, so the scan scope, the per-entry
+      report and the `.tf` goldens changed in the same commit, and the goldens are the bytes one real run wrote.
+      The pins that moved are listed in `acceptance.md` §Result. `tests/test_edge_cases.py` and the EDL golden did
+      not move, because the EDL site resolves no names.
 
 ## Rules the layout keeps
 

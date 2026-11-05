@@ -45,7 +45,7 @@
       <entry name="Edge">
         <certificate>
           <entry name="edge-cert">
-            <description>no parse method reads a certificate entry</description>
+            <description>covered by parse_certificates</description>
           </entry>
         </certificate>
         <address>

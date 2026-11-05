@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  F7.14 certificate fixture: the entries the two certificate parse methods read.
+
+  Each entry sits in a scope its row's type can place, so the location block names the place the
+  export put it in: the import entries sit under a device's virtual system and under a template,
+  and the profile entry sits under a template (`panos_certificate_profile` declares no
+  `location.device_group`, so a device-group entry could not be placed by the location rule).
+
+  Every field the `COVERAGE_MATRIX` row states for the two types is carried with a non-empty value,
+  so the property scan measures each field the emitter reads.
+
+  The two values inside `local` are the facts the provider marks `sensitive`: the run reads them to
+  name the variable, prints the reference, and writes no file that holds them.
+-->
+<config>
+  <devices>
+    <entry name="fw-1.example.com">
+      <vsys>
+        <entry name="vsys1">
+          <network>
+            <certificate>
+              <entry name="Edge-Cert">
+                <local>
+                  <pem>
+                    <certificate>edge-pem-value</certificate>
+                    <private-key>edge-private-key-value</private-key>
+                    <passphrase>edge-passphrase-value</passphrase>
+                  </pem>
+                </local>
+              </entry>
+            </certificate>
+          </network>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+  <templates>
+    <entry name="Lab-Template">
+      <devices>
+        <entry name="fw-2.example.com"/>
+      </devices>
+      <network>
+        <certificate>
+          <entry name="Lab-Cert">
+            <local>
+              <pkcs12>
+                <certificate>lab-pkcs12-value</certificate>
+                <passphrase>lab-passphrase-value</passphrase>
+              </pkcs12>
+            </local>
+          </entry>
+        </certificate>
+        <certificate-profile>
+          <entry name="Strict-OCSP">
+            <use-ocsp>yes</use-ocsp>
+            <use-crl>yes</use-crl>
+            <block-expired-certificate>yes</block-expired-certificate>
+            <block-timeout-certificate>yes</block-timeout-certificate>
+            <block-unauthenticated-certificate>yes</block-unauthenticated-certificate>
+            <block-unknown-certificate>yes</block-unknown-certificate>
+            <ocsp-exclude-nonce>yes</ocsp-exclude-nonce>
+            <certificate-status-timeout>30</certificate-status-timeout>
+            <ocsp-receive-timeout>15</ocsp-receive-timeout>
+            <crl-receive-timeout>20</crl-receive-timeout>
+            <domain>lab.example.com</domain>
+            <certificate>
+              <entry name="Edge-Cert">
+                <default-ocsp-url>http://ocsp.example.com</default-ocsp-url>
+                <ocsp-verify-certificate>yes</ocsp-verify-certificate>
+                <template-name>Lab-Template</template-name>
+              </entry>
+              <entry name="Lab-Cert">
+                <default-ocsp-url>http://ocsp.example.com</default-ocsp-url>
+                <ocsp-verify-certificate>no</ocsp-verify-certificate>
+                <template-name>Lab-Template</template-name>
+              </entry>
+            </certificate>
+            <username-field>
+              <subject>cn</subject>
+              <subject-alt>email</subject-alt>
+            </username-field>
+          </entry>
+        </certificate-profile>
+      </network>
+    </entry>
+  </templates>
+</config>

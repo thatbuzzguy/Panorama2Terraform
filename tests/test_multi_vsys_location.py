@@ -110,9 +110,14 @@ def test_only_template_scoped_types_declare_ngfw():
     Config a firewall owns is a template-scoped object placed on one device
     (F3.6). Objects and rules live in a virtual system or a device group, so
     they have no ngfw sub-block to emit.
+
+    Measured 2026-11-05 against the live provider schema: the exception set is the template-scoped types the
+    provider declares no `ngfw` sub-block for — `panos_zone`, and the two certificate types (F7.14), whose
+    location declares `template` and `vsys` only.
     """
+    no_ngfw = {'panos_zone', 'panos_certificate_import', 'panos_certificate_profile'}
     ngfw_types = {t for t, scopes in LOCATION_SCHEMA.items() if 'ngfw' in scopes}
-    assert ngfw_types == TerraformGenerator._TEMPLATE_SCOPED_TYPES - {'panos_zone'}
+    assert ngfw_types == TerraformGenerator._TEMPLATE_SCOPED_TYPES - no_ngfw
     assert 'panos_address' not in ngfw_types
     assert 'panos_security_policy_rules' not in ngfw_types
 

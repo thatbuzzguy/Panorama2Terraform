@@ -125,40 +125,45 @@ def _reference_names(case: str, converter_module) -> set[str]:
 
     A `sensitive` value cannot name itself, so the name is the §5 name of the entry that holds the field: an
     entry names itself when the field is its own, and a level inside an entry names the entry that holds it. The
-    pin walks the fixture through the `sensitive` sets of the `PROTOCOL_SHAPE` rows, through the `string_list`
-    shape, which is the table's way of saying the object is an entry, and through `_protocol_xml_name`, the one
-    rule that turns a table name into the element the input spells, so it states no name list of its own. A
-    field with no value names nothing, because the parse records nothing for it, and a case with no protocol
-    object names nothing.
+    pin walks the fixture through the `sensitive` sets of the shape table rows, through the `string_list` shape,
+    which is the table's way of saying the object is an entry, and through `_protocol_xml_name`, the one rule
+    that turns a table name into the element the input spells, so it states no name list of its own. The entry
+    element is `ShapeTable.root`, so the walk states no container either. A field with no value names nothing,
+    because the parse records nothing for it, and a case with no protocol object or no certificate entry names
+    nothing.
     """
     root = ET.fromstring(CASES[case].read_text(encoding='utf-8'))
     spell = converter_module.PanoramaParser._protocol_xml_name
     parents = {child: parent for parent in root.iter() for child in parent}
     names = set()
-    for path, row in sorted(resource_mapping.PROTOCOL_SHAPE.items()):
-        if not row['sensitive']:
-            continue
-        # A `string_list` row reads entries, so the input holds one `entry` element for each object the row
-        # names; every other row reads the level itself, so the entry that names the reference is the one that
-        # holds the level.
-        segments = path.split('/')
-        parts_list = []
-        for index, segment in enumerate(segments):
-            parts_list.append(spell(segment))
-            walked = resource_mapping.PROTOCOL_SHAPE.get('/'.join(segments[:index + 1]))
-            if walked and walked['shape'] == 'string_list':
-                parts_list.append('entry')
-        xml_path = '/'.join(parts_list)
-        for obj in root.findall(f'.//virtual-router/entry/{xml_path}'):
-            for field in row['sensitive']:
-                value = obj.find(spell(field))
-                if value is None or value.text in entry_coverage.EMPTY_FIELD_VALUES:
+    for table in (resource_mapping.PROTOCOL_TABLE, resource_mapping.CERTIFICATE_TABLE):
+        for path, row in sorted(table.rows.items()):
+            if not row['sensitive']:
+                continue
+            # A `string_list` row reads entries, so the input holds one `entry` element for each object the row
+            # names; every other row reads the level itself, so the entry that names the reference is the one that
+            # holds the level. The segment that names the table's root is the entry element, so it is the walk's
+            # prefix and not part of the level path.
+            segments = path.split('/')
+            parts_list = [spell(table.root), 'entry']
+            for index, segment in enumerate(segments):
+                if segment == table.root:
                     continue
-                holder = obj
-                while holder is not None and holder.tag != 'entry':
-                    holder = parents.get(holder)
-                if holder is not None:
-                    names.add(naming.variable_name(holder.get('name')))
+                parts_list.append(spell(segment, path))
+                walked = table.rows.get('/'.join(segments[:index + 1]))
+                if walked and walked['shape'] == 'string_list':
+                    parts_list.append('entry')
+            xml_path = '/'.join(parts_list)
+            for obj in root.findall(f'.//{xml_path}'):
+                for field in row['sensitive']:
+                    value = obj.find(spell(field, path, table))
+                    if value is None or value.text in entry_coverage.EMPTY_FIELD_VALUES:
+                        continue
+                    holder = obj
+                    while holder is not None and holder.tag != 'entry':
+                        holder = parents.get(holder)
+                    if holder is not None:
+                        names.add(naming.variable_name(holder.get('name')))
     return names
 
 

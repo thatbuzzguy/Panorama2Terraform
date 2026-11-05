@@ -21,3 +21,9 @@ variable "target" {
   type        = string
 }
 
+variable "vsys_cert" {
+  description = "Sensitive protocol value (F7.1, F7.7): the reference prints, so no file states the value, and the operator supplies it"
+  type        = string
+  sensitive   = true
+}
+

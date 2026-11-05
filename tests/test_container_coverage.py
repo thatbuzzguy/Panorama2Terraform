@@ -48,7 +48,6 @@ UNKNOWN_FIXTURE = 'unknown_containers.xml'
 # the console lines can be compared with these values.
 EXPECTED_FINDINGS = [
     ('data-entry', 23, 1),
-    ('device-group/entry/certificate', 46, 1),
     ('devices/entry/vsys/entry/import', 64, 1),
     ('document', 14, 2),
 ]
@@ -298,7 +297,7 @@ def test_report_line_wording_counts_the_entries():
     """The wording is one place: a single entry is not called 'entries'."""
     _, _, findings = _scan(UNKNOWN_FIXTURE)
     phrases = [container_coverage.entry_phrase(f.entries) for f in findings]
-    assert phrases == ['1 entry', '1 entry', '1 entry', '2 entries'], phrases
+    assert phrases == ['1 entry', '1 entry', '2 entries'], phrases
     single = container_coverage.Finding(path='document', line=14, entries=1)
     assert container_coverage.report_line(single).endswith('1 entry - no parse method reads this container')
     unknown = container_coverage.Finding(path='document', line=None, entries=2)

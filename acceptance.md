@@ -1,110 +1,142 @@
-# Acceptance — measure the certificate types against the pinned provider schema
+# Acceptance criteria — the certificate containers (task for this commit)
 
-Piece 1 of the certificate feature. This piece measures; it writes no code and no test.
+Scope: the two `CONTAINER_TABLE` rows, the two parse methods, the two emitters, and the
+goldens regenerated from a real run. The gate rule for a certificate block is the next
+task, so this commit adds no gate code.
 
-## Measurement
+## 1. The tables state the facts the emitter prints
 
-Measured 2026-11-05 against provider 2.0.14 with Terraform v1.16.2, through `terraform init` +
-`terraform providers schema -json` — the same door `tests/conftest.py::provider_schemas` runs. The two
-choice facts are read from `terraform validate` on hand-written blocks in a scratch directory; no scratch
-file is committed.
+1.1 `CONTAINER_TABLE` holds one row per parse method: `parse_certificates` reading
+`certificate` and `parse_certificate_profiles` reading `certificate_profile`. Both rows are
+`emitted` and name the provider type in the note, because the property scan reads a matrix
+row only for an emitted row (`entry_coverage.matrix_row_for`).
 
-### `panos_certificate_import` — resource only, no data source
+1.2 `COVERAGE_MATRIX` holds one row per emitted type, so both certificate types gain a row,
+and each row names a fixture entry, an emitter, an output file, and the properties the
+emitter reads. A row's properties are the fields the emitter reads from the captured object,
+in the print order.
 
-- Attributes: `local`, `location`, `name`. Required: `name`, `location`.
-- No attribute at the block's own level is `sensitive`. The three `sensitive` facts are inside the `local`
-  object: `local.pem.private_key`, `local.pem.passphrase`, `local.pkcs12.passphrase`.
-- `local` is an object (the schema states it as `single`) with two sub-shapes: `pem` (`certificate`,
-  `passphrase`, `private_key`) and `pkcs12` (`certificate`, `passphrase`). `certificate` is required inside
-  each, so a block cannot print the key reference alone. `terraform validate` refuses a `local` that states
-  both `pem` and `pkcs12`, so `local` is a choice level and `selects` is the one place a row states it
-  (`docs/ARCHITECTURE.md` §4.9, the F7.12 rule).
-- `location` sub-blocks: `panorama` (`panorama_device`), `template`, `template_stack`,
-  `template_stack_vsys`, `template_vsys`, `vsys`. It declares no `device_group` and no `shared`.
+1.3 The field names and shapes are the live provider facts, measured 2026-11-05 against
+provider 2.0.14 (`terraform providers schema -json`): `panos_certificate_import` declares
+`name`, `location`, `local`; `local` is one object with the `pem` and `pkcs12` sub-shapes, and
+`terraform validate` refuses a `local` stating both, so the choice is stated by presence.
+`panos_certificate_profile` declares 15 attributes, none sensitive.
 
-### `panos_certificate_profile` — resource and data source, and the two shapes are identical
+1.4 `CERTIFICATE_SHAPE` is the table that owns these shapes, so the emitter prints through it
+and a gate rule can read the same rows. One reader serves every shape table, so no method
+writes a field name of its own.
 
-- Attributes (15): `block_expired_certificate`, `block_timeout_certificate`,
-  `block_unauthenticated_certificate`, `block_unknown_certificate`, `certificate`,
-  `certificate_status_timeout`, `crl_receive_timeout`, `domain`, `location`, `name`,
-  `ocsp_exclude_nonce`, `ocsp_receive_timeout`, `use_crl`, `use_ocsp`, `username_field`.
-  Required: `name`, `location`. No field is `sensitive`.
-- `certificate` is a list of objects (`name` required, `default_ocsp_url`, `ocsp_verify_certificate`,
-  `template_name`); `terraform validate` refuses a single object there, so the emitter must print the list
-  shape. `username_field` is an object (`subject`, `subject_alt`). The rest are leaf fields: seven booleans,
-  three numbers, `domain` as a string.
-- `location` sub-blocks: `panorama` (no field), `shared` (no field), `template`, `template_stack`,
-  `template_stack_vsys`, `template_vsys`. It declares no `device_group` and no `vsys`.
+1.5 The two `sensitive` facts (`private_key`, `passphrase`) are `REFERENCE_ONLY` rows in
+`VALUE_VARIABLES`, so the block prints the variable reference and no generated file states the
+value (`tests/test_robustness.py` rule).
 
-### `panos_certificate` — data source only
+1.6 `LOCATION_SCHEMA` holds one row per emitted type, and each row lists only the sub-blocks
+the location rule can reach. The profile row holds `template` only: the shared sub-block is
+reached only inside the device-group branch, and the profile row declares no device group, so
+stating `shared` would be a fact the tool cannot use. The tool prints the `Shared` template
+placeholder for a profile entry the export places in a device group, and the test pins what the
+tool prints.
 
-Confirmed: no resource exists for it. 19 attributes, required `name` and `location`, and no attribute is
-`sensitive` — the data source's `private_key` is not marked sensitive, so the §11 rule does not reach it.
-`location` sub-blocks: `panorama` (no field), `template`, `template_stack`, `template_stack_vsys`,
-`template_vsys`, `vsys`; no `shared`, no `device_group`.
+1.7 `panos_certificate_import` is the first emitted type with no data source, so the name rule
+needs a fact source for a type `DATA_SOURCE_SCHEMA` has no row for. One table states it, and the
+test pins it against the live schema.
 
-### Set facts re-measured
+1.8 `entry_coverage.name_field` stays the one rule for the field that carries an entry name, and
+it answers through that table for a resource-only type.
 
-128 resources, 128 data sources. The resource-only set is `panos_certificate_import` and
-`panos_virtual_router_interface`; the data-source-only set is `panos_certificate` and
-`panos_predefined_dlp_file_type`. `panos_certificate_profile` is one of the 126 types in both sets, and its
-data row equals its resource row.
+## 2. The parse methods
 
-## What the code states today
+2.1 Each method marks every entry it reads, and reads only the fields its row states.
 
-Read from `src/resource_mapping.py` and the tests, as the code stands:
+2.2 An entry with no name is skipped, with the reason.
 
-- `LOCATION_SCHEMA` has no row for either certificate type. `DATA_SOURCE_SCHEMA` has rows for
-  `panos_certificate` and `panos_certificate_profile`, and no row for `panos_certificate_import`, which is
-  correct because no data source exists for it.
-- Neither certificate type is in `EMITTED_TYPES` or in `NOT_EMITTED_TYPES`.
-- `VALUE_VARIABLES` has no row for `private_key` or `passphrase`, so the shape rule has no row for a
-  `sensitive` field inside the `local` object.
-- `tests/test_container_coverage.py::EXPECTED_FINDINGS` keeps
-  `('device-group/entry/certificate', 46, 1)`.
-- `tests/fixtures/unknown_containers.xml` carries one certificate entry (`edge-cert`, line 47) with
-  `description` only. `description` is an attribute neither certificate type declares, so no output can read
-  it, and the entry carries no `profile-name`.
+2.3 A certificate entry that states no `local` sub-shape is still an object the run can place:
+`name` and `location` are the only facts the provider requires, so the entry is emitted.
 
-## Facts the measurement contradicted
+## 3. The emitters
 
-Corrected in `backlog.md`, which is the owner document for a provider fact no table row covers today:
+3.1 One resource block per entry, in the row's field order, with the location block.
 
-- `panos_certificate_profile` is not in `LOCATION_SCHEMA`. It is in `DATA_SOURCE_SCHEMA`.
-- The recorded profile attribute list omits `ocsp_exclude_nonce` and `ocsp_receive_timeout`, and states
-  `certificate` and `username_field` as fields when the schema states them as objects.
-- The recorded `sensitive` list omits `local.pkcs12.passphrase`.
+3.2 `local` prints as the one sub-shape the export states; the alternative the export does not
+state prints nothing.
 
-## What the next pieces must decide
+3.3 A `sensitive` field prints as the variable reference named by the entry that holds it (§5),
+never as its value.
 
-1. The profile row. Measured: every field the profile declares is a leaf field or a small object, so a parse
-   method can read the whole entry. The reason `NOT_EMITTED_TYPES` exists — a partial object would create a
-   misconfigured object — does not hold for this type, so the row can be `emitted`. It needs a
-   `LOCATION_SCHEMA` row, and the location rule must be read first: `location_data` reaches `shared` only
-   inside the `device_group` branch, so a row that declares `shared` without `device_group` prints the
-   `Shared` template placeholder instead of `shared = {}`.
-2. The location for a certificate entry. No certificate type declares `device_group`, so an entry the export
-   places in a device group has no location the emitter can print. The fixture entry must move to a scope the
-   type can carry (`template`, `template_stack`, `template_vsys`, `template_stack_vsys`, `vsys`, or
-   `panorama`), or the row stays `report` with that reason, and `EXPECTED_FINDINGS` keeps the finding.
-3. `VALUE_VARIABLES` needs a `REFERENCE_ONLY` row for `private_key` and for `passphrase`; the two pins in
-   `tests/test_site_data.py` that read the table move in the same commit.
-4. The `local` choice: the row states `pem` and `pkcs12` as `selects`, and the gate reads the choice at the
-   level the walk enters.
-5. The `profile_name` pin can be written only after a parse method reads the `certificate` container and the
-   fixture entry carries `profile-name`; the pin must run the pipeline, not build a row by hand. Recommend a
-   parse method for `certificate` and for `certificate/profile`, and a fixture entry that carries the fields
-   the emitter reads, because a captured field no output reads is a finding.
-6. Decide whether `certificate_profile` in an EDL sub-shape prints as a reference to the emitted profile
-   block. If it does, `tests/golden/kitchen_sink/shared_45ca31c3/external_lists.tf` changes from a real run.
+3.4 The `certificate` list inside a profile entry prints as the list shape the provider declares
+(one object per entry the export holds), because `terraform validate` refuses a single object.
 
-## Rules this must keep
+3.5 Each emitter writes one file per unit that has content, in the order the run read it.
 
-- A document explains a table and never restates it row by row, so the measurement for a type no table row
-  covers is recorded in `backlog.md`.
-- No new table, no scratch file committed, no code change in this piece.
-- `ruff check .` is clean, and `python3 -m pytest` passes.
+## 4. The corpus and the goldens
 
-## Result
+4.1 `tests/fixtures/certificates.xml` holds the entries the emitter reads, each in a scope its
+row's type can place (vsys for an import entry, template for a profile entry), and carries every
+declared property with a non-empty value, so the property scan measures every field the row states.
 
-Met, 2026-11-05. `ruff check .` is clean and `python3 -m pytest` passes.
+4.2 The kitchen-sink record holds a certificate entry and a profile entry, so the golden case
+exercises both generator paths. The goldens are the bytes a real run wrote, regenerated from that
+run and never hand-edited.
+
+4.3 The pins that move move in the same commit: the container findings, the fixture counts, the
+value-table pins, the name-asymmetry pin, the ngfw pin, and the reference-name pin. A pin states
+the measured fact, not a guess.
+
+4.4 `ruff check .` is clean and `python3 -m pytest` passes.
+
+## 5. What this commit does not do
+
+5.1 No gate rule for a certificate block. The emitter prints a shape a gate can read: field names
+as the provider spells them, values in the shape the table states, the choice by presence.
+
+5.2 The EDL `certificate_profile` field stays a plain string, so it records no reference edge. A
+read-through data block cannot answer a name for a type whose data row declares no `name` field,
+and `panos_certificate_profile` is not such a type — but the EDL site does not resolve names, so
+the reference rule cannot reach it. This stays a finding in `backlog.md`.
+
+## Result (measured 2026-11-05)
+
+All criteria hold. `ruff check .` is clean and `python3 -m pytest` passes 1518 tests.
+
+1.1 Both `CONTAINER_TABLE` rows are `emitted` and name the provider type. The profile row path is the
+input's spelling `certificate-profile`, because the scan reads the row path off the input, and the parse
+method states the table path `certificate_profile`. The profile's `certificate` list holds one entry per
+object, so the objects are a `nested-block` row under the profile row, and the row path holds the `entry`
+segment the profile entry is; without it the single-segment `certificate` row would answer for the object.
+
+1.2 Both `COVERAGE_MATRIX` rows hold. The profile row declares 16 properties: the 13 fields the emitter
+reads from the entry, plus the 3 fields it reads for the objects inside its `certificate` list, which the
+property scan measures against the profile row through the nested row. The import row declares `local` only.
+
+1.4 `CERTIFICATE_SHAPE` is the shape owner for both emitters, and `tests/test_coverage_matrix.py::_shape_table_grounding`
+reads the certificate table branch. `CERTIFICATE_TABLE` carries `root='certificate'`, so the reference-name walk
+in `tests/test_variables.py` names no container.
+
+1.5 `VALUE_VARIABLES` holds the two `REFERENCE_ONLY` rows, and the goldens print the reference.
+
+1.7 `RESOURCE_NAME_FIELDS` holds the two resource-only types, and
+`tests/test_data_source_schema.py::test_the_name_fact_for_a_resource_only_type` pins it against the live schema;
+`test_the_certificate_table_is_the_live_shape` pins `CERTIFICATE_SHAPE` on the field set and the `sensitive` flags,
+and on `selects` for the `one_of` row.
+
+2.3 The record's certificate entry states `local`, and the fixture's profile entry states every declared field.
+
+3.1–3.5 Both emitters print through the table, in the row's order, with the location block; the two files are
+`certificates.tf` and `certificate_profiles.tf`, one `UnitText` each, so neither overwrites the other.
+
+4.2 Goldens that moved, from one real run on `tests/fixtures/kitchen_sink.xml`:
+`tests/golden/kitchen_sink/vsys1_78d8e4bc/certificates.tf` (new),
+`tests/golden/kitchen_sink/fw_template_00a08cdc/certificate_profiles.tf` (new), and
+`tests/golden/kitchen_sink/vsys1_78d8e4bc/variables.tf` (the run declared `var.vsys_cert`, the §5 name of the
+entry that holds the two `sensitive` fields).
+
+4.3 Pins that moved in this commit: `tests/test_container_coverage.py::EXPECTED_FINDINGS` and the entry-phrasing
+pin (the record's certificate entry is covered); the fixture counts in `tests/test_build_kitchen_sink.py`
+(68 accepted, 67 read, 3 skipped, 17 comments, 13 names the record holds alone); the reference-only name set and
+the pinned table in `tests/test_site_data.py`, plus the golden file-name pin (five files carry a device location)
+and the declaration-set clause; `tests/test_variables.py::_reference_names`, which walks both tables through
+`ShapeTable.root`; `tests/test_multi_vsys_location.py` ngfw pin; `tests/test_data_source_schema.py` (two new pins);
+and `tests/test_coverage_matrix.py` grounding branch. No pin was weakened.
+
+5.1 No gate code was added. `tests/test_edge_cases.py` and the EDL golden are unchanged, so the EDL decision is a
+finding, not a change.

@@ -88,14 +88,14 @@ def test_the_read_rule_answers_for_a_fixture_the_tool_has_never_seen(tmp_path):
 
 def test_the_read_set_is_the_set_the_corpus_pins_read_less_the_record():
     """The corpus pins read the fixtures that are not hostile, so the tool reads the same set, less its own
-    record. Measured 2026-11-04 on the committed corpus: 67 accepted, 66 read, 3 skipped."""
+    record. Measured 2026-11-05 on the committed corpus: 68 accepted, 67 read, 3 skipped."""
     accepted = [path.name for path in sorted(FIXTURES_DIR.glob("*.xml")) if tool.refusal_reason(path) is None]
     skipped = [path.name for path in sorted(FIXTURES_DIR.glob("*.xml")) if tool.refusal_reason(path) is not None]
     read = [name for name in accepted if name != tool.RECORD]
 
-    assert len(accepted) == 67, accepted
+    assert len(accepted) == 68, accepted
     assert len(skipped) == 3, skipped
-    assert len(read) == 66, read
+    assert len(read) == 67, read
     assert tool.RECORD in accepted, "the record is not hostile, so the rule keeps it out for another reason"
 
 
@@ -122,7 +122,7 @@ def test_the_tool_is_not_a_pin_on_the_record():
     record = (FIXTURES_DIR / tool.RECORD).read_text(encoding="utf-8")
     assert output != record, "the tool is a generator, so its output is not the record"
 
-    assert record.count("<!--") == 15, "ET.parse builds no comment node, so no merge can answer a comment"
+    assert record.count("<!--") == 17, "ET.parse builds no comment node, so no merge can answer a comment"
     assert "<!--" not in output
 
     names = {entry.get("name") for entry in ET.fromstring(record).iter("entry")}
@@ -131,7 +131,7 @@ def test_the_tool_is_not_a_pin_on_the_record():
         if path.name == tool.RECORD or tool.refusal_reason(path) is not None:
             continue
         carried |= {entry.get("name") for entry in ET.parse(path).getroot().iter("entry")}
-    assert len(names - carried) == 11, sorted(names - carried)
+    assert len(names - carried) == 13, sorted(names - carried)
 
 
 # --- 3. The merge rule ---------------------------------------------------------
