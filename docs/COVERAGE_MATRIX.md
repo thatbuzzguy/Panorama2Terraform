@@ -198,7 +198,9 @@ Two levels sit beside the matrix:
   ([`ARCHITECTURE.md`](ARCHITECTURE.md) §3.2). The scan scope is the entries a matrix
   row covers, so a report, inventory, bookkeeping, count-only, or nested-block
   container is not a finding: it has no row, and only a row can name the properties an
-  emitter reads. A field gap in a container with no rule is recorded in [`../backlog.md`](../backlog.md).
+  emitter reads. The cross-check reads the same scope through `matrix_row_for`, so the
+  rule about a read keeps one owner and one reader (`ARCHITECTURE.md` §4.6). A field gap
+  in a container with no rule is recorded in [`../backlog.md`](../backlog.md).
   A container outside the scan scope is honest only when the output that reaches its entry reads the
   field, because no finding can name a container with no row. Four shapes state that, one per kind.
   A `report` container is honest only when its report section reads the field it prints through the

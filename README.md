@@ -398,7 +398,12 @@ Every conversion runs a static gate on the output it wrote, then prints a
 summary and writes `SANITY_REPORT.txt`. The gate reads the files, so it reports
 what you receive, not what the generator intended. It reads the `.tf` files for
 the block rules and the four data files for the data rule, and the summary names
-both counts.
+both counts. The round-trip cross-check is the one exception to that boundary,
+because its fact compares two sets: the `.tf` block set it read, and the entry
+set the run's ledger read. It reads no report and no data file, and a call with
+no ledger reports the check as NOT RUN, so the rules that read only the files are
+unchanged. The rule is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6,
+and `tests/test_round_trip.py` pins it.
 
 | Check | Rule | Severity |
 |---|---|---|
@@ -414,12 +419,15 @@ both counts.
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable the run declares | FAIL |
 | `data_files` | every data file reads as its declared rows, and the data agrees with the naming rule, the joins, the order rule, and its printed form | FAIL |
+| `round_trip` | the `.tf` block set agrees with the entry set the run's ledger read, per unit and row | WARN, or NOT RUN |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
 
 A WARN does not fail the run: a placeholder is correct output that still needs
-an action before apply. A FAIL finding exits 1. A SKIPPED check never changes
+an action before apply, and a cross-check finding names a coverage fact, not a
+broken output, so a count that does not agree keeps the exit code with the rules
+that read the files. A FAIL finding exits 1. A SKIPPED check never changes
 the exit code, so a run on a machine without terraform still reports the checks
 it could not run. The rules are stated once in `sanity_checks.py`; the tests
 call that module instead of restating them. One block reader serves every block
@@ -503,6 +511,11 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   the gate reads, the `CHECK_ORDER` position, each finding, the row ordinal as the finding position, the rule
   that each row shape is read through its own module, the truth across the corpus, and the byte rule between
   two runs
+- `tests/test_round_trip.py` - the cross-check (`round_trip`): the `.tf` block set read through the one gate
+  reader and the entry set read through the run's ledger, the join through the one scope rule and the one unit
+  rule, one finding per unit and row where the two counts do not agree, the position the reader read, the WARN
+  severity, the NOT RUN result when the caller passes no ledger, the rows that enter no count, the findings the
+  corpus reports, and the byte rule between two runs
 - `tests/test_write_path.py` - the write path (`write_path.py`): the two file sets and the rule that every file
   names one set, the one function that writes bytes and forces LF, the two path builders, the rule that no module
   of the tool writes a file outside it, the reader key as the path from the codebase root, the plan check that

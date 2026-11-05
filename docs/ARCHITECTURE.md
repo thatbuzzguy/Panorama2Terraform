@@ -28,7 +28,7 @@ Every file in this table is a module in `src/`, except the test harness, which i
 | `shadow_coverage.py` | The cross-source shadow scan (§3.2): a child entry name that repeats a parent entry name | the key is `state_coverage.ownership_key` read with the facts the parent row declares, so one key names one parent entry; the scan compares the matrix row and entry name part of the key; both sources are read with the same row rule, so no second naming rule exists |
 | `state_input.py` | The state producer (F5.6): a Terraform state document read as a reference source, through the same door | the two byte checks run on the state bytes, and only the parse step is chosen by the kind, so a `<!DOCTYPE` inside a JSON value is not a refusal; a document the identity key cannot read is an input refusal; the state source writes no output, so no `.tf` byte changes |
 | `state_coverage.py` | The state scan (§3.2): the ownership fact and the drift fact | the matrix row is the same table the property scan uses, keyed by the resource type; the ownership key is §2.1 identity with the declared facts, never the `Shared` fallback; the scan is not an output, so it reads captured values without recording |
-| `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state; one block reader serves every block kind a rule reads, so a fact about a block is reported once; the plan check runs once per unit directory the record names, so the report prints one result per unit and names the directory it ran on |
+| `sanity_checks.py` | The post-run gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state, with one exception: the cross-check reads the run's ledger as well, because its fact compares two sets (§4.6); one block reader serves every block kind a rule reads, so a fact about a block is reported once; the plan check runs once per unit directory the record names, so the report prints one result per unit and names the directory it ran on |
 | `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4), and the prune action `--prune-cache` gates | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line; the record file is a codebase root-set file, so the action reads the record file the same run wrote |
 | `naming.py` | The §5 sanitizing rule, stated in one module (F6.6): the shape a PAN-OS name takes when it becomes a Terraform name, and the `var.` text a block prints for a site value | one rule, three callers: the local name of a block, the unit directory name, and the variable name of a site value. The gate reads it without the generator, so `TerraformGenerator.sanitize_name` is a delegate and every other module takes the rule as an argument or reads it here |
 | `unit_manifest.py` | The unit as data (F6.1): one row per declared scope, as `CODEBASE_MANIFEST.json` (§3.4) | the rows come from the ledger, so the module adds no parse data; it takes the §5 naming rule as an argument, so no second naming rule exists; the reference names arrive from §4.3, so this module resolves no name |
@@ -1045,8 +1045,10 @@ Pinned by `tests/test_reports.py`, including
 reads the files in the output directory, so a rule is satisfied by a file, not
 by a bookkeeping value that never reached one. The gate runs on every
 conversion. It reads the `.tf` files for the block rules and the four data files
-for the data rule (F6.8), and the report names both counts. The splitter writes
-XML, so it has no `.tf` file and no data file to check.
+for the data rule (F6.8), and the report names both counts. The round-trip
+cross-check is the one exception to that boundary, because its fact compares two
+sets: the block set it read, and the entry set the run's ledger read. The
+splitter writes XML, so it has no `.tf` file and no data file to check.
 
 The reader walks the codebase root and the directories under it and keys each `.tf` file by the path from the
 codebase root, so a finding names the unit the file belongs to: a per-unit file names its unit only by its
@@ -1081,6 +1083,7 @@ The provider fact itself is recorded in `backlog.md`, as a fact the tool cannot 
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a variable this run declares (F6.6) | FAIL |
 | `data_files` | every data file reads as its declared rows and agrees with the rules that produced it (F6.8) | FAIL |
+| `round_trip` | the block set the reader read agrees with the entry set the run's ledger read, per unit and row (`tests/test_round_trip.py`) | WARN, or NOT RUN |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder, such as the VPN key `***CHANGE_ME***`, is listed | WARN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
@@ -1244,6 +1247,37 @@ findings, and `--validate` runs the terraform check or reports it as SKIPPED. Th
 pinned by `tests/test_data_file_gate.py`, one test per finding, and the rule that the
 order graph reads only manifest units is pinned by
 `tests/test_reference_edges.py::test_a_declared_parent_source_adds_no_dependency`.
+
+`round_trip` (`tests/test_round_trip.py`) is the one gate rule that reads two sets, so it is the one exception
+to the boundary stated above. It reads the `.tf` block set through `blocks` with `kinds = ('resource',)`, and
+the entry set through the run's ledger (`entry_coverage.EntryLedger`). It reads no report and no data file, and
+`run_checks` takes the ledger as an argument, so a call with no ledger reports the check as NOT RUN and a rule
+that reads only the output directory is unchanged. The count scope is the property-scan scope read through
+`entry_coverage.matrix_row_for` (`COVERAGE_MATRIX.md` §1), the join is the matrix row and the unit read through
+`unit_manifest`, and the destination is read per entry through `EntryLedger.destination`, so the rule states no
+reader, no count, no scope, no kind, no type, no field name, no file name and no unit rule of its own.
+
+One finding per unit and per matrix row where the two counts do not agree, and the fact is the two counts. The
+rule names no entry, because §3.2 owns one entry, so the gate cannot restate the per-entry report. Both
+directions are findings: a block the reader read that no entry produced, and an entry the ledger read that has
+no block. The position is the line of the first block the reader read for that unit and row; when the reader
+read no block, the position is the file as a whole (`line` 0), and the file is the unit directory plus the
+row's `output_file`. A `.tf` file at the codebase root names no unit, so its count cannot be assigned.
+Findings sort by (file, line, detail), the order `check_data_files` already uses, so the report stays
+byte-identical between runs. The rule prints no console line, because its fact compares two sets and the
+console shape names one identity (§3.2).
+
+The severity is WARN, not FAIL, because a disagreeing count names no broken output. That is the decision
+`entry_coverage.PROPERTY_RULE` already states for a gap, so the exit code stays with the rules that read the
+files. `CHECK_ORDER` puts `round_trip` after `data_files` and before `control_chars`, because it is the only
+rule that reads two sets: it sits after every rule that reads one set, and `terraform` stays the last result.
+A NOT RUN result cannot fail the gate. `tests/test_round_trip.py` pins the position with
+`::test_check_order_puts_the_cross_check_after_the_data_rule`, the severity with
+`::test_the_cross_check_finding_is_a_coverage_fact_not_a_broken_output`, the two sets with
+`::test_the_rule_reads_the_block_set_through_the_gate_reader` and
+`::test_the_entry_count_is_read_through_the_ledger_and_the_scan_scope_rule`, and the corpus with
+`::test_the_rule_reports_the_gaps_the_corpus_contains`. The corpus is not silent: the rule reports findings on
+the corpus fixtures, and the populations it cannot join are in `backlog.md`.
 
 ### 4.7 Read-through data blocks (opt-in)
 

@@ -49,6 +49,11 @@ check reports it on `--validate`. A plan reads the directory it runs on, so the 
 unit directory the manifest record names, and Goal 2 holds for every fixture because the pin reads the files the run
 wrote.
 
+The cross-check rule (`sanity_checks.check_round_trip`, `tests/test_round_trip.py`) is the one exception to that
+boundary, because its fact compares two sets: the `.tf` block set it read, and the entry set the run's ledger read,
+per unit and per coverage matrix row. A disagreeing count names no broken output, so the finding is a WARN and the
+exit code stays with the rules that read the files (`docs/ARCHITECTURE.md` §4.6).
+
 The three shape tables each have one owner and one gate rule that reads them: `PROTOCOL_SHAPE` and
 `protocol_object`, `FILTER_SHAPE` and `filter_blocks`, `CERTIFICATE_SHAPE` and `certificate_blocks` (F7.14). Each
 rule reads the block through the same block reader and the same field reader, so a printed block and a
@@ -89,13 +94,15 @@ relation. Measured 2026-11-04 the four rules hold for every container in the cor
 closed.
 
 The credential rule single statement is complete, and `docs/CODEBASE_ASSEMBLY.md` §11 is the owner document for it.
-The certificate container row, its emitters and its gate rule are complete (`docs/ARCHITECTURE.md` §4.11). The next
-feature is the round-trip cross-check in `backlog.md`, because it is the gate work that is actionable offline: the
-generated HCL is read back and the object counts are compared with the input through the coverage data. The gated
-pieces that stay held in `backlog.md` are the four `*_policy_rules` types, which wait for the F3.5 rulebase decision
-and a live target, and a config entry inside a stack, which needs a provider location shape before the emitter can
-write a block for it. The rows that state fewer fields than the pinned provider declares for their level are the
-choice levels, which state their alternatives as `selects` keys.
+The certificate container row, its emitters and its gate rule are complete (`docs/ARCHITECTURE.md` §4.11). The
+round-trip cross-check is complete, and `docs/ARCHITECTURE.md` §4.6 is the owner document for it: the rule reads
+the generated HCL back through the one gate reader and compares the block count with the run's entry ledger, per
+unit and per coverage matrix row. The next feature is the `report_only` timing, the open fact that rule measured
+(`backlog.md`), because `EntryLedger.destination` is read after `mark`. The gated pieces that stay held in
+`backlog.md` are the four `*_policy_rules` types, which wait for the F3.5 rulebase decision and a live target, and
+a config entry inside a stack, which needs a provider location shape before the emitter can write a block for it.
+The rows that state fewer fields than the pinned provider declares for their level are the choice levels, which
+state their alternatives as `selects` keys.
 
 ## Out of Scope (tracked in backlog.md)
 
