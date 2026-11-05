@@ -77,7 +77,8 @@ the relation between an entry and the membership container that lists it, and th
 relation. Measured 2026-11-04 the four rules hold for every container in the corpus, so the work that used them is
 closed.
 
-The next feature is the credential rule single statement, in `to-do.md`. The gated pieces that stay held in
+The credential rule single statement is complete, and `docs/CODEBASE_ASSEMBLY.md` §11 is the owner document for it.
+The next feature is the certificate container row and its emitter, in `to-do.md`. The gated pieces that stay held in
 `backlog.md` are the four `*_policy_rules` types, which wait for the F3.5 rulebase decision, and a config entry
 inside a stack, which needs a provider location shape before the emitter can write a block for it. The rows that
 state fewer fields than the pinned provider declares for their level are the choice levels, which state their

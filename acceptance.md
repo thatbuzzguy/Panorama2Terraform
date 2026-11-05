@@ -1,76 +1,88 @@
-# Acceptance — F4.4: the `bookkeeping` field rule for `devices` and `templates`
+# Acceptance — the credential rule single statement
 
 ## Measurement
 
-Measured 2026-11-04 with a real run on `tests/fixtures/multi_device_templates.xml`
-(`python3 src/panorama_to_terraform.py`, gate `PASS (0 FAIL, 0 WARN)`), read through `tests/conftest.py`:
+Measured 2026-11-04 against provider 2.0.14 through `terraform providers schema -json`, read through
+`tests/conftest.py::provider_schemas` (the provider version the golden `provider.tf` declares). Measured on the
+`provider_config_block`... the schema key is `provider`, so the test reads `provider_schemas['provider']['block']`:
 
-- The `bookkeeping` rows are the four `parse_associations` association rows, the five scope-fact rows, and the two
-  sub-shape selector rows. The report counts 7 `bookkeeping` rows for this fixture and 13 across the corpus.
-- A membership entry carries no captured field, so its entry line prints `captured: name only`. Measured on
-  `device-group/entry/devices/fw-1.example.com`: the read record is empty, because `_list_names` marks the entry
-  with an empty object, and the association table is built from names read off the XML element before the run
-  starts the outputs. The row states the relation in the detail column (`association table`).
-- The entry that owns the membership container is an `emitted` row, and its block prints the list. Measured on the
-  `Office-FW` entry: the read record names `description, devices, parent, templates`, and the block prints
-  `devices = [ { name = "fw-1.example.com" } ]`. So `devices` is a field an output reads through the captured
-  object of the entry that owns the list.
-- `panos_template` declares no device field (`resource_mapping.SCOPE_SHAPE`), so `parse_templates` keeps no value
-  for a template's device members and the entry line for `HQ-Networks` prints `captured: name only`. No output can
-  read that field. The association is read as a table, by the location rule (`template_of`, `device_of`) and by the
-  manual report section that names the templates a device takes, so it is never a captured field.
-- The fixture extended so both fields of `parse_device_groups` are measured by one real run:
-  `tests/fixtures/multi_device_templates.xml` gains a `templates` member on `Office-FW`. The entry line reads
-  `captured: devices, templates`, the block prints `templates = [ "HQ-Networks" ]`, and the gate stays
-  `PASS (0 FAIL, 0 WARN)`. No other file of the run changes but the report line, the `scope.tf` block, and the
-  source name.
-- Measured across the corpus, none of the 13 `bookkeeping` report entries carries a captured field, so the rule
-  moves no report bytes.
+- 16 arguments, and none is required. The measured set is `additional_headers`, `api_key`, `api_key_in_request`,
+  `auth_file`, `config_file`, `hostname`, `multi_config_batch_size`, `panos_version`, `password`, `port`,
+  `protocol`, `sdk_log_categories`, `sdk_log_level`, `skip_verify_certificate`, `target`, `username`.
+- Two arguments are `sensitive`: `api_key` and `password`. `hostname` and `target` are not.
+- A block that states no required argument is a complete block, so the generated block can state only the facts
+  the run names, and nothing else.
+- The provider docs state `api_key` as the alternative to `username` plus `password`, read from the environment as
+  `PANOS_API_KEY` — the same name `source_fetch.API_KEY_ENV` uses. So one credential fact, one environment name,
+  and the pair is an alternative path the codebase does not take.
 
-## The rule this slice states
+## The statement (one statement, stated once)
 
-The scan scope rule in `docs/COVERAGE_MATRIX.md` §1 says the output that reaches an entry outside the scan scope
-must read the field it names. For a `bookkeeping` row there is no output and no captured object, so the rule is:
-a `bookkeeping` entry line names no field, because the fact the row records is a relation between the entry and the
-container that lists it, and the entry carries no value for that relation. The row states the relation in the detail
-column, and the entry line prints `captured: name only`: the membership entry contributes its name, which is the
-row identity (`entry_coverage.NON_FIELD_KEYS`). The value of the relation belongs to the entry that owns the
-membership container, so a `bookkeeping` field is honest only when that owning entry is covered by an `emitted` row
-whose emitter reads the list through that entry's captured object. Where the owning entry's row declares no field
-for the list, the parse method keeps no value for it, because no output can read it. So `devices` and `templates`
-are fields the output reads through the captured object of the entry that owns the list, and never fields of the
-entry the list holds.
+Owner: `docs/CODEBASE_ASSEMBLY.md` §11. `docs/ARCHITECTURE.md` §3 links to it and keeps only what the fetch layer
+can enforce on its own (argv, the cache name), so no document states the credential rule twice.
 
-The option not taken — naming `devices` on the membership entry's line, because `parse_associations` reads the
-membership container — is refused by the measurement: the parse marks those entries with an empty object, so the
-line would name a field the entry carries no value for, and the read that builds the table happens off the element
-at parse time, which the property scan does not count.
+1. The credential is the API key. The run takes it from the environment, and the codebase takes it from the same
+   environment at plan time (`PANOS_API_KEY`), which the provider reads itself. A run writes no credential pair,
+   and no generated file states a credential value.
+2. The host is a site fact, not a credential: the measured schema marks `api_key` and `password` sensitive, and
+   `hostname` not. The run names the host as a variable and holds no value for it, because no export states the
+   host the run read, so it is the same shape as `target`: `operator_supplied`.
+3. So `variables.tf` declares only what the run names — the host name, the site values, the reference-only names,
+   and the facts the tool cannot read — and `provider.tf` prints the host through the variable the run declares and
+   states no credential argument.
 
-## Acceptance criteria
+## What the code must do
 
-1. The measurement above is recorded in the owner document, `docs/COVERAGE_MATRIX.md` §1, as the fourth shape of
-   the scan-scope rule. `docs/ARCHITECTURE.md` §2.4 keeps only the destination fact and the link to §1.
-2. `entry_coverage.captured_part` names no field for a `bookkeeping` row, through a data set in the same shape as
-   `PRINTS_VALUE_KINDS`, so no writer branch decides the shape per kind. `gap_fact` reads the same captured part, so
-   the console names the same words.
-3. `parse_associations` marks each membership entry with an empty object, and `parse_templates` keeps no device
-   value, so `entry_coverage.captured_fields` answers empty for these entries. The modules state the rule the
-   measurement shows: the table is read as a table, not through a captured object.
-4. `tests/fixtures/multi_device_templates.xml` gains a `templates` member on `Office-FW`, so one real run measures
-   both fields of `parse_device_groups` through a printed block, and the entry line names them.
-5. `tests/test_property_coverage.py` group 6 gains gap 8, in the shape of the group 6 pins: the fixture entry, the
-   empty object the parse marked, the entry line that names no field, the owning entry that carries the value, and
-   the block that prints it.
-6. `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers` names the `bookkeeping`
-   shape: `matrix_row_for` answers None for the membership entry, so the scan measures nothing there, and the pin
-   is the only thing that can keep the field honest.
-7. The entry-mark rule stays green, the report line shape, the console line shape, the exit codes, and the eight
-   destination kinds are unchanged, and no destination kind moves.
-8. The extended fixture run reports `PASS (0 FAIL, 0 WARN)`, the entry line for `Office-FW` reads
-   `captured: devices, templates`, and the membership entry line reads `captured: name only`.
-9. `ruff check .` is clean and `python3 -m pytest` passes. No golden is regenerated: the golden set pins `.tf`
-   paths and bytes only, and no golden holds this fixture.
-10. Tracking markdown after the commit: `backlog.md` loses the closed `bookkeeping` line, `to-do.md` closes this
-    feature and names the next one (the credential rule single statement), `agent-status.md` records the position
-    and the pins changed, `PLAN.md` names the rule that now exists for `bookkeeping`. ASD-STE100, no test counts
-    outside `agent-status.md`.
+1. `resource_mapping.VALUE_VARIABLES` stays the single shape owner for the provider block arguments, so `hostname`
+   gains an `operator_supplied` row beside `target`, and `naming.py` is the only naming rule for it.
+2. `generate_provider_config` prints the host through `printed_value`, so the argument name is the §5 rule applied
+   to the row, and no name list decides it. It prints `target` only for a unit that names a device (unchanged).
+3. `generate_variables` declares the host through the same held-name path as `target`, so the header states no
+   `panos_*` name list and each description follows its shape word, not a name.
+4. The generated `provider.tf` comment names `PANOS_API_KEY` as the environment the provider reads, so the block
+   states the statement in the file it writes; the generated `variables.tf` header states that a credential is not
+   a declared variable.
+
+## Pins
+
+1. `tests/test_variables.py`: the declaration set is the site values plus the names the run holds (the
+   `operator_supplied` rows) plus the reference names — no credential pair. The provider-block pin reads the block
+   through the table: its arguments are the `operator_supplied` rows the run names for that unit, so the `panos_`
+   prefix exception in the sensitive pin is gone.
+2. `tests/test_variables.py`: the block prints the host for every unit, through `naming.variable_name('hostname')`,
+   so a declaration and its consumer are in the same unit directory (§14).
+3. `tests/test_variables.py`: no argument the measured schema marks `sensitive` is printed in a generated provider
+   block, read through `provider_schemas`, and the environment name the generated block names is
+   `fetch_module.API_KEY_ENV`, so one statement names one environment variable in both layers.
+4. `tests/test_variables.py` group 1 names the table row for `hostname`, so `tests/test_site_data.py` reads the
+   provider arguments as data (`test_the_table_covers_every_field_the_location_can_state`,
+   `test_only_the_device_field_maps_to_a_variable`, `test_the_table_holds_no_property`).
+5. `tests/test_source_fetch.py` keeps the fetch half: the key comes from the environment, never argv, never the
+   cache name, never a generated file. `tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`
+   keeps the no-secret half, and `tests/test_provenance.py` keeps the provenance rule (the record names the host and
+   the scope, never the credential).
+6. The goldens move, and only from a real run: `provider.tf` and `variables.tf` in all four cases.
+
+## Rules this must keep
+
+- The `variables` gate rule: every declaration has a `var.` consumer, so the host declaration is consumed by the
+  provider block in the same unit, and the `variables` pin runs the corpus with no finding.
+- No new CLI flag, and no change to the exit codes.
+- The LF write path, the content rule (a file is written only when it has content), `check_variables` reading the
+  whole `.tf` set as consumer text.
+- `provider.tf` keeps `required_version = ">= 1.14"` and the pinned provider source and version, because
+  `tests/conftest.py::declared_provider` reads the pinned version from a golden `provider.tf`.
+- The generated README, `docs/USAGE_GUIDE.md`, `README.md` and `docs/MIGRATION_GUIDE.md` are migrated to the
+  statement: the operator's `terraform.tfvars` holds the host, not a credential pair, and the key comes from the
+  environment.
+- `ruff check .` is clean, and `python3 -m pytest` passes. No test counts outside `agent-status.md`.
+
+## Result
+
+Met. The goldens moved only from a real run: 34 files, 22867 bytes to 24768 bytes (+1901). The statement, the
+measurement and the pins above are what the committed code and documents now state, and `docs/README.md` names §11 as
+the owner of the rule.
+
+One finding is recorded in `backlog.md`, because the live `terraform validate` gate reports it on the kitchen sink
+fixture and the pinned schema cannot state the constraint. The static rules report `PASS (0 FAIL, 1 WARN)` for the
+same run, and the committed baseline reports the same validate finding, so the rule stated here did not cause it.

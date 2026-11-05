@@ -17,6 +17,13 @@ Completed work is not recorded here; the git history and the owner document hold
   its entry line names no field. Measured 2026-11-04 no container outside the scan scope has a captured field no
   output read, so no field gap is recorded here.
 
+- Measured 2026-11-04, the live `terraform validate` gate reports one finding on
+  `tests/fixtures/kitchen_sink.xml`: the fixture states `disable_override` as `yes` for the shared `env-prod` tag,
+  and provider 2.0.14 accepts only `no` for `panos_administrative_tag`. The pinned schema states no value list for
+  that field, so the constraint is in the provider code and the tool cannot read it, so the emitter prints the value
+  the export states and the gate reports the finding. The static rules report `PASS (0 FAIL, 1 WARN)` for the same
+  run. Goal 2 says validate passes on every fixture, so this is the open case.
+
 - Parser extraction gaps found by the parse unit tests (each drops data; fix each
   when a report confirms it in a fixture). What stays:
   - The `profile_name` column in the per-entry report cannot be pinned for the certificate container, because
@@ -457,10 +464,6 @@ restated here; they are in the record and the git history. Only the open items a
   push block states no `devices`, because the tool names no serial (`docs/CODEBASE_ASSEMBLY.md` §9 rule 8).
 - Open: no coverage matrix row covers an `action` block, the decision F5.5 made for a `data` block,
   because an action names no entry, so a property finding cannot name one.
-- The credential rule needs one statement that covers both the fetch layer (the key from the
-  environment only, never a generated file) and the generated provider block, which declares
-  `panos_username` and `panos_password` variables. The provider reads `PANOS_API_KEY` from the
-  environment, so the codebase shape is a host variable plus the key, not a credential pair.
 - Local inspection mode (`config_file`, `panos_version`) exists in the pinned provider schema and
   could let CI plan against a committed export with no server. It is not a rule in this project, and
   a plan in that mode cannot show drift, so it is not a replacement for the state scan.

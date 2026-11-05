@@ -1,28 +1,31 @@
 # To Do
 
-The current feature is the credential rule single statement, which `backlog.md` names and
-`docs/CODEBASE_ASSEMBLY.md` §11 states as a decision. Two statements cover the same idea today: the fetch rule
-(`docs/ARCHITECTURE.md` §3) says the key comes from the environment only and never reaches a generated file, and
-`generate_variables` declares `panos_hostname`, `panos_username` and `panos_password`, which
-`generate_provider_config` uses. One statement must cover both the fetch layer and the generated provider block.
+The current feature is the certificate container row and its emitter, which `backlog.md` names. The credential rule
+single statement is complete: `docs/CODEBASE_ASSEMBLY.md` §11 is the owner document, and the run declares no
+credential variable, so the shape the certificate emitter needs is already decided — the value the export holds
+prints as a value, and a field the provider marks `sensitive` prints as the reference to the §5 name of the entry
+that holds it.
 
 Pieces:
 
-- [ ] Decide the one statement and the document that owns it. Say what the generated provider block reads: the key
-      from the environment, or the declared variables. The fetch layer must read the same statement, so no module
-      states a second rule.
-- [ ] Decide what the block holds for a unit: the host as the variable the codebase already declares, and no
-      credential literal in a generated file. `site_data.py` states the operator's own file for the credentials, so
-      the statement must agree with it, and `resource_mapping.VALUE_VARIABLES` stays the single shape owner.
-- [ ] Decide the pins. The fetch layer reads the key through the one statement, and the generated `provider.tf`
-      writes what the statement says. `tests/test_variables.py` pins the declaration set and
-      `tests/conftest.py::declared_provider` reads the provider block from the golden, so the new pin reads through
-      those rules and restates neither.
-- [ ] Check the gate and the goldens together: a change to the generated provider block moves the goldens, which
-      are regenerated only from a real run.
-
-The rules this feature rests on are `docs/CODEBASE_ASSEMBLY.md` §11 for the gap, `docs/ARCHITECTURE.md` §3 for the
-fetch rule, and `docs/CODEBASE_ASSEMBLY.md` §6 for the file the run writes.
+- [ ] Measure `panos_certificate_import` and `panos_certificate_profile` against the pinned provider schema
+      (2.0.14) through `tests/conftest.py::provider_schemas`: the attributes each declares, which are required, and
+      which are `sensitive`. `panos_certificate` is a data source only, so the container cannot become an `emitted`
+      row through a data source.
+- [ ] Decide the `certificate` container row in `resource_mapping.COVERAGE_MATRIX`: the row must be `emitted` with
+      the provider type in its note, so the property scan and the per-entry report read the same row, and
+      `tests/test_container_coverage.py::EXPECTED_FINDINGS` loses the `unaccounted` finding for
+      `device-group/entry/certificate`.
+- [ ] Decide the profile row: `panos_certificate_profile` is in `LOCATION_SCHEMA` but in neither `EMITTED_TYPES` nor
+      `NOT_EMITTED_TYPES`. Emit it, or state it in `NOT_EMITTED_TYPES` with the reason.
+- [ ] Write the emitter: it prints `local.pem.certificate` as the value the export states and the key as the
+      reference the §11 rule gives it, so no key value reaches a generated file, and the field order is the order the
+      row states.
+- [ ] Say what the gate reads for a certificate block. A certificate entry has no name a reference resolves, so the
+      F5.5 read-through rule cannot serve it, and the gate rule must read the block the run wrote instead.
+- [ ] Check the gate and the goldens together: a container row that moves to `emitted` changes the scan scope, the
+      per-entry report and the `.tf` goldens in the same commit, and the goldens are regenerated only from a real
+      run.
 
 ## Rules the layout keeps
 
