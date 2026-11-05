@@ -9,16 +9,13 @@ Completed work is not recorded here; the git history and the owner document hold
   no matrix row: only an `emitted` container can name the properties an emitter reads.
   The scan scope rule pins this in
   `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers`.
-  Measured on the corpus: `bookkeeping` (association table and scope facts): `devices`, `templates`.
-  These are not findings today, and each one needs a rule before it can become one: an
-  emitter must exist, or the output that reaches the entry must read the field it names. The rule now exists
-  for `report` containers (`docs/COVERAGE_MATRIX.md` §1), which closed the application filter, the schedule,
-  and the application override gaps, for a `count-only` container, which closed the regions `addresses` gap,
-  and for a `nested-block` container, which closed the `parent` gap on
-  `tests/fixtures/interfaces_ethernet.xml`: `parent` is a fact of the parent entry, not a property of the child,
-  so the entry line names only the fields the print reads. Measured 2026-11-04 no `report`, `count-only`, or
-  `nested-block` container in the corpus has a captured field no output read. The `bookkeeping` container still
-  has no output that can read its fields.
+  The rule now exists for each shape, in `docs/COVERAGE_MATRIX.md` §1: `report`, which closed the application
+  filter, the schedule, and the application override gaps; `count-only`, which closed the regions `addresses`
+  gap; `nested-block`, which closed the `parent` gap on `tests/fixtures/interfaces_ethernet.xml`; and
+  `bookkeeping`, which closed the `devices` and `templates` fields, because the fact those rows record is the
+  relation between an entry and the container that lists it, so the membership entry carries no value for it and
+  its entry line names no field. Measured 2026-11-04 no container outside the scan scope has a captured field no
+  output read, so no field gap is recorded here.
 
 - Parser extraction gaps found by the parse unit tests (each drops data; fix each
   when a report confirms it in a fixture). What stays:
@@ -229,9 +226,9 @@ Completed work is not recorded here; the git history and the owner document hold
   `unaccounted` (no parse method read it, so no row covers its container). A
   `report` row is not a gap: the manual report is its output. The gap kinds are the
   three that write nothing.
-- The `parse_device_groups` row moved from `count-only` to `bookkeeping`. A device
-  group name reaches the output through `location`, so the entry does produce output;
-  only the entry itself is not a resource.
+- The `parse_device_groups` row is `emitted`, because the device group entry is an object the scope block writes;
+  the membership containers inside it stay `bookkeeping`, because no provider resource exists for a device and the
+  entry inside a membership container carries no value for the relation the row records.
 - A report row is one entry at section level. A container inside a config-object
   entry is a property level, so the parent row shows the property-entry count and the
   matrix (F4.4) states the properties. F4.3 does not print property rows.

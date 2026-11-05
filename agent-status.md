@@ -2,37 +2,37 @@
 
 ## Current position
 
-The `nested-block` field rule for `parent` is complete and committed on `development` (`1d0786a`); this tracking
-markdown is the next commit. `docs/COVERAGE_MATRIX.md` §1 is the owner document for the rule, and
-`docs/ARCHITECTURE.md` §2.4 states the destination fact and links to it.
+The `bookkeeping` field rule for `devices` and `templates` is complete and committed on `development`
+(`caed435`); this tracking markdown is the next commit. `docs/COVERAGE_MATRIX.md` §1 is the owner document for the
+rule, and `docs/ARCHITECTURE.md` §2.4 states the destination fact and links to it.
 
-- The rule: a `nested-block` entry line names only the fields the print reads through the captured object,
-  because a nested block prints only the attributes its type declares. `parent` is not one of those fields: it is
-  a fact of the parent entry, and the child's own name states the parent part, which the `name` line prints as
-  the row identity. `parent` stays a captured property for the kinds whose matrix row declares it, where the
-  emitter reads it through the child object and prints `parent = <parent entry>.name`.
-- The measurement that decided it, 2026-11-04 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14`
-  through `tests/conftest.py::provider_schemas`): 128 resources and 128 data sources, and three resource types
-  declare a `parent` attribute — `panos_ethernet_layer3_subinterface`, `panos_aggregate_layer3_subinterface`, and
-  `panos_device_group_parent`. `panos_ethernet_interface`, the type the virtual-wire block prints, declares none,
-  so no line of that block can print a parent. No emitter was built.
-- Code: `parse_interfaces` records no `parent` value for an entry in
-  `network/interface/virtual-wire/units`, so `entry_coverage.captured_fields` names `comment, mode, type` for
-  `ethernet1/4.1`: the printed comment line, the block key from `mode`, and the type from
-  `INTERFACE_RESOURCE_TYPES`. The print reads the parent part through the name, which is the row identity.
-  `PRINTS_VALUE_KINDS`, the report line shape, the console line shape, and the exit codes are unchanged, and the
-  `nested-block` destination kind is unchanged.
-- Pins: `tests/test_property_coverage.py` group 6 gains gap 7,
-  `test_the_nested_block_line_names_only_the_fields_the_emitter_reads`, so the group names seven gaps and one pin
-  per gap. `test_scan_scope_is_the_entries_a_matrix_row_covers` names the shape instead of an unread field, and
-  `tests/test_parse_network.py::test_parse_virtual_wire_units` reads the name, not the field.
-- `tests/fixtures/interfaces_ethernet.xml` gained a comment on `ethernet1/4.1`, so the rule is measured by a real
-  run. That run reports `PASS (0 FAIL, 0 WARN)` and the entry line reads `captured: comment, mode, type`.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1489 tests (about 3 minutes). No golden moved: the
-  golden set pins `.tf` paths and bytes only, and no golden holds the interfaces fixture.
+- The rule: a `bookkeeping` row records the relation between an entry and the membership container that lists it,
+  so the entry carries no value for that relation and its entry line names no field. The row states the relation in
+  the detail column, and the line prints `captured: name only`, because the membership entry contributes only its
+  name, which is the row identity. `devices` and `templates` are fields an output reads through the captured object
+  of the entry that owns the list, and never fields of the entry the list holds.
+- The measurement that decided it, 2026-11-04 with a run on `tests/fixtures/multi_device_templates.xml`: the four
+  `parse_associations` rows and the five scope-fact rows are the `bookkeeping` rows, the run reports 7
+  `bookkeeping` entries for that fixture and 13 across the corpus, and none of them carries a captured field, so no
+  finding can name one and the pin is the only thing that can keep the shape honest.
+- Code: `entry_coverage.NAMES_NO_FIELD_KINDS` is the data set `captured_part` reads for this shape, so no writer
+  branch decides the captured part per kind, and `gap_fact` prints the same words. `parse_associations` marks each
+  membership entry with an empty object, and `parse_templates` keeps no device value, because
+  `resource_mapping.SCOPE_SHAPE` states no device field for `panos_template` and no output can read one. The
+  report line shape, the console line shape, the exit codes, and the eight destination kinds are unchanged.
+- Pins: `tests/test_property_coverage.py` group 6 gains gap 8,
+  `test_the_bookkeeping_line_names_no_field_for_the_membership_entry_it_marks`, so the group names eight gaps and
+  one pin per gap. `test_scan_scope_is_the_entries_a_matrix_row_covers` names the shape and measures the membership
+  entry against the row that covers it.
+- `tests/fixtures/multi_device_templates.xml` gained a `templates` member on `Office-FW`, so both halves of the rule
+  are measured by one real run: the device group entry line reads `captured: devices, templates`, the device group
+  block prints `templates = [ "HQ-Networks" ]`, and the membership entry line reads `captured: name only`. That run
+  reports `PASS (0 FAIL, 0 WARN)`.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1490 tests (about 2 minutes). No golden moved: the
+  golden set pins `.tf` paths and bytes only, and no golden holds this fixture.
 
-The next feature is the `bookkeeping` `devices` and `templates` fields rule, which `to-do.md` names. The open
-items that stay in `backlog.md` are the credential rule single statement and the certificate container row.
+The next feature is the credential rule single statement, which `to-do.md` names. The open items that stay in
+`backlog.md` are the certificate container row and the gated `*_policy_rules` types.
 
 ## Rules to keep when writing documents
 
@@ -64,13 +64,18 @@ items that stay in `backlog.md` are the credential rule single statement and the
   report only.
 - The captured part of a report line is stated in one place, `entry_coverage.captured_part`, so `entry_line` and
   `gap_fact` print the same words for the same finding. `PRINTS_VALUE_KINDS` names which kinds print a value, and
-  it must stay data: no writer branch may decide the shape per kind. A row that prints a value must carry the
+  it must stay data: no writer branch may decide the shape per kind. `NAMES_NO_FIELD_KINDS` is the matching data set
+  for the kinds that name no field, so a `bookkeeping` row states the row identity only, because the fact its row
+  records is the relation the entry carries no value for. A row that prints a value must carry the
   captured object through `row_for`, because `fields` holds the names only, and the value shape is
   `report_value`. A read through the recorded object is what the property scan counts, so a rule that prints a
   value is a rule about a read, and the pin that holds it must run the pipeline, not build a row by hand. A kind
 that names field names must name only fields a read reaches: for a `nested-block` row the print is the only
-output its entry reaches, so the names come from the read record (`docs/COVERAGE_MATRIX.md` §1, pinned by
-`tests/test_property_coverage.py::test_the_nested_block_line_names_only_the_fields_the_emitter_reads`).
+output its entry reaches, so the names come from the read record, and for a `bookkeeping` row no read reaches a
+field, because the fact the row records is a relation the entry carries no value for
+(`docs/COVERAGE_MATRIX.md` §1, pinned by
+`tests/test_property_coverage.py::test_the_nested_block_line_names_only_the_fields_the_emitter_reads` and
+`tests/test_property_coverage.py::test_the_bookkeeping_line_names_no_field_for_the_membership_entry_it_marks`).
 - The write path landed (`docs/CODEBASE_ASSEMBLY.md` §14): the run writes one directory per
 unit the manifest
     names, and the codebase root holds the root set. A new file shape must name which set it

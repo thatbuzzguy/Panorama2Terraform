@@ -1,29 +1,28 @@
 # To Do
 
-The current feature is the `bookkeeping` `devices` and `templates` fields rule, which `backlog.md` names:
-`parse_associations` keeps `devices` and `templates`, and no output reads them, because a `bookkeeping` row has
-no matrix row. The rule `docs/COVERAGE_MATRIX.md` §1 states for a container outside the scan scope is that the
-output which reaches the entry must read the field it names. The `nested-block` rule decided what a read is:
-`parent` is a fact of the parent entry, so the child carries no value for it and the entry line names only what
-the print reads. This feature can now say whether an association table and a scope fact are fields an output
-reads, or facts the run records without a captured object.
+The current feature is the credential rule single statement, which `backlog.md` names and
+`docs/CODEBASE_ASSEMBLY.md` §11 states as a decision. Two statements cover the same idea today: the fetch rule
+(`docs/ARCHITECTURE.md` §3) says the key comes from the environment only and never reaches a generated file, and
+`generate_variables` declares `panos_hostname`, `panos_username` and `panos_password`, which
+`generate_provider_config` uses. One statement must cover both the fetch layer and the generated provider block.
 
 Pieces:
 
-- [ ] Decide what a `bookkeeping` row names. A `captured_fields` set names the keys of the object the parse
-      method built, so a fact the run records without a captured object cannot be a captured field. Say whether
-      `devices` and `templates` are fields an output reads, or facts the report records as bookkeeping.
-- [ ] Decide the pin, in the shape of the group 6 pins in `tests/test_property_coverage.py`: the fixture entry,
-      the read the parse made, and the output that prints the field or states that no output can read it. A
-      `bookkeeping` row has no matrix row, so the pin is the only thing that can keep the field honest.
-- [ ] No fixture change until the rule states what a `bookkeeping` output reads, because the corpus pins are
-      keyed by fixture name and the goldens read the bytes of a run on the fixture.
-- [ ] Check the entry name and the five scope facts against the decision: they are the row identity
-      (`entry_coverage.NON_FIELD_KEYS`), so a rule that calls an association table a field must say why it is
-      not an identity fact.
+- [ ] Decide the one statement and the document that owns it. Say what the generated provider block reads: the key
+      from the environment, or the declared variables. The fetch layer must read the same statement, so no module
+      states a second rule.
+- [ ] Decide what the block holds for a unit: the host as the variable the codebase already declares, and no
+      credential literal in a generated file. `site_data.py` states the operator's own file for the credentials, so
+      the statement must agree with it, and `resource_mapping.VALUE_VARIABLES` stays the single shape owner.
+- [ ] Decide the pins. The fetch layer reads the key through the one statement, and the generated `provider.tf`
+      writes what the statement says. `tests/test_variables.py` pins the declaration set and
+      `tests/conftest.py::declared_provider` reads the provider block from the golden, so the new pin reads through
+      those rules and restates neither.
+- [ ] Check the gate and the goldens together: a change to the generated provider block moves the goldens, which
+      are regenerated only from a real run.
 
-The rules this feature rests on are `docs/COVERAGE_MATRIX.md` §1 for the scan scope and the output that reads a
-field, and `docs/ARCHITECTURE.md` §2.2, §2.4 and §3.1 for the scope facts and the destination kinds.
+The rules this feature rests on are `docs/CODEBASE_ASSEMBLY.md` §11 for the gap, `docs/ARCHITECTURE.md` §3 for the
+fetch rule, and `docs/CODEBASE_ASSEMBLY.md` §6 for the file the run writes.
 
 ## Rules the layout keeps
 
