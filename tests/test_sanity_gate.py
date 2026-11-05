@@ -380,20 +380,30 @@ def test_kitchen_sink_gate_passes_with_validate(tmp_path):
     is not data the static gate can read, so it cannot become a gate rule; the `terraform` check is the rule
     that reports it as FAIL, and the report is the operator's notice. The fixture a validate pin reads is test
     data, so it states the value provider 2.0.14 accepts for `panos_administrative_tag`, and this pin reads
-    the report the run wrote: the static counts are unchanged, and every plan result is PASS.
+    the report the run wrote: the static counts are unchanged, and every plan result is PASS. The
+    round-trip cross-check reads the same run, so the report names its own WARN result and its own findings
+    block; `tests/test_round_trip.py` pins the five findings it states for this fixture.
     """
     if TERRAFORM is None:
         pytest.skip("terraform binary not found (the CI terraform-gate job provides it)")
     result = _generate(FIXTURES_DIR / 'kitchen_sink.xml', tmp_path, ('--validate',))
     assert result.returncode == 0, result.stdout + result.stderr
     text = (tmp_path / 'SANITY_REPORT.txt').read_text(encoding='utf-8')
-    assert 'Result: PASS (0 FAIL, 1 WARN)' in text
-    assert re.search(r'^placeholders\s+WARN \(1\)$', text, re.M)
-    # The one WARN is the placeholder the run wrote, in the unit directory the report names.
-    finding = [line for line in text.split('FINDINGS')[1].splitlines() if line.startswith('  ')]
-    assert len(finding) == 1, finding
-    path = Path(finding[0].split()[0].split(':')[0])
-    assert path.name == 'vpn.tf' and path.parent.name, finding
+    assert 'Result: PASS (0 FAIL, 6 WARN)' in text, text
+    assert re.search(r'^placeholders\s+WARN \(1\)$', text, re.M), text
+    assert re.search(r'^round_trip\s+WARN \(5\)$', text, re.M), text
+    # One findings block per rule that reported, so the cross-check cannot be read as a placeholder.
+    blocks, check = {}, None
+    for line in text.split('FINDINGS')[1].splitlines():
+        if line.startswith('['):
+            check = line.strip('[]')
+            blocks[check] = []
+        elif line.startswith('  '):
+            blocks[check].append(line)
+    assert sorted(blocks) == ['placeholders', 'round_trip'], sorted(blocks)
+    assert len(blocks['placeholders']) == 1 and len(blocks['round_trip']) == 5, blocks
+    path = Path(blocks['placeholders'][0].split()[0].split(':')[0])
+    assert path.name == 'vpn.tf' and path.parent.name, blocks
 
     units = sanity_checks.unit_directories(tmp_path)
     assert units, 'the run wrote one directory per unit the record names'

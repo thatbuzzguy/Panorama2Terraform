@@ -211,4 +211,139 @@ same-name comparison limit, and the matrix rows no entry measures.
 
 ## Result
 
-Pending. The implementing agent fills this section with the measurements, one entry per criterion.
+Measured 2026-11-05. `ruff check .` is clean and `python3 -m pytest` passes 1566 tests (1533 before this
+commit, plus the 33 in `tests/test_round_trip.py`), with no skip and no golden change. Four criteria could not
+hold as written; each entry below states what the rule measures instead, and the decision is in
+`backlog.md`.
+
+### 1. What the rule reads
+
+- 1.1 Holds. The rule calls `blocks(files, ('resource',))` and states no regular expression and no field
+  reader: the pin reads the source slice and finds no `re` call and no `fields_at`. Measured on
+  `tests/fixtures/address_objects.xml`: the reader reads 5 blocks, all in `shared_45ca31c3`, and reads nothing
+  for the other kinds.
+- 1.2 Holds. The entry side is `ledger.rows()`, and the scope is `entry_coverage.matrix_row_for`; the rule
+  calls `covering_row` nowhere. Measured on the same fixture: 7 entries for the `panos_address` row in the
+  shared unit, 5 blocks, so one finding.
+- 1.3 Holds. The rule reads `unit_manifest.facts_of`, `unit_manifest.directory_name` and
+  `unit_manifest.units`, and takes `naming.sanitize` as the shape argument. Measured: the block directory and
+  the entry directory answer the same name, `shared_45ca31c3`, and the run names one unit.
+- 1.4 Holds. The rule names no record and no report. The data rule's source slice now ends at
+  `check_round_trip`, so the boundaries are `check_data_files` … `check_round_trip` … `check_control_chars` in
+  `tests/test_data_file_gate.py` and in `tests/test_write_path.py`. Measured on the address run: 3 `.tf`
+  files, 2 data files, 5 resources, the same with or without the ledger.
+- 1.5 Holds. `run_checks` takes `ledger` and `main()` passes `panorama.ledger`. A call with no ledger returns
+  one `CheckResult` with `ran` false, `NOT RUN`, and a note that names the ledger, and it states no finding.
+  Measured: the sample run reports `round_trip PASS` when the ledger is passed, and the address run reports
+  `round_trip WARN (1)`.
+- 1.6 Holds as measured. A run with `--state tests/fixtures/state_workspace.json --workspace production`
+  writes the same files, reads the same blocks, and reports the same findings as the run without it, because
+  no ledger row names the state document. The declared parent source half is held by
+  `tests/test_ownership.py`, which the criterion names.
+- 1.7 Holds. Measured on `examples/sample_panorama_config.xml`: 14 `.tf` files, 2 data files, 20 resources,
+  with the ledger or without it, so `tests/test_sanity_gate.py::test_console_summary_reports_the_result` does
+  not move.
+
+### 2. The finding
+
+- 2.1 Holds. Measured on `tests/fixtures/kitchen_sink.xml`: 5 findings, 5 unit-and-row pairs over 3 units, so
+  the same row in two units is two findings. No entry name appears in a fact.
+- 2.2 Holds. Each position is the path from the codebase root and the line of the first block the reader read
+  for that unit and row, in the order the reader read it. Measured: `kitchen_sink.xml` positions 16, 3, 17, 85,
+  95. When the reader read no block, the position is `line` 0 and the file is the unit plus the row's
+  `output_file`, measured with an empty file set: `shared_45ca31c3/address_objects.tf` at line 0.
+- 2.3 Holds. No `panos_` name appears in the rule as a string constant; the row name comes from
+  `entry_coverage.MATRIX_BY_RESOURCE`, the table `matrix_row_for` reads.
+- 2.4 Could not hold as written for the severity. Both directions are pinned. Measured with FAIL: the gate
+  exits 1 on the corpus fixtures, so `python3 -m pytest` fails 111 tests and errors 115, because every corpus
+  pin reads a clean run. Measured with WARN: 2 tests fail. The decision follows
+  `entry_coverage.PROPERTY_RULE` — a coverage fact names no broken output, so it is a WARN and the exit code
+  stays with the rules that read the files. The rule states WARN, and the pins read WARN.
+- 2.5 Could not hold as written for the fixture. `tests/fixtures/address_objects.xml` shows two such entries:
+  `Ext-Dynamic` and `Country-US`, both captured with `report_only`, both named `emitted` by the per-entry
+  report, and neither has a block in its unit directory. The pin reads the fixture, and `backlog.md` keeps the
+  fact. The position is the first block the reader read for that unit and row, not the missing entry, because
+  the fact is per unit and row.
+- 2.6 Holds. Two runs on `kitchen_sink.xml` write the same report bytes, name no timestamp and no absolute
+  path, and the findings are in the (file, line, detail) order `check_data_files` already uses.
+- 2.7 Holds. A `.tf` file at the root names no unit, so the rule states one finding that the count cannot be
+  assigned. Measured: `root.tf` at line 1, plus the finding for the unit the run wrote. The run itself writes
+  no `.tf` file at the root.
+- 2.8 Holds. The rule states no console wording, so the four kinds that print gain no line. Measured: the gate
+  summary prints `round_trip: WARN` and the finding line under it, the same shape every finding uses. The
+  shape pin is `tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place`.
+
+### 3. Which types the rule can compare
+
+- 3.1 Holds. The count row set is the rows `matrix_row_for` answers over `container_coverage.CONTAINER_TABLE`:
+  41 rows, with `panos_address` in and `panos_device_group_parent` out. Measured: every finding names a row in
+  that set. The pin `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers`
+  holds the same scope.
+- 3.2 Could not hold as written. `report_only` is recorded after `mark`, so `destination` answers `emitted`
+  for a report-only address and the rule counts it. Measured: 2 such entries in
+  `tests/fixtures/address_objects.xml`. The half that holds is the destination read per entry: the `report`
+  row on `tests/fixtures/application_filters.xml` enters no count. Fixing the timing would move golden report
+  bytes, so the fact stays in `backlog.md`.
+- 3.3 Could not hold as written. `matrix_row_for` answers no row only for the container
+  `network/interface/virtual-wire/units`, so the `nested-block` entry on
+  `tests/fixtures/interfaces_ethernet.xml` (`ethernet1/4.1`) is not counted on the entry side, while the block
+  that entry wrote is counted on the block side. Measured: the pair is compared and disagrees (4 entries
+  against 5 blocks). `backlog.md` keeps the fact.
+- 3.4 Holds. `tests/fixtures/multi_device_templates.xml` reads 7 bookkeeping rows, none answered by the scope
+  rule, and the rule reports nothing for the run.
+- 3.5 Holds, with one measured addition. `count-only`, `inventory`, `report` and `unaccounted` answer no
+  matrix row, so they enter no count. A `skipped` entry can sit inside a row the scope rule answers (5 such
+  rows in the kitchen run), and it is still not counted, because the count reads the destination per entry. No
+  fixture holds an `unaccounted` entry.
+- 3.6 Holds, with one measured addition. `tests/fixtures/scope_objects.xml` reads 7 `emitted` rows over 5
+  table rows. Four scope containers answer a row; `devices` answers none, because that entry feeds the parent
+  record, and `variable` answers `panos_template_variable`. The run reports nothing.
+- 3.7 Holds. `panos_device_group_parent` is the only row the scope rule can never answer, and the rule states
+  no exception list.
+- 3.8 Holds. Measured with a planted file that states a `data` block, an `import` block, an `action` block and
+  a `variable` declaration: the reader reads 8 blocks over the four kinds and 5 at the count kind, so the
+  count is unchanged.
+- 3.9 Holds. No field name appears in the rule, and `entry_coverage.name_field` is not called.
+- 3.10 Holds. The rule states no file name and checks no file name. Measured: the same 7-and-5 fact is
+  reported when the blocks are read from another file of the same unit. The file names are pinned by
+  `tests/test_golden_files.py`.
+
+### 4. Gate order, determinism, and no false positive
+
+- 4.1 Holds. `round_trip` sits after `data_files` and before `control_chars`, and `terraform` stays last. The
+  order pin in `tests/test_data_file_gate.py` gained the name.
+- 4.2 Holds. The report names the checks in the pinned order, with `round_trip` as a rule that ran, and the
+  `terraform` result stays the last one.
+- 4.3 Could not hold as written. The corpus is not silent: the rule reports 22 findings on 10 fixtures. The
+  three categories are 5 findings where an `emitted` entry writes no block because no v2 attribute exists for
+  its content, 16 findings where the reader read a block for a property level the ledger has no row for, and 1
+  finding where one entry writes more than one block. Each is in `backlog.md`. The half that holds is the
+  sample run: it reads clean, so the gate reports PASS for the check on the run
+  `tests/test_sanity_gate.py` pins.
+- 4.4 Holds. Measured on the kitchen run: two runs write the same bytes, name no timestamp and no absolute
+  path, and no finding line names a path outside the unit directory.
+- 4.5 Holds. The gate writes no file, so no golden moved: `tests/golden` is unchanged in `git status`.
+- 4.6 Could not hold as written for the FAIL half, for the reason in 2.4: a cross-check finding is a WARN, so
+  no cross-check FAIL can occur. The rest holds. Measured: the sample run exits 0, a call with no ledger
+  reports NOT RUN and changes nothing, and a planted file with a dangling reference still exits 1, so the
+  cross-check cannot hide a FAIL. `tests/test_sanity_gate.py::test_a_fail_finding_exits_non_zero` holds, and
+  `tests/test_sanity_gate.py::test_kitchen_sink_gate_passes_with_validate` now reads the cross-check's own
+  findings block for the kitchen run (0 FAIL, 6 WARN: 5 cross-check findings and the placeholder).
+
+### 5. Documents
+
+`README.md`, `docs/ARCHITECTURE.md` §4.6, §1, `docs/COVERAGE_MATRIX.md` §1 and `docs/README.md` are the
+documents agent's set, so this commit did not write them. What this commit did: `sanity_checks.py` states the
+check in its own table, in report order (5.5), and its module docstring names the ledger as the one exception
+to the gate boundary; the tracking markdown is updated (5.6), and `backlog.md` keeps the three categories and
+the `report_only` timing, with the Deeper post-run checks item losing its round-trip half.
+
+### 6. What this commit did not do
+
+- 6.1 Holds. The only change to `CHECK_ORDER` is the one name. No new shape word, no new destination kind, no
+  change to `VALUE_VARIABLES` and no change to a container row.
+- 6.2 Holds. The rule writes no reader, no regular expression, no field rule, no file-name rule, no kind list,
+  no type list and no unit rule; the pins read the source slice for each.
+- 6.3 Holds. No report gained a section, so `CONVERSION_REPORT.txt` bytes did not move and the data-file
+  counts did not move.
+- 6.4 Holds, and `backlog.md` gained the three categories the rule cannot join and the `report_only` timing.
