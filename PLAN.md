@@ -69,20 +69,19 @@ path writes one directory per unit the manifest names.
 
 The rule that keeps a container outside the scan scope honest is in `docs/COVERAGE_MATRIX.md` §1: the output that
 reaches the entry must read the field it names, because a container with no matrix row cannot produce a finding.
-Three shapes state it, one per kind. A `report` container's section reads the field it prints through the captured
+Four shapes state it, one per kind. A `report` container's section reads the field it prints through the captured
 object; a `count-only` row has no section, so the per-entry report line prints the value of each field it names,
 read through the captured object; a `nested-block` line names only the fields the print reads, because a nested
-block prints only what its type declares. Measured 2026-11-04 the three rules hold for every `report`,
-`count-only`, and `nested-block` container in the corpus, so the work that used them is closed. The
-`bookkeeping` container still has field gaps the scan cannot report (`backlog.md`), and it needs a rule before it
-can become a finding.
+block prints only what its type declares; a `bookkeeping` line names no field, because the fact its row records is
+the relation between an entry and the membership container that lists it, and the entry carries no value for that
+relation. Measured 2026-11-04 the four rules hold for every container in the corpus, so the work that used them is
+closed.
 
-The next feature is the `bookkeeping` `devices` and `templates` fields rule, in `to-do.md`: the parse keeps those
-keys and no output reads them, so the rule must say whether they are fields an output reads or facts the run
-records without a captured object. The gated pieces that stay held in `backlog.md` are the four
-`*_policy_rules` types, which wait for the F3.5 rulebase decision, and a config entry inside a stack, which needs
-a provider location shape before the emitter can write a block for it. The rows that state fewer fields than the
-pinned provider declares for their level are the choice levels, which state their alternatives as `selects` keys.
+The next feature is the credential rule single statement, in `to-do.md`. The gated pieces that stay held in
+`backlog.md` are the four `*_policy_rules` types, which wait for the F3.5 rulebase decision, and a config entry
+inside a stack, which needs a provider location shape before the emitter can write a block for it. The rows that
+state fewer fields than the pinned provider declares for their level are the choice levels, which state their
+alternatives as `selects` keys.
 
 ## Out of Scope (tracked in backlog.md)
 
