@@ -104,9 +104,10 @@ terraform apply
 A unit is one plan against one state, so you plan and apply one unit directory at a time, in the order the
 manifest rows print. Each unit directory holds that unit's `.tf` files and the printed form of its site row.
 
-Before apply: replace the placeholder VPN pre-shared keys, confirm the
-credential variables in `terraform.tfvars`, and finish the manual items from the
-report.
+Before apply: replace the placeholder VPN pre-shared keys, set `hostname` and `target` in `terraform.tfvars`
+(the names the tool declares and cannot fill), and finish the manual items from the report. The key is not a
+variable the tool declares: the provider reads it from the environment
+(`CODEBASE_ASSEMBLY.md` §11).
 
 ## Interface mapping
 

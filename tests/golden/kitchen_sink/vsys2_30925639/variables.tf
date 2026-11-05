@@ -1,22 +1,8 @@
 # Variables for Palo Alto Configuration
-# Set the values in terraform.tfvars (do not commit it) or via the
-# TF_VAR_panos_hostname / TF_VAR_panos_username / TF_VAR_panos_password
-# environment variables.
-variable "panos_hostname" {
-  description = "Hostname or IP of the Palo Alto firewall or Panorama"
-  type        = string
-}
-
-variable "panos_username" {
-  description = "Username for authentication"
-  type        = string
-}
-
-variable "panos_password" {
-  description = "Password for authentication"
-  type        = string
-  sensitive   = true
-}
+# The run declares the names it names: the site values `site_data.py` maps, the reference-only
+# names, and the facts the tool cannot read. Set the values in terraform.tfvars (do not commit
+# it) or via the TF_VAR_* environment variables. The run declares no key, because the provider
+# reads PANOS_API_KEY from the environment (docs/CODEBASE_ASSEMBLY.md §11).
 # Site values (F6.6): one variable per value `resource_mapping.VALUE_VARIABLES` maps.
 # The values are in site.auto.tfvars, which Terraform loads automatically.
 
@@ -25,8 +11,13 @@ variable "fw_2_example_com" {
   type        = string
 }
 
+variable "hostname" {
+  description = "A fact the tool cannot read (F6.10.4, docs/CODEBASE_ASSEMBLY.md §11): the run names the variable and the operator supplies the value"
+  type        = string
+}
+
 variable "target" {
-  description = "NGFW serial (F6.10.4): the export states no serial, so the run names the variable and the operator supplies the value"
+  description = "A fact the tool cannot read (F6.10.4, docs/CODEBASE_ASSEMBLY.md §11): the run names the variable and the operator supplies the value"
   type        = string
 }
 

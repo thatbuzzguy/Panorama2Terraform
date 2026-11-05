@@ -20,7 +20,7 @@ Every file in this table is a module in `src/`, except the test harness, which i
 |---|---|---|
 | `panorama_to_terraform.py` | The converter: `PanoramaParser` (model), `TerraformGenerator` (model and write), `main()` (order) | the parser consumes only the producer contract (`ParsedSource`); it reads no file and opens no connection itself, so a source is either the file producer or the api producer |
 | `xml_input.py` | The only input read, shared by every entry point, through one producer boundary (F5.1), and the scope vocabulary a source states (F5.4) | the two byte checks are one function (`check_bytes`) every source kind runs, so the size cap and the DTD refusal are kind-independent and only the parse step is chosen by the kind; one definition of the scope a source holds (`DEFAULT_SCOPE`) and of the path segment that names an entry (`ENTRY_SEGMENT`) |
-| `source_fetch.py` | The api producer (F5.2): the https request, the cached copy, the response wrapper, and the per-scope request shape (F5.4) | https only; a redirect that changes the scheme is refused; the cache holds exactly the bytes the boundary parsed; the key comes from the environment only; the declared path is part of the request identity, so each scope gets its own entry |
+| `source_fetch.py` | The api producer (F5.2): the https request, the cached copy, the response wrapper, and the per-scope request shape (F5.4) | https only; a redirect that changes the scheme is refused; the cache holds exactly the bytes the boundary parsed; the key comes from the environment only, and `API_KEY_ENV` is the only module that states its name (`CODEBASE_ASSEMBLY.md` §11); the declared path is part of the request identity, so each scope gets its own entry |
 | `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `DATA_SOURCE_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX`, and the scope tables `SCOPE_TYPES`, `SCOPE_PLACEMENT`, `SCOPE_ANSWER`, `SCOPE_LEVEL_ORDER` and `SCOPE_SHAPE` (F6.5), plus the value-to-variable table `VALUE_VARIABLES` (F6.6) | the single source of truth; no resource name or attribute from memory; `SCOPE_SHAPE` is the shape the provider takes, so a membership cannot be printed as a string where the provider takes an object; `VALUE_VARIABLES` covers every field `LOCATION_SCHEMA` declares, so the emitter and the gate read one table and no emitter branch decides the shape for one type |
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy` |
 | `container_coverage.py` | The container table (§3.1) and the section rule | the table is data, so a parse method cannot exist without a row |
@@ -242,8 +242,10 @@ reads it (`COVERAGE_MATRIX.md` §1). The gap that has no rule yet is recorded in
    - **https only, with no silent downgrade.** The request uses https; `--insecure` is the
      explicit choice to skip certificate verification. A redirect that changes the scheme is
      refused, because following it would send the credential over a plain connection. The
-     key is read from the environment (`PANOS_API_KEY`) only, never from a command line, so
-     it does not appear in a shell history or in a process list. Standard library only: the
+     key is read from the environment only, never from a command line, so it does not appear
+     in a shell history or in a process list; the environment name is stated once, in
+     `API_KEY_ENV`, and `CODEBASE_ASSEMBLY.md` §11 owns the rule for both layers, so this
+     section names no name. Standard library only: the
      planned `pan-os-python` producer cannot enforce the redirect rule, so it is not a
      dependency (see `backlog.md`). Pinned by
      `tests/test_source_fetch.py::test_the_producer_accepts_https_only`,

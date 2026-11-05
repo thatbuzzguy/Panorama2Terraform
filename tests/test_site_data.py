@@ -118,12 +118,14 @@ REFERENCE_ONLY_NAMES = {'secret', 'key', 'password'}
 
 def test_the_table_covers_every_field_the_location_can_state():
     """The table is complete: one row per field `LOCATION_SCHEMA` declares, plus one row per
-    reference-only name (F7.1), plus the one row for a fact the location cannot state because the export
-    holds no value for it (`target`, F6.10.4), so a field cannot gain a row without the test naming it.
+    reference-only name (F7.1), plus one row per provider argument the run prints for a fact the location can
+    state no value for (`target` and `hostname`, F6.10.4 and §11), so a field cannot gain a row without the test
+    naming it.
     """
     fields = {field for scopes in resource_mapping.LOCATION_SCHEMA.values()
               for sub_block in scopes.values() for field in sub_block}
-    assert set(resource_mapping.VALUE_VARIABLES) == fields | REFERENCE_ONLY_NAMES | {'target'}, fields
+    provider_arguments = {'target', 'hostname'}
+    assert set(resource_mapping.VALUE_VARIABLES) == fields | REFERENCE_ONLY_NAMES | provider_arguments, fields
 
 
 def test_only_the_device_field_maps_to_a_variable():
@@ -131,8 +133,9 @@ def test_only_the_device_field_maps_to_a_variable():
     that holds a value (§9 rule 1). A reference-only name is the other case: the block prints the reference to
     a variable the run declares, and the value itself is never in the table (F7.1).
 
-    F6.10.4: `target` names a variable and holds no value, because the export states a device as a hostname,
-    so no serial reaches the parse and the operator supplies the value.
+    F6.10.4 and §11: an `operator_supplied` row names a variable and holds no value, because the fact it names
+    comes from outside the export — no serial reaches the parse, and the export states no host — so the operator
+    supplies the value.
     """
     variable, literal, reference, named = (
         resource_mapping.VARIABLE, resource_mapping.LITERAL, resource_mapping.REFERENCE_ONLY,
@@ -143,6 +146,7 @@ def test_only_the_device_field_maps_to_a_variable():
         'vsys': literal,
         'panorama_device': literal,
         'rulebase': literal,
+        'hostname': named,
         'target': named,
         'secret': reference,
         'key': reference,
@@ -154,10 +158,16 @@ def test_only_the_device_field_maps_to_a_variable():
 def test_the_generator_prints_a_value_through_the_table(converter_module):
     """One shape rule: `location_field` delegates to `printed_value`, so a printed value's shape
     cannot be decided in two places (F7.1).
+
+    §11: the provider block prints its arguments through the same one place, so the name of a provider
+    argument is the §5 rule applied to its row and no name list decides it.
     """
     source = inspect.getsource(converter_module.TerraformGenerator.location_field)
     assert 'self.printed_value(' in source, source
     assert 'VALUE_VARIABLES' not in source, source
+    provider = inspect.getsource(converter_module.TerraformGenerator.generate_provider_config)
+    assert 'self.printed_value(' in provider, provider
+    assert 'VALUE_VARIABLES' not in provider, provider
 
 
 def test_the_table_holds_no_property():
@@ -166,18 +176,23 @@ def test_the_table_holds_no_property():
     A reference-only name is not a site value: the block prints the reference to a variable, and no
     `.tf` holds the value (F7.1). `panos_template_variable` prints its value as
     the export states it, and no variable is declared for it.
-    F6.10.4 adds one row for a fact the export cannot state: `target` names the device the unit plans
-    against, so the run names the variable and holds no value for it. It is not a property.
+    F6.10.4 and §11 add the rows for the facts the export cannot state: `target` names the device the unit plans
+    against, and `hostname` names the host the unit plans against, so the run names each variable and holds no
+    value for it. Neither is a property.
     F7.7: a reference-only name is a property only for the row that covers the entry the run read it in,
     because the emitter reads the field to print the reference. So the reference-only names in the matrix are
     the fields `PROTOCOL_SHAPE` marks `sensitive` for the levels that row covers, and `key` is the exception
     the scan scope states: it is read inside an entry inside an entry, which no row covers, so the table stays
     the only place that states it.
     """
-    allowed = {'name', 'ngfw_device', 'panorama_device', 'rulebase', 'vsys', 'target'} | REFERENCE_ONLY_NAMES
+    allowed = {'name', 'ngfw_device', 'panorama_device', 'rulebase', 'vsys',
+               'target', 'hostname'} | REFERENCE_ONLY_NAMES
     assert all(field in allowed for field in resource_mapping.VALUE_VARIABLES), resource_mapping.VALUE_VARIABLES
-    assert resource_mapping.VALUE_VARIABLES['target'] == resource_mapping.OPERATOR_SUPPLIED, \
-        'the run names the variable, the operator supplies the value'
+    assert all(resource_mapping.VALUE_VARIABLES[field] == resource_mapping.OPERATOR_SUPPLIED
+               for field in ('target', 'hostname')), resource_mapping.VALUE_VARIABLES
+    # §11: the table holds no credential row. `password` is the protocol field the provider marks sensitive, not
+    # the credential, and the credential the provider reads from the environment has no row, so it cannot be a
+    # declaration. `tests/test_variables.py` pins that.
     measured = {prop for row in resource_mapping.COVERAGE_MATRIX for prop in row['properties']}
     assert measured & REFERENCE_ONLY_NAMES == {field for row in resource_mapping.PROTOCOL_SHAPE.values()
                                                for field in row['sensitive']} - {'key'}, measured
@@ -345,21 +360,28 @@ def test_the_tfvars_file_is_written_only_when_it_has_content(tmp_path):
     line = f'{naming.variable_name(DEVICE)} = {site_data.value_text(DEVICE)}'
     for path, text in printed.items():
         assert _value_lines(text) == [line], (path, text)
-        assert 'panos_' not in text, path
+        # §11: the print rule writes a line only for a value, so no name the run holds no value for reaches the
+        # printed form, and the tool writes no credential file.
+        assert not any(line.split(' = ')[0] == naming.variable_name('hostname')
+                       for line in _value_lines(text)), path
 
 
 def test_a_name_the_tool_cannot_fill_writes_no_row_and_no_line(tmp_path):
-    """F6.10.4 rule 3: a row is a value the run read (§9 rule 2), so the record holds no row for `target`
-    and the printed form holds no line for it, even though the run declares the variable for it.
+    """F6.10.4 rule 3 and §11: a row is a value the run read (§9 rule 2), so the record holds no row for an
+    `operator_supplied` name (`target`, and the host name) and the printed form holds no line for it, even
+    though the run declares the variable for it. The names are read through the table, not through a name list.
     """
     out = tmp_path / 'kitchen'
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
     rows = _rows(out)
     assert rows, 'the kitchen sink names a device value'
+    held = {naming.variable_name(field) for field, shape in resource_mapping.VALUE_VARIABLES.items()
+            if shape == resource_mapping.OPERATOR_SUPPLIED}
+    assert held, 'the table states no fact the tool cannot read'
     for row in rows:
-        assert 'target' not in row['variables'], row
+        assert not set(row['variables']) & held, row
     for path, text in _printed_forms(out).items():
-        assert not any(line.startswith('target =') for line in _value_lines(text)), (path, text)
+        assert not any(line.split(' = ')[0] in held for line in _value_lines(text)), (path, text)
     assert len(_printed_forms(out)) == len(rows), 'no printed form for a name with no row'
 
 
@@ -468,12 +490,14 @@ def test_the_provider_block_prints_target_only_for_a_unit_that_names_a_device(tm
     for path in sorted((GOLDEN_DIR / 'sample').rglob('provider.tf')):
         assert 'var.target' not in path.read_text(encoding='utf-8'), path
     # F6.10.3: `variables.tf` is the unit's file, so the declaration set is the union the run wrote,
-    # one file per unit.
+    # one file per unit. The set is the site value the table mapped plus the names the table records with no
+    # value for it (`hostname`, §11, and `target`, F6.10.4), read through the table and the naming rule.
     declared = set()
     for path in sorted((GOLDEN_DIR / 'kitchen_sink').rglob('variables.tf')):
         declared.update(sanity_checks.VARIABLE_RE.findall(path.read_text(encoding='utf-8')))
-    assert sorted(declared) == ['fw_2_example_com', 'panos_hostname', 'panos_password',
-                                'panos_username', 'target'], declared
+    held = {naming.variable_name(field) for field, shape in resource_mapping.VALUE_VARIABLES.items()
+            if shape == resource_mapping.OPERATOR_SUPPLIED}
+    assert sorted(declared) == sorted(held | {naming.variable_name(DEVICE)}), declared
 
 
 # --- 5. the declaration set ----------------------------------------------------

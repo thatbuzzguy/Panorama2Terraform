@@ -1,17 +1,15 @@
 """F2.10: clean generated config - every emitted variable is consumed.
 
-The generated variables.tf declares the credential variables, and the provider
-block in provider.tf consumes all of them. No dead variables: a declared
-variable that no .tf file references is a failure. (The old `device_group`
-variable was dead: v2 location is derived per resource from the source XML, so
-no global device-group variable has a consumer.)
+The generated `variables.tf` declares the names the run named, and the provider block in `provider.tf`
+consumes each one in the same unit directory (`docs/CODEBASE_ASSEMBLY.md` §14). No dead variables: a
+declared variable that no `.tf` file references is a failure. (The old `device_group` variable was dead: v2
+location is derived per resource from the source XML, so no global device-group variable has a consumer.)
 
-F6.6 adds the second half of the declaration set: the site values the
-value-to-variable table mapped. The set is read through `site_data.parse_rows`,
-so the file and the data cannot disagree.
+F6.6 adds the second half of the declaration set: the site values the value-to-variable table mapped. The
+set is read through `site_data.parse_rows`, so the file and the data cannot disagree.
 
-F7.1 adds the sensitive rule: `sensitive = true` is the table's `reference_only` row, so a name
-that is not in the table is never a secret.
+F7.1 adds the sensitive rule: `sensitive = true` is the table's `reference_only` row, so a name that is not
+in the table is never a secret.
 
 F7.7 adds the second way a reference-only name is named: a `sensitive` field the run read inside an entry
 cannot name itself, so the name is the §5 name of the entry that holds it, and the declaration set holds that
@@ -20,6 +18,13 @@ name for the run that read it.
 F6.10.4 adds the third part of the declaration set: a name the table records with no value for it, because the
 tool cannot read the fact it names. The set is read through the table and through the provider block that
 references it.
+
+The credential rule (`docs/CODEBASE_ASSEMBLY.md` §11) is the fourth part, stated once: the credential is the
+key, the run takes it from the environment, and the provider reads that same environment at plan time, so the
+run declares no credential and writes no credential value. The host is the fact the run names for every unit,
+and the provider block prints it through the table. Pins, one per part of the rule: the declaration set holds
+no name a table row states for a credential, the provider block prints the names the table states, and no
+printed argument is one the pinned schema marks `sensitive`.
 """
 
 import re
@@ -34,7 +39,8 @@ import naming
 import resource_mapping
 import sanity_checks
 import site_data
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, file_text, run_script, tf_files
+import source_fetch
+from conftest import FIXTURES_DIR, SAMPLE_CONFIG, SRC_DIR, file_text, parts, run_script, tf_files
 
 CASES = {
     "sample": SAMPLE_CONFIG,
@@ -44,9 +50,11 @@ CASES = {
     "auth_profile": FIXTURES_DIR / "auth_profile.xml",
 }
 
-CREDENTIALS = ("panos_hostname", "panos_username", "panos_password")
-
 VAR_DECL_RE = re.compile(r'variable\s+"([A-Za-z0-9_]+)"')
+
+# One argument line inside a provider block, at the block's own level. A comment line is not an argument.
+PROVIDER_BLOCK_RE = re.compile(r'provider\s+"panos"\s*\{(.*?)\n\}', re.S)
+PROVIDER_ARG_RE = re.compile(r'^  ([a-z0-9_]+)\s*=', re.M)
 
 # case -> the run output directory (session cache), so the `.tf` files and the
 # site data read the same run.
@@ -85,7 +93,7 @@ def _site_rows(case: str) -> list:
 
 
 def _held_names(case: str) -> set[str]:
-    """F6.10.4: the names the table declares with no value, read through the table.
+    """F6.10.4 and §11: the names the table declares with no value, read through the table.
 
     A name the tool cannot fill is a declaration only for the units whose provider block prints it, so the
     reader keeps the names one run actually references. `provider.tf` is the unit's file, so the file set is
@@ -96,6 +104,20 @@ def _held_names(case: str) -> set[str]:
     return {name for path, text in _generate(case).items()
             if Path(path).name == 'provider.tf'
             for name in named if f'var.{name}' in text}
+
+
+def _provider_arguments(case: str) -> dict[str, set[str]]:
+    """The arguments one provider block states, keyed by the unit directory the file names (F2.10, §14).
+
+    The gate's block reader serves `resource`, `data`, `import` and `action`, so this reader is the provider
+    form of the same rule: the block's own level, one argument per line, no comment.
+    """
+    blocks = {}
+    for path, text in parts(_generate(case), 'provider.tf').items():
+        block = PROVIDER_BLOCK_RE.search(text)
+        assert block, path
+        blocks[Path(path).parent.name] = set(PROVIDER_ARG_RE.findall(block.group(1)))
+    return blocks
 
 
 def _reference_names(case: str, converter_module) -> set[str]:
@@ -120,13 +142,13 @@ def _reference_names(case: str, converter_module) -> set[str]:
         # names; every other row reads the level itself, so the entry that names the reference is the one that
         # holds the level.
         segments = path.split('/')
-        parts = []
+        parts_list = []
         for index, segment in enumerate(segments):
-            parts.append(spell(segment))
+            parts_list.append(spell(segment))
             walked = resource_mapping.PROTOCOL_SHAPE.get('/'.join(segments[:index + 1]))
             if walked and walked['shape'] == 'string_list':
-                parts.append('entry')
-        xml_path = '/'.join(parts)
+                parts_list.append('entry')
+        xml_path = '/'.join(parts_list)
         for obj in root.findall(f'.//virtual-router/entry/{xml_path}'):
             for field in row['sensitive']:
                 value = obj.find(spell(field))
@@ -141,22 +163,27 @@ def _reference_names(case: str, converter_module) -> set[str]:
 
 
 @pytest.mark.parametrize('case', list(CASES))
-def test_the_declaration_set_is_the_credentials_plus_the_site_values(case, converter_module):
-    """No dead variable survives: the declaration set is the credentials plus the values the table
-    mapped (F6.6), and the file and the data read the same run.
+def test_the_declaration_set_is_the_names_the_run_named(case, converter_module):
+    """No dead variable survives: the declaration set is the values the table mapped (F6.6), the names the
+    table records with no value for it (F6.10.4, §11), and the reference names (F7.7). The file and the data
+    read the same run.
 
-    F6.10.4: the table also names a value the run cannot read, so the declaration set holds the names it
-    declares with no value for the units whose provider block references them. F7.7: a `sensitive` field the
-    run read inside an entry names a variable after the entry, so the set also holds those names.
+    §11: the table holds no row for a credential, so the set cannot hold one, and the pin states no name list:
+    it reads the table's shape words and the naming rule.
     """
     # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): `variables.tf` is the unit's file, so the declaration
     # set is the union across the unit set, read in path order.
     declared = set(VAR_DECL_RE.findall(file_text(_generate(case), 'variables.tf')))
     site = {name for row in _site_rows(case) for name in row['variables']}
-    assert declared == set(CREDENTIALS) | site | _held_names(case) | _reference_names(case, converter_module), (
-        f'{case}: variables.tf declares {sorted(declared)}; expected the credentials plus '
+    assert declared == site | _held_names(case) | _reference_names(case, converter_module), (
+        f'{case}: variables.tf declares {sorted(declared)}; expected '
         f'{sorted(site)} plus {sorted(_held_names(case))} plus '
         f'{sorted(_reference_names(case, converter_module))}')
+    # A field cannot name itself (F7.7), and §11 states no credential row, so no declaration is named by a
+    # table field the provider marks sensitive.
+    reference_fields = {field for field, shape in resource_mapping.VALUE_VARIABLES.items()
+                        if shape == resource_mapping.REFERENCE_ONLY}
+    assert not declared & reference_fields, (case, declared & reference_fields)
 
 
 @pytest.mark.parametrize('case', list(CASES))
@@ -171,44 +198,96 @@ def test_every_declared_variable_is_consumed(case):
 
 
 @pytest.mark.parametrize('case', list(CASES))
-def test_provider_block_consumes_the_credentials(case):
-    """The provider block wires all three credential variables.
+def test_the_provider_block_prints_only_the_names_the_table_states(case):
+    """§11: the block's arguments are the rows the table states for it, read through the table and the naming
+    rule, so no name list decides a provider argument and the run states no credential argument.
 
-    Credentials reach the provider through variables (set in
-    terraform.tfvars or via TF_VAR_*), not through commented-out lines.
+    The host row is read by every unit, because a unit is one plan against one state and a plan needs the host
+    it plans against (§14). The serial row is read only by a unit whose manifest row names a device, because a
+    declaration with no consumer is a finding (F6.10.4, F2.10).
     """
-    files = _generate(case)
-    provider = file_text(files, 'provider.tf')
-    for name in CREDENTIALS:
-        assert f'var.{name}' in provider, (
-            f'{case}: provider block does not consume var.{name}')
-    # The old commented-out wiring is gone.
-    assert '# hostname = var.panos_hostname' not in provider
+    provider_arguments = {naming.variable_name(field) for field, shape in
+                          resource_mapping.VALUE_VARIABLES.items()
+                          if shape == resource_mapping.OPERATOR_SUPPLIED}
+    assert provider_arguments, 'the table states no provider argument'
+    blocks = _provider_arguments(case)
+    assert blocks, f'{case}: no provider block'
+    for unit, arguments in blocks.items():
+        assert arguments <= provider_arguments, (case, unit, arguments)
+    host = naming.variable_name('hostname')
+    for unit, arguments in blocks.items():
+        assert host in arguments, (case, unit, arguments)
+    assert host in provider_arguments, provider_arguments
+
+
+@pytest.mark.parametrize('case', list(CASES))
+def test_no_provider_block_argument_is_one_the_provider_marks_sensitive(case, provider_schemas):
+    """Measured against the pinned provider: the block prints only optional arguments, and none of them is one
+    the provider marks `sensitive` (§11).
+
+    No argument is required, so a block that states only the facts the run names is a complete block. The two
+    `sensitive` arguments are the credential path the provider takes when the operator does not use the
+    environment, which is not the path the codebase takes.
+    """
+    block = provider_schemas.get('provider') or provider_schemas.get('provider_config_block')
+    assert block, 'the schema names no provider configuration block'
+    arguments = block.get('block', {}).get('attributes', {})
+    assert arguments, 'the provider declares no arguments'
+    assert not block.get('block', {}).get('required'), 'no provider argument is required'
+    sensitive = {name for name, argument in arguments.items() if argument.get('sensitive')}
+    assert sensitive, 'the provider marks no argument sensitive'
+    for unit, printed in _provider_arguments(case).items():
+        assert not printed & sensitive, (case, unit, printed & sensitive)
+        for name in printed:
+            assert name in arguments, (case, unit, name)
+            assert not arguments[name].get('required'), (case, unit, name)
+
+
+@pytest.mark.parametrize('case', list(CASES))
+def test_the_generated_block_names_the_environment_the_fetch_layer_reads(case):
+    """§11: one statement, one name. The generated provider block names the environment the provider reads at
+    plan time, and `source_fetch.py` is the only tool module that states it, so the generator reads it through
+    the module that owns the key rule instead of restating it.
+    """
+    for path, text in parts(_generate(case), 'provider.tf').items():
+        assert source_fetch.API_KEY_ENV in text, path
+    stating = [path.name for path in sorted(SRC_DIR.glob('*.py'))
+               if path.name != 'source_fetch.py' and source_fetch.API_KEY_ENV in path.read_text(encoding='utf-8')]
+    assert stating == [], stating
 
 
 @pytest.mark.parametrize('case', list(CASES))
 def test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_only(case, converter_module):
     """F7.1: `sensitive = true` follows `VALUE_VARIABLES`, not a name list.
 
-    A reference-only name is either the field the table marks `sensitive` (the credential `password`), or the
-    §5 name of the entry that holds such a field (F7.7), because a value cannot name itself. The pin reads both
-    through the table and the naming rule, so a name outside the two is never a secret.
+    A reference-only name is the §5 name of the entry that holds a field the table marks `sensitive` (F7.7),
+    because a value cannot name itself. The pin reads it through the table and the naming rule, so a name
+    outside the two is never a secret.
+
+    §11: an `operator_supplied` name is a fact the tool cannot read, and a fact is not a secret, so the
+    marking stays the `reference_only` row's rule alone and no name list appears.
     """
     files = _generate(case)
     text = file_text(files, 'variables.tf')
     blocks = re.findall(
         r'variable\s+"([A-Za-z0-9_]+)"\s*\{(.*?)\n\}', text, re.S)
-    reference_only = {field for field, row in resource_mapping.VALUE_VARIABLES.items()
-                      if row == resource_mapping.REFERENCE_ONLY}
+    reference_fields = {field for field, row in resource_mapping.VALUE_VARIABLES.items()
+                        if row == resource_mapping.REFERENCE_ONLY}
+    assert reference_fields, 'the table states no reference-only row'
     entry_names = _reference_names(case, converter_module)
+    # §11: the table holds no credential row, so a field the provider marks sensitive is never a declaration.
+    declared = {name for name, _ in blocks}
+    assert not declared & reference_fields, (case, declared & reference_fields)
     for name, body in blocks:
-        # A variable name is the §5 name of a field: `panos_password` is the credential field `password`.
-        field = name[len('panos_'):] if name.startswith('panos_') else name
         marking = 'sensitive' if 'sensitive' in body else 'not sensitive'
-        assert ('sensitive' in body) == (field in reference_only or name in entry_names), (
+        assert ('sensitive' in body) == (name in entry_names), (
             f'{case}: variable {name!r} sensitive marking is unexpected: {marking}')
-    # F6.10.4: `operator_supplied` is the shape word for a name the run cannot fill, and it states no marking,
-    # so the declaration for `target` holds none. A serial is not a secret.
+    # F6.10.4 and §11: `operator_supplied` is the shape word for a name the run cannot fill, and it states no
+    # marking, so the declarations for the provider arguments hold none.
     assert resource_mapping.OPERATOR_SUPPLIED != resource_mapping.REFERENCE_ONLY
-    named = [body for name, body in blocks if name == 'target']
+    named = [body for name, body in blocks
+            if name in {naming.variable_name(field) for field, row
+                        in resource_mapping.VALUE_VARIABLES.items()
+                        if row == resource_mapping.OPERATOR_SUPPLIED}]
+    assert named, (case, 'the run declares the names the tool cannot read')
     assert all('sensitive' not in body for body in named), (case, named)

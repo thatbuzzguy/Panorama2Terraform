@@ -70,9 +70,11 @@ python3 src/panorama_to_terraform.py --source api --host panorama --path /device
   --parent /shared --output-dir out
 ```
 
-- The key is read from `PANOS_API_KEY`. It is never taken from a command line, so it
-  does not appear in a shell history or in a process list, and it never appears in an
-  output file or in a cache entry name.
+- The key is read from the environment, never from a command line, so it does not appear
+  in a shell history or in a process list, and it never appears in an output file or in a
+  cache entry name. `CODEBASE_ASSEMBLY.md` §11 owns the rule for both the fetch layer and
+  the generated codebase, and `source_fetch.py` is the module that states the environment
+  name the example above uses.
 - The request is https only. A redirect that changes the scheme is refused, because
   following it would send the key over a plain connection.
 - Each response is stored in `--cache-dir` under the SHA-256 hex of the host and the
@@ -210,8 +212,8 @@ directory, so a table row names the file, not the path.
 
 | File | Content |
 |---|---|
-| `provider.tf` | Provider block, wired to the three credential variables, plus `target = var.target` for a unit that names a device (F6.10.4) |
-| `variables.tf` | The three credential variables (`panos_hostname`, `panos_username`, `panos_password`) plus the site variables the run printed (F6.6), plus a name the run declares with no value for it (`target`, F6.10.4). Written after the emitters, so it declares only what the run consumed |
+| `provider.tf` | Provider block. It prints the host through `var.hostname`, names the environment the provider reads for the key, and states no credential argument (`CODEBASE_ASSEMBLY.md` §11), plus `target = var.target` for a unit that names a device (F6.10.4) |
+| `variables.tf` | The names the run declares: the host name, the site values the table mapped (F6.6), the reference-only names it recorded (F7.1, F7.7), and the facts the tool cannot read (F6.10.4). Written after the emitters, so it declares only what the run consumed, and it declares no credential (`CODEBASE_ASSEMBLY.md` §11) |
 | `scope.tf` | The six scope objects the export declares: device group, the device-group parent record, template, template stack, template variable, and virtual system. Written by every run that has a scope entry, before the object files, in the F3.9 level order (F6.5) |
 | `address_objects.tf`, `address_groups.tf`, `service_objects.tf`, `service_groups.tf`, `tags.tf`, `custom_url_categories.tf`, `application_groups.tf`, `external_lists.tf` | Object resources |
 | `security_rules.tf`, `nat_rules.tf`, `decryption_rules.tf`, `pbf_rules.tf` | Policy rules, one resource per rule, chained in XML order |
@@ -233,7 +235,7 @@ directory, so a table row names the file, not the path.
 | `OWNERSHIP.json` | One row per entry the coverage matrix covers, as data: the matrix row, the entry name, the source, the five scope facts, the declaring unit's directory, the owning unit's directory, what the rule can say about the entry, and the `disable_override` flag as the parse read it. Written only when it has content (F6.2) |
 | `REFERENCE_EDGES.json` | One row per reference pair, as data: the referrer unit, the target unit, the matrix row, and the entry name. Written only when it has content (F6.3) |
 | `SITE_DATA.json` | One row per site that names a value, as data: the unit directory and the variable names with their values. Written only when it has content (F6.6) |
-| `site.auto.tfvars` | The `.tfvars` written from the site data rows, one file per unit inside the directory that row names, one line per variable in name order (F6.6). Terraform loads a `*.auto.tfvars` file automatically, so `terraform.tfvars` stays the operator's own file for the credentials |
+| `site.auto.tfvars` | The `.tfvars` written from the site data rows, one file per unit inside the directory that row names, one line per variable in name order (F6.6). Terraform loads a `*.auto.tfvars` file automatically, so `terraform.tfvars` stays the operator's own file for the values the tool cannot read, and for the key, which the tool never writes (`CODEBASE_ASSEMBLY.md` §11) |
 
 The interface report, the VPN report, and the conversion report share one grouping
 rule: one section per scope the export declares (device group, then the template or
@@ -456,7 +458,8 @@ fw_2_example_com = "fw-2.example.com"
   file, so the sample output is unchanged.
 - `site.auto.tfvars` prints one line per variable, in name order. The run writes one file per unit, inside the
   directory that row names, so one file prints one row. Terraform loads a `*.auto.tfvars` file automatically,
-  so `terraform.tfvars` stays your own file for the credentials, which the tool never writes.
+  so `terraform.tfvars` stays your own file for the values the tool cannot read: the host, the serial, and the
+  key, which the tool never writes ([CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) §11).
 - `parse_rows` reads a written file back as data and refuses a row that is not the declared shape, including a
   variable name that is not the naming-rule shape of its string value
   ([ARCHITECTURE.md](ARCHITECTURE.md) §3.7). A value that is neither a string nor a list is a refusal, and so
@@ -526,17 +529,17 @@ Four things explain the shape of the output:
   holds no value for it, so no site row and no `.tfvars` line is written for it, and `provider.tf` reads
   `var.target`. Set the serial in `terraform.tfvars`, or with `TF_VAR_target`
   ([CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) §9 rule 8). The declaration is not `sensitive`, because a serial
-  is not a secret.
+  is not a secret. `hostname` is the same case: the export states no host, so the run declares it for every unit
+  and writes no value for it, and `provider.tf` reads `var.hostname` (§11).
 
 ## Deploying the generated configuration
 
-1. Create `terraform.tfvars` with the credentials. Do not commit it. The tool writes one `site.auto.tfvars` per
-   unit, inside the directory that the site row names, and Terraform loads it automatically, so put the
-   credentials in
-   `terraform.tfvars` and leave the site values in the file the tool wrote. Set the `target` serial there too:
-   the tool names the variable and holds no value for it, because the export states a device as a hostname
-   (F6.10.4). Plan and apply one unit directory
-   at a time.
+1. Set the key in the environment the provider reads at plan time
+   ([CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) §11). Create `terraform.tfvars` for the two facts the tool
+   names and cannot read: `hostname`, and `target` for a unit that plans against a device (F6.10.4). Do not
+   commit it. The tool writes one `site.auto.tfvars` per unit, inside the directory that the site row names, and
+   Terraform loads it automatically, so leave the site values in the file the tool wrote. Plan and apply one unit
+   directory at a time.
 2. Replace the placeholder VPN pre-shared keys.
 3. Read `MANUAL_SETUP_REPORT.txt` and configure those items by hand.
 4. Check interface names against the target platform
@@ -552,7 +555,7 @@ Four things explain the shape of the output:
 | `Error: ... larger than the limit` | The input exceeds `--max-input-bytes`. Raise the limit only for a trusted file. |
 | `Refused: input declares a DTD` | The file is not a Panorama export. Do not disable the check; obtain the export again. |
 | Gate FAIL on `references` | A `.name` reference points at a resource this run did not declare. Read `SANITY_REPORT.txt`; the converter never declares a resource to make a reference work. |
-| Gate FAIL on `variables` | A declared variable has no `var.` consumer, or a `var.` consumer names a variable this run does not declare. The run declares the three credential variables plus the site variables it printed (F6.6). Read `SANITY_REPORT.txt` |
+| Gate FAIL on `variables` | A declared variable has no `var.` consumer, or a `var.` consumer names a variable this run does not declare. The run declares the host name, the site values it printed (F6.6), and the names it records with no value for it (F6.10.4, §11). Read `SANITY_REPORT.txt` |
 | Gate WARN on `placeholders` | Expected. A VPN pre-shared key is a placeholder, and you must set it before apply. |
 | Duplicate local resource names | A true duplicate of the same identity. The generator adds a numeric suffix so the output stays valid HCL. Two different identities never need it. |
 | `terraform validate` reports an unknown `location` sub-block | The gate checks presence only, not shape. Read `LOCATION_SCHEMA` in `resource_mapping.py`; `terraform validate` accepts an unknown sub-block and drops it silently. |
