@@ -7,7 +7,7 @@ resource "panos_administrative_tag" "env_prod_5301b734" {
   name = "env-prod"
   color = "color4"
   comments = "Production environment"
-  disable_override = "yes"
+  disable_override = "no"
 }
 
 resource "panos_administrative_tag" "web_4d6aa528" {

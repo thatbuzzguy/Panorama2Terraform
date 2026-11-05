@@ -11,6 +11,12 @@ The gate has two checks:
    fixture (which exercises the F3.6 ``location.ngfw`` placement), and
    the filter fixture (which exercises the F7.8 container emission).
 
+A plan reads the directory it runs on, and every fixture here writes one directory per unit, so each pin
+calls the same function the CLI calls on ``--validate``, once per unit directory the manifest record names.
+A validate at the codebase root reads no configuration file, so it passes without checking the run. The rule
+is in `docs/ARCHITECTURE.md` §4.6, and the pin uses the gate's own result for the directory, so no second
+plan rule appears here.
+
 The test skips when the ``terraform`` binary is absent so the Python
 matrix jobs are unaffected; the CI ``terraform-gate`` job provides it.
 """
@@ -31,198 +37,103 @@ FIXTURES_MULTI_DEVICE = FIXTURES_DIR / "multi_device_templates.xml"
 FIXTURES_FILTERS = FIXTURES_DIR / "filter_containers.xml"
 
 
-def _generate_sample_output(out_dir: Path) -> None:
-    result = run_script("panorama_to_terraform.py", str(SAMPLE_CONFIG), "--output-dir", str(out_dir))
+def _generate(source_xml: Path, out_dir: Path) -> None:
+    result = run_script("panorama_to_terraform.py", str(source_xml), "--output-dir", str(out_dir))
     assert result.returncode == 0, f"converter failed: {result.stderr}\n{result.stdout}"
 
 
-@pytest.fixture(scope="session")
-def tf_workspace(tmp_path_factory) -> dict:
-    """Generate the sample output, terraform init it, and return both.
+def _plan_results(out_dir: Path) -> list[tuple[str, sanity_checks.CheckResult]]:
+    """The gate's plan check, one result per unit directory the record names.
 
-    Returns {"dir": output directory, "init": init CompletedProcess}.
+    This is the call `main()` makes on `--validate`, so the pin cannot disagree with the runtime gate.
+    """
+    units = sanity_checks.unit_directories(out_dir)
+    assert units, "the run wrote no unit directory"
+    return [(unit, sanity_checks.check_terraform(out_dir / unit, TERRAFORM, unit)) for unit in units]
+
+
+def _assert_all_passed(results: list[tuple[str, sanity_checks.CheckResult]]) -> None:
+    for unit, check in results:
+        assert check.result == "PASS", f"{unit}: {[f.render() for f in check.findings]}"
+
+
+def test_terraform_init_succeeds(tmp_path):
+    """The provider declared in the output must resolve and install inside a unit directory the run wrote."""
+    if TERRAFORM is None:
+        pytest.skip("terraform binary not found (the CI terraform-gate job provides it)")
+    out_dir = tmp_path / "tf_validate"
+    _generate(SAMPLE_CONFIG, out_dir)
+    units = sanity_checks.unit_directories(out_dir)
+    assert units, "the run wrote no unit directory"
+    init = subprocess.run(
+        [TERRAFORM, "init", "-backend=false", "-input=false"],
+        cwd=out_dir / units[0],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert init.returncode == 0, f"terraform init failed:\n{init.stdout[-2000:]}\n{init.stderr[-2000:]}"
+
+
+def test_terraform_validate_succeeds(tmp_path):
+    """The sample configuration must pass terraform validate, one plan per unit directory."""
+    if TERRAFORM is None:
+        pytest.skip("terraform binary not found (the CI terraform-gate job provides it)")
+    out_dir = tmp_path / "tf_validate_sample"
+    _generate(SAMPLE_CONFIG, out_dir)
+    _assert_all_passed(_plan_results(out_dir))
+
+
+def test_terraform_validate_kitchen_succeeds(tmp_path):
+    """The kitchen-sink configuration must pass terraform validate, one plan per unit directory.
+
+    The fixture states the value provider 2.0.14 accepts for `panos_administrative_tag`, so the plan that
+    reads the written files passes. A value the provider constrains in its code, not in the schema, is a
+    plan finding, not a static rule: `docs/ARCHITECTURE.md` §4.6, pinned by
+    `tests/test_sanity_gate.py::test_kitchen_sink_gate_passes_with_validate`.
     """
     if TERRAFORM is None:
         pytest.skip("terraform binary not found (the CI terraform-gate job provides it)")
-    out_dir = tmp_path_factory.mktemp("tf_validate")
-    _generate_sample_output(out_dir)
-    init = subprocess.run(
-        [TERRAFORM, "init", "-backend=false", "-input=false"],
-        cwd=out_dir,
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
-    return {"dir": out_dir, "init": init}
+    out_dir = tmp_path / "tf_validate_kitchen"
+    _generate(FIXTURES_KITCHEN, out_dir)
+    _assert_all_passed(_plan_results(out_dir))
 
 
-def test_terraform_init_succeeds(tf_workspace):
-    """The provider declared in the output must resolve and install."""
-    init = tf_workspace["init"]
-    assert init.returncode == 0, (
-        f"terraform init failed:\n{init.stdout[-2000:]}\n{init.stderr[-2000:]}"
-    )
-
-
-def test_terraform_validate_succeeds(tf_workspace):
-    """The generated configuration must pass terraform validate."""
-    result = subprocess.run(
-        [TERRAFORM, "validate"],
-        cwd=tf_workspace["dir"],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    assert result.returncode == 0, (
-        f"terraform validate failed:\n{result.stdout[-4000:]}\n{result.stderr[-2000:]}"
-    )
-
-
-@pytest.fixture(scope="session")
-def tf_workspace_kitchen(tmp_path_factory) -> dict:
-    """Same gate for the kitchen-sink fixture (exercises every type)."""
-    if TERRAFORM is None:
-        pytest.skip("terraform binary not found (the CI terraform-gate job provides it)")
-    out_dir = tmp_path_factory.mktemp("tf_validate_kitchen")
-    result = run_script(
-        "panorama_to_terraform.py", str(FIXTURES_KITCHEN), "--output-dir", str(out_dir)
-    )
-    assert result.returncode == 0, f"converter failed: {result.stderr}\n{result.stdout}"
-    init = subprocess.run(
-        [TERRAFORM, "init", "-backend=false", "-input=false"],
-        cwd=out_dir,
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
-    return {"dir": out_dir, "init": init}
-
-
-def test_terraform_validate_kitchen_succeeds(tf_workspace_kitchen):
-    """The kitchen-sink configuration must pass terraform validate."""
-    ws = tf_workspace_kitchen
-    assert ws["init"].returncode == 0, (
-        f"terraform init failed:\n{ws['init'].stdout[-2000:]}\n{ws['init'].stderr[-2000:]}"
-    )
-    result = subprocess.run(
-        [TERRAFORM, "validate"],
-        cwd=ws["dir"],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    assert result.returncode == 0, (
-        f"terraform validate failed:\n{result.stdout[-4000:]}\n{result.stderr[-2000:]}"
-    )
-
-
-@pytest.fixture(scope="session")
-def tf_workspace_vpn_profiles(tmp_path_factory) -> dict:
-    """Same gate for the crypto-profile-only fixture (F2.8).
+def test_terraform_validate_vpn_profiles_succeeds(tmp_path):
+    """A standalone crypto profile must pass terraform validate.
 
     A config with crypto profiles but no gateway or tunnel must still
     emit a valid vpn.tf: the legacy emission gate dropped it silently.
     """
     if TERRAFORM is None:
         pytest.skip("terraform binary not found (the CI terraform-gate job provides it)")
-    out_dir = tmp_path_factory.mktemp("tf_validate_vpn_profiles")
-    result = run_script(
-        "panorama_to_terraform.py", str(FIXTURES_VPN_PROFILES), "--output-dir", str(out_dir)
-    )
-    assert result.returncode == 0, f"converter failed: {result.stderr}\n{result.stdout}"
-    init = subprocess.run(
-        [TERRAFORM, "init", "-backend=false", "-input=false"],
-        cwd=out_dir,
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
-    return {"dir": out_dir, "init": init}
-
-
-def test_terraform_validate_vpn_profiles_succeeds(tf_workspace_vpn_profiles):
-    """A standalone crypto profile must pass terraform validate."""
-    ws = tf_workspace_vpn_profiles
-    assert ws["init"].returncode == 0, (
-        f"terraform init failed:\n{ws['init'].stdout[-2000:]}\n{ws['init'].stderr[-2000:]}"
-    )
-    result = subprocess.run(
-        [TERRAFORM, "validate"],
-        cwd=ws["dir"],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    assert result.returncode == 0, (
-        f"terraform validate failed:\n{result.stdout[-4000:]}\n{result.stderr[-2000:]}"
-    )
-
-
-@pytest.fixture(scope="session")
-def tf_workspace_multi_device(tmp_path_factory) -> dict:
-    """Same gate for the two-device fixture (F3.6).
-
-    This is the only fixture that emits `location.ngfw`, the placement for
-    config a firewall owns.
-    """
-    if TERRAFORM is None:
-        pytest.skip("terraform binary not found (the CI terraform-gate job provides it)")
-    out_dir = tmp_path_factory.mktemp("tf_validate_multi_device")
-    result = run_script(
-        "panorama_to_terraform.py", str(FIXTURES_MULTI_DEVICE),
-        "--output-dir", str(out_dir)
-    )
-    assert result.returncode == 0, f"converter failed: {result.stderr}\n{result.stdout}"
-    init = subprocess.run(
-        [TERRAFORM, "init", "-backend=false", "-input=false"],
-        cwd=out_dir,
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
-    return {"dir": out_dir, "init": init}
+    out_dir = tmp_path / "tf_validate_vpn_profiles"
+    _generate(FIXTURES_VPN_PROFILES, out_dir)
+    _assert_all_passed(_plan_results(out_dir))
 
 
 def test_terraform_validate_filters_succeeds(tmp_path):
-    """The filter fixture must pass terraform validate.
+    """The filter fixture must pass terraform validate, one plan per unit directory.
 
-    The filter run writes one directory per unit, so the gate reads the unit set through
-    `sanity_checks.unit_directories` and validates each one; a validate at the codebase root would read no
-    configuration files. The pin calls the same function the CLI calls on `--validate`, so the choice levels
+    The pin calls the same function the CLI calls on `--validate`, so the choice levels
     the fixture answers with one element are the same choice levels the provider accepts.
     """
     if TERRAFORM is None:
         pytest.skip("terraform binary not found (the CI terraform-gate job provides it)")
     out_dir = tmp_path / "tf_validate_filters"
-    result = run_script(
-        "panorama_to_terraform.py", str(FIXTURES_FILTERS), "--output-dir", str(out_dir)
-    )
-    assert result.returncode == 0, f"converter failed: {result.stderr}\n{result.stdout}"
-    units = sanity_checks.unit_directories(out_dir)
-    assert units, "the run wrote no unit directory"
-    for directory in units:
-        check = sanity_checks.check_terraform(out_dir / directory, TERRAFORM, directory)
-        assert check.result == "PASS" and not check.findings, [f.render() for f in check.findings]
+    _generate(FIXTURES_FILTERS, out_dir)
+    _assert_all_passed(_plan_results(out_dir))
 
 
-def test_terraform_validate_multi_device_succeeds(tf_workspace_multi_device):
+def test_terraform_validate_multi_device_succeeds(tmp_path):
     """A device-placed interface and a template-placed router must validate.
 
-    `terraform validate` accepts an unknown location sub-block and drops it,
-    so this gate proves the HCL parses and the sub-block shape is well formed;
-    tests/test_multi_device_template.py checks the sub-block name itself.
+    `terraform validate` accepts an unknown location sub-block and drops it, so this gate proves the HCL
+    parses and the sub-block shape is well formed; tests/test_multi_device_template.py checks the sub-block
+    name itself.
     """
-    ws = tf_workspace_multi_device
-    assert ws["init"].returncode == 0, (
-        f"terraform init failed:\n{ws['init'].stdout[-2000:]}\n{ws['init'].stderr[-2000:]}"
-    )
-    result = subprocess.run(
-        [TERRAFORM, "validate"],
-        cwd=ws["dir"],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    assert result.returncode == 0, (
-        f"terraform validate failed:\n{result.stdout[-4000:]}\n{result.stderr[-2000:]}"
-    )
+    if TERRAFORM is None:
+        pytest.skip("terraform binary not found (the CI terraform-gate job provides it)")
+    out_dir = tmp_path / "tf_validate_multi_device"
+    _generate(FIXTURES_MULTI_DEVICE, out_dir)
+    _assert_all_passed(_plan_results(out_dir))

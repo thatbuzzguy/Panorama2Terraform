@@ -1057,6 +1057,16 @@ result the check produced, so a unit that failed is not hidden behind a unit tha
 name the two sets: the `.tf` files the reader read, and the four records at the root
 (`tests/test_write_path.py`, `tests/test_sanity_gate.py`).
 
+A value constraint the provider carries in its code, not in the schema JSON, is not data the gate can read, so
+it cannot become a gate rule: the gate is static, and its input is the files it wrote plus the tables it reads
+offline. The emitter prints the value the export states, and the `terraform` check is the rule that reports
+such a value as FAIL when the run uses `--validate`, so the report is the operator's notice. A fixture a plan
+pin reads is test data, so it states the value the provider accepts. Pinned by
+`tests/test_terraform_validate.py::test_terraform_validate_kitchen_succeeds`, which runs the plan once per unit
+directory the record names so the pin reads the files the run wrote, and
+`tests/test_sanity_gate.py::test_kitchen_sink_gate_passes_with_validate`, which reads the report the run wrote.
+The provider fact itself is recorded in `backlog.md`, as a fact the tool cannot read offline.
+
 | Check | Rule | Severity |
 |---|---|---|
 | `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |

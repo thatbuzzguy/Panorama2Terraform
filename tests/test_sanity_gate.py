@@ -16,6 +16,8 @@ Pins:
 - a FAIL finding exits non-zero;
 - `--validate` runs `terraform init` + `terraform validate`, and a missing
   terraform binary is SKIPPED, never a failure, so the suite stays offline;
+- the plan check reports one result per unit directory the record names, so a
+  `--validate` pin reads the files the run wrote;
 - the splitter writes XML, so the gate has nothing to check there.
 """
 
@@ -369,6 +371,38 @@ def test_terraform_check_failure_is_a_fail_finding(tmp_path):
     assert len(lone.results('terraform')) == 1, 'the root has one plan result'
     assert named(lone.results('terraform')[0]) == '.', 'the root result names the codebase root'
     assert lone.result_of('terraform') == 'FAIL'
+
+
+def test_kitchen_sink_gate_passes_with_validate(tmp_path):
+    """The kitchen run's plan results are the gate's report for the directories it wrote.
+
+    The rule (`docs/ARCHITECTURE.md` §4.6): a value the provider constrains in its code, not in the schema,
+    is not data the static gate can read, so it cannot become a gate rule; the `terraform` check is the rule
+    that reports it as FAIL, and the report is the operator's notice. The fixture a validate pin reads is test
+    data, so it states the value provider 2.0.14 accepts for `panos_administrative_tag`, and this pin reads
+    the report the run wrote: the static counts are unchanged, and every plan result is PASS.
+    """
+    if TERRAFORM is None:
+        pytest.skip("terraform binary not found (the CI terraform-gate job provides it)")
+    result = _generate(FIXTURES_DIR / 'kitchen_sink.xml', tmp_path, ('--validate',))
+    assert result.returncode == 0, result.stdout + result.stderr
+    text = (tmp_path / 'SANITY_REPORT.txt').read_text(encoding='utf-8')
+    assert 'Result: PASS (0 FAIL, 1 WARN)' in text
+    assert re.search(r'^placeholders\s+WARN \(1\)$', text, re.M)
+    # The one WARN is the placeholder the run wrote, in the unit directory the report names.
+    finding = [line for line in text.split('FINDINGS')[1].splitlines() if line.startswith('  ')]
+    assert len(finding) == 1, finding
+    path = Path(finding[0].split()[0].split(':')[0])
+    assert path.name == 'vpn.tf' and path.parent.name, finding
+
+    units = sanity_checks.unit_directories(tmp_path)
+    assert units, 'the run wrote one directory per unit the record names'
+    section = text.split('CHECK RESULTS')[1].split('FINDINGS')[0]
+    plan_lines = [line for line in section.splitlines() if line.startswith('terraform')]
+    assert len(plan_lines) == len(units), 'one plan result per unit directory'
+    assert all(re.match(r'terraform\s+PASS$', line) for line in plan_lines), plan_lines
+    # A result that passed names the directory it ran on, so the pin can say which unit the plan read.
+    assert all(f'{unit}: Success!' in section for unit in units), section
 
 
 # --- The second entry point --------------------------------------------------
