@@ -167,8 +167,14 @@ def name_field(resource_type: str) -> str:
     The emitter prints the name through this rule, the import agreement gate (F6.4) reads it through
     this rule, and `tests/test_coverage_matrix.py` checks a block against it, so no second naming
     rule exists.
+
+    F7.14: a type `DATA_SOURCE_SCHEMA` has no row for is a resource-only type, so the name fact comes from
+    `RESOURCE_NAME_FIELDS`, the table that states it for those two types.
     """
-    declares_name, _shape = resource_mapping.DATA_SOURCE_SCHEMA[resource_type]
+    row = resource_mapping.DATA_SOURCE_SCHEMA.get(resource_type)
+    if row is None:
+        return resource_mapping.RESOURCE_NAME_FIELDS[resource_type]
+    declares_name, _shape = row
     if declares_name:
         return 'name'
     return REPORT_SCOPE_KEYS.get(

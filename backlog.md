@@ -19,15 +19,12 @@ Completed work is not recorded here; the git history and the owner document hold
 
 - Parser extraction gaps found by the parse unit tests (each drops data; fix each
   when a report confirms it in a fixture). What stays:
-  - The `profile_name` column in the per-entry report cannot be pinned for the certificate container, because
-    no parse method reads its entries. Measured 2026-11-05: `panos_certificate` is a data source only (no
-    resource), so the container cannot become an `emitted` row through that type; the row can name
-    `panos_certificate_import`, which is a resource. The corpus holds one certificate entry in
-    `tests/fixtures/unknown_containers.xml`, which the report counts as `unaccounted`. Measured 2026-11-05:
-    that entry carries `description` only, and no certificate type declares a `description` attribute, so no
-    output can read the field the parse captures for it. The pin that would hold the rule is
-    `tests/test_container_coverage.py::test_report_declares_the_profile_name_column`, never written. It needs
-    a parse method for the container and a fixture entry that carries `profile-name`.
+  - The `profile_name` column in the per-entry report cannot be pinned for the certificate container. Measured
+    2026-11-05: no certificate type declares a `profile-name` attribute, and the certificate entry inside a
+    profile names the object it is, not a profile, so the report has no profile-name fact for the container. The
+    parse method now exists (`parse_certificate_profiles`), so the only missing half is a value the provider does
+    not declare. The pin that would hold the rule is
+    `tests/test_container_coverage.py::test_report_declares_the_profile_name_column`, never written.
 
 - Service objects with both tcp and udp legs cannot be emitted whole. The v2
   `panos_service` schema declares `protocol.tcp` and `protocol.udp`, but the
@@ -101,23 +98,21 @@ Completed work is not recorded here; the git history and the owner document hold
   the device group as context and no device group is declared. Give
   device-level objects their own context when a fixture shows the collision.
 
-- Certificate entries have no coverage matrix row, so a certificate entry is an
-  `unaccounted` finding today (`device-group/entry/certificate`, pinned in
-  `tests/test_container_coverage.py::EXPECTED_FINDINGS`). Measured 2026-11-05 against
-  provider 2.0.14: `panos_certificate_import` is a resource with no data source,
-  `panos_certificate` is a data source with no resource, and `panos_certificate_profile`
-  is in `DATA_SOURCE_SCHEMA` (not in `LOCATION_SCHEMA`, which has no certificate row at
-  all) and in neither `EMITTED_TYPES` nor `NOT_EMITTED_TYPES`.
-  Measured 2026-11-05: no certificate type declares a `device_group` sub-block, so a
-  certificate entry the export places in a device group has no location the emitter can
-  print. And `location_data` reaches `shared` only inside the `device_group` branch, so a
-  profile row that declares `shared` without `device_group` prints the `Shared` template
-  placeholder for an entry in `<shared>`. The open work is: a `certificate`
-  container row, an emitter that prints `local.pem.certificate` as the value and the key
-  as the variable reference, and a decision for the profile row (emit, or state it in
-  `NOT_EMITTED_TYPES` with the reason). A certificate the run writes no block for cannot
-  be read through a data source, because the certificate entry has no name a reference
-  resolves.
+- Certificate blocks: what stays open after the two container rows, the two parse methods and the two
+  emitters landed. Measured 2026-11-05 against provider 2.0.14: `panos_certificate_import` is a resource
+  with no data source, so `entry_coverage.name_field` reads its name fact through `RESOURCE_NAME_FIELDS`;
+  `panos_certificate` is a data source with no resource; no certificate type declares a `device_group`
+  sub-block, so a certificate entry the export places in a device group prints the `Shared` template
+  placeholder, which the location rule reports. The gate rule for a certificate block is the next task
+  (`to-do.md`).
+  - The EDL `certificate_profile` field stays a plain string, so it records no reference edge: the EDL site
+    resolves no names, so `name_ref` cannot reach it, and `tests/golden/kitchen_sink/shared_45ca31c3/external_lists.tf`
+    is unchanged. If a later rule makes the EDL site resolve names, that field becomes a reference to the emitted
+    profile block and the golden moves from a real run.
+  - A `certificate` list member inside a profile entry prints its `name` as plain data, not as a reference to the
+    certificate block the run wrote for the same name, because the object carries its own name and the emitter
+    prints the list shape the provider declares. If a reference edge is wanted for those names, a rule must say
+    which site records it.
 
 - A per-device template variable override has no place the provider can put it:
   `panos_template_variable.location` declares `template` and `template_stack` only,

@@ -156,13 +156,17 @@ def test_the_sensitive_rows_are_the_reference_only_names():
     """`VALUE_VARIABLES` holds one row per field the provider marks `sensitive` (F7.1 rule).
 
     A sensitive value cannot reach a generated file as a literal, so the table says the block prints the
-    reference, and the run declares the variable with no value for it.
+    reference, and the run declares the variable with no value for it. F7.14 adds the two names the certificate
+    table marks, which are the fields inside `certificate/local`.
     """
-    declared = {field for row in resource_mapping.PROTOCOL_SHAPE.values() for field in row['sensitive']}
+    # F7.14: the two tables that state a `sensitive` fact are the protocol table and the certificate table, so
+    # the pin reads both through `ShapeTable` and names no field of its own.
+    tables = (resource_mapping.PROTOCOL_TABLE, resource_mapping.CERTIFICATE_TABLE)
+    declared = {field for table in tables for row in table.rows.values() for field in row['sensitive']}
     reference_only = {field for field, row in resource_mapping.VALUE_VARIABLES.items()
                       if row == resource_mapping.REFERENCE_ONLY}
     assert declared == reference_only, (declared, reference_only)
-    assert declared == {'secret', 'key', 'password'}, declared
+    assert declared == {'secret', 'key', 'password', 'private_key', 'passphrase'}, declared
 
 
 def test_the_table_is_the_only_shape_owner(converter_module):

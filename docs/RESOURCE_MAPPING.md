@@ -16,7 +16,7 @@ version.
 
 | Bucket | Count |
 |---|---|
-| Emitted as real v2 resources (`EMITTED_TYPES`) | 40 (34 before F7.8, plus the six filter containers) |
+| Emitted as real v2 resources (`EMITTED_TYPES`) | 42 (40 before F7.14, plus the two certificate types) |
 | No v2 equivalent, report only (`REPORT_ONLY_TYPES`) | 4 |
 | v2 resource exists, intentionally not emitted (`NOT_EMITTED_TYPES`) | 3 |
 
@@ -99,6 +99,27 @@ table `FILTER_SHAPE` states its levels (`docs/ARCHITECTURE.md` §4.10). One reso
 
 The placement is `template`, `template_stack` or `ngfw`, which is what `LOCATION_SCHEMA` states for these six
 types.
+
+### Certificate containers (template and vsys scoped)
+
+F7.14 added one row per certificate container, because the provider declares a resource for each one, and the
+shape table `CERTIFICATE_SHAPE` states their levels through `CERTIFICATE_TABLE`, the same row shape the two
+routing tables use. One resource block per entry: `certificates.tf` for the import container and
+`certificate_profiles.tf` for the profile container, because the profile block prints a list and the import block
+prints the one sub-shape the export states.
+
+`panos_certificate_import` is the one emitted type with no data source, so the name fact for its block comes from
+`RESOURCE_NAME_FIELDS`, the table `entry_coverage.name_field` reads when `DATA_SOURCE_SCHEMA` has no row. The
+profile's `certificate` level holds one entry per object, so those objects are a `nested-block` row under the
+profile row: the print writes them as list elements inside the profile block, and each prints the name the object
+carries, not a reference to a certificate block.
+
+`CERTIFICATE_TABLE.rule` states the name the gate rule for a certificate block will use, and no rule function
+reads it yet. The two fields the table marks `sensitive` print as the variable reference the entry names, so no
+generated file states the value (`docs/CODEBASE_ASSEMBLY.md` §11).
+
+The profile row states `template` only, because `location_data` reaches `shared` inside the device-group branch
+only, so an entry the export places in a device group keeps the `Shared` template placeholder.
 
 ### VPN (template scoped)
 

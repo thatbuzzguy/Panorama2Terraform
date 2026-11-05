@@ -226,6 +226,20 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
                  'no v2 resource'),
     ContainerRow('parse_pbf_monitor_profiles', 'network/profiles/monitor-profile',
                  'emitted', 'panos_monitor_profile'),
+    # F7.14: the two certificate containers. `certificate` is a section, and `certificate_profile` is a
+    # section of its own, because the export spells it as `certificate/profile/entry`: no config-object entry
+    # lies between it and a config root, so the entry is the object one resource block prints. The row path is
+    # the input's spelling of the level the method states as a table path (F7.6).
+    ContainerRow('parse_certificates', 'certificate', 'emitted', 'panos_certificate_import'),
+    ContainerRow('parse_certificate_profiles', 'certificate-profile', 'emitted',
+                 'panos_certificate_profile'),
+    # F7.14: the profile's `certificate` level holds one entry per object the provider declares, and each
+    # object prints inside the profile block as a list element, so it is a nested block: the parent row records
+    # it, and the object prints the name plus the four fields the provider declares for it. The row path holds
+    # the `entry` segment the profile entry is, so the scan measures the object against this row and not against
+    # the `certificate` section row, whose single segment would otherwise match the last segment of the path.
+    ContainerRow('parse_certificate_profiles', 'certificate-profile/entry/certificate', 'nested-block',
+                  'nested block inside panos_certificate_profile', level='sub-shape'),
     # F7.1: the routing levels are printed as the `protocol` object attribute on `panos_virtual_router`, so
     # every row that holds an entry the emitter prints is an emitted row naming that type. A row must be
     # emitted for the property scan to read it, because `matrix_row_for` returns a matrix row only for an

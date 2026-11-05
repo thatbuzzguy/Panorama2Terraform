@@ -852,6 +852,20 @@
               </network>
             </entry>
           </zone>
+          <!-- F7.14: the certificate container inside a virtual system, so the block prints the vsys
+               location its row's type declares. The two values inside `local` are the facts the provider
+               marks `sensitive`, so the block prints the reference the entry names and no file holds them. -->
+          <certificate>
+            <entry name="Vsys-Cert">
+              <local>
+                <pem>
+                  <certificate>vsys-pem-value</certificate>
+                  <private-key>vsys-private-key-value</private-key>
+                  <passphrase>vsys-passphrase-value</passphrase>
+                </pem>
+              </local>
+            </entry>
+          </certificate>
         </entry>
         <entry name="vsys2">
           <address>
@@ -885,6 +899,30 @@
   <templates>
     <entry name="FW-Template">
       <network>
+        <!-- F7.14: the certificate profile, which the export spells as `certificate/profile` but names as its
+             own section, so the entry is the object one resource block prints. The `certificate` level holds one
+             entry per object the provider reads, and the profile row states no `vsys` sub-block, so a template is
+             the only place the location rule can put it. -->
+        <certificate-profile>
+          <entry name="T-Profile">
+            <use-ocsp>yes</use-ocsp>
+            <use-crl>yes</use-crl>
+            <block-expired-certificate>yes</block-expired-certificate>
+            <ocsp-exclude-nonce>yes</ocsp-exclude-nonce>
+            <certificate-status-timeout>30</certificate-status-timeout>
+            <domain>template.example.com</domain>
+            <certificate>
+              <entry name="Vsys-Cert">
+                <default-ocsp-url>http://ocsp.example.com</default-ocsp-url>
+                <ocsp-verify-certificate>yes</ocsp-verify-certificate>
+                <template-name>FW-Template</template-name>
+              </entry>
+            </certificate>
+            <username-field>
+              <subject>cn</subject>
+            </username-field>
+          </entry>
+        </certificate-profile>
         <logical-router>
           <entry name="lr-main">
             <interface>

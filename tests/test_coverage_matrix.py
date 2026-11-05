@@ -217,17 +217,22 @@ def test_row_names_its_emitter_and_properties(row, converter_module):
 
 
 def _shape_table_grounding(row: dict) -> set:
-    """The properties the row's emitter prints through a shape table (F7.1, F7.8).
+    """The properties the row's emitter prints through a shape table (F7.1, F7.8, F7.14).
 
     `generate_virtual_routers` and `generate_filter_containers` have no per-field branch: each prints the
-    fields the shape table declares for the level it reads. So a field the table states is grounded by the
-    table, and tests/test_protocol_object.py and tests/test_filter_containers.py are what keep the two tables
-    against the live provider schema.
+    fields the shape table declares for the level it reads, and the two certificate emitters print the fields
+    `CERTIFICATE_SHAPE` states in the row's order. So a field the table states is grounded by the table, and
+    `tests/test_protocol_object.py`, `tests/test_filter_containers.py` and `tests/test_data_source_schema.py`
+    are what keep the three tables against the live provider schema.
     """
     if 'generate_virtual_routers' in row['emitter']:
         return {field for shape_row in resource_mapping.PROTOCOL_SHAPE.values() for field in shape_row['fields']}
     if 'generate_filter_containers' in row['emitter']:
         return {field for shape_row in resource_mapping.FILTER_SHAPE.values() for field in shape_row['fields']}
+    # F7.14: the two certificate emitters print the fields `CERTIFICATE_SHAPE` states, so the table grounds
+    # them. `tests/test_data_source_schema.py` is what keeps that table against the live provider schema.
+    if 'generate_certificates' in row['emitter'] or 'generate_certificate_profiles' in row['emitter']:
+        return {field for shape_row in resource_mapping.CERTIFICATE_SHAPE.values() for field in shape_row['fields']}
     return set()
 
 

@@ -2088,6 +2088,69 @@ class PanoramaParser:
 
         return profiles
 
+    def parse_certificates(self) -> list[dict]:
+        """Read the certificate entries (F7.14).
+
+        `certificate` is a section, so the entry is the object one resource block prints and it carries the
+        five scope facts. The levels inside the entry are property levels, so they are read through
+        `CERTIFICATE_SHAPE` and this method states no field name (F7.1 rule).
+
+        `local` is the one level the export states by presence, because the provider reads it as exactly one
+        of `pem` or `pkcs12`, so the row states no field and `_protocol_body` fills the choice from the
+        element. An entry that states no `local` is still an object the provider can place: `name` and
+        `location` are the only attributes it requires, so such an entry is emitted with those two.
+        """
+        table = resource_mapping.CERTIFICATE_TABLE
+        entries = []
+        for container in self.root.findall('.//certificate'):
+            # `certificate` is also the name of a field inside `local`, and an entry inside a config-object
+            # entry is a property level, so only the section container is read here (F4.2).
+            if not container_coverage.is_section(container, self.parent_map, self.source):
+                continue
+            for entry in container.findall('./entry'):
+                if not entry.get('name'):
+                    self.mark_skipped(entry, 'entry has no name attribute')
+                    continue
+                captured = self._protocol_level(entry, 'certificate', True, table)
+                self._protocol_body('certificate', entry, captured, table)
+                entries.append(self.mark(entry, captured))
+        return entries
+
+    def parse_certificate_profiles(self) -> list[dict]:
+        """Read the certificate profile entries (F7.14).
+
+        The profile is a section of its own, because the export spells it as `certificate/profile/entry`: no
+        config-object entry lies between the container and a config root, so the entry is the object the block
+        prints and the container needs its own `CONTAINER_TABLE` row.
+
+        The profile's `certificate` level is a `string_list` the provider reads as objects with fields, so the
+        export holds one entry per object. This method states the path the table names for that level and the
+        shared reader fills it with the entries, the same rule `parse_ospf` states for `export_rules`: the field
+        name comes from the path, so nothing is spelled (F7.1 rule). Each object is a property level of the
+        profile entry, so the property scan measures the profile against its row and the container table names
+        the objects as a nested block inside the profile block. The whole entry is readable, which is why the
+        type is emitted and not reported: the `NOT_EMITTED_TYPES` reason (the body is not parsed) does not hold
+        for it.
+        """
+        table = resource_mapping.CERTIFICATE_TABLE
+        path = 'certificate_profile'
+        entry_list_path = 'certificate_profile/certificate'
+        field = self._protocol_field_name(entry_list_path, table)
+        entries = []
+        # The path is the table's spelling, so the container is read through the one rule that turns a table
+        # name into the tag the input spells (F7.3).
+        for container in self.root.findall(f'.//{self._protocol_xml_name(path, table=table)}'):
+            for entry in container.findall('./entry'):
+                if not entry.get('name'):
+                    self.mark_skipped(entry, 'entry has no name attribute')
+                    continue
+                captured = self._protocol_level(entry, path, True, table)
+                self._protocol_entries(entry_list_path, captured[field],
+                                       entry.findall(f'./{self._protocol_xml_name(field, path, table)}/entry'),
+                                       table)
+                entries.append(self.mark(entry, captured))
+        return entries
+
     def parse_bgp(self, router: ET.Element) -> dict:
         """Build the `bgp` level of one router's protocol object (F7.1).
 
@@ -2435,7 +2498,7 @@ class PanoramaParser:
                 continue
             entry_path = f'{path}/{field}'
             if shape == 'one_of':
-                fields[field], reason = self._protocol_presence_choice(entry_path, element)
+                fields[field], reason = self._protocol_presence_choice(entry_path, element, table)
                 detail = detail or reason
             elif shape == 'string_list':
                 # The entries a level holds are its own children, so an entry inside an entry belongs to the
@@ -2459,7 +2522,9 @@ class PanoramaParser:
         """
         table = table or resource_mapping.PROTOCOL_TABLE
         child = element[0] if len(element) else None
-        return self._protocol_choice(path, child.tag if child is not None else '', element, child)
+        # The table is passed on, so a choice read for a shape table other than `protocol` cannot fall back to
+        # the protocol table (`test_the_shape_tables_are_the_only_shape_owners`).
+        return self._protocol_choice(path, child.tag if child is not None else '', element, child, table)
 
     def _protocol_presence_fields(self, path: str, captured: dict,
                          table: Optional[resource_mapping.ShapeTable] = None) -> str:
@@ -2522,9 +2587,11 @@ class PanoramaParser:
         chosen = row['selects'].get(report_value, '')
         if not chosen:
             name = self._protocol_field_name(path, table)
+            # The table is named through the object, so a choice read for a shape table other than
+            # `protocol` says the table that states no key for it.
             return {report_value: {}}, (
-                f'{name} {report_value} is not a value PROTOCOL_SHAPE states' if report_value
-                else f'{name} states no key PROTOCOL_SHAPE selects')
+                f'{name} {report_value} is not a value {table.name} states' if report_value
+                else f'{name} states no key {table.name} selects')
         if chosen in row['fields']:
             field = self._protocol_field_name(f'{path}/{chosen}', table)
             return ({report_value: self._protocol_field(level, field, self._protocol_xml_name(field, table),
@@ -2555,7 +2622,7 @@ class PanoramaParser:
             if shape == 'string_list':
                 level[field] = []
             elif shape == 'one_of':
-                sub = resource_mapping.protocol_row(f'{path}/{field}')
+                sub = table.row(f'{path}/{field}')
                 if sub['fields']:
                     # F7.6: the row states its alternatives as its own fields, so the level reads the one the
                     # element holds. A row that states no field leaves the choice to the caller, because the
@@ -3719,7 +3786,7 @@ class TerraformGenerator:
                         for element in value]
             elif shape == 'one_of':
                 # The mapping lives on the one_of row for this field, not on the level that holds it.
-                sub = resource_mapping.protocol_row(f'{path}/{field}')
+                sub = table.row(f'{path}/{field}')
                 report_value = next(iter(value), '')
                 key = sub['selects'].get(report_value, '')
                 if not key:
@@ -3768,6 +3835,53 @@ class TerraformGenerator:
                 wrote = True
         if wrote:
             out.write()
+
+    def generate_certificates(self, entries: list[dict]) -> None:
+        """Generate the certificate entries (F7.14): one `certificates.tf` block per entry.
+
+        `CERTIFICATE_SHAPE` states the fields and the shapes, so the block prints what the entry row declares,
+        in the table's order, and the gate rule that reads a certificate block reads the same names. `local`
+        prints as the one sub-shape the export states, and the two fields the provider marks `sensitive` print
+        as the variable reference the entry names (F7.7), so no generated file states the value.
+        """
+        self._generate_certificate_blocks(entries, 'certificates.tf', 'certificate',
+                                         '# Certificate entries (F7.14)\n\n')
+
+    def generate_certificate_profiles(self, entries: list[dict]) -> None:
+        """Generate the certificate profile entries (F7.14): one `certificate_profiles.tf` block per entry.
+
+        The same print rule as a certificate block, so one method writes both files and neither states a field
+        name of its own. The file name is the kind the `COVERAGE_MATRIX` row names, so the two blocks are in two
+        files: the profile block prints a list, the certificate block prints the one sub-shape the export states.
+        """
+        self._generate_certificate_blocks(entries, 'certificate_profiles.tf', 'certificate_profile',
+                                         '# Certificate profiles (F7.14)\n\n')
+
+    def _generate_certificate_blocks(self, entries: list[dict], file_name: str, path: str,
+                                     header: str) -> None:
+        """One resource block per certificate entry, printed from the shape table (F7.14).
+
+        `path` is the entry row of `CERTIFICATE_SHAPE`, so the printed fields are the row's fields in the row's
+        order, and `name` is printed first because the block states the entry name before its content. The
+        resource type comes from `CERTIFICATE_TYPES`, read through the same path.
+        """
+        if not entries:
+            return
+        table = resource_mapping.CERTIFICATE_TABLE
+        resource = resource_mapping.CERTIFICATE_TYPES[path]
+        out = UnitText(self, file_name, header)
+        for entry in entries:
+            name = entry['name']
+            block_name = self.declare_resource_name(name, resource, entry,
+                                                    context=self.scope_context(entry),
+                                                    vsys=entry.get('vsys') or '')
+            out.add(entry, f'resource "{resource}" "{block_name}" {{\n')
+            out.add(entry, self.location_block(resource, entry, block_name))
+            printed = self._protocol_fields(path, entry, entry, name, table)
+            for field in sorted(printed, key=lambda key: (key != 'name', key)):
+                out.add(entry, f'  {field} = {self.hcl_value(printed[field])}\n')
+            out.add(entry, '}\n\n')
+        out.write()
 
     def generate_provider_config(self):
         """Generate `provider.tf` for every unit the run's unit set names (F6.10.3, §14).
@@ -6687,6 +6801,9 @@ def main():
         # F2.9: PBF path monitoring profiles (a different PAN-OS object; the
         # provider manages them as panos_monitor_profile)
         pbf_monitor_profiles = panorama.parse_pbf_monitor_profiles()
+        # F7.14: the two certificate containers, one resource block per entry.
+        certificates = panorama.parse_certificates()
+        certificate_profiles = panorama.parse_certificate_profiles()
 
         # Dynamic routing (F7.1): the protocol levels belong to the router record, so no separate parse
         # call builds a routing record any more. `_parse_router` fills the `protocol` field, and the
@@ -6739,6 +6856,11 @@ def main():
         print(f"  - {len(qos_profiles)} QoS profiles")
         print(f"  - {len(tunnel_monitor_profiles)} IPsec tunnel monitor profiles")
         print(f"  - {len(pbf_monitor_profiles)} PBF path monitoring profiles")
+        # F7.14: the certificate counts come from the entries the two methods read.
+        if certificates:
+            print(f"  - {len(certificates)} certificate entries")
+        if certificate_profiles:
+            print(f"  - {len(certificate_profiles)} certificate profiles")
 
         # Dynamic routing (F7.1): the counts come from the protocol levels of the router record, so the
         # summary names the same entries the `.tf` file prints.
@@ -6801,6 +6923,9 @@ def main():
         tf_gen.generate_zones(zones)
         tf_gen.generate_virtual_routers(all_routers)  # Handles both virtual & logical routers
         tf_gen.generate_filter_containers(filter_containers)  # F7.8
+        # F7.14: the two certificate containers, one block per entry, printed from `CERTIFICATE_SHAPE`.
+        tf_gen.generate_certificates(certificates)
+        tf_gen.generate_certificate_profiles(certificate_profiles)
 
         # Security Profiles
         # F2.9: zone protection, log forwarding, and IPsec tunnel monitor
