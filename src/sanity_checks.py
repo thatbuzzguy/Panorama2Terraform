@@ -10,6 +10,12 @@ never reached one. The block rules read the `.tf` files; the data rule (F6.8)
 reads the four data files, and the site record's printed form, through the
 module that owns each row shape, so no second shape rule appears.
 
+The round-trip cross-check is the one exception to that boundary, because its fact compares two sets:
+the `.tf` block set it read, and the entry set the parse read through the run's ledger (`docs/ARCHITECTURE.md`
+§4.6). It reads no report and no data file, and a call with no ledger reports the check as NOT RUN, so a
+rule that reads only the output directory is unchanged. Its finding is a coverage fact, not a broken
+output, so it is a WARN and the exit code still follows the rules that read the files.
+
 F6.10.1 (`docs/CODEBASE_ASSEMBLY.md` §14) states which set each rule reads: the block rules read the
 `.tf` files of one unit, keyed by the path from the codebase root, and the data rule reads the records at
 the root as one rule over the rows of every unit. No rule reads a report. F6.10.3 lands that shape: the
@@ -32,6 +38,7 @@ Checks, in report order:
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a declared variable | FAIL |
 | `data_files` | every data file reads as its declared rows and agrees with the rules that produced it (F6.8) | FAIL |
+| `round_trip` | the block set agrees with the entry set the run's ledger read, per unit and row | WARN, or NOT RUN |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder is listed so the operator replaces it | WARN |
 | `terraform` | `terraform init` + `terraform validate` (`--validate` only) | FAIL or SKIPPED |
@@ -54,6 +61,7 @@ from pathlib import Path
 from typing import Optional
 
 import commit_actions
+import container_coverage
 import entry_coverage
 import import_blocks
 import naming
@@ -83,6 +91,7 @@ CHECK_ORDER = (
     'references',
     'variables',
     'data_files',
+    'round_trip',
     'control_chars',
     'placeholders',
     'terraform',
@@ -1225,6 +1234,108 @@ def check_data_files(output_dir: Path) -> list[Finding]:
     return sorted(findings, key=lambda finding: (finding.file, finding.line, finding.detail))
 
 
+def check_round_trip(files: dict[str, str], ledger) -> list[Finding]:
+    """Compare the block set the reader read with the entry set the run's ledger read, per unit and per row (§4.6).
+
+    Two sets, each read through the module that owns it, so the rule states no reader, no count, no scope,
+    no kind, no type, no field name, no file name and no unit rule of its own:
+
+    - the entry side through `entry_coverage.EntryLedger`, and the count scope through
+      `entry_coverage.matrix_row_for`, the property-scan scope rule, so only an `emitted` container row
+      names an entry here. The destination is read per entry, so an entry the run reports is not in the
+      count even when its container row is `emitted`.
+    - the block side through the one block reader, `blocks`, with `kinds = ('resource',)`, so a `data`
+      block, an `import` block, an `action` block and a `variable` declaration enter no count.
+    - the join through `entry_coverage.MATRIX_BY_RESOURCE`, the same table `matrix_row_for` reads, and
+      through `unit_manifest` (`facts_of`, `directory_name`, `units`).
+
+    A row `matrix_row_for` can never answer is not a count row, because no entry maps to it, so the rule
+    states no exception list. A `.tf` file at the codebase root names no unit, because `write_path.py`
+    writes no `.tf` file in the root set, so its count cannot be assigned.
+
+    One finding per unit and per row where the two counts do not agree, and the fact is the two counts. The
+    rule names no entry: `docs/ARCHITECTURE.md` §3.2 owns one entry, and the gap section names the entries
+    that write nothing, so the gate cannot restate the per-entry report. Both directions are findings: a
+    block the reader read that no entry produced, and an entry the parse read and modelled that has no
+    block. A finding is a coverage fact, not a broken output, so it is a WARN and does not change the exit
+    code, the decision the property scan already states (`entry_coverage.PROPERTY_RULE`). The position is
+    the line of the first block the reader read for that unit and row; when the reader read no block, the
+    position is the file as a whole (`line` 0) and the file is the unit directory plus the row's
+    `output_file` read from the row.
+
+    The two populations are not the same population, so a disagreeing count is a real gap, not noise: an
+    `emitted` entry whose type has no v2 attribute writes no block, a block written for a property level
+    has no ledger row, and one entry can write more than one block. The rule states no exception list for
+    them; `tests/test_round_trip.py` pins the three, and `backlog.md` keeps them open.
+
+    Findings sort by (file, line, detail), the rule `check_data_files` already uses, so the report is
+    byte-identical between runs on the same files. The rule prints no scan console line, because its fact
+    compares two sets and the console shape names one identity (`docs/ARCHITECTURE.md` §3.2).
+    """
+    # A count row is a matrix row the one scope rule can answer, read over the container table. A row the
+    # rule can never answer is not in the count, because no entry maps to it, so no exception list appears.
+    count_rows = {matrix_row['resource'] for matrix_row in
+                  (entry_coverage.matrix_row_for(container_row.path)
+                   for container_row in container_coverage.CONTAINER_TABLE)
+                  if matrix_row is not None}
+
+    # The unit set is the run's, read through the one unit rule, so the entry's facts and the directory the
+    # reader read for the same entry land on one name.
+    directories = {facts: unit_manifest.directory_name(facts, naming.sanitize)
+                   for facts in unit_manifest.units(ledger)}
+
+    entry_counts: dict[tuple, int] = {}
+    for row in ledger.rows():
+        # `row['destination']` is the fact `EntryLedger.destination` records for the entry, so the count reads
+        # the destination per entry and not the container row. Measured: `report_only` is recorded after the
+        # mark, so a report-only address still answers `emitted` and is counted here (`backlog.md`).
+        if row['destination'] != 'emitted':
+            continue
+        covered = entry_coverage.matrix_row_for(row['container'])
+        if covered is None:
+            continue            # the scan scope: no row covers the entry, or its kind writes no block
+        key = (covered['resource'], directories[unit_manifest.facts_of(row)])
+        entry_counts[key] = entry_counts.get(key, 0) + 1
+
+    # The block side, in the order the one reader read it.
+    blocks_read: dict[tuple, list] = {}
+    for block in blocks(files, ('resource',)):
+        row = entry_coverage.MATRIX_BY_RESOURCE.get(block.rtype)
+        if row is None or row['resource'] not in count_rows:
+            continue            # not a count row: no entry measures it
+        blocks_read.setdefault((row['resource'], Path(block.file).parent.name), []).append(block)
+
+    findings = []
+    for key in sorted(set(entry_counts) | set(blocks_read)):
+        resource, unit = key
+        read = blocks_read.get(key, [])
+        entries = entry_counts.get(key, 0)
+        if entries == len(read):
+            continue
+        row = entry_coverage.MATRIX_BY_RESOURCE[resource]
+        if not unit:
+            # The reader read the block in the root set, which names no unit, so the count cannot be
+            # assigned to one.
+            findings.append(Finding(
+                'round_trip', WARN, read[0].file, read[0].line,
+                f'row {resource}: the count cannot be assigned to a unit, because the reader read '
+                f'{len(read)} blocks in a .tf file at the codebase root',
+            ))
+            continue
+        if read:
+            file_name, line = read[0].file, read[0].line
+        else:
+            # The reader read no block, so the position is the file as a whole and the file is the unit
+            # directory plus the name the row states.
+            file_name, line = f'{unit}/{row["output_file"]}', 0
+        findings.append(Finding(
+            'round_trip', WARN, file_name, line,
+            f'row {resource} in unit {unit}: the ledger reads {entries} entries, '
+            f'the reader reads {len(read)} blocks',
+        ))
+    return sorted(findings, key=lambda finding: (finding.file, finding.line, finding.detail))
+
+
 def check_control_chars(files: dict[str, str]) -> list[Finding]:
     """No raw control character or DEL may reach a `.tf` file (F1.7).
 
@@ -1339,11 +1450,15 @@ def unit_directories(output_dir: Path) -> list[str]:
 
 
 def run_checks(output_dir: Path, run_terraform: bool = False,
-               terraform: Optional[str] = None) -> SanityReport:
+               terraform: Optional[str] = None,
+               ledger: Optional[entry_coverage.EntryLedger] = None) -> SanityReport:
     """Run every static check on one output directory.
 
     `run_terraform` adds the terraform check. Pass `terraform=None` with
     `run_terraform=True` to report the check as SKIPPED.
+
+    `ledger` is the run's ledger for the cross-check, the one rule that reads two sets. A call with no
+    ledger reports the check as NOT RUN, so a test that reads only the output directory is unchanged.
     """
     files = read_tf_files(Path(output_dir))
     checks = [
@@ -1359,6 +1474,12 @@ def run_checks(output_dir: Path, run_terraform: bool = False,
         CheckResult('references', tuple(check_references(files))),
         CheckResult('variables', tuple(check_variables(files))),
         CheckResult('data_files', tuple(check_data_files(Path(output_dir)))),
+        # The cross-check is the one rule that reads the run's ledger, so a caller that passes no ledger
+        # gets NOT RUN, not an empty count: an empty count would read as a rule that ran and passed.
+        CheckResult('round_trip',
+                    tuple(check_round_trip(files, ledger)) if ledger is not None else (),
+                    ran=ledger is not None,
+                    note="the cross-check reads the run's ledger, so pass it to the gate"),
         CheckResult('control_chars', tuple(check_control_chars(files))),
         CheckResult('placeholders', tuple(check_placeholders(files))),
     ]

@@ -1,42 +1,34 @@
 # To Do
 
-The round-trip cross-check design decisions are committed. The criteria the implementing agent measures
-against are in `acceptance.md`. `docs/ARCHITECTURE.md` §4.6 becomes the owner document for the rule when the
-rule lands.
+The round-trip cross-check landed: `sanity_checks.check_round_trip`, its `CHECK_ORDER` position, the ledger
+argument on `run_checks`, and the pins in `tests/test_round_trip.py`. `docs/ARCHITECTURE.md` §4.6 becomes the
+owner document for the rule when the document agent writes it.
 
-The three decisions:
+The three decisions, as the rule now states them:
 
 - What the rule reads: the `.tf` block set through `sanity_checks.blocks` with `kinds = ('resource',)`, and the
   entry set through the run's `entry_coverage.EntryLedger`. The rule writes no reader and reads no report and
   no data file, so `run_checks` takes the ledger as an argument and a call with no ledger reports the check as
   NOT RUN.
-- The finding: one FAIL finding per unit and per `COVERAGE_MATRIX` row where the two counts do not agree, at the
-  position the reader read (line 0, the file as a whole, when the reader read no block). `CHECK_ORDER` puts
-  `round_trip` after `data_files` and before `control_chars`, so the cross-check is the only rule that reads two
-  sets and sits after every rule that reads one set.
+- The finding: one finding per unit and per `COVERAGE_MATRIX` row where the two counts do not agree, at the
+  position the reader read (line 0, the file as a whole, when the reader read no block). The finding is a
+  coverage fact, so it is a WARN and does not change the exit code, the decision
+  `entry_coverage.PROPERTY_RULE` already states for a gap. `CHECK_ORDER` puts `round_trip` after `data_files`
+  and before `control_chars`, so the cross-check is the only rule that reads two sets and sits after every rule
+  that reads one set.
 - Which types the rule can compare: the property-scan scope read through `entry_coverage.matrix_row_for`, so
   only an `emitted` row enters the count, and the destination per entry through `EntryLedger.destination`. The
-  rule states no kind list and no type list.
+  rule states no kind list and no type list. The three populations the rule cannot join, and the `report_only`
+  timing, are in `backlog.md`.
 
-## Implementation pieces
+## Next pieces
 
-- [ ] `sanity_checks.check_round_trip`: read the block set through `blocks` and the entry set through the
-      ledger, join them through `matrix_row_for` and `unit_manifest`, and state no reader, no count, no scope,
-      no kind, no type, no field name and no file name of its own.
-- [ ] `run_checks` takes the ledger as an argument, and `main()` passes the run's ledger, so a call with no
-      ledger reports NOT RUN.
-- [ ] `CHECK_ORDER` gains `round_trip` between `data_files` and `control_chars`, and the order pin in
-      `tests/test_data_file_gate.py` gains the name.
-- [ ] `tests/test_round_trip.py`: one test per finding, the reader-reuse pin, the ledger-and-scope-rule pin, the
-      unit-rule pin, the no-ledger pin, the second-source pin, the order pin, the determinism pin, the
-      file-and-line pin, the no-false-positive pin across the corpus, the console-shape pin, and the pins for
-      each destination kind the count excludes.
-- [ ] Documents: `docs/ARCHITECTURE.md` §4.6 states the rule and its position, and §1 gains the ledger boundary
-      so the sentence that the gate reads the written files names this rule as its one exception;
-      `docs/COVERAGE_MATRIX.md` §1 names `matrix_row_for` as the scope both scans read; `README.md` names the
-      check in the gate table and the test file in the Testing list; `docs/README.md` names the owner;
-      `sanity_checks.py` states the check in its own table. The `backlog.md` sentence that the gate cannot see
-      an entry that produced no file moves to §4.6, because the cross-check reads the ledger.
+- [ ] Documents: `docs/ARCHITECTURE.md` §4.6 states the rule, its position and its severity, and §1 gains the
+      ledger boundary so the sentence that the gate reads the written files names this rule as its one
+      exception; `docs/COVERAGE_MATRIX.md` §1 names `matrix_row_for` as the scope both scans read; `README.md`
+      names the check in the gate table and the test file in the Testing list; `docs/README.md` names the owner.
+      The `backlog.md` sentence that the gate cannot see an entry that produced no file already names the
+      cross-check as the rule that reads the ledger.
 
 Feature-sized items that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the four
 `*_policy_rules` types wait for the F3.5 rulebase decision and a live target, a config entry inside a stack

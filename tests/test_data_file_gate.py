@@ -8,7 +8,8 @@ a data file.
 Sections, one per finding:
 
 1. The file set: the gate reads the `.tf` files plus the four data files, the report names both sets,
-   and `CHECK_ORDER` puts the data rule after the block rules and before the byte rules.
+   and `CHECK_ORDER` puts the data rule after the block rules and before the round-trip cross-check, which
+   is the rule that reads two sets, and then before the byte rules.
 2. Finding 1: a data file that does not read as its declared rows, and a data file with no rows.
 3. Finding 2: the fields `naming.py` decides must be stated as the rule states them.
 4. Finding 3: the joins, through `directory`.
@@ -157,11 +158,13 @@ def test_the_report_names_both_file_sets(tmp_path):
 
 
 def test_check_order_puts_the_data_rule_after_the_block_rules(tmp_path):
-    """The block rules, then the run-level text rules, then the data rule, then the byte rules."""
+    """The block rules, then the run-level text rules, then the data rule, then the cross-check that reads
+    two sets, then the byte rules."""
     assert sanity_checks.CHECK_ORDER == (
         'emitted_types', 'location_present', 'data_blocks', 'import_blocks', 'scope_blocks',
         'actions', 'protocol_object', 'filter_blocks', 'certificate_blocks', 'references', 'variables',
         'data_files',
+        'round_trip',
         'control_chars',
         'placeholders', 'terraform',
     )
@@ -175,11 +178,13 @@ def test_no_block_rule_reads_a_data_file_and_the_data_rule_reads_no_tf_file():
     through their modules, so the module states no second shape rule.
     """
     source = Path(sanity_checks.__file__).read_text(encoding='utf-8')
-    rule = source[source.index('def check_data_files'):source.index('def check_control_chars')]
+    rule = source[source.index('def check_data_files'):source.index('def check_round_trip')]
     assert 'read_tf_files' not in rule and "glob('*.tf')" not in rule, 'the data rule reads no .tf file'
     assert 'parse_rows' in rule, 'the rule reads each row shape through its module'
     assert 'import json' not in source, 'no second shape rule'
     assert 'def check_data_files(output_dir: Path)' in source
+    # The slice boundary is the cross-check, the rule that reads two sets, so the data rule reads no ledger.
+    assert 'ledger' not in rule, 'the data rule reads no ledger, and the cross-check reads no record'
 
 
 # --- 2. Finding 1: the row shape -----------------------------------------------

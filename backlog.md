@@ -151,8 +151,7 @@ here with that rule named.
   (about 1500 changed lines in `panorama_to_terraform.py`). Do it as its own task so the diff stays
   reviewable.
 - Deeper post-run checks (beyond the gate (F4.1): `tflint` integration. `sanity_checks.py` is the runtime home
-  for the static rules. The round-trip cross-check that compares the block set the reader read with the entry set
-  the parse read is in `to-do.md`, so it is not recorded here.
+  for the static rules.
 
 ## Design Decisions (multi-scope model)
 
@@ -185,8 +184,29 @@ here with that rule named.
   the test that makes an unmarked element read fail CI.
 - The parser extraction gaps listed above will surface in the F4.3/F4.4 reports; fix each gap when
   the report confirms it in a fixture, rather than fixing them speculatively now.
-- The sanity gate (F4.1) reads the output files, so it cannot see an entry that produced no file.
-  F4.3 is the accounting for that case; the gate cannot replace it.
+- The sanity gate (F4.1) reads the output files, so a rule that reads only the files cannot see an entry that
+  produced no file. The round-trip cross-check is the one gate rule that reads the run's ledger, so it states
+  that case as a count that does not agree (`docs/ARCHITECTURE.md` §4.6). F4.3 is the accounting for the
+  entries that write nothing, and the gate cannot replace it.
+- The round-trip cross-check (`sanity_checks.check_round_trip`, pinned by `tests/test_round_trip.py`) compares
+  the block set the reader read with the entry set the run's ledger read, per unit and row. Its finding is a
+  coverage fact, not a broken output, so it is a WARN and does not change the exit code, the decision
+  `entry_coverage.PROPERTY_RULE` already states for a gap. Measured 2026-11-05 across the corpus: 22 findings
+  on 10 fixtures. The rule states no exception list for the three populations it cannot join, so they stay
+  open here.
+  - 5 findings: an `emitted` entry the emitter writes no block for, because no v2 attribute exists for its
+    content. The `panos_address` entries whose type is `external` or `location` in
+    `tests/fixtures/address_objects.xml` are the measured instances, and the config entry inside a stack above
+    is the same case.
+  - 16 findings: a block read for a property level, which has no ledger row, because the ledger records one row
+    per config entry and a property level is not an entry.
+  - 1 finding: one entry that writes more than one block, on `tests/fixtures/interfaces_ethernet.xml`, because
+    the `nested-block` entry writes lines inside its parent block and `matrix_row_for` answers no row for that
+    container, so the entry side reads no count while the block side counts the block.
+- Open: `report_only` is recorded after `mark`, so `EntryLedger.destination` answers `emitted` for a
+  report-only address and the cross-check counts it, while the manual setup report prints that entry as a
+  report. The two facts disagree for the same entry. Fixing the timing moves golden report bytes, so the fact
+  stays here.
 - The gate `location` check is presence only, for both block kinds. The resource sub-block and field
   shape stays pinned by `tests/test_multi_vsys_location.py`, because `terraform validate` accepts an
   unknown sub-block and drops it silently. The `data` shape is checked by the gate, because

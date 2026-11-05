@@ -2,49 +2,56 @@
 
 ## Current position
 
-This commit wrote no code and no test: it states the acceptance criteria for the round-trip cross-check, the
-gate rule that compares the block set the reader read with the entry set the parse read. `acceptance.md` holds
-the criteria. The decisions are below, and `to-do.md` holds the implementation pieces for the next agent.
+This commit wrote the round-trip cross-check and its pins: `sanity_checks.check_round_trip`, its
+`CHECK_ORDER` position between `data_files` and `control_chars`, the ledger argument on `run_checks` that
+`main()` now passes, and `tests/test_round_trip.py` (33 tests, one per criterion in `acceptance.md`). The
+measurements are in the `acceptance.md` Result, and the facts that stay open are in `backlog.md`.
 
-The decisions this commit made:
+What landed:
 
-- What the check reads: the `.tf` block set through `sanity_checks.blocks` with `kinds = ('resource',)`, and the
-  entry set through the run's `entry_coverage.EntryLedger`. No report file and no data file is read, so the gate
-  boundary in `docs/ARCHITECTURE.md` §1 gains one exception: for this rule the gate reads the files it wrote
-  plus the run's ledger. `run_checks` takes the ledger as an argument, `main()` passes it, and a call with no
-  ledger reports the check as NOT RUN, so a pin that reads only the output directory does not change. The unit
-  join is read through `unit_manifest` (`facts_of`, `directory_name`, `units`) and the row scope through
-  `entry_coverage.matrix_row_for` and `covering_row`, so no second reader, count rule, scope rule or unit rule
-  appears.
-- The finding: one FAIL finding per unit and per `COVERAGE_MATRIX` row where the two counts disagree. The
-  position is the line of the first block the reader read for that unit and row, or the file as a whole (`line`
-  0) when the reader read no block, which names the unit directory plus the row's `output_file`. `CHECK_ORDER`
-  puts `round_trip` after `data_files` and before `control_chars`: the report order stays grouped by fact kind,
-  and the cross-check is the only rule that reads two sets, so it sits after every rule that reads one. The
-  findings sort by (file, line, detail), the order `check_data_files` already uses, so the report stays
-  byte-identical between runs. The cross-check prints no scan console line, because the console shape names one
-  identity and this fact compares two sets.
-- Which types the rule can compare: the property-scan scope read through `matrix_row_for`, so only an `emitted`
-  container row enters the count and one entry is one block. `nested-block`, `report`, `inventory`,
-  `bookkeeping`, `count-only`, `skipped` and `unaccounted` are excluded by that same rule; `data`, `import` and
-  `action` blocks and variables are excluded because no matrix row covers them. The destination comes from the
-  ledger row, so a `report_only` address inside an `emitted` row is not counted. The rule states no type list:
-  the scope rows and the four `*_policy_rules` rows are in the count through the same table, and a row no entry
-  measures, such as `panos_device_group_parent`, is not a count row.
+- The rule reads the `.tf` block set through `sanity_checks.blocks` with `kinds = ('resource',)`, and the entry
+  set through the run's `entry_coverage.EntryLedger`. It joins them through `entry_coverage.matrix_row_for`,
+  `entry_coverage.MATRIX_BY_RESOURCE` and `unit_manifest` (`facts_of`, `directory_name`, `units`), so it states
+  no reader, no count, no scope, no kind, no type, no field name, no file name and no unit rule of its own. It
+  is the gate's one boundary exception: the gate reads the files it wrote plus the run's ledger for this rule.
+  `run_checks` takes the ledger as an argument, `main()` passes it, and a call with no ledger reports the check
+  as NOT RUN with a note, so a pin that reads only the output directory is unchanged.
+- The finding: one finding per unit and per `COVERAGE_MATRIX` row where the two counts do not agree, and the
+  fact is the two counts, so the rule names no entry. The position is the line of the first block the reader
+  read for that unit and row, or the file as a whole (`line` 0) when the reader read no block, which names the
+  unit directory plus the row's `output_file`. A `.tf` file at the codebase root names no unit, so the rule
+  states the count as not assignable. Findings sort by (file, line, detail), the order `check_data_files`
+  already uses, so the report stays byte-identical between runs. The rule prints no scan console line, because
+  its fact compares two sets and the console shape names one identity.
+- The severity is WARN, not the FAIL `acceptance.md` stated. Measured with FAIL: `main()` exits 1 on the corpus
+  fixtures, so `python3 -m pytest` fails 111 tests and errors 115. Measured with WARN: 2 tests fail. The
+  decision follows `entry_coverage.PROPERTY_RULE`: a disagreeing count names no broken output, so the exit code
+  stays with the rules that read the files.
 
-`tests/test_round_trip.py` does not exist yet. `tests/test_data_file_gate.py::test_check_order_puts_the_data_rule_after_the_block_rules`
-gains the new name when the rule lands. The gate writes no file, so no golden moves.
+The measured facts that could not hold as written are in the `acceptance.md` Result and in `backlog.md`: the
+corpus is not silent, so the rule reports 22 findings on 10 fixtures in three categories (5, 16 and 1);
+`matrix_row_for` answers no row only for the `nested-block` container, so the entry side reads no count for a
+nested-block entry while the block side counts the block it wrote; `report_only` is recorded after `mark`, so
+`destination` answers `emitted` for a report-only address and the count includes it.
 
-Next step, for the implementing agent: write `sanity_checks.check_round_trip`, put `round_trip` in `CHECK_ORDER`
-between `data_files` and `control_chars`, give `run_checks` the ledger argument and pass it from `main()`, and
-write `tests/test_round_trip.py` with one test per finding plus the pins `acceptance.md` names. Then the
-documents in `acceptance.md` §5.
+Pins that moved with the rule: `tests/test_data_file_gate.py` (the order tuple gained the name, and the data
+rule's source slice now ends at `check_round_trip`), `tests/test_write_path.py` (the same slice boundary), and
+`tests/test_sanity_gate.py::test_kitchen_sink_gate_passes_with_validate` (the kitchen run now reports 6 WARN:
+the cross-check's five findings and the placeholder).
 
-`ruff check .` is clean and `python3 -m pytest` passes 1533 tests, unchanged by this commit.
+Every pin that reads the entry side runs the pipeline in process, because `run_script` loses the ledger with
+the process. The suite runs offline.
+
+Next step, for the documents agent: `docs/ARCHITECTURE.md` §4.6 and §1, `docs/COVERAGE_MATRIX.md` §1,
+`README.md` and `docs/README.md`. `sanity_checks.py` already states the check in its own table and names the
+ledger exception in its module docstring.
+
+`ruff check .` is clean and `python3 -m pytest` passes 1566 tests (1533 before this commit, plus the 33 new
+ones), with no skip and no golden change.
 
 The gated pieces that stay open are the four `*_policy_rules` types, a config entry inside a stack, the EDL
-reference decision, and the profile-name report column. The config entry inside a stack is a count mismatch this
-rule reports once it lands, so `backlog.md` keeps the fact with the rule named.
+reference decision, and the profile-name report column. The config entry inside a stack is a count mismatch
+this rule reports, so `backlog.md` keeps the fact with the rule named.
 
 
 
@@ -129,7 +136,9 @@ the fields inside a
     container value and the elements of a list value, so a new block shape uses them rather
 than writing a second
   reader. The round-trip cross-check reads the block set through it with `kinds = ('resource',)`, so it states
-  no reader of its own.
+  no reader of its own. Its fact compares two sets, so its finding is a coverage fact and prints no console
+  line: it is a WARN, the decision `entry_coverage.PROPERTY_RULE` already states for a gap, and the exit code
+  stays with the rules that read the files.
 - A test that reads the `.tf` set reads it as the gate reads it, keyed by the path from the
 output directory, so
     a run that names two units is not read as one file. A plan check that runs writes a

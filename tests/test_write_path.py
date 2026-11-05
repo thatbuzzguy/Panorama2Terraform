@@ -266,7 +266,7 @@ def test_the_data_rule_is_one_rule_over_the_rows_of_every_unit(corpus_run):
     assert len({row['directory'] for row in rows}) == len(rows) == 11, 'one record holds every unit rows'
     assert dict(sanity_checks.DATA_FILES) == RECORDS, 'each record is read through the module that owns it'
 
-    rule = _rule_source('check_data_files', 'def check_control_chars')
+    rule = _rule_source('check_data_files', 'def check_round_trip')
     assert 'parse_rows' in rule and 'for name, module in DATA_FILES' in rule and 'out / name' in rule, \
         'the rule reads the records at the root, through the module that owns each row shape'
     assert 'rglob' not in rule, 'the data rule reads no file inside a unit directory'

@@ -7152,7 +7152,10 @@ def main():
         # F4.1: the gate reads the files that were written, so it reports what
         # the operator receives. A WARN does not fail the gate; a FAIL does.
         # The four data files are written above, so the data rule (F6.8) reads the records the run wrote.
-        report = sanity_checks.run_checks(args.output_dir, run_terraform=args.validate)
+        # The cross-check is the one rule that reads two sets, so the run's ledger is the second input
+        # (`docs/ARCHITECTURE.md` §4.6).
+        report = sanity_checks.run_checks(args.output_dir, run_terraform=args.validate,
+                                          ledger=panorama.ledger)
         report_path = write_path.root_path(args.output_dir, 'SANITY_REPORT.txt')
         write_path.write_file(report_path, report.render())
         print()
