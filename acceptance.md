@@ -1,88 +1,83 @@
-# Acceptance — the credential rule single statement
+# Acceptance — a value the provider constrains in code, not in the schema
 
 ## Measurement
 
-Measured 2026-11-04 against provider 2.0.14 through `terraform providers schema -json`, read through
-`tests/conftest.py::provider_schemas` (the provider version the golden `provider.tf` declares). Measured on the
-`provider_config_block`... the schema key is `provider`, so the test reads `provider_schemas['provider']['block']`:
+Measured 2026-11-04 against provider 2.0.14 with Terraform v1.16.2, on a real kitchen-sink run read through
+`sanity_checks.run_checks` with `run_terraform=True`:
 
-- 16 arguments, and none is required. The measured set is `additional_headers`, `api_key`, `api_key_in_request`,
-  `auth_file`, `config_file`, `hostname`, `multi_config_batch_size`, `panos_version`, `password`, `port`,
-  `protocol`, `sdk_log_categories`, `sdk_log_level`, `skip_verify_certificate`, `target`, `username`.
-- Two arguments are `sensitive`: `api_key` and `password`. `hostname` and `target` are not.
-- A block that states no required argument is a complete block, so the generated block can state only the facts
-  the run names, and nothing else.
-- The provider docs state `api_key` as the alternative to `username` plus `password`, read from the environment as
-  `PANOS_API_KEY` — the same name `source_fetch.API_KEY_ENV` uses. So one credential fact, one environment name,
-  and the pair is an alternative path the codebase does not take.
+- The static rules report `PASS (0 FAIL, 1 WARN)`. The one WARN is the VPN key placeholder in `vpn.tf`.
+- The `terraform` check reports one FAIL, on the unit `shared_45ca31c3`: `Invalid Attribute Value Match` —
+  `disable_override value must be one of: ["no"], got: "yes"` for `panos_administrative_tag.env_prod_5301b734`.
+  `terraform providers schema -json` states no value list for that field, so the constraint is in the provider
+  code, and `tests/conftest.py::provider_schemas` cannot answer it offline.
+- A plan reads only the files in the directory it runs on. On the kitchen run, `terraform validate` at the
+  codebase root answers "The configuration is valid" with no configuration files, because the `.tf` files sit
+  inside the unit directories. So `tests/test_terraform_validate.py::test_terraform_validate_kitchen_succeeds`
+  passes without reading the generated config. That is the part of Goal 2 this slice fixes.
 
-## The statement (one statement, stated once)
+## The rule (one statement, stated once)
 
-Owner: `docs/CODEBASE_ASSEMBLY.md` §11. `docs/ARCHITECTURE.md` §3 links to it and keeps only what the fetch layer
-can enforce on its own (argv, the cache name), so no document states the credential rule twice.
+Owner: `docs/ARCHITECTURE.md` §4.6, the gate.
 
-1. The credential is the API key. The run takes it from the environment, and the codebase takes it from the same
-   environment at plan time (`PANOS_API_KEY`), which the provider reads itself. A run writes no credential pair,
-   and no generated file states a credential value.
-2. The host is a site fact, not a credential: the measured schema marks `api_key` and `password` sensitive, and
-   `hostname` not. The run names the host as a variable and holds no value for it, because no export states the
-   host the run read, so it is the same shape as `target`: `operator_supplied`.
-3. So `variables.tf` declares only what the run names — the host name, the site values, the reference-only names,
-   and the facts the tool cannot read — and `provider.tf` prints the host through the variable the run declares and
-   states no credential argument.
+The gate is a static gate: it reads the files it wrote against the tables it can read offline. A value
+constraint the provider carries in its code, not in the schema JSON, is not data the gate can read, so it
+cannot become a gate rule and the FAIL rule does not change. The emitter prints the value the export states,
+and the `terraform` check is the rule that reports such a value as FAIL when the run uses `--validate`, so the
+report is the operator's notice. A fixture that a validate pin reads is test data, so it states the value the
+provider accepts, and the plan check reads what the run wrote: one plan per unit directory the record names.
+
+Rejected candidate: a verified-value table read by the gate at check time, with a WARN in the placeholder
+style. The fact would be a table the gate can only verify by running the provider, not by reading the schema,
+so the static gate would depend on a live binary to decide a rule, and a WARN rule would need a value list the
+pinned schema does not state. It also restates a fact the tool cannot read offline.
 
 ## What the code must do
 
-1. `resource_mapping.VALUE_VARIABLES` stays the single shape owner for the provider block arguments, so `hostname`
-   gains an `operator_supplied` row beside `target`, and `naming.py` is the only naming rule for it.
-2. `generate_provider_config` prints the host through `printed_value`, so the argument name is the §5 rule applied
-   to the row, and no name list decides it. It prints `target` only for a unit that names a device (unchanged).
-3. `generate_variables` declares the host through the same held-name path as `target`, so the header states no
-   `panos_*` name list and each description follows its shape word, not a name.
-4. The generated `provider.tf` comment names `PANOS_API_KEY` as the environment the provider reads, so the block
-   states the statement in the file it writes; the generated `variables.tf` header states that a credential is not
-   a declared variable.
+1. `tests/fixtures/kitchen_sink.xml` states `no` for `disable-override` on the shared `env-prod` tag entry, so
+   the kitchen validate pin passes. The goldens change only from a real run.
+2. `tests/fixtures/tags.xml` keeps `yes`: it is the F4.4 flag-read pin, no validate pin reads it, and the
+   F4.4 pins read that fixture (`tests/test_parse_objects.py::FLAG_READS`, `tests/test_ownership.py::SEVEN_ROWS`).
+3. `tests/test_terraform_validate.py` runs each fixture plan through the same function the CLI calls on
+   `--validate`, once per unit directory the record names, so each pin reads the files the run wrote. Every
+   fixture in the file writes one directory per unit, so the rule applies to the whole file, not only the
+   kitchen case: a pin that validates at the codebase root reads no configuration file. The
+   skipped-when-absent rule is unchanged, and the tooling gate (the provider resolves and installs) is still
+   pinned inside a unit directory the run wrote.
+4. `tests/test_sanity_gate.py` pins the gate for the kitchen run with `terraform` available: `PASS (0 FAIL,
+   1 WARN)`, the WARN is the placeholder, and every `terraform` result is PASS, one result per unit directory.
+5. `docs/ARCHITECTURE.md` §4.6 states the rule once and names the two tests. The provider fact itself stays
+   recorded in `backlog.md`, as a fact the tool cannot read, and links to §4.6 for the rule.
 
 ## Pins
 
-1. `tests/test_variables.py`: the declaration set is the site values plus the names the run holds (the
-   `operator_supplied` rows) plus the reference names — no credential pair. The provider-block pin reads the block
-   through the table: its arguments are the `operator_supplied` rows the run names for that unit, so the `panos_`
-   prefix exception in the sensitive pin is gone.
-2. `tests/test_variables.py`: the block prints the host for every unit, through `naming.variable_name('hostname')`,
-   so a declaration and its consumer are in the same unit directory (§14).
-3. `tests/test_variables.py`: no argument the measured schema marks `sensitive` is printed in a generated provider
-   block, read through `provider_schemas`, and the environment name the generated block names is
-   `fetch_module.API_KEY_ENV`, so one statement names one environment variable in both layers.
-4. `tests/test_variables.py` group 1 names the table row for `hostname`, so `tests/test_site_data.py` reads the
-   provider arguments as data (`test_the_table_covers_every_field_the_location_can_state`,
-   `test_only_the_device_field_maps_to_a_variable`, `test_the_table_holds_no_property`).
-5. `tests/test_source_fetch.py` keeps the fetch half: the key comes from the environment, never argv, never the
-   cache name, never a generated file. `tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`
-   keeps the no-secret half, and `tests/test_provenance.py` keeps the provenance rule (the record names the host and
-   the scope, never the credential).
-6. The goldens move, and only from a real run: `provider.tf` and `variables.tf` in all four cases.
+1. `tests/test_terraform_validate.py::test_terraform_validate_kitchen_succeeds` — skipped when the binary is
+   absent; asserts PASS for every unit directory the record names.
+2. `tests/test_sanity_gate.py::test_kitchen_sink_gate_passes_with_validate` — skipped when the binary is
+   absent; asserts `Result: PASS (0 FAIL, 1 WARN)`, the placeholder WARN, and one PASS `terraform` result per
+   unit directory.
+3. `tests/test_golden_files.py` pins the golden bytes unchanged except `tests/golden/kitchen_sink/shared_45ca31c3/tags.tf`,
+   regenerated from a real run; the golden file set does not change.
+4. `tests/test_build_kitchen_sink.py` keeps its data counts: the comment count and the entry-name counts do not move.
 
 ## Rules this must keep
 
-- The `variables` gate rule: every declaration has a `var.` consumer, so the host declaration is consumed by the
-  provider block in the same unit, and the `variables` pin runs the corpus with no finding.
-- No new CLI flag, and no change to the exit codes.
-- The LF write path, the content rule (a file is written only when it has content), `check_variables` reading the
-  whole `.tf` set as consumer text.
-- `provider.tf` keeps `required_version = ">= 1.14"` and the pinned provider source and version, because
-  `tests/conftest.py::declared_provider` reads the pinned version from a golden `provider.tf`.
-- The generated README, `docs/USAGE_GUIDE.md`, `README.md` and `docs/MIGRATION_GUIDE.md` are migrated to the
-  statement: the operator's `terraform.tfvars` holds the host, not a credential pair, and the key comes from the
-  environment.
+- FAIL, WARN, SKIPPED and exit codes are unchanged, and `CHECK_ORDER` does not change.
+- No new table, and no second statement of a value held elsewhere.
+- The single block reader, the report determinism, and the report counts are unchanged.
 - `ruff check .` is clean, and `python3 -m pytest` passes. No test counts outside `agent-status.md`.
 
 ## Result
 
-Met. The goldens moved only from a real run: 34 files, 22867 bytes to 24768 bytes (+1901). The statement, the
-measurement and the pins above are what the committed code and documents now state, and `docs/README.md` names §11 as
-the owner of the rule.
+Met, 2026-11-04.
 
-One finding is recorded in `backlog.md`, because the live `terraform validate` gate reports it on the kitchen sink
-fixture and the pinned schema cannot state the constraint. The static rules report `PASS (0 FAIL, 1 WARN)` for the
-same run, and the committed baseline reports the same validate finding, so the rule stated here did not cause it.
+- `tests/fixtures/kitchen_sink.xml` states the value the provider accepts for the shared `env-prod` entry, and
+  `tests/golden/kitchen_sink/shared_45ca31c3/tags.tf` changed from a real run: the address golden and the golden
+  file set are unchanged.
+- `tests/test_terraform_validate.py` runs the plan once per unit directory the record names, for every fixture in
+  the file, so each pin reads the files the run wrote instead of passing at a root that holds no configuration file.
+- `tests/test_sanity_gate.py::test_kitchen_sink_gate_passes_with_validate` reads the report the run wrote and reports
+  `Result: PASS (0 FAIL, 1 WARN)`: the one WARN is the placeholder in `shared_a6577c11/vpn.tf`, and every plan result
+  is PASS, one per unit directory.
+- `docs/ARCHITECTURE.md` §4.6 states the rule once and names both tests, and `backlog.md` keeps the provider fact as
+  a fact the tool cannot read offline.
+- `ruff check .` is clean and `python3 -m pytest` passes.

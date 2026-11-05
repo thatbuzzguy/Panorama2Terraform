@@ -2,37 +2,34 @@
 
 ## Current position
 
-The credential rule single statement is complete and committed on `development` (`9f697fa`); this tracking
-markdown is the next commit. `docs/CODEBASE_ASSEMBLY.md` §11 is the owner document for the rule, and
-`docs/ARCHITECTURE.md` §3 links to it and keeps only what the fetch layer enforces on its own (argv, the cache
-name), so no document states the rule twice.
+The gate rule for a value the provider constrains in its code is complete and committed on `development`
+(`4c285f2`); this tracking markdown is the next commit. `docs/ARCHITECTURE.md` §4.6 is the owner document for the
+rule, and `backlog.md` keeps the provider fact as a fact the tool cannot read offline.
 
-- The statement: the credential is the API key; the run takes it from the environment, and the generated codebase
-  takes it from the same environment at plan time, which the provider reads itself, so the run writes no credential
-  pair and declares no credential variable, and `terraform.tfvars` stays the operator's own file. The host is a
-  site fact, not a credential, so `provider.tf` prints it through the declared variable, and `variables.tf`
-  declares the host name, the site values, and the reference-only names only.
-- The measurement that decided it, 2026-11-04 against provider 2.0.14 through `terraform providers schema -json`,
-  read through `tests/conftest.py::provider_schemas`: 16 provider-block arguments, none required, and the two
-  `sensitive` ones are `api_key` and `password`. `hostname` is not `sensitive`, so the host is not a credential, and
-  a block that states no required argument is a complete block.
-- Code: `hostname` is an `operator_supplied` row of `VALUE_VARIABLES`, in the same case as `target`, so the table
-  owns the provider-argument shape and `naming.py` names it (`var.hostname`). `generate_provider_config` prints the
-  host through `printed_value` and states no credential argument. `generate_variables` states no name list, and each
-  description follows its shape word. `source_fetch.py` is the only tool module that states the environment name, so
-  the generator, the generated README and the console next steps read it through `API_KEY_ENV`.
-- Pins that moved: `tests/test_variables.py` names the declaration set through the table and reads the provider
-  block through the table and the measured schema, so the `panos_` prefix exception is gone, and the environment
-  name is pinned in one module. `tests/test_site_data.py` reads the provider arguments as data, and the golden
-  declaration set is now `fw_2_example_com`, `hostname` and `target`. The no-secret pin, the key-never-from-argv
-  pin, the provenance rule, the `variables` gate rule, the LF write path and the exit codes are unchanged.
-- Goldens moved: 34 files, one `provider.tf` and one `variables.tf` per unit across the four cases, from 22867 bytes
-  to 24768 bytes (+1901), written by a real run.
-- A clean kitchen-sink run reports `PASS (0 FAIL, 1 WARN)` for the static rules. The live `terraform validate` gate
-  reports one finding for `panos_administrative_tag`, where the fixture states `disable_override` as `yes` on the
-  shared entry and the provider accepts only `no`; measured on the committed baseline as well, so this slice did not
-  change it. It is recorded in `backlog.md`.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1496 tests (about 2 minutes).
+- The rule: the gate is static, so a value constraint the provider carries in its code, not in the schema JSON, is
+  not data the gate can read and cannot become a gate rule. The emitter prints the value the export states, and the
+  `terraform` check is the rule that reports such a value as FAIL on `--validate`, so the report is the operator's
+  notice. A fixture a plan pin reads is test data, so it states the value the provider accepts. Rejected: a
+  verified-value table read at check time with a WARN, because the gate could only verify it by running the provider
+  and a WARN rule would need a value list the pinned schema does not state.
+- The measurement, 2026-11-04 with Terraform v1.16.2 against provider 2.0.14, on a kitchen-sink run through
+  `sanity_checks.run_checks` with `run_terraform=True`: the static rules report `PASS (0 FAIL, 1 WARN)`, and the plan
+  check reported the FAIL for `panos_administrative_tag.env_prod_5301b734` before the fixture stated the accepted
+  value. A `terraform validate` at the codebase root passes vacuously, because the `.tf` files sit in the unit
+  directories.
+- Code: `tests/fixtures/kitchen_sink.xml` states the accepted value for the shared `env-prod` entry. Goldens moved:
+  one file, `tests/golden/kitchen_sink/shared_45ca31c3/tags.tf`, written by a real run; the golden file set is
+  unchanged.
+- Pins that moved: `tests/test_terraform_validate.py` calls `sanity_checks.check_terraform` once per unit directory
+  the record names, for every fixture in the file, so each pin reads the files the run wrote; the tooling gate still
+  pins the provider resolving inside a unit directory, and the skipped-when-absent rule is unchanged. New pin:
+  `tests/test_sanity_gate.py::test_kitchen_sink_gate_passes_with_validate`, which reads the report the run wrote and
+  asserts the plan result for each unit directory. `tests/fixtures/tags.xml` keeps `yes`, because no plan pin reads
+  it and the F4.4 pins read that fixture.
+- Unchanged: FAIL, WARN, SKIPPED, the exit codes, `CHECK_ORDER`, the single block reader, and the determinism of the
+  report.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1497 tests (about 3 minutes, because the plan check runs
+  once per unit directory).
 
 The next feature is the certificate container row and its emitter, which `to-do.md` names. The gated pieces that
 stay in `backlog.md` are the four `*_policy_rules` types and a config entry inside a stack.
@@ -123,6 +120,11 @@ output directory, so
     a run that names two units is not read as one file. A plan check that runs writes a
 `.terraform` cache inside
   the directory it ran on, so a pin that reads a corpus run uses a copy of it.
+- A plan check reads the directory the plan runs on, so a validate pin runs `sanity_checks.check_terraform` once per
+  unit directory the manifest record names, never at the codebase root, where no configuration file sits. A value the
+  provider constrains in its code, not in the schema JSON, is not data the gate can read, so it stays outside the
+  static rules and the plan check reports it (`docs/ARCHITECTURE.md` §4.6), and a fixture a plan pin reads states the
+  accepted value.
 - A field reader must read at the block's own level and stop at the closing quote, or a
   sub-block field or an escaped quote answers for the block's field. Both are pinned in
   `tests/test_import_blocks.py`, and the scope rule reads at the block's own level through the
