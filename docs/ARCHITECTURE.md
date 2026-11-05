@@ -151,7 +151,7 @@ does not turn into an entry of its own:
 
 | Kind | What it means |
 |---|---|
-| Bookkeeping | an association table or a scope fact (§2.2), and a sub-shape that only selects a shape |
+| Bookkeeping | an association table or a scope fact (§2.2), and a sub-shape that only selects a shape. The per-entry report line (§3.2) is the only output a membership entry reaches, and the fact the row records is the relation between that entry and the container that lists it, so the entry carries no value for it and the line names no field. The honesty rule for that line is in [`COVERAGE_MATRIX.md`](COVERAGE_MATRIX.md) §1 |
 | Nested block | lines written inside a parent resource block, not a resource of its own. The per-entry report line (§3.2) is the only output its entry reaches, so it names only the fields the print reads through the captured object. The honesty rule for that line is in [`COVERAGE_MATRIX.md`](COVERAGE_MATRIX.md) §1 |
 
 The per-entry report (§3.2) adds two kinds for a single entry, because a

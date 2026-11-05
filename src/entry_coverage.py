@@ -47,6 +47,12 @@ The captured part of a line is the shape `captured_part` states: a row that reac
 the fields it captured, and a row whose kind has no other output prints the value of each field it names,
 read through the captured object. `docs/COVERAGE_MATRIX.md` §1 owns that rule, and
 `tests/test_property_coverage.py::test_the_report_line_reads_the_region_addresses_it_prints` pins it.
+
+A `bookkeeping` row records a relation between an entry and the container that lists it, so the entry carries no
+value for it and the captured part names no field. The shape is `NAMES_NO_FIELD_KINDS`, and
+`tests/test_property_coverage.py::test_the_bookkeeping_line_names_no_field_for_the_membership_entry_it_marks`
+pins it. The relation is the `detail` column, and the value of the relation is printed by the block of the entry
+that owns the container, through the row that covers that entry.
 """
 
 import re
@@ -73,6 +79,13 @@ GAP_KINDS = ('count-only', 'skipped', 'unaccounted')
 # be read. The other two gap kinds have no captured object to print: `mark_skipped` records an empty
 # object, and an `unaccounted` entry has no mark.
 PRINTS_VALUE_KINDS = ('count-only',)
+
+# The kind whose report line names no field, because the fact its row records is a relation between the entry and
+# the container that lists it (`docs/COVERAGE_MATRIX.md` §1). The entry carries no value for a relation, so the
+# line states the row identity only. The relation itself is the `detail` column, and the value belongs to the entry
+# that owns the container. Stated as a data set, in the same shape as `PRINTS_VALUE_KINDS`, so no writer branch
+# decides the captured part per kind.
+NAMES_NO_FIELD_KINDS = ('bookkeeping',)
 
 # Keys a parsed object carries that are not entry fields: the entry name and the
 # five scope facts.
@@ -506,11 +519,13 @@ def captured_part(row: dict) -> str:
     A row that reaches another output names the fields it captured, so the line keeps the names. A row
     whose kind prints a value (`PRINTS_VALUE_KINDS`, `docs/COVERAGE_MATRIX.md` §1) has no other output, so
     the line is the only output its entry reaches and it prints each field's value, read through the
-    captured object: that read is the property use the property scan counts. A row with no captured field
-    says `name only`, because a field the entry carries no value for is not a captured field (F4.3 rule 3).
+    captured object: that read is the property use the property scan counts. A row whose kind names no field
+    (`NAMES_NO_FIELD_KINDS`, the same §1 rule) records a relation the entry carries no value for, so the line
+    states the row identity only. A row with no captured field says `name only`, because a field the entry
+    carries no value for is not a captured field (F4.3 rule 3).
     """
     fields = row['fields']
-    if not fields:
+    if not fields or row['destination'] in NAMES_NO_FIELD_KINDS:
         return f'{CAPTURED_LABEL}: name only'
     captured = row.get('captured')
     if row['destination'] not in PRINTS_VALUE_KINDS or not captured:

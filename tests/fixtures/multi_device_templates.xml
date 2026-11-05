@@ -5,6 +5,7 @@
      relationships from:
 
        device-group/entry/<DG>/devices/entry/<device>
+       device-group/entry/<DG>/templates/member/<template>
        templates/entry/<template>/devices/entry/<device>
        template-stack/entry/<stack>/devices/entry/<device>
        template-stack/entry/<stack>/templates/member/<template>
@@ -25,6 +26,12 @@
         <devices>
           <entry name="fw-1.example.com" />
         </devices>
+        <!-- F4.4: the device group entry owns both lists, so `parse_device_groups` keeps a value for each and the
+             device group block prints them. The entry inside `devices` carries no value for the relation, so its
+             report line names no field (`docs/COVERAGE_MATRIX.md` §1). -->
+        <templates>
+          <member>HQ-Networks</member>
+        </templates>
       </entry>
       <entry name="Datacenter-FW">
         <devices>

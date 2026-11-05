@@ -200,7 +200,7 @@ Two levels sit beside the matrix:
   container is not a finding: it has no row, and only a row can name the properties an
   emitter reads. A field gap in a container with no rule is recorded in [`../backlog.md`](../backlog.md).
   A container outside the scan scope is honest only when the output that reaches its entry reads the
-  field, because no finding can name a container with no row. Three shapes state that, one per kind.
+  field, because no finding can name a container with no row. Four shapes state that, one per kind.
   A `report` container is honest only when its report section reads the field it prints through the
   captured object, because that section is the only output for the entry. Five pins hold the rule, one per
   container, in `tests/test_property_coverage.py`:
@@ -243,8 +243,25 @@ Two levels sit beside the matrix:
   `mode` (the block key), and `type` (the type from `INTERFACE_RESOURCE_TYPES`). `parent` stays a captured
   property for the kinds whose row declares it, where the emitter reads it through the child object and prints
   `parent = <parent entry>.name`. One pin holds this shape, on `tests/fixtures/interfaces_ethernet.xml`:
-  `::test_the_nested_block_line_names_only_the_fields_the_emitter_reads`. The `bookkeeping` container has no rule
-  yet, so its `devices` and `templates` fields stay in `backlog.md`.
+  `::test_the_nested_block_line_names_only_the_fields_the_emitter_reads`.
+
+  A `bookkeeping` container has no matrix row and no captured object, because the fact its row records is
+  a relation between an entry and the membership container that lists it. So its entry line names no field:
+  the entry carries no value for a relation, the row states the relation in its detail column
+  (`association table`, and the five scope facts), and the line prints `captured: name only`, because the
+  membership entry contributes only its name, which is the row identity (`entry_coverage.NON_FIELD_KEYS`).
+  The value of the relation belongs to the entry that owns the membership container, so a `bookkeeping`
+  field is honest only when that owning entry is covered by an `emitted` row whose emitter reads the list
+  through that entry's captured object. Where the owning entry's row declares no field for the list, the
+  parse method keeps no value for it, because no output can read it. The association itself is read as a
+  table, by the location rule (`template_of`, `device_of`) and by the manual report section that names the
+  templates a device takes, so it can never be a captured field. Measured 2026-11-04 with a run on
+  `tests/fixtures/multi_device_templates.xml`: `parse_device_groups` keeps `devices` and `templates` for
+  `Office-FW`, the device group block prints both, and the entry line names them; each membership entry the
+  association row covers carries nothing, so its line prints `captured: name only`. One pin holds this
+  shape, on that fixture:
+  `::test_the_bookkeeping_line_names_no_field_for_the_membership_entry_it_marks`, and the part of the line
+  is the data set `entry_coverage.NAMES_NO_FIELD_KINDS`.
 
    F7.11 completed the six `PROTOCOL_SHAPE` entry rows the router reads, so the router row declares
    a property for each field those rows state, and the scan measures each entry that states them.
