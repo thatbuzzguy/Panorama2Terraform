@@ -57,7 +57,8 @@ These parts are true today, so a codebase can be built on them.
 | The import block | The address that binds a written block to the object the live config already has, from the same identity data the resource block uses (§7) | `import_blocks.py`, §7 |
 | The scope object | The unit as a block in the run, so a new site is created by an apply and a name inside a location can be checked against the run (§8) | `resource_mapping.py`, §8 |
 
-§3 to §10 are landed. §11 is a gap. The open work is the write path's remaining facts, in §14.
+§3 to §11 are landed, and §11 is the owner document for the credential rule. The open work is the write path's
+remaining facts, in §14.
 
 ## 3. The unit boundary as data (F6.1, landed)
 

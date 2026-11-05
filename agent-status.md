@@ -2,37 +2,40 @@
 
 ## Current position
 
-The `bookkeeping` field rule for `devices` and `templates` is complete and committed on `development`
-(`caed435`); this tracking markdown is the next commit. `docs/COVERAGE_MATRIX.md` §1 is the owner document for the
-rule, and `docs/ARCHITECTURE.md` §2.4 states the destination fact and links to it.
+The credential rule single statement is complete and committed on `development` (`9f697fa`); this tracking
+markdown is the next commit. `docs/CODEBASE_ASSEMBLY.md` §11 is the owner document for the rule, and
+`docs/ARCHITECTURE.md` §3 links to it and keeps only what the fetch layer enforces on its own (argv, the cache
+name), so no document states the rule twice.
 
-- The rule: a `bookkeeping` row records the relation between an entry and the membership container that lists it,
-  so the entry carries no value for that relation and its entry line names no field. The row states the relation in
-  the detail column, and the line prints `captured: name only`, because the membership entry contributes only its
-  name, which is the row identity. `devices` and `templates` are fields an output reads through the captured object
-  of the entry that owns the list, and never fields of the entry the list holds.
-- The measurement that decided it, 2026-11-04 with a run on `tests/fixtures/multi_device_templates.xml`: the four
-  `parse_associations` rows and the five scope-fact rows are the `bookkeeping` rows, the run reports 7
-  `bookkeeping` entries for that fixture and 13 across the corpus, and none of them carries a captured field, so no
-  finding can name one and the pin is the only thing that can keep the shape honest.
-- Code: `entry_coverage.NAMES_NO_FIELD_KINDS` is the data set `captured_part` reads for this shape, so no writer
-  branch decides the captured part per kind, and `gap_fact` prints the same words. `parse_associations` marks each
-  membership entry with an empty object, and `parse_templates` keeps no device value, because
-  `resource_mapping.SCOPE_SHAPE` states no device field for `panos_template` and no output can read one. The
-  report line shape, the console line shape, the exit codes, and the eight destination kinds are unchanged.
-- Pins: `tests/test_property_coverage.py` group 6 gains gap 8,
-  `test_the_bookkeeping_line_names_no_field_for_the_membership_entry_it_marks`, so the group names eight gaps and
-  one pin per gap. `test_scan_scope_is_the_entries_a_matrix_row_covers` names the shape and measures the membership
-  entry against the row that covers it.
-- `tests/fixtures/multi_device_templates.xml` gained a `templates` member on `Office-FW`, so both halves of the rule
-  are measured by one real run: the device group entry line reads `captured: devices, templates`, the device group
-  block prints `templates = [ "HQ-Networks" ]`, and the membership entry line reads `captured: name only`. That run
-  reports `PASS (0 FAIL, 0 WARN)`.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1490 tests (about 2 minutes). No golden moved: the
-  golden set pins `.tf` paths and bytes only, and no golden holds this fixture.
+- The statement: the credential is the API key; the run takes it from the environment, and the generated codebase
+  takes it from the same environment at plan time, which the provider reads itself, so the run writes no credential
+  pair and declares no credential variable, and `terraform.tfvars` stays the operator's own file. The host is a
+  site fact, not a credential, so `provider.tf` prints it through the declared variable, and `variables.tf`
+  declares the host name, the site values, and the reference-only names only.
+- The measurement that decided it, 2026-11-04 against provider 2.0.14 through `terraform providers schema -json`,
+  read through `tests/conftest.py::provider_schemas`: 16 provider-block arguments, none required, and the two
+  `sensitive` ones are `api_key` and `password`. `hostname` is not `sensitive`, so the host is not a credential, and
+  a block that states no required argument is a complete block.
+- Code: `hostname` is an `operator_supplied` row of `VALUE_VARIABLES`, in the same case as `target`, so the table
+  owns the provider-argument shape and `naming.py` names it (`var.hostname`). `generate_provider_config` prints the
+  host through `printed_value` and states no credential argument. `generate_variables` states no name list, and each
+  description follows its shape word. `source_fetch.py` is the only tool module that states the environment name, so
+  the generator, the generated README and the console next steps read it through `API_KEY_ENV`.
+- Pins that moved: `tests/test_variables.py` names the declaration set through the table and reads the provider
+  block through the table and the measured schema, so the `panos_` prefix exception is gone, and the environment
+  name is pinned in one module. `tests/test_site_data.py` reads the provider arguments as data, and the golden
+  declaration set is now `fw_2_example_com`, `hostname` and `target`. The no-secret pin, the key-never-from-argv
+  pin, the provenance rule, the `variables` gate rule, the LF write path and the exit codes are unchanged.
+- Goldens moved: 34 files, one `provider.tf` and one `variables.tf` per unit across the four cases, from 22867 bytes
+  to 24768 bytes (+1901), written by a real run.
+- A clean kitchen-sink run reports `PASS (0 FAIL, 1 WARN)` for the static rules. The live `terraform validate` gate
+  reports one finding for `panos_administrative_tag`, where the fixture states `disable_override` as `yes` on the
+  shared entry and the provider accepts only `no`; measured on the committed baseline as well, so this slice did not
+  change it. It is recorded in `backlog.md`.
+- `ruff check .` is clean, and `python3 -m pytest` passes 1496 tests (about 2 minutes).
 
-The next feature is the credential rule single statement, which `to-do.md` names. The open items that stay in
-`backlog.md` are the certificate container row and the gated `*_policy_rules` types.
+The next feature is the certificate container row and its emitter, which `to-do.md` names. The gated pieces that
+stay in `backlog.md` are the four `*_policy_rules` types and a config entry inside a stack.
 
 ## Rules to keep when writing documents
 
@@ -214,8 +217,11 @@ names
 - Actions need Terraform 1.14 or later; the committed goldens now declare it, so a change to
 the
   minimum is a golden change.
-- The credential rule needs one statement that covers both the fetch layer and the generated
-  provider block.
+- The credential rule has one statement and one owner document, `docs/CODEBASE_ASSEMBLY.md` §11, so every other
+  document links to it. `source_fetch.py` is the only tool module that states the environment name, and the pin
+  `tests/test_variables.py::test_the_generated_block_names_the_environment_the_fetch_layer_reads` holds both halves:
+  the generated block names that name, and no other `src/` module states it. `VALUE_VARIABLES` decides the shape, so
+  the host is an `operator_supplied` row and no name list decides a provider argument or a marking.
 - The prune action reads the record file the run wrote, because the record directory is the output directory
   and `SOURCE.txt` is a codebase root-set file. `provenance.prune` decides through `prunable_entries` and
   builds no path, so no path rule for a record directory can appear in the module that owns the record. A state
