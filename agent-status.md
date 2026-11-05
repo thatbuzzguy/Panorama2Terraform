@@ -2,46 +2,50 @@
 
 ## Current position
 
-The certificate feature is complete and committed on `development`. Pieces 2, 3, 4, 5 and 6 landed: the two
-`CONTAINER_TABLE` rows, the two `COVERAGE_MATRIX` rows, `CERTIFICATE_SHAPE` and `CERTIFICATE_TABLE`, the two parse
-methods, the two emitters, the two `VALUE_VARIABLES` rows, the fixture, the pins, the goldens from one real run,
-and the gate rule `sanity_checks.check_certificate_blocks`. `tests/test_certificate_blocks.py` holds its pins.
+This commit wrote no code and no test: it states the acceptance criteria for the round-trip cross-check, the
+gate rule that compares the block set the reader read with the entry set the parse read. `acceptance.md` holds
+the criteria. The decisions are below, and `to-do.md` holds the implementation pieces for the next agent.
 
 The decisions this commit made:
 
-- The rule reads the block through `sanity_checks.blocks` and `import_blocks.fields_at`, at the block's own level,
-  and excludes `location`, which `location_present` owns. It states no reader, no helper and no field name of its
-  own: the entry name is read through `entry_coverage.name_field`, the choice through the row's `selects`, and the
-  `sensitive` marks through the row's set, which
-  `tests/test_protocol_object.py::test_the_sensitive_rows_are_the_reference_only_names` pins against
-  `VALUE_VARIABLES`.
-- The type to row lookup is `resource_mapping.certificate_path`, which reads `CERTIFICATE_TYPES` the other way, so
-  the rule states no resource type.
-- The name fact is read before the field rule, because the field rule reads only the fields the block states, so a
-  block that states no entry name is read by the name rule. The name is read first, which is also the order the
-  emitter prints.
-- The choice rule is the existing `_shape_choice_findings`, so no new choice rule appears: `local` states exactly
-  one of `pem` or `pkcs12`, and a `local` that states both, or none, is a finding. No shape word changed:
-  `one_of` keeps reading as `object`.
-- The table gained one shape-word fix. `certificate_profile/certificate` is the entry-list row, so its shape word is
-  `string_list`, the word the reader reads for a `[` value, as the filter table's entry rows state it. The rule
-  found the mismatch: with the row read as `object`, the profile block the run wrote was reported as an object
-  value. The fields the row states are the fields one entry inside the list states.
-- `CHECK_ORDER` puts `certificate_blocks` after `filter_blocks`, so the three shape-table rules are grouped. The
-  gate writes no file, so no golden moved.
+- What the check reads: the `.tf` block set through `sanity_checks.blocks` with `kinds = ('resource',)`, and the
+  entry set through the run's `entry_coverage.EntryLedger`. No report file and no data file is read, so the gate
+  boundary in `docs/ARCHITECTURE.md` §1 gains one exception: for this rule the gate reads the files it wrote
+  plus the run's ledger. `run_checks` takes the ledger as an argument, `main()` passes it, and a call with no
+  ledger reports the check as NOT RUN, so a pin that reads only the output directory does not change. The unit
+  join is read through `unit_manifest` (`facts_of`, `directory_name`, `units`) and the row scope through
+  `entry_coverage.matrix_row_for` and `covering_row`, so no second reader, count rule, scope rule or unit rule
+  appears.
+- The finding: one FAIL finding per unit and per `COVERAGE_MATRIX` row where the two counts disagree. The
+  position is the line of the first block the reader read for that unit and row, or the file as a whole (`line`
+  0) when the reader read no block, which names the unit directory plus the row's `output_file`. `CHECK_ORDER`
+  puts `round_trip` after `data_files` and before `control_chars`: the report order stays grouped by fact kind,
+  and the cross-check is the only rule that reads two sets, so it sits after every rule that reads one. The
+  findings sort by (file, line, detail), the order `check_data_files` already uses, so the report stays
+  byte-identical between runs. The cross-check prints no scan console line, because the console shape names one
+  identity and this fact compares two sets.
+- Which types the rule can compare: the property-scan scope read through `matrix_row_for`, so only an `emitted`
+  container row enters the count and one entry is one block. `nested-block`, `report`, `inventory`,
+  `bookkeeping`, `count-only`, `skipped` and `unaccounted` are excluded by that same rule; `data`, `import` and
+  `action` blocks and variables are excluded because no matrix row covers them. The destination comes from the
+  ledger row, so a `report_only` address inside an `emitted` row is not counted. The rule states no type list:
+  the scope rows and the four `*_policy_rules` rows are in the count through the same table, and a row no entry
+  measures, such as `panos_device_group_parent`, is not a count row.
 
-Pins written in `tests/test_certificate_blocks.py`: one test per finding, the two-reader pin, the placement pin,
-the lookup pin, the name-rule pin, the pin that the table states a row for every level the walk enters, the gate
-order and report order, the report determinism pin, the file-and-line pin, and the reference-name pin read through
-`naming.py` from a real run. `tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner` now reads
-three tables and the certificate rule. `tests/test_data_file_gate.py` names the new `CHECK_ORDER` position.
+`tests/test_round_trip.py` does not exist yet. `tests/test_data_file_gate.py::test_check_order_puts_the_data_rule_after_the_block_rules`
+gains the new name when the rule lands. The gate writes no file, so no golden moves.
 
-`ruff check .` is clean and `python3 -m pytest` passes 1533 tests.
+Next step, for the implementing agent: write `sanity_checks.check_round_trip`, put `round_trip` in `CHECK_ORDER`
+between `data_files` and `control_chars`, give `run_checks` the ledger argument and pass it from `main()`, and
+write `tests/test_round_trip.py` with one test per finding plus the pins `acceptance.md` names. Then the
+documents in `acceptance.md` §5.
 
-The next feature is the round-trip cross-check in `backlog.md`: parse the generated HCL and compare the object
-counts against the input, through the coverage data. The gated pieces that stay open are the four
-`*_policy_rules` types, a config entry inside a stack, the EDL reference decision, and the profile-name report
-column.
+`ruff check .` is clean and `python3 -m pytest` passes 1533 tests, unchanged by this commit.
+
+The gated pieces that stay open are the four `*_policy_rules` types, a config entry inside a stack, the EDL
+reference decision, and the profile-name report column. The config entry inside a stack is a count mismatch this
+rule reports once it lands, so `backlog.md` keeps the fact with the rule named.
+
 
 
 ## Rules to keep when writing documents
@@ -124,7 +128,8 @@ same commit.
 the fields inside a
     container value and the elements of a list value, so a new block shape uses them rather
 than writing a second
-  reader.
+  reader. The round-trip cross-check reads the block set through it with `kinds = ('resource',)`, so it states
+  no reader of its own.
 - A test that reads the `.tf` set reads it as the gate reads it, keyed by the path from the
 output directory, so
     a run that names two units is not read as one file. A plan check that runs writes a
@@ -248,7 +253,9 @@ the
   no-flag scan holds, and it cannot change what the gate counts or the exit code the gate decides.
 - A coverage fact that comes from a run must be read from the run's ledger, so the scan tests
   run
-  the pipeline in process.
+  the pipeline in process. The round-trip cross-check reads the run's ledger as an argument, so its
+  pins run the pipeline in process too, and a `run_checks` call that passes no ledger reports the check
+  as NOT RUN rather than guessing a count.
 - A cycle test needs two units that each declare a name the other one uses, because the rule
   resolves a
   name only inside the unit that declared it (`tests/fixtures/reference_cycle.xml`).

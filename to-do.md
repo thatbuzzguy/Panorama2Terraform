@@ -1,21 +1,42 @@
 # To Do
 
-The certificate feature is complete and committed: the two `CONTAINER_TABLE` rows, the two `COVERAGE_MATRIX`
-rows, `CERTIFICATE_SHAPE` and `CERTIFICATE_TABLE`, the two parse methods, the two emitters, the two
-`VALUE_VARIABLES` rows, the fixture, the goldens from one real run, and the gate rule
-`sanity_checks.check_certificate_blocks` that reads a printed certificate block against `CERTIFICATE_SHAPE`
-(`docs/ARCHITECTURE.md` §4.6 and §4.11). `tests/test_certificate_blocks.py` holds its pins.
+The round-trip cross-check design decisions are committed. The criteria the implementing agent measures
+against are in `acceptance.md`. `docs/ARCHITECTURE.md` §4.6 becomes the owner document for the rule when the
+rule lands.
 
-The next feature is the round-trip cross-check, in `backlog.md` (Deeper post-run checks): parse the generated
-HCL and compare the object counts against the input, through the coverage data. It is the gate work that is
-actionable offline. Pieces:
+The three decisions:
 
-- [ ] Decide what the round-trip check reads: the `.tf` block set and the entry ledger, so no second count rule
-      appears and the rule stays a rule about a read.
-- [ ] Decide the finding: a count that does not agree, stated per unit, at the position the reader read, and the
-      `CHECK_ORDER` position the new rule takes.
-- [ ] Decide which types the check can compare: a `nested-block` row writes lines inside a parent block, so its
-      count is not one block, and an entry the run reports writes no block.
+- What the rule reads: the `.tf` block set through `sanity_checks.blocks` with `kinds = ('resource',)`, and the
+  entry set through the run's `entry_coverage.EntryLedger`. The rule writes no reader and reads no report and
+  no data file, so `run_checks` takes the ledger as an argument and a call with no ledger reports the check as
+  NOT RUN.
+- The finding: one FAIL finding per unit and per `COVERAGE_MATRIX` row where the two counts do not agree, at the
+  position the reader read (line 0, the file as a whole, when the reader read no block). `CHECK_ORDER` puts
+  `round_trip` after `data_files` and before `control_chars`, so the cross-check is the only rule that reads two
+  sets and sits after every rule that reads one set.
+- Which types the rule can compare: the property-scan scope read through `entry_coverage.matrix_row_for`, so
+  only an `emitted` row enters the count, and the destination per entry through `EntryLedger.destination`. The
+  rule states no kind list and no type list.
+
+## Implementation pieces
+
+- [ ] `sanity_checks.check_round_trip`: read the block set through `blocks` and the entry set through the
+      ledger, join them through `matrix_row_for` and `unit_manifest`, and state no reader, no count, no scope,
+      no kind, no type, no field name and no file name of its own.
+- [ ] `run_checks` takes the ledger as an argument, and `main()` passes the run's ledger, so a call with no
+      ledger reports NOT RUN.
+- [ ] `CHECK_ORDER` gains `round_trip` between `data_files` and `control_chars`, and the order pin in
+      `tests/test_data_file_gate.py` gains the name.
+- [ ] `tests/test_round_trip.py`: one test per finding, the reader-reuse pin, the ledger-and-scope-rule pin, the
+      unit-rule pin, the no-ledger pin, the second-source pin, the order pin, the determinism pin, the
+      file-and-line pin, the no-false-positive pin across the corpus, the console-shape pin, and the pins for
+      each destination kind the count excludes.
+- [ ] Documents: `docs/ARCHITECTURE.md` §4.6 states the rule and its position, and §1 gains the ledger boundary
+      so the sentence that the gate reads the written files names this rule as its one exception;
+      `docs/COVERAGE_MATRIX.md` §1 names `matrix_row_for` as the scope both scans read; `README.md` names the
+      check in the gate table and the test file in the Testing list; `docs/README.md` names the owner;
+      `sanity_checks.py` states the check in its own table. The `backlog.md` sentence that the gate cannot see
+      an entry that produced no file moves to §4.6, because the cross-check reads the ledger.
 
 Feature-sized items that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the four
 `*_policy_rules` types wait for the F3.5 rulebase decision and a live target, a config entry inside a stack

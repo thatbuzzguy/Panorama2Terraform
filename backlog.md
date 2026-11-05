@@ -79,7 +79,9 @@ Completed work is not recorded here; the git history and the owner document hold
   block for it. Measured on an export that nests one `address` entry under a `template-stack` entry:
   the report line names the entry as `emitted`, and the unit directory holds no `address_objects.tf`.
   Only `panos_template_variable` and `panos_vsys` declare the `template_stack` sub-block. The fix needs
-  the provider to state a config location inside a stack, so the entry stays a report finding until then.
+  the provider to state a config location inside a stack, so the entry stays a report finding until then. The
+round-trip cross-check is the gate rule that states this case as a count that does not agree, so the fact stays
+here with that rule named.
 
 - The splitter copies a template only when the export lists a device in both
   the device group and the template (F3.6). An export whose device groups
@@ -148,9 +150,9 @@ Completed work is not recorded here; the git history and the owner document hold
 - Adopt `ruff format` as a gate. A one-time format pass of both legacy scripts is required first
   (about 1500 changed lines in `panorama_to_terraform.py`). Do it as its own task so the diff stays
   reviewable.
-- Deeper post-run checks (beyond the gate (F4.1): parse the generated HCL and cross-check object
-  counts against the input (round-trip; needs the F4.3/F4.4 coverage data); `tflint` integration.
-  `sanity_checks.py` is the runtime home for the static rules.
+- Deeper post-run checks (beyond the gate (F4.1): `tflint` integration. `sanity_checks.py` is the runtime home
+  for the static rules. The round-trip cross-check that compares the block set the reader read with the entry set
+  the parse read is in `to-do.md`, so it is not recorded here.
 
 ## Design Decisions (multi-scope model)
 
