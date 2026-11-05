@@ -17,14 +17,12 @@ Completed work is not recorded here; the git history and the owner document hold
   its entry line names no field. Measured 2026-11-04 no container outside the scan scope has a captured field no
   output read, so no field gap is recorded here.
 
-- Parser extraction gaps found by the parse unit tests (each drops data; fix each
-  when a report confirms it in a fixture). What stays:
-  - The `profile_name` column in the per-entry report cannot be pinned for the certificate container. Measured
-    2026-11-05: no certificate type declares a `profile-name` attribute, and the certificate entry inside a
-    profile names the object it is, not a profile, so the report has no profile-name fact for the container. The
-    parse method now exists (`parse_certificate_profiles`), so the only missing half is a value the provider does
-    not declare. The pin that would hold the rule is
-    `tests/test_container_coverage.py::test_report_declares_the_profile_name_column`, never written.
+- Parser extraction gaps found by the parse unit tests: none. Each gap was a parse method that dropped data, and
+  each was fixed when a report confirmed it in a fixture. What stays open is the fact a report cannot state, not
+  a gap: no certificate type declares a `profile-name` attribute, so the per-entry report has no profile-name
+  fact for the certificate container, and the pin that would hold the rule
+  (`tests/test_container_coverage.py::test_report_declares_the_profile_name_column`) cannot be written from the
+  schema.
 
 - Service objects with both tcp and udp legs cannot be emitted whole. The v2
   `panos_service` schema declares `protocol.tcp` and `protocol.udp`, but the
@@ -98,13 +96,15 @@ Completed work is not recorded here; the git history and the owner document hold
   the device group as context and no device group is declared. Give
   device-level objects their own context when a fixture shows the collision.
 
-- Certificate blocks: what stays open after the two container rows, the two parse methods and the two
-  emitters landed. Measured 2026-11-05 against provider 2.0.14: `panos_certificate_import` is a resource
+- Certificate blocks: what stays open after the two container rows, the two parse methods, the two emitters and
+  the gate rule landed. Measured 2026-11-05 against provider 2.0.14: `panos_certificate_import` is a resource
   with no data source, so `entry_coverage.name_field` reads its name fact through `RESOURCE_NAME_FIELDS`;
-  `panos_certificate` is a data source with no resource; no certificate type declares a `device_group`
-  sub-block, so a certificate entry the export places in a device group prints the `Shared` template
-  placeholder, which the location rule reports. The gate rule for a certificate block is the next task
-  (`to-do.md`).
+  `panos_certificate` is a data source with no resource, so the container cannot become an `emitted` row through
+  a data source; no certificate type declares a `device_group` sub-block, so a certificate entry the export
+  places in a device group prints the `Shared` template placeholder, which the location rule reports. A `local`
+  that states both `pem` and `pkcs12` is refused by `terraform validate` and not by the schema JSON, so the
+  choice is a measured fact written as `selects` data in the row, which the gate reads offline
+  (`docs/ARCHITECTURE.md` §4.6), and the plan check reports the same block for a run that uses `--validate`.
   - The EDL `certificate_profile` field stays a plain string, so it records no reference edge: the EDL site
     resolves no names, so `name_ref` cannot reach it, and `tests/golden/kitchen_sink/shared_45ca31c3/external_lists.tf`
     is unchanged. If a later rule makes the EDL site resolve names, that field becomes a reference to the emitted

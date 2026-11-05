@@ -2,54 +2,47 @@
 
 ## Current position
 
-Pieces 2, 3, 4 and 6 of the certificate feature are complete and committed on `development`: the two
+The certificate feature is complete and committed on `development`. Pieces 2, 3, 4, 5 and 6 landed: the two
 `CONTAINER_TABLE` rows, the two `COVERAGE_MATRIX` rows, `CERTIFICATE_SHAPE` and `CERTIFICATE_TABLE`, the two parse
-methods, the two emitters, the two `VALUE_VARIABLES` rows, the fixture, the pins, and the goldens from one real run.
-Piece 5 — what the gate reads for a certificate block — is the next task, so this commit added no gate code.
+methods, the two emitters, the two `VALUE_VARIABLES` rows, the fixture, the pins, the goldens from one real run,
+and the gate rule `sanity_checks.check_certificate_blocks`. `tests/test_certificate_blocks.py` holds its pins.
 
 The decisions this commit made:
 
-- Both container rows are `emitted`. `panos_certificate_profile` is emitted rather than stated in
-  `NOT_EMITTED_TYPES`, because the whole entry is readable: every field it declares is a leaf field, a list the
-  export holds as entries, or a small object. The profile's `LOCATION_SCHEMA` row states `template` only, because
-  `location_data` reaches `shared` inside the device-group branch only, so a `shared` row without a device group
-  is a fact the tool cannot use.
-- `CERTIFICATE_SHAPE` is the shape owner for both emitters, and `CERTIFICATE_TABLE` carries `root='certificate'` so
-  the reference-name walk states no container. `certificate/local` is the one row that states the choice by
-  presence, with `fields: {}` and `selects`, so `_protocol_body` fills it from the element.
-- `RESOURCE_NAME_FIELDS` is the fact source for the name field of the two types `DATA_SOURCE_SCHEMA` has no row
-  for, and `entry_coverage.name_field` falls back to it.
-- The two `sensitive` facts inside `local` print as the variable reference the entry names, so no generated file
-  states the value.
-- The objects inside a profile's `certificate` list are a `nested-block` row under the profile row, because the
-  single-segment `certificate` row would otherwise answer for them. The emitter prints each list member as plain
-  data, so no reference edge is recorded for those names.
+- The rule reads the block through `sanity_checks.blocks` and `import_blocks.fields_at`, at the block's own level,
+  and excludes `location`, which `location_present` owns. It states no reader, no helper and no field name of its
+  own: the entry name is read through `entry_coverage.name_field`, the choice through the row's `selects`, and the
+  `sensitive` marks through the row's set, which
+  `tests/test_protocol_object.py::test_the_sensitive_rows_are_the_reference_only_names` pins against
+  `VALUE_VARIABLES`.
+- The type to row lookup is `resource_mapping.certificate_path`, which reads `CERTIFICATE_TYPES` the other way, so
+  the rule states no resource type.
+- The name fact is read before the field rule, because the field rule reads only the fields the block states, so a
+  block that states no entry name is read by the name rule. The name is read first, which is also the order the
+  emitter prints.
+- The choice rule is the existing `_shape_choice_findings`, so no new choice rule appears: `local` states exactly
+  one of `pem` or `pkcs12`, and a `local` that states both, or none, is a finding. No shape word changed:
+  `one_of` keeps reading as `object`.
+- The table gained one shape-word fix. `certificate_profile/certificate` is the entry-list row, so its shape word is
+  `string_list`, the word the reader reads for a `[` value, as the filter table's entry rows state it. The rule
+  found the mismatch: with the row read as `object`, the profile block the run wrote was reported as an object
+  value. The fields the row states are the fields one entry inside the list states.
+- `CHECK_ORDER` puts `certificate_blocks` after `filter_blocks`, so the three shape-table rules are grouped. The
+  gate writes no file, so no golden moved.
 
-What the next agent must state for a certificate block:
+Pins written in `tests/test_certificate_blocks.py`: one test per finding, the two-reader pin, the placement pin,
+the lookup pin, the name-rule pin, the pin that the table states a row for every level the walk enters, the gate
+order and report order, the report determinism pin, the file-and-line pin, and the reference-name pin read through
+`naming.py` from a real run. `tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner` now reads
+three tables and the certificate rule. `tests/test_data_file_gate.py` names the new `CHECK_ORDER` position.
 
-- The gate reads a certificate block through `CERTIFICATE_TABLE`: the field names are the table's spellings, the
-  values are the shapes the table states, the entry name is `name` (read through `RESOURCE_NAME_FIELDS` for
-  `panos_certificate_import`, the one emitted type with no data source), and `local` prints the one alternative the
-  export states, so a block that states both `pem` and `pkcs12` is a finding the plan check reports.
-- The two fields the table marks `sensitive` print as `var.<§5 name of the entry>`, never as a value, so the rule
-  compares the printed reference against the declaration set with no value check.
-- A `local` that states no alternative prints nothing, so no block carries it; `name` and `location` are the only
-  facts the provider requires, so a certificate entry with no `local` is still emitted.
-- The `rule` name `CERTIFICATE_TABLE` states is `certificate_blocks`, which no rule function reads yet.
+`ruff check .` is clean and `python3 -m pytest` passes 1533 tests.
 
-Pins and goldens that moved in this commit (see `acceptance.md` §Result): the container findings and the
-entry-phrasing pin, the corpus counts and the record-content counts in `tests/test_build_kitchen_sink.py`, the
-reference-only set and the pinned table and the declaration-set clause in `tests/test_site_data.py`,
-`tests/test_variables.py::_reference_names`, the ngfw pin, two new pins in `tests/test_data_source_schema.py`, and
-the grounding branch in `tests/test_coverage_matrix.py`. The goldens that moved are two new files and one
-`variables.tf`. `tests/test_edge_cases.py` and the EDL golden did not move.
+The next feature is the round-trip cross-check in `backlog.md`: parse the generated HCL and compare the object
+counts against the input, through the coverage data. The gated pieces that stay open are the four
+`*_policy_rules` types, a config entry inside a stack, the EDL reference decision, and the profile-name report
+column.
 
-`ruff check .` is clean and `python3 -m pytest` passes 1518 tests.
-
-The measured sets are in `acceptance.md` §Result, and the facts that stay open are in `backlog.md`.
-
-The gated pieces that stay in `backlog.md` are the four `*_policy_rules` types, a config entry inside a stack, the
-EDL reference decision, and the profile-name report column.
 
 ## Rules to keep when writing documents
 
@@ -148,15 +141,18 @@ output directory, so
   same reader, which takes the sub-block it reads as an argument (the action rule reads inside
   `config`). The same reader also tells a quoted value from a `var.` reference, so no second
   rule decides the shape of a field.
-- `PROTOCOL_SHAPE` is the one table for the `protocol` object, and `FILTER_SHAPE` is the one table for the filter
-  containers, which sit outside it. A level either table does not state is not read. A new routing level needs a
-  table row before an emitter, a gate rule or a report can read it, and `SHAPE_TO_SCHEMA` is the one pin between a
-  table word and the schema word for both tables. A parse method states a path and never spells a field name:
+- `PROTOCOL_SHAPE` is the one table for the `protocol` object, `FILTER_SHAPE` is the one table for the filter
+  containers, which sit outside it, and `CERTIFICATE_SHAPE` is the one table for the two certificate containers
+  (F7.14). A level either table does not state is not read. A new routing level needs a table row before an
+  emitter, a gate rule or a report can read it, and `SHAPE_TO_SCHEMA` is the one pin between a table word and the
+  schema word for all three tables. A parse method states a path and never spells a field name:
   `_protocol_field_name` and `_protocol_xml_name` are the two rules; `XML_NAME_EXCEPTIONS` is the protocol table's
   exception map, and `FILTER_XML_NAME_EXCEPTIONS` is the filter table's map, keyed by the container path because
-  one idea spells two ways in two containers. Both tables are the same row shape read as `resource_mapping.ShapeTable`,
+  one idea spells two ways in two containers. All three shape tables are the same row shape read as `resource_mapping.ShapeTable`,
   so the readers and the gate helpers take the table as an argument and state no table name in their finding
-  wording. `_parse_router` builds the `protocol` dict from the fields the `protocol` row states, and
+  wording, and one helper group (`_shape_level_findings`, `_shape_field_findings`, `_shape_choice_findings`) serves
+  all three. A level the export holds as entries states its row as `string_list`, so the walk reads it as a `[`
+  value and each element as an entry, which is the certificate profile's `certificate` row. `_parse_router` builds the `protocol` dict from the fields the `protocol` row states, and
   `parse_filter_containers` builds each entry dict from the fields its own row states, so the level names are the
   table's names in both. Field order is the table order, so the order a row states is the order the block
   prints, and a row change that moves the order moves the goldens. A level that holds no entry has no container row, so the property scan measures nothing

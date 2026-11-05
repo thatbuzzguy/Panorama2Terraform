@@ -28,6 +28,7 @@ Checks, in report order:
 | `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
 | `protocol_object` | a `protocol` object on a `panos_virtual_router` block matches its `PROTOCOL_SHAPE` row | FAIL |
 | `filter_blocks` | a filter container block matches its `FILTER_SHAPE` row | FAIL |
+| `certificate_blocks` | a certificate block matches its `CERTIFICATE_SHAPE` row | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a declared variable | FAIL |
 | `data_files` | every data file reads as its declared rows and agrees with the rules that produced it (F6.8) | FAIL |
@@ -78,6 +79,7 @@ CHECK_ORDER = (
     'actions',
     'protocol_object',
     'filter_blocks',
+    'certificate_blocks',
     'references',
     'variables',
     'data_files',
@@ -958,6 +960,53 @@ def check_filter_blocks(files: dict[str, str]) -> list[Finding]:
             _shape_field_findings(block, path, fields, findings, table)
     return findings
 
+def check_certificate_blocks(files: dict[str, str]) -> list[Finding]:
+    """Every certificate block must match its `CERTIFICATE_SHAPE` row (F7.14).
+
+    Five findings, each a FAIL, read through the same block reader and field reader the other two shape-table
+    rules use:
+
+    1. A level the table states no row for, a field the row does not declare, or a value whose shape the
+       reader reads differently from the shape the row states. The level half cannot fire for a certificate
+       block, because every field the walk enters has a row under it.
+    2. The block states no entry name, which is the field `entry_coverage.name_field` reads for its type. The
+       field rule reads only the fields the block states, so an absent name is read here. A certificate entry
+       has no name a reference resolves, so the `references` rule cannot reach it.
+    3. The exactly-one choice a row states as `selects`. For `certificate/local` that is `pem` or `pkcs12`, so
+       a `local` that states both, or none, is a finding (F7.12).
+    4. A field the row marks `sensitive` prints as the variable reference, never as a literal. The row's
+       `sensitive` set is the same fact `VALUE_VARIABLES` states for the emitter, which is the table the print
+       reads, so one table decides the shape.
+    5. An element inside a `[` container states the name the row reads for the entry name.
+
+    `location` is the placement fact, so the rule reads the fields at the block's own level and not the
+    sub-block: `location_present` is the rule that asks for it. The entry name is read first, because the block
+    states it before its content, which is also the order the emitter prints. The choice is read before the
+    field rule, as in `_shape_level_findings`, so a selected key is not read twice. The rule reads no data
+    file: the block text and the table are the whole input.
+    """
+    findings = []
+    table = resource_mapping.CERTIFICATE_TABLE
+    for block in sorted(blocks(files, ('resource',)), key=lambda b: (b.file, b.line)):
+        path = resource_mapping.certificate_path(block.rtype)
+        if path is None:
+            continue
+        # `location` is the placement sub-block, not a field the entry row declares.
+        fields = {key: value for key, value in import_blocks.fields_at(block.body).items() if key != 'location'}
+        # Rule 2, through the one naming rule: `name` is not a name this rule states.
+        name_field = entry_coverage.name_field(block.rtype)
+        if name_field not in fields:
+            findings.append(Finding(
+                table.rule, FAIL, block.file, block.line,
+                f'{table.word} {block.address} states no {name_field}, which is the field '
+                'entry_coverage.name_field reads for the entry name',
+            ))
+        # The entry row is the level the walk enters for a certificate block, so the choice is read here too.
+        if not _shape_choice_findings(block, path, fields, findings, table):
+            _shape_field_findings(block, path, fields, findings, table)
+    return findings
+
+
 def check_references(files: dict[str, str]) -> list[Finding]:
     """Every `.name` reference must resolve to a block declared in this run (F2.6, F5.5).
 
@@ -1306,6 +1355,7 @@ def run_checks(output_dir: Path, run_terraform: bool = False,
         CheckResult('actions', tuple(check_actions(files))),
         CheckResult('protocol_object', tuple(check_protocol_object(files))),
         CheckResult('filter_blocks', tuple(check_filter_blocks(files))),
+        CheckResult('certificate_blocks', tuple(check_certificate_blocks(files))),
         CheckResult('references', tuple(check_references(files))),
         CheckResult('variables', tuple(check_variables(files))),
         CheckResult('data_files', tuple(check_data_files(Path(output_dir)))),

@@ -114,9 +114,10 @@ profile's `certificate` level holds one entry per object, so those objects are a
 profile row: the print writes them as list elements inside the profile block, and each prints the name the object
 carries, not a reference to a certificate block.
 
-`CERTIFICATE_TABLE.rule` states the name the gate rule for a certificate block will use, and no rule function
-reads it yet. The two fields the table marks `sensitive` print as the variable reference the entry names, so no
-generated file states the value (`docs/CODEBASE_ASSEMBLY.md` §11).
+`CERTIFICATE_TABLE.rule` names the gate rule that reads these rows: `sanity_checks.check_certificate_blocks`
+(§4.6), which reads the printed block against the same rows, so the emitter and the gate cannot disagree. The two
+fields the table marks `sensitive` print as the variable reference the entry names, so no generated file states
+the value (`docs/CODEBASE_ASSEMBLY.md` §11).
 
 The profile row states `template` only, because `location_data` reaches `shared` inside the device-group branch
 only, so an entry the export places in a device group keeps the `Shared` template placeholder.

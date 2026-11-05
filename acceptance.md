@@ -1,142 +1,133 @@
-# Acceptance criteria — the certificate containers (task for this commit)
+# Acceptance criteria — the certificate gate rule (task for this commit)
 
-Scope: the two `CONTAINER_TABLE` rows, the two parse methods, the two emitters, and the
-goldens regenerated from a real run. The gate rule for a certificate block is the next
-task, so this commit adds no gate code.
+Scope: `sanity_checks.check_certificate_blocks`, its `CHECK_ORDER` position, the pins in
+`tests/test_certificate_blocks.py`, and the documents that name the rule. The gate writes no file, so no
+golden moves. The certificate feature closes with this piece; the facts that stay open stay in `backlog.md`.
 
-## 1. The tables state the facts the emitter prints
+## 1. The rule reads the block through the readers that already exist
 
-1.1 `CONTAINER_TABLE` holds one row per parse method: `parse_certificates` reading
-`certificate` and `parse_certificate_profiles` reading `certificate_profile`. Both rows are
-`emitted` and name the provider type in the note, because the property scan reads a matrix
-row only for an emitted row (`entry_coverage.matrix_row_for`).
+1.1 One block reader (`sanity_checks.blocks`) serves the rule, as it serves every block kind the gate
+reads, and one field reader (`import_blocks.fields_at`) reads the fields. The rule writes no reader of
+its own, so no second reader appears.
 
-1.2 `COVERAGE_MATRIX` holds one row per emitted type, so both certificate types gain a row,
-and each row names a fixture entry, an emitter, an output file, and the properties the
-emitter reads. A row's properties are the fields the emitter reads from the captured object,
-in the print order.
+1.2 The rule reads the fields at the block's own level and not the `location` sub-block: `location` is the
+placement fact, and `location_present` is the rule that asks for it.
 
-1.3 The field names and shapes are the live provider facts, measured 2026-11-05 against
-provider 2.0.14 (`terraform providers schema -json`): `panos_certificate_import` declares
-`name`, `location`, `local`; `local` is one object with the `pem` and `pkcs12` sub-shapes, and
-`terraform validate` refuses a `local` stating both, so the choice is stated by presence.
-`panos_certificate_profile` declares 15 attributes, none sensitive.
+1.3 The type to row lookup is `resource_mapping.CERTIFICATE_TYPES` read the other way, so the rule states no
+resource type of its own. `resource_mapping.certificate_path` is that lookup, in the shape `filter_path`
+already states.
 
-1.4 `CERTIFICATE_SHAPE` is the table that owns these shapes, so the emitter prints through it
-and a gate rule can read the same rows. One reader serves every shape table, so no method
-writes a field name of its own.
+1.4 The rule states no field name of its own. The entry name comes from `entry_coverage.name_field` (the one
+naming rule for the field that carries an entry name), the choice comes from the row's `selects`, and the
+sensitive marks come from the row's `sensitive`. The rule uses no new shape word: `one_of` keeps reading as
+`object`, so `SHAPE_WORDS`, `SHAPE_TO_SCHEMA`, `SHAPE_READS_AS` and `SHAPE_LEVELS` do not change.
 
-1.5 The two `sensitive` facts (`private_key`, `passphrase`) are `REFERENCE_ONLY` rows in
-`VALUE_VARIABLES`, so the block prints the variable reference and no generated file states the
-value (`tests/test_robustness.py` rule).
+1.5 `tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner` reads the certificate rule as an
+owner, so a field name written as a string constant inside it is a finding.
 
-1.6 `LOCATION_SCHEMA` holds one row per emitted type, and each row lists only the sub-blocks
-the location rule can reach. The profile row holds `template` only: the shared sub-block is
-reached only inside the device-group branch, and the profile row declares no device group, so
-stating `shared` would be a fact the tool cannot use. The tool prints the `Shared` template
-placeholder for a profile entry the export places in a device group, and the test pins what the
-tool prints.
+## 2. Findings, each a FAIL
 
-1.7 `panos_certificate_import` is the first emitted type with no data source, so the name rule
-needs a fact source for a type `DATA_SOURCE_SCHEMA` has no row for. One table states it, and the
-test pins it against the live schema.
+The rule reports five findings, each a FAIL, and adds no WARN and no exit-code rule. The exit code follows
+the findings through the rule `tests/test_sanity_gate.py` already pins.
 
-1.8 `entry_coverage.name_field` stays the one rule for the field that carries an entry name, and
-it answers through that table for a resource-only type.
+2.1 A level the table states no row for, a field the row does not declare, or a value whose shape the
+reader reads differently from the shape the row states.
 
-## 2. The parse methods
+2.2 The block states no entry name. A certificate entry has no name a reference resolves, so the
+`references` rule cannot reach it, and the field rule reads only the fields the block states, so an absent
+name is read by the name rule and not by the field rule. The name is read first, because the block states it
+before its content, which is also the order the emitter prints.
 
-2.1 Each method marks every entry it reads, and reads only the fields its row states.
+2.3 `local` states exactly one of the keys its row selects. This is the choice rule `selects` already states
+(F7.12), read through `_shape_choice_findings`, so no new choice rule appears. A `local` that states both
+alternatives is a finding, and a `local` that states none is a finding.
 
-2.2 An entry with no name is skipped, with the reason.
+2.4 A field the row marks `sensitive` prints as `var.<name>`, never as a quoted value. The gate reads the
+row's `sensitive` set, and `tests/test_protocol_object.py::test_the_sensitive_rows_are_the_reference_only_names`
+pins that set against `resource_mapping.VALUE_VARIABLES`, the table the emitter reads at the print site. The
+name is the §5 name of the entry that holds the field, read through `naming.py`, because a field cannot name
+itself. The literal half is pinned by
+`tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`.
 
-2.3 A certificate entry that states no `local` sub-shape is still an object the run can place:
-`name` and `location` are the only facts the provider requires, so the entry is emitted.
+2.5 An element inside the profile's `certificate` `[` container states the name the row reads for it.
 
-## 3. The emitters
+## 3. Gate order, determinism, and no false positive
 
-3.1 One resource block per entry, in the row's field order, with the location block.
+3.1 `certificate_blocks` sits after `filter_blocks` and before `references`, because the three shape-table
+rules are grouped together in the report order.
 
-3.2 `local` prints as the one sub-shape the export states; the alternative the export does not
-state prints nothing.
+3.2 The corpus and `tests/fixtures/certificates.xml` trip no finding, so the gate reports PASS for the new
+check on every fixture.
 
-3.3 A `sensitive` field prints as the variable reference named by the entry that holds it (§5),
-never as its value.
+3.3 The report is byte-identical between two runs on the same input, and a finding names the unit directory
+the file is in, through the reader that already keys the `.tf` set.
 
-3.4 The `certificate` list inside a profile entry prints as the list shape the provider declares
-(one object per entry the export holds), because `terraform validate` refuses a single object.
+3.4 No golden moves, because the gate writes no file.
 
-3.5 Each emitter writes one file per unit that has content, in the order the run read it.
+## 4. Documents
 
-## 4. The corpus and the goldens
+4.1 `README.md` names the check in the gate table, `docs/ARCHITECTURE.md` §4.6 states the rule and names the
+test file, and `sanity_checks.py` states the check in its own table.
 
-4.1 `tests/fixtures/certificates.xml` holds the entries the emitter reads, each in a scope its
-row's type can place (vsys for an import entry, template for a profile entry), and carries every
-declared property with a non-empty value, so the property scan measures every field the row states.
-
-4.2 The kitchen-sink record holds a certificate entry and a profile entry, so the golden case
-exercises both generator paths. The goldens are the bytes a real run wrote, regenerated from that
-run and never hand-edited.
-
-4.3 The pins that move move in the same commit: the container findings, the fixture counts, the
-value-table pins, the name-asymmetry pin, the ngfw pin, and the reference-name pin. A pin states
-the measured fact, not a guess.
-
-4.4 `ruff check .` is clean and `python3 -m pytest` passes.
+4.2 The tracking markdown closes the piece: `to-do.md` loses the completed pieces, `backlog.md` loses the
+findings this commit resolved and keeps the facts that stay open, `agent-status.md` names the position and the
+next feature.
 
 ## 5. What this commit does not do
 
-5.1 No gate rule for a certificate block. The emitter prints a shape a gate can read: field names
-as the provider spells them, values in the shape the table states, the choice by presence.
+5.1 No change to a shape word, no change to `VALUE_VARIABLES`, and no data-file rule for a certificate row.
 
-5.2 The EDL `certificate_profile` field stays a plain string, so it records no reference edge. A
-read-through data block cannot answer a name for a type whose data row declares no `name` field,
-and `panos_certificate_profile` is not such a type — but the EDL site does not resolve names, so
-the reference rule cannot reach it. This stays a finding in `backlog.md`.
+5.2 The facts that stay open in `backlog.md`: the EDL `certificate_profile` field is a plain string, so it
+records no reference edge; `panos_certificate` is a data source with no resource; a certificate entry the
+export places in a device group prints the `Shared` template placeholder, because no certificate type declares
+a `device_group` sub-block; a `local` that states both alternatives is refused by `terraform validate`, not by
+the schema JSON, so the choice is gate data read from `selects`.
 
 ## Result (measured 2026-11-05)
 
-All criteria hold. `ruff check .` is clean and `python3 -m pytest` passes 1518 tests.
+All criteria hold. `ruff check .` is clean and `python3 -m pytest` passes 1533 tests. No golden moved, because the
+gate writes no file.
 
-1.1 Both `CONTAINER_TABLE` rows are `emitted` and name the provider type. The profile row path is the
-input's spelling `certificate-profile`, because the scan reads the row path off the input, and the parse
-method states the table path `certificate_profile`. The profile's `certificate` list holds one entry per
-object, so the objects are a `nested-block` row under the profile row, and the row path holds the `entry`
-segment the profile entry is; without it the single-segment `certificate` row would answer for the object.
+1.1 `check_certificate_blocks` calls `sanity_checks.blocks` and `import_blocks.fields_at` and writes no reader or
+helper of its own, pinned by `tests/test_certificate_blocks.py::test_the_rule_reads_the_block_through_the_gate_readers`.
 
-1.2 Both `COVERAGE_MATRIX` rows hold. The profile row declares 16 properties: the 13 fields the emitter
-reads from the entry, plus the 3 fields it reads for the objects inside its `certificate` list, which the
-property scan measures against the profile row through the nested row. The import row declares `local` only.
+1.2 The rule reads the fields at the block's own level and excludes `location`, pinned by
+`::test_the_gate_does_not_read_the_location_sub_block`.
 
-1.4 `CERTIFICATE_SHAPE` is the shape owner for both emitters, and `tests/test_coverage_matrix.py::_shape_table_grounding`
-reads the certificate table branch. `CERTIFICATE_TABLE` carries `root='certificate'`, so the reference-name walk
-in `tests/test_variables.py` names no container.
+1.3 `resource_mapping.certificate_path` is the lookup, read through `CERTIFICATE_TYPES`, pinned by
+`::test_the_type_row_lookup_is_the_table_read_the_other_way`.
 
-1.5 `VALUE_VARIABLES` holds the two `REFERENCE_ONLY` rows, and the goldens print the reference.
+1.4 No shape word changed. `SHAPE_WORDS`, `SHAPE_TO_SCHEMA`, `SHAPE_READS_AS` and `SHAPE_LEVELS` are unchanged:
+`one_of` keeps reading as `object`. The rule states no field name the table declares, which
+`::test_the_entry_name_is_read_through_the_one_naming_rule` pins, and the only name it states is the placement
+sub-block.
 
-1.7 `RESOURCE_NAME_FIELDS` holds the two resource-only types, and
-`tests/test_data_source_schema.py::test_the_name_fact_for_a_resource_only_type` pins it against the live schema;
-`test_the_certificate_table_is_the_live_shape` pins `CERTIFICATE_SHAPE` on the field set and the `sensitive` flags,
-and on `selects` for the `one_of` row.
+1.5 `tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner` now reads three tables and names the
+certificate rule as an owner.
 
-2.3 The record's certificate entry states `local`, and the fixture's profile entry states every declared field.
+2.1–2.5 One test per finding in `tests/test_certificate_blocks.py`: the undeclared field, the value read as
+another shape, the block states no entry name, the choice at the level the walk enters (two keys, none, and a key
+the row does not select), the `sensitive` field printed as a literal, and an element inside a `[` container that
+states no name. Every finding is FAIL, and the rule produces no WARN.
 
-3.1–3.5 Both emitters print through the table, in the row's order, with the location block; the two files are
-`certificates.tf` and `certificate_profiles.tf`, one `UnitText` each, so neither overwrites the other.
+3.1 `CHECK_ORDER` puts `certificate_blocks` after `filter_blocks` and before `references`; the report names the
+checks in that order, pinned by `::test_the_gate_reads_the_run_and_reports_nothing` and by the order pin in
+`tests/test_data_file_gate.py`.
 
-4.2 Goldens that moved, from one real run on `tests/fixtures/kitchen_sink.xml`:
-`tests/golden/kitchen_sink/vsys1_78d8e4bc/certificates.tf` (new),
-`tests/golden/kitchen_sink/fw_template_00a08cdc/certificate_profiles.tf` (new), and
-`tests/golden/kitchen_sink/vsys1_78d8e4bc/variables.tf` (the run declared `var.vsys_cert`, the §5 name of the
-entry that holds the two `sensitive` fields).
+3.2 The certificate fixture and every fixture trip no finding: the rule reports nothing on the run, the report
+line reads `certificate_blocks PASS`, and the whole run reports
+`Result: PASS (0 FAIL, 0 WARN)`.
 
-4.3 Pins that moved in this commit: `tests/test_container_coverage.py::EXPECTED_FINDINGS` and the entry-phrasing
-pin (the record's certificate entry is covered); the fixture counts in `tests/test_build_kitchen_sink.py`
-(68 accepted, 67 read, 3 skipped, 17 comments, 13 names the record holds alone); the reference-only name set and
-the pinned table in `tests/test_site_data.py`, plus the golden file-name pin (five files carry a device location)
-and the declaration-set clause; `tests/test_variables.py::_reference_names`, which walks both tables through
-`ShapeTable.root`; `tests/test_multi_vsys_location.py` ngfw pin; `tests/test_data_source_schema.py` (two new pins);
-and `tests/test_coverage_matrix.py` grounding branch. No pin was weakened.
+3.3 Two runs on the same input write the same report bytes (`::test_the_report_is_byte_identical_between_two_runs`),
+and a finding names the unit directory the file is in (`::test_a_finding_names_the_file_and_the_line_the_reader_read`).
 
-5.1 No gate code was added. `tests/test_edge_cases.py` and the EDL golden are unchanged, so the EDL decision is a
-finding, not a change.
+3.4 No golden moved.
+
+4.1 `README.md` names the check in the gate table, `docs/ARCHITECTURE.md` §4.6 states the rule and §4.11 names the
+module and the test file, `docs/README.md` names the owner for the certificate shape, and `sanity_checks.py` states
+the check in its own table. `docs/RESOURCE_MAPPING.md` no longer says the rule is unwritten.
+
+5.1 One table change: `certificate_profile/certificate` is the entry-list row, so its shape word is `string_list`,
+the word the reader reads for a `[` value, as the filter table's entry rows state it. The rule found the mismatch —
+with the row read as `object`, the profile block a real run wrote was reported as an object value. The field set
+and the `sensitive` flags are unchanged, so the provider pin and the goldens did not move.
