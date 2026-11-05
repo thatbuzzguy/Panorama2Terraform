@@ -17,13 +17,6 @@ Completed work is not recorded here; the git history and the owner document hold
   its entry line names no field. Measured 2026-11-04 no container outside the scan scope has a captured field no
   output read, so no field gap is recorded here.
 
-- Measured 2026-11-04, the live `terraform validate` gate reports one finding on
-  `tests/fixtures/kitchen_sink.xml`: the fixture states `disable_override` as `yes` for the shared `env-prod` tag,
-  and provider 2.0.14 accepts only `no` for `panos_administrative_tag`. The pinned schema states no value list for
-  that field, so the constraint is in the provider code and the tool cannot read it, so the emitter prints the value
-  the export states and the gate reports the finding. The static rules report `PASS (0 FAIL, 1 WARN)` for the same
-  run. Goal 2 says validate passes on every fixture, so this is the open case.
-
 - Parser extraction gaps found by the parse unit tests (each drops data; fix each
   when a report confirms it in a fixture). What stays:
   - The `profile_name` column in the per-entry report cannot be pinned for the certificate container, because
@@ -196,6 +189,11 @@ Completed work is not recorded here; the git history and the owner document hold
   can read for both kinds.
 - The placeholder check lists the VPN pre-shared key only. When F4.3 adds per-entry accounting, the
   expected placeholders should come from the same table that decides the report entries.
+- A value the provider constrains in its code, not in the schema JSON, is a fact the tool cannot read offline, so no
+  table states it. Measured 2026-11-04 against provider 2.0.14: `panos_administrative_tag` accepts one value for
+  `disable_override`, while the pinned schema states no value list for the field. The rule that decides how the gate
+  treats such a value is in `docs/ARCHITECTURE.md` §4.6, and `tests/fixtures/kitchen_sink.xml` states the accepted
+  value for the entry a plan pin reads.
 - Consider a `--checks` selector on the converter CLI if the gate grows; today every check runs on
   every conversion, and a WARN never changes the exit code.
 

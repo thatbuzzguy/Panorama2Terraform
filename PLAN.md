@@ -43,6 +43,12 @@ F7.13 applied the same rule and the same wording to `FILTER_SHAPE`, which states
 measurement names, and the gate reads a filter choice at the block's own level as well. The rules are in
 `docs/ARCHITECTURE.md` §4.9 and §4.10, and the coverage is in `docs/COVERAGE_MATRIX.md`.
 
+The gate keeps one boundary rule, stated in `docs/ARCHITECTURE.md` §4.6: it reads only data it can read offline, so a
+value the provider constrains in its code, not in the schema JSON, stays outside the static rules and the `terraform`
+check reports it on `--validate`. A plan reads the directory it runs on, so the validate pins run the plan once per
+unit directory the manifest record names, and Goal 2 holds for every fixture because the pin reads the files the run
+wrote.
+
 ## Goals
 
 | Goal | Description | Definition of Done |

@@ -4,7 +4,10 @@ The current feature is the certificate container row and its emitter, which `bac
 single statement is complete: `docs/CODEBASE_ASSEMBLY.md` §11 is the owner document, and the run declares no
 credential variable, so the shape the certificate emitter needs is already decided — the value the export holds
 prints as a value, and a field the provider marks `sensitive` prints as the reference to the §5 name of the entry
-that holds it.
+that holds it. The gate rule for a value the provider constrains in its code, not in the schema, is also complete
+(`docs/ARCHITECTURE.md` §4.6): such a value stays outside the static rules and the `terraform` check reports it, so
+the certificate piece below names only what a gate rule reads from a block, and the plan pins read the unit
+directories the run wrote.
 
 Pieces:
 
