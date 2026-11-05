@@ -189,15 +189,17 @@ here with that rule named.
   that case as a count that does not agree (`docs/ARCHITECTURE.md` §4.6). F4.3 is the accounting for the
   entries that write nothing, and the gate cannot replace it.
 - The round-trip cross-check (`sanity_checks.check_round_trip`, pinned by `tests/test_round_trip.py`) compares
-  the block set the reader read with the entry set the run's ledger read, per unit and row. Its finding is a
-  coverage fact, not a broken output, so it is a WARN and does not change the exit code, the decision
-  `entry_coverage.PROPERTY_RULE` already states for a gap. Measured 2026-11-05 across the corpus: 22 findings
-  on 10 fixtures. The rule states no exception list for the three populations it cannot join, so they stay
-  open here.
+  the block set the reader read with the entry set the run's ledger read, per unit and row. It is the one gate
+  rule that reads two sets, so it is the one exception to the boundary that the gate reads only the files it
+  wrote (`docs/ARCHITECTURE.md` §4.6). Its finding is a coverage fact, not a broken output, so it is a WARN and
+  does not change the exit code, the decision `entry_coverage.PROPERTY_RULE` already states for a gap: every
+  corpus fixture still exits 0, and the pins read WARN. Measured 2026-11-05 the corpus is not silent: the rule
+  reports 22 findings on 10 fixtures. The rule states no exception list for the populations it cannot join, so
+  they stay open here.
   - 5 findings: an `emitted` entry the emitter writes no block for, because no v2 attribute exists for its
     content. The `panos_address` entries whose type is `external` or `location` in
-    `tests/fixtures/address_objects.xml` are the measured instances, and the config entry inside a stack above
-    is the same case.
+    `tests/fixtures/address_objects.xml` (`Ext-Dynamic` and `Country-US`) are the measured instances, and the
+    config entry inside a stack above is the same case.
   - 16 findings: a block read for a property level, which has no ledger row, because the ledger records one row
     per config entry and a property level is not an entry.
   - 1 finding: one entry that writes more than one block, on `tests/fixtures/interfaces_ethernet.xml`, because
@@ -206,7 +208,7 @@ here with that rule named.
 - Open: `report_only` is recorded after `mark`, so `EntryLedger.destination` answers `emitted` for a
   report-only address and the cross-check counts it, while the manual setup report prints that entry as a
   report. The two facts disagree for the same entry. Fixing the timing moves golden report bytes, so the fact
-  stays here.
+  stays here; `to-do.md` names it as the next piece.
 - The gate `location` check is presence only, for both block kinds. The resource sub-block and field
   shape stays pinned by `tests/test_multi_vsys_location.py`, because `terraform validate` accepts an
   unknown sub-block and drops it silently. The `data` shape is checked by the gate, because

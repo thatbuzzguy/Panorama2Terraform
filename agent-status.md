@@ -2,56 +2,33 @@
 
 ## Current position
 
-This commit wrote the round-trip cross-check and its pins: `sanity_checks.check_round_trip`, its
-`CHECK_ORDER` position between `data_files` and `control_chars`, the ledger argument on `run_checks` that
-`main()` now passes, and `tests/test_round_trip.py` (33 tests, one per criterion in `acceptance.md`). The
-measurements are in the `acceptance.md` Result, and the facts that stay open are in `backlog.md`.
+The round-trip cross-check feature is complete and committed. `sanity_checks.check_round_trip`, its
+`CHECK_ORDER` position between `data_files` and `control_chars`, the ledger argument on `run_checks`, and the
+33 pins in `tests/test_round_trip.py` landed in `70064a5`. This commit wrote the documents that name the rule:
+`README.md` (the gate table row in report order, the Testing entry, and the paragraph that says the gate reads
+the files, which now names the run's ledger as this rule's one exception), `docs/ARCHITECTURE.md` §4.6 and §1,
+`docs/COVERAGE_MATRIX.md` §1, and `docs/README.md` (the owner table). `sanity_checks.py` already stated the
+check in its own table in report order with the correct severity, so no source file changed.
 
-What landed:
+What the documents state, as the rule measures it:
 
-- The rule reads the `.tf` block set through `sanity_checks.blocks` with `kinds = ('resource',)`, and the entry
-  set through the run's `entry_coverage.EntryLedger`. It joins them through `entry_coverage.matrix_row_for`,
-  `entry_coverage.MATRIX_BY_RESOURCE` and `unit_manifest` (`facts_of`, `directory_name`, `units`), so it states
-  no reader, no count, no scope, no kind, no type, no field name, no file name and no unit rule of its own. It
-  is the gate's one boundary exception: the gate reads the files it wrote plus the run's ledger for this rule.
-  `run_checks` takes the ledger as an argument, `main()` passes it, and a call with no ledger reports the check
-  as NOT RUN with a note, so a pin that reads only the output directory is unchanged.
-- The finding: one finding per unit and per `COVERAGE_MATRIX` row where the two counts do not agree, and the
-  fact is the two counts, so the rule names no entry. The position is the line of the first block the reader
-  read for that unit and row, or the file as a whole (`line` 0) when the reader read no block, which names the
-  unit directory plus the row's `output_file`. A `.tf` file at the codebase root names no unit, so the rule
-  states the count as not assignable. Findings sort by (file, line, detail), the order `check_data_files`
-  already uses, so the report stays byte-identical between runs. The rule prints no scan console line, because
-  its fact compares two sets and the console shape names one identity.
-- The severity is WARN, not the FAIL `acceptance.md` stated. Measured with FAIL: `main()` exits 1 on the corpus
-  fixtures, so `python3 -m pytest` fails 111 tests and errors 115. Measured with WARN: 2 tests fail. The
-  decision follows `entry_coverage.PROPERTY_RULE`: a disagreeing count names no broken output, so the exit code
-  stays with the rules that read the files.
+- The rule reads the `.tf` block set through the one block reader with `kinds = ('resource',)`, and the entry
+  set through the run's `entry_coverage.EntryLedger`, and joins them through `entry_coverage.matrix_row_for`
+  and `unit_manifest`. It is the gate's one boundary exception, and a call with no ledger reports NOT RUN.
+- The severity is WARN, not FAIL, because a disagreeing count names no broken output, which is the decision
+  `entry_coverage.PROPERTY_RULE` already states for a gap, so the exit code stays with the rules that read the
+  files.
+- The corpus is not silent: the rule reports findings on the corpus fixtures, and the populations it cannot join
+  are recorded in `backlog.md`. `docs/COVERAGE_MATRIX.md` §1 keeps the scan scope rule both scans read.
 
-The measured facts that could not hold as written are in the `acceptance.md` Result and in `backlog.md`: the
-corpus is not silent, so the rule reports 22 findings on 10 fixtures in three categories (5, 16 and 1);
-`matrix_row_for` answers no row only for the `nested-block` container, so the entry side reads no count for a
-nested-block entry while the block side counts the block it wrote; `report_only` is recorded after `mark`, so
-`destination` answers `emitted` for a report-only address and the count includes it.
+`ruff check .` is clean and `python3 -m pytest` passes 1566 tests, with no skip and no golden change.
 
-Pins that moved with the rule: `tests/test_data_file_gate.py` (the order tuple gained the name, and the data
-rule's source slice now ends at `check_round_trip`), `tests/test_write_path.py` (the same slice boundary), and
-`tests/test_sanity_gate.py::test_kitchen_sink_gate_passes_with_validate` (the kitchen run now reports 6 WARN:
-the cross-check's five findings and the placeholder).
-
-Every pin that reads the entry side runs the pipeline in process, because `run_script` loses the ledger with
-the process. The suite runs offline.
-
-Next step, for the documents agent: `docs/ARCHITECTURE.md` §4.6 and §1, `docs/COVERAGE_MATRIX.md` §1,
-`README.md` and `docs/README.md`. `sanity_checks.py` already states the check in its own table and names the
-ledger exception in its module docstring.
-
-`ruff check .` is clean and `python3 -m pytest` passes 1566 tests (1533 before this commit, plus the 33 new
-ones), with no skip and no golden change.
-
-The gated pieces that stay open are the four `*_policy_rules` types, a config entry inside a stack, the EDL
-reference decision, and the profile-name report column. The config entry inside a stack is a count mismatch
-this rule reports, so `backlog.md` keeps the fact with the rule named.
+Next: the `report_only` timing in `entry_coverage.EntryLedger`, which is the open fact this feature measured.
+`destination` answers `emitted` for a report-only address, because the destination is recorded after `mark`, so
+the cross-check counts an entry the manual setup report prints as a report; the fix moves golden report bytes,
+so the report pins and the corpus pins change in the same commit. The pieces that stay blocked on a fact the
+tool cannot read offline stay in `backlog.md`: the four `*_policy_rules` types, a config entry inside a stack,
+the EDL reference decision, and the profile-name report column.
 
 
 
