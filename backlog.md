@@ -20,11 +20,14 @@ Completed work is not recorded here; the git history and the owner document hold
 - Parser extraction gaps found by the parse unit tests (each drops data; fix each
   when a report confirms it in a fixture). What stays:
   - The `profile_name` column in the per-entry report cannot be pinned for the certificate container, because
-    no parse method reads its entries. Measured 2026-11-04: `panos_certificate` is a data source only (no
-    resource), so the container cannot become an `emitted` row, and the corpus holds one certificate entry in
-    `tests/fixtures/unknown_containers.xml`, which the report counts as `unaccounted`. The pin that would hold
-    the rule is `tests/test_container_coverage.py::test_report_declares_the_profile_name_column`, never written.
-    It needs a parse method for the container and a fixture entry that carries `profile-name`.
+    no parse method reads its entries. Measured 2026-11-05: `panos_certificate` is a data source only (no
+    resource), so the container cannot become an `emitted` row through that type; the row can name
+    `panos_certificate_import`, which is a resource. The corpus holds one certificate entry in
+    `tests/fixtures/unknown_containers.xml`, which the report counts as `unaccounted`. Measured 2026-11-05:
+    that entry carries `description` only, and no certificate type declares a `description` attribute, so no
+    output can read the field the parse captures for it. The pin that would hold the rule is
+    `tests/test_container_coverage.py::test_report_declares_the_profile_name_column`, never written. It needs
+    a parse method for the container and a fixture entry that carries `profile-name`.
 
 - Service objects with both tcp and udp legs cannot be emitted whole. The v2
   `panos_service` schema declares `protocol.tcp` and `protocol.udp`, but the
@@ -100,15 +103,21 @@ Completed work is not recorded here; the git history and the owner document hold
 
 - Certificate entries have no coverage matrix row, so a certificate entry is an
   `unaccounted` finding today (`device-group/entry/certificate`, pinned in
-  `tests/test_container_coverage.py::EXPECTED_FINDINGS`). `panos_certificate_import`
-  is a resource with no data source, and `panos_certificate_profile` is a resource
-  that is in `LOCATION_SCHEMA` but in neither `EMITTED_TYPES` nor
-  `NOT_EMITTED_TYPES`. The open work is: a `certificate` container row, an emitter
-  that prints `local.pem.certificate` as the value and the key as the variable
-  reference, and a decision for the profile row (emit, or state it in
-  `NOT_EMITTED_TYPES` with the reason). A certificate the run writes no block for
-  cannot be read through a data source, because the certificate entry has no name
-  a reference resolves.
+  `tests/test_container_coverage.py::EXPECTED_FINDINGS`). Measured 2026-11-05 against
+  provider 2.0.14: `panos_certificate_import` is a resource with no data source,
+  `panos_certificate` is a data source with no resource, and `panos_certificate_profile`
+  is in `DATA_SOURCE_SCHEMA` (not in `LOCATION_SCHEMA`, which has no certificate row at
+  all) and in neither `EMITTED_TYPES` nor `NOT_EMITTED_TYPES`.
+  Measured 2026-11-05: no certificate type declares a `device_group` sub-block, so a
+  certificate entry the export places in a device group has no location the emitter can
+  print. And `location_data` reaches `shared` only inside the `device_group` branch, so a
+  profile row that declares `shared` without `device_group` prints the `Shared` template
+  placeholder for an entry in `<shared>`. The open work is: a `certificate`
+  container row, an emitter that prints `local.pem.certificate` as the value and the key
+  as the variable reference, and a decision for the profile row (emit, or state it in
+  `NOT_EMITTED_TYPES` with the reason). A certificate the run writes no block for cannot
+  be read through a data source, because the certificate entry has no name a reference
+  resolves.
 
 - A per-device template variable override has no place the provider can put it:
   `panos_template_variable.location` declares `template` and `template_stack` only,
@@ -383,10 +392,14 @@ Completed work is not recorded here; the git history and the owner document hold
 
 - Decided 2026-10-31: a value the parse cannot carry prints as the variable reference, never as a
   literal. The provider marks these attributes `sensitive`: `panos_certificate_import`
-  `local.pem.private_key` and `local.pem.passphrase`, the BGP, OSPF and RIP auth profile keys, the
-  external dynamic list credentials, and the VPN pre-shared key. One table decides the shape, so the
-  emitter, the gate and the `.tfvars` writer read `resource_mapping.VALUE_VARIABLES`; the literal half
-  is held by `tests/test_robustness.py` (no generated file may contain the secret).
+  `local.pem.private_key`, `local.pem.passphrase` and `local.pkcs12.passphrase` (measured 2026-11-05),
+  the BGP, OSPF and RIP auth profile keys, the external dynamic list credentials, and the VPN pre-shared
+  key. One table decides the shape, so the emitter, the gate and the `.tfvars` writer read
+  `resource_mapping.VALUE_VARIABLES`; the literal half is held by `tests/test_robustness.py` (no generated
+  file may contain the secret). Measured 2026-11-05: the three certificate `sensitive` facts sit inside the
+  `local` object, not at the block's own level, and the table has no row for `private_key` or `passphrase`,
+  so the certificate emitter needs a `REFERENCE_ONLY` row for each before it can print the reference. No
+  other certificate attribute is `sensitive`, including the `panos_certificate` data source's `private_key`.
 - Decided 2026-11-03 (F7.7): the rule is about the print, not about what the parse can carry. A parse
   method can read a `sensitive` value inside an entry and still print the reference, so the value is held
   only to decide the name, and the name is the §5 name of the entry that holds the field, because a field
@@ -429,11 +442,21 @@ These are the facts a provider discussion contradicts:
   (`panos_api_key`, `panos_vm_auth_key`), and the functions `address_value` and `generate_import_id`.
   `docs/CODEBASE_ASSEMBLY.md` §12 names the first three counts only. The last two are facts the tool
   does not use, because a run writes no secret and a run with no network must pass CI.
-- `panos_certificate_profile` declares `certificate`, `block_expired_certificate`,
-  `block_unknown_certificate`, `block_timeout_certificate`, `block_unauthenticated_certificate`,
-  `use_crl`, `use_ocsp`, `certificate_status_timeout`, `crl_receive_timeout`, `domain` and
-  `username_field`. The v1 names (`certificate_profile_certificates`, `block_expired_cert`) are not in
-  the pinned schema, so an emitter for the profile row must use the v2 names.
+- `panos_certificate_profile` declares 15 attributes: the 13 fields `block_expired_certificate`,
+  `block_unknown_certificate`, `block_timeout_certificate`, `block_unauthenticated_certificate`, `use_crl`,
+  `use_ocsp`, `certificate_status_timeout`, `crl_receive_timeout`, `ocsp_exclude_nonce`,
+  `ocsp_receive_timeout`, `domain`, `certificate`, `username_field`, plus `name` and `location`. Measured
+  2026-11-05: `ocsp_exclude_nonce` and `ocsp_receive_timeout` are in the pinned schema, and `certificate` and
+  `username_field` are objects, not fields — `certificate` is a list of objects whose `name` is required, so
+  `terraform validate` refuses a single object there, and `username_field` states `subject` and `subject_alt`.
+  The v1 names (`certificate_profile_certificates`, `block_expired_cert`) are not in the pinned schema, so an
+  emitter for the profile row must use the v2 names.
+- `panos_certificate_import` declares three attributes: `name`, `location` and `local`. `local` is one object
+  with two sub-shapes, `pem` and `pkcs12`, and `terraform validate` refuses a `local` that states both
+  (measured 2026-11-05), so `selects` is the one place a row states that choice. `certificate` is required
+  inside each sub-shape, so the block cannot print the key reference on its own. Measured 2026-11-05: no
+  certificate type declares a `device_group` sub-block, `panos_certificate_import` declares no `shared`, and
+  `panos_certificate_profile` declares no `vsys`.
 
 ## Design Decisions (codebase assembly, open items)
 

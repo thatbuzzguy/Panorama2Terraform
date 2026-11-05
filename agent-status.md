@@ -2,37 +2,52 @@
 
 ## Current position
 
-The gate rule for a value the provider constrains in its code is complete and committed on `development`
-(`4c285f2`); this tracking markdown is the next commit. `docs/ARCHITECTURE.md` §4.6 is the owner document for the
-rule, and `backlog.md` keeps the provider fact as a fact the tool cannot read offline.
+Piece 1 of the certificate feature — the measurement — is complete and committed on `development`. No code and no
+test changed. The measured sets are in `acceptance.md`; `backlog.md` holds the three facts the measurement
+corrected.
 
-- The rule: the gate is static, so a value constraint the provider carries in its code, not in the schema JSON, is
-  not data the gate can read and cannot become a gate rule. The emitter prints the value the export states, and the
-  `terraform` check is the rule that reports such a value as FAIL on `--validate`, so the report is the operator's
-  notice. A fixture a plan pin reads is test data, so it states the value the provider accepts. Rejected: a
-  verified-value table read at check time with a WARN, because the gate could only verify it by running the provider
-  and a WARN rule would need a value list the pinned schema does not state.
-- The measurement, 2026-11-04 with Terraform v1.16.2 against provider 2.0.14, on a kitchen-sink run through
-  `sanity_checks.run_checks` with `run_terraform=True`: the static rules report `PASS (0 FAIL, 1 WARN)`, and the plan
-  check reported the FAIL for `panos_administrative_tag.env_prod_5301b734` before the fixture stated the accepted
-  value. A `terraform validate` at the codebase root passes vacuously, because the `.tf` files sit in the unit
-  directories.
-- Code: `tests/fixtures/kitchen_sink.xml` states the accepted value for the shared `env-prod` entry. Goldens moved:
-  one file, `tests/golden/kitchen_sink/shared_45ca31c3/tags.tf`, written by a real run; the golden file set is
-  unchanged.
-- Pins that moved: `tests/test_terraform_validate.py` calls `sanity_checks.check_terraform` once per unit directory
-  the record names, for every fixture in the file, so each pin reads the files the run wrote; the tooling gate still
-  pins the provider resolving inside a unit directory, and the skipped-when-absent rule is unchanged. New pin:
-  `tests/test_sanity_gate.py::test_kitchen_sink_gate_passes_with_validate`, which reads the report the run wrote and
-  asserts the plan result for each unit directory. `tests/fixtures/tags.xml` keeps `yes`, because no plan pin reads
-  it and the F4.4 pins read that fixture.
-- Unchanged: FAIL, WARN, SKIPPED, the exit codes, `CHECK_ORDER`, the single block reader, and the determinism of the
-  report.
-- `ruff check .` is clean, and `python3 -m pytest` passes 1497 tests (about 3 minutes, because the plan check runs
-  once per unit directory).
+Measured 2026-11-05 against provider 2.0.14 with Terraform v1.16.2, through `terraform providers schema -json`
+(the door `tests/conftest.py::provider_schemas` runs):
 
-The next feature is the certificate container row and its emitter, which `to-do.md` names. The gated pieces that
-stay in `backlog.md` are the four `*_policy_rules` types and a config entry inside a stack.
+- `panos_certificate_import` declares `name`, `location` and `local`; required `name` and `location`. Nothing at
+  the block's own level is `sensitive`: the three `sensitive` facts sit inside `local`, which needs two rows in
+  `VALUE_VARIABLES` (`private_key`, `passphrase`) before an emitter can print the reference. `local` is one object
+  with the two sub-shapes `pem` and `pkcs12`, `certificate` is required inside each, and `terraform validate`
+  refuses a `local` that states both, so `selects` states that choice. Its `location` declares no `device_group`
+  and no `shared`.
+- `panos_certificate_profile` declares 15 attributes, and its resource row and its data source row are identical.
+  Required `name` and `location`; no field is `sensitive`. `certificate` is a list of objects whose `name` is
+  required, and `username_field` is an object. Its `location` declares `shared` and no `device_group` and no
+  `vsys`. It is in `DATA_SOURCE_SCHEMA`, not in `LOCATION_SCHEMA`.
+- `panos_certificate` has a data source and no resource, confirmed: 19 attributes, no `sensitive`, no
+  `device_group`, no `shared`.
+- The code as it stands: `LOCATION_SCHEMA` has no certificate row, `DATA_SOURCE_SCHEMA` has no row for
+  `panos_certificate_import`, neither type is in `EMITTED_TYPES` or `NOT_EMITTED_TYPES`, and the fixture
+  certificate entry (`edge-cert`, `tests/fixtures/unknown_containers.xml` line 47) carries `description` only,
+  which no certificate type declares.
+
+What the next agent must decide:
+
+- Can the profile row be emitted. Measured: every field the profile declares is a leaf field or a small object, so
+  a parse method can read the whole entry, and the reason `NOT_EMITTED_TYPES` exists — a partial object would
+  create a misconfigured object — does not hold for this type. Recommend `emitted`, with a `LOCATION_SCHEMA` row,
+  after the location rule is read: `location_data` reaches `shared` only inside the `device_group` branch, so a
+  row that declares `shared` without `device_group` prints the `Shared` template placeholder for an entry in
+  `<shared>`. The parse method should read the `certificate/profile` container as its own row, so the profile
+  entry is a section the report can cover.
+- Whether `tests/test_container_coverage.py::test_report_declares_the_profile_name_column` can be written now: no.
+  It needs a parse method for the container and a fixture entry that carries `profile-name`, and the committed
+  entry carries `description` only. Write it after the parse method lands, and run the pipeline for the pin,
+  because the rule is a rule about a read.
+- The `certificate` container row can be `emitted` only for an entry in a scope the row's type can place, because
+  no certificate type declares `device_group`. Either the fixture entry moves to a template or a vsys, or the row
+  stays `report` with that reason and `EXPECTED_FINDINGS` keeps the finding.
+- Whether `certificate_profile` in an EDL sub-shape prints as a reference to the emitted profile block; if it
+  does, `tests/golden/kitchen_sink/shared_45ca31c3/external_lists.tf` changes from a real run.
+
+`ruff check .` is clean, and `python3 -m pytest` passes 1497 tests.
+
+The gated pieces that stay in `backlog.md` are the four `*_policy_rules` types and a config entry inside a stack.
 
 ## Rules to keep when writing documents
 

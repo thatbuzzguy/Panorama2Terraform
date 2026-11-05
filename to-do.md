@@ -11,16 +11,20 @@ directories the run wrote.
 
 Pieces:
 
-- [ ] Measure `panos_certificate_import` and `panos_certificate_profile` against the pinned provider schema
+- [x] Measure `panos_certificate_import` and `panos_certificate_profile` against the pinned provider schema
       (2.0.14) through `tests/conftest.py::provider_schemas`: the attributes each declares, which are required, and
       which are `sensitive`. `panos_certificate` is a data source only, so the container cannot become an `emitted`
-      row through a data source.
+      row through a data source. Measured 2026-11-05; the sets are in `acceptance.md`, and the corrected facts are
+      in `backlog.md`.
 - [ ] Decide the `certificate` container row in `resource_mapping.COVERAGE_MATRIX`: the row must be `emitted` with
       the provider type in its note, so the property scan and the per-entry report read the same row, and
       `tests/test_container_coverage.py::EXPECTED_FINDINGS` loses the `unaccounted` finding for
-      `device-group/entry/certificate`.
-- [ ] Decide the profile row: `panos_certificate_profile` is in `LOCATION_SCHEMA` but in neither `EMITTED_TYPES` nor
-      `NOT_EMITTED_TYPES`. Emit it, or state it in `NOT_EMITTED_TYPES` with the reason.
+      `device-group/entry/certificate`. Measured 2026-11-05: no certificate type declares a `device_group`
+      sub-block, so the fixture entry must sit in a scope the row's type can place, or the row stays `report`
+      with that reason and the finding stays.
+- [ ] Decide the profile row: `panos_certificate_profile` is in `DATA_SOURCE_SCHEMA` (not in
+      `LOCATION_SCHEMA`, measured 2026-11-05) but in neither `EMITTED_TYPES` nor `NOT_EMITTED_TYPES`. Emit it, or
+      state it in `NOT_EMITTED_TYPES` with the reason.
 - [ ] Write the emitter: it prints `local.pem.certificate` as the value the export states and the key as the
       reference the §11 rule gives it, so no key value reaches a generated file, and the field order is the order the
       row states.
