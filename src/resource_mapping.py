@@ -1203,11 +1203,11 @@ LITERAL = 'literal'
 # (`backlog.md`, the value the parse cannot carry). F7.7: the run can read the value for such a field inside an
 # entry, and it holds it only to decide the name, so no `.tfvars` line and no site row is written for it.
 REFERENCE_ONLY = 'reference_only'
-# F6.10.4: the shape for a site fact the tool cannot name. The run names the variable, holds no value for it,
-# and the operator supplies the value in `terraform.tfvars` (§11). The export states a device as a hostname,
-# so a serial is a fact the tool cannot read, and the tool names the name and not the value. This is the
-# `reference_only` shape without the `sensitive` marking, because a serial is not a secret: the marking stays
-# the `reference_only` row's rule alone.
+# The shape for a site fact the tool cannot name. The run names the variable, holds no value for it, and the
+# operator supplies the value in `terraform.tfvars` (§11): the export states a device as a hostname, so no serial
+# reaches the parse, and the export states no host, so no host value reaches the parse either. This is the
+# `reference_only` shape without the `sensitive` marking, because neither fact is a secret: the marking stays the
+# `reference_only` row's rule alone, so the credential rule (§11) has no row in this table.
 OPERATOR_SUPPLIED = 'operator_supplied'
 VALUE_VARIABLES = {
     # The device the site names. Hardware replacement changes the serial, and a literal prints in every
@@ -1217,8 +1217,9 @@ VALUE_VARIABLES = {
     'name': LITERAL,
     # A virtual system is a scope name, not a site value.
     'vsys': LITERAL,
-    # The codebase states no device fact in a location (§8 rule 6), and the Panorama host is the credential
-    # gap (§11), so this row states the decision for a field the tool never prints.
+    # The codebase states no device fact in a location (§8 rule 6), so this row states the decision for a
+    # field the tool never prints. The Panorama host is the credential rule's host fact (§11), read through
+    # the `hostname` row below.
     'panorama_device': LITERAL,
     # The parse records no rulebase (F3.5), so no value reaches the block.
     'rulebase': LITERAL,
@@ -1227,9 +1228,14 @@ VALUE_VARIABLES = {
     'secret': REFERENCE_ONLY,
     'key': REFERENCE_ONLY,
     'password': REFERENCE_ONLY,
-    # F6.10.4: the one row for a field the emitter prints outside a location, so the table covers the fields
-    # it prints a value shape for: the location fields, the `sensitive` names, and this provider argument.
-    # The corpus states no serial (the device entry names are hostnames), so no value can be named for it.
+    # The two rows for the fields the emitter prints outside a location: the provider block arguments. The table
+    # covers the location fields, the `sensitive` names, and these two arguments, so the provider block prints its
+    # arguments through the same rule as a location field (`generate_provider_config` calls `printed_value`). Both
+    # are facts the run cannot read from the export: the corpus states no serial (the device entry names are
+    # hostnames), and the export states no host, so no value can be named for either. The credential rule
+    # (`docs/CODEBASE_ASSEMBLY.md` §11) is why the table holds no credential row: the provider reads the key from
+    # the environment, so a credential is never a declared variable.
+    'hostname': OPERATOR_SUPPLIED,
     'target': OPERATOR_SUPPLIED,
 }
 

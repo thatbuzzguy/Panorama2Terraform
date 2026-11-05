@@ -232,12 +232,13 @@ a source. The other files are the unit set, and the run writes one directory per
 - `site.auto.tfvars` - the `.tfvars` written from the site data rows, one file per unit inside the directory
   that row names, one line per variable in name order
   ([`src/site_data.py`](src/site_data.py)). Terraform loads a `*.auto.tfvars` file automatically, so
-  `terraform.tfvars` stays the operator's own file for the credentials, which the tool never writes. Written
+  `terraform.tfvars` stays the operator's own file for the values the tool cannot read, and for the key, which
+  the tool never writes ([docs/CODEBASE_ASSEMBLY.md](docs/CODEBASE_ASSEMBLY.md) §11). Written
   only when it has content. The gate rule `data_files` reads the record through `parse_rows` and compares
   the printed form with `render_tfvars`; the printed form is not one of the four data files, so the report
   count names only the records. A name the table records with no value for it writes no row and no line:
-  `target` is such a name, because the export states a device as a hostname, so no serial reaches the parse and
-  the operator supplies the value
+  `target` is such a name, because the export states a device as a hostname, so no serial reaches the parse, and
+  `hostname` is the same case, because the export states no host (§11). The operator supplies both values
   ([`docs/CODEBASE_ASSEMBLY.md`](docs/CODEBASE_ASSEMBLY.md) §9 rule 8)
 - `scope.tf` - The scope objects the export declares: one `resource` block per scope entry for
   `panos_device_group`, `panos_device_group_parent`, `panos_template`, `panos_template_stack`,
@@ -296,8 +297,10 @@ manifest names, holding that unit's `.tf` files and the printed form of that uni
   INTERFACE_MIGRATION_REPORT.txt  VPN_MIGRATION_REPORT.txt
 
   <unit directory>/                    (one directory per unit the manifest names)
-    provider.tf  variables.tf          (the credentials plus the values the run printed, F6.6; provider.tf reads
-                                        `var.target` for a unit that names a device, F6.10.4)
+    provider.tf  variables.tf          (the names the run declares: the host, the values the run printed,
+                                        and the names it holds no value for. `provider.tf` reads
+                                        `var.hostname` for every unit and `var.target` for a unit that
+                                        names a device, F6.6, F6.10.4, §11)
     scope.tf
     address_objects.tf  address_groups.tf
     service_objects.tf  service_groups.tf
@@ -327,7 +330,8 @@ The converter can also read the API response itself (`--source api --host panora
 which fetches over https and keeps a cached copy. The response is an envelope
 (`response/result/config`), so the fetch layer normalises the root to the `config` element
 before the parse. A cached entry lets a later run work with `--offline`, which needs no
-key. The key is read from `PANOS_API_KEY`, never from a command line. `--path` reads one scope
+key. The key is read from the environment, never from a command line, and the generated codebase reads the same
+environment at plan time ([docs/CODEBASE_ASSEMBLY.md](docs/CODEBASE_ASSEMBLY.md) §11). `--path` reads one scope
 instead of the whole config, and `--parent` declares the parent scope the run reads as a second
 source, which is what the shadow scan reads ([`src/shadow_coverage.py`](src/shadow_coverage.py)); both
 apply to the api source only. The arguments are in
@@ -371,12 +375,13 @@ value is legal input. A state document the identity key cannot read is refused a
 
 ## Deploying with Terraform
 
-1. Create `terraform.tfvars` with credentials (do not commit it):
+1. Set the key in the environment the provider reads at plan time
+   ([docs/CODEBASE_ASSEMBLY.md](docs/CODEBASE_ASSEMBLY.md) §11), and create `terraform.tfvars` for the names the
+   tool declares and cannot fill (do not commit it):
 
    ```hcl
-   panos_hostname = "panorama.example.com"
-   panos_username = "admin"
-   panos_password = "your-password"
+   hostname = "panorama.example.com"   # every unit
+   target   = "0123456789"             # a unit that plans against a device (F6.10.4)
    ```
 
 2. `terraform init`

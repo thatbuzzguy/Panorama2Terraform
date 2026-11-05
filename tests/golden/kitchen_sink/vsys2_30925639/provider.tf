@@ -13,12 +13,11 @@ terraform {
 }
 
 provider "panos" {
-  # Credentials come from variables.tf. Set the values in
-  # terraform.tfvars (do not commit it) or via the TF_VAR_*
-  # environment variables.
-  hostname = var.panos_hostname
-  username = var.panos_username
-  password = var.panos_password
+  # The Panorama host this unit plans against. The run names the variable and holds no
+  # value for it, so the operator supplies it in terraform.tfvars (do not commit that
+  # file). The provider reads PANOS_API_KEY from the environment, so the
+  # block states no key.
+  hostname = var.hostname
   # The NGFW serial for the device this unit plans against. The run names the
   # variable and holds no value for it, so the operator supplies the serial.
   target = var.target

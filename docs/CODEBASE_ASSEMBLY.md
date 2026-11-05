@@ -479,10 +479,11 @@ files for every run that has content.
    No new flag, so no new argument error path and no change to the exit codes.
 2. **The table is data, one row per location field the emitter prints** — the five fields
    `LOCATION_SCHEMA` declares — plus one row per reference-only name, which is a field the provider marks
-   `sensitive` (F7.1), plus the one row for a fact the location can state no value for (rule 8), and it states
-   what the block prints for each. Only `ngfw_device` maps to a variable that holds a value: the device is the
-   value a codebase changes per site. `name` is the row identity (§8 rule 3),
-   `vsys` is a scope name, `panorama_device` is the credential gap (§11) and is never emitted (§8 rule 6),
+   `sensitive` (F7.1), plus one row per fact the location can state no value for (rule 8): `target` and
+   `hostname`. The table states what the block prints for each. Only `ngfw_device` maps to a variable that
+   holds a value: the device is the value a codebase changes per site. `name` is the row identity (§8 rule 3),
+   `vsys` is a scope name, `panorama_device` names the device the credential rule reads the key for (§11) and
+   is never emitted (§8 rule 6),
    and `rulebase` is not recorded (F3.5). A reference-only row holds no value, because the value must never
    reach a generated file: the block prints the reference to a variable the run declares with
    `sensitive = true`, and no `.tfvars` line and no site row is written for it, because rule 3 writes a row
@@ -529,11 +530,13 @@ files for every run that has content.
    a printed value's shape cannot be decided in two places: a mapped field prints as `var.<name>`, a
    reference-only field prints as the reference to the §5 name of the entry that holds the field
    (F7.7), because a field cannot name itself, and every other field prints as the quoted value.
-   the quoted value. `location_data` keeps the value, because the import id encodes the value (§7 rule 3) and a
+   `location_data` keeps the value, because the import id encodes the value (§7 rule 3) and a
    variable name is not a device name. The pair is recorded at the print site, keyed by
    `unit_manifest.facts_of`, the way `name_ref` records a reference name for the manifest (§3 rule 4), so
    `site_data.build_rows` resolves nothing and names no value the run did not print. `generate_variables()`
-   declares the credentials plus what the run consumed, so `main()` calls it after the emitters (§6). Pinned
+   declares the host name, the site values the table mapped, and the reference-only names it recorded, which
+   is the declaration set §11 states, so `main()` calls it after the emitters (§6). `generate_provider_config()`
+   prints the block's arguments through the same print site. Pinned
    by `tests/test_site_data.py::test_the_generator_prints_a_value_through_the_table`.
 6. **The gate reads a location field as the block states it.** `Block.location_values` reads the quoted
    value or the `var.` reference through the one block reader, and `check_import_blocks` compares the
@@ -545,20 +548,26 @@ files for every run that has content.
    location print `ngfw_device = var.<name>`, and `variables.tf` gains the device variable for that case.
    The sample set is byte-identical, because its only device entry is the "this device" placeholder, which
    names no device and no variable (F3.5). A run that reads no mapped value writes the same bytes as before.
-   A run that names a device gains the `target` name in `provider.tf` and in `variables.tf` (rule 8), and the
-   sample set gains nothing, because its only device entry names no device.
+   A run that names a device gains the `target` name in `provider.tf` and in `variables.tf` (rule 8). §11 adds
+   the host row, so every unit gains `hostname` in both files and the provider block states no credential
+   argument, so the golden `.tf` set changed for all four cases: 34 files, one `provider.tf` and one
+   `variables.tf` per unit. `tests/test_variables.py` no longer pins a `panos_` prefix, because the host name
+   comes from the table.
 8. **The tool names a variable for a fact it cannot read.** `target` takes one NGFW serial (§12), and every
-   device name the corpus states is a hostname, so no serial reaches the parse. The run names the variable,
-   holds no value for it, and the operator supplies the value in `terraform.tfvars` (§11). The shape word is
-   `operator_supplied`, which is the F7.1 `reference_only` shape with one difference: a serial is not a secret,
-   so `sensitive = true` stays the `reference_only` row's rule alone and the table is read in one place, and no
-   name list decides a marking. The name is the §5 rule applied to the field, because a fact the tool cannot
-   read has no value to name it from, so `naming.py` is still the only naming rule. No site row and no `.tfvars`
-   line is written for it, because rule 3 writes a row only for a site that names a value. `provider.tf` is the
-   consumer: the block prints `target = var.target` for a unit whose manifest row names a device and prints none
-   for a unit that names no device, so the `variables` gate rule (§4.6) sees no declaration with no consumer, and
-   the placeholder device names none (F3.5). `generate_provider_config()` records the pair at the print site,
-   before `generate_variables()` runs, so the declaration set is what the run consumed.
+   device name the corpus states is a hostname, so no serial reaches the parse. `hostname` names the host the
+   unit plans against, and the export states no host, so the run cannot read that either. Both rows hold the
+   shape word `operator_supplied`, which is the F7.1 `reference_only` shape with one difference: a serial and a
+   host are facts, not secrets, so `sensitive = true` stays the `reference_only` row's rule alone, the table is
+   read in one place, and no name list decides a marking. The name is the §5 rule applied to the field, because
+   a fact the tool cannot read has no value to name it from, so `naming.py` is still the only naming rule. No
+   site row and no `.tfvars` line is written for a name like this, because rule 3 writes a row only for a site
+   that names a value. `provider.tf` is the consumer for both rows: the block prints `hostname = var.hostname`
+   for every unit, because one unit is one plan against one host, and prints `target = var.target` only for a
+   unit whose manifest row names a device, so the `variables` gate rule (§4.6) sees no declaration with no
+   consumer, and the placeholder device names none (F3.5). `generate_provider_config()` records the pair at the
+   print site, before `generate_variables()` runs, so the declaration set is what the run consumed. Neither row
+   is a credential: the credential is the key §11 states, and the run holds no value for it and declares no
+   variable for it.
 9. **The generated `README.md` names the site files.** The F5.5 label precedent (§5) says a report may name what
    a reader cannot see from a `.tf` file alone, so the README names `imports.tf`, `SITE_DATA.json` and
    `site.auto.tfvars`, and names `target` as the fact the tool names as a variable and cannot name as a value. It
@@ -575,8 +584,9 @@ Pinned by `tests/test_site_data.py`, including `::test_the_corpus_rows_are_pinne
 `::test_a_name_the_tool_cannot_fill_writes_no_row_and_no_line`,
 `::test_a_fact_the_tool_cannot_read_names_a_variable_and_holds_no_value`,
 `::test_the_provider_block_prints_target_only_for_a_unit_that_names_a_device`, and
-`::test_the_gate_reads_the_record_and_its_printed_form_through_site_data`.
-The `.tf` bytes and the report bytes of the corpus are otherwise unchanged.
+`::test_the_gate_reads_the_record_and_its_printed_form_through_site_data`. The report bytes of the corpus are
+otherwise unchanged, and `tests/test_variables.py` pins the provider block against the table and the measured
+provider schema.
 
 ## 10. The commit action per unit (F6.7, landed)
 
@@ -657,18 +667,34 @@ Pinned by `tests/test_commit_actions.py`, including
 block for each unit that names a fact `SCOPE_ANSWER` answers, and declare Terraform 1.14; every other golden
 byte is unchanged.
 
-## 11. Gap — credentials and the provider block
+## 11. The credential rule — one statement
 
-`generate_variables` declares `panos_hostname`, `panos_username`, and
-`panos_password`, and `generate_provider_config` uses them. The fetch rule
-(`ARCHITECTURE.md` §3) is: the key comes from the environment only and never reaches a
-generated file. A codebase should use the same rule for the provider: the host per unit
-as a variable, the key through `TF_VAR_PANOS_API_KEY`, and no credential literal in a
-generated file.
+This section is the owner of the credential rule. No other document restates it; each one links here.
 
-Decision needed: keep the generated username/password provider block as an operator
-template, or make the generated provider block read the key. One rule, stated once, must
-cover both the fetch layer and the generated provider block.
+The credential is the API key. The rule is one statement, and it covers both layers:
+
+- The run takes the key from the environment, never from a command line, and never writes it to a generated
+  file. `source_fetch.py` is the only tool module that states the environment name.
+- The generated codebase takes the key from the same environment at plan time. The provider reads that
+  environment itself, so `provider.tf` names the environment in a comment and states no credential argument.
+- The tool declares no credential variable and writes no credential value. `terraform.tfvars` stays the
+  operator's own file, and the tool never writes it.
+
+The host is a site fact, not a credential. The pinned provider schema (§12) marks `api_key` and `password`
+`sensitive`, and it does not mark `hostname` `sensitive`, so the host is a fact the run names, not a secret:
+
+- `hostname` is an `operator_supplied` row of `VALUE_VARIABLES`, in the same case as `target`: the run names the
+  variable and holds no value for it, because the export states no host.
+- `provider.tf` prints the host through the print site, so the argument name is the §5 rule applied to the row:
+  `hostname = var.hostname`.
+- `variables.tf` declares the host name, the site values the table mapped, and the reference-only names it
+  recorded (F7.1, F7.7), and nothing else. No declaration is named by a table row the provider marks
+  `sensitive`.
+
+Pinned by `tests/test_variables.py`: the declaration set holds no name a table row states for a credential; the
+provider block prints only the rows the table states for it; no printed argument is one the measured schema marks
+`sensitive` or requires; the generated block names the environment `source_fetch.py` owns, and no other tool
+module states that name. `tests/test_robustness.py` pins that a parsed secret never reaches a generated file.
 
 ## 12. Provider facts, verified 2026-10-27
 
@@ -698,11 +724,12 @@ provider docs:
   four rule types are the rows `LOCATION_SCHEMA` declares `rulebase` for, and no second table
   names them. Pinned by `tests/test_import_blocks.py`.
 - Actions need Terraform 1.14 or later. The provider needs Terraform 1.8 or later.
-- Provider arguments include `api_key` (environment `PANOS_API_KEY`) and `target` (one
-  NGFW serial), and the local inspection mode (`config_file`, `panos_version`), which
-  reads a config file with no server. No rule in this project uses local inspection mode,
-  and a plan in that mode cannot show drift, so it is not a replacement for the state
-  scan.
+- The provider block declares 16 arguments, and none is required, so a block that states only the facts the run
+  names is a complete block (§11). Two are `sensitive`: `api_key` and `password`. `api_key` is the alternative to
+  `username` + `password`, and the provider reads it from the environment `source_fetch.API_KEY_ENV` names (§11).
+  `hostname` is the host the block plans against, and `target` takes one NGFW serial. The local inspection mode
+  (`config_file`, `panos_version`) reads a config file with no server. No rule in this project uses local
+  inspection mode, and a plan in that mode cannot show drift, so it is not a replacement for the state scan.
 
 ## 13. The tool and the platform boundary
 

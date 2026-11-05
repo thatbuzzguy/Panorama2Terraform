@@ -3775,6 +3775,13 @@ class TerraformGenerator:
         One plan reads one root, so the provider block is a unit-set file: the codebase root set holds no
         `.tf` file. The text states no unit, so the path is the only place the file names the unit.
 
+        The credential rule (`docs/CODEBASE_ASSEMBLY.md` §11) decides what the block states. The block prints the
+        host through the shape table, so the argument name is the §5 rule applied to the `hostname` row, and it
+        states no credential argument: the provider reads the key from the environment named by
+        `source_fetch.API_KEY_ENV`, so the run declares no credential variable and writes no credential value.
+        Measured against the pinned provider,
+        every provider-block argument is optional, so a block that states only the facts the run names is complete.
+
         F6.10.4: the block prints `target` for a unit whose manifest row names a device, because the provider
         reads the serial there (§12). The shape table decides the shape, so the block prints the reference to
         the name the run declares, and the operator supplies the value in `terraform.tfvars` (§11): the export
@@ -3797,15 +3804,16 @@ terraform {
 }
 
 provider "panos" {
-  # Credentials come from variables.tf. Set the values in
-  # terraform.tfvars (do not commit it) or via the TF_VAR_*
-  # environment variables.
-  hostname = var.panos_hostname
-  username = var.panos_username
-  password = var.panos_password
 '''
         for facts in self.unit_set():
             body = head
+            # The host is the fact the run names and cannot read, so the block prints the reference to the name
+            # the table's `operator_supplied` row gives it (F6.6, §11).
+            body += ('  # The Panorama host this unit plans against. The run names the variable and holds no\n'
+                     '  # value for it, so the operator supplies it in terraform.tfvars (do not commit that\n'
+                     '  # file). The provider reads ' + source_fetch.API_KEY_ENV + ' from the environment, so the\n'
+                     '  # block states no key.\n'
+                     f'  hostname = {self.printed_value("hostname", "", facts)}\n')
             device = unit_manifest.fact(facts, 'vsys_device')
             if device and device != container_coverage.PLACEHOLDER_DEVICE:
                 body += ('  # The NGFW serial for the device this unit plans against. The run names the\n'
@@ -3816,36 +3824,24 @@ provider "panos" {
     def generate_variables(self):
         """Generate `variables.tf` for every unit the run's unit set names (F6.10.3, §14).
 
-        F2.10: every emitted variable is consumed. The three credential variables are consumed by the
-        provider block in `provider.tf`, and `provider.tf` is a unit-set file, so the declaration file is
-        one per unit too. The old dead `device_group` variable is gone: v2 location is derived per
-        resource from the source XML.
+        F2.10: every emitted variable is consumed. The declaration set is what the run named: the site values the
+        shape table mapped, the reference-only names, and the facts the tool cannot read (`hostname` and `target`),
+        and each is consumed by the provider block in the same unit directory. The old dead `device_group`
+        variable is gone: v2 location is derived per resource from the source XML.
 
-        F6.6: the rest of the declaration set is the site values the value-to-variable table mapped for
-        that unit, so the file declares exactly what that unit printed. `main()` calls it after the
-        emitters, because the file cannot state a variable the run has not consumed. The type is the kind
-        the site data row declares, so a declaration agrees with the value the `.tfvars` prints.
+        The credential rule (`docs/CODEBASE_ASSEMBLY.md` §11): a credential is never a declared variable, so the
+        header states no name list and each description follows its shape word. The provider reads the key from the
+        environment, so the run declares nothing for it.
+
+        F6.6: `main()` calls this after the emitters, because the file cannot state a variable the run has not
+        consumed. The type is the kind the site data row declares, so a declaration agrees with the value the
+        `.tfvars` prints.
         """
-        header = '''# Variables for Palo Alto Configuration
-# Set the values in terraform.tfvars (do not commit it) or via the
-# TF_VAR_panos_hostname / TF_VAR_panos_username / TF_VAR_panos_password
-# environment variables.
-variable "panos_hostname" {
-  description = "Hostname or IP of the Palo Alto firewall or Panorama"
-  type        = string
-}
-
-variable "panos_username" {
-  description = "Username for authentication"
-  type        = string
-}
-
-variable "panos_password" {
-  description = "Password for authentication"
-  type        = string
-  sensitive   = true
-}
-'''
+        header = (f'# Variables for Palo Alto Configuration\n'
+                  '# The run declares the names it names: the site values `site_data.py` maps, the reference-only\n'
+                  '# names, and the facts the tool cannot read. Set the values in terraform.tfvars (do not commit\n'
+                  '# it) or via the TF_VAR_* environment variables. The run declares no key, because the provider\n'
+                  f'# reads {source_fetch.API_KEY_ENV} from the environment (docs/CODEBASE_ASSEMBLY.md §11).\n')
         for facts in self.unit_set():
             recorded = self._value_variables.get(facts) or {}
             # F7.1: a reference-only name is a declaration with no value held for it.
@@ -3864,7 +3860,8 @@ variable "panos_password" {
             shapes = self._value_shapes.get(facts) or {}
             for name in sorted(held):
                 # F7.1 marks a held name `sensitive` when its table row is `reference_only`; F6.10.4 names a
-                # fact the tool cannot read, and a serial is not a secret, so the marking follows the row.
+                # fact the tool cannot read, and neither is a secret, so the marking follows the row. The
+                # description states the shape word, so no name list appears in a generated file.
                 if shapes.get(name) == resource_mapping.REFERENCE_ONLY:
                     content += (f'variable "{name}" {{\n'
                                 f'  description = "Sensitive protocol value (F7.1, F7.7): the reference prints, so no '
@@ -3874,8 +3871,8 @@ variable "panos_password" {
                                 '}\n\n')
                 else:
                     content += (f'variable "{name}" {{\n'
-                                f'  description = "NGFW serial (F6.10.4): the export states no serial, so the run '
-                                f'names the variable and the operator supplies the value"\n'
+                                f'  description = "A fact the tool cannot read (F6.10.4, docs/CODEBASE_ASSEMBLY.md '
+                                f'§11): the run names the variable and the operator supplies the value"\n'
                                 f'  type        = string\n'
                                 '}\n\n')
             self.write_unit_file(self.directory_of(facts), 'variables.tf', content)
@@ -6266,7 +6263,11 @@ variable "panos_password" {
         files a reader cannot see from a `.tf` file alone. It names the files and states no row and no value,
         so the rule that no report names a field the site data states still holds for the site record itself.
         """
-        head = '''# Palo Alto Terraform Configuration
+        # The environment name is stated once, in `source_fetch.API_KEY_ENV`, so the README cannot name a
+        # second one (docs/CODEBASE_ASSEMBLY.md §11). The host name is read through the naming rule, so the
+        # instruction names the name the table's `operator_supplied` row gives it.
+        host = naming.variable_name('hostname')
+        head = f'''# Palo Alto Terraform Configuration
 
 This directory contains Terraform configuration files generated from Palo Alto Panorama export.
 
@@ -6282,33 +6283,35 @@ unit directory.
 
 ## Configuration
 
-1. Set up the credential variables in `terraform.tfvars` (do not
-   commit the file):
+1. Set the API key in the environment the provider reads:
+
+```bash
+export {source_fetch.API_KEY_ENV}="your-api-key"
+```
+
+2. Set the host in `terraform.tfvars` (do not commit the file). The run declares the name and writes no value
+   for it:
 
 ```hcl
-panos_hostname = "your-panorama-hostname-or-ip"
-panos_username = "admin"
-panos_password = "your-password"
+{host} = "your-panorama-hostname-or-ip"
 ```
 
-Or use Terraform environment variables:
+Or set it with the environment variable Terraform reads for a declared variable:
 ```bash
-export TF_VAR_panos_hostname="your-panorama-hostname-or-ip"
-export TF_VAR_panos_username="admin"
-export TF_VAR_panos_password="your-password"
+export TF_VAR_{host}="your-panorama-hostname-or-ip"
 ```
 
-2. Initialize Terraform:
+3. Initialize Terraform:
 ```bash
 terraform init
 ```
 
-3. Review the plan:
+4. Review the plan:
 ```bash
 terraform plan
 ```
 
-4. Apply the configuration:
+5. Apply the configuration:
 ```bash
 terraform apply
 ```
@@ -6320,8 +6323,10 @@ subset below that matches the input.
 
 Terraform configuration, one file per unit inside the unit directory the manifest names:
 
-- `provider.tf` - Provider configuration
-- `variables.tf` - Variable definitions
+- `provider.tf` - Provider configuration. The block prints the host through the variable the run declares, and
+  names the environment the provider reads for the key
+- `variables.tf` - The names the run declares: the site values, the reference-only names, and the facts the tool
+  cannot read
 - `scope.tf` - The scope objects (device group, template, template stack, template variable,
   virtual system), one block per scope entry, written before the config inside them
 - `address_objects.tf`, `address_groups.tf` - Address objects and groups
@@ -6385,10 +6390,11 @@ Reports, at the codebase root:
             f'The run writes `{site_data.SITE_DATA_FILE}` at the codebase root, one row per unit it recorded a '
             f'site value for, and writes the printed form of that row as `{site_data.TFVARS_FILE}` inside the '
             'unit directory. Set the values there, or with `TF_VAR_<name>`.\n\n'
-            'The tool names a variable for a site fact it cannot read. The export states a device as a '
-            'hostname, so no serial reaches the parse, and `target` is a name the tool declares for a unit that '
-            'plans against a device while the operator supplies the value in `terraform.tfvars`. A value the '
-            'provider marks sensitive follows the same rule.\n'
+            'The tool names a variable for a site fact it cannot read, so it writes no row and no line for it: '
+            '`target` for a unit that plans against a device, and '
+            f'`{naming.variable_name("hostname")}` for every unit. The operator supplies both in '
+            '`terraform.tfvars`. A value the provider marks `sensitive` follows the same rule: the run holds it '
+            'to decide the name and never writes it.\n'
         )
 
         tail = '''
@@ -7034,7 +7040,8 @@ def main():
         if ike_gateways or ipsec_tunnels:
             print("  3. ⚠️  Review VPN_MIGRATION_REPORT.txt and update pre-shared keys!")
         print("  4. Review the generated .tf files")
-        print("  5. Create terraform.tfvars with your credentials")
+        print("  5. Set the host in terraform.tfvars (do not commit the file), and set the key in the "
+              f"environment ({source_fetch.API_KEY_ENV})")
         if ike_gateways or ipsec_tunnels:
             print("  6. ⚠️  Add VPN pre-shared keys to terraform.tfvars (DO NOT COMMIT)")
         # F6.10.3: a unit is one plan against one state, so the plan runs inside the unit directory the
