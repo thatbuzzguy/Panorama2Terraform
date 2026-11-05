@@ -492,6 +492,13 @@ class PanoramaParser:
         template_stacks, stack_templates), each value sorted so the result
         does not depend on document order. An export that lists no device
         returns empty tables: no association is better than a guessed one.
+
+        The tables are the fact this method records, and they are read as tables, so no captured field carries
+        them (`docs/COVERAGE_MATRIX.md` §1). The membership entries this method marks hold no value: `_list_names`
+        marks each with an empty object, so the entry line names no field and states the relation as the detail
+        column. The value of the relation is the list on the entry that owns the container, and the block of that
+        entry prints it through the row that covers it. The location rule reads these tables to place an entry, so
+        the membership entry reaches the output only as the row identity.
         """
         cached = getattr(self, '_associations', None)
         if cached is not None:

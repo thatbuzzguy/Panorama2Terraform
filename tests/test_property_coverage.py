@@ -23,12 +23,14 @@ Six groups:
    the emitter reading the key and the row naming it in the same change; a `count-only` container is
    closed by the report line printing the value it names, because the entry line is the only output
    its entry reaches; a `nested-block` container is closed by the entry line naming only the fields
-   the print reads, because a nested block prints only what its type declares. Seven pins, one per gap.
+   the print reads, because a nested block prints only what its type declares; a `bookkeeping`
+   container is closed by the entry line naming no field, because the fact its row records is a relation the
+   entry carries no value for. Eight pins, one per gap.
 
 The scan scope is the entries a matrix row covers. A report, inventory, bookkeeping,
 count-only, or nested-block container has no matrix row, so the scan does not report it;
-`docs/COVERAGE_MATRIX.md` §1 names the output that reads the field for each shape, and the shape with
-no rule (`bookkeeping`) stays in backlog.md. F7.11: an entry the parse reaches through a field the parent row names is
+`docs/COVERAGE_MATRIX.md` §1 names the output that reads the field for each shape. F7.11: an entry the
+parse reaches through a field the parent row names is
 not measured either, such as an interface entry inside an area entry, so the fields its row declares are grounded
 by `PROTOCOL_SHAPE` instead of by the row.
 """
@@ -571,6 +573,13 @@ def test_scan_scope_is_the_entries_a_matrix_row_covers(converter_module, tmp_pat
     the value it names through the captured object, which is the rule group 6 pins on the regions fixture.
     A `report` container has no row either, so its field is honest only when its report section reads what
     it prints; measured 2026-11-04 no `report` container in the corpus has a captured field no output read.
+    The `bookkeeping` row is in the same scope, and it has no captured field to report: the fact its row records is
+    the relation between an entry and the membership container that lists it, and the membership entry carries no
+    value for that relation. Measured 2026-11-04 on `tests/fixtures/multi_device_templates.xml`, the entry the
+    association row covers carries nothing, so the line names no field, and the value is printed by the block of the
+    entry that owns the container. The rule that keeps its line honest is the one
+    `docs/COVERAGE_MATRIX.md` §1 states for this shape, and gap 8 pins it:
+    `::test_the_bookkeeping_line_names_no_field_for_the_membership_entry_it_marks`.
     """
     parser = run_pipeline(converter_module, 'interfaces_ethernet.xml', tmp_path)
     assert parser is not None, 'interfaces_ethernet.xml'
@@ -598,6 +607,23 @@ def test_scan_scope_is_the_entries_a_matrix_row_covers(converter_module, tmp_pat
     # The field is read by the only output the entry reaches, so there is nothing for the scan to report.
     assert 'addresses' in region_ledger.mark_for(region_entry)['captured'].used_keys(), \
         region_ledger.mark_for(region_entry)['captured'].used_keys()
+
+    # The `bookkeeping` shape: the membership entry carries no value for the relation its row records, so the
+    # scan measures nothing for it and the entry line names no field.
+    multi = run_pipeline(converter_module, 'multi_device_templates.xml', tmp_path / 'multi')
+    assert multi is not None, 'multi_device_templates.xml'
+    membership = next(e for e in multi.ledger.entries()
+                      if e.get('name') == 'fw-1.example.com'
+                      and entry_coverage.covering_row(container_coverage.section_path(
+                          multi.ledger.parents[e], multi.ledger.parents, multi.ledger.source)).path
+                      == 'device-group/entry/devices')
+    membership_path = container_coverage.section_path(multi.ledger.parents[membership],
+                                                       multi.ledger.parents, multi.ledger.source)
+    assert entry_coverage.covering_row(membership_path).destination == 'bookkeeping', membership_path
+    assert entry_coverage.matrix_row_for(membership_path) is None, membership_path
+    assert multi.ledger.captured_fields(multi.ledger.mark_for(membership)) == (), \
+        multi.ledger.captured_fields(multi.ledger.mark_for(membership))
+    assert multi.ledger.property_findings() == [], multi.ledger.property_findings()
 
 
 # --- 4. The report section ------------------------------------------------
@@ -969,6 +995,81 @@ def test_the_nested_block_line_names_only_the_fields_the_emitter_reads(converter
     path = container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source)
     assert entry_coverage.covering_row(path).destination == 'nested-block', path
     assert entry_coverage.matrix_row_for(path) is None, path
+    assert ledger.property_findings() == [], ledger.property_findings()
+
+
+def test_the_bookkeeping_line_names_no_field_for_the_membership_entry_it_marks(converter_module, tmp_path):
+    """Gap 8: a `bookkeeping` entry carries no value for the relation its row records, so its line names no field.
+
+    `docs/COVERAGE_MATRIX.md` §1 states the shape for this kind: the fact a `bookkeeping` row records is the
+    relation between an entry and the membership container that lists it, so the entry carries no value for it and
+    the captured part states the row identity only. Measured 2026-11-04 across the corpus, none of the 13
+    `bookkeeping` report entries carries a captured field, so this pin is the only thing that can keep the shape
+    honest: `matrix_row_for` answers None for the row, so no finding can name it. The read that builds the
+    association table reads the names off the XML element at parse time, before the run starts the outputs, so the
+    read record for a membership entry stays empty, and the name the entry carries is the row identity
+    (`entry_coverage.NON_FIELD_KEYS`), not a captured field.
+
+    The other side of the rule is the entry that owns the membership container, and the run measures it on the same
+    fixture: `parse_device_groups` keeps a value for `devices` and `templates` on `Office-FW`, the device group
+    row's emitter reads both through that entry's captured object, and the block prints them, so that line names
+    them. `parse_templates` keeps no value for a template's device members, because `resource_mapping.SCOPE_SHAPE`
+    states no device field for `panos_template` and no output can read one, so the association is read as the table
+    and never as a field of the entry.
+    """
+    out = tmp_path / 'multi_device_templates'
+    parser = run_pipeline(converter_module, 'multi_device_templates.xml', out)
+    assert parser is not None, 'multi_device_templates.xml'
+    ledger = parser.ledger
+    written = written_bytes(out)
+    report = written[entry_coverage.REPORT_FILE].decode(encoding='utf-8')
+
+    def covered(name, row_path):
+        """The entry one `bookkeeping` row covers, and the section path the scan reads for it."""
+        for candidate in ledger.entries():
+            if candidate.get('name') != name:
+                continue
+            section = container_coverage.section_path(ledger.parents[candidate], ledger.parents, ledger.source)
+            row = entry_coverage.covering_row(section)
+            if row is not None and row.path == row_path:
+                return candidate, row, section
+        raise AssertionError((name, row_path))
+
+    # The membership entry: no value, so no field on the line, and the relation is the detail column.
+    member, member_row, member_path = covered('fw-1.example.com', 'device-group/entry/devices')
+    assert member_row.destination == 'bookkeeping', member_row
+    assert entry_coverage.matrix_row_for(member_path) is None, member_path
+    mark = ledger.mark_for(member)
+    assert ledger.captured_fields(mark) == (), ledger.captured_fields(mark)
+    assert mark['captured'].used_keys() == (), mark['captured'].used_keys()
+    line = next(line for line in report.splitlines() if 'device-group/entry/devices/fw-1.example.com' in line)
+    assert 'captured: name only' in line, line
+    assert 'association table' in line, line
+
+    # The association is the table the row builds, so the run reads it as a table, not through a captured object.
+    assert parser.parse_associations()['device_groups'] == {
+        'fw-1.example.com': ['Office-FW'], 'fw-2.example.com': ['Datacenter-FW']}, \
+        parser.parse_associations()['device_groups']
+
+    # The entry that owns the container carries the value, and its block prints it.
+    owner, owner_row, owner_path = covered('Office-FW', 'device-group')
+    assert owner_row.destination == 'emitted', owner_row
+    assert entry_coverage.matrix_row_for(owner_path)['resource'] == 'panos_device_group', owner_path
+    owner_mark = ledger.mark_for(owner)
+    assert ledger.captured_fields(owner_mark) == ('devices', 'templates'), ledger.captured_fields(owner_mark)
+    assert set(ledger.captured_fields(owner_mark)) <= set(owner_mark['captured'].used_keys()), \
+        owner_mark['captured'].used_keys()
+    owner_line = next(line for line in report.splitlines() if 'device-group/Office-FW' in line)
+    assert 'captured: devices, templates' in owner_line, owner_line
+    block = next(text.decode(encoding='utf-8') for name, text in written.items()
+                 if name.endswith('scope.tf') and 'name = "Office-FW"' in text.decode(encoding='utf-8'))
+    assert 'devices = [' in block and 'name = "fw-1.example.com"' in block, block
+    assert 'templates = [ "HQ-Networks" ]' in block, block
+
+    # A template entry keeps no value for its device members, so no output can read one.
+    template, template_row, _template_path = covered('HQ-Networks', 'templates')
+    assert template_row.destination == 'emitted', template_row
+    assert 'devices' not in ledger.mark_for(template)['captured'], ledger.mark_for(template)['captured']
     assert ledger.property_findings() == [], ledger.property_findings()
 
 
