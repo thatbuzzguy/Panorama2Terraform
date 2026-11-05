@@ -1077,6 +1077,7 @@ The provider fact itself is recorded in `backlog.md`, as a fact the tool cannot 
 | `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
 | `protocol_object` | every `protocol` object on a `panos_virtual_router` block matches its `PROTOCOL_SHAPE` row (§4.9) | FAIL |
 | `filter_blocks` | every filter container block matches its `FILTER_SHAPE` row (§4.10) | FAIL |
+| `certificate_blocks` | every certificate block matches its `CERTIFICATE_SHAPE` row (§4.11) | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a variable this run declares (F6.6) | FAIL |
 | `data_files` | every data file reads as its declared rows and agrees with the rules that produced it (F6.8) | FAIL |
@@ -1180,6 +1181,23 @@ is the rule that asks for it. The table states no `sensitive` field, so the sens
 filter block. The choice is read before the field rule, as in `_shape_level_findings`, so a selected key is not
 read twice. Pinned by `tests/test_filter_containers.py`, one test per finding, and
 `::test_the_gate_reads_the_run_and_reports_nothing` for the gate order.
+
+`certificate_blocks` (F7.14) reads a certificate block against `resource_mapping.CERTIFICATE_SHAPE` (§4.11),
+through the same block reader and the same field reader. Five findings, each a FAIL, read from the file text: a
+level, a field, or a value must be the shape the row states; the block states the entry name through
+`entry_coverage.name_field`, because a certificate entry has no name a reference resolves and the field rule
+reads only the fields the block states; a row that states `selects` names the attributes the provider reads as
+exactly one, so `local` states one key (F7.12); a field the row marks `sensitive` prints as the variable
+reference, never as a literal; and an element inside a `[` container states the name the row reads for the entry
+name. `location` is the placement fact, so the rule reads the fields at the block's own level and not the
+sub-block. The name is read first, because the block states it before its content, which is the print order the
+emitter uses. The choice is read before the field rule, as in `_shape_level_findings`, so a selected key is not
+read twice. The level finding cannot fire for a certificate block, because every field the walk enters has a row
+under it. `CHECK_ORDER` puts the rule after `filter_blocks`, so the three shape-table rules are grouped. Pinned
+by `tests/test_certificate_blocks.py`, one test per finding, the two-reader pin, the lookup pin, and
+`::test_the_gate_reads_the_run_and_reports_nothing` for the gate order; the rule is read as a shape owner by
+`tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner`, and the report order is pinned by
+`tests/test_data_file_gate.py::test_check_order_puts_the_data_rule_after_the_block_rules`.
 
 - A WARN does not fail the gate: a placeholder is correct output that still needs
   an operator action, so the run exits 0.
@@ -1529,6 +1547,42 @@ them is a spelling the `-` rule can produce. Each pair is grounded by an entry i
 holds a choice holds one entry per alternative the fixture states. The pin reads the pair from a real run: the
 entry states the element the exception names, the block the run wrote for that entry prints the name the row
 declares, and `terraform validate` accepts the block. Pinned by `tests/test_filter_containers.py`.
+
+### 4.11 The certificate containers (F7.14)
+
+The two certificate containers are each one resource block per entry. `resource_mapping.CERTIFICATE_SHAPE` is the
+one table that states their shape, with the same row shape the protocol and filter tables use: `shape`, `fields`,
+`selects`, `sensitive`. `resource_mapping.CERTIFICATE_TABLE` is the object the two parse methods
+(`PanoramaParser.parse_certificates`, `PanoramaParser.parse_certificate_profiles`), the two emitters
+(`TerraformGenerator.generate_certificates`, `TerraformGenerator.generate_certificate_profiles`) and the gate rule
+(`sanity_checks.check_certificate_blocks`) read it through, so no second table names a certificate shape.
+`resource_mapping.CERTIFICATE_TYPES` is the lookup from an entry row to the provider type, and
+`resource_mapping.certificate_path` reads it the other way for the gate rule, so the rule states no type.
+
+Three things the table states:
+
+1. **`selects` states the choice by presence** for `certificate/local` (F7.12), because the provider reads
+   `local` as exactly one of `pem` or `pkcs12` and `terraform validate` refuses a `local` stating both. The row
+   states no field, so the alternative is read from the key the block states. `SHAPE_READS_AS` keeps `one_of`
+   reading as `object`, so the gate needs no new shape word.
+2. **`sensitive` is stated only inside `local`**: the `private_key` and `passphrase` rows of
+   `resource_mapping.VALUE_VARIABLES` are the same fact the table marks, which
+   `tests/test_protocol_object.py::test_the_sensitive_rows_are_the_reference_only_names` pins. The block prints
+   the reference, and no generated file states the value (`tests/test_robustness.py`).
+3. **`certificate_profile/certificate` is an entry-list row**, so its shape word is `string_list`, the word the
+   reader reads for a `[` value, as the filter table's entry rows state it. The fields the row states are the
+   fields one entry inside the list states, so the walk reads each element as an entry.
+
+The entry name is read through `entry_coverage.name_field`. `panos_certificate_import` is the first emitted type
+with no data source, so the name fact comes from `RESOURCE_NAME_FIELDS`, which
+`tests/test_data_source_schema.py::test_the_name_fact_for_a_resource_only_type` pins against the live schema. The
+emitter prints the entry name before the row's other fields, in the row's order, and the gate rule reads the name
+in the same order.
+
+The table itself is pinned by `tests/test_data_source_schema.py::test_the_certificate_table_is_the_live_shape`,
+the emitter by the grounding branch in `tests/test_coverage_matrix.py`, the print by the goldens from one real run
+on `tests/fixtures/kitchen_sink.xml`, and the gate rule by `tests/test_certificate_blocks.py`. The facts that stay
+open are in `backlog.md`.
 
 ## 5. Naming rules
 

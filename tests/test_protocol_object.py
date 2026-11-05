@@ -179,11 +179,13 @@ def test_the_table_is_the_only_shape_owner(converter_module):
     there too. `name` is the field the rule reads for the entry name, and `protocol` is the table's own
     `PROTOCOL_FIELD`: those two are the names the rule has to state.
     F7.10 added the two methods the `protocol` row names for the redist profile lists and the path-only helper
-    they read through, so those three are owners too.
+    they read through, so those three are owners too. F7.14 added the certificate rule to the owners, so the
+    pin reads the three shape tables and no rule states a certificate field.
     """
-    # Both shape tables are shape owners, so a field name written as a string constant in a reader, an emitter
-    # or a gate branch is a second owner for either table (F7.8).
-    fields = {field for table in (resource_mapping.PROTOCOL_TABLE, resource_mapping.FILTER_TABLE)
+    # The three shape tables are shape owners, so a field name written as a string constant in a reader, an
+    # emitter or a gate branch is a second owner for any of them (F7.8, F7.14).
+    fields = {field for table in (resource_mapping.PROTOCOL_TABLE, resource_mapping.FILTER_TABLE,
+                                  resource_mapping.CERTIFICATE_TABLE)
               for row in table.rows.values() for field in row['fields']}
     # The static-route emitter is not a protocol owner: `metric` is the route's own field there, and the row
     # `COVERAGE_MATRIX` states for it names that shape. `name` is the field the rule reads for the entry
@@ -197,8 +199,8 @@ def test_the_table_is_the_only_shape_owner(converter_module):
     allowed = (set(resource_mapping.SHAPE_WORDS) | {'name', 'entry', resource_mapping.PROTOCOL_FIELD}
                | set(static_route['properties']) | {'interfaces'})
     owners = [getattr(sanity_checks, name, None) for name in
-              ('check_protocol_object', 'check_filter_blocks', '_shape_level_findings',
-               '_shape_field_findings', '_shape_choice_findings', 'value_shape')]
+              ('check_protocol_object', 'check_filter_blocks', 'check_certificate_blocks',
+               '_shape_level_findings', '_shape_field_findings', '_shape_choice_findings', 'value_shape')]
     generator = converter_module.TerraformGenerator
     parser = converter_module.PanoramaParser
     owners += [getattr(generator, name) for name in ('generate_virtual_routers', '_protocol_fields', 'printed_value')]

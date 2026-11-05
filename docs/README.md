@@ -27,6 +27,7 @@ that document instead of restating the rule.
 | Emit order, location, reference resolution, policy chains, reports, gate | `ARCHITECTURE.md` §4 |
 | The protocol object shape, the one-of mapping, and what prints | `ARCHITECTURE.md` §4.9, and `resource_mapping.PROTOCOL_SHAPE` |
 | The filter container shape, the row scope, and the path-keyed input spellings | `ARCHITECTURE.md` §4.10, and `resource_mapping.FILTER_SHAPE` |
+| The certificate container shape, the choice by presence, and the `sensitive` print | `ARCHITECTURE.md` §4.11, and `resource_mapping.CERTIFICATE_SHAPE` |
 | Local resource naming | `ARCHITECTURE.md` §5 |
 | Determinism | `ARCHITECTURE.md` §6 |
 | Provider type per object kind | `RESOURCE_MAPPING.md`, and `resource_mapping.py` |

@@ -1,42 +1,26 @@
 # To Do
 
-The current feature is the certificate container row and its emitter, which `backlog.md` names. The credential rule
-single statement is complete: `docs/CODEBASE_ASSEMBLY.md` §11 is the owner document, and the run declares no
-credential variable, so the shape the certificate emitter needs is already decided — the value the export holds
-prints as a value, and a field the provider marks `sensitive` prints as the reference to the §5 name of the entry
-that holds it. The gate rule for a value the provider constrains in its code, not in the schema, is also complete
-(`docs/ARCHITECTURE.md` §4.6): such a value stays outside the static rules and the `terraform` check reports it, so
-the certificate piece below names only what a gate rule reads from a block, and the plan pins read the unit
-directories the run wrote.
+The certificate feature is complete and committed: the two `CONTAINER_TABLE` rows, the two `COVERAGE_MATRIX`
+rows, `CERTIFICATE_SHAPE` and `CERTIFICATE_TABLE`, the two parse methods, the two emitters, the two
+`VALUE_VARIABLES` rows, the fixture, the goldens from one real run, and the gate rule
+`sanity_checks.check_certificate_blocks` that reads a printed certificate block against `CERTIFICATE_SHAPE`
+(`docs/ARCHITECTURE.md` §4.6 and §4.11). `tests/test_certificate_blocks.py` holds its pins.
 
-Pieces:
+The next feature is the round-trip cross-check, in `backlog.md` (Deeper post-run checks): parse the generated
+HCL and compare the object counts against the input, through the coverage data. It is the gate work that is
+actionable offline. Pieces:
 
-- [x] Measure `panos_certificate_import` and `panos_certificate_profile` against the pinned provider schema
-      (2.0.14) through `tests/conftest.py::provider_schemas`: the attributes each declares, which are required, and
-      which are `sensitive`. `panos_certificate` is a data source only, so the container cannot become an `emitted`
-      row through a data source. Measured 2026-11-05; the sets are in `acceptance.md`, and the corrected facts are
-      in `backlog.md`.
-- [x] Decide the `certificate` container row in `resource_mapping.COVERAGE_MATRIX`: `emitted` with the provider
-      type in its note, so the property scan and the per-entry report read the same row. Measured 2026-11-05: no
-      certificate type declares a `device_group` sub-block, so the fixture entry sits in a scope the row's type
-      can place (a virtual system for the record entry, a template and a virtual system in
-      `tests/fixtures/certificates.xml`), and `tests/test_container_coverage.py::EXPECTED_FINDINGS` lost the
-      `unaccounted` finding for `device-group/entry/certificate`.
-- [x] Decide the profile row: `emitted`, with a `LOCATION_SCHEMA` row that states `template` only, because
-      `location_data` reaches `shared` only inside the device-group branch and the row declares no device group,
-      so a `shared` row would be a fact the tool cannot use. The whole entry is readable, so the
-      `NOT_EMITTED_TYPES` reason (a partial object) does not hold for this type. The container row is the input's
-      spelling `certificate-profile`, and the profile's `certificate` objects are a `nested-block` row under it.
-- [x] Write the emitter: it prints `local.pem.certificate` as the value the export states and the two `sensitive`
-      fields as the variable reference the entry names, so no generated file states the value, and the field order
-      is the order `CERTIFICATE_SHAPE` states. Two files, one per emitter: `certificates.tf` and
-      `certificate_profiles.tf`.
-- [ ] Say what the gate reads for a certificate block. A certificate entry has no name a reference resolves, so the
-      F5.5 read-through rule cannot serve it, and the gate rule must read the block the run wrote instead.
-- [x] Check the gate and the goldens together: the two rows moved to `emitted`, so the scan scope, the per-entry
-      report and the `.tf` goldens changed in the same commit, and the goldens are the bytes one real run wrote.
-      The pins that moved are listed in `acceptance.md` §Result. `tests/test_edge_cases.py` and the EDL golden did
-      not move, because the EDL site resolves no names.
+- [ ] Decide what the round-trip check reads: the `.tf` block set and the entry ledger, so no second count rule
+      appears and the rule stays a rule about a read.
+- [ ] Decide the finding: a count that does not agree, stated per unit, at the position the reader read, and the
+      `CHECK_ORDER` position the new rule takes.
+- [ ] Decide which types the check can compare: a `nested-block` row writes lines inside a parent block, so its
+      count is not one block, and an entry the run reports writes no block.
+
+Feature-sized items that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the four
+`*_policy_rules` types wait for the F3.5 rulebase decision and a live target, a config entry inside a stack
+needs a provider location shape, the EDL `certificate_profile` field needs a rule that makes the EDL site
+resolve names, and the per-entry report `profile_name` column needs a value the provider does not declare.
 
 ## Rules the layout keeps
 

@@ -40,7 +40,7 @@ panos provider v2:
                          tests/test_protocol_object.py pins it against the live schema.
      CERTIFICATE_SHAPE  - one row per level of the two certificate containers (F7.14), read by the two
                           certificate emitters and pinned against the live schema by
-                          tests/test_data_source_schema.py. No gate rule reads it yet.
+                          tests/test_data_source_schema.py, and read by the gate rule `certificate_blocks`.
      RESOURCE_NAME_FIELDS - the field that carries the entry name for a type `DATA_SOURCE_SCHEMA` has no
                           row for (F6.5 decision 4), read by `entry_coverage.name_field`.
 
@@ -3873,9 +3873,11 @@ CERTIFICATE_SHAPE: dict[str, dict] = {
     },
     # One object per entry the export holds under the profile's `certificate` level. `name` is required by
     # the provider, so the object prints it, and the entry name is not a reference: it names the object the
-    # provider reads inside the list.
+    # provider reads inside the list. The row is the list level the walk enters, so its shape word is the word
+    # the reader reads for a `[` value, as in the filter table's entry rows, and the fields are the fields one
+    # entry inside the list states.
     'certificate_profile/certificate': {
-        'shape': 'object',
+        'shape': 'string_list',
         'fields': {'name': 'string', 'default_ocsp_url': 'string',
                    'ocsp_verify_certificate': 'string', 'template_name': 'string'},
         'selects': {},
@@ -3893,6 +3895,18 @@ CERTIFICATE_SHAPE: dict[str, dict] = {
 # through the table starts at the container the table names, and states no container name of its own.
 CERTIFICATE_TYPES = {'certificate': 'panos_certificate_import',
                      'certificate_profile': 'panos_certificate_profile'}
+
+
+def certificate_path(resource: str) -> Optional[str]:
+    """The entry row a certificate resource type belongs to (`CERTIFICATE_TYPES`, read the other way).
+
+    The gate rule reads a block through this lookup, so it states no resource type of its own, the same way
+    `filter_path` reads `FILTER_TYPES`.
+    """
+    for path, name in CERTIFICATE_TYPES.items():
+        if name == resource:
+            return path
+    return None
 
 
 class ShapeTable:
@@ -3939,10 +3953,9 @@ class ShapeTable:
 PROTOCOL_TABLE = ShapeTable('PROTOCOL_SHAPE', PROTOCOL_SHAPE, word='protocol', rule='protocol_object',
                             root='virtual-router')
 FILTER_TABLE = ShapeTable('FILTER_SHAPE', FILTER_SHAPE, FILTER_XML_NAME_EXCEPTIONS, 'filter', 'filter_blocks')
-# `rule` names the gate rule that reads these rows. This feature states no rule for them, because the existing
-# gate rules already cover a certificate block: the type is in `EMITTED_TYPES`, the location is present, and the
-# two `sensitive` fields print as the variable reference. The name is the fact the gate feature will use, so the
-# table states it here.
+# `rule` names the gate rule that reads these rows. `sanity_checks.check_certificate_blocks` reads them through
+# this table object, so the rows the emitter prints and the rows the gate reads are the same rows. `name` is the
+# field `entry_coverage.name_field` reads for the entry name, not a name the rule states.
 CERTIFICATE_TABLE = ShapeTable('CERTIFICATE_SHAPE', CERTIFICATE_SHAPE, word='certificate',
                                rule='certificate_blocks', root='certificate')
 
