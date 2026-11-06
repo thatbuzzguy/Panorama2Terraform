@@ -19,12 +19,15 @@ so an entry the run reports enters no count. The report-only call site in
 
 Test count: `python3 -m pytest` reads 1567 pins, and `ruff check .` is clean.
 
-Next: the certificate `REFERENCE_ONLY` rows for `private_key` and `passphrase`, which
-`resource_mapping.VALUE_VARIABLES` has no row for, so the certificate emitter cannot print the reference yet
-(`backlog.md`). The facts that stay blocked on a fact the tool cannot read offline stay in `backlog.md`: the four
-`*_policy_rules` types, a config entry inside a stack, the EDL `certificate_profile` field, the profile-name
-report column, the certificate `sensitive` `REFERENCE_ONLY` fact, and the two `.github/` template files outside
-the document indexes.
+Next: `ruff format` as a gate is the next actionable slice, run as its own task after the one-time format pass
+of the legacy scripts (`backlog.md`, Nice-to-Haves); `tflint` integration is the following item. The
+certificate `sensitive` `REFERENCE_ONLY` fact is closed: `resource_mapping.VALUE_VARIABLES` holds the
+`private_key` and `passphrase` rows, the emitter reads them at the print site, and the pins that hold the rule
+are `tests/test_variables.py` (the declaration set read through the table) and
+`tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`. The facts that stay blocked
+on a fact the tool cannot read offline stay in `backlog.md`: the four `*_policy_rules` types, a config entry
+inside a stack, the EDL `certificate_profile` field, the profile-name report column, and the two `.github/`
+template files outside the document indexes.
 
 
 

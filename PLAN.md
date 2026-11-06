@@ -105,8 +105,10 @@ The certificate container row, its emitters and its gate rule are complete (`doc
 round-trip cross-check is complete, and `docs/ARCHITECTURE.md` §4.6 is the owner document for it: the rule reads
 the generated HCL back through the one gate reader and compares the block count with the run's entry ledger, per
 unit and per coverage matrix row. The `report_only` timing fact that rule measured is landed and closed here,
-through the destination rule in Current State. The next feature is the certificate `REFERENCE_ONLY` rows for
-`private_key` and `passphrase`, which `resource_mapping.VALUE_VARIABLES` has no row for (`backlog.md`). The gated
+through the destination rule in Current State. The certificate `REFERENCE_ONLY` rows for `private_key` and
+`passphrase` are landed in `resource_mapping.VALUE_VARIABLES`, read by the emitter, the gate and the `.tfvars`
+writer through the same table, so that feature is closed. The next actionable slice is `ruff format` as a gate,
+which `backlog.md` records as its own task. The gated
 pieces that stay held in `backlog.md` are the four `*_policy_rules` types, which wait for the F3.5 rulebase
 decision and a live target, and a config entry inside a stack, which needs a provider location shape before the
 emitter can write a block for it. The rows that state fewer fields than the pinned provider declares for their
