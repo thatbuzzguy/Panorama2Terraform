@@ -199,16 +199,24 @@ here with that rule named.
   - 5 findings: an `emitted` entry the emitter writes no block for, because no v2 attribute exists for its
     content. The `panos_address` entries whose type is `external` or `location` in
     `tests/fixtures/address_objects.xml` (`Ext-Dynamic` and `Country-US`) are the measured instances, and the
-    config entry inside a stack above is the same case.
+    config entry inside a stack above is the same case. Measured again on 2026-11-05 with the destination read
+    from the recorded object (`to-do.md`): 3 findings, because the 3 report-only entries leave the count, so this
+    shape has no measured instance left. The survivors are `tests/fixtures/dependency_wiring.xml`
+    (`panos_address` 3 against 2), `tests/fixtures/interfaces_other.xml` (`panos_aggregate_interface` 2 against
+    1, the aggregate group with no content the provider models), and the same aggregate case in
+    `tests/fixtures/kitchen_sink.xml`.
   - 16 findings: a block read for a property level, which has no ledger row, because the ledger records one row
     per config entry and a property level is not an entry.
   - 1 finding: one entry that writes more than one block, on `tests/fixtures/interfaces_ethernet.xml`, because
     the `nested-block` entry writes lines inside its parent block and `matrix_row_for` answers no row for that
     container, so the entry side reads no count while the block side counts the block.
-- Open: `report_only` is recorded after `mark`, so `EntryLedger.destination` answers `emitted` for a
-  report-only address and the cross-check counts it, while the manual setup report prints that entry as a
-  report. The two facts disagree for the same entry. Fixing the timing moves golden report bytes, so the fact
-  stays here; `to-do.md` names it as the next piece.
+- The `report_only` timing fact is no longer open here: `acceptance.md` states the decision and `to-do.md` names
+  the pieces. `mark` records what the parse method took and only the destination the caller states, and
+  `EntryLedger.destination` answers the destination in one place, in the order: the destination the mark
+  recorded, then the per-entry fact read from the recorded object, then the container table row.
+- The two template files under `.github/` (`ISSUE_TEMPLATE.md` and `PULL_REQUEST_TEMPLATE.md`) sit outside every
+  index, so the layout rule (`docs/ARCHITECTURE.md` §1.1) reads them as a finding. They are not tool documents,
+  so no index names them; either an index gains them or they leave the repository.
 - The gate `location` check is presence only, for both block kinds. The resource sub-block and field
   shape stays pinned by `tests/test_multi_vsys_location.py`, because `terraform validate` accepts an
   unknown sub-block and drops it silently. The `data` shape is checked by the gate, because
