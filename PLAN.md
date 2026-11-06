@@ -76,6 +76,7 @@ hand-written block are read the same way.
 | 4 | Full traceability and verification of the conversion | Every input entry is classified converted, report-only, or unaccounted in a per-entry report with line numbers. Every output passes the sanity gate. No silent drops, no unverified output. |
 | 5 | Input comes from a declared source, and the run records which source it used | The parse boundary returns the same contract for every source. The F3.8 size and DTD checks apply to the bytes a source returns. A run with no network passes CI. The provenance record names the source, the scope, and the cache entry it read. |
 | 6 | The output is a codebase, not one directory: one unit per declared scope, one owner per entry, and the path that binds each entry to the live config | A codebase run writes one directory per declared scope, a manifest that names each unit and the entries it owns, one scope object per declared scope, an import block per entry, the reference edges between units, and the site values as data with the `.tfvars` written from them. The gate reads the `.tf` files for the block rules and the four data files for the data rule. Every rule stays offline and deterministic. |
+| 7 | A second conversion path that reads only Panorama and PAN-OS API responses | Path 2 reads no file. Its scope set comes from the membership responses it read, and every response is checked against the request that made it. CI runs it offline on committed responses with no server. It reads the same tables, naming rule, write path, and gate as path 1, and for content with no live-only fact it writes the same `.tf` bytes as path 1. |
 
 A brown-field config is an existing production config: mixed shared objects,
 per-device-group overrides, template stacks, and multiple virtual systems.
@@ -87,6 +88,34 @@ applies. The design record is `docs/CODEBASE_ASSEMBLY.md`, and every rule it sta
 and the test that holds it. The unit rule, the owner rule, the edge rule, the order rule, the import
 block rule, the scope object rule, the site rule, and the action rule are all landed, and the write
 path writes one directory per unit the manifest names.
+
+## Epic 8 — the API-only conversion path (Goal 7) — open
+
+Path 2 reads only API responses, one per scope, and writes the same codebase. The design record is
+`docs/API_CONVERSION_PATH.md`, and every rule it states names the module and the test that holds it.
+
+Phase 8A — the read boundary. The accepted request shapes (the whole-config export, the per-scope
+read, and the device fact shape), the scope index read from the membership responses, and the join
+between a response and the request that made it. The offline harness is part of this phase, so no
+piece in it needs a server.
+
+Phase 8B — the run over many sources. The parse methods run per response, the report position names
+the line inside the response that held the entry, the record holds one record per request, and the
+unit join reads the scope the run read for each unit.
+
+Phase 8C — the gate and the entry point. Every existing gate rule reads the same files, so path 2
+adds one rule: the request set must agree with the scope the run read. The entry point states the
+arguments, the run order, the exit codes, and the generated `README.md` label that names which path
+wrote the codebase.
+
+Phase 8D — the facts only a live target states: the rulebase per rule, the rule position, the device
+serial, the per-device template variable override, and the built-in name table. Each fact is gated on
+its own condition, recorded in `backlog.md`, and none of it is a piece until a committed response
+shows its shape.
+
+Definition of done for the epic: CI runs path 2 with no server, its output passes the gate, the
+record names every request the run read, and for a fixture with no live-only fact the `.tf` bytes
+agree with path 1.
 
 ## Sequencing
 

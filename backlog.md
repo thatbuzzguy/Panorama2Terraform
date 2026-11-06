@@ -422,6 +422,15 @@ here with that rule named.
   provider schema, the way `LOCATION_SCHEMA` is, so the scan keeps the same-name rule until such a
   table exists.
 
+- Epic 8 (path 2) reads the facts an export cannot carry, and each one stays blocked until a
+  committed response shows its shape. The shapes, what each one unlocks, and the condition per fact
+  are in `docs/API_CONVERSION_PATH.md` §4, so this document names no shape a second time. The rule
+  that keeps these items out of `to-do.md` is that a piece cannot be written from a response the
+  project does not hold. The three conditions are: the accepted op response shape, which also
+  decides how `container_coverage.SCOPE_PATH_ROOTS` reads a `predefined` path; the F3.5 rulebase
+  value verified against a live target; and a response that shows how a device states a per-device
+  template variable override.
+
 ## Design Decisions (the value the parse cannot carry)
 
 - Decided 2026-10-31: a value the parse cannot carry prints as the variable reference, never as a

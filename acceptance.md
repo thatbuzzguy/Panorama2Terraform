@@ -1,70 +1,64 @@
-# Acceptance criteria — the stale certificate REFERENCE_ONLY claim (task for this commit)
+# Acceptance criteria — the Epic 8 plan (task for this commit)
 
-Scope: markdown only. The fix writes no code and no test, so no golden moves. The finding is a stale claim:
-`backlog.md` states that `resource_mapping.VALUE_VARIABLES` has no row for `private_key` or `passphrase`, and
-`agent-status.md` names that claim as the Next item. The rule that makes it a finding is in `AGENTS.md`: a claim
-about what the tool does must name the module or the test that holds it, and a stale claim is a finding.
+Scope: documents only. This task writes no code and no test, so no golden moves and no pin changes.
+The deliverable is the design record for the second conversion path, plus the tracking markdown that
+carries it. The rule that makes a document a finding is the one in `AGENTS.md`: a claim about what the
+tool does must name the module or the test that holds it, and each index must name every document
+under it.
 
-## 1. The finding is measured before it is rewritten
+## 1. The design record
 
-1.1 The rows exist. `src/resource_mapping.py` `VALUE_VARIABLES` holds `'private_key': REFERENCE_ONLY` and
-`'passphrase': REFERENCE_ONLY`, added with the certificate work (F7.14), which names them in the comment above
-the rows.
+1.1 `docs/API_CONVERSION_PATH.md` is the owner document for the path 2 rules, and `docs/README.md`
+names both the document and the rules it owns.
 
-1.2 The emitter reads them. `panorama_to_terraform.py` `_protocol_fields` reads the table at the print site
-(line 3802), and `_generate_certificate_blocks` prints certificate blocks through that rule.
+1.2 The record states which parts of the pipeline path 2 shares with path 1, and states that path 2
+adds no second version of them. The pins that read the `src/` set are named.
 
-1.3 The golden proves the reference prints.
-`tests/golden/kitchen_sink/vsys1_78d8e4bc/certificates.tf` states `passphrase = var.vsys_cert` and
-`private_key = var.vsys_cert`, and `tests/golden/kitchen_sink/vsys1_78d8e4bc/variables.tf` declares `vsys_cert`
-with `sensitive = true`.
+1.3 The record states the three accepted request shapes, and names the one decision that must be made
+before any other path 2 piece can be written: the wrapper rule for the op shape, and how
+`container_coverage.SCOPE_PATH_ROOTS` reads a `predefined` path.
 
-1.4 The pins hold the rule. `tests/test_variables.py` pins the declaration set read through the table, and
-`tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file` pins that no generated file
-holds the parsed value. `python3 -m pytest tests/test_variables.py tests/test_robustness.py
-tests/test_certificate_blocks.py` passes.
+1.4 The record states that the scope set is read from the responses, never guessed, and that path 2
+never assembles one tree from many responses, because the line map, the entry ledger, and the parent
+walk are keyed on the source that was parsed.
 
-## 2. The documents
+1.5 The record states the facts only a live target states, the request shape that gives each one, what
+each one unlocks, and the condition that keeps it blocked. It states no fact as available.
 
-2.1 `backlog.md`: the sentence in `Design Decisions (the value the parse cannot carry)` states what the table
-holds, not what it lacks, and names the module and the tests. The facts that stay genuinely open in the
-certificate entries stay: the `panos_certificate` data-source-only asymmetry, no certificate type declares a
-`device_group` sub-block, the `selects` choice for a `local` that states both alternatives, the `sensitive`
-marks on the rows. The table is not restated row by row.
+1.6 The record states what path 2 does not close, so the plan does not promise a parse gap as an input
+gain.
 
-2.2 `backlog.md`: the open-fact list in the round-trip entry no longer names the closed fact, and keeps the two
-`.github/` template files as the recorded finding.
+1.7 The record states the offline rule for path 2, and the agreement rule between the two paths for
+content with no live-only fact.
 
-2.3 `PLAN.md`: the Sequencing sentence that carries the same stale claim states that the rows are landed.
+1.8 The record names the two modules path 2 adds, and the rule each keeps.
 
-2.4 `agent-status.md`: the Current position Next paragraph names the next actionable item. The gated feature
-items are blocked on facts the tool cannot read offline, so the actionable items are the Nice-to-Haves:
-`ruff format` as a gate is the next actionable slice, its own task per `backlog.md`; `tflint` integration is the
-following item.
+## 2. The tracking markdown
 
-2.5 `to-do.md`: no open implementation piece remains for a landed feature. It states the current position and
-the next actionable slice, and records no work blocked offline as an open piece.
+2.1 `PLAN.md` carries Goal 7 and Epic 8 with the four phases and the definition of done for the epic.
+It states no rule that the design record owns.
+
+2.2 `to-do.md` holds the buildable pieces for Epic 8, in the order the design record states them, and
+each piece names the module and the test that will hold its rule. It holds no piece that needs a
+server.
+
+2.3 `backlog.md` records the blocked path 2 facts and links to the design record instead of restating
+the shapes.
+
+2.4 `agent-status.md` names the current position, the next piece, and the pieces that stay blocked.
 
 ## 3. The checks
 
 3.1 `ruff check .` is clean.
 
-3.2 `python3 -m pytest` passes 1567 pins with no skip.
+3.2 `python3 -m pytest` passes 1567 pins with no skip. No code and no fixture moved, so the pins read
+the same set as before.
 
 3.3 The commit is markdown only, with an ASD-STE100 message.
 
 ## Result
 
-Measured before writing the fix. `src/resource_mapping.py` lines 1265–1266 hold `'private_key': REFERENCE_ONLY`
-and `'passphrase': REFERENCE_ONLY`, and the F7.14 comment above them names the rows. `panorama_to_terraform.py`
-line 3802 is the print site that reads the table, and `_generate_certificate_blocks` prints through it.
-`tests/golden/kitchen_sink/vsys1_78d8e4bc/certificates.tf` lines 14–15 state `passphrase = var.vsys_cert` and
-`private_key = var.vsys_cert`, and `variables.tf` line 24 declares `variable "vsys_cert"` with
-`sensitive = true`. `python3 -m pytest tests/test_variables.py tests/test_robustness.py
-tests/test_certificate_blocks.py` passes 53 pins.
-
-After the fix: `ruff check .` is clean, `python3 -m pytest` passes 1567 pins with no skip (the provider-cache
-pins ran, so none skipped), and `git status` names only the tracking markdown: `backlog.md`, `PLAN.md`,
-`agent-status.md`, `to-do.md` and this file. No code and no test moved. `PLAN.md` carried the same stale claim
-in its Sequencing section, so the fix states the same fact there; the same claim in `agent-status.md` and
-`to-do.md` is closed, and the Next item now names `ruff format` as a gate.
+Measured after the change: `ruff check .` is clean, and `python3 -m pytest` collects and passes 1567
+pins with no skip. `git status` names only the tracking markdown and the documents: `PLAN.md`,
+`backlog.md`, `to-do.md`, `acceptance.md`, `agent-status.md`, `docs/README.md`, and the new
+`docs/API_CONVERSION_PATH.md`. No code, no test, and no fixture moved.
