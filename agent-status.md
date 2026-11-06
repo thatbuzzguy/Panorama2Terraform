@@ -2,32 +2,28 @@
 
 ## Current position
 
-The destination a report-only entry answers is complete and committed. The change that implemented it holds
-`src/entry_coverage.py`, `src/sanity_checks.py`, the three test files and the tracking markdown. This commit
-writes the documents group 5 of `acceptance.md` names: the `README.md` gate table, `docs/ARCHITECTURE.md` §1.1,
-§3.2 and §4.6, `docs/COVERAGE_MATRIX.md` §1, `docs/README.md`, and `backlog.md`, and closes the tracking
-markdown. The measured facts are in the `acceptance.md` Result, and no other document restates them.
+The Epic 8 plan is written and committed: the second conversion path, which reads only Panorama and
+PAN-OS API responses. The task wrote documents only, so no code, no test and no fixture moved. The
+design record is `docs/API_CONVERSION_PATH.md`, and `docs/README.md` names it as the owner document for
+the path 2 rules.
 
-The rule, in `src/entry_coverage.py`: `mark` records what the parse method took and only the destination the
-caller states; `EntryLedger.destination` is the one place that answers a destination, in the order the per-entry
-fact on the recorded object (`report_only` answers `report`), then the destination `mark` recorded, then the
-container table row. The fact is read at read time through `RecordingDict.value()`, so the decision records no
-property use and the order of `mark` and the field cannot change the answer. `src/sanity_checks.py` states the
-same rule in the comment inside `check_round_trip`, which counts only the entries that rule answers as `emitted`,
-so an entry the run reports enters no count. The report-only call site in
-`panorama_to_terraform.parse_address_objects` states the fact through the recorded object and names no destination.
+The four decisions the plan took: path 2 has its own entry point module, so path 1 keeps its rules
+unchanged; it reads XML API responses only, so the tree, the line map and the entry ledger survive; its
+coverage is path 1 coverage plus the facts a live target states; and it is proven offline through
+committed response fixtures read by an injected producer, so no test calls a server.
+
+Next: piece F8.1, the accepted request shapes. It decides the wrapper rule for the op response shape and
+how `container_coverage.SCOPE_PATH_ROOTS` reads a `predefined` path, so no later path 2 piece can be
+written before it. Then F8.2 and F8.3, the scope index read from the membership responses and the join
+between a response and the request that made it, with the offline harness (F8.4).
 
 Test count: `python3 -m pytest` reads 1567 pins, and `ruff check .` is clean.
 
-Next: `ruff format` as a gate is the next actionable slice, run as its own task after the one-time format pass
-of the legacy scripts (`backlog.md`, Nice-to-Haves); `tflint` integration is the following item. The
-certificate `sensitive` `REFERENCE_ONLY` fact is closed: `resource_mapping.VALUE_VARIABLES` holds the
-`private_key` and `passphrase` rows, the emitter reads them at the print site, and the pins that hold the rule
-are `tests/test_variables.py` (the declaration set read through the table) and
-`tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`. The facts that stay blocked
-on a fact the tool cannot read offline stay in `backlog.md`: the four `*_policy_rules` types, a config entry
-inside a stack, the EDL `certificate_profile` field, the profile-name report column, and the two `.github/`
-template files outside the document indexes.
+The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
+facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a
+stack, the EDL `certificate_profile` field, the profile-name report column, and the two `.github/`
+template files outside the document indexes. `ruff format` as a gate stays the next actionable slice
+outside Epic 8.
 
 
 
@@ -254,3 +250,7 @@ the
 - The LF rule is a byte rule, so the goldens and the no-change tests change with the write
   path. The rule is in
   the one write function, and `docs/ARCHITECTURE.md` §6 states it.
+- Path 2 (Epic 8) adds `api_requests.py` and `api_to_terraform.py`, and both are read by the pins that
+  scan the `src/` set: the writer scan, the environment-name scan, the console-line scan, and the
+  second-naming-rule scan. So path 2 states no second rule of any kind, and each new path 2 rule names
+  the module that holds it and the test that pins it. Its rules are in `docs/API_CONVERSION_PATH.md`.

@@ -1,32 +1,95 @@
 # To Do
 
-No implementation piece is open for a landed feature. The completed pieces that this file carried are closed in
-the git history and the owner documents, including the certificate `REFERENCE_ONLY` fact: `resource_mapping.
-VALUE_VARIABLES` holds the `private_key` and `passphrase` rows, the emitter reads them at the print site, and
-the pins are `tests/test_variables.py` and
+The open feature is Epic 8, the API-only conversion path. Its design record is
+`docs/API_CONVERSION_PATH.md`, and each piece below names the rule it holds, the module that will
+state it, and the test that will pin it. No piece is started yet, so no pin exists yet.
+
+The completed pieces that this file carried are closed in the git history and the owner documents,
+including the certificate `REFERENCE_ONLY` fact: `resource_mapping.VALUE_VARIABLES` holds the
+`private_key` and `passphrase` rows, the emitter reads them at the print site, and the pins are
+`tests/test_variables.py` and
 `tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`.
 
-## Next pieces
+## Epic 8 — path 2 pieces
 
-- [ ] `ruff format` as a gate, its own task per `backlog.md` (Nice-to-Haves). The one-time format pass of the
-      legacy scripts comes first, so the diff stays reviewable. `tflint` integration is the following item.
+Phase 8A, the read boundary:
 
-Feature-sized items that stay blocked on a fact the tool cannot read offline are recorded in `backlog.md` and
-are not pieces here: the four `*_policy_rules` types wait for the F3.5 rulebase decision and a live target, a
-config entry inside a stack needs a provider location shape, the EDL `certificate_profile` field needs a rule
-that makes the EDL site resolve names, the per-entry report `profile_name` column needs a value the provider
-does not declare, and the two `.github/` template files outside the indexes are findings.
+- [ ] F8.1 The accepted request shapes. Path 2 accepts the whole-config export, the per-scope read,
+      and the device fact shape, and each shape has one accepted response element. The op shape is
+      new, so `source_fetch.py` states its wrapper rule. The same piece decides how
+      `container_coverage.SCOPE_PATH_ROOTS` reads a `predefined` path, because that set is the one
+      definition that validates a scope path. Pins: `tests/test_source_fetch.py`, and the pins that
+      read the `src/` set unchanged.
+- [ ] F8.2 The scope index. The scope set comes from the membership responses the run read, through
+      the four membership lists `parse_associations` reads: one request per scope container, then one
+      request per scope entry those containers name. No scope is guessed. Module: `api_requests.py`.
+      Pin: `tests/test_api_requests.py`.
+- [ ] F8.3 The response-to-request join. A response is accepted only when the element it holds is the
+      element its own request names, and the entry name inside it agrees with the scope index. Pins:
+      `tests/test_source_fetch.py` for the shape, `tests/test_api_requests.py` for the join with the
+      index.
+- [ ] F8.4 The offline harness. One committed response per request shape, each naming the request
+      identity that produced it, and the producer injected so no test calls a network. Pins:
+      `tests/test_api_requests.py`, and the existing no-network rule in `tests/test_source_fetch.py`.
+
+Phase 8B, the run over many sources:
+
+- [ ] F8.5 No merged tree. Each response stays its own `ParsedSource` with its own line map, and each
+      parse method runs over the response that holds its container. The report position is the line
+      inside that response, and the report row names the source that holds the entry. Pin:
+      `tests/test_api_path.py`, and the existing pin
+      `tests/test_entry_coverage.py::test_every_row_names_the_source_that_holds_the_entry`.
+- [ ] F8.6 One record per request. The eight fields and the fixed order are unchanged, and the `scope`
+      and `request` fields name the request that made the response. The prune action reads the record
+      file, so a run that read N scopes protects N entries. Pins: `tests/test_provenance.py`,
+      `tests/test_write_path.py::test_the_record_directory_is_the_output_directory_for_the_prune`.
+- [ ] F8.7 The unit join. `unit_manifest.units` stays the one unit rule, and path 2 adds the fact of
+      which scope the run read for a unit. A unit with no request, and a request that answers no unit,
+      is a finding. Pins: `tests/test_api_path.py`, `tests/test_unit_manifest.py`,
+      `tests/test_ownership.py`.
+
+Phase 8C, the gate and the entry point:
+
+- [ ] F8.8 The request-set gate rule, read inside `sanity_checks.py` at one position in
+      `CHECK_ORDER`, and the path 2 pins for the gate rules that already read the files. The
+      round-trip cross-check reads the run's ledger, so path 2 feeds the same ledger through the same
+      `mark` rule. Pins: `tests/test_sanity_gate.py`, `tests/test_round_trip.py`.
+- [ ] F8.9 The entry point `api_to_terraform.py`: the arguments, the run order, the exit codes, the
+      rule that it writes no file outside `write_path.py` and states no environment name, and the
+      generated `README.md` label that names which path wrote the codebase. Pins:
+      `tests/test_api_path.py`, `tests/test_variables.py`, `tests/test_site_data.py`.
+- [ ] F8.10 The agreement pin. For a fixture with no live-only fact, path 2 writes the same `.tf`
+      bytes as path 1. The reports do not agree, because a report names its source. Pin:
+      `tests/test_api_path.py`.
+
+Feature-sized items that stay blocked on a fact the tool cannot read offline are recorded in
+`backlog.md` and are not pieces here: the four `*_policy_rules` types wait for the F3.5 rulebase
+decision and a live target, a config entry inside a stack needs a provider location shape, the EDL
+`certificate_profile` field needs a rule that makes the EDL site resolve names, the per-entry report
+`profile_name` column needs a value the provider does not declare, the two `.github/` template files
+outside the indexes are findings, and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4 need
+a committed response for each shape.
+
+## Other open pieces
+
+- [ ] `ruff format` as a gate, its own task per `backlog.md` (Nice-to-Haves). The one-time format pass
+      of the legacy scripts comes first, so the diff stays reviewable. `tflint` integration is the
+      following item.
 
 ## Rules the layout keeps
 
-- `docs/ARCHITECTURE.md` §1.1 is the owner document for the layout. `AGENTS.md` names the tracking markdown set,
-  and each index names every document under it, so a file outside an index is a finding.
-- Import rule: `src/` is one flat namespace, so a module may import any `src/` module without a cycle. The
-  one test that checks the rule reads only `src/`. A test may import `src` modules and `tests/conftest.py`
-  through `importlib`; nothing under `tests/` may import another test module. `src/` may not import from
-  `tests/`. `tools/` is not on the test path, so `tests/test_build_kitchen_sink.py` reads the fixture assembler
-  through `importlib` on the path `tests/conftest.py` builds once.
-- The corpus is the directory the scan runs over. A hostile fixture in it changes the set the scan reports for
-  the other fixtures, so pins that state the printed set name the fixture count. The fixture assembler reads the
-  same set by rule: a fixture the F3.8 input rule refuses is skipped, and the record is not an input
-  (`tests/test_build_kitchen_sink.py`).
+- `docs/ARCHITECTURE.md` §1.1 is the owner document for the layout. `AGENTS.md` names the tracking
+  markdown set, and each index names every document under it, so a file outside an index is a finding.
+- Import rule: `src/` is one flat namespace, so a module may import any `src/` module without a cycle.
+  The one test that checks the rule reads only `src/`. A test may import `src` modules and
+  `tests/conftest.py` through `importlib`; nothing under `tests/` may import another test module. `src/`
+  may not import from `tests/`. `tools/` is not on the test path, so `tests/test_build_kitchen_sink.py`
+  reads the fixture assembler through `importlib` on the path `tests/conftest.py` builds once.
+- Path 2 adds two modules, `api_requests.py` and `api_to_terraform.py`, and both must be named in the
+  `docs/ARCHITECTURE.md` §1 table. Both state no second naming rule, no second writer, no second
+  console line, and no environment name, so the pins that scan the `src/` set read them with the other
+  modules.
+- The corpus is the directory the scan runs over. A hostile fixture in it changes the set the scan
+  reports for the other fixtures, so pins that state the printed set name the fixture count. The fixture
+  assembler reads the same set by rule: a fixture the F3.8 input rule refuses is skipped, and the record
+  is not an input (`tests/test_build_kitchen_sink.py`).
