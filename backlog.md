@@ -216,9 +216,11 @@ here with that rule named.
   - The facts that stay open, each stated in its own entry in this document: the four `*_policy_rules` types,
     which wait for the F3.5 rulebase decision and a live target; a config entry inside a stack, which needs a
     provider location shape; the EDL `certificate_profile` field, which records no reference edge because the
-    EDL site resolves no names; the profile-name report column, which no certificate type declares; the
-    certificate `sensitive` `REFERENCE_ONLY` rows, which `resource_mapping.VALUE_VARIABLES` has no row for; and
-    the two `.github/` template files outside the indexes.
+    EDL site resolves no names; the profile-name report column, which no certificate type declares; and
+    the two `.github/` template files outside the indexes. The certificate `sensitive` `REFERENCE_ONLY` fact is
+    closed: `resource_mapping.VALUE_VARIABLES` holds the `private_key` and `passphrase` rows, and the pins that
+    hold it are `tests/test_variables.py` and
+    `tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`.
 - The two template files under `.github/` (`ISSUE_TEMPLATE.md` and `PULL_REQUEST_TEMPLATE.md`) sit outside every
   index, so the layout rule (`docs/ARCHITECTURE.md` §1.1) reads them as a finding. They are not tool documents,
   so no index names them; either an index gains them or they leave the repository.
@@ -429,8 +431,12 @@ here with that rule named.
   key. One table decides the shape, so the emitter, the gate and the `.tfvars` writer read
   `resource_mapping.VALUE_VARIABLES`; the literal half is held by `tests/test_robustness.py` (no generated
   file may contain the secret). Measured 2026-11-05: the three certificate `sensitive` facts sit inside the
-  `local` object, not at the block's own level, and the table has no row for `private_key` or `passphrase`,
-  so the certificate emitter needs a `REFERENCE_ONLY` row for each before it can print the reference. No
+  `local` object, not at the block's own level, and the shape table marks them in the `certificate` rows. The
+  table holds the `REFERENCE_ONLY` row for `private_key` and `passphrase`, read by the emitter at the print
+  site, and the gate and the `.tfvars` writer read both through the same table. The golden run proves the
+  reference prints (`tests/golden/kitchen_sink/vsys1_78d8e4bc/certificates.tf`, with `vsys_cert` declared in
+  `variables.tf`), and the pins that hold the rule are `tests/test_variables.py` (the declaration set read
+  through the table) and `tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`. No
   other certificate attribute is `sensitive`, including the `panos_certificate` data source's `private_key`.
 - Decided 2026-11-03 (F7.7): the rule is about the print, not about what the parse can carry. A parse
   method can read a `sensitive` value inside an entry and still print the reference, so the value is held

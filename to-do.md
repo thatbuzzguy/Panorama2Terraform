@@ -1,28 +1,21 @@
 # To Do
 
-The destination a report-only entry answers is complete and committed. `mark` records what the parse method took
-and only the destination the caller states, `EntryLedger.destination` is the one place that answers a
-destination, in the order the per-entry fact on the recorded object, then the destination `mark` recorded, then
-the container table row, and `sanity_checks.check_round_trip` counts the entry side through that rule, so an
-entry the run reports enters no count. The committed change holds `src/entry_coverage.py`, `src/sanity_checks.py`,
-the three test files and the tracking markdown. This commit writes the documents that name the rule: the
-`README.md` gate table, `docs/ARCHITECTURE.md` §1.1, §3.2 and §4.6, `docs/COVERAGE_MATRIX.md` §1,
-`docs/README.md`, and `backlog.md`, where the 'entry side counts more' entry reads 3 findings with the surviving
-instances named. No piece of this feature stays open.
-
-The round-trip cross-check feature is complete and committed. The rule, its `CHECK_ORDER` position, the ledger
-argument on `run_checks`, the pins in `tests/test_round_trip.py`, and the documents that name it are all landed.
-No piece of that feature stays open.
+No implementation piece is open for a landed feature. The completed pieces that this file carried are closed in
+the git history and the owner documents, including the certificate `REFERENCE_ONLY` fact: `resource_mapping.
+VALUE_VARIABLES` holds the `private_key` and `passphrase` rows, the emitter reads them at the print site, and
+the pins are `tests/test_variables.py` and
+`tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`.
 
 ## Next pieces
 
-- [ ] The certificate `REFERENCE_ONLY` rows for `private_key` and `passphrase`, which the table has no row for,
-      so the certificate emitter cannot print the reference yet (`backlog.md`).
+- [ ] `ruff format` as a gate, its own task per `backlog.md` (Nice-to-Haves). The one-time format pass of the
+      legacy scripts comes first, so the diff stays reviewable. `tflint` integration is the following item.
 
-Feature-sized items that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the four
-`*_policy_rules` types wait for the F3.5 rulebase decision and a live target, a config entry inside a stack
-needs a provider location shape, the EDL `certificate_profile` field needs a rule that makes the EDL site
-resolve names, and the per-entry report `profile_name` column needs a value the provider does not declare.
+Feature-sized items that stay blocked on a fact the tool cannot read offline are recorded in `backlog.md` and
+are not pieces here: the four `*_policy_rules` types wait for the F3.5 rulebase decision and a live target, a
+config entry inside a stack needs a provider location shape, the EDL `certificate_profile` field needs a rule
+that makes the EDL site resolve names, the per-entry report `profile_name` column needs a value the provider
+does not declare, and the two `.github/` template files outside the indexes are findings.
 
 ## Rules the layout keeps
 
