@@ -194,26 +194,31 @@ here with that rule named.
   wrote (`docs/ARCHITECTURE.md` §4.6). Its finding is a coverage fact, not a broken output, so it is a WARN and
   does not change the exit code, the decision `entry_coverage.PROPERTY_RULE` already states for a gap: every
   corpus fixture still exits 0, and the pins read WARN. Measured 2026-11-05 the corpus is not silent: the rule
-  reports 22 findings on 10 fixtures. The rule states no exception list for the populations it cannot join, so
-  they stay open here.
-  - 5 findings: an `emitted` entry the emitter writes no block for, because no v2 attribute exists for its
-    content. The `panos_address` entries whose type is `external` or `location` in
-    `tests/fixtures/address_objects.xml` (`Ext-Dynamic` and `Country-US`) are the measured instances, and the
-    config entry inside a stack above is the same case. Measured again on 2026-11-05 with the destination read
-    from the recorded object (`to-do.md`): 3 findings, because the 3 report-only entries leave the count, so this
-    shape has no measured instance left. The survivors are `tests/fixtures/dependency_wiring.xml`
-    (`panos_address` 3 against 2), `tests/fixtures/interfaces_other.xml` (`panos_aggregate_interface` 2 against
-    1, the aggregate group with no content the provider models), and the same aggregate case in
-    `tests/fixtures/kitchen_sink.xml`.
+  reports 20 findings on 9 fixtures, which `tests/test_round_trip.py` pins as `CORPUS_GAPS` and
+  `CATEGORY_COUNTS`, and the entry side counts only the entries `entry_coverage.EntryLedger.destination` answers
+  as `emitted`, so an entry the run reports enters no count. The rule states no exception list for the
+  populations it cannot join, so they stay open here.
+  - 3 findings: an `emitted` entry the row counts with no block of the row's type. The measured instances are
+    `tests/fixtures/dependency_wiring.xml` (`panos_ethernet_interface`, 3 against 2),
+    `tests/fixtures/interfaces_other.xml` (`panos_aggregate_interface`, 2 against 1), and the same aggregate
+    case in `tests/fixtures/kitchen_sink.xml` (2 against 1). In each, the counted entry that has no block of the
+    row's type is one whose name carries a unit, so the emitter prints its block as the subinterface type
+    through the name rule and the reader reads that block for the subinterface row
+    (`docs/COVERAGE_MATRIX.md` §1). The shape that held the instances before, an `emitted` entry whose content
+    has no v2 attribute, has no measured instance left: the `report_only` address entries in
+    `tests/fixtures/address_objects.xml` answer `report` through the destination rule and enter no count, so
+    that fixture reads clean. The same shape stays open for a config entry inside a stack, above.
   - 16 findings: a block read for a property level, which has no ledger row, because the ledger records one row
     per config entry and a property level is not an entry.
   - 1 finding: one entry that writes more than one block, on `tests/fixtures/interfaces_ethernet.xml`, because
     the `nested-block` entry writes lines inside its parent block and `matrix_row_for` answers no row for that
     container, so the entry side reads no count while the block side counts the block.
-- The `report_only` timing fact is no longer open here: `acceptance.md` states the decision and `to-do.md` names
-  the pieces. `mark` records what the parse method took and only the destination the caller states, and
-  `EntryLedger.destination` answers the destination in one place, in the order: the destination the mark
-  recorded, then the per-entry fact read from the recorded object, then the container table row.
+  - The facts that stay open, each stated in its own entry in this document: the four `*_policy_rules` types,
+    which wait for the F3.5 rulebase decision and a live target; a config entry inside a stack, which needs a
+    provider location shape; the EDL `certificate_profile` field, which records no reference edge because the
+    EDL site resolves no names; the profile-name report column, which no certificate type declares; the
+    certificate `sensitive` `REFERENCE_ONLY` rows, which `resource_mapping.VALUE_VARIABLES` has no row for; and
+    the two `.github/` template files outside the indexes.
 - The two template files under `.github/` (`ISSUE_TEMPLATE.md` and `PULL_REQUEST_TEMPLATE.md`) sit outside every
   index, so the layout rule (`docs/ARCHITECTURE.md` §1.1) reads them as a finding. They are not tool documents,
   so no index names them; either an index gains them or they leave the repository.

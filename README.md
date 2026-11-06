@@ -419,7 +419,7 @@ and `tests/test_round_trip.py` pins it.
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable the run declares | FAIL |
 | `data_files` | every data file reads as its declared rows, and the data agrees with the naming rule, the joins, the order rule, and its printed form | FAIL |
-| `round_trip` | the `.tf` block set agrees with the entry set the run's ledger read, per unit and row | WARN, or NOT RUN |
+| `round_trip` | the `.tf` block set agrees with the entry set the run's ledger read, per unit and row, where the entry side counts only the entries `entry_coverage.EntryLedger.destination` answers as `emitted`, so an entry the run reports is not counted | WARN, or NOT RUN |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |

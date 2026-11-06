@@ -1,21 +1,21 @@
 # To Do
 
+The destination a report-only entry answers is complete and committed. `mark` records what the parse method took
+and only the destination the caller states, `EntryLedger.destination` is the one place that answers a
+destination, in the order the per-entry fact on the recorded object, then the destination `mark` recorded, then
+the container table row, and `sanity_checks.check_round_trip` counts the entry side through that rule, so an
+entry the run reports enters no count. The committed change holds `src/entry_coverage.py`, `src/sanity_checks.py`,
+the three test files and the tracking markdown. This commit writes the documents that name the rule: the
+`README.md` gate table, `docs/ARCHITECTURE.md` §1.1, §3.2 and §4.6, `docs/COVERAGE_MATRIX.md` §1,
+`docs/README.md`, and `backlog.md`, where the 'entry side counts more' entry reads 3 findings with the surviving
+instances named. No piece of this feature stays open.
+
 The round-trip cross-check feature is complete and committed. The rule, its `CHECK_ORDER` position, the ledger
-argument on `run_checks`, the pins in `tests/test_round_trip.py`, and the documents that name it
-(`README.md`, `docs/ARCHITECTURE.md` §1 and §4.6, `docs/COVERAGE_MATRIX.md` §1, and `docs/README.md`) are all
-landed. No piece of this feature stays open.
+argument on `run_checks`, the pins in `tests/test_round_trip.py`, and the documents that name it are all landed.
+No piece of that feature stays open.
 
 ## Next pieces
 
-- [ ] The destination a report-only entry answers (`acceptance.md`). The rule, the pins and the Result are
-      landed: `mark` records what the parse method took and only the destination the caller states, and
-      `EntryLedger.destination` is the one place that answers a destination, in the order the per-entry fact
-      read from the recorded object, then the mark-stated destination, then the container table row. Piece left
-      open:
-  - [ ] Write the documents that name the rule: `docs/ARCHITECTURE.md` §1.1, §3.2, §4.6,
-        `docs/COVERAGE_MATRIX.md` §1, `docs/README.md`, `README.md` gate table (`acceptance.md` §5), and
-        `backlog.md`, where the 'entry side counts more' entry reads 3 findings with the surviving instances
-        named.
 - [ ] The certificate `REFERENCE_ONLY` rows for `private_key` and `passphrase`, which the table has no row for,
       so the certificate emitter cannot print the reference yet (`backlog.md`).
 
