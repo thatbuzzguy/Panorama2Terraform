@@ -21,16 +21,18 @@ Pins, one per criterion in `acceptance.md`:
 Four criteria could not hold as written, and each is pinned as measured with the measurement in the
 `acceptance.md` Result:
 
-- 4.3: the corpus is not silent. The rule reports 22 findings on 10 fixtures, in three categories: an
-  `emitted` entry whose type has no v2 attribute, a block read for a property level (no ledger row), and one
-  entry that writes more than one block. `backlog.md` keeps the three open.
+- 4.3: the corpus is not silent. The rule reports 20 findings on 9 fixtures, in three categories: an
+  `emitted` entry the row counts with no block of the row's type, a block read for a property level (no
+  ledger row), and one entry that writes more than one block. `backlog.md` keeps the three open.
 - 2.4 and 4.6: a disagreeing count names no broken output, so the rule states WARN, the decision
   `entry_coverage.PROPERTY_RULE` already states for a gap. The exit code follows the rules that read the
   files, so every fixture still exits 0, which is the corpus pin in `tests/test_sanity_gate.py`.
 - 3.3: `matrix_row_for` answers no row for a `nested-block` container, so the entry side reads no count for
   it, but a block that entry wrote still enters the block side, so the pair is compared and disagrees.
-- 3.2: `report_only` is recorded after `mark`, so `destination` answers `emitted` for a report-only address
-  and the rule counts it.
+- 3.2: `EntryLedger.destination` answers the destination in one place, in the order: the per-entry fact on
+  the recorded object, then the destination the mark recorded, then the container table row. An entry the run
+  reports enters no count, so `address_objects.xml` reads clean and `GAP_FIXTURE` names the fixture the rule
+  still reports.
 
 Every test that reads the entry side runs the pipeline in process, because `run_script` loses the ledger with
 the process. The suite runs offline.
@@ -49,8 +51,12 @@ from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_pipeline, run_script, tf_f
 
 CONVERTER = 'panorama_to_terraform.py'
 
-# An `emitted` entry that writes no block: no v2 attribute exists for its content.
-GAP_FIXTURE = 'address_objects.xml'
+# An `emitted` entry the row counts with no block of the row's type: `ae1.101`, an aggregate entry whose
+# block is a `panos_aggregate_layer3_subinterface` block. `address_objects.xml` reads clean once the
+# destination is answered from the recorded object, so the pin reads a fixture the rule still reports.
+GAP_FIXTURE = 'interfaces_other.xml'
+# The unit the run names for that fixture: its entries sit under a declared vsys, not under `Shared`.
+GAP_UNIT = 'vsys1_b3e94a35'
 SHARED_UNIT = 'shared_45ca31c3'
 # A `nested-block` container row: `network/interface/virtual-wire/units`.
 NESTED_FIXTURE = 'interfaces_ethernet.xml'
@@ -60,15 +66,17 @@ BOOKKEEPING_FIXTURE = 'multi_device_templates.xml'
 SCOPE_FIXTURE = 'scope_objects.xml'
 REPORT_FIXTURE = 'application_filters.xml'
 KIND_FIXTURE = 'kitchen_sink.xml'
+# The fixture the property scan reports, so the console shape that names one identity stays visible.
+PROPERTY_SCAN_FIXTURE = 'address_objects.xml'
 
 # The corpus findings, as the rule reports them: (row, unit, entries the ledger reads, blocks the reader
 # reads), in the order the rule sorts them. Each is one of the three categories the rule cannot join, and each
-# is recorded in `backlog.md`: an `emitted` entry whose content has no v2 attribute (the entry side counts more
-# than the block side), a block read for a property level (the entry side reads no row, so the count is zero),
-# and one entry that writes more than one block (the block side counts more). The sample run reads clean, so
-# the check prints PASS on the run `tests/test_sanity_gate.py` pins.
+# is recorded in `backlog.md`: an `emitted` entry the row counts with no block of the row's type (the entry
+# side counts more than the block side), a block read for a property level (the entry side reads no row, so the
+# count is zero), and one entry that writes more than one block (the block side counts more). The sample run
+# reads clean, so the check prints PASS on the run `tests/test_sanity_gate.py` pins. `address_objects.xml`
+# reads clean, because its three report-only entries answer `report` and enter no count.
 CORPUS_GAPS = {
-    GAP_FIXTURE: [('panos_address', SHARED_UNIT, 7, 5)],
     'dependency_wiring.xml': [('panos_ethernet_interface', 'vsys1_d7045c06', 3, 2),
                               ('panos_ethernet_layer3_subinterface', 'vsys1_d7045c06', 0, 2)],
     'edge_mixed_vr_lr.xml': [('panos_virtual_router_static_route_ipv4', 'fw_template_00a08cdc', 0, 2),
@@ -86,15 +94,15 @@ CORPUS_GAPS = {
     'scope_child.xml': [('panos_address', SHARED_UNIT, 0, 1)],
     'virtual_routers.xml': [('panos_virtual_router_static_route_ipv4', 'fw_template_00a08cdc', 0, 2)],
     KIND_FIXTURE: [('panos_virtual_router_static_route_ipv4', 'fw_template_00a08cdc', 0, 3),
-                   ('panos_address', SHARED_UNIT, 6, 5),
                    ('panos_ethernet_layer3_subinterface', 'shared_a6577c11', 0, 1),
                    ('panos_aggregate_interface', 'shared_a6577c11', 2, 1),
                    ('panos_aggregate_layer3_subinterface', 'shared_a6577c11', 0, 2)],
 }
 
-# The same 22 findings, counted by category: the entry side counts more, the entry side reads no row for the
-# block, and the block side counts more.
-CATEGORY_COUNTS = {'entry side counts more': 5, 'block read for a property level': 16,
+# The same 20 findings, counted by category: the entry side counts more, the entry side reads no row for the
+# block, and the block side counts more. The first category has three instances: `dependency_wiring.xml`,
+# `interfaces_other.xml`, and the same aggregate case in `kitchen_sink.xml`.
+CATEGORY_COUNTS = {'entry side counts more': 3, 'block read for a property level': 16,
                    'entry writes more than one block': 1}
 
 # The two counts, read out of the fact the rule states.
@@ -154,10 +162,10 @@ def test_the_rule_reads_the_block_set_through_the_gate_reader(tmp_path):
     assert 'fields_at' not in rule, 'a count is a fact about blocks, not about fields'
     # The block side is the set the one reader read, at the reader's kinds.
     read = sanity_checks.blocks(files, ('resource',))
-    assert len(read) == 5, [block.file for block in read]
-    assert all(Path(block.file).parent.name == SHARED_UNIT for block in read), 'one unit directory'
+    assert len(read) == 6, [block.file for block in read]
+    assert all(Path(block.file).parent.name == GAP_UNIT for block in read), 'one unit directory'
     assert not sanity_checks.blocks(files, ('data', 'import', 'action')), 'no other kind enters the count'
-    assert len(sanity_checks.check_round_trip(files, ledger)) == 1, 'the two counts do not agree'
+    assert len(sanity_checks.check_round_trip(files, ledger)) == 2, 'the two counts do not agree'
 
 
 def test_the_entry_count_is_read_through_the_ledger_and_the_scan_scope_rule(tmp_path):
@@ -173,10 +181,12 @@ def test_the_entry_count_is_read_through_the_ledger_and_the_scan_scope_rule(tmp_
     row = entry_coverage.MATRIX_BY_RESOURCE[fact[0]]
     entries = [r for r in ledger.rows()
                if r['destination'] == 'emitted' and entry_coverage.matrix_row_for(r['container']) is row]
-    assert fact[2] == len(entries) == 7, fact
+    assert fact[2] == len(entries) == 2, fact
     assert all(r['source'] == ledger.source.origin.name for r in entries), 'one ledger, one source'
-    assert fact[3] == len(sanity_checks.blocks(files, ('resource',))), 'the block side is the reader\'s set'
-    assert len(sanity_checks.check_round_trip(files, ledger)) == 1, 'one finding for one unit and row'
+    assert fact[3] == len([block for block in sanity_checks.blocks(files, ('resource',))
+                           if Path(block.file).parent.name == fact[1] and block.rtype == fact[0]]) == 1, \
+        'the block side is the reader\'s set for that unit and row'
+    assert len(sanity_checks.check_round_trip(files, ledger)) == 2, 'one finding for one unit and row'
 
 
 def test_the_unit_is_read_through_the_one_unit_rule(tmp_path):
@@ -189,12 +199,13 @@ def test_the_unit_is_read_through_the_one_unit_rule(tmp_path):
         'the unit is read through the one unit rule'
     assert 'naming.sanitize' in rule, 'the directory shape is read through the one naming rule'
     unit = _fact(sanity_checks.check_round_trip(files, ledger)[0])[1]
+    assert unit == GAP_UNIT, 'the run names the unit the fixture entries sit under'
     block = sanity_checks.blocks(files, ('resource',))[0]
     assert Path(block.file).parent.name == unit, 'the unit is the directory the reader read'
     row = [r for r in ledger.rows() if r['destination'] == 'emitted'][0]
     assert unit_manifest.directory_name(unit_manifest.facts_of(row), naming.sanitize) == unit, \
         'the entry and the block land on one unit name'
-    assert unit_manifest.units(ledger) == [unit_manifest.facts_of(row)], 'the run\'s unit set'
+    assert len(unit_manifest.units(ledger)) == 2, 'the run wrote two unit directories'
     assert unit in {unit_manifest.directory_name(facts, naming.sanitize)
                     for facts in unit_manifest.units(ledger)}
 
@@ -218,7 +229,7 @@ def test_the_rule_reads_no_report_and_no_data_file(tmp_path):
     assert (plain.file_count, plain.data_file_count, plain.resource_count) == \
         (ran.file_count, ran.data_file_count, ran.resource_count), 'the report counts do not move'
     assert plain.data_file_count == 2, 'the four records at the root are still the data rule\'s input'
-    assert 'Files checked: 3 .tf files, 2 data files.' in ran.render(), ran.render()
+    assert 'Files checked: 5 .tf files, 2 data files.' in ran.render(), ran.render()
 
 
 def test_the_rule_reports_not_run_when_the_caller_passes_no_ledger(tmp_path):
@@ -235,11 +246,11 @@ def test_the_rule_reports_not_run_when_the_caller_passes_no_ledger(tmp_path):
     ran = sanity_checks.run_checks(tmp_path, ledger=ledger)
     assert [result.check for result in ran.checks] == list(sanity_checks.CHECK_ORDER), ran.render()
     assert ran.result_of('round_trip') == sanity_checks.WARN, ran.render()
-    assert re.search(r'^round_trip\s+WARN \(1\)$', ran.render(), re.M), ran.render()
+    assert re.search(r'^round_trip\s+WARN \(2\)$', ran.render(), re.M), ran.render()
     # `main()` passes the run's ledger, so a real run reports the check as a rule that ran.
     out = tmp_path / 'run'
     assert run_script(CONVERTER, str(FIXTURES_DIR / GAP_FIXTURE), '--output-dir', str(out)).returncode == 0
-    assert re.search(r'^round_trip\s+WARN \(1\)$', (out / 'SANITY_REPORT.txt').read_text(encoding='utf-8'),
+    assert re.search(r'^round_trip\s+WARN \(2\)$', (out / 'SANITY_REPORT.txt').read_text(encoding='utf-8'),
                      re.M)
 
 
@@ -284,10 +295,10 @@ def test_a_count_that_does_not_agree_is_one_finding_per_unit_and_row(tmp_path):
     files, ledger = _run(KIND_FIXTURE, tmp_path)
     findings = sanity_checks.check_round_trip(files, ledger)
     facts = [_fact(f) for f in findings]
-    assert len(facts) == 5, [f.render() for f in findings]
+    assert len(facts) == 4, [f.render() for f in findings]
     assert len(set(facts)) == len(facts), 'one fact per unit and row'
-    assert len({(row, unit) for row, unit, _, _ in facts}) == 5, facts
-    assert len({unit for _, unit, _, _ in facts}) == 3, 'the same row in two units is two findings'
+    assert len({(row, unit) for row, unit, _, _ in facts}) == 4, facts
+    assert len({unit for _, unit, _, _ in facts}) == 2, 'the same row in two units is two findings'
     assert all(f.check == 'round_trip' and COUNTS_RE.search(f.detail) for f in findings), \
         [f.render() for f in findings]
     # A fact that names no entry cannot restate the per-entry report, which `docs/ARCHITECTURE.md` §3.2 owns.
@@ -301,12 +312,14 @@ def test_the_rule_names_no_entry(tmp_path):
     """
     files, ledger = _run(GAP_FIXTURE, tmp_path)
     finding = sanity_checks.check_round_trip(files, ledger)[0]
-    names = {r['name'] for r in ledger.rows() if r['destination'] == 'emitted'}
-    assert len(names) == 7, sorted(names)
+    # A name that is a digit cannot be told from the unit name the fact states, so the pin reads the names
+    # longer than two characters, as `test_a_count_that_does_not_agree_is_one_finding_per_unit_and_row` does.
+    names = {r['name'] for r in ledger.rows() if r['destination'] == 'emitted' and len(r['name']) > 2}
+    assert len(names) == 2, sorted(names)
     assert not [name for name in names if name in finding.detail], finding.render()
-    assert _fact(finding) == ('panos_address', SHARED_UNIT, 7, 5), finding.render()
-    # The entries the run wrote for that unit are the five the reader read, so the pair is the fact.
-    assert COUNTS_RE.search(finding.detail).groups() == ('7', '5'), finding.render()
+    assert _fact(finding) == ('panos_aggregate_interface', GAP_UNIT, 2, 1), finding.render()
+    # The two entries the fact counts are `ae1` and `ae1.101`, and the reader read one block for that row.
+    assert COUNTS_RE.search(finding.detail).groups() == ('2', '1'), finding.render()
     assert finding.detail.count(':') == 1, 'the fact states the two counts and nothing else'
 
 
@@ -335,11 +348,20 @@ def test_a_finding_names_the_file_and_the_line_the_reader_read(tmp_path):
         assert finding.line == 0, finding.render()
         assert finding.file == f'{unit}/{entry_coverage.MATRIX_BY_RESOURCE[row]["output_file"]}', \
             finding.render()
+    # The same rule with no block read: the position is the file as a whole for each row the entry side
+    # counts. In the gap unit the aggregate row counts `ae1` and `ae1.101`, and the three other interface
+    # rows count one entry each, so the rule states the file for each of them.
     single = sanity_checks.check_round_trip({}, run_pipeline(panorama_to_terraform, GAP_FIXTURE,
                                                              tmp_path / 'ao').ledger)
-    assert [f.render() for f in single] == \
-        [f'{SHARED_UNIT}/address_objects.tf  row panos_address in unit {SHARED_UNIT}: '
-         f'the ledger reads 7 entries, the reader reads 0 blocks'], [f.render() for f in single]
+    assert [f.render() for f in single] == [
+        f'{GAP_UNIT}/interfaces.tf  row panos_aggregate_interface in unit {GAP_UNIT}: '
+        f'the ledger reads 2 entries, the reader reads 0 blocks',
+        f'{GAP_UNIT}/interfaces.tf  row panos_loopback_interface in unit {GAP_UNIT}: '
+        f'the ledger reads 1 entries, the reader reads 0 blocks',
+        f'{GAP_UNIT}/interfaces.tf  row panos_tunnel_interface in unit {GAP_UNIT}: '
+        f'the ledger reads 1 entries, the reader reads 0 blocks',
+        f'{GAP_UNIT}/interfaces.tf  row panos_vlan_interface in unit {GAP_UNIT}: '
+        f'the ledger reads 1 entries, the reader reads 0 blocks'], [f.render() for f in single]
 
 
 def test_the_rule_states_no_type_of_its_own(tmp_path):
@@ -351,7 +373,7 @@ def test_the_rule_states_no_type_of_its_own(tmp_path):
     files, ledger = _run(GAP_FIXTURE, tmp_path)
     fact = _fact(sanity_checks.check_round_trip(files, ledger)[0])
     assert fact[0] in entry_coverage.MATRIX_BY_RESOURCE, fact
-    assert entry_coverage.MATRIX_BY_RESOURCE[fact[0]]['resource'] == 'panos_address', fact
+    assert entry_coverage.MATRIX_BY_RESOURCE[fact[0]]['resource'] == 'panos_aggregate_interface', fact
     assert not [part for part in re.findall(r"'[^']*'", rule) if 'panos_' in part], rule
 
 
@@ -362,16 +384,23 @@ def test_the_rule_detects_a_block_with_no_entry(tmp_path):
     """
     files, ledger = _run(GAP_FIXTURE, tmp_path)
     planted = dict(files)
-    planted[f'{SHARED_UNIT}/planted.tf'] = 'resource "panos_address" "planted_00000000" {\n  name = "Planted"\n}\n'
+    planted[f'{GAP_UNIT}/planted.tf'] = 'resource "panos_address" "planted_00000000" {\n  name = "Planted"\n}\n'
     findings = sanity_checks.check_round_trip(planted, ledger)
-    assert len(findings) == 1, [f.render() for f in findings]
-    assert _fact(findings[0]) == ('panos_address', SHARED_UNIT, 7, 6), findings[0].render()
+    assert len(findings) == 3, [f.render() for f in findings]
+    # The planted row is one the entry side reads no row for in this unit, so the fact is the block side alone.
+    planted_finding = [f for f in findings if _fact(f)[0] == 'panos_address']
+    assert len(planted_finding) == 1, [f.render() for f in findings]
+    assert _fact(planted_finding[0]) == ('panos_address', GAP_UNIT, 0, 1), planted_finding[0].render()
     # The position is the first block the reader read for that unit and row, so the planted block is read like
     # any other input rather than named as an exception.
-    assert sanity_checks.blocks(planted, ('resource',))[0].file == findings[0].file, findings[0].render()
-    assert findings[0].line == sanity_checks.blocks(planted, ('resource',))[0].line, findings[0].render()
-    assert len(sanity_checks.blocks(planted, ('resource',))) == 6, 'the planted block enters the count'
-    assert findings[0].severity == sanity_checks.WARN, findings[0].render()
+    read_for_row = [block for block in sanity_checks.blocks(planted, ('resource',))
+                    if Path(block.file).parent.name == GAP_UNIT and block.rtype == 'panos_address']
+    assert len(read_for_row) == 1 and read_for_row[0].file == planted_finding[0].file, \
+        [f.render() for f in findings]
+    assert planted_finding[0].line == read_for_row[0].line, planted_finding[0].render()
+    assert len(sanity_checks.blocks(planted, ('resource',))) == 7, 'the planted block enters the count'
+    assert all(finding.severity == sanity_checks.WARN for finding in findings), \
+        [f.render() for f in findings]
 
 
 def test_the_rule_detects_an_entry_with_no_block(tmp_path):
@@ -379,15 +408,15 @@ def test_the_rule_detects_an_entry_with_no_block(tmp_path):
     """
     files, ledger = _run(GAP_FIXTURE, tmp_path)
     findings = sanity_checks.check_round_trip(files, ledger)
-    assert len(findings) == 1 and COUNTS_RE.search(findings[0].detail).groups() == ('7', '5'), \
+    assert len(findings) == 2 and COUNTS_RE.search(findings[0].detail).groups() == ('2', '1'), \
         [f.render() for f in findings]
     assert findings[0].severity == sanity_checks.WARN, findings[0].render()
     # Both directions are findings, so a count of zero on one side is still a finding.
-    only_blocks = {'shared_45ca31c3/address_objects.tf':
-                   'resource "panos_address" "one_00000000" {\n  name = "One"\n}\n'}
-    assert len(sanity_checks.check_round_trip(only_blocks, ledger)) == 1, 'one block for seven entries'
+    only_blocks = {f'{GAP_UNIT}/interfaces.tf':
+                   'resource "panos_aggregate_interface" "one_00000000" {\n  name = "One"\n}\n'}
+    assert len(sanity_checks.check_round_trip(only_blocks, ledger)) == 4, 'one block for five entries'
     no_blocks = sanity_checks.check_round_trip({}, ledger)
-    assert len(no_blocks) == 1 and _fact(no_blocks[0])[3] == 0, [f.render() for f in no_blocks]
+    assert len(no_blocks) == 4 and _fact(no_blocks[0])[3] == 0, [f.render() for f in no_blocks]
     assert no_blocks[0].line == 0, 'the reader read no block, so the position is the file as a whole'
     # The exit code is the rules that read the files, so the cross-check adds no exit-code rule.
     out = tmp_path / 'run'
@@ -395,27 +424,27 @@ def test_the_rule_detects_an_entry_with_no_block(tmp_path):
 
 
 def test_the_rule_reports_an_emitted_entry_that_writes_no_block(tmp_path):
-    """2.5: the report line names the entry as `emitted` and the unit directory holds no block for it, so the
-    rule states it as a count that does not agree. `acceptance.md` says no committed fixture shows one;
-    `tests/fixtures/address_objects.xml` shows two, so the pin reads the fixture, and `backlog.md` keeps the
-    fact with this rule named as the rule that states it.
+    """2.5: the report line names the entry as `emitted` and the unit directory holds no block of the row's
+    type for it, so the rule states it as a count that does not agree. `acceptance.md` says no committed
+    fixture shows one; `tests/fixtures/interfaces_other.xml` shows one for the aggregate row, so the pin reads
+    the fixture, and `backlog.md` keeps the fact with this rule named as the rule that states it.
     """
     files, ledger = _run(GAP_FIXTURE, tmp_path)
     emitted = [r for r in ledger.rows() if r['destination'] == 'emitted']
-    assert len(emitted) == 7, [r['name'] for r in emitted]
+    assert len(emitted) == 5, [r['name'] for r in emitted]
     read = sanity_checks.blocks(files, ('resource',))
-    assert len(read) == 5, 'two emitted entries write no block'
-    # The block a run writes is named by the entry name in the slug shape, so the two entries have no block.
-    locals_read = {block.local for block in read}
-    for name in ('Ext-Dynamic', 'Country-US'):
-        slug = name.lower().replace('-', '_')
-        assert not [local for local in locals_read if local.startswith(slug)], (name, sorted(locals_read))
-    # The per-entry report names both as `emitted`, which is the fact the cross-check reads.
+    assert len(read) == 6, 'the aggregate row counts two entries against one block'
+    # The block a run writes is named by the entry name in the slug shape, so the aggregate row holds one
+    # block, for `ae1`, and none for `ae1.101`, whose block is read for the subinterface row.
+    aggregate_blocks = [block for block in read if block.rtype == 'panos_aggregate_interface']
+    assert len(aggregate_blocks) == 1 and aggregate_blocks[0].local.startswith('ae1_'), \
+        [block.local for block in read]
+    assert not [block for block in aggregate_blocks if '101' in block.local], [block.local for block in read]
+    # The per-entry report names the entry as `emitted`, which is the fact the cross-check reads.
     report = (tmp_path / 'CONVERSION_REPORT.txt').read_text(encoding='utf-8')
-    for name in ('Ext-Dynamic', 'Country-US'):
-        line = [part for part in report.splitlines() if f'address/{name}' in part and 'emitted' in part]
-        assert line and 'captured' in line[0], line
-    assert len(sanity_checks.check_round_trip(files, ledger)) == 1, 'one fact, not one line per entry'
+    line = [part for part in report.splitlines() if 'aggregate-ethernet/ae1.101' in part and 'emitted' in part]
+    assert line and 'captured' in line[0], line
+    assert len(sanity_checks.check_round_trip(files, ledger)) == 2, 'one fact per row, not one line per entry'
 
 
 def test_the_report_is_byte_identical_between_two_runs(tmp_path):
@@ -450,7 +479,7 @@ def test_a_tf_file_at_the_root_names_no_unit(tmp_path):
     planted = dict(files)
     planted['root.tf'] = 'resource "panos_address" "root_00000000" {\n  name = "Root"\n}\n'
     findings = sanity_checks.check_round_trip(planted, ledger)
-    assert len(findings) == 2, [f.render() for f in findings]
+    assert len(findings) == 3, [f.render() for f in findings]
     root = [f for f in findings if f.file == 'root.tf']
     assert root, findings
     assert 'cannot be assigned to a unit' in root[0].detail, root[0].render()
@@ -474,8 +503,13 @@ def test_the_rule_prints_no_scan_line(tmp_path):
     # The finding prints in the gate summary, in the shape every finding uses, and the gate gains no scan
     # section of its own.
     finding = [line for line in gate.splitlines() if line.startswith('    ')]
-    assert len(finding) == 1 and 'row panos_address in unit' in finding[0], gate
-    assert 'Property findings' in result.stdout, 'the scans that print still print'
+    assert len(finding) == 2 and 'row panos_aggregate_interface in unit' in finding[0], gate
+    # The scans that print still print: the gap fixture reports no property finding, so the pin reads the
+    # fixture the property scan reports.
+    scan = run_script(CONVERTER, str(FIXTURES_DIR / PROPERTY_SCAN_FIXTURE),
+                      '--output-dir', str(tmp_path / 'scan'))
+    assert scan.returncode == 0, scan.stdout + scan.stderr
+    assert 'Property findings' in scan.stdout, scan.stdout
 
 
 # --- 3. Which types the rule can compare ---------------------------------------
@@ -503,20 +537,26 @@ def test_the_count_scope_is_the_scan_scope_read_through_one_rule(tmp_path):
 
 def test_an_entry_the_run_reports_is_not_counted(tmp_path):
     """3.2: the destination is read per entry, so an entry the run reports is not in the count. The
-    `report_only` address case cannot hold as written, because `report_only` is recorded after `mark`, so
-    `destination` answers `emitted` for it; the measurement is in the `acceptance.md` Result.
+    `report_only` address case now holds as written, because the fact is read from the recorded object.
     """
     files, ledger = _run(REPORT_FIXTURE, tmp_path)
     reported = [r for r in ledger.rows() if r['destination'] == 'report']
     assert len(reported) == 1, [r['name'] for r in reported]
     assert entry_coverage.matrix_row_for(reported[0]['container']) is None, reported[0]['container']
     assert sanity_checks.check_round_trip(files, ledger) == [], 'a report entry enters no count'
-    # The address case, measured: `report_only` is recorded after the mark, so the entry is still counted.
-    files, ledger = _run(GAP_FIXTURE, tmp_path)
+    # The address case reads clean, so the pin keeps a run that still disagrees: a planted `panos_address`
+    # block for `Country-US` is a count the entry side cannot join, so the whole fact is the pair.
+    files, ledger = _run(PROPERTY_SCAN_FIXTURE, tmp_path)
     report_only = [r for r in ledger.rows() if r['captured'].get('report_only')]
     assert len(report_only) == 2, [r['name'] for r in report_only]
-    assert all(r['destination'] == 'emitted' for r in report_only), [r['name'] for r in report_only]
-    assert len(sanity_checks.check_round_trip(files, ledger)) == 1, 'so the count includes them'
+    assert all(r['destination'] == 'report' for r in report_only), [r['name'] for r in report_only]
+    assert sanity_checks.check_round_trip(files, ledger) == [], 'so those two entries leave the count'
+    planted = dict(files)
+    planted[f'{SHARED_UNIT}/planted.tf'] = (
+        'resource "panos_address" "country_us_00000000" {\n  name = "Country-US"\n}\n')
+    findings = sanity_checks.check_round_trip(planted, ledger)
+    assert len(findings) == 1, [f.render() for f in findings]
+    assert _fact(findings[0]) == ('panos_address', SHARED_UNIT, 5, 6), findings[0].render()
 
 
 def test_a_nested_block_row_is_not_counted(tmp_path):
@@ -564,15 +604,23 @@ def test_a_kind_that_writes_no_block_is_not_counted(tmp_path):
     for kind in ('count-only', 'inventory', 'skipped', 'report', 'bookkeeping'):
         rows = [r for r in ledger.rows() if r['destination'] == kind]
         assert rows, kind
-        assert all(entry_coverage.matrix_row_for(r['container']) is None for r in rows) or kind == 'skipped', \
+        # The count reads only `emitted` rows, so a kind that writes no block enters no count even when its
+        # entry sits inside a container the scope rule answers.
+        assert all(entry_coverage.matrix_row_for(r['container']) is None for r in rows) \
+            or kind in ('skipped', 'report'), \
             (kind, [r['container'] for r in rows if entry_coverage.matrix_row_for(r['container'])])
+    # The report half, as the rule answers it: the report-only address entry sits inside `address`, the
+    # container the scope rule answers, and still enters no count.
+    report_rows = [r for r in ledger.rows() if r['destination'] == 'report']
+    answered = [r for r in report_rows if entry_coverage.matrix_row_for(r['container'])]
+    assert len(answered) == 1 and answered[0]['container'] == 'address', [r['container'] for r in answered]
     skipped = [r for r in ledger.rows() if r['destination'] == 'skipped']
     assert [r for r in skipped if entry_coverage.matrix_row_for(r['container'])], \
         'a skipped entry can sit inside a row the scope rule answers, and is still not counted'
     assert entry_coverage.GAP_KINDS == ('count-only', 'skipped', 'unaccounted'), 'one definition'
     counted = {_fact(f)[0] for f in sanity_checks.check_round_trip(files, ledger)}
     assert counted <= set(entry_coverage.MATRIX_BY_RESOURCE), sorted(counted)
-    assert len(sanity_checks.check_round_trip(files, ledger)) == 5, [f.render() for f in
+    assert len(sanity_checks.check_round_trip(files, ledger)) == 4, [f.render() for f in
         sanity_checks.check_round_trip(files, ledger)]
 
 
@@ -623,19 +671,19 @@ def test_no_other_block_kind_enters_the_count(tmp_path):
     """
     files, ledger = _run(GAP_FIXTURE, tmp_path)
     planted = dict(files)
-    planted[f'{SHARED_UNIT}/other.tf'] = (
-        'data "panos_address" "d_00000000" {\n  location = { shared = {} }\n  name = "Other"\n}\n'
-        'import {\n  to = panos_address.web_server_1_df7a622a\n}\n'
-        'action "commit" "a_00000000" {\n  location = { shared = {} }\n}\n'
+    planted[f'{GAP_UNIT}/other.tf'] = (
+        'data "panos_address" "d_00000000" {\n  location = { vsys1 = {} }\n  name = "Other"\n}\n'
+        'import {\n  to = panos_aggregate_interface.ae1_5552830e\n}\n'
+        'action "commit" "a_00000000" {\n  location = { vsys1 = {} }\n}\n'
         'variable "other" {\n  description = "no block"\n}\n')
     read = sanity_checks.blocks(planted, ('resource', 'data', 'import', 'action'))
-    assert len(read) == 8, [block.kind for block in read]
-    assert len(sanity_checks.blocks(planted, ('resource',))) == 5, 'the reader read one kind for the count'
+    assert len(read) == 9, [block.kind for block in read]
+    assert len(sanity_checks.blocks(planted, ('resource',))) == 6, 'the reader read one kind for the count'
     assert sorted({block.kind for block in read}) == ['action', 'data', 'import', 'resource'], \
         sorted({block.kind for block in read})
     findings = sanity_checks.check_round_trip(planted, ledger)
-    assert len(findings) == 1, [f.render() for f in findings]
-    assert _fact(findings[0]) == ('panos_address', SHARED_UNIT, 7, 5), findings[0].render()
+    assert len(findings) == 2, [f.render() for f in findings]
+    assert _fact(findings[0]) == ('panos_aggregate_interface', GAP_UNIT, 2, 1), findings[0].render()
     assert all(block.kind == 'resource' for block in sanity_checks.blocks(planted, ('resource',)))
     rule = _rule_source()
     assert "blocks(files, ('resource',))" in rule, 'the decision is the reader\'s kinds argument'
@@ -652,9 +700,14 @@ def test_the_rule_states_no_field_name_of_its_own(tmp_path):
     assert entry_coverage.name_field('panos_address') == 'name', 'the one naming rule stays the owner'
     files, ledger = _run(GAP_FIXTURE, tmp_path)
     finding = sanity_checks.check_round_trip(files, ledger)[0]
-    row = entry_coverage.MATRIX_BY_RESOURCE['panos_address']
+    row = entry_coverage.MATRIX_BY_RESOURCE['panos_aggregate_interface']
     assert not [field for field in row['properties'] if field in finding.detail], finding.render()
-    assert not [r['name'] for r in ledger.rows() if r['name'] in finding.detail], finding.render()
+    # The fact names no entry: read the names the fact counts, because a name the fact could not name (the
+    # scope entry `vsys1`) is also part of the unit name it states.
+    counted = [r for r in ledger.rows() if r['destination'] == 'emitted'
+               and entry_coverage.matrix_row_for(r['container']) is row]
+    assert len(counted) == 2, [r['name'] for r in counted]
+    assert not [r['name'] for r in counted if r['name'] in finding.detail], finding.render()
 
 
 def test_the_rule_reads_no_file_name_rule(tmp_path):
@@ -665,13 +718,13 @@ def test_the_rule_reads_no_file_name_rule(tmp_path):
     assert '*.tf' not in rule and 'glob' not in rule, 'the rule checks no file name'
     assert 'output_file' in rule, 'the whole-file position reads the name the row states'
     files, ledger = _run(GAP_FIXTURE, tmp_path)
-    moved = {f'{SHARED_UNIT}/moved_{Path(name).name}': text for name, text in files.items()}
+    moved = {f'{GAP_UNIT}/moved_{Path(name).name}': text for name, text in files.items()}
     findings = sanity_checks.check_round_trip(moved, ledger)
-    assert len(findings) == 1, [f.render() for f in findings]
+    assert len(findings) == 2, [f.render() for f in findings]
     # The same unit and the same row, so the count is the same fact in another file of that unit.
-    assert _fact(findings[0]) == ('panos_address', SHARED_UNIT, 7, 5), findings[0].render()
-    assert Path(findings[0].file).parent.name == SHARED_UNIT, findings[0].render()
-    moved_name = entry_coverage.MATRIX_BY_RESOURCE['panos_address']['output_file']
+    assert _fact(findings[0]) == ('panos_aggregate_interface', GAP_UNIT, 2, 1), findings[0].render()
+    assert Path(findings[0].file).parent.name == GAP_UNIT, findings[0].render()
+    moved_name = entry_coverage.MATRIX_BY_RESOURCE['panos_aggregate_interface']['output_file']
     assert Path(findings[0].file).name == f'moved_{moved_name}', findings[0].render()
     # The file names themselves are pinned by `tests/test_golden_files.py`, not by this rule.
     assert run_script(CONVERTER, str(FIXTURES_DIR / GAP_FIXTURE),
@@ -733,7 +786,7 @@ def test_the_rule_reports_nothing_across_the_corpus(tmp_path):
 
 def test_the_rule_reports_the_gaps_the_corpus_contains(tmp_path):
     """4.3, as measured: `acceptance.md` claimed the corpus trips no finding, so this pin reads what the rule
-    reports instead. The 22 findings on 10 fixtures are the three categories the rule cannot join, and each is
+    reports instead. The 20 findings on 9 fixtures are the three categories the rule cannot join, and each is
     recorded in `backlog.md`.
     """
     base = tmp_path / 'corpus'
@@ -758,9 +811,9 @@ def test_the_rule_reports_the_gaps_the_corpus_contains(tmp_path):
                 by_category['entry side counts more'] += 1
             else:
                 by_category['entry writes more than one block'] += 1
-    assert total == 22, total
+    assert total == 20, total
     assert by_category == CATEGORY_COUNTS, by_category
-    assert len(CORPUS_GAPS) == 10, sorted(CORPUS_GAPS)
+    assert len(CORPUS_GAPS) == 9, sorted(CORPUS_GAPS)
 
 
 def test_the_cross_check_finding_is_a_coverage_fact_not_a_broken_output(tmp_path):
@@ -774,12 +827,13 @@ def test_the_cross_check_finding_is_a_coverage_fact_not_a_broken_output(tmp_path
     assert findings and all(f.severity == sanity_checks.WARN for f in findings), \
         [f.render() for f in findings]
     report = sanity_checks.SanityReport(checks=(sanity_checks.CheckResult('round_trip', tuple(findings)),),
-                                        file_count=len(files), resource_count=5)
+                                        file_count=len(files),
+                                        resource_count=len(sanity_checks.blocks(files, ('resource',))))
     assert report.result_of('round_trip') == sanity_checks.WARN, report.render()
     assert not report.failed, 'a WARN-only result does not fail the gate'
     out = tmp_path / 'run'
     assert run_script(CONVERTER, str(FIXTURES_DIR / GAP_FIXTURE), '--output-dir', str(out)).returncode == 0
-    assert 'Result: PASS (0 FAIL, 1 WARN)' in (out / 'SANITY_REPORT.txt').read_text(encoding='utf-8')
+    assert 'Result: PASS (0 FAIL, 2 WARN)' in (out / 'SANITY_REPORT.txt').read_text(encoding='utf-8')
 
 
 def test_not_run_does_not_change_the_exit_code(tmp_path):
