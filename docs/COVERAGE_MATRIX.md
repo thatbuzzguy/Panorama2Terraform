@@ -199,7 +199,13 @@ Two levels sit beside the matrix:
   row covers, so a report, inventory, bookkeeping, count-only, or nested-block
   container is not a finding: it has no row, and only a row can name the properties an
   emitter reads. The cross-check reads the same scope through `matrix_row_for`, so the
-  rule about a read keeps one owner and one reader (`ARCHITECTURE.md` §4.6). A field gap
+  rule about a read keeps one owner and one reader (`ARCHITECTURE.md` §4.6). It reads the
+  destination per entry through `entry_coverage.EntryLedger.destination`, which answers a
+  destination in one place, so an entry the run reports enters no count even when the row
+  that covers its container is an `emitted` row.
+  `tests/test_round_trip.py::test_an_entry_the_run_reports_is_not_counted` holds that, and
+  `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers`
+  holds the scan scope, which the destination rule is not. A field gap
   in a container with no rule is recorded in [`../backlog.md`](../backlog.md).
   A container outside the scan scope is honest only when the output that reaches its entry reads the
   field, because no finding can name a container with no row. Four shapes state that, one per kind.

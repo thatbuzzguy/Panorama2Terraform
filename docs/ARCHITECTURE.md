@@ -24,7 +24,7 @@ Every file in this table is a module in `src/`, except the test harness, which i
 | `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `DATA_SOURCE_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX`, and the scope tables `SCOPE_TYPES`, `SCOPE_PLACEMENT`, `SCOPE_ANSWER`, `SCOPE_LEVEL_ORDER` and `SCOPE_SHAPE` (F6.5), plus the value-to-variable table `VALUE_VARIABLES` (F6.6) | the single source of truth; no resource name or attribute from memory; `SCOPE_SHAPE` is the shape the provider takes, so a membership cannot be printed as a string where the provider takes an object; `VALUE_VARIABLES` covers every field `LOCATION_SCHEMA` declares, so the emitter and the gate read one table and no emitter branch decides the shape for one type |
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy` |
 | `container_coverage.py` | The container table (§3.1) and the section rule | the table is data, so a parse method cannot exist without a row |
-| `entry_coverage.py` | The per-entry report (§3.2) | a destination comes from the table row, or from the mark when the method knows better; `name_field` is the one rule for the field that carries an entry name into a block, so the emitter, the gate, and the matrix test read the same rule |
+| `entry_coverage.py` | The per-entry report (§3.2) | the destination is answered in one place, `EntryLedger.destination`, in this order: the per-entry fact on the recorded object, then the destination `mark` recorded, then the container table row; `mark` records a destination only when the caller states it, so a call site that states `destination='report'` for a report-only entry restates a fact the entry already holds; `name_field` is the one rule for the field that carries an entry name into a block, so the emitter, the gate, and the matrix test read the same rule |
 | `shadow_coverage.py` | The cross-source shadow scan (§3.2): a child entry name that repeats a parent entry name | the key is `state_coverage.ownership_key` read with the facts the parent row declares, so one key names one parent entry; the scan compares the matrix row and entry name part of the key; both sources are read with the same row rule, so no second naming rule exists |
 | `state_input.py` | The state producer (F5.6): a Terraform state document read as a reference source, through the same door | the two byte checks run on the state bytes, and only the parse step is chosen by the kind, so a `<!DOCTYPE` inside a JSON value is not a refusal; a document the identity key cannot read is an input refusal; the state source writes no output, so no `.tf` byte changes |
 | `state_coverage.py` | The state scan (§3.2): the ownership fact and the drift fact | the matrix row is the same table the property scan uses, keyed by the resource type; the ownership key is §2.1 identity with the declared facts, never the `Shared` fallback; the scan is not an output, so it reads captured values without recording |
@@ -364,14 +364,21 @@ Six rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
   under `predefined` are not rows; the header gives the count.
 - **Object type is the F4.2 `section_path`** of the entry's container. No second
   naming rule.
-- **Destination comes from the table row that covers the container**, longest
-  matching row wins, so a sub-shape row beats the general row for its container.
-  A per-entry mark overrides the row when the method knows better: `report_only`
-  content is `report`, and a skipped entry is `skipped`. A scope entry takes the
-  destination its table row states (F6.5): the five scope containers and `variable`
+- **The destination for one entry is answered in one place**, `entry_coverage.EntryLedger.destination`, in this
+  order: the per-entry fact on the recorded object, then the destination `mark` recorded, then the table row
+  that covers the container (longest matching row wins, so a sub-shape row beats the general row for its
+  container). `mark` records the destination only when the caller states it, so it states none of its own. The
+  `report_only` fact on the recorded object answers `report`, and a skipped entry answers `skipped` through the
+  mark, because `mark_skipped` records no object. The fact is read at read time through `RecordingDict.value()`,
+  so the order of `mark` and the field cannot change the answer and the decision records no property use. A
+  scope entry takes the destination its table row states (F6.5): the five scope containers and `variable`
   are `emitted` rows, so a scope entry is an object the output writes, and the
   membership lists inside a scope entry stay `bookkeeping`, because no provider
-  resource exists for a device.
+  resource exists for a device. Pinned by
+  `tests/test_entry_coverage.py::test_report_only_entry_destination_is_report`,
+  `::test_the_destination_is_read_from_the_recorded_object_after_the_mark`,
+  `::test_skipped_entry_destination_beats_the_table_row`, and
+  `::test_scope_entry_destination_comes_from_the_table_row`.
 - **An entry the output cannot express is a report row, and the file holds no half of it** (F7.1): a
   peer no peer group names, an OSPF interface outside an area, a `one_of` value the mapping cannot state,
   and an OSPF `range` entry that states neither choice are marked `report` with the reason, and the parse
@@ -1254,8 +1261,12 @@ the entry set through the run's ledger (`entry_coverage.EntryLedger`). It reads 
 `run_checks` takes the ledger as an argument, so a call with no ledger reports the check as NOT RUN and a rule
 that reads only the output directory is unchanged. The count scope is the property-scan scope read through
 `entry_coverage.matrix_row_for` (`COVERAGE_MATRIX.md` §1), the join is the matrix row and the unit read through
-`unit_manifest`, and the destination is read per entry through `EntryLedger.destination`, so the rule states no
-reader, no count, no scope, no kind, no type, no field name, no file name and no unit rule of its own.
+`unit_manifest`, and the destination is read per entry through `entry_coverage.EntryLedger.destination`, so the
+rule states no reader, no count, no scope, no kind, no type, no field name, no file name and no unit rule of its
+own. The entry side counts only the entries that rule answers as `emitted`, so an entry the run reports enters
+no count even when its container row is an `emitted` row. Pinned by
+`tests/test_round_trip.py::test_the_entry_count_is_read_through_the_ledger_and_the_scan_scope_rule` and
+`::test_an_entry_the_run_reports_is_not_counted`.
 
 One finding per unit and per matrix row where the two counts do not agree, and the fact is the two counts. The
 rule names no entry, because §3.2 owns one entry, so the gate cannot restate the per-entry report. Both

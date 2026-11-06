@@ -2,38 +2,29 @@
 
 ## Current position
 
-The destination a report-only entry answers is implemented, pinned and committed, and the Result in
-`acceptance.md` is filled. The documents that name the rule are the next step (`acceptance.md` §5). The commit
-holds `src/entry_coverage.py`, `src/sanity_checks.py`, the three test files, and the tracking markdown.
+The destination a report-only entry answers is complete and committed. The change that implemented it holds
+`src/entry_coverage.py`, `src/sanity_checks.py`, the three test files and the tracking markdown. This commit
+writes the documents group 5 of `acceptance.md` names: the `README.md` gate table, `docs/ARCHITECTURE.md` §1.1,
+§3.2 and §4.6, `docs/COVERAGE_MATRIX.md` §1, `docs/README.md`, and `backlog.md`, and closes the tracking
+markdown. The measured facts are in the `acceptance.md` Result, and no other document restates them.
 
 The rule, in `src/entry_coverage.py`: `mark` records what the parse method took and only the destination the
 caller states; `EntryLedger.destination` is the one place that answers a destination, in the order the per-entry
 fact on the recorded object (`report_only` answers `report`), then the destination `mark` recorded, then the
 container table row. The fact is read at read time through `RecordingDict.value()`, so the decision records no
 property use and the order of `mark` and the field cannot change the answer. `src/sanity_checks.py` states the
-same rule in the comment inside `check_round_trip`.
+same rule in the comment inside `check_round_trip`, which counts only the entries that rule answers as `emitted`,
+so an entry the run reports enters no count. The report-only call site in
+`panorama_to_terraform.parse_address_objects` states the fact through the recorded object and names no destination.
 
-What the run measures, as the pins read it:
+Test count: `python3 -m pytest` reads 1567 pins, and `ruff check .` is clean.
 
-- the 3 report lines read `report`, and no other line moves; `tests/fixtures/address_objects.xml` reads 5
-  emitted and 2 report, `tests/fixtures/kitchen_sink.xml` reads 61 and 9; the sample run reads 20 and 0, so the
-  gate stays `PASS (0 FAIL, 0 WARN)`; no `.tf` golden moves.
-- the corpus cross-check reads 20 findings on 9 fixtures, in the categories 3, 16 and 1, so
-  `GAP_FIXTURE` in `tests/test_round_trip.py` reads `interfaces_other.xml`, the surviving instance of an
-  `emitted` entry the row counts with no block of the row's type.
-- two facts `acceptance.md` recorded wrong, and the pins read them as measured: the unit that fixture names is
-  `vsys1_b3e94a35`, so the fact is `('panos_aggregate_interface', 'vsys1_b3e94a35', 2, 1)`; the entry with no
-  block of the row's type is `ae1.101`, not `ae1`.
-- 22 pins moved, 21 in `tests/test_round_trip.py` and 1 in `tests/test_sanity_gate.py`. The pins that needed a
-  shape, not a number, are named in the `acceptance.md` Result. `tests/test_property_coverage.py`,
-  `tests/test_data_file_gate.py`, `tests/test_edge_cases.py`, `tests/test_real_or_report.py` and
-  `tests/test_golden_files.py` did not move.
-
-Next: write the documents group 5 names, and move the `report_only` timing fact out of `backlog.md`, where the
-'entry side counts more' entry reads 3 findings with `dependency_wiring.xml`, `interfaces_other.xml` and the
-same aggregate case in `kitchen_sink.xml` named. The facts that stay blocked on a fact the tool cannot read
-offline stay in `backlog.md`: the four `*_policy_rules` types, a config entry inside a stack, the EDL reference
-decision, the profile-name report column, and the two `.github/` template files outside the document indexes.
+Next: the certificate `REFERENCE_ONLY` rows for `private_key` and `passphrase`, which
+`resource_mapping.VALUE_VARIABLES` has no row for, so the certificate emitter cannot print the reference yet
+(`backlog.md`). The facts that stay blocked on a fact the tool cannot read offline stay in `backlog.md`: the four
+`*_policy_rules` types, a config entry inside a stack, the EDL `certificate_profile` field, the profile-name
+report column, the certificate `sensitive` `REFERENCE_ONLY` fact, and the two `.github/` template files outside
+the document indexes.
 
 
 

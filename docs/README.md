@@ -24,6 +24,7 @@ that document instead of restating the rule.
 | Safe input read, container table, entry marks | `ARCHITECTURE.md` §3 |
 | Per-scope source shape, the envelope rule, the scope path shape | `ARCHITECTURE.md` §3.1, and `container_coverage.py` |
 | Cross-source shadow scan (the fact, the line shape, the heading) | `ARCHITECTURE.md` §3.2, and `shadow_coverage.py` |
+| The destination one entry takes (the one place that answers it, and the order) | `ARCHITECTURE.md` §3.2, and `entry_coverage.py` (`EntryLedger.destination`) |
 | Emit order, location, reference resolution, policy chains, reports, gate | `ARCHITECTURE.md` §4 |
 | The round-trip cross-check (the block set against the entry set, per unit and row) | `ARCHITECTURE.md` §4.6, and `sanity_checks.check_round_trip`, which reads the scan scope through `entry_coverage.matrix_row_for` |
 | The protocol object shape, the one-of mapping, and what prints | `ARCHITECTURE.md` §4.9, and `resource_mapping.PROTOCOL_SHAPE` |

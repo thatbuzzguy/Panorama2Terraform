@@ -54,6 +54,13 @@ boundary, because its fact compares two sets: the `.tf` block set it read, and t
 per unit and per coverage matrix row. A disagreeing count names no broken output, so the finding is a WARN and the
 exit code stays with the rules that read the files (`docs/ARCHITECTURE.md` §4.6).
 
+The cross-check counts the entry side through one destination rule. `entry_coverage.EntryLedger.destination` is
+the one place that answers a destination, in the order the per-entry fact on the recorded object, then the
+destination `mark` recorded, then the container table row, and `mark` records a destination only when the caller
+states it. So an entry the run reports enters no count, even when the row that covers its container is an
+`emitted` row. The rule is in `docs/ARCHITECTURE.md` §3.2, `docs/README.md` names `entry_coverage.py` as its
+owner, and `tests/test_round_trip.py::test_an_entry_the_run_reports_is_not_counted` holds it.
+
 The three shape tables each have one owner and one gate rule that reads them: `PROTOCOL_SHAPE` and
 `protocol_object`, `FILTER_SHAPE` and `filter_blocks`, `CERTIFICATE_SHAPE` and `certificate_blocks` (F7.14). Each
 rule reads the block through the same block reader and the same field reader, so a printed block and a
@@ -97,12 +104,13 @@ The credential rule single statement is complete, and `docs/CODEBASE_ASSEMBLY.md
 The certificate container row, its emitters and its gate rule are complete (`docs/ARCHITECTURE.md` §4.11). The
 round-trip cross-check is complete, and `docs/ARCHITECTURE.md` §4.6 is the owner document for it: the rule reads
 the generated HCL back through the one gate reader and compares the block count with the run's entry ledger, per
-unit and per coverage matrix row. The next feature is the `report_only` timing, the open fact that rule measured
-(`backlog.md`), because `EntryLedger.destination` is read after `mark`. The gated pieces that stay held in
-`backlog.md` are the four `*_policy_rules` types, which wait for the F3.5 rulebase decision and a live target, and
-a config entry inside a stack, which needs a provider location shape before the emitter can write a block for it.
-The rows that state fewer fields than the pinned provider declares for their level are the choice levels, which
-state their alternatives as `selects` keys.
+unit and per coverage matrix row. The `report_only` timing fact that rule measured is landed and closed here,
+through the destination rule in Current State. The next feature is the certificate `REFERENCE_ONLY` rows for
+`private_key` and `passphrase`, which `resource_mapping.VALUE_VARIABLES` has no row for (`backlog.md`). The gated
+pieces that stay held in `backlog.md` are the four `*_policy_rules` types, which wait for the F3.5 rulebase
+decision and a live target, and a config entry inside a stack, which needs a provider location shape before the
+emitter can write a block for it. The rows that state fewer fields than the pinned provider declares for their
+level are the choice levels, which state their alternatives as `selects` keys.
 
 ## Out of Scope (tracked in backlog.md)
 
