@@ -1286,9 +1286,9 @@ def check_round_trip(files: dict[str, str], ledger) -> list[Finding]:
 
     entry_counts: dict[tuple, int] = {}
     for row in ledger.rows():
-        # `row['destination']` is the fact `EntryLedger.destination` records for the entry, so the count reads
-        # the destination per entry and not the container row. Measured: `report_only` is recorded after the
-        # mark, so a report-only address still answers `emitted` and is counted here (`backlog.md`).
+        # `row['destination']` is the destination `EntryLedger.destination` answers for the entry, so the
+        # count reads it per entry and not from the container row. An entry the run reports enters no
+        # count, because `report_only` on the recorded object answers `report` before the mark does.
         if row['destination'] != 'emitted':
             continue
         covered = entry_coverage.matrix_row_for(row['container'])

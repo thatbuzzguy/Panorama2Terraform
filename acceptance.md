@@ -172,6 +172,105 @@ data-file counts do not move.
 
 ## Result
 
-Pending. To measure: `ruff check .` clean, `python3 -m pytest` passing with no skip, and no `.tf` golden
-changed in `git status`. The pins in group 4 must be read as the rule measures it, not as the numbers this
-document recorded, and the numbers in 2, 3 and 4 must be confirmed by the run before the commit.
+Measured with the fix applied. `ruff check .` is clean, `python3 -m pytest` passes 1567 pins with no skip, and
+`git status` names no `.tf` golden: the commit holds `src/entry_coverage.py`, `src/sanity_checks.py`,
+`tests/test_entry_coverage.py`, `tests/test_round_trip.py`, and `tests/test_sanity_gate.py`.
+
+### 1. One place answers the destination
+
+1.1 `mark` records only the destination the caller states, and `destination` answers in the order 1.1.
+`tests/test_entry_coverage.py::test_report_only_entry_destination_is_report` measures the mark answering
+`emitted` with no fact on the recorded object, then `report` after the fact is added through that object. The
+pin this document named for the second step, `::test_a_row_names_the_destination_the_mark_records`, does not
+exist; the second step is held by `::test_skipped_entry_destination_beats_the_table_row` and the third by
+`::test_scope_entry_destination_comes_from_the_table_row`, both unchanged.
+
+1.2 The new pin `::test_the_destination_is_read_from_the_recorded_object_after_the_mark` measures `report` read
+in the order mark, field, destination, and measures the same answer for the same entry read in the other
+order, so the call order states nothing.
+
+1.3 Inside a recording, the read through `value()` leaves `used_keys() == ('name',)`, and the same key read
+through `get()` records `('name', 'report_only')`, so the decision records no property use.
+`tests/test_property_coverage.py::CORPUS_FINDINGS` keeps `('address', 'Country-US', 'panos_address',
+('description',))` for both fixtures, and `used_keys()` reads `declared_type, device_group, name, other,
+report_only, vsys` for the three report-only entries before and after. `::test_fields_added_through_the_recorded_object_are_recorded`
+keeps its list, and `tests/test_ownership.py::test_the_scan_read_is_not_an_output_read` is unchanged.
+
+1.4 `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers` is unchanged: no
+destination kind is in the scan scope, and no count row is named through the destination rule.
+
+### 2. The report line
+
+2.1 The three lines move from `emitted` to `report` and no other line moves: `address/Ext-Dynamic` and
+`address/Country-US` in `address_objects.xml`, and `address/Country-US` in `kitchen_sink.xml`. The sample run
+holds no report-only entry, so its report is unchanged (emitted 20, report 0).
+
+2.2 Measured counts: `address_objects.xml` emitted 5, report 2; `kitchen_sink.xml` emitted 61, report 9. The
+detail column reads `panos_address` for those lines, and the gap section is unchanged.
+
+2.3 No `.tf` file moves, so `tests/test_golden_files.py` and
+`tests/test_ownership.py::test_the_goldens_are_byte_identical` are unchanged.
+
+2.4 `tests/test_edge_cases.py` and `tests/test_real_or_report.py` are unchanged.
+
+### 3. The cross-check count
+
+3.1 The comment in `src/sanity_checks.py` states the rule. `check_round_trip` counts the entry side through
+`row['destination']`, so the two report-only address entries leave the count and the fixture reads clean. The
+pin reads the planted block fact `('panos_address', 'shared_45ca31c3', 5, 6)` as this document recorded, and no
+fixture was added.
+
+3.2 Measured: 20 findings on 9 fixtures; `address_objects.xml` is in the clean branch. `kitchen_sink.xml` keeps
+4 findings at positions 16, 17, 85, 95.
+
+3.3 `CATEGORY_COUNTS` reads 3, 16, 1 as recorded, and the three survivors are `dependency_wiring.xml` (3
+against 2), `interfaces_other.xml` (2 against 1), and `kitchen_sink.xml` (2 against 1). The 'no v2 attribute'
+shape has no measured instance left.
+
+3.4 `test_the_rule_reports_the_gaps_the_corpus_contains` reads 20, 9 and 3.
+
+3.5 Measured, in two places where this document recorded the wrong fact. The run names
+`vsys1_b3e94a35` for `interfaces_other.xml`, because its entries sit under a declared vsys and not under
+`Shared`, so the fact is `('panos_aggregate_interface', 'vsys1_b3e94a35', 2, 1)`. The no-block-read pins read 4
+findings on `vsys1_b3e94a35/interfaces.tf`, not 1, because four rows in that unit have an entry side; the
+aggregate row reads 2 against 0. The entry with no block of the row's type is `ae1.101`, not `ae1`: the
+aggregate row counts `ae1` and `ae1.101`, and the one block it reads is `ae1`'s, because `ae1.101` wrote the
+blocks the reader reads for the subinterface row.
+
+3.6 The severity stays WARN, and the exit code stays with the rules that read the files: 2 findings on the gap
+run, `Result: PASS (0 FAIL, 2 WARN)`. The sample run stays `PASS (0 FAIL, 0 WARN)`, so
+`test_not_run_does_not_change_the_exit_code` and `tests/test_sanity_gate.py::test_console_summary_reports_the_result`
+did not move.
+
+3.7 `tests/test_sanity_gate.py::test_kitchen_sink_gate_passes_with_validate` reads `PASS (0 FAIL, 5 WARN)` with
+4 findings in the `round_trip` block. `tests/test_data_file_gate.py` did not move.
+
+### 4. Pins that moved, as the run measured them
+
+22 pins moved: 21 in `tests/test_round_trip.py` and 1 in `tests/test_sanity_gate.py`. This document named 20
+in `tests/test_round_trip.py`; the pin it did not name is `test_the_rule_prints_no_scan_line`, which moved
+because the gate prints no property finding for `interfaces_other.xml`, so the half that says the scans that
+print still print reads `address_objects.xml`, where the property scan reports 2 findings. Two pins moved only
+after `GAP_FIXTURE` changed, not after the fix alone: `test_the_rule_reads_no_report_and_no_data_file` reads 5
+`.tf` files instead of 3, and `test_the_rule_detects_a_block_with_no_entry` plants a block for a row the entry
+side reads no row for in that unit, so its fact is `('panos_address', 'vsys1_b3e94a35', 0, 1)` and the two
+findings the run reports stay.
+
+Numbers that moved with the counts: 1.1 blocks 5 → 6 and findings 1 → 2; 1.2 entries 7 → 2 and the block side
+read for that row and unit; 1.3 the run writes two unit directories, so the unit set is 2; 1.4 the report counts
+read 5 `.tf` files for the new fixture; 1.5 `round_trip WARN (2)`; 2.1 kitchen facts 5 → 4 and units 3 → 2; 2.7
+findings 2 → 3; 2.8 finding lines 1 → 2; 3.8 blocks 8 → 9 and 5 → 6, findings 1 → 2; 4.3 22 → 20, 10 → 9,
+5 → 3; the severity pin reads 2 WARN and the resource count 6.
+
+Shape that moved because the pin reads a set rather than one entry: `test_the_rule_names_no_entry` and
+`test_the_rule_states_no_field_name_of_its_own` read the names the fact counts, because a one-character entry
+name (`1`) and the scope name (`vsys1`) are inside the unit name the fact states;
+`test_a_kind_that_writes_no_block_is_not_counted` states that the count reads only `emitted` rows, because the
+`report` half now holds the report-only address entry inside `address`, the container the scope rule answers;
+`test_a_finding_names_the_file_and_the_line_the_reader_read` states four whole-file positions for the gap unit.
+
+### 5. Documents
+
+Not written here. `README.md`, `docs/ARCHITECTURE.md` §1.1, §3.2 and §4.6, `docs/COVERAGE_MATRIX.md` §1,
+`docs/README.md` and `backlog.md` (the `report_only` timing fact moves out, and the 'entry side counts more'
+entry reads 3 with the surviving instances named) are the next step.

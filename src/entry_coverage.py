@@ -13,10 +13,12 @@ Four rules, stated once here.
    scan reports the properties.
    Entries under `predefined` are PAN-OS built-in definitions, not operator
    objects (F4.2), so they are not rows.
-3. The destination. The container table row that covers the entry's container
-   gives the destination. No second table. A mark can override it when the fact
-   is per-entry: `report_only` content is `report`, and a skipped entry is
-   `skipped`.
+3. The destination. `EntryLedger.destination` is the one place that answers a destination, in this
+   order: the per-entry fact on the recorded object (`report_only` content is `report`), then the
+   destination the mark recorded, then the container table row. `mark` records what the parse method
+   took and only the destination the caller states, so it states no destination of its own. The fact
+   is read at read time through `RecordingDict.value()`, so the decision records no property use and
+   the order of `mark` and the field cannot change the answer.
 4. The property scan (F4.4). The matrix row for an emitted container names the
    properties its emitter reads. A captured property that no output read for this
    entry is a gap, and the scan reports it. The scan measures reads at run time:
@@ -302,12 +304,10 @@ class EntryLedger:
 
         `captured` is stored as a `RecordingDict`, so a field a method adds after the
         mark is still in the report, and the object also records the keys an output
-        reads from it (F4.4).
+        reads from it (F4.4). The destination is what the caller states: `mark` states
+        no destination of its own, so a per-entry fact on the object answers through
+        `EntryLedger.destination` at read time.
         """
-        if captured.get('report_only') and destination is None:
-            # report_only is an entry fact, not a container fact, so the mark wins
-            # over the table row (F4.3 AC-2.4).
-            destination = 'report'
         recorded = RecordingDict(self, captured)
         self._marks[id(entry)] = {'entry': entry, 'captured': recorded,
                                   'detail': detail, 'destination': destination}
@@ -350,14 +350,26 @@ class EntryLedger:
         return container_coverage.is_section(container, self.parents, self.source)
 
     def destination(self, entry: ET.Element) -> str:
-        """Destination for one entry: the mark wins over the table row (F4.3 AC-2.4).
+        """The destination for one entry, answered in one place, in this order.
+
+        1. The per-entry fact on the recorded object: `report_only` content answers `report`. The read
+           is through `RecordingDict.value()`, so the decision records no property use, and a field the
+           parse method adds after the mark is still the recorded fact.
+        2. The destination `mark` recorded, which is what the caller stated.
+        3. The container table row.
 
         F6.5: a scope entry is an object the output writes, so the table row alone decides. The
         `devices` entry stays `bookkeeping`, because no provider resource exists for a device.
         """
         mark = self.mark_for(entry)
-        if mark and mark['destination']:
-            return mark['destination']
+        if mark:
+            # `mark_skipped` records no object, so the fact answers only for a mark that holds the
+            # recorded object, and the mark's destination answers for a skipped entry.
+            recorded = mark['captured']
+            if isinstance(recorded, RecordingDict) and recorded.value('report_only'):
+                return 'report'
+            if mark['destination']:
+                return mark['destination']
         container = self.parents.get(entry)
         row = covering_row(container_coverage.section_path(container, self.parents, self.source))
         if row:

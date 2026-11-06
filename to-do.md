@@ -7,24 +7,15 @@ landed. No piece of this feature stays open.
 
 ## Next pieces
 
-- [ ] The destination a report-only entry answers (`acceptance.md`). The decision: `mark` records what the
-      parse method took and only the destination the caller states, and `EntryLedger.destination` is the one
-      place that answers a destination, in the order mark-stated destination, then the per-entry fact read from
-      the recorded object, then the container table row. Pieces:
-  - [ ] Remove the `report_only` branch from `mark` (`src/entry_coverage.py`), and answer the fact from the
-        recorded object inside `destination`, through `RecordingDict.value()` so the decision records no
-        property use (`acceptance.md` §1.3).
-  - [ ] Rewrite `tests/test_entry_coverage.py::test_report_only_entry_destination_is_report` to mark first, add
-        the field through the recorded object, then read the destination, and add the pin that holds the ordering
-        (`acceptance.md` §1.2).
-  - [ ] Move the pins that read a number the fix changes: `tests/test_round_trip.py` (`GAP_FIXTURE` to
-        `interfaces_other.xml`, `CORPUS_GAPS`, `CATEGORY_COUNTS`, 22 → 20 findings, 10 → 9 fixtures) and
-        `tests/test_sanity_gate.py::test_kitchen_sink_gate_passes_with_validate` (6 WARN → 5 WARN, 5 findings →
-        4). The list is in `acceptance.md` §4.
+- [ ] The destination a report-only entry answers (`acceptance.md`). The rule, the pins and the Result are
+      landed: `mark` records what the parse method took and only the destination the caller states, and
+      `EntryLedger.destination` is the one place that answers a destination, in the order the per-entry fact
+      read from the recorded object, then the mark-stated destination, then the container table row. Piece left
+      open:
   - [ ] Write the documents that name the rule: `docs/ARCHITECTURE.md` §1.1, §3.2, §4.6,
-        `docs/COVERAGE_MATRIX.md` §1, `docs/README.md`, `README.md` gate table (`acceptance.md` §5).
-  - [ ] Read the report bytes for the three report-only entries and confirm no `.tf` golden moves
-        (`acceptance.md` §2), then fill the Result.
+        `docs/COVERAGE_MATRIX.md` §1, `docs/README.md`, `README.md` gate table (`acceptance.md` §5), and
+        `backlog.md`, where the 'entry side counts more' entry reads 3 findings with the surviving instances
+        named.
 - [ ] The certificate `REFERENCE_ONLY` rows for `private_key` and `passphrase`, which the table has no row for,
       so the certificate emitter cannot print the reference yet (`backlog.md`).
 

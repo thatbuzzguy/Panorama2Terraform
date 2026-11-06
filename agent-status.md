@@ -2,40 +2,38 @@
 
 ## Current position
 
-The round-trip cross-check feature is complete and committed (`70064a5`, then `1b25d75` for the documents). The
-task now open is the fact that feature measured: the destination a report-only entry answers. `mark` records the
-destination before the parse method sets `report_only`, so `EntryLedger.destination` answers `emitted` for the
-three report-only address entries in the corpus, the report line prints them as `emitted`, and
-`sanity_checks.check_round_trip` counts them.
+The destination a report-only entry answers is implemented, pinned and committed, and the Result in
+`acceptance.md` is filled. The documents that name the rule are the next step (`acceptance.md` §5). The commit
+holds `src/entry_coverage.py`, `src/sanity_checks.py`, the three test files, and the tracking markdown.
 
-The decision, in `acceptance.md`:
+The rule, in `src/entry_coverage.py`: `mark` records what the parse method took and only the destination the
+caller states; `EntryLedger.destination` is the one place that answers a destination, in the order the per-entry
+fact on the recorded object (`report_only` answers `report`), then the destination `mark` recorded, then the
+container table row. The fact is read at read time through `RecordingDict.value()`, so the decision records no
+property use and the order of `mark` and the field cannot change the answer. `src/sanity_checks.py` states the
+same rule in the comment inside `check_round_trip`.
 
-- `mark` records what the parse method took and only the destination the caller states; the `report_only` branch
-  inside `mark` is removed.
-- `EntryLedger.destination` is the one place that answers a destination, in the order: the destination the mark
-  recorded, then the per-entry fact read from the recorded object, then the container table row. Because the
-  destination is answered after the parse, the ordering dependency disappears: the field the parse method adds
-  through the recorded object carries the fact, which
-  `tests/test_entry_coverage.py::test_fields_added_through_the_recorded_object_are_recorded` already pins as
-  deliberate.
-- The fact is read through `RecordingDict.value()`, not `get()`, so the destination decision records no property
-  use and the property scan stays a measurement of output reads. The scan scope stays the container row through
-  `matrix_row_for`, so `tests/test_property_coverage.py::CORPUS_FINDINGS` does not move.
-- The parse method `parse_address_objects` is not restructured, and the address call site states no destination,
-  because the entry already holds the fact.
+What the run measures, as the pins read it:
 
-What the fix moves, as measured on the corpus: the 3 report lines read `report`; the summary counts read 7 → 5
-emitted on `tests/fixtures/address_objects.xml` and 62 → 61 emitted, 8 → 9 report on
-`tests/fixtures/kitchen_sink.xml`; the corpus cross-check reads 22 findings on 10 fixtures → 20 findings on 9
-fixtures, because `address_objects.xml` reads clean. `GAP_FIXTURE` in `tests/test_round_trip.py` moves to
-`interfaces_other.xml`, the surviving instance of an emitted entry that writes no block. 21 pins read a number
-the fix changes: 20 in `tests/test_round_trip.py` and 1 in `tests/test_sanity_gate.py`. No `.tf` golden moves,
-because the fix writes no block.
+- the 3 report lines read `report`, and no other line moves; `tests/fixtures/address_objects.xml` reads 5
+  emitted and 2 report, `tests/fixtures/kitchen_sink.xml` reads 61 and 9; the sample run reads 20 and 0, so the
+  gate stays `PASS (0 FAIL, 0 WARN)`; no `.tf` golden moves.
+- the corpus cross-check reads 20 findings on 9 fixtures, in the categories 3, 16 and 1, so
+  `GAP_FIXTURE` in `tests/test_round_trip.py` reads `interfaces_other.xml`, the surviving instance of an
+  `emitted` entry the row counts with no block of the row's type.
+- two facts `acceptance.md` recorded wrong, and the pins read them as measured: the unit that fixture names is
+  `vsys1_b3e94a35`, so the fact is `('panos_aggregate_interface', 'vsys1_b3e94a35', 2, 1)`; the entry with no
+  block of the row's type is `ae1.101`, not `ae1`.
+- 22 pins moved, 21 in `tests/test_round_trip.py` and 1 in `tests/test_sanity_gate.py`. The pins that needed a
+  shape, not a number, are named in the `acceptance.md` Result. `tests/test_property_coverage.py`,
+  `tests/test_data_file_gate.py`, `tests/test_edge_cases.py`, `tests/test_real_or_report.py` and
+  `tests/test_golden_files.py` did not move.
 
-Next: implement the pieces in `to-do.md`, then read the pins as the rule measures it and fill the `acceptance.md`
-Result. The facts that stay blocked on a fact the tool cannot read offline stay in `backlog.md`: the four
-`*_policy_rules` types, a config entry inside a stack, the EDL reference decision, the profile-name report
-column, and the two `.github/` template files outside the document indexes.
+Next: write the documents group 5 names, and move the `report_only` timing fact out of `backlog.md`, where the
+'entry side counts more' entry reads 3 findings with `dependency_wiring.xml`, `interfaces_other.xml` and the
+same aggregate case in `kitchen_sink.xml` named. The facts that stay blocked on a fact the tool cannot read
+offline stay in `backlog.md`: the four `*_policy_rules` types, a config entry inside a stack, the EDL reference
+decision, the profile-name report column, and the two `.github/` template files outside the document indexes.
 
 
 
@@ -244,6 +242,13 @@ the
   record references nothing, so it prunes nothing and protects nothing, and the action reads a record file, not
   one record. `--prune-cache` is an opt-in flag that gates the step; it names no part of the layout, so the
   no-flag scan holds, and it cannot change what the gate counts or the exit code the gate decides.
+- One place answers a destination: `entry_coverage.EntryLedger.destination`, in the order the per-entry fact on
+  the recorded object, the destination `mark` recorded, the container table row. `mark` states no destination of
+  its own, so a call site that states `destination='report'` for a report-only entry restates a fact the entry
+  already holds. The fact is read through `RecordingDict.value()`, so the decision records no property use and
+  the order of `mark` and the field cannot change the answer; `mark_skipped` records no object, so a skipped
+  entry answers through the mark. The cross-check counts only `emitted` rows, so an entry the run reports enters
+  no count.
 - A coverage fact that comes from a run must be read from the run's ledger, so the scan tests
   run
   the pipeline in process. The round-trip cross-check reads the run's ledger as an argument, so its

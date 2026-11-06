@@ -9,11 +9,11 @@ Four groups of checks:
    marks them, and a method that reads entries without marking them fails. A
    negative control pins that the check really fails. The corpus check runs the
    parse methods, so it checks the marks the parse actually made.
-3. The row rules. Object type is the F4.2 `section_path`, destination is the
-   longest matching table row, a per-entry mark wins for `report_only` and a
-   skipped entry, a scope entry takes the destination its table row states (F6.5),
-   a property entry is counted on the parent row, and a `predefined` entry is not
-   a row.
+3. The row rules. Object type is the F4.2 `section_path`, destination is answered in
+   one place, in the order: the per-entry fact on the recorded object, the destination
+   `mark` recorded, the container table row. A scope entry takes the destination its
+   table row states (F6.5), a property entry is counted on the parent row, and a
+   `predefined` entry is not a row.
 4. The report. One line per row, the gap section, file name only, byte-identical
    between runs, and no file when the input has no entries. A gap does not change
    the exit code.
@@ -272,19 +272,56 @@ def test_longest_matching_row_wins_for_a_sub_shape():
 
 
 def test_report_only_entry_destination_is_report():
-    """A per-entry fact wins over the table row (AC-2.4).
+    """1.1: the per-entry fact on the recorded object answers `report`, ahead of the destination the mark
+    recorded. `mark` states no destination of its own, so the destination it records is the one the caller
+    states, and here that is the table row's.
 
-    `address` is emitted, so the table row says `emitted`. The entry with
-    `report_only` content writes nothing, so the mark reports it as `report`.
+    The read order is the one the rule states: the fact on the recorded object, then the destination the mark
+    recorded, then the container table row.
     """
     ledger = _ledger('kitchen_sink.xml')
     entry = next(e for e in ledger.entries() if e.get('name') == 'Country-US')
-    assert entry_coverage.covering_row('address').destination == 'emitted'
-    ledger.mark(entry, {'report_only': 'no v2 resource'})
+    row_destination = entry_coverage.covering_row('address').destination
+    assert row_destination == 'emitted'
+    # Mark first, with the table row's destination, so the mark answer is visible before the fact.
+    recorded = ledger.mark(entry, {'name': entry.get('name')}, destination=row_destination)
+    assert ledger.destination(entry) == 'emitted', 'no fact on the object, so the mark answers'
+    # Then the fact is added through the recorded object, as the parse method does.
+    recorded['report_only'] = 'no v2 resource'
     row = ledger.row_for(entry)
     assert row['destination'] == 'report', row
     # A `report` destination writes the manual report, so it is not a gap row.
     assert row not in ledger.gaps()
+
+
+def test_the_destination_is_read_from_the_recorded_object_after_the_mark():
+    """1.2: the fact is read at read time, so the order of `mark` and the field cannot change the answer.
+
+    The pin reads in the order the parse method works: mark, then the field through the recorded object, then
+    the destination. `::test_fields_added_through_the_recorded_object_are_recorded` holds the decision this
+    depends on, that a field added after the mark is still the recorded fact, and
+    `::test_skipped_entry_destination_beats_the_table_row` holds the second step, because `mark_skipped`
+    records no object so the mark answers for a skipped entry.
+    """
+    ledger = _ledger('kitchen_sink.xml')
+    entry = next(e for e in ledger.entries() if e.get('name') == 'Country-US')
+    recorded = ledger.mark(entry, {'name': entry.get('name')})
+    recorded['report_only'] = 'no v2 resource'
+    assert ledger.destination(entry) == 'report', ledger.destination(entry)
+    # The same entry read in the other order answers the same, because the answer is the recorded fact.
+    other = _ledger('kitchen_sink.xml')
+    other_entry = next(e for e in other.entries() if e.get('name') == 'Country-US')
+    fact_first = {'name': other_entry.get('name'), 'report_only': 'no v2 resource'}
+    other.mark(other_entry, fact_first)
+    assert other.destination(other_entry) == ledger.destination(entry), 'the call order states nothing'
+    # 1.3: the fact is read through `RecordingDict.value()`, so the decision records no property use.
+    ledger.start_recording()
+    recorded.get('name')
+    assert ledger.destination(entry) == 'report', ledger.destination(entry)
+    assert recorded.used_keys() == ('name',), recorded.used_keys()
+    # The same key read through `get()` is an output read, so the two reads are different.
+    recorded.get('report_only')
+    assert recorded.used_keys() == ('name', 'report_only'), recorded.used_keys()
 
 
 def test_skipped_entry_destination_beats_the_table_row():
