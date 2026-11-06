@@ -2,33 +2,40 @@
 
 ## Current position
 
-The round-trip cross-check feature is complete and committed. `sanity_checks.check_round_trip`, its
-`CHECK_ORDER` position between `data_files` and `control_chars`, the ledger argument on `run_checks`, and the
-33 pins in `tests/test_round_trip.py` landed in `70064a5`. This commit wrote the documents that name the rule:
-`README.md` (the gate table row in report order, the Testing entry, and the paragraph that says the gate reads
-the files, which now names the run's ledger as this rule's one exception), `docs/ARCHITECTURE.md` §4.6 and §1,
-`docs/COVERAGE_MATRIX.md` §1, and `docs/README.md` (the owner table). `sanity_checks.py` already stated the
-check in its own table in report order with the correct severity, so no source file changed.
+The round-trip cross-check feature is complete and committed (`70064a5`, then `1b25d75` for the documents). The
+task now open is the fact that feature measured: the destination a report-only entry answers. `mark` records the
+destination before the parse method sets `report_only`, so `EntryLedger.destination` answers `emitted` for the
+three report-only address entries in the corpus, the report line prints them as `emitted`, and
+`sanity_checks.check_round_trip` counts them.
 
-What the documents state, as the rule measures it:
+The decision, in `acceptance.md`:
 
-- The rule reads the `.tf` block set through the one block reader with `kinds = ('resource',)`, and the entry
-  set through the run's `entry_coverage.EntryLedger`, and joins them through `entry_coverage.matrix_row_for`
-  and `unit_manifest`. It is the gate's one boundary exception, and a call with no ledger reports NOT RUN.
-- The severity is WARN, not FAIL, because a disagreeing count names no broken output, which is the decision
-  `entry_coverage.PROPERTY_RULE` already states for a gap, so the exit code stays with the rules that read the
-  files.
-- The corpus is not silent: the rule reports findings on the corpus fixtures, and the populations it cannot join
-  are recorded in `backlog.md`. `docs/COVERAGE_MATRIX.md` §1 keeps the scan scope rule both scans read.
+- `mark` records what the parse method took and only the destination the caller states; the `report_only` branch
+  inside `mark` is removed.
+- `EntryLedger.destination` is the one place that answers a destination, in the order: the destination the mark
+  recorded, then the per-entry fact read from the recorded object, then the container table row. Because the
+  destination is answered after the parse, the ordering dependency disappears: the field the parse method adds
+  through the recorded object carries the fact, which
+  `tests/test_entry_coverage.py::test_fields_added_through_the_recorded_object_are_recorded` already pins as
+  deliberate.
+- The fact is read through `RecordingDict.value()`, not `get()`, so the destination decision records no property
+  use and the property scan stays a measurement of output reads. The scan scope stays the container row through
+  `matrix_row_for`, so `tests/test_property_coverage.py::CORPUS_FINDINGS` does not move.
+- The parse method `parse_address_objects` is not restructured, and the address call site states no destination,
+  because the entry already holds the fact.
 
-`ruff check .` is clean and `python3 -m pytest` passes 1566 tests, with no skip and no golden change.
+What the fix moves, as measured on the corpus: the 3 report lines read `report`; the summary counts read 7 → 5
+emitted on `tests/fixtures/address_objects.xml` and 62 → 61 emitted, 8 → 9 report on
+`tests/fixtures/kitchen_sink.xml`; the corpus cross-check reads 22 findings on 10 fixtures → 20 findings on 9
+fixtures, because `address_objects.xml` reads clean. `GAP_FIXTURE` in `tests/test_round_trip.py` moves to
+`interfaces_other.xml`, the surviving instance of an emitted entry that writes no block. 21 pins read a number
+the fix changes: 20 in `tests/test_round_trip.py` and 1 in `tests/test_sanity_gate.py`. No `.tf` golden moves,
+because the fix writes no block.
 
-Next: the `report_only` timing in `entry_coverage.EntryLedger`, which is the open fact this feature measured.
-`destination` answers `emitted` for a report-only address, because the destination is recorded after `mark`, so
-the cross-check counts an entry the manual setup report prints as a report; the fix moves golden report bytes,
-so the report pins and the corpus pins change in the same commit. The pieces that stay blocked on a fact the
-tool cannot read offline stay in `backlog.md`: the four `*_policy_rules` types, a config entry inside a stack,
-the EDL reference decision, and the profile-name report column.
+Next: implement the pieces in `to-do.md`, then read the pins as the rule measures it and fill the `acceptance.md`
+Result. The facts that stay blocked on a fact the tool cannot read offline stay in `backlog.md`: the four
+`*_policy_rules` types, a config entry inside a stack, the EDL reference decision, the profile-name report
+column, and the two `.github/` template files outside the document indexes.
 
 
 
