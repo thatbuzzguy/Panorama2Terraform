@@ -10,7 +10,9 @@ Seven groups, one per rule in `ownership.py` (`docs/CODEBASE_ASSEMBLY.md` §4):
 4. The service leg F6.2 closes: the parse captures the flag, the emitter prints it, and the
    `panos_service` row names it. F4.4: the seven rows that can carry the flag name it too, so the
    record states the value as the parse read it for their entries, and the print shape is one helper.
-5. The record shape: the declared fields, the declared order, and the refusal rule.
+5. The record shape: the declared fields, the declared order, and the refusal rule. The `source` field is
+   the name the join in `api_requests.py` reads, so it is stated once here, and for a response read it names
+   the response through the name rule in `source_fetch.py`.
 6. Determinism, and the rule that a data file is written only when it has content.
 7. The report section, the console, and the exit codes.
 
@@ -35,7 +37,18 @@ import state_coverage
 import state_input
 import unit_manifest
 import xml_input
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, file_text, run_main, run_pipeline, run_script, tf_files
+from conftest import (
+    FIXTURES_DIR,
+    GOLDEN_DIR,
+    RESPONSES_DIR,
+    SAMPLE_CONFIG,
+    SRC_DIR,
+    file_text,
+    run_main,
+    run_pipeline,
+    run_script,
+    tf_files,
+)
 
 CONVERTER = 'panorama_to_terraform.py'
 RECORD = ownership.OWNERSHIP_FILE
@@ -565,6 +578,42 @@ def test_the_record_names_no_path_and_no_timestamp(converter_module, tmp_path):
     assert all('/' not in row[key] for row in rows for key in ownership.FIELD_ORDER), rows
     assert all(row['source'] == FIXTURE for row in rows), rows
     assert str(FIXTURES_DIR) not in (out / RECORD).read_text(encoding='utf-8')
+
+
+def test_a_path_2_row_names_the_response_name_on_the_source_field(converter_module, fetch_module, tmp_path):
+    """F8.7 (`docs/API_CONVERSION_PATH.md` §3): the field name for the row's source is stated once, here, and
+    for a response read it names the response through the one name rule in `source_fetch.py`. The unit join
+    reads the row through this name, so path 2 states no field name of its own and adds no field to the
+    declared shape.
+    """
+    assert ownership.SOURCE_FIELD in ownership.FIELD_ORDER, 'the source field is part of the declared shape'
+    assert ownership.FIELD_ORDER.index(ownership.SOURCE_FIELD) == 2, 'the record prints it in the declared order'
+
+    request = fetch_module.ApiRequest(host=HOST, path='device-group')
+    source = fetch_module.fetch(request, tmp_path / 'read',
+                                producer=lambda r: (RESPONSES_DIR / r.cache_name()).read_bytes())
+    parser = converter_module.PanoramaParser(source)
+    parser.parse_device_groups()
+    parser.parse_associations()
+    generator = converter_module.TerraformGenerator(str(tmp_path / 'gen'))
+    rows = ownership.build_rows(parser.ledger, None, generator.sanitize_name)
+    assert rows, 'the run needs a row to name a source'
+
+    # The value is the name the request's own rule produces, so the row names the response the run read.
+    assert all(row[ownership.SOURCE_FIELD] == source.name == request.cache_name() for row in rows), rows
+    # The key reads the same field through the same name, so the record order and the join read one rule.
+    assert all(ownership.row_key(row)[-1] == row[ownership.SOURCE_FIELD] for row in rows), rows
+
+    # The name is stated once in the `src/` set: `ownership` states it, and the join reads it through the owner.
+    for name in ('ownership.py', 'api_requests.py'):
+        text = (SRC_DIR / name).read_text(encoding='utf-8')
+        assert text.count(f"'{ownership.SOURCE_FIELD}'") == (1 if name == 'ownership.py' else 0), name
+
+    # A file run names the file on the same field, so the fact the join reads is the source the run read,
+    # not a path.
+    out = tmp_path / 'out'
+    _pipeline(converter_module, FIXTURES_DIR / FIXTURE, out)
+    assert all(row[ownership.SOURCE_FIELD] == FIXTURE for row in _record(out)), out
 
 
 def test_the_record_reads_back_as_the_rows_it_wrote(converter_module, tmp_path):

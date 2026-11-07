@@ -488,6 +488,17 @@ here with that rule named.
   `/<place>/entry/<name>`), so a predefined read cannot name a container inside the place
   (`/predefined/url-list`), which is the shape the built-in name table read needs. The shape rule is
   unchanged by F8.1, so this stays outside the piece until the read that needs it is written.
+- Open, opened by F8.7: the unit join reads the row set through one ledger, because the join is per response
+  (F8.5), so for a run that read one response the row set is that response's rows. Which row set a run that read
+  more than one response joins is the run order's decision, so `api_requests.py` states no merge rule here, and
+  the joins across responses (the tables and the rows) belong with the entry point (F8.9).
+- Finding, opened by F8.7: the join reports a unit whose rows name a response the index made no request for, and
+  states no rule that such a source is definitions. The two instances the pin reads are a whole-config export read
+  and a predefined read; the predefined half stays with the F8.1 finding above, because no membership row reads a
+  built-in place, so the index has no entry for it and the join can only report the unit.
+- Open, opened by F8.7: the join reports its two directions as data rows, so no rule decides yet how a finding of
+  this kind prints or whether it changes the exit code. The console line shape, the report section and the exit
+  code belong with the gate (F8.8), and the pin that reports the rows states no shape of its own.
 
 ## Design Decisions (the value the parse cannot carry)
 

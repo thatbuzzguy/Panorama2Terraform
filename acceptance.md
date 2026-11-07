@@ -1,82 +1,94 @@
-# Acceptance criteria — F8.6, one record per request (Epic 8, Phase 8B)
+# Acceptance criteria — F8.7, the unit join (Epic 8, Phase 8B)
 
-Scope: the provenance record rule for a path 2 run — one record per request the run read — the pins in
-`tests/test_provenance.py` and the pin `tests/test_write_path.py::test_the_record_directory_is_the_output_
-directory_for_the_prune`, the rule statement in `src/provenance.py` (the module that owns the record), and the
-design record `docs/API_CONVERSION_PATH.md` §2.5 with `docs/ARCHITECTURE.md` §3.3 as the owner document for the
-record. No new module, no new record field, no change to the field order, no entry point (F8.9), no gate rule
-(F8.8), no unit join (F8.7), no path rule for a record directory, and no membership rule. Path 1 is unchanged.
+Scope: the join between the run's unit set and the request set (`docs/API_CONVERSION_PATH.md` §3), stated in
+`src/api_requests.py` as `join_units`, and the ownership `source` field for a path 2 row. The pins are in
+`tests/test_api_path.py` (both directions of the join), `tests/test_unit_manifest.py` (the join reads the unit
+set through the one rule), and `tests/test_ownership.py` (the `source` field names a response name). Path 1 is
+unchanged.
 
-## 1. One record per request the path 2 run read
+What this piece does not do: no second unit rule, no second naming rule, no second writer, no second console
+line, no report section for the findings, no environment name, no cache rule, no path rule, no membership
+reader, no merge rule, no request-set gate rule (F8.8), no entry point and no run order (F8.9).
+`tests/test_reference_edges.py` is unchanged, because the order rule reads no input shape.
 
-1.1 One response is one source (`docs/API_CONVERSION_PATH.md` §2.4), so the record file holds one record per
-request the run read. A run that read N requests writes N records, in the order the run read them. For a path 2
-run that order is the order the index names its entries, because the run reads the membership responses first
-and then the entries in path order. `provenance.py` states the read order for the sources it owns (the main
-source, then the declared parent, then the state source) and states no read rule of its own for a path 2 run,
-because the run order is the entry point (F8.9).
+## 1. The unit set is read through the one rule
 
-1.2 The eight fields, the fixed order, the `-` value for a field that does not apply to the source kind, and the
-one blank line between records are unchanged (`docs/ARCHITECTURE.md` §3.3). `parse_records` reads a path 2
-record file back as itself, so the record stays data, and a second run that read the same requests writes the
-same record bytes.
+1.1 `unit_manifest.units` stays the one unit rule: one unit is one combination of the five scope facts, and a
+unit exists when the ledger has a report row in it. `api_requests.join_units` reads the unit set through that
+function and through `unit_manifest.facts_of`, so path 2 states no second unit rule and counts no unit a second
+way.
 
-1.3 For each request the index names, `scope` names the path that request declared, which is the fact the door
-records, and `request` names the key-free identity of that request, which is the shape the cache entry is hashed
-from. `cache_entry` names the entry that identity names, `name` is the report value for the response, and the two
-byte facts come from the door.
+1.2 The join names no field of its own. The fact order comes from `unit_manifest`, and the field name for the
+row's source comes from `ownership.SOURCE_FIELD`, so `src/api_requests.py` holds no field name as a string
+constant, and the join adds no field to the declared manifest row shape or to the declared record shape.
 
-1.4 A device fact request declares no path, so its record states the door's default for `scope`, because a
-command names no scope. The index makes no device fact request, so this case stays a finding in `backlog.md`.
+1.3 The join answers the pair for each unit: the unit identity as the one rule states it, and the index entry
+whose request made the response the unit's rows came from.
 
-1.5 The record names no credential: every request the run read is named by its key-free identity.
+## 2. The fact path 2 adds
 
-## 2. The prune action reads the record file the same run wrote
+2.1 Path 2 adds one fact the join can read: the scope the run read for a unit. Each ledger row names the
+response its entry came from, and that value is the key-free request identity `source_fetch` hashes, so the join
+matches the row to the index entry through `source_fetch`'s name rule (`cache_name`) and states no cache rule and
+no identity rule of its own.
 
-2.1 The record directory is the output directory: `SOURCE.txt` is a codebase root-set file, named through
-`write_path.root_path`, so the action reads the record file at the codebase root. There is no record directory,
-so `write_path.py` states no third builder and the module that owns the record states no path rule of its own.
+2.2 The join answers which scope the run read for the unit, not which scope the unit sits in: the place response
+for a place read, and the entry response for an entry read (F8.5). Same content, two reads, two answers.
 
-2.2 The reference is the `cache_entry` field of a parsed record, so a run that read N requests protects the N
-entries its own record names, and an entry no record references is pruned. The action reads the record file back
-through `parse_records` and decides through `prunable_entries`; it builds no path.
+2.3 The join reads the row set through one ledger, because the join is per response (F8.5). For a run that read
+one response, the row set is that response's rows. Which row set a run that read more than one response joins is
+the run order's decision, so this piece states no merge rule and the finding stays in `backlog.md`.
 
-## 3. No test calls a network
+## 3. The two directions are findings
 
-3.1 Every path 2 response in these pins is handed by an injected producer through `source_fetch.fetch`, as
-`tests/test_source_fetch.py` and `tests/test_api_requests.py` do. The `device-group` read is the committed
-response set (`tests/responses/`), read through the injected producer, so the record names the same bytes the
-fixture holds.
+3.1 Direction 1: a unit the join answers no entry for, because the response its rows name is one the index made
+no request for. A whole-config response holds no scope entry, and a scope no membership row reads gains no entry,
+so a run that read the same content as a whole-config export, or as a predefined read, has a unit with no request.
 
-3.2 The record the pins write goes through `write_path`, the single writer, and the path is named through the
-builder for the set the record belongs to.
+3.2 Direction 2: an index entry the run read no rows for, so no unit answers it. The set is read from the
+membership responses, so an entry the index names can exist while the run read no row for it.
 
-## 4. The pins
+3.3 The join reports both directions as data rows and nothing else: no console line, no writer, no report
+section, no exit code, and no new gate rule (F8.8). A finding is data the join reports, so this piece decides no
+predefined rule and no vsys rule.
 
-4.1 `tests/test_provenance.py` (the record group, plus the new path 2 group):
+## 4. The ownership source field
 
-1. `test_the_record_file_holds_one_record_per_source_read` — grows to the path 2 case: the F5.4 pair, then a
-   run that read N requests and wrote N records in the order it read them, one record per request.
-2. `test_the_path_2_record_names_the_request_that_made_each_response` — AC-1.3, AC-1.5, AC-3.1.
-3. `test_a_path_2_record_file_reads_back_with_no_new_field` — AC-1.2, and the byte rule between two runs.
-4. `test_the_prune_protects_every_entry_a_path_2_run_read` — AC-2.2.
+4.1 `OWNERSHIP.json` keeps the same row shape and the same field order for a path 2 run, with a response name on
+the `source` field instead of a file name. No new field, no change to the order rule, and `parse_rows` reads a
+path 2 record back as itself.
 
-4.2 `tests/test_write_path.py::test_the_record_directory_is_the_output_directory_for_the_prune` grows to the
-path 2 case: the record file the run wrote is the codebase root set, so the action reads it at the root and the N
-records protect the N entries the run read, and the record module states no path rule (AC-2.1).
+4.2 The `source` value is the source name, never its path, so a path 2 value holds no `/` and no credential.
 
-4.3 The existing pins that read the record unchanged: the field names, the round trip, the refusal of a line that
-is not a field, the key rule, the report label, the reference rule, the gate counts, and the exit codes.
+## 5. The pins
 
-## 5. The checks
+5.1 `tests/test_api_path.py` (the new unit join group):
 
-5.1 `ruff check .` is clean.
+1. `test_the_unit_join_answers_the_scope_the_run_read_for_a_unit` — AC-1.3, AC-2.1, AC-2.2, AC-2.3.
+2. `test_a_unit_the_index_made_no_request_for_is_a_finding` — AC-3.1.
+3. `test_an_index_entry_the_run_read_no_rows_for_is_a_finding` — AC-3.2.
+4. `test_the_join_reports_the_findings_as_data_through_the_owners_names` — AC-1.2, AC-3.3.
 
-5.2 `python3 -m pytest` passes with no skip: the baseline 1620 pins, plus the pins above. No existing pin
+5.2 `tests/test_unit_manifest.py` gains `test_the_join_reads_the_unit_set_through_this_rule` (AC-1.1, AC-1.2).
+
+5.3 `tests/test_ownership.py` gains `test_a_path_2_row_names_the_response_name_on_the_source_field`
+(AC-4.1, AC-4.2, AC-1.2). The existing pins that read the record shape, the order, the round trip, the refusal
+rule, and the gate are unchanged.
+
+5.4 The pin `tests/test_api_requests.py::test_the_module_reads_the_layout_rules_through_their_owners` gains the
+two names the join reads through their owners (`unit_manifest`, and `ownership` for the field name). The pin that
+reads the string constants and the names the module must not define passes unchanged.
+
+5.5 Every response in these pins is handed by an injected producer, so no test calls a network.
+
+## 6. The checks
+
+6.1 `ruff check .` is clean.
+
+6.2 `python3 -m pytest` passes with no skip: the baseline 1623 pins, plus the pins above. No existing pin
 regresses.
 
-5.3 The commit is one ASD-STE100 message. When the rule lands, `docs/API_CONVERSION_PATH.md` §2.5 states it in
-the present tense with the pins named, `docs/ARCHITECTURE.md` §3.3 states the path 2 case for the record,
-`README.md` names the path 2 case in the testing list and in the record file description, `docs/README.md` names
-the record module in the second-path owner row, the completed piece leaves `to-do.md`, the device fact case stays
-a finding in `backlog.md`, and `agent-status.md` names the next piece (F8.7, the unit join).
+6.3 The commit is one ASD-STE100 message. When the rule lands, `docs/API_CONVERSION_PATH.md` §3 states it in the
+present tense with the pins named, `README.md` and `docs/README.md` name the join and the pins as needed, the
+completed piece leaves `to-do.md`, the cross-response row set and the names the join cannot read stay findings in
+`backlog.md`, and `agent-status.md` names the next piece (F8.8, the request-set gate).

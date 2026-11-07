@@ -3,7 +3,8 @@
 Seven groups, one per rule in `unit_manifest.py` (`docs/CODEBASE_ASSEMBLY.md` §3):
 
 1. The unit. One row per combination of the five scope facts, built from the ledger
-   `entry_coverage.py` already writes, so F6.1 adds no parse data.
+   `entry_coverage.py` already writes, so F6.1 adds no parse data. F8.7: the unit join in
+   `api_requests.py` reads this set through `units`, so path 2 states no second unit rule.
 2. The directory naming rule. `sanitize(unit name) + '_' + 8-hex digest of the unit identity`,
    always, so a name depends on the unit alone and not on the other units in the run.
 3. The row shape. Fixed fields in the declared order, rows in identity order, read back as data.
@@ -25,16 +26,19 @@ from pathlib import Path
 
 import pytest
 
+import api_requests
 import container_coverage
 import entry_coverage
 import ownership
 import reference_edges
 import sanity_checks
 import site_data
+import source_fetch
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, file_text, run_script, tf_files
+from conftest import FIXTURES_DIR, GOLDEN_DIR, RESPONSES_DIR, SAMPLE_CONFIG, SRC_DIR, file_text, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
+HOST = 'panorama.test'
 GROUPING = 'report_grouping.xml'
 MULTI = 'multi_device_templates.xml'
 MANIFEST = unit_manifest.MANIFEST_FILE
@@ -130,6 +134,43 @@ def test_one_row_per_combination_of_the_five_facts(converter_module, tmp_path):
     units = sorted({unit_manifest.facts_of(row) for row in parser.ledger.rows()})
     assert [tuple(row[key] for key in unit_manifest.FACT_KEYS) for row in rows] == units == GROUPING_UNITS
     assert sum(row['entry_count'] for row in rows) == len(parser.ledger.rows())
+
+
+def test_the_join_reads_the_unit_set_through_this_rule(converter_module, tmp_path):
+    """F8.7 (`docs/API_CONVERSION_PATH.md` §3): the unit join reads the run's unit set through `units`, so
+    path 2 states no second unit rule and counts no unit a second way. A unit exists only when the ledger has
+    a row in it, so a run that read no rows gives the join nothing to answer and nothing to report.
+    """
+    request = source_fetch.ApiRequest(host=HOST, path='device-group')
+    source = source_fetch.fetch(request, tmp_path / 'read',
+                                producer=lambda r: (RESPONSES_DIR / r.cache_name()).read_bytes())
+    parser = converter_module.PanoramaParser(source)
+    tables = parser.parse_associations()
+    parser.parse_device_groups()
+    rows = parser.ledger.rows()
+    assert rows, 'the join needs rows to read'
+
+    pairs = api_requests.join_units(api_requests.scope_index(HOST, tables, ('device-group/entry/devices',)),
+                                    parser.ledger)
+    units = unit_manifest.units(parser.ledger)
+    assert [facts for facts, _entry in pairs] == units, pairs
+    assert len(pairs) == len(units), 'one answer per unit, so no unit is counted a second way'
+    assert len({facts for facts, _entry in pairs}) == len(pairs), 'the join reports a unit once'
+
+    # The answer names the index entry the row's source names, read through the name rule in `source_fetch`,
+    # so the join holds no field name and no cache name of its own.
+    answered = dict(pairs)
+    assert all(answered[unit_manifest.facts_of(row)].request.cache_name() == row[ownership.SOURCE_FIELD]
+               for row in rows), (answered, rows)
+
+    # A unit exists only when the ledger has a row in it, so the set the join reads is the set the rows show.
+    assert set(units) == {unit_manifest.facts_of(row) for row in rows}, (units, rows)
+
+    # Path 2 names no unit rule of its own: the fact order is read through this module.
+    source_text = (SRC_DIR / 'api_requests.py').read_text(encoding='utf-8')
+    assert 'unit_manifest.units(' in source_text and 'unit_manifest.facts_of(' in source_text
+    for key in unit_manifest.FACT_KEYS:
+        assert f"'{key}'" not in source_text, (key, 'the join names no fact of its own')
 
 
 def test_the_scope_entry_is_one_of_its_rows(converter_module, tmp_path):

@@ -16,6 +16,9 @@ Six groups:
    over a predefined response and the entry report names no row for a built-in entry.
 6. No test calls a network: every response is handed by an injected producer, as `tests/test_source_fetch.py`
    does, and the committed response set is read through it.
+7. The unit join (`docs/API_CONVERSION_PATH.md` §3): the run's unit set is read through `unit_manifest.units`,
+   and the fact path 2 adds is the scope the run read for a unit. A unit the join answers no entry for, and an
+   index entry the run read no rows for, are findings the join reports as data rows.
 
 Every response is read through `source_fetch.fetch` with an injected producer, so the wrapper decision, the
 origin, and the line map are the ones the run holds. No pin reads a response as a file, because the wrapper
@@ -27,9 +30,11 @@ import pytest
 import api_requests
 import container_coverage
 import entry_coverage
+import ownership
 import panorama_to_terraform
 import source_fetch
-from conftest import REPO_ROOT, RESPONSES_DIR
+import unit_manifest
+from conftest import REPO_ROOT, RESPONSES_DIR, SRC_DIR
 
 HOST = 'panorama.test'
 
@@ -500,3 +505,154 @@ def test_no_test_in_this_file_calls_a_network_producer(tmp_path, monkeypatch):
                                    producer=lambda r: (RESPONSES_DIR / r.cache_name()).read_bytes())
     assert committed.origin.kind == 'api'
     assert (RESPONSES_DIR / committed.origin.name).is_file(), 'the origin names the committed response'
+
+
+# --- 7. the unit join -----------------------------------------------------------
+
+def _rows_for(parser, methods: tuple) -> list:
+    """Run the parse methods named by the run, over the response that holds its container, and return the rows.
+
+    The join reads the row set through one ledger, because the join is per response (F8.5), so a pin reads the
+    join against one run's ledger.
+    """
+    for method in methods:
+        getattr(parser, method)()
+    return parser.ledger.rows()
+
+
+def test_the_unit_join_answers_the_scope_the_run_read_for_a_unit(tmp_path):
+    """AC-1.3, AC-2.1, AC-2.2 and AC-2.3: the join reads the unit set through `unit_manifest.units` and
+    answers, for each unit, the index entry whose request made the response that unit's rows name. The same
+    content read as a place and as an entry gives two answers for the same unit, because the fact path 2 adds
+    is the scope the run read, not the scope the unit sits in.
+    """
+    index = _index(tmp_path)
+    place_source, place_parser = _run(source_fetch.ApiRequest(host=HOST, path='device-group'),
+                                      DEVICE_GROUP, tmp_path / 'place read')
+    place_rows = _rows_for(place_parser, ('parse_device_groups', 'parse_associations'))
+    assert place_rows, 'the join needs rows to read'
+    assert {row[ownership.SOURCE_FIELD] for row in place_rows} == {place_source.name}, \
+        'each row names the response the run read'
+    place_pairs = api_requests.join_units(index, place_parser.ledger)
+    assert [facts for facts, _entry in place_pairs] == unit_manifest.units(place_parser.ledger), \
+        'the join reads the unit set through the one rule'
+
+    entry_source, entry_parser = _run(source_fetch.ApiRequest(host=HOST, path='device-group/entry/Office-FW'),
+                                      ENTRY_OFFICE_FW, tmp_path / 'entry read')
+    entry_rows = _rows_for(entry_parser, ('parse_device_groups', 'parse_address_objects'))
+    assert entry_rows, 'the join needs rows to read'
+    assert {row[ownership.SOURCE_FIELD] for row in entry_rows} == {entry_source.name}, \
+        'the same content, named by a different request'
+    entry_pairs = api_requests.join_units(index, entry_parser.ledger)
+    assert [facts for facts, _entry in entry_pairs] == unit_manifest.units(entry_parser.ledger), entry_pairs
+
+    # The two runs read the same content, so the units they share are the same units, and the join answers a
+    # shared unit with the response the run read: the place response for one run, the entry response for the
+    # other. That answer is the fact path 1 cannot state.
+    shared = sorted(set(unit_manifest.units(place_parser.ledger)) & set(unit_manifest.units(entry_parser.ledger)))
+    assert shared, 'the two runs share a unit'
+    for facts in shared:
+        assert [entry.path for row_facts, entry in place_pairs if row_facts == facts] == ['device-group'], \
+            (facts, place_pairs)
+        assert [entry.path for row_facts, entry in entry_pairs if row_facts == facts] == \
+            ['device-group/entry/Office-FW'], (facts, entry_pairs)
+
+    # The join reads the row's source field and the name rule in `source_fetch`, so the answer is the response
+    # name the row carries, not a name the join states.
+    for facts, answered in place_pairs:
+        names = {row[ownership.SOURCE_FIELD] for row in place_rows if unit_manifest.facts_of(row) == facts}
+        assert names == {answered.request.cache_name()}, (facts, names, answered)
+    for facts, answered in entry_pairs:
+        names = {row[ownership.SOURCE_FIELD] for row in entry_rows if unit_manifest.facts_of(row) == facts}
+        assert names == {answered.request.cache_name()}, (facts, names, answered)
+
+
+def test_a_unit_the_index_made_no_request_for_is_a_finding(tmp_path):
+    """AC-3.1, the first direction: a unit the join answers no entry for, because the response its rows name
+    is one the index made no request for. A whole-config response holds no scope entry, and a built-in place
+    gains no entry, so the run read the unit through a response the index has no entry for.
+    """
+    index = _index(tmp_path)
+
+    export_source = source_fetch.fetch(source_fetch.ApiRequest(host=HOST), tmp_path / 'export read',
+                                       producer=lambda r: SAME_CONTENT_EXPORT)
+    export_parser = panorama_to_terraform.PanoramaParser(export_source)
+    export_rows = _rows_for(export_parser, ('parse_device_groups', 'parse_associations'))
+    assert export_rows, 'the join needs rows to read'
+    assert not export_source.is_per_scope, 'the whole-config shape holds no scope entry'
+
+    # The response the rows name is not one the index made a request for, so the join answers no pair and every
+    # unit it shows is a finding.
+    assert not api_requests.join_units(index, export_parser.ledger), 'the join answers nothing here'
+    unit_findings = [row for row in api_requests.unit_findings(index, export_parser.ledger) if row[1] is None]
+    assert [facts for facts, _entry in unit_findings] == unit_manifest.units(export_parser.ledger), unit_findings
+
+    # The same content read as a per-scope place is answered, so the direction is about the request the run
+    # read, not about the content.
+    _, place_parser = _run(source_fetch.ApiRequest(host=HOST, path='device-group'), DEVICE_GROUP,
+                           tmp_path / 'place read')
+    _rows_for(place_parser, ('parse_device_groups', 'parse_associations'))
+    assert api_requests.join_units(index, place_parser.ledger), 'the join answers this unit'
+    assert [row for row in api_requests.unit_findings(index, place_parser.ledger) if row[1] is None] == []
+
+    # A built-in read is the same direction: no membership row reads `predefined`, so the index has no entry
+    # for it. The join reports the unit and states no rule that a predefined source is definitions.
+    _, predefined_parser = _run(source_fetch.ApiRequest(host=HOST, path='predefined/entry/url-list'),
+                                PREDEFINED_ENTRY, tmp_path / 'entry read')
+    _rows_for(predefined_parser, ('parse_address_objects',))
+    assert predefined_parser.ledger.rows(), 'the ledger holds the built-in row'
+    assert not api_requests.join_units(index, predefined_parser.ledger), 'the join answers nothing here'
+    built_in_findings = [row for row in api_requests.unit_findings(index, predefined_parser.ledger) if row[1] is None]
+    assert [facts for facts, _entry in built_in_findings] == unit_manifest.units(predefined_parser.ledger), \
+        built_in_findings
+    assert not any(entry.container == 'predefined' for entry in index), 'the index read no built-in scope'
+
+
+def test_an_index_entry_the_run_read_no_rows_for_is_a_finding(tmp_path):
+    """AC-3.2, the second direction: an index entry the run read no rows for, so no unit answers it. The set
+    is read from the membership responses, so an entry the index names can exist while the run read no row for
+    it.
+    """
+    index = _index(tmp_path)
+    source, parser = _run(source_fetch.ApiRequest(host=HOST, path='device-group'), DEVICE_GROUP,
+                          tmp_path / 'one response')
+    rows = _rows_for(parser, ('parse_device_groups', 'parse_associations'))
+    assert rows, 'the join needs rows to read'
+
+    pairs = api_requests.join_units(index, parser.ledger)
+    assert all(entry.path == 'device-group' for _facts, entry in pairs), pairs
+
+    findings = api_requests.unit_findings(index, parser.ledger)
+    assert all(facts is None for facts, _entry in findings), 'the run read rows for every unit it shows'
+    answered = {entry.path for _facts, entry in pairs}
+    assert [entry.path for _facts, entry in findings] == [entry.path for entry in index
+                                                           if entry.path not in answered], findings
+
+    # The join reads the name rule for each entry, so a finding names the entry whose response name the run
+    # read no row for. The row set is this run's rows, because the join is per response (F8.5).
+    read = {row[ownership.SOURCE_FIELD] for row in rows}
+    assert all(entry.request.cache_name() not in read for _facts, entry in findings), findings
+    assert read == {entry.request.cache_name() for entry in index if entry.path == 'device-group'}, \
+        'the run read one response, and that response names one index entry'
+
+
+def test_the_join_reports_the_findings_as_data_through_the_owners_names():
+    """AC-1.2 and AC-3.3: the join names no field of its own and reports no shape of its own. It reads the
+    fact order through `unit_manifest` and the field name for the row's source through `ownership`, and it
+    builds no row, so the declared row shape and the declared record shape are unchanged by the join.
+    """
+    source = (SRC_DIR / 'api_requests.py').read_text(encoding='utf-8')
+    assert 'unit_manifest.units(' in source and 'unit_manifest.facts_of(' in source, \
+        'the join reads the unit rule through its owner'
+    assert 'ownership.SOURCE_FIELD' in source, 'the field name for the row source is read through its owner'
+    assert f"'{ownership.SOURCE_FIELD}'" not in source, 'the join states no field name of its own'
+    for field in unit_manifest.FIELD_ORDER:
+        assert f"'{field}'" not in source, (field, 'the join adds no field to the declared row shape')
+    assert 'dict.fromkeys' not in source, 'the join builds no row shape of its own'
+
+    # The join reports data rows only: no console line, no writer, no report section, and no unit rule.
+    for name in ('finding_line', 'console_line', 'render', 'write_file', 'report_section', 'check',
+                 'units', 'unit_name', 'named_fact', 'identity_digest', 'directory_name'):
+        assert not hasattr(api_requests, name), (name, 'the join states no rule of this kind')
+    for word in ('print(', 'CONSOLE_PREFIX', 'REPORT', 'MANUAL_SETUP'):
+        assert word not in source, (word, 'the join prints nothing and writes nothing')
