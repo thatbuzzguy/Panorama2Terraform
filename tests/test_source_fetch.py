@@ -13,7 +13,9 @@ Six groups, one per acceptance rule:
    F8.1 adds the device fact branch: `result` holds the one fact element the command
    names, `result` becomes the root, and the source states no scope. The path is part of
    the request identity, so each scope gets its own cache entry, and the command is part of
-   the identity for the same reason.
+   the identity for the same reason. F8.3 adds the group 2c pins: the element-name rule is the one rule the
+    response-to-request join reads through this module, so the fetch layer states no shape rule for the join,
+    and it names no element for a device fact.
 3. The cache. The entry name is the request identity without the key. A miss calls the
    producer once and caches only the bytes that passed the door and the response
    check; a hit parses the cache bytes with no producer. Two runs on the same cache
@@ -434,6 +436,58 @@ def test_an_op_response_is_not_a_config_source(fetch_module, tmp_path):
         'the table states no row for a fact element'
     assert frozenset({'response', 'result'}) == container_coverage.ENVELOPE, \
         'the envelope rule is unchanged by the device fact shape'
+
+
+# --- 2c. The response-to-request join (F8.3) -------------------------------
+
+def test_the_join_reads_the_element_name_rule_through_the_fetch_layer(fetch_module, tmp_path):
+    """F8.3 AC-1.2 and AC-1.3: the fetch layer holds the one element-name rule, and the join runs the
+    wrapper decision with it, so a response whose element is not the element its own request names is
+    refused by the fetch layer's words, and `api_requests.py` states no shape rule of its own."""
+    # A per-scope request and a response that holds another container: the shape rule reads the path, so
+    # the refusal names the path the request states.
+    data = (b'<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n'
+            b'<templates><entry name="Edge"/></templates>\n</result>\n</response>\n')
+    request = _request(fetch_module, path='device-group')
+    with pytest.raises(fetch_module.SourceFetchError) as excinfo:
+        fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, data))
+    message = str(excinfo.value)
+    assert 'does not match the path' in message and request.path in message, message
+    assert not (tmp_path / request.cache_name()).exists(), 'no cache entry for a refused response'
+
+    # One definition, so the join reads it rather than keeping a second copy. It is public, because the
+    # join reads it through its owner.
+    source_text = (SRC_DIR / 'source_fetch.py').read_text(encoding='utf-8')
+    assert 'def names_element(' in source_text, 'the one element-name rule'
+    for path in sorted(SRC_DIR.iterdir()):
+        if path.suffix == '.py' and path.name != 'source_fetch.py':
+            assert 'def names_element(' not in path.read_text(encoding='utf-8'), \
+                (path.name, 'no module states a second element-name rule')
+
+    # The join states no shape rule and no wrapper rule: it calls the wrapper decision, and it reads the
+    # path rule through its owner. It keeps no parser of its own, so no second tree is built.
+    join_text = (SRC_DIR / 'api_requests.py').read_text(encoding='utf-8')
+    tree = ast.parse(join_text)
+    module_calls = sorted({(node.func.value.id, node.func.attr) for node in ast.walk(tree)
+                           if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                           and isinstance(node.func.value, ast.Name)
+                           and node.func.value.id in ('source_fetch', 'container_coverage', 'xml_input')})
+    assert ('source_fetch', 'unwrap_config_root') in module_calls, module_calls
+    assert ('container_coverage', 'is_scope_path') in module_calls, module_calls
+    assert not any(attr in ('parse_bytes', 'parse', 'fromstring') for _, attr in module_calls), \
+        'the join reads the response the door parsed, and builds no second tree'
+
+
+def test_the_element_name_rule_names_no_element_for_a_device_fact(fetch_module, tmp_path):
+    """F8.3 AC-1.4: a device fact declares a command and no path, so the one rule names no element for it,
+    and the join has no fact to read a command's element name against."""
+    request = _fact_request(fetch_module)
+    source = fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, OP_FACT))
+    held = source.root[0]      # the shape rule passes for any single element under `result`
+    assert held.tag == 'show', 'the shape rule read the fact element, and no name rule with it'
+    assert not fetch_module.names_element(held, request), \
+        'the rule names no element for a command, so the join cannot check a device fact offline'
+    assert not request.segments(), 'a command names no path, so no index entry names it'
 
 
 # --- 3. The cache ---------------------------------------------------------------

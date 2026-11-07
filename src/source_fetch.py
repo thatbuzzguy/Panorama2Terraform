@@ -39,8 +39,9 @@ Five rules, stated once here:
    `type=config&action=get&path=<scope path>` takes the element the path names, and `result`
    becomes the root, read as the place the path names; `type=op&cmd=<command>` takes exactly one
    element under `result`, the fact element the command names, and `result` becomes the root, read
-   as the place the command names. The fetch layer states no command-to-element table, so which
-   element a command names is checked by the response-to-request join (F8.3) and never guessed.
+   as the place the command names. The fetch layer states no command-to-element table, and the join states none
+    either, so which
+   element a command names is a fact the tool cannot read offline, so it stays in `backlog.md`.
    A response shape that does not match its request is refused, not guessed. An op
    response is a device fact, not a config: it names no scope, so the source states no scope and the
    container table needs no wrapper row and no row for the fact element.
@@ -263,14 +264,23 @@ def network_producer(request: ApiRequest, api_key: str, insecure: bool = False) 
         return response.read()
 
 
-def _named_element(element, request: ApiRequest) -> bool:
+def names_element(element, request: ApiRequest) -> bool:
     """True when `element` is the element the request path names (F5.4 AC-1.2).
+
+    The one definition of which element a per-scope request names, so the wrapper decision and the
+    response-to-request join (F8.3) read one rule and no module states a second.
 
     A path that names an entry (`container/entry/name`) names that entry by name; a path
     that names a container names the element with that tag. The wrapper decision checks
-    the response against the request; it does not guess a shape the path does not state.
+    the response against the request; it does not guess a shape the path does not state. A
+    device fact request declares a command and no path, so this rule names no element for it:
+    the tool states no command-to-element table, so the join has no fact to read a command's
+    element name against (`backlog.md`).
     """
     segments = request.segments()
+    if not segments:
+        # The device fact shape declares no path, so no element name follows from it.
+        return False
     if len(segments) == 3 and segments[1] == ENTRY_SEGMENT:
         return element.tag == 'entry' and element.get('name') == segments[2]
     return element.tag == segments[0]
@@ -313,8 +323,9 @@ def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = Non
         # `result` itself becomes the root, read as the place the command names. The response is a
         # device fact, not a config, so no scope comes from it and no container name comes from it:
         # the envelope rule keeps `result` out of the scan, and the container table states no row
-        # for a fact element. Which element a command names is checked by the response-to-request
-        # join (F8.3), because the fetch layer states no command-to-element table and guesses none.
+        # for a fact element. The join (F8.3) reads a response against the index entry its request names, and it
+        # states no command-to-element table either, so a command's element name stays a fact the join cannot read
+        # offline, and `backlog.md` records it.
         if root.tag != 'result':
             raise SourceFetchError(
                 f"refusing the API response from '{source.name}': the device fact request for "
@@ -350,7 +361,7 @@ def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = Non
                 f"refusing the API response from '{source.name}': the result holds no element, "
                 f"or {len(held)} elements, not the one element the path '{request.path}' names."
             )
-        if not _named_element(held[0], request):
+        if not names_element(held[0], request):
             raise SourceFetchError(
                 f"refusing the API response from '{source.name}': the element under the result "
                 f"does not match the path '{request.path}'. The wrapper decision reads the "

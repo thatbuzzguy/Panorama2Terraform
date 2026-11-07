@@ -8,16 +8,14 @@ wrapper rule are in `src/source_fetch.py`, the `predefined` decision is inside
 `docs/API_CONVERSION_PATH.md` §2.1. F8.2 is complete: the scope index is in `src/api_requests.py`,
 the set is read through the four membership lists, the rule is stated in
 `docs/API_CONVERSION_PATH.md` §2.2, the module is in the `docs/ARCHITECTURE.md` §1 table, and the
-pins are named there.
+pins are named there. F8.3 is complete: the join is `api_requests.join_response`, the element-name rule is
+read through `source_fetch.names_element`, and the rule is stated in `docs/API_CONVERSION_PATH.md` §2.3 with
+the pins named.
 
 ## Epic 8 — path 2 pieces
 
 Phase 8A, the read boundary:
 
-- [ ] F8.3 The response-to-request join. A response is accepted only when the element it holds is the
-      element its own request names, and the entry name inside it agrees with the scope index. Pins:
-      `tests/test_source_fetch.py` for the shape, `tests/test_api_requests.py` for the join with the
-      index.
 - [ ] F8.4 The offline harness. One committed response per request shape, each naming the request
       identity that produced it, and the producer injected so no test calls a network. Pins:
       `tests/test_api_requests.py`, and the existing no-network rule in `tests/test_source_fetch.py`.

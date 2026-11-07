@@ -85,20 +85,43 @@ read, and it guesses no scope. `src/api_requests.py` states this rule, and the p
 `test_no_request_is_made_for_a_scope_the_run_did_not_read`,
 `test_a_container_that_lists_no_name_gains_no_entry`,
 `test_the_index_makes_one_request_per_scope_container_then_one_per_entry`,
-`test_a_device_names_no_entry_in_the_index`, and
+`test_a_device_key_names_no_entry_in_the_index`, and
 `test_the_index_is_read_in_sorted_order_and_names_one_entry_per_scope`. The module reads no
 membership itself: it takes the tables as data, so no module states a second membership reader, and
 it builds a path only through `xml_input.ENTRY_SEGMENT` and `container_coverage.is_scope_path`, so no
-second path rule exists. The response-to-request join (§2.3) is the next piece, and it reads the two
-parts this rule already names: the entry name and the request that made the response.
+second path rule exists. The response-to-request join (§2.3) reads the two parts this rule names: the
+entry name, and the request that made the response.
 
-**2.3 One response per request, checked against the request that made it.** A response is
-accepted only when the element it holds is the element its own request names, and the entry name
-inside it agrees with the scope index. This is the F5.4 wrapper rule read with the scope index, so
-the join is checked rather than assumed. The boundary is fixed by §2.1: `source_fetch.py` checks the
-shape, and this piece checks the element name, because the fetch layer states no command-to-element
-table. `tests/test_source_fetch.py` pins the shape, and `tests/test_api_requests.py` pins the join
-with the index.
+**2.3 One response per request, checked against the request that made it.** `api_requests.join_response`
+reads one response against the index entry whose request made it, and answers the entry names inside
+it in sorted order, which is what the run (§2.4) keys its parse on. A response is accepted only when
+the element it holds is the element its own request names, and the entry name inside it agrees with the
+scope index, so the join is checked rather than assumed. The first half is read through `source_fetch.py`:
+the join runs the one wrapper decision, which names the element through the one rule in that module
+(`names_element`), so the join states no shape rule, no wrapper rule, no command-to-element table, and no
+second response success check. The second half is what the join owns: for a request that names an entry,
+the name inside equals the index name; for a request that names a place, the entry names inside hold the
+names the index read for that container, so a name the index read must appear inside. The check is
+one-way, so an entry inside a response that lists no name compares no name, which is the §2.2 rule that
+such an entry gains no entry. The join reads no membership and builds no second tree, so the origin and
+the line map a report needs stay the door's.
+
+The join reads only a response the index made a request for, because the index makes only per-scope
+requests: a whole-config response holds no scope entry, and a device fact names no scope, so a command's
+element name is a fact the tool cannot read offline (`backlog.md`).
+
+Pinned by `tests/test_source_fetch.py` (the join group):
+`test_the_join_reads_the_element_name_rule_through_the_fetch_layer`, and
+`test_the_element_name_rule_names_no_element_for_a_device_fact`. Pinned by `tests/test_api_requests.py`
+(the join group): `test_the_join_accepts_only_the_response_for_the_request_that_made_it`,
+`test_the_entry_name_inside_a_response_agrees_with_the_index`,
+`test_the_join_refuses_a_response_whose_element_is_not_the_element_its_request_names`,
+`test_the_join_refuses_a_response_the_index_made_no_request_for`,
+`test_an_entry_that_lists_no_name_names_no_entry_for_the_join`,
+`test_an_entry_inside_a_response_with_no_name_is_refused`,
+`test_the_join_returns_the_entry_names_inside_the_response_in_sorted_order`,
+`test_the_join_reads_the_same_response_the_door_parsed`, and
+`test_the_join_states_no_second_shape_rule_or_wrapper_rule`.
 
 **2.4 The request set is not one tree.** Path 2 never assembles one tree from many responses,
 because the line map, the entry ledger, and the parent walk are keyed on the source that was
@@ -188,7 +211,7 @@ named in the `docs/ARCHITECTURE.md` §1 table when it lands.
 
 | Module | Role | Rule it keeps |
 |---|---|---|
-| `api_requests.py` | the scope index (§2.2), and the response-to-request join when it lands (§2.3) | the set is read from the membership responses, in sorted order, one entry per scope, and every response is checked against the request that made it |
+| `api_requests.py` | the scope index (§2.2), and the response-to-request join (§2.3) | the set is read from the membership responses, in sorted order, one entry per scope, and every response is checked against the request that made it |
 | `api_to_terraform.py` | the path 2 entry point | the run order, the arguments, the exit codes, and no rule restated. It reads `PanoramaParser`, `TerraformGenerator`, `unit_manifest`, `sanity_checks`, and `write_path` |
 
 Both modules write no file except through `write_path.py`, and neither states the environment name.

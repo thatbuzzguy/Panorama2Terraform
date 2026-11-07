@@ -438,6 +438,12 @@ here with that rule named.
   (`tests/test_container_coverage.py::test_predefined_entries_are_not_findings`) reads, and not for a
   predefined read. A piece must decide whether the scope path names the place only, and the built-in
   entries are read through the response that holds the container the name table needs.
+- Finding, opened by F8.3: the join checks a response against the index entry whose request made it, so it
+  reads only a response the index made a request for. The index makes only per-scope requests, and a device
+  fact request names no scope path, so the one element-name rule (`source_fetch.names_element`) names no
+  element for a command, and no module states a command-to-element table. Which element a command names is
+  therefore a fact the tool cannot read offline, and it stays here until a committed response (F8.4) shows
+  it. This touches the F8.1 finding above, because both need a fact a request cannot state.
 - Finding, opened by F8.2: the four membership lists name three of the five scope facts, so the index
   reaches no `vsys` and no device. A `vsys` is a scope fact (`ARCHITECTURE.md` §2.2), but no membership
   row reads it, so path 2 cannot request a vsys scope from membership: the run must read it as its
