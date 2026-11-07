@@ -2,7 +2,7 @@
 
 The design record for the second conversion path. It states what that path reads, what it may
 decide, and what it must not state twice. Each rule names the module and the test that holds it.
-The parts that are enforced (§2.1, §2.2, §2.3, and the response set in §5) are stated in the present
+The parts that are enforced (§2.1, §2.2, §2.3, §2.4, and the response set in §5) are stated in the present
 tense with their pins; the rest names the module and the test that will hold it.
 
 Path 1 reads one declared source: a file, or the whole-config API export
@@ -123,13 +123,57 @@ Pinned by `tests/test_source_fetch.py` (the join group):
 `test_the_join_reads_the_same_response_the_door_parsed`, and
 `test_the_join_states_no_second_shape_rule_or_wrapper_rule`.
 
-**2.4 The request set is not one tree.** Path 2 never assembles one tree from many responses,
-because the line map, the entry ledger, and the parent walk are keyed on the source that was
-parsed. Each response is its own `ParsedSource` with its own line map, and each parse method runs
-over the response that holds its container. The report row names the source that holds the entry,
-which `tests/test_entry_coverage.py::test_every_row_names_the_source_that_holds_the_entry` already
-pins. A run that reads N scopes has N sources, so its report names the response the entry came
-from. `tests/test_api_path.py` pins that a merged tree is not built.
+**2.4 The request set is not one tree.** Path 2 assembles no tree from many responses, because the
+line map, the entry ledger, and the parent walk are keyed on the source that was parsed. One response
+is one source: each response read through the door is its own `ParsedSource` with its own line map,
+and each parse method runs over the response that holds its container, so a report position can only
+name a line inside the response that holds the entry. `api_requests.response_for_section` answers the
+index entry whose response holds the container a section names, in two parts read through their owners:
+the place the section names first, which `list_container` states, and the entry inside that place that
+the run read, built through `scope_path` and validated through `is_scope_path`, so the join states no
+second path rule. `name` is data the run states, because a section names a container and never the entry
+it sits inside: for a place read the join answers the response for the place, and for an entry read it
+answers the response for the entry the run read. A run that reads N scopes has N sources, so its report
+names the response the entry came from, and the report names that source by its name only, which is the
+key-free request identity. The join refuses a section whose first segment names no place the one
+definition validates, and a section inside a place the index has no entry for, because the set is read
+from the membership responses.
+
+The join keeps no parser and states no merge rule, so the run order calls the parse method: the join
+answers which response a section belongs to. `api_requests.py` takes the four tables as data, so a run
+that read one response holds one table set, and the merge across responses belongs to the run order
+(`backlog.md`).
+
+Two consequences the pins hold. The report names the place a section names once, inside
+`container_coverage.section_path`, which reads `result` as the place the path names and keeps the `entry`
+segment only when the path names an entry, so the same content read as a per-scope place response and as a
+whole-config export names the same container path, and the two reports disagree only on the source they
+name (§5). And no container table row names a built-in container, so the run runs no parse method over a
+predefined response and the entry report names no row for a built-in entry: the ledger counts it through
+`predefined_total`. A predefined place read keeps the `predefined` element in the tree, so
+`is_predefined` reaches it and the scan names no finding; a predefined entry read puts the entry at the
+place level, so the scan reports the place, which is the finding `backlog.md` keeps. The join answers no
+response for a built-in place, because no membership row reads `predefined`. This changes no path 1 rule,
+because the guard reads a per-scope source.
+
+Pinned by `tests/test_api_path.py`: `test_each_response_keeps_its_own_line_map`,
+`test_the_parent_walk_answers_within_one_response`, `test_the_join_answers_one_response_per_section`,
+`test_a_section_that_names_no_scope_is_refused`,
+`test_the_join_refuses_a_section_inside_an_entry_the_run_read_no_response_for`,
+`test_the_join_names_the_response_the_parse_method_runs_over`,
+`test_a_parse_method_marks_only_the_entries_in_its_own_response`,
+`test_the_same_name_in_two_responses_gives_two_rows_naming_two_sources`,
+`test_the_report_position_is_the_line_inside_the_response`,
+`test_a_path_2_report_row_names_the_response_by_name_only`,
+`test_the_same_content_agrees_with_path_1_except_for_the_source`,
+`test_no_table_row_names_a_builtin_container`,
+`test_the_join_answers_no_response_for_a_builtin_place`,
+`test_a_predefined_entry_read_reports_the_place_as_a_finding`,
+`test_the_committed_response_is_one_source_and_names_itself_in_the_report`, and
+`test_no_test_in_this_file_calls_a_network_producer`. The pin
+`tests/test_entry_coverage.py::test_every_row_names_the_source_that_holds_the_entry` holds unchanged, and
+the pins that read `src/api_requests.py` (the import list, the names the module must not define, and the
+string constants the join must not state) pass unchanged.
 
 **2.5 The record holds one record per request the run read.** The eight fields and the fixed order
 are unchanged (`docs/ARCHITECTURE.md` §3.3). The `scope` field names the path the request declared,

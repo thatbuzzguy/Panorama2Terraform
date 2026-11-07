@@ -1,92 +1,119 @@
-# Acceptance criteria — F8.4, the offline harness (Epic 8, Phase 8A)
+# Acceptance criteria — F8.5, the run over many sources (Epic 8, Phase 8B)
 
-Scope: the committed response set, the layout path `tests/conftest.py` builds for it, the harness pins in
-`tests/test_api_requests.py`, one no-network pin in `tests/test_source_fetch.py`, one read-set pin in
-`tests/test_build_kitchen_sink.py`, and the decision named in `docs/ARCHITECTURE.md` §1.1 and
-`docs/API_CONVERSION_PATH.md` §5. No `src/` module changes: the three request shapes, the wrapper decision,
-the request identity rule and the record are already landed, and a harness adds no rule. No parse method runs
-over a response (F8.5), no record per request is written (F8.6), no gate rule is added (F8.8), no entry point
-is added (F8.9), and path 1 is unchanged.
+Scope: the rule that one response is one source, the section-to-response join in `src/api_requests.py`,
+the pins in `tests/test_api_path.py`, and the decision about the predefined read. No new module, no entry
+point (F8.9), no gate rule (F8.8), no unit join (F8.7), no record change (F8.6), and path 1 is unchanged.
+The run order is the entry point, so this piece states the rule and the join; no module here calls a parse
+method, and the pins run the parse per response.
 
-## 1. Where the response fixtures live
+## 1. One response is one source
 
-1.1 `tests/` is flat with three sets: `fixtures/` (the corpus, the directory the scan runs over), `golden/`
-(the pinned bytes of a run), and `responses/` (the committed API responses). `tests/conftest.py` is the one
-shared helper file and the one place the path to each set is built, so a harness pin reads the response set
-through it and states no path of its own.
+1.1 Each response read through the door is its own `ParsedSource` with its own line map, keyed by the
+elements of the tree that was parsed. An element of one response has no line in another response's map, so
+a report position can only name a line inside the response that holds the entry.
 
-1.2 A committed response is not a Panorama export, so it is not corpus material. The scan runs over the
-corpus, and `tools/build_kitchen_sink.py` reads the committed fixtures under the F3.8 input rule, so a
-response file enters neither the set the scan reports nor the assembler's merge set. The pins that state the
-printed fixture set read the corpus directory, so they are undisturbed by this piece. The decision is named in
-`docs/ARCHITECTURE.md` §1.1, which is the owner document for the layout.
+1.2 The parent walk, the entry ledger, and the scope walk are keyed on one tree, so each response gets its
+own. A parent map or a ledger built for one response holds no element of another.
 
-1.3 A committed response is read through the fetch layer, never through the file producer, because the wrapper
-decision belongs to the request that produced it. The existing committed response fixtures that the corpus pins
-read (`tests/fixtures/api_response.xml`, `scope_child.xml`, `scope_parent.xml`) stay in the corpus and are not
-moved, so the printed fixture set is unchanged.
+1.3 The run builds no tree from many responses. `src/api_requests.py` keeps no parser and states no merge
+rule, so the join answers one response per section, and no section needs a tree across responses.
 
-## 2. One committed response per request shape, named by the request identity
+## 2. Each parse method runs over the response that holds its container
 
-2.1 The response set holds exactly one file per accepted shape: the whole-config export, the per-scope read,
-and the device fact.
+2.1 `api_requests.response_for_section(section, index, name)` answers the index entry whose response holds
+the container a section names, in two parts, both read through their owners: the place the section names
+first, and the entry inside that place that the run read. The path is built through `xml_input.ENTRY_SEGMENT`
+and validated through `container_coverage.is_scope_path`, so the join states no second path rule and no
+second membership rule.
 
-2.2 Each file is named by the key-free request identity that produced it, in the shape the record reads as
-`cache_entry`: the SHA-256 hex of the host and the sorted params. The file states the same identity in its
-prolog comment, so a reader can see which request produced it, and no file names a credential.
+2.2 `name` is data the run states, because a section names a container and never the entry it sits inside.
+For a place read the join answers the response for the place; for an entry read it answers the response for
+the entry the run read.
 
-2.3 The three requests state their own shape through what they declare (F8.1): nothing else is the
-whole-config export, a path is the per-scope shape, a command is the device fact shape.
+2.3 A section whose first segment names no place the one definition validates is refused: the run reads such
+a container inside the response for the scope that holds it, and the section names no scope. A section inside
+a place the index has no entry for is refused, because the index reads its set from the membership responses
+and no membership row reads that scope.
 
-## 3. The producer stays injected
+2.4 A parse method run over one response marks only the entries inside that response, so the rows it
+produces name that response.
 
-3.1 No test calls a network. The harness injects a producer that hands the committed bytes, and the default
-producer stands in as one that fails the test when called.
+## 3. The report position and the source name for a path 2 run
 
-3.2 For each shape, `fetch()` through the injected producer reads the committed bytes through the door, hands
-back the shape its own request states, and writes the cache entry under the name the fixture is named by, with
-the committed bytes unchanged.
+3.1 A report row's `source` is the response name, which is the key-free request identity
+(`ApiRequest.cache_name()`) and holds no path. The existing pin
+`tests/test_entry_coverage.py::test_every_row_names_the_source_that_holds_the_entry` holds unchanged, and the
+row's source is the same value the join answers.
 
-3.3 A harness pin reads the same bytes the record names: the record built through `provenance.record_for` names
-the fixture as `cache_entry`, names the key-free identity as `request`, and states the size and the SHA-256 hex
-of the committed bytes. No record names a credential.
+3.2 The report position is the line inside the response the request made, read through that response's own
+line map, in the shape `container_coverage.position_part` states. The printed entry line names the position
+and the identity; the source stays row data and the report section header value.
 
-## 4. The join, read through the committed fixtures
+3.3 A name that appears in two responses gives two rows, each naming the response that holds it with the line
+inside it, and the two lines are read from two different maps.
 
-4.1 The committed per-scope response is the membership read the index is built from, so the index and the join
-read the same bytes: the names inside it are the names the index read, and the join accepts the response for
-the entry whose request made it and answers them in sorted order. The F8.3 pins are unchanged, so the join is
-not weakened.
+3.4 The report names the place a section names once. For a place read the chain starts at the place, and the
+element under `result` is the element the request names, so the same content read as a per-scope place
+response and as a whole-config export names the same container path, and the two reports disagree only on the
+source name (`docs/API_CONVERSION_PATH.md` §5).
 
-4.2 The committed device fact response shows the shape one command gives, and names no fact. The fetch layer
-states no command-to-element table, so `names_element` names no element for a command and the join has nothing
-to read a command's element name against. The fixture is an illustration, not a measurement, and it holds no
-live fact, so the facts in `docs/API_CONVERSION_PATH.md` §4 stay blocked and are not unblocked here.
+## 4. The predefined read
 
-## 5. The pins
+4.1 No container table row names a built-in container, so the run runs no parse method over a predefined
+response and the entry report names no row for a built-in entry. The ledger counts the built-in entry through
+`predefined_total`, and `container_coverage.is_predefined` keeps it out of the report.
 
-5.1 `tests/test_api_requests.py` (the harness group):
-`test_one_committed_response_per_request_shape_names_the_request_identity_that_produced_it`,
-`test_a_committed_response_reads_through_the_injected_producer_and_the_record_names_the_same_bytes`,
-`test_the_committed_responses_are_not_corpus_material`,
-`test_the_join_reads_the_committed_per_scope_response_through_the_injected_producer`,
-`test_the_committed_op_response_shows_one_shape_and_names_no_live_fact`.
+4.2 A predefined place read keeps the `predefined` element in the tree, so the built-in rule reaches it and the
+scan names no finding. A predefined entry read puts the entry at the place level, so the scan reports the place
+as a finding: the scan has no rule that a predefined source is definitions, and this piece adds none, so
+`backlog.md` keeps the finding.
 
-5.2 `tests/test_source_fetch.py` (the no-network rule, read for the committed set):
-`test_a_committed_response_is_read_through_the_injected_producer`.
+4.3 The join answers no response for a built-in place, because the index reads its set from the membership
+responses and no membership row reads `predefined`. The fact the built-in name table needs stays blocked on a
+live target (`docs/API_CONVERSION_PATH.md` §4).
 
-5.3 `tests/test_build_kitchen_sink.py` (the read set, read for the response set):
-`test_the_assembler_reads_the_corpus_and_not_the_response_set`.
+## 5. No test calls a network
 
-## 6. The checks
+5.1 Every response in `tests/test_api_path.py` is handed by an injected producer through
+`source_fetch.fetch`, as `tests/test_source_fetch.py` does, and the default producer stands in as one that
+fails the test when called.
 
-6.1 `ruff check .` is clean.
+5.2 The committed response set (`tests/responses/`) is read through the injected producer, and the committed
+per-scope response is one source whose report rows name it, so the run reads one response per scope.
 
-6.2 `python3 -m pytest` passes with no skip: the baseline 1597 pins, plus the pins above. No existing pin
-regresses, and the pins that state the printed fixture set answer the same set as before this piece.
+## 6. The pins
 
-6.3 The commit is one ASD-STE100 message. When the rule lands, `docs/API_CONVERSION_PATH.md` §5 states the
-harness in the present tense and names the pins, `docs/ARCHITECTURE.md` §1.1 names the response set as a set
-and the rule that it is not corpus material, `docs/README.md` names the owner of that decision, the completed
-piece leaves `to-do.md`, the finding about a command's element name is made honest in `backlog.md` (the shape
-is shown, not verified), and `agent-status.md` names the next piece (F8.5, the run over many sources).
+6.1 `tests/test_api_path.py` (16 pins):
+
+1. `test_each_response_keeps_its_own_line_map`
+2. `test_the_parent_walk_answers_within_one_response`
+3. `test_the_join_answers_one_response_per_section`
+4. `test_a_section_that_names_no_scope_is_refused`
+5. `test_the_join_refuses_a_section_inside_an_entry_the_run_read_no_response_for`
+6. `test_the_join_names_the_response_the_parse_method_runs_over`
+7. `test_a_parse_method_marks_only_the_entries_in_its_own_response`
+8. `test_the_same_name_in_two_responses_gives_two_rows_naming_two_sources`
+9. `test_the_report_position_is_the_line_inside_the_response`
+10. `test_a_path_2_report_row_names_the_response_by_name_only`
+11. `test_the_same_content_agrees_with_path_1_except_for_the_source`
+12. `test_no_table_row_names_a_builtin_container` (AC-4.1, which covers the no-row-for-a-built-in-entry half)
+13. `test_the_join_answers_no_response_for_a_builtin_place`
+14. `test_a_predefined_entry_read_reports_the_place_as_a_finding`
+15. `test_the_committed_response_is_one_source_and_names_itself_in_the_report`
+16. `test_no_test_in_this_file_calls_a_network_producer`
+
+6.2 The existing pins that read `src/api_requests.py` (the import list, the names the module must not define,
+and the string constants the join must not state) pass unchanged, so the join states no rule its owners state.
+
+## 7. The checks
+
+7.1 `ruff check .` is clean.
+
+7.2 `python3 -m pytest` passes with no skip: the baseline 1604 pins, plus the pins above. No existing pin
+regresses, and `tests/test_entry_coverage.py::test_every_row_names_the_source_that_holds_the_entry` passes
+unchanged.
+
+7.3 The commit is one ASD-STE100 message. When the rule lands, `docs/API_CONVERSION_PATH.md` §2.4 states it in
+the present tense with the pins named, `README.md` names `tests/test_api_path.py` in the testing list, the
+completed piece leaves `to-do.md`, the predefined decision and the two findings stay honest in `backlog.md`, and
+`agent-status.md` names the next piece (F8.6, one record per request).

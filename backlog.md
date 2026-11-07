@@ -438,6 +438,13 @@ here with that rule named.
   (`tests/test_container_coverage.py::test_predefined_entries_are_not_findings`) reads, and not for a
   predefined read. A piece must decide whether the scope path names the place only, and the built-in
   entries are read through the response that holds the container the name table needs.
+  Measured by F8.5 (`tests/test_api_path.py::test_a_predefined_entry_read_reports_the_place_as_a_finding`):
+  for a place read the response holds the `predefined` element, so the walk reaches it and the scan names no
+  finding; for an entry read inside the place the entry sits at the place level, so the scan reports the place.
+  No container table row names a built-in container, so no parse method runs over a predefined response and the
+  entry report names no row for a built-in entry, which the ledger counts through `predefined_total`. The rule
+  that decides whether a predefined source is definitions still has no owner, so the entry read stays a finding
+  here.
 - Finding, opened by F8.3: the join checks a response against the index entry whose request made it, so it
   reads only a response the index made a request for. The index makes only per-scope requests, and a device
   fact request names no scope path, so the one element-name rule (`source_fetch.names_element`) names no
@@ -461,10 +468,11 @@ here with that rule named.
   a `table` field, `LIST_JOIN` becomes data read through the table and the index states no join of its
   own.
 - Open, opened by F8.2: `parse_associations` returns the four tables for one parsed source, so a run
-  that read N membership responses must merge them before the index can read them
-  (`docs/API_CONVERSION_PATH.md` §2.4 keeps each response its own source). `api_requests.py` takes the
-  four tables as data and states no merge rule, so the merge belongs to the run order, which is the
-  entry point (F8.9).
+  that read N membership responses must join those tables before the index can read them. F8.5 decided the
+  shape of the run: no tree is built across responses, because each response keeps its own line map, parent
+  walk and ledger, so the join is over table data only and never over elements from two responses.
+  `api_requests.py` takes the four tables as data and states no merge rule, so the join belongs to the run
+  order, which is the entry point (F8.9).
 - Finding: `is_scope_path` accepts the place or an entry inside it (`/<place>` and
   `/<place>/entry/<name>`), so a predefined read cannot name a container inside the place
   (`/predefined/url-list`), which is the shape the built-in name table read needs. The shape rule is

@@ -468,7 +468,9 @@ def section_path(container: ET.Element, parents: dict,
     F5.4: for a per-scope source, `result` is the place the path names, never a segment
     of a container name. When the path names an entry, `result` stands as the container
     the path names first, so the chain reads as it reads for the same shape in a
-    whole-config export.
+    whole-config export. When the path names a place, the element under `result` is that
+    place, so the chain states the place once (F8.5): a place read that repeated the place
+    as a segment would name a container that no path names.
     """
     parts = [container.tag]
     node = container
@@ -479,10 +481,17 @@ def section_path(container: ET.Element, parents: dict,
         parts.append(node.tag)
     chain = list(reversed(parts))
     if source is not None and source.is_per_scope:
+        place = source.scope_container
+        names_an_entry = ENTRY_SEGMENT in source.scope.split('/')
         if chain and chain[0] == 'result':
-            chain[0] = source.scope_container  # the root itself is the place
-        elif ENTRY_SEGMENT in source.scope.split('/'):
-            chain.insert(0, source.scope_container)
+            chain[0] = place      # the root itself is the place
+            # The element under `result` is the element the request names, so for a place read it is the
+            # place and it is read once. For an entry read `entry` is a segment the operator sees in the
+            # file, so the chain keeps it (`docs/API_CONVERSION_PATH.md` §2.4).
+            if not names_an_entry and len(chain) > 1 and chain[1] == place:
+                chain.pop(1)
+        elif names_an_entry:
+            chain.insert(0, place)
     while chain and chain[0] in PATH_ROOTS:
         chain.pop(0)
     return '/'.join(chain)

@@ -467,6 +467,10 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   one-entry-per-scope order, the join checked against the request that made the response, and the offline
   harness: one committed response per request shape, each named by the request identity that produced it, read
   through the injected producer, and read as data by the record
+- `tests/test_api_path.py` - the run over many sources: one response is one source with its own line map, the
+  section-to-response join, the parse method running over the response that holds its container, the report
+  position as the line inside that response, the row naming the source that holds the entry, and the predefined
+  read
 - `tests/test_shadow_coverage.py` - the cross-source shadow scan: the per-scope shape in the
   scan, the shadow fact (the key is `state_coverage.ownership_key` read with the facts the parent row
   declares, so it names the parent scope), the report section and its line shape with the parent entry
