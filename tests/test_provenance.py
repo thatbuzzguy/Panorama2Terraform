@@ -15,8 +15,13 @@ Six groups, one per acceptance rule:
    action reads the record file the same run wrote; what it removes, what it keeps, what it
    refuses, and what it cannot change.
 
+The path 2 case (F8.6) is pinned inside groups 1, 2 and 6: the record names the request that made each
+response, the record file holds one record per request the run read, and the action protects every entry a
+path 2 run read.
+
 No test calls the network: every api run uses an injected producer, or reads a seeded cache
-with `--offline`.
+with `--offline`. The path 2 pins read every response through the injected producer, as
+`tests/test_api_requests.py` does, and the committed response set is read through it.
 """
 
 import dataclasses
@@ -25,13 +30,23 @@ from pathlib import Path
 
 import pytest
 
+import api_requests
 import container_coverage
 import entry_coverage
 import provenance
 import sanity_checks
 import write_path
 import xml_input
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, file_text, run_main, run_script, tf_files, written_bytes
+from conftest import (
+    FIXTURES_DIR,
+    RESPONSES_DIR,
+    SAMPLE_CONFIG,
+    file_text,
+    run_main,
+    run_script,
+    tf_files,
+    written_bytes,
+)
 
 FETCH_FIXTURE = 'api_response.xml'
 UNKNOWN_FIXTURE = 'unknown_containers.xml'
@@ -43,6 +58,20 @@ PARENT_PATH = 'shared'
 # A key that a test can search for in every output file, so a leak is visible.
 SECRET_KEY = 'SECRET-KEY-9f3'
 HOST = 'panorama.test'
+
+# The path 2 reads (F8.6, `docs/API_CONVERSION_PATH.md` §2.5): one response per request the run read.
+# `device-group` is the committed response the offline harness holds (`tests/responses/`), read through the
+# injected producer, so the record names the bytes the fixture holds. `templates` is the other membership
+# read, and the two entry paths are the requests the scope index names for the entries those containers read.
+PATH_2_READS = ('device-group/entry/devices', 'templates/entry/devices')
+COMMITTED_READ = 'device-group'
+PATH_2_BODIES = {
+    'templates': '<entry name="HQ-Networks"><devices><entry name="fw-1.example.com" /></devices></entry>',
+    'device-group/entry/Office-FW':
+        '<entry name="Office-FW"><devices><entry name="fw-1.example.com" /></devices></entry>',
+    'templates/entry/HQ-Networks':
+        '<entry name="HQ-Networks"><devices><entry name="fw-1.example.com" /></devices></entry>',
+}
 
 
 def _bytes():
@@ -99,6 +128,59 @@ def _run_pair(converter_module, fetch_module, tmp_path, monkeypatch):
     return cache, out
 
 
+def _path_2_response(request) -> bytes:
+    """The response for one path 2 request, in the shape that request states: `result` holds the element the
+    path names, which is the entry itself for an entry read and the container for a place read. The
+    `device-group` read is the committed response, so the record names the same bytes the fixture holds. The
+    producer hands these bytes, so no test calls a network.
+    """
+    if request.path == COMMITTED_READ:
+        return (RESPONSES_DIR / request.cache_name()).read_bytes()
+    body = PATH_2_BODIES[request.path]
+    segments = request.segments()
+    held = body if len(segments) == 3 else f'<{segments[0]}>\n{body}\n</{segments[0]}>'
+    return ('<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n'
+            + held + '\n</result>\n</response>\n').encode()
+
+
+def _path_2_run(converter_module, fetch_module, cache, out, monkeypatch):
+    """The path 2 run, read one response at a time through the injected producer, in the order it read them:
+    the membership responses first, because the scope index is built from them, then the response for each
+    request the index names. Returns (index, reads), where `reads` names the request and the source for each
+    response in read order, and writes the record file through the single writer at the codebase root, one
+    record per request the run read.
+
+    The record order is the read order. Which order a path 2 run reads is the run order's decision (the entry
+    point, F8.9), so `provenance.py` states no read rule for it, and this helper states the read order only for
+    the pin.
+    """
+    monkeypatch.setattr(fetch_module, 'network_producer', lambda *args, **kwargs: (_ for _ in ()).throw(
+        AssertionError('the run called the network')))
+
+    membership, reads, read_names = {}, [], set()
+    for list_path in PATH_2_READS:
+        request = fetch_module.ApiRequest(host=HOST, path=api_requests.list_container(list_path))
+        source = fetch_module.fetch(request, cache, producer=lambda r: _path_2_response(r))
+        reads.append((request, source))
+        read_names.add(request.cache_name())
+        for table, values in converter_module.PanoramaParser(source).parse_associations().items():
+            for owner, names in values.items():
+                membership.setdefault(table, {}).setdefault(owner, []).extend(names)
+
+    index = api_requests.scope_index(HOST, membership, PATH_2_READS)
+    for entry in index:
+        # A place is read once: the membership read is the response for the place the index names.
+        if entry.request.cache_name() in read_names:
+            continue
+        source = fetch_module.fetch(entry.request, cache, producer=lambda r: _path_2_response(r))
+        reads.append((entry.request, source))
+
+    records = [provenance.record_for(source, request=request) for request, source in reads]
+    write_path.write_file(write_path.root_path(out, provenance.PROVENANCE_FILE),
+                          provenance.render_records(records))
+    return index, reads
+
+
 # --- 1. What the record states ------------------------------------------------
 
 def test_the_record_field_names_are_the_printed_keys():
@@ -151,6 +233,38 @@ def test_the_record_never_names_the_key(converter_module, fetch_module, tmp_path
         encoding='utf-8', errors='surrogateescape')
 
 
+def test_the_path_2_record_names_the_request_that_made_each_response(
+        converter_module, fetch_module, tmp_path, monkeypatch):
+    """AC-1.3, AC-1.5 and AC-3.1: for each request the run read, `scope` names the path that request declared
+    and `request` names the key-free identity of that request, which is the shape the cache entry is hashed
+    from. Every response is handed by an injected producer, so the two byte facts are the door's, and the
+    record for the committed response names the same bytes the fixture holds.
+    """
+    cache, out = tmp_path / 'cache', tmp_path / 'out'
+    index, reads = _path_2_run(converter_module, fetch_module, cache, out, monkeypatch)
+    assert len(reads) == len(index), 'one response per request the index names'
+
+    records = provenance.parse_records((out / provenance.PROVENANCE_FILE).read_text(encoding='utf-8'))
+    for (request, source), record in zip(reads, records):
+        entry = api_requests.entry_for_path(index, request.path)
+        assert entry is not None and entry.request.cache_name() == request.cache_name(), (request, entry)
+        assert record.kind == 'api', record
+        assert record.scope == request.path == entry.path, 'the record names the path the request declared'
+        assert record.request == request.canonical(), 'the record names the key-free identity'
+        assert 'key=' not in record.request, 'the identity is the key-free shape'
+        assert record.name == request.cache_name(), 'the report value, not the path'
+        assert source.origin.name == request.cache_name(), 'the door named the response the record names'
+        assert record.cache_entry == request.cache_name(), 'the entry that identity names'
+        assert record.path == str(cache / request.cache_name()), 'the entry a reader reopens'
+        data = _path_2_response(request)
+        assert record.size == len(data), 'the byte facts come from the door'
+        assert record.sha256 == hashlib.sha256(data).hexdigest(), record
+
+    assert len(records) == 4, records
+    assert len({record.cache_entry for record in records}) == len(records), 'one cache entry per request'
+    assert SECRET_KEY not in (out / provenance.PROVENANCE_FILE).read_text(encoding='utf-8')
+
+
 # --- 2. The record is data, written outside the report bodies -----------------
 
 def test_the_record_round_trips_as_data(tmp_path):
@@ -176,8 +290,10 @@ def test_one_record_writes_the_same_bytes_as_the_f5_3_rule(fetch_module):
 
 
 def test_the_record_file_holds_one_record_per_source_read(converter_module, fetch_module, tmp_path, monkeypatch):
-    """AC-5.1 and AC-5.3: the main source, then the declared parent, in read order, with
-    each record stating its own scope."""
+    """AC-1.1 and AC-1.2: the main source, then the declared parent, in read order, with
+    each record stating its own scope; and the path 2 case, where one response is one source, so a run
+    that read N requests writes N records in the order it read them.
+    """
     _, out = _run_pair(converter_module, fetch_module, tmp_path, monkeypatch)
     text = (out / provenance.PROVENANCE_FILE).read_text(encoding='utf-8')
     records = provenance.parse_records(text)
@@ -189,6 +305,42 @@ def test_the_record_file_holds_one_record_per_source_read(converter_module, fetc
     assert f'path={CHILD_PATH}' in records[0].request, records[0].request
     assert 'key=' not in records[1].request, 'the key rule holds for the second request (AC-5.5)'
     assert records[0].cache_entry != records[1].cache_entry, 'one cache entry per request identity'
+
+    # The path 2 case (F8.6): N requests, read through the injected producer, so N records, in the order the
+    # run read them. The record module states no read rule for a path 2 run, so the file order is the order
+    # the run read them, which is what the helper read them in.
+    cache, path2 = tmp_path / 'cache', tmp_path / 'path2'
+    index, reads = _path_2_run(converter_module, fetch_module, cache, path2, monkeypatch)
+    text = (path2 / provenance.PROVENANCE_FILE).read_text(encoding='utf-8')
+    records = provenance.parse_records(text)
+    assert len(records) == len(reads) == len(index), 'one record per request the run read'
+    assert [record.scope for record in records] == [request.path for request, _ in reads], records
+    assert [record.request for record in records] == [request.canonical() for request, _ in reads], records
+    assert [record.cache_entry for record in records] == [request.cache_name() for request, _ in reads]
+    assert len(text.split('\n\n')) == len(records), 'one blank line between records, the whole shape'
+    assert text == provenance.render_records(records), 'the record file reads back as itself'
+
+
+def test_a_path_2_record_file_reads_back_with_no_new_field(
+        converter_module, fetch_module, tmp_path, monkeypatch):
+    """AC-1.2: the eight fields and the fixed order are unchanged, so `parse_records` reads a path 2 record
+    file back as itself, with no field outside the declared shape, and a second run that read the same
+    requests writes the same record bytes.
+    """
+    cache, first, second = tmp_path / 'cache', tmp_path / 'out1', tmp_path / 'out2'
+    _, reads = _path_2_run(converter_module, fetch_module, cache, first, monkeypatch)
+    text = (first / provenance.PROVENANCE_FILE).read_text(encoding='utf-8')
+    records = provenance.parse_records(text)
+    assert text == provenance.render_records(records), 'the record file reads back as itself'
+    for chunk in text.split('\n\n'):
+        keys = [line.partition(': ')[0] for line in chunk.splitlines()]
+        assert keys == list(provenance.FIELD_ORDER), (chunk, 'no new field, no prose, no timestamp')
+
+    # Two runs that read the same requests write the same bytes, because the record names no timestamp and
+    # both runs read the same cache.
+    _path_2_run(converter_module, fetch_module, cache, second, monkeypatch)
+    assert (first / provenance.PROVENANCE_FILE).read_bytes() == \
+           (second / provenance.PROVENANCE_FILE).read_bytes()
 
 
 def test_a_record_line_that_is_not_a_field_is_refused():
@@ -453,6 +605,31 @@ def test_the_prune_reads_a_record_file_with_two_records(converter_module, fetch_
     for entry in kept:
         assert entry.is_file(), f'the record file references {entry.name}'
     assert not stale.is_file(), 'one file, two records, and an entry neither names is pruned'
+
+
+def test_the_prune_protects_every_entry_a_path_2_run_read(
+        converter_module, fetch_module, tmp_path, monkeypatch):
+    """AC-2.1 and AC-2.2: the record is a codebase root-set file, so the action reads the record file the path
+    2 run wrote at the codebase root, and the reference is the `cache_entry` field of each parsed record, so a
+    run that read N requests protects the N entries its own record names and prunes an entry none references.
+    """
+    cache, out = tmp_path / 'cache', tmp_path / 'out'
+    _, reads = _path_2_run(converter_module, fetch_module, cache, out, monkeypatch)
+    stale = _stale_entry(cache)
+
+    # The record path is named through the builder for the set the record belongs to, because the module that
+    # owns the record builds no path.
+    record_file = write_path.root_path(out, provenance.PROVENANCE_FILE)
+    assert record_file == out / provenance.PROVENANCE_FILE, 'the record directory is the output directory'
+    removed = provenance.prune(record_file, cache)
+    assert removed == [stale], 'the action removes only what no record references'
+
+    parsed = provenance.parse_records(record_file.read_text(encoding='utf-8'))
+    assert [provenance.cache_reference(record) for record in parsed] == [request.cache_name()
+                                                                         for request, _ in reads], \
+        'the reference is the field of the record file the action reads'
+    kept = sorted(path.name for path in cache.iterdir() if path.is_file())
+    assert kept == sorted(request.cache_name() for request, _ in reads), 'the N entries the run read stay'
 
 
 def test_a_record_the_prune_cannot_read_is_refused(tmp_path):

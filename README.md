@@ -477,9 +477,10 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   field, one finding per parent entry, the report order, the console line, the CLI argument rules, and the
   offline run reading both cache entries
 - `tests/test_provenance.py` - the provenance record (`SOURCE.txt`): the fields, the record
-  read back as data, one record per source the run read, the `Source:` label for both sources,
-  the rule that a cache entry is not pruned while a written record references it, and the record
-  byte rule between two runs
+  read back as data, one record per source the run read, one record per request the path 2 run read with the
+  `scope` field naming the path that request declared, the `Source:` label for both sources,
+  the rule that a cache entry is not pruned while a written record references it, the action reading the record
+  file the same run wrote, and the record byte rule between two runs
 - `tests/test_state_input.py` - the state producer: the two byte checks on the state bytes, the entry
   shape a scan can read, the document refusals, the record facts, the CLI argument rules, and the
   offline run that calls no producer
