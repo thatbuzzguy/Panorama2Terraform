@@ -2,7 +2,10 @@
 
 The open feature is Epic 8, the API-only conversion path. Its design record is
 `docs/API_CONVERSION_PATH.md`, and each piece below names the rule it holds, the module that will
-state it, and the test that will pin it. No piece is started yet, so no pin exists yet.
+state it, and the test that will pin it. F8.1 is complete: the three request shapes and the op
+wrapper rule are in `src/source_fetch.py`, the `predefined` decision is inside
+`container_coverage.SCOPE_PATH_ROOTS`, and the pins are named in
+`docs/API_CONVERSION_PATH.md` §2.1.
 
 The completed pieces that this file carried are closed in the git history and the owner documents,
 including the certificate `REFERENCE_ONLY` fact: `resource_mapping.VALUE_VARIABLES` holds the
@@ -14,12 +17,6 @@ including the certificate `REFERENCE_ONLY` fact: `resource_mapping.VALUE_VARIABL
 
 Phase 8A, the read boundary:
 
-- [ ] F8.1 The accepted request shapes. Path 2 accepts the whole-config export, the per-scope read,
-      and the device fact shape, and each shape has one accepted response element. The op shape is
-      new, so `source_fetch.py` states its wrapper rule. The same piece decides how
-      `container_coverage.SCOPE_PATH_ROOTS` reads a `predefined` path, because that set is the one
-      definition that validates a scope path. Pins: `tests/test_source_fetch.py`, and the pins that
-      read the `src/` set unchanged.
 - [ ] F8.2 The scope index. The scope set comes from the membership responses the run read, through
       the four membership lists `parse_associations` reads: one request per scope container, then one
       request per scope entry those containers name. No scope is guessed. Module: `api_requests.py`.

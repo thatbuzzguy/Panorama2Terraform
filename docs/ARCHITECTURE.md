@@ -20,10 +20,10 @@ Every file in this table is a module in `src/`, except the test harness, which i
 |---|---|---|
 | `panorama_to_terraform.py` | The converter: `PanoramaParser` (model), `TerraformGenerator` (model and write), `main()` (order) | the parser consumes only the producer contract (`ParsedSource`); it reads no file and opens no connection itself, so a source is either the file producer or the api producer |
 | `xml_input.py` | The only input read, shared by every entry point, through one producer boundary (F5.1), and the scope vocabulary a source states (F5.4) | the two byte checks are one function (`check_bytes`) every source kind runs, so the size cap and the DTD refusal are kind-independent and only the parse step is chosen by the kind; one definition of the scope a source holds (`DEFAULT_SCOPE`) and of the path segment that names an entry (`ENTRY_SEGMENT`) |
-| `source_fetch.py` | The api producer (F5.2): the https request, the cached copy, the response wrapper, and the per-scope request shape (F5.4) | https only; a redirect that changes the scheme is refused; the cache holds exactly the bytes the boundary parsed; the key comes from the environment only, and `API_KEY_ENV` is the only module that states its name (`CODEBASE_ASSEMBLY.md` §11); the declared path is part of the request identity, so each scope gets its own entry |
+| `source_fetch.py` | The api producer (F5.2): the https request, the cached copy, the response wrapper, and the three accepted request shapes (F5.4, F8.1) | https only; a redirect that changes the scheme is refused; the cache holds exactly the bytes the boundary parsed; the key comes from the environment only, and `API_KEY_ENV` is the only module that states its name (`CODEBASE_ASSEMBLY.md` §11); the declared path or the declared command is part of the request identity, so each scope and each command gets its own entry; a command value reaches the URL encoded |
 | `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `DATA_SOURCE_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX`, and the scope tables `SCOPE_TYPES`, `SCOPE_PLACEMENT`, `SCOPE_ANSWER`, `SCOPE_LEVEL_ORDER` and `SCOPE_SHAPE` (F6.5), plus the value-to-variable table `VALUE_VARIABLES` (F6.6) | the single source of truth; no resource name or attribute from memory; `SCOPE_SHAPE` is the shape the provider takes, so a membership cannot be printed as a string where the provider takes an object; `VALUE_VARIABLES` covers every field `LOCATION_SCHEMA` declares, so the emitter and the gate read one table and no emitter branch decides the shape for one type |
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy` |
-| `container_coverage.py` | The container table (§3.1) and the section rule | the table is data, so a parse method cannot exist without a row |
+| `container_coverage.py` | The container table (§3.1), the section rule, and the one scope path definition | the table is data, so a parse method cannot exist without a row |
 | `entry_coverage.py` | The per-entry report (§3.2) | the destination is answered in one place, `EntryLedger.destination`, in this order: the per-entry fact on the recorded object, then the destination `mark` recorded, then the container table row; `mark` records a destination only when the caller states it, so a call site that states `destination='report'` for a report-only entry restates a fact the entry already holds; `name_field` is the one rule for the field that carries an entry name into a block, so the emitter, the gate, and the matrix test read the same rule |
 | `shadow_coverage.py` | The cross-source shadow scan (§3.2): a child entry name that repeats a parent entry name | the key is `state_coverage.ownership_key` read with the facts the parent row declares, so one key names one parent entry; the scan compares the matrix row and entry name part of the key; both sources are read with the same row rule, so no second naming rule exists |
 | `state_input.py` | The state producer (F5.6): a Terraform state document read as a reference source, through the same door | the two byte checks run on the state bytes, and only the parse step is chosen by the kind, so a `<!DOCTYPE` inside a JSON value is not a refusal; a document the identity key cannot read is an input refusal; the state source writes no output, so no `.tf` byte changes |
@@ -207,12 +207,18 @@ reads it (`COVERAGE_MATRIX.md` §1). The gap that has no rule yet is recorded in
      `response/result/config`, `result/config`, and a plain `config`. A per-scope request (F5.4)
      declares a path, and its `result` must hold exactly one element: the container the path
      names, or the entry with the name the path states. `result` itself becomes the root, read as
-     the place the path names (§3.1). A shape that does not match its own request is refused: a
+     the place the path names (§3.1). A device fact request (F8.1) declares a command, and its
+     `result` must hold exactly one element, the fact element the command names; `result` becomes
+     the root, read as the place the command names, and the source states no scope, because a
+     command names no scope. The producer states no command-to-element table, so which element a
+     command names is checked by the response-to-request join (`API_CONVERSION_PATH.md` §2.3) and is
+     never guessed. A shape that does not match its own request is refused: a
      `result` with no `config` element read by a whole-config request, a `result` that holds
      nothing, more than one element, or an element the path does not name, and a whole-config
-     shape read by a per-scope request. The producer does not reparse, so the origin and the line
-     map are the same objects, and a report line still names the line the response carries. The
-     response check (type `success`, code `0`) runs for both shapes, before the cache entry is
+     shape read by a per-scope request, and a whole-config or a per-scope shape read by a device
+     fact request. The producer does not reparse, so the origin and the line map are the same
+     objects, and a report line still names the line the response carries. The response check (type
+     `success`, code `0`) runs for all three shapes, before the cache entry is
      written. The cache holds the response as it arrived: normalising before the cache write would
      put bytes in the file that the parser never saw. Pinned by
      `tests/test_source_fetch.py::test_fetch_root_is_the_config_element_under_result` (the origin
@@ -220,20 +226,30 @@ reads it (`COVERAGE_MATRIX.md` §1). The gap that has no rule yet is recorded in
      `::test_a_per_scope_response_holds_the_element_the_path_names`,
      `::test_a_per_scope_response_that_does_not_match_its_path_is_refused`,
      `::test_the_response_check_runs_for_both_shapes`,
-     `::test_result_root_and_plain_config_root_are_accepted`, and
-     `::test_container_table_names_no_wrapper_row`.
+     `::test_result_root_and_plain_config_root_are_accepted`,
+     `::test_container_table_names_no_wrapper_row`, and the F8.1 group
+     `::test_the_request_states_which_of_the_three_shapes_it_is`,
+     `::test_an_op_response_holds_the_one_element_the_command_names`,
+     `::test_an_op_response_that_breaks_the_op_shape_is_refused`,
+     `::test_the_op_shape_checks_the_shape_and_the_join_checks_the_element_name`,
+     `::test_the_response_check_runs_for_the_op_shape`, and
+     `::test_an_op_response_is_not_a_config_source`.
    - **The cache holds the parsed bytes under a key-free name.** An entry is named by the
      SHA-256 hex of the host and the sorted request parameters. The key is not part of the
      name, so the credential never appears in a file name, and two requests with the same
      parameters but different keys share one entry. `--offline` reads only this cache and
      refuses a missing entry; it needs no key, so a CI run on a committed cache connects to
      no server. The declared path is part of the identity (F5.4), so each scope gets its own
-     entry, and `--offline` covers both requests of a two-source run. The checks must pass
+     entry, and `--offline` covers both requests of a two-source run. The declared command is part
+     of the identity for the same reason (F8.1), so each command gets its own entry, and its value
+     reaches the request URL encoded, because a command is words with spaces, while the identity
+     string keeps the plain sorted shape the record reads as data. The checks must pass
      before a write, so a refused response never reaches the cache, and two runs on the same
      cache write byte-identical output. Pinned by
      `tests/test_source_fetch.py::test_cache_miss_then_hit_reopens_the_same_bytes`,
      `::test_cache_entry_name_is_the_request_identity_without_the_key`,
      `::test_the_declared_path_is_part_of_the_request_identity`,
+     `::test_the_command_is_part_of_the_request_identity`,
      `::test_cache_hit_over_the_limit_is_refused_through_the_door`,
      `::test_offline_refuses_a_missing_entry_and_calls_no_producer`,
      `::test_offline_refuses_a_missing_entry_for_the_second_request`,
@@ -332,6 +348,11 @@ Three rules the scan uses:
   console line per finding in the shape §3.2 states. An absent section is not a finding, an empty known
   section is not a finding, and an entry container under `predefined` is not a
   finding: those entries are PAN-OS built-in definitions, not operator objects.
+  `container_coverage.SCOPE_PATH_ROOTS` is the one definition that validates a scope path, and
+  `predefined` is a place inside it, so a run can read a built-in path; it stays outside the five
+  scope containers, so a built-in entry answers no scope fact. Pinned by
+  `tests/test_container_coverage.py::test_predefined_entries_are_not_findings` and
+  `::test_a_predefined_path_is_read_by_the_one_scope_path_definition`.
 - **The envelope is never a scanned container** (`container_coverage.ENVELOPE`:
   `response` and `result`). For a per-scope source (F5.4) `result` is read as the place the
   declared path names, so the entry under it is the declared scope entry, and a container inside

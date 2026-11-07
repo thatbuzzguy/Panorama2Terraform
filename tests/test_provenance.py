@@ -184,7 +184,9 @@ def test_the_record_file_holds_one_record_per_source_read(converter_module, fetc
     assert [record.scope for record in records] == [CHILD_PATH, PARENT_PATH], records
     assert len(text.split('\n\n')) == 2, text
     assert text == provenance.render_records(records), 'the record file reads back as itself'
-    assert records[0].request.endswith(f'path={CHILD_PATH}'), records[0].request
+    # F8.1: the record names the whole sorted identity, so the path is one part of it and no
+    # longer the last part. The pin keeps the fact it pins: the record names the request identity.
+    assert f'path={CHILD_PATH}' in records[0].request, records[0].request
     assert 'key=' not in records[1].request, 'the key rule holds for the second request (AC-5.5)'
     assert records[0].cache_entry != records[1].cache_entry, 'one cache entry per request identity'
 

@@ -12,7 +12,9 @@ Three groups of checks:
    property level, so this module does not report it (the property-level scan, F4.4,
    covers it). F5.4 adds the envelope rule and the per-scope place rule: `response`
    and `result` are never scanned containers, and for a per-scope source `result` is
-   read as the place the declared path names.
+   read as the place the declared path names. F8.1 adds the built-in section to the one scope path
+   definition: `predefined` is a place a scope path may read, and it stays out of the five scope
+   containers, so a built-in entry answers no scope fact.
 3. The report. A section the table does not cover produces one finding, sorted
    by tag chain then line, naming the file name only. An absent container is not
    a finding. A finding does not change the exit code.
@@ -267,6 +269,33 @@ def test_the_scan_reads_a_per_scope_root_as_the_place_the_path_names():
     assert all(container.tag not in container_coverage.ENVELOPE
                for container in container_coverage.entry_containers(file_source.root, file_parents, file_source))
     assert container_coverage.scan(file_source, file_parents) == []
+
+
+def test_a_predefined_path_is_read_by_the_one_scope_path_definition(tmp_path):
+    """F8.1 AC-4.1 and AC-4.2: `predefined` is a place the one definition validates, so a
+    built-in path is a scope path, and the run can read it. It is read as a place, not as a
+    scope: no scope fact comes from a built-in entry."""
+    assert 'predefined' in container_coverage.SCOPE_PATH_ROOTS
+    assert 'predefined' not in container_coverage.SCOPE_CONTAINERS, \
+        'a built-in section is a place, not one of the five scope containers'
+
+    assert container_coverage.is_scope_path('/predefined')
+    assert container_coverage.is_scope_path('/predefined/entry/url-list')
+    assert not container_coverage.is_scope_path('/predefined/url-list'), \
+        'the shape rule is unchanged: a path names the place or an entry inside it'
+
+    entry = ET.fromstring('<predefined><url-list><entry name="url-list"/></url-list></predefined>')
+    parents = container_coverage.parent_map(entry)
+    built_in_entry = entry.find(".//entry[@name='url-list']")
+    assert not container_coverage.is_scope_entry(built_in_entry, parents), \
+        'a built-in entry answers no scope fact'
+
+    # The CLI prints the set through the one definition, so the argument error names `predefined`.
+    result = run_script('panorama_to_terraform.py', '--source', 'api', '--host', 'panorama.test',
+                        '--path', '/predefined/url-list', '--cache-dir', str(tmp_path),
+                        '--output-dir', str(tmp_path))
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert 'predefined' in result.stderr, result.stderr
 
 
 def test_empty_known_container_is_not_a_finding(tmp_path):

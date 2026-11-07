@@ -6669,7 +6669,7 @@ def main():
             if declared and not container_coverage.is_scope_path(declared):
                 parser.error(
                     f'{flag} must name a scope path: /<container> or /<container>/entry/<name>, '
-                    f'where <container> is a declared scope container '
+                    f'where <container> is a place the one scope path definition validates '
                     f'({", ".join(sorted(container_coverage.SCOPE_PATH_ROOTS))})'
                 )
 

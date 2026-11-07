@@ -2,6 +2,8 @@
 """
 F5.2: the cached API export. A byte producer for the input door. F5.4 adds the per-scope
 request (`type=config&action=get&path=...`) and the wrapper rule for its response shape.
+F8.1 adds the third accepted request shape, the device fact shape (`type=op&cmd=<command>`),
+and the wrapper rule for its response shape.
 
 Copyright (c) 2025 GSW Systems
 
@@ -28,19 +30,27 @@ keyed on the ElementTree tree.
 
 Five rules, stated once here:
 
-1. The wrapper decision (F5.2 AC-2, F5.4 AC-1). A fetched response is a `response` /
+1. The wrapper decision (F5.2 AC-2, F5.4 AC-1, F8.1). A fetched response is a `response` /
    `result` wrapper, not a config root. The fetch parses the whole response
    bytes, then moves the tree root to the element the request shape names.
-   No reparse, so the line map survives. A whole-config request takes the `config`
-   element under `result`. A per-scope request (a `path` param, F5.4) takes the element
-   the path names: `result` becomes the root, read as the place the path names. The
-   response shape must match the request shape; a mismatch is refused, not guessed.
-   `response` and `result` are never read as containers, so the container table needs no
-   wrapper row.
+   No reparse, so the line map survives. The three accepted request shapes each have one accepted
+   response element, and a response is read against the shape its own request states:
+   `type=export&category=configuration` takes the `config` element under `result`;
+   `type=config&action=get&path=<scope path>` takes the element the path names, and `result`
+   becomes the root, read as the place the path names; `type=op&cmd=<command>` takes exactly one
+   element under `result`, the fact element the command names, and `result` becomes the root, read
+   as the place the command names. The fetch layer states no command-to-element table, so which
+   element a command names is checked by the response-to-request join (F8.3) and never guessed.
+   A response shape that does not match its request is refused, not guessed. An op
+   response is a device fact, not a config: it names no scope, so the source states no scope and the
+   container table needs no wrapper row and no row for the fact element.
+   `response` and `result` are never read as containers.
 2. The cache entry is what gets parsed (F5.2 AC-3). The entry name is the
    SHA-256 hex of the request identity (host and sorted params), so the same
    request finds the same entry, and the credential is not part of the
-   identity. Both checks run before any file is written, and the entry holds
+   identity. The params are the words the request's shape states plus the part it declares (the
+   path, or the command), so each scope and each command finds its own entry. Both checks run
+   before any file is written, and the entry holds
    exactly the bytes the door parsed, so a report line names bytes a reader
    can reopen. A cache hit calls no producer. `--offline` reads the cache
    only and refuses when the entry does not exist.
@@ -62,6 +72,8 @@ Usage:
     source = fetch(request, 'panorama_cache')   # reads the API once, then the cache
     scope_request = ApiRequest(host='panorama.example.com', path='device-group/entry/Edge')
     source = fetch(scope_request, 'panorama_cache', offline=True)
+    fact_request = ApiRequest(host='panorama.example.com', command='show system info')
+    source = fetch(fact_request, 'panorama_cache')      # `result` holds the one fact element
     line = source.line_of(source.root.find('.//entry'))
 """
 
@@ -88,15 +100,26 @@ from xml_input import (
 # The source kind the report names for a fetched input. F5.6 adds 'state'.
 SOURCE_KIND = 'api'
 
-# Request shape the container table knows: the whole-config export.
+# The three accepted request shapes (F8.1, `docs/API_CONVERSION_PATH.md` §2.1), one response
+# element each. The wrapper decision reads a response against the shape its own request states, so
+# a shape is never guessed from what the response looks like.
 EXPORT_TYPE = 'export'
 EXPORT_CATEGORY = 'configuration'
-
-# The per-scope request shape (F5.4). The path is part of the request identity, so each
-# declared scope gets its own cache entry. `ENTRY_SEGMENT` comes from the shared scope
-# vocabulary in `xml_input.py`, the only module the fetch layer may import.
 CONFIG_TYPE = 'config'
 CONFIG_ACTION = 'get'
+OP_TYPE = 'op'
+
+# The params each shape states. `path` names the scope for the per-scope shape and `cmd` names the
+# command for the device fact shape, so the part a request declares is part of its identity and
+# each scope and each command gets its own cache entry. `ENTRY_SEGMENT` comes from the shared scope
+# vocabulary in `xml_input.py`, the only module the fetch layer may import.
+SHAPE_PARAMS = {
+    EXPORT_TYPE: (('type', EXPORT_TYPE), ('category', EXPORT_CATEGORY)),
+    CONFIG_TYPE: (('type', CONFIG_TYPE), ('action', CONFIG_ACTION)),
+    OP_TYPE: (('type', OP_TYPE),),
+}
+PATH_PARAM = 'path'
+CMD_PARAM = 'cmd'
 
 DEFAULT_CACHE_DIR = 'panorama_cache'
 API_KEY_ENV = 'PANOS_API_KEY'
@@ -119,25 +142,47 @@ class ApiRequest:
     A `path` (F5.4) makes the request a per-scope request. It is stored without a
     leading slash, so the path is the same shape the record states, and it is part of
     the request identity: one cache entry per request identity.
+
+    A `command` (F8.1) makes the request a device fact request, and the command is part of the
+    identity for the same reason. A request that states no params takes the words its own shape
+    states; `params` is the override for a request that states them itself.
     """
 
     host: str
     path: str = ''
-    params: tuple = ((EXPORT_CATEGORY, 'configuration'), (EXPORT_TYPE, 'export'))
+    command: str = ''
+    params: tuple = ()
+
+    def request_shape(self) -> str:
+        """The shape the request declares: the device fact shape for a command, the per-scope
+        shape for a path, the whole-config export for nothing else (F8.1). The wrapper decision
+        reads the response against this shape, and never against what the response looks like."""
+        if self.command:
+            return OP_TYPE
+        if self.path:
+            return CONFIG_TYPE
+        return EXPORT_TYPE
 
     def is_per_scope(self) -> bool:
         """True when the request declares a scope path, not the whole-config export."""
         return bool(self.path)
+
+    def is_device_fact(self) -> bool:
+        """True when the request declares a command (F8.1)."""
+        return bool(self.command)
 
     def segments(self) -> tuple:
         """The declared path as segments: ('device-group', 'entry', 'Edge')."""
         return tuple(self.path.split('/')) if self.path else ()
 
     def request_params(self) -> tuple:
-        """The params the identity hashes, including the declared path when there is one."""
-        params = dict(self.params)
+        """The params the identity hashes: the words its shape states, or the params the request
+        states for itself, plus the part it declares (the path, or the command)."""
+        params = dict(self.params or SHAPE_PARAMS[self.request_shape()])
         if self.path:
-            params['path'] = self.path
+            params[PATH_PARAM] = self.path
+        if self.command:
+            params[CMD_PARAM] = self.command
         return tuple(sorted(params.items()))
 
     def https_host(self) -> str:
@@ -168,8 +213,13 @@ class ApiRequest:
         return hashlib.sha256(self.canonical().encode('utf-8')).hexdigest() + CACHE_SUFFIX
 
     def url(self, api_key: str) -> str:
-        """The request URL. The key reaches this URL and nothing else."""
-        query = '&'.join(f'{key}={value}' for key, value in self.request_params())
+        """The request URL. The key reaches this URL and nothing else.
+
+        The query is encoded, because a command is words with spaces and an unencoded query is not
+        a request. `canonical()` keeps the plain sorted shape, because the record reads the identity
+        as data.
+        """
+        query = urllib.parse.urlencode(self.request_params())
         return f'https://{self.https_host()}/api/?{query}&key={api_key}'
 
 
@@ -228,14 +278,17 @@ def _named_element(element, request: ApiRequest) -> bool:
 
 def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = None) -> ParsedSource:
     """The wrapper decision: move the tree root to the element the request shape names
-    (F5.2 AC-2, F5.4 AC-1).
+    (F5.2 AC-2, F5.4 AC-1, F8.1).
 
     The origin and the line map are the same object, so a report line still names
     the line the response bytes carry. A whole-config request accepts
     `response`/`result`/`config`, `result`/`config`, and a plain `config` root. A
     per-scope request accepts `response`/`result` and `result`, and `result` must hold
     exactly one element, the element the path names; `result` then becomes the root,
-    read as the place the path names. A shape that does not match its request is
+    read as the place the path names. A device fact request accepts `response`/`result` and
+    `result`, and `result` must hold exactly one element, the fact element the command names;
+    `result` then becomes the root, read as the place the command names, and the source states no
+    scope, because a command names no scope. A shape that does not match its request is
     refused. The response success check runs here, before the cache entry is written.
     """
     root = source.root
@@ -255,6 +308,33 @@ def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = Non
                 "the response has no result element."
             )
         root = result
+    if request is not None and request.request_shape() == OP_TYPE:
+        # The device fact shape (F8.1): `result` holds the one fact element the command names, and
+        # `result` itself becomes the root, read as the place the command names. The response is a
+        # device fact, not a config, so no scope comes from it and no container name comes from it:
+        # the envelope rule keeps `result` out of the scan, and the container table states no row
+        # for a fact element. Which element a command names is checked by the response-to-request
+        # join (F8.3), because the fetch layer states no command-to-element table and guesses none.
+        if root.tag != 'result':
+            raise SourceFetchError(
+                f"refusing the API response from '{source.name}': the device fact request for "
+                f"'{request.command}' needs the result element, and the root element "
+                f"'{root.tag}' is the whole-config shape."
+            )
+        held = list(root)
+        if len(held) != 1:
+            raise SourceFetchError(
+                f"refusing the API response from '{source.name}': the result holds no element, "
+                f"or {len(held)} elements, not the one fact element the command "
+                f"'{request.command}' names."
+            )
+        if held[0].tag == 'config':
+            raise SourceFetchError(
+                f"refusing the API response from '{source.name}': the result holds the config "
+                f"element, which the whole-config shape names, not the fact element the command "
+                f"'{request.command}' names."
+            )
+        return replace(source, root=root)
     if request is not None and request.is_per_scope():
         # The per-scope shape (F5.4): `result` holds the element the path names, and
         # `result` itself becomes the root, read as the place the path names.
