@@ -438,6 +438,24 @@ here with that rule named.
   (`tests/test_container_coverage.py::test_predefined_entries_are_not_findings`) reads, and not for a
   predefined read. A piece must decide whether the scope path names the place only, and the built-in
   entries are read through the response that holds the container the name table needs.
+- Finding, opened by F8.2: the four membership lists name three of the five scope facts, so the index
+  reaches no `vsys` and no device. A `vsys` is a scope fact (`ARCHITECTURE.md` §2.2), but no membership
+  row reads it, so path 2 cannot request a vsys scope from membership: the run must read it as its
+  declared scope, which names the device the vsys sits in. The pin
+  (`tests/test_api_requests.py::test_the_four_membership_lists_are_the_container_table_rows`) holds the
+  three, and a piece that reads a vsys scope needs the fact that names which device the run read, so it
+  belongs with the entry point (F8.9).
+- Finding, opened by F8.2: `container_coverage.ContainerRow` has no field for the table its method
+  returns, so a row cannot state which table `parse_associations` fills for a path. The join between a
+  membership list, the table it returns, and the container that defines its names therefore lives in
+  `api_requests.LIST_JOIN`, which is a second table beside the container table. If `ContainerRow` gains
+  a `table` field, `LIST_JOIN` becomes data read through the table and the index states no join of its
+  own.
+- Open, opened by F8.2: `parse_associations` returns the four tables for one parsed source, so a run
+  that read N membership responses must merge them before the index can read them
+  (`docs/API_CONVERSION_PATH.md` §2.4 keeps each response its own source). `api_requests.py` takes the
+  four tables as data and states no merge rule, so the merge belongs to the run order, which is the
+  entry point (F8.9).
 - Finding: `is_scope_path` accepts the place or an entry inside it (`/<place>` and
   `/<place>/entry/<name>`), so a predefined read cannot name a container inside the place
   (`/predefined/url-list`), which is the shape the built-in name table read needs. The shape rule is

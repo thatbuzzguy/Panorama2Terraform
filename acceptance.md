@@ -1,124 +1,122 @@
-# Acceptance criteria — F8.1, the accepted request shapes (Epic 8, Phase 8A)
+# Acceptance criteria — F8.2, the scope index (Epic 8, Phase 8A)
 
-Scope: `src/source_fetch.py` (the device fact shape and its wrapper rule), the one scope path
-definition in `src/container_coverage.py`, and the pins that hold both. No module is added, no
-fixture is committed, and no parse method runs over an op response: the committed response harness
-is F8.4, and the device facts in `docs/API_CONVERSION_PATH.md` §4 stay blocked. Path 1 is unchanged
-except the one wording the CLI prints from the scope path set.
+Scope: `src/api_requests.py` (the module path 2 adds first), its pins in
+`tests/test_api_requests.py`, and the `docs/ARCHITECTURE.md` §1 table row that names it. No
+response is committed (the committed harness is F8.4), no response is checked against the request
+that made it (the join is F8.3), no parse method runs over a response, no entry point is added, and
+path 1 is unchanged.
 
-## 1. The three accepted request shapes
+## 1. The four membership lists
 
-1.1 `source_fetch.py` states the three shapes as data: the whole-config export
-(`type=export&category=configuration`), the per-scope read (`type=config&action=get&path=<scope
-path>`), and the device fact shape (`type=op&cmd=<command>`). One shape per `type` value, so the
-wrapper decision reads a response against the shape its own request states.
+1.1 The four lists are the `parse_associations` rows in `container_coverage.CONTAINER_TABLE`, read
+    through the table, so the module states no second list of membership containers.
 
-1.2 The request states its shape through what it declares: a command is the device fact shape, a
-path is the per-scope shape, and nothing else is the whole-config export. The params the request
-identity hashes are the words its shape states, plus the part it declares, so the identity names
-the shape and no shape is guessed from what a response looks like.
+1.2 The join between a list and the table `parse_associations` returns for it, and the scope
+    container that defines the entries its names belong to, is stated once in the module and nowhere
+    else. The fourth list names the templates a stack applies, which are entries inside the
+    `templates` container, so its names join to that container and not to the stack.
 
-1.3 The identity rule is unchanged: host and sorted params, never the key. Each op request gets its
-own cache entry, the same rule the declared path already has.
+1.3 The module reads no membership itself: it takes what `parse_associations` returned as data, so
+    no module states a second reader of membership, and no module builds a path.
 
-1.4 A command value reaches the request URL encoded, because a command is words with spaces and an
-unencoded query is not a request. The identity string is the plain sorted shape, because the record
-reads it as data.
+1.4 The four lists name three of the five scope facts, so `vsys` and `devices` name no entry: the
+    index requests no scope no membership row reads, and the run reads such a scope as its declared
+    scope (`tests/test_api_requests.py::test_the_four_membership_lists_are_the_container_table_rows`).
 
-## 2. The op wrapper rule
+1.5 The module takes the four tables as data, so it states no merge rule and owns no reader; the join
+    between a list, the table it returns, and the container that defines its names is stated once, as
+    data, and the pin reads the tables the parse method returned.
 
-2.1 One accepted response shape for an op request, stated in `source_fetch.py`: `result` holds
-exactly one element, and that element is the element the command names — its first word. `result`
-becomes the root, read as the place the command names, the same way the per-scope rule reads the
-place the path names.
+## 2. The set is read, not guessed
 
-2.2 A response that does not match its own command is refused, not guessed: a root that is not
-`result`, a `result` that holds nothing or more than one element, and the `config` element, which the
-whole-config shape names. An element the command does not name is not refused here, because the fetch
-layer states no command-to-element table (see 2.6). No cache entry is written for a refused response.
+2.1 Two levels, no more: one entry per scope container the run read, then one entry per scope entry
+    those containers name. No entry is a third level.
 
-2.3 The response success check (type `success`, code `0`) runs for the third shape as well, before
-the cache entry is written.
+2.2 The names in the set are the names the lists the run read hold. A name no membership list read
+    is not in the set, so no scope is guessed.
 
-2.4 The origin and the line map are the same objects after the unwrap, so a report line still names
-the line the response bytes carry.
+2.3 No request is made for a scope the run did not read. A name read through a list whose entries
+    belong to a container the run did not read enters no entry.
 
-2.5 An op response is not a config source: no scope path comes from it, the source states no scope,
-and the container table names no row for the command element, so the envelope rule (the envelope is
-never a scanned container) is unchanged.
+2.4 A device names no entry in the index. `parse_associations` keys its tables on the entry that owns
+    a list, which is a device for three tables and the stack for the fourth, and a membership entry
+    inside a list is a `bookkeeping` entry (`docs/ARCHITECTURE.md` §2.4), so a key is never a scope
+    entry the module can request.
 
-2.6 The op shape rule checks the shape, not the element name: `result` holding any single element
-passes the shape rule, because `source_fetch.py` states no command-to-element table and guesses
-none. Which element a command names is checked by the response-to-request join (F8.3), which this
-piece does not build. A response read by an op request is refused when it is not the op shape: a
-root that is not `result`, a `result` that holds nothing or more than one element, and the `config`
-element the whole-config shape names.
+2.5 A container that lists no name gains no entry, the same way an export that lists no device gives
+    empty tables: no association is better than a guessed one.
 
-## 3. The pins for the op shape (`tests/test_source_fetch.py`)
+## 3. Order and identity
 
-3.1 `test_the_request_states_which_of_the_three_shapes_it_is` — the three shapes, and the params
-each one states in the request identity.
+3.1 The set is read in sorted order, one entry per scope: the containers first, then the entries in
+    path order, so the same names in a different document order give the same set.
 
-3.2 `test_an_op_response_holds_the_one_element_the_command_names` — the accepted shape, `result` as
-the root, the same origin and line map, no scope stated, and the cache entry holds the bytes as
-they arrived.
+3.2 A name two lists read gives one entry.
 
-3.3 `test_an_op_response_that_breaks_the_op_shape_is_refused` — no element, more than one element,
-the `config` element, and a root that is not `result`; no cache entry for a refused response.
+3.3 One entry names the level, the scope container that defines it, the entry name, the scope path,
+    and the request that reads it. The entry name and the request are what the response-to-request
+    join (F8.3) reads, so the join is a new function in this module and not a change to this rule.
 
-3.4 `test_the_op_shape_checks_the_shape_and_the_join_checks_the_element_name` — the boundary between
-this piece and F8.3.
+## 4. The rules the module reads through their owners
 
-3.5 `test_the_response_check_runs_for_the_op_shape` — the success check before the cache write.
+4.1 Every path in the index is a path `container_coverage.is_scope_path` validates. The module builds
+    a path through `xml_input.ENTRY_SEGMENT` and refuses one the one definition does not validate, so
+    it states no second path rule.
 
-3.6 `test_the_command_is_part_of_the_request_identity` — key-free, one entry per command, and the
-command reaches the URL encoded.
+4.2 Each entry's request is a per-scope request built by `source_fetch.ApiRequest`, so the module
+    states no request shape, no cache rule, and no request identity rule of its own.
 
-3.7 `test_an_op_response_is_not_a_config_source` — the scan reads no container from it, and the
-container table states no row for a fact element.
+4.3 The module states no naming rule, no writer, no console line, and no environment name, so the
+    pins that scan the `src/` set read it with the other modules: the writer scan, the environment-name
+    scan, the console-line scan, and the second-naming-rule scan pass unchanged. It writes no file, so
+    `write_path.py` stays the single writer.
 
-## 4. The scope path definition and the `predefined` path
+4.4 `api_requests.py` is named in the `docs/ARCHITECTURE.md` §1 table.
 
-4.1 `container_coverage.SCOPE_PATH_ROOTS` is the one definition that validates a scope path, so the
-decision is stated inside that set and nowhere else. The set gains `predefined`, so a path that names
-the built-in section is a scope path and the run can read it. Pinned by
-`tests/test_container_coverage.py::test_a_predefined_path_is_read_by_the_one_scope_path_definition`.
+4.5 No test calls the network. The pins run `fetch` through an injected producer, as
+    `tests/test_source_fetch.py` does, and the module imports the standard library and its `src/`
+    siblings only.
 
-4.2 `predefined` is read as a place, not as a scope: `SCOPE_CONTAINERS` keeps the five scope facts,
-so an entry whose container is `predefined` answers no scope fact and `is_scope_entry` answers False
-for it. The path shape is unchanged: `/<place>` or `/<place>/entry/<name>`, so a path that names a
-container inside `predefined` stays outside the shape rule and is recorded as a finding.
+## 5. The pins (`tests/test_api_requests.py`)
 
-4.3 The scan rule for a built-in container is unchanged: an entry container under `predefined` is not
-a finding, and the pin that holds it
-(`tests/test_container_coverage.py::test_predefined_entries_are_not_findings`) passes unchanged.
+5.1 `test_the_four_membership_lists_are_the_container_table_rows` — the lists are the rows, the join
+    names the four lists and no other path, and the join names three of the five scope facts.
 
-4.4 The CLI prints the set through the one definition, so the argument error names `predefined`. Its
-wording says a place the scope path definition validates, because the set already holds `shared`,
-which is a place and not a scope container.
+5.2 `test_the_scope_set_comes_from_the_membership_responses_the_run_read` — the index equals the names
+    the four lists read for the responses the run read, read through the injected producer and the same
+    parse rule, and the join names the tables `parse_associations` returns.
 
-## 5. The pins that read the `src/` set
+5.3 `test_no_request_is_made_for_a_scope_the_run_did_not_read` — a partial read, and a name whose
+    entries belong to a container the run did not read.
 
-5.1 The writer scan, the environment-name scan, the console-line scan and the second-naming-rule scan
-pass unchanged. `source_fetch.py` writes only through `write_path.py`, states no console line, defines
-no naming rule, and stays the only module that states the environment name.
+5.4 `test_a_container_that_lists_no_name_gains_no_entry` — an entry with no membership name.
 
-5.2 No test calls the network. The producer stays injectable, as `tests/test_source_fetch.py` does
-today, and the fetch layer imports the standard library only.
+5.5 `test_a_device_key_names_no_entry_in_the_index` — a key is not a scope entry.
 
-5.3 Two existing assertions move to the new spec, both because the identity now carries the words
-the shape states, so the declared path is no longer the last part of the sorted identity:
-`tests/test_source_fetch.py::test_the_declared_path_is_part_of_the_request_identity` and
-`tests/test_provenance.py::test_the_record_file_holds_one_record_per_source_read`. One existing
-docstring says the wrapper has one branch per shape rather than two. No other existing pin changes.
+5.6 `test_the_index_makes_one_request_per_scope_container_then_one_per_entry` — two levels, no more.
+
+5.7 `test_the_index_is_read_in_sorted_order_and_names_one_entry_per_scope` — the order, and a name two
+    lists read.
+
+5.8 `test_every_index_path_is_a_path_the_one_scope_path_definition_validates` — the module refuses a
+    name that builds a path the definition does not validate.
+
+5.9 `test_each_entry_names_the_request_the_fetch_layer_reads` — the per-scope shape, one cache entry
+    per entry, and no identity rule stated in the module.
+
+5.10 `test_the_module_reads_the_layout_rules_through_their_owners` — no second naming rule, no second
+    writer, no second console line, no environment name, no membership reader, no merge rule.
+
+5.11 `test_the_module_is_named_in_the_architecture_module_table` — the §1 row.
 
 ## 6. The checks
 
 6.1 `ruff check .` is clean.
 
-6.2 `python3 -m pytest` passes with no skip: the baseline 1567 pins, plus the op-shape pins in
-`tests/test_source_fetch.py` and the one pin for the `predefined` decision in
-`tests/test_container_coverage.py`.
+6.2 `python3 -m pytest` passes with no skip: the baseline 1575 pins, plus the pins in
+    `tests/test_api_requests.py`. The pins that scan the `src/` set read the new module with the other
+    modules and pass unchanged.
 
-6.3 The commit is one ASD-STE100 message. When a rule lands, `docs/API_CONVERSION_PATH.md` §2.1 states
-it in the present tense and names the pin, and the completed piece leaves `to-do.md`.
+6.3 The commit is one ASD-STE100 message. When the rule lands, `docs/API_CONVERSION_PATH.md` §2.2
+    states it in the present tense and names the pin, `docs/ARCHITECTURE.md` §1 names the module, and
+    the completed piece leaves `to-do.md`.

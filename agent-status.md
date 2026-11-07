@@ -2,30 +2,35 @@
 
 ## Current position
 
-F8.1 is complete (Epic 8, Phase 8A): the three accepted request shapes and the device fact wrapper
-rule are in `src/source_fetch.py`, and the `predefined` decision is inside
-`container_coverage.SCOPE_PATH_ROOTS`, the one definition that validates a scope path. The pins are
-named in `docs/API_CONVERSION_PATH.md` §2.1, which is the owner document for the path 2 rules.
+F8.2 is complete (Epic 8, Phase 8A): the scope index is in `src/api_requests.py`, the rule is stated
+in `docs/API_CONVERSION_PATH.md` §2.2 with the pins named, and the module is in the
+`docs/ARCHITECTURE.md` §1 table. F8.1 landed before it: the three accepted request shapes, the op
+wrapper rule, and the `predefined` decision inside `container_coverage.SCOPE_PATH_ROOTS`, the one
+definition that validates a scope path (`docs/API_CONVERSION_PATH.md` §2.1).
 
-The two decisions F8.1 took: an op response is `result` holding exactly one element, the element the
-command names, and `result` becomes the root, read as the place the command names, so the fetch layer
-states no command-to-element table and the element name is checked by the response-to-request join
-(F8.3); and `predefined` joins the scope path set as a place, not as a scope container, so
-`SCOPE_CONTAINERS` keeps the five scope facts and `is_scope_entry` answers False for a built-in
-entry. The response success check runs for the third shape, before the cache entry is written, and
-the command is part of the request identity, so each command gets its own cache entry and its value
-reaches the URL encoded.
+The decisions F8.2 took: the module reads no membership itself, so the four tables
+`parse_associations` returns arrive as data, and the join between a membership list, the table it
+returns, and the scope container that defines its names is stated once, as `LIST_JOIN`. The fourth
+list names the templates a stack applies, which are entries inside the `templates` container, so its
+names join to that container and an entry counts only when the run read the response for it — that is
+how no scope is guessed and no request is made for a scope the run did not read. Two levels only,
+sorted order, one entry per scope. A table key names no entry, because a key names the entry that owns
+the list. The index reaches three of the five scope facts, so `vsys` and `devices` name no entry. The
+path is built through `xml_input.ENTRY_SEGMENT` and validated through
+`container_coverage.is_scope_path`, so no second path rule exists, and the entry names the request the
+fetch layer reads, which is the part F8.3 reads.
 
-Next: piece F8.2, the scope index, in `api_requests.py`, pinned by `tests/test_api_requests.py`. It
-reads the membership responses through the four membership lists `parse_associations` already reads,
-so it needs the op shape F8.1 landed and a committed response (F8.4). Then F8.3, the response to
-request join, which is where the element name a command names is checked.
+Next: piece F8.3, the response-to-request join, as a new function in the same module: the element a
+response holds must be the element its own request names, and the entry name inside it must agree with
+the index. Then F8.4, the offline harness with one committed response per shape.
 
-Findings this piece recorded in `backlog.md`: the scan has no rule that a predefined source is
-definitions, so a predefined read reports its built-in containers as findings, and the scope path
-shape does not allow a path that names a container inside `predefined`.
+Findings this piece recorded in `backlog.md`: the four lists name three of the five scope facts, so a
+vsys scope cannot be read from membership; `container_coverage.ContainerRow` has no field for the table
+its method returns, so the join lives as data in `api_requests.LIST_JOIN`; and the merge of the four
+tables across the responses a run read belongs to the run order, because the module states no merge
+rule. The findings the F8.1 decision recorded stay there too.
 
-Test count: `python3 -m pytest` reads 1575 pins, and `ruff check .` is clean.
+Test count: `python3 -m pytest` reads 1586 pins, and `ruff check .` is clean.
 
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
 facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a

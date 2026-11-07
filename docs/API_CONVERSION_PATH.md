@@ -70,11 +70,27 @@ Pinned by `tests/test_container_coverage.py::test_a_predefined_path_is_read_by_t
 and by `test_predefined_entries_are_not_findings` unchanged.
 
 **2.2 The scope set is read, not guessed.** Path 2 builds its scope set from the membership
-responses it read, through the same four membership lists `parse_associations` reads
-(`docs/ARCHITECTURE.md` §3, rule 3). Two levels, no more: one request per scope container, then
-one request per scope entry that those containers name. Path 2 makes no request for a scope the
-run did not read, and it guesses no scope. `api_requests.py` states this rule, and
-`tests/test_api_requests.py` pins it.
+responses it read, through the four membership lists `parse_associations` reads
+(`docs/ARCHITECTURE.md` §3, rule 3). Two levels, no more: one request per scope container the run
+read, then one request per scope entry those containers name. The set is read in sorted order, one
+entry per scope, so a name two lists read gives one entry. Each list joins to the table
+`parse_associations` returns for it, and to the scope container that defines the entries its names
+belong to, so a name counts only when the run read the response for that container: the fourth list
+names the templates a stack applies, which are entries inside the `templates` container, so its names
+join to `templates` and not to the stack. A device names no entry, because `parse_associations` keys
+its tables on the device that owns a list. So path 2 makes no request for a scope the run did not
+read, and it guesses no scope. `src/api_requests.py` states this rule, and the pins are
+`tests/test_api_requests.py::test_the_four_membership_lists_are_the_container_table_rows`,
+`test_the_scope_set_comes_from_the_membership_responses_the_run_read`,
+`test_no_request_is_made_for_a_scope_the_run_did_not_read`,
+`test_a_container_that_lists_no_name_gains_no_entry`,
+`test_the_index_makes_one_request_per_scope_container_then_one_per_entry`,
+`test_a_device_names_no_entry_in_the_index`, and
+`test_the_index_is_read_in_sorted_order_and_names_one_entry_per_scope`. The module reads no
+membership itself: it takes the tables as data, so no module states a second membership reader, and
+it builds a path only through `xml_input.ENTRY_SEGMENT` and `container_coverage.is_scope_path`, so no
+second path rule exists. The response-to-request join (§2.3) is the next piece, and it reads the two
+parts this rule already names: the entry name and the request that made the response.
 
 **2.3 One response per request, checked against the request that made it.** A response is
 accepted only when the element it holds is the element its own request names, and the entry name
@@ -172,7 +188,7 @@ named in the `docs/ARCHITECTURE.md` §1 table when it lands.
 
 | Module | Role | Rule it keeps |
 |---|---|---|
-| `api_requests.py` | the scope index and the request set | the set is read from the membership responses, in sorted order, one entry per scope, and every response is checked against the request that made it |
+| `api_requests.py` | the scope index (§2.2), and the response-to-request join when it lands (§2.3) | the set is read from the membership responses, in sorted order, one entry per scope, and every response is checked against the request that made it |
 | `api_to_terraform.py` | the path 2 entry point | the run order, the arguments, the exit codes, and no rule restated. It reads `PanoramaParser`, `TerraformGenerator`, `unit_manifest`, `sanity_checks`, and `write_path` |
 
 Both modules write no file except through `write_path.py`, and neither states the environment name.
