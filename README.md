@@ -460,7 +460,13 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   marks them, so the per-entry report cannot lie
 - `tests/test_source_fetch.py` - the api producer: bytes handed to the shared door,
   the response wrapper, the key-free cache name, `--offline`, the https rules, and the
-  key from the environment. No test calls the network
+  key from the environment. No test calls the network, and the committed response set is read through
+  an injected producer
+- `tests/test_api_requests.py` - the scope index and the response-to-request join (`api_requests.py`): the four
+  membership lists as the container table rows, the scope set read from the membership responses, the sorted
+  one-entry-per-scope order, the join checked against the request that made the response, and the offline
+  harness: one committed response per request shape, each named by the request identity that produced it, read
+  through the injected producer, and read as data by the record
 - `tests/test_shadow_coverage.py` - the cross-source shadow scan: the per-scope shape in the
   scan, the shadow fact (the key is `state_coverage.ownership_key` read with the facts the parent row
   declares, so it names the parent scope), the report section and its line shape with the parent entry
@@ -542,14 +548,17 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
 - `tests/test_build_kitchen_sink.py` - the fixture assembler (`tools/`): the read rule read on the committed
   bytes, so a hostile fixture is skipped by rule and not by name and the tool's decision agrees with `xml_input`
   for every committed fixture; the rule that the tool names no fixture except its own record, writes no file,
-  and is a generator rather than a pin on the record; the three merge cases; and the byte rule between two runs
+  and is a generator rather than a pin on the record; the three merge cases; the byte rule between two runs; and
+  the rule that the tool reads the corpus and not the committed response set
 - `ruff check .` - lint
 
 Run counts are not stated here. They change with every feature and are
 recorded in the git history and in `agent-status.md`.
 
-`tests/` is flat: the test files sit beside `fixtures/` and `golden/`, and `tests/conftest.py` is the one
-shared helper file. `pyproject.toml` `testpaths = ["tests"]` keeps discovery at the root, and
+`tests/` is flat: the test files sit beside the three sets `fixtures/`, `golden/`, and `responses/`, and
+`tests/conftest.py` is the one shared helper file and the one place the path to each set is built. A committed
+API response is not a Panorama export, so it lives in `tests/responses/` and is not corpus material: the scan
+and the fixture assembler read the corpus only. `pyproject.toml` `testpaths = ["tests"]` keeps discovery at the root, and
 `pythonpath = ["src"]` is the only place a test path is stated, so a test imports a tool module by name.
 The rule is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1.1.
 

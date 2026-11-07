@@ -17,21 +17,25 @@ Five groups, one per rule in `src/api_requests.py`:
 6. The response-to-request join (F8.3): each response is read against the index entry whose request made
    it, so the element it holds is the element that request names, and the entry name inside it agrees with
    the index. The shape rule is read through `source_fetch.py`, so this file states no shape rule of its own.
+7. The offline harness (F8.4): one committed response per accepted request shape, each named by the request
+   identity that produced it, read through the injected producer, and read as data by the record. The
+   response set is not corpus material, so the scan and the fixture assembler never read it.
 
 No test calls the network: every response is handed by an injected producer, as
-`tests/test_source_fetch.py` does. No response is committed here: the committed harness is F8.4.
-Group 6 holds the join pins.
+`tests/test_source_fetch.py` does. Group 6 holds the join pins, and group 7 holds the harness pins.
 """
 
 import ast
+import hashlib
 
 import pytest
 
 import api_requests
 import container_coverage
 import panorama_to_terraform
+import provenance
 import source_fetch
-from conftest import REPO_ROOT, SRC_DIR
+from conftest import FIXTURES_DIR, REPO_ROOT, RESPONSES_DIR, SRC_DIR, TESTS_DIR
 
 HOST = 'panorama.test'
 
@@ -292,7 +296,9 @@ def test_the_module_is_named_in_the_architecture_module_table():
 
 # The element each index entry's own request names, as its response holds it: the entry element for an
 # entry, and the container body the membership read for a place. These are the same names the fixtures
-# above hold, so the join is read against the index with no committed response (the harness is F8.4).
+# above hold. Group 7 reads the committed response for the per-scope shape through the injected producer, so
+# the join is read against the index with committed bytes, and these bodies keep the pins that check a
+# response against another entry's request.
 ENTRY_BODIES = {
     'device-group/entry/Datacenter-FW':
         '<entry name="Datacenter-FW"><devices><entry name="fw-2.example.com" /></devices></entry>',
@@ -530,3 +536,158 @@ def test_the_join_states_no_second_shape_rule_or_wrapper_rule():
     assert not tables, 'the join states no command-to-element table'
     assert not any(hasattr(api_requests, name) for name in ('parse', 'parse_bytes', 'element_from_line')), \
         'the join keeps no parser, so it builds no second tree'
+
+
+# --- 7. the offline harness (F8.4) --------------------------------------------
+
+# One committed response per accepted request shape, in the set the layout rule names for responses
+# (`tests/responses/`, `docs/ARCHITECTURE.md` §1.1). Each file is named by the key-free request identity that
+# produced it, which is the cache entry the record reads as `cache_entry`, and each file states the same
+# identity in its prolog comment. The identity is the words the request's shape states plus the part the
+# request declares, so the three requests below find three different entries.
+HARNESS = (
+    ('whole-config export', source_fetch.ApiRequest(host=HOST),
+     'panorama.test?category=configuration&type=export'),
+    ('per-scope read', source_fetch.ApiRequest(host=HOST, path='device-group'),
+     'panorama.test?action=get&path=device-group&type=config'),
+    ('device fact', source_fetch.ApiRequest(host=HOST, command='show system info'),
+     'panorama.test?cmd=show system info&type=op'),
+)
+
+
+def _committed(request) -> bytes:
+    """The committed response for one request, read through the path `tests/conftest.py` builds once (§1.1)."""
+    return (RESPONSES_DIR / request.cache_name()).read_bytes()
+
+
+def _read_committed(request, cache_dir):
+    """One committed response, read through the injected producer. No test calls a network."""
+    data = _committed(request)
+    return source_fetch.fetch(request, cache_dir, producer=lambda r, d=data: d)
+
+
+def test_one_committed_response_per_request_shape_names_the_request_identity_that_produced_it():
+    """AC-2.1 to AC-2.3: the response set holds one file per accepted shape, and each file is named by the
+    identity that produced it, in the shape the record reads as `cache_entry`. The identity is key-free, so no
+    file name can carry a credential."""
+    assert len(HARNESS) == 3, 'the three accepted shapes'
+    files = sorted(p.name for p in RESPONSES_DIR.glob('*.xml'))
+    assert files == sorted(request.cache_name() for _shape, request, _identity in HARNESS), files
+
+    # The shape comes from what each request declares, so a file is read by the request whose shape named it.
+    assert sorted(request.request_shape() for _shape, request, _identity in HARNESS) == \
+        sorted((source_fetch.EXPORT_TYPE, source_fetch.CONFIG_TYPE, source_fetch.OP_TYPE))
+
+    for shape, request, identity in HARNESS:
+        text = (RESPONSES_DIR / request.cache_name()).read_text(encoding='utf-8')
+        assert request.canonical() == identity, (shape, request.canonical())
+        assert identity in text, (shape, 'the fixture names the request identity that produced it')
+        assert 'key=' not in identity and 'key=' not in text, (shape, 'the identity is the key-free shape')
+        assert 'F8.4 offline harness' in text, (shape, 'the fixture names itself as harness bytes')
+
+
+def test_a_committed_response_reads_through_the_injected_producer_and_the_record_names_the_same_bytes(
+        tmp_path, monkeypatch):
+    """AC-3.1 to AC-3.3: `fetch()` reads a committed response through the door with an injected producer, so
+    no test calls a network, and the record names the same bytes the fixture holds."""
+    monkeypatch.setattr(source_fetch, 'network_producer',
+                        lambda *args, **kwargs: (_ for _ in ()).throw(
+                            AssertionError('the harness called the network')))
+
+    for shape, request, identity in HARNESS:
+        data = _committed(request)
+        cache = tmp_path / shape.replace(' ', '-')
+        source = _read_committed(request, cache)
+
+        # The cache entry the run wrote is the committed bytes, and the origin names the entry the fixture is
+        # named by: the harness reads through the fetch layer, never through the file producer.
+        entry = cache / request.cache_name()
+        assert entry.read_bytes() == data, (shape, 'the cache holds the bytes as they arrived')
+        assert source.origin.kind == 'api', (shape, 'the door named a fetched source')
+        assert source.origin.name == request.cache_name() and source.origin.path == entry, \
+            (shape, 'the origin names the committed response as the cache entry')
+
+        record = provenance.record_for(source, request=request)
+        assert record.cache_entry == request.cache_name(), (shape, 'the record names the same entry')
+        assert record.request == identity, (shape, record.request)
+        assert record.size == len(data), (shape, record.size)
+        assert record.sha256 == hashlib.sha256(data).hexdigest(), (shape, record.sha256)
+
+        # The wrapper decision read each committed response against the shape its own request states.
+        if request.request_shape() == source_fetch.EXPORT_TYPE:
+            assert source.root.tag == 'config', (shape, 'the whole-config shape reads the config element')
+            assert record.scope == 'whole-config', (shape, 'a whole-config source names no scope path')
+        elif request.request_shape() == source_fetch.CONFIG_TYPE:
+            assert source.root.tag == 'result' and source_fetch.names_element(source.root[0], request), \
+                (shape, 'the per-scope shape reads the element the path names')
+            assert record.scope == request.path, (shape, 'the record names the path the request declared')
+        else:
+            assert source.root.tag == 'result' and len(list(source.root)) == 1, \
+                (shape, 'the device fact shape reads the one element under result')
+            assert record.scope == 'whole-config', (shape, 'a command names no scope, so the door keeps its default')
+
+
+def test_the_committed_responses_are_not_corpus_material():
+    """AC-1.1 to AC-1.3 (`docs/ARCHITECTURE.md` §1.1): a response is not a Panorama export, so the response
+    set sits beside the corpus. The scan runs over the corpus, and the fixture assembler reads the corpus, so a
+    committed response changes neither the printed fixture set nor the merge set."""
+    assert RESPONSES_DIR == TESTS_DIR / 'responses', 'the path is built once, in `tests/conftest.py`'
+    assert RESPONSES_DIR != FIXTURES_DIR, 'the response set is a set, not part of the corpus'
+
+    harness = sorted(p.name for p in RESPONSES_DIR.glob('*.xml'))
+    corpus = sorted(p.name for p in FIXTURES_DIR.glob('*.xml'))
+    assert len(harness) == 3, harness
+    assert not (set(harness) & set(corpus)), 'no response file is in the set the scan runs over'
+    assert all(p.is_file() for p in FIXTURES_DIR.iterdir()), \
+        'the corpus is one flat directory, so a response cannot enter the set the pins state'
+
+    # The committed response fixtures the corpus pins already read stay in the corpus, so the pins that state
+    # the printed fixture set read the same set as before this piece.
+    for name in ('api_response.xml', 'scope_child.xml', 'scope_parent.xml'):
+        assert name in corpus, (name, 'the corpus pins read it, so it is not moved')
+
+
+def test_the_join_reads_the_committed_per_scope_response_through_the_injected_producer(tmp_path):
+    """AC-4.1: the committed per-scope response is the membership read the index is built from, so the index
+    and the join read the same committed bytes, and the join accepts the response for the entry whose request
+    made it. The join pins above are unchanged, so this reads the harness without weakening them."""
+    request = HARNESS[1][1]
+    source = _read_committed(request, tmp_path / 'harness join')
+    tables = panorama_to_terraform.PanoramaParser(source).parse_associations()
+    membership = {table: {owner: list(names) for owner, names in value.items()}
+                  for table, value in tables.items()}
+    index = api_requests.scope_index(HOST, membership, ('device-group/entry/devices',))
+    place = _place(index, 'device-group')
+    inside = api_requests.join_response(source, place, index)
+
+    assert [entry.path for entry in index] == ['device-group', 'device-group/entry/Office-FW'], index
+    assert inside == ('Office-FW', 'Unassigned-DG'), inside
+    assert api_requests.names_in_index(index, 'device-group') == ('Office-FW',), \
+        'the entry that lists no name is inside the response but gains no index entry'
+    assert inside == tuple(sorted(inside)), 'the names the run (F8.5) keys its parse on'
+    assert source.origin.name == request.cache_name(), 'the join reads the response the door parsed'
+
+
+def test_the_committed_op_response_shows_one_shape_and_names_no_live_fact(tmp_path):
+    """AC-4.2: the committed device fact response shows the shape one command gives, and names no fact the
+    tool can read offline. The fetch layer states no command-to-element table, so the shape stays an
+    illustration and `docs/API_CONVERSION_PATH.md` §4 stays blocked."""
+    request = HARNESS[2][1]
+    source = _read_committed(request, tmp_path / 'harness fact')
+    held = source.root[0]
+    assert held.tag == 'show', 'the shape the fixture shows: `result` holds one element'
+    assert not source_fetch.names_element(held, request), 'the one rule names no element for a command'
+    assert not request.segments(), 'a command names no path, so the join has no index entry to read it against'
+
+    text = _committed(request).decode('utf-8')
+    assert 'illustration' in text, 'the fixture states that it shows a shape and is not a measurement'
+    for fact in ('serial', 'rulebase', 'pre-rulebase', 'post-rulebase'):
+        assert fact not in text, (fact, 'the fixture states no live fact')
+    for name in ('source_fetch.py', 'api_requests.py'):
+        tree = ast.parse((SRC_DIR / name).read_text(encoding='utf-8'))
+        tables = [node for node in ast.walk(tree) if isinstance(node, ast.Dict)
+                  and any(isinstance(key, ast.Constant) and isinstance(key.value, str)
+                          and ' ' in key.value for key in node.keys)]
+        assert not tables, (name, 'no command-to-element table, so the shape the fixture shows cannot become a rule')
+    assert '§4' in (REPO_ROOT / 'docs' / 'API_CONVERSION_PATH.md').read_text(encoding='utf-8'), \
+        'the live facts stay blocked in the design record'

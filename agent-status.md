@@ -2,44 +2,33 @@
 
 ## Current position
 
-F8.3 is complete (Epic 8, Phase 8A): the response-to-request join is `api_requests.join_response`, the rule
-is stated in `docs/API_CONVERSION_PATH.md` §2.3 with the pins named, and the module row in
-`docs/ARCHITECTURE.md` §1 names it. The join reads one response against the index entry whose request made
-it, and answers the entry names inside it, which is what the run (F8.5) keys its parse on. Two checks, in
-order: the element the response holds is the element its own request names, read through
-`source_fetch.names_element` by running the one wrapper decision, so no module states a second shape rule or
-a second element-name rule; and the entry name inside agrees with the index, which is what the join owns, so
-the join is checked and not assumed. The check is one-way, so an entry that lists no name compares no name,
-which keeps the F8.2 rule. The join keeps no parser and calls no producer, so the origin and the line map
-stay the ones the door recorded.
+F8.4 is complete, and with it Phase 8A (Epic 8, the read boundary): the offline harness is one committed
+response per accepted request shape in `tests/responses/`, each named by the key-free request identity that
+produced it, read through the injected producer, and read as data by the record. The rule is stated in
+`docs/API_CONVERSION_PATH.md` §5 with the pins named, and the decision about where the set lives is in
+`docs/ARCHITECTURE.md` §1.1. `docs/README.md` names the owner of that decision, and `README.md` names the
+test module `tests/test_api_requests.py`, which its index did not name before this piece.
 
-F8.2 is complete (Epic 8, Phase 8A): the scope index is in `src/api_requests.py`, the rule is stated
-in `docs/API_CONVERSION_PATH.md` §2.2 with the pins named, and the module is in the
-`docs/ARCHITECTURE.md` §1 table. F8.1 landed before it: the three accepted request shapes, the op
-wrapper rule, and the `predefined` decision inside `container_coverage.SCOPE_PATH_ROOTS`, the one
-definition that validates a scope path (`docs/API_CONVERSION_PATH.md` §2.1).
+The decisions F8.4 took: a committed response is not a Panorama export, so it is not corpus material and lives
+in its own set beside `fixtures/` and `golden/`; `tests/conftest.py` is the one place the path to each set is
+built, so a harness pin reads the response set through it and states no path of its own. Each file name is the
+identity hash the record reads as `cache_entry`, and each file states the same identity in its prolog comment, so
+a reader can see which request produced it and no name can carry a credential. A committed response is read
+through the fetch layer and never through the file producer, because the wrapper decision belongs to the request
+that produced it and the file producer has no request to read a shape against. The three files are the
+whole-config export, the per-scope read of `device-group`, and the device fact for `show system info`. The
+per-scope file is the membership read the scope index is built from, so the index and the join read the same
+committed bytes. The device fact file shows the shape one command gives and names no fact, so
+`docs/API_CONVERSION_PATH.md` §4 stays blocked on a live target. The response set changes no count the corpus
+pins state, so the printed fixture set (68 accepted, 67 read, 3 skipped) is unchanged.
 
-The decisions F8.2 took: the module reads no membership itself, so the four tables
-`parse_associations` returns arrive as data, and the join between a membership list, the table it
-returns, and the scope container that defines its names is stated once, as `LIST_JOIN`. The fourth
-list names the templates a stack applies, which are entries inside the `templates` container, so its
-names join to that container and an entry counts only when the run read the response for it — that is
-how no scope is guessed and no request is made for a scope the run did not read. Two levels only,
-sorted order, one entry per scope. A table key names no entry, because a key names the entry that owns
-the list. The index reaches three of the five scope facts, so `vsys` and `devices` name no entry. The
-path is built through `xml_input.ENTRY_SEGMENT` and validated through
-`container_coverage.is_scope_path`, so no second path rule exists, and the entry names the request the
-fetch layer reads, which is the part the join reads.
+Phase 8A landed four rules, and each is stated in `docs/API_CONVERSION_PATH.md` §2.1, §2.2 and §2.3 with its
+pins: the three accepted request shapes and the op wrapper rule; the scope index read from the four membership
+lists in sorted order, one entry per scope; and the response-to-request join, checked against the request that
+made the response through the one element-name rule (`source_fetch.names_element`). The join keeps no parser and
+calls no producer, so the origin and the line map stay the ones the door recorded.
 
-The decisions F8.3 took: `source_fetch._named_element` became the public `names_element`, so the wrapper
-decision and the join read one rule and no module states a second; the join runs that wrapper decision on the
-response the door parsed and keeps no parser of its own, so the origin and the line map reach the report
-unchanged; the join compares the entry names inside a response with the index, so it owns the index
-agreement and no membership rule; and it reads only a response the index made a request for, so a device
-fact request and a whole-config response are refused, because a command names no path and the rule names no
-element for it.
-
-Next: piece F8.4, the offline harness with one committed response per shape.
+Next: piece F8.5, the run over many sources (`to-do.md`, Phase 8B).
 
 Findings F8.2 recorded in `backlog.md`: the four lists name three of the five scope facts, so a
 vsys scope cannot be read from membership; `container_coverage.ContainerRow` has no field for the table
@@ -47,10 +36,11 @@ its method returns, so the join lives as data in `api_requests.LIST_JOIN`; and t
 tables across the responses a run read belongs to the run order, because the module states no merge
 rule. F8.3 recorded one finding there: `names_element` names no element for a device fact request, so the
 join has no fact to read a command's element name against, and it sits with the F8.1 finding about a
-predefined read, because both need a fact a request cannot state. The findings the F8.1 decision recorded
+predefined read, because both need a fact a request cannot state; the committed response for the device fact
+shape shows the shape and names no fact, so the finding stays open. The findings the F8.1 decision recorded
 stay there too.
 
-Test count: `python3 -m pytest` reads 1597 pins, and `ruff check .` is clean.
+Test count: `python3 -m pytest` reads 1604 pins, and `ruff check .` is clean.
 
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
 facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a

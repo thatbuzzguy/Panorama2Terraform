@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!-- F8.4 offline harness: one committed response, for the device fact request `show system info`.
+     Request identity: panorama.test?cmd=show system info&type=op
+     The file name is the key-free identity hash, which is the cache entry the record reads as `cache_entry`.
+     This response shows one shape for one command: `result` holds exactly one element, and `result` becomes
+     the root, read as the place the command names. It is an illustration, not a measurement: the fetch layer
+     states no command-to-element table, so the one element-name rule names no element for a command, and the
+     join has no fact to read a command's element name against. The fixture holds no device fact, so the live
+     facts in `docs/API_CONVERSION_PATH.md` §4 stay blocked. A response is not a Panorama export, so this file
+     is not corpus material. -->
+<response type="success" code="0">
+<result>
+<show>
+  <system>
+    <info name="Panorama" />
+  </system>
+</show>
+</result>
+</response>

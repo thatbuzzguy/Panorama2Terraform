@@ -6,7 +6,7 @@ Four groups:
 1. The read rule: the tool reads a fixture when the F3.8 input rule accepts it, so a hostile fixture is
    skipped by rule and not by name. The tool's decision agrees with `xml_input` for every committed fixture,
    the tool names no fixture in its source except its own record, and the rule answers for a fixture the test
-   writes.
+   writes. F8.4 adds the pin that the tool reads the corpus and not the committed response set.
 2. The generator, not a pin: the tool writes no file, the record is not an input, and the tool's output for
    the committed set is not the record, because the record is curated by hand.
 3. The merge rule: an entry merges with the entry of the same name, a leaf with text always appends, and
@@ -25,7 +25,7 @@ import io
 import xml.etree.ElementTree as ET
 
 import xml_input
-from conftest import FIXTURES_DIR, TOOLS_DIR
+from conftest import FIXTURES_DIR, RESPONSES_DIR, TOOLS_DIR
 
 TOOL_PATH = TOOLS_DIR / "build_kitchen_sink.py"
 _spec = importlib.util.spec_from_file_location("build_kitchen_sink", TOOL_PATH)
@@ -97,6 +97,31 @@ def test_the_read_set_is_the_set_the_corpus_pins_read_less_the_record():
     assert len(skipped) == 3, skipped
     assert len(read) == 67, read
     assert tool.RECORD in accepted, "the record is not hostile, so the rule keeps it out for another reason"
+
+
+def test_the_assembler_reads_the_corpus_and_not_the_response_set():
+    """F8.4 AC-1.2 (`docs/ARCHITECTURE.md` §1.1): a committed response is not a Panorama export, so the
+    response set sits beside the corpus and enters neither the printed fixture set nor the merge set. The
+    response files are legal input for the read rule, so this reads the path the tool reads, not the rule."""
+    assert tool.FIXDIR == FIXTURES_DIR, "the tool reads the corpus the pins state"
+    assert tool.FIXDIR != RESPONSES_DIR, "the response set is not part of the corpus"
+
+    read = [path.name for path in sorted(FIXTURES_DIR.glob("*.xml"))
+            if tool.refusal_reason(path) is None and path.name != tool.RECORD]
+    responses = sorted(path.name for path in RESPONSES_DIR.glob("*.xml"))
+    assert len(read) == 67, read  # the set the pin above states, unchanged by this piece
+    assert not (set(responses) & set(read)), "a committed response is not in the set the tool reads"
+    assert all(tool.refusal_reason(RESPONSES_DIR / name) is None for name in responses), \
+        "the response files are not hostile, so the pin reads the path and not the rule"
+
+    # The tool reads the directory its caller gives it, and it states no path to the response set, so the
+    # harness cannot put a response in the merge set by name.
+    literals = {node.value for node in ast.walk(ast.parse(TOOL_PATH.read_text(encoding="utf-8")))
+                if isinstance(node, ast.Constant) and isinstance(node.value, str)}
+    assert not any("responses" in value for value in literals), "the tool states no path to the response set"
+    _root, skipped = tool.assemble(FIXTURES_DIR)
+    assert [name for name, _reason in skipped] == [path.name for path in sorted(FIXTURES_DIR.glob("*.xml"))
+                                                    if tool.refusal_reason(path) is not None], skipped
 
 
 # --- 2. The generator, not a pin ----------------------------------------------

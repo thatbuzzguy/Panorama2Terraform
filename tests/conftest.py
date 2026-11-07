@@ -29,6 +29,9 @@ EXAMPLES_DIR = REPO_ROOT / "examples"
 SAMPLE_CONFIG = EXAMPLES_DIR / "sample_panorama_config.xml"
 FIXTURES_DIR = TESTS_DIR / "fixtures"
 GOLDEN_DIR = TESTS_DIR / "golden"
+# The committed API responses (F8.4). A response is not a Panorama export, so the scan and the fixture
+# assembler never read it: `FIXTURES_DIR` is the corpus, and this is a separate set (§1.1).
+RESPONSES_DIR = TESTS_DIR / "responses"
 TERRAFORM = shutil.which("terraform")
 
 # Every `resource "panos_x" "y" {` line in a Terraform file.
