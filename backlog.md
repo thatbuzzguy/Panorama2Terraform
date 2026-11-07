@@ -426,10 +426,22 @@ here with that rule named.
   committed response shows its shape. The shapes, what each one unlocks, and the condition per fact
   are in `docs/API_CONVERSION_PATH.md` §4, so this document names no shape a second time. The rule
   that keeps these items out of `to-do.md` is that a piece cannot be written from a response the
-  project does not hold. The three conditions are: the accepted op response shape, which also
-  decides how `container_coverage.SCOPE_PATH_ROOTS` reads a `predefined` path; the F3.5 rulebase
-  value verified against a live target; and a response that shows how a device states a per-device
+  project does not hold. The conditions are: a committed response for each shape, since the accepted
+  op response shape and the `SCOPE_PATH_ROOTS` decision landed with F8.1; the F3.5 rulebase value
+  verified against a live target; and a response that shows how a device states a per-device
   template variable override.
+- Finding, opened by the F8.1 decision: the scan has no rule that a predefined source is definitions,
+  so a run that reads a predefined scope reports its built-in containers as findings. `is_predefined`
+  answers through the parent walk, and for a per-scope source the parent of the container under the
+  root is `result`, read as the place, so the walk never reaches an element tagged `predefined`. The
+  rule that a built-in entry container is not a finding holds for a file source, which the pin
+  (`tests/test_container_coverage.py::test_predefined_entries_are_not_findings`) reads, and not for a
+  predefined read. A piece must decide whether the scope path names the place only, and the built-in
+  entries are read through the response that holds the container the name table needs.
+- Finding: `is_scope_path` accepts the place or an entry inside it (`/<place>` and
+  `/<place>/entry/<name>`), so a predefined read cannot name a container inside the place
+  (`/predefined/url-list`), which is the shape the built-in name table read needs. The shape rule is
+  unchanged by F8.1, so this stays outside the piece until the read that needs it is written.
 
 ## Design Decisions (the value the parse cannot carry)
 

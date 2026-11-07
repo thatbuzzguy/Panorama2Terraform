@@ -10,7 +10,10 @@ Six groups, one per acceptance rule:
    the cache entry is written. The container table names no wrapper row. F5.4 adds the
    per-scope branch: `result` holds the element the declared path names, `result`
    becomes the root, and a response that does not match its own request is refused.
-   The path is part of the request identity, so each scope gets its own cache entry.
+   F8.1 adds the device fact branch: `result` holds the one fact element the command
+   names, `result` becomes the root, and the source states no scope. The path is part of
+   the request identity, so each scope gets its own cache entry, and the command is part of
+   the identity for the same reason.
 3. The cache. The entry name is the request identity without the key. A miss calls the
    producer once and caches only the bytes that passed the door and the response
    check; a hit parses the cache bytes with no producer. Two runs on the same cache
@@ -169,8 +172,8 @@ def test_failed_response_is_refused_before_the_cache_entry_is_written(fetch_modu
 
 
 def test_one_shape_per_request_shape(fetch_module, tmp_path):
-    """The wrapper decision has two branches (F5.2, F5.4), and each request reads its
-    own shape: the response is not guessed from what it looks like."""
+    """The wrapper decision has one branch per shape (F5.2, F5.4, F8.1), and each request
+    reads its own shape: the response is not guessed from what it looks like."""
     whole = (b'<?xml version="1.0"?>\n<response type="success" code="0">\n'
              b'<result><config><device-group/></config></result>\n</response>\n')
     scoped = (b'<?xml version="1.0"?>\n<response type="success" code="0">\n'
@@ -261,7 +264,10 @@ def test_the_declared_path_is_part_of_the_request_identity(fetch_module):
     """AC-1.1: each scope gets its own cache entry, and the identity stays key-free."""
     plain = _request(fetch_module)
     scoped = _request(fetch_module, path='shared')
-    assert scoped.canonical().endswith('path=shared'), scoped.canonical()
+    # F8.1: a per-scope request states the words its own shape states, so the identity carries
+    # the shape words plus the declared path. The path is still part of the identity.
+    assert 'path=shared' in scoped.canonical(), scoped.canonical()
+    assert scoped.canonical().startswith('panorama.test?'), scoped.canonical()
     assert scoped.cache_name() != plain.cache_name(), 'one cache entry per request identity'
     assert 'key=' not in scoped.canonical(), 'the identity is the key-free shape'
     assert 'key=' not in scoped.url('SECRET-KEY-9f3').split('?')[0]
@@ -274,6 +280,160 @@ def test_container_table_names_no_wrapper_row():
     assert not any('response' in row.path or 'result' in row.path
                    for row in container_coverage.CONTAINER_TABLE)
     assert not {'response', 'result'} & container_coverage.PATH_ROOTS
+
+
+# --- 2b. The device fact shape (F8.1) ------------------------------------
+
+# An op response as the bytes arrive. The pins use these bytes inline, because the committed
+# response harness is F8.4: no op fixture is committed by this piece.
+# Physical lines: prolog 1, response 2, result 3, show 4, system 5, info 6.
+OP_FACT = (b'<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n'
+           b'<show><system><info name="Panorama"/></system></show>\n</result>\n</response>\n')
+OP_COMMAND = 'show system info'
+RESULT_LINE = 3
+FACT_ELEMENT_LINE = 4
+
+
+def _fact_request(fetch_module, command=OP_COMMAND):
+    return fetch_module.ApiRequest(host='panorama.test', command=command)
+
+
+def test_the_request_states_which_of_the_three_shapes_it_is(fetch_module):
+    """AC-1.1 and AC-1.2: the shape comes from what the request declares, so a shape is
+    never guessed from what a response looks like."""
+    assert fetch_module.SHAPE_PARAMS[fetch_module.EXPORT_TYPE] == (
+        ('type', 'export'), ('category', 'configuration'))
+    assert fetch_module.SHAPE_PARAMS[fetch_module.CONFIG_TYPE] == (
+        ('type', 'config'), ('action', 'get'))
+    assert fetch_module.SHAPE_PARAMS[fetch_module.OP_TYPE] == (('type', 'op'),)
+
+    assert _request(fetch_module).request_shape() == fetch_module.EXPORT_TYPE
+    assert _request(fetch_module, path='shared').request_shape() == fetch_module.CONFIG_TYPE
+    assert _fact_request(fetch_module).request_shape() == fetch_module.OP_TYPE
+
+    # The params the identity hashes are the words the shape states plus the part declared.
+    assert _fact_request(fetch_module).request_params() == (('cmd', OP_COMMAND), ('type', 'op'))
+    assert _request(fetch_module, path='shared').request_params() == (
+        ('action', 'get'), ('path', 'shared'), ('type', 'config'))
+    fact = _fact_request(fetch_module)
+    assert fact.is_device_fact() and not fact.is_per_scope(), 'a command names no scope'
+
+
+def test_an_op_response_holds_the_one_element_the_command_names(fetch_module, tmp_path):
+    """AC-2.1, AC-2.4 and AC-2.5: `result` becomes the root, read as the place the command
+    names, through the same origin and the same line map, and the source states no scope."""
+    request = _fact_request(fetch_module)
+    origin = xml_input.SourceOrigin(kind='api', name=request.cache_name(), path=tmp_path / request.cache_name())
+    parsed = xml_input.parse_bytes(OP_FACT, origin)
+    unwrapped = fetch_module.unwrap_config_root(parsed, request)
+
+    assert unwrapped.root.tag == 'result', 'the root is the place the command names'
+    assert [child.tag for child in unwrapped.root] == ['show'], 'the one element the command names'
+    assert unwrapped.origin is parsed.origin and unwrapped.lines is parsed.lines, \
+        'the same origin and the same line map, not a reparse'
+    assert unwrapped.line_of(unwrapped.root) == RESULT_LINE
+    assert unwrapped.line_of(unwrapped.root[0]) == FACT_ELEMENT_LINE, \
+        'the line the report prints is the line the response bytes carry'
+    assert unwrapped.scope == 'whole-config' and not unwrapped.is_per_scope, \
+        'a device fact names no scope, so the source states no scope'
+    assert unwrapped.scope_container == ''
+
+    source = fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, OP_FACT))
+    assert source.root.tag == 'result', 'the same rule through the fetch, so a cached fact reads the same'
+    assert (tmp_path / request.cache_name()).read_bytes() == OP_FACT, \
+        'the cache entry is the bytes as they arrived'
+
+
+def test_an_op_response_that_breaks_the_op_shape_is_refused(fetch_module, tmp_path):
+    """AC-2.2: the root is not `result`, `result` holds nothing or more than one element, and
+    the `config` element the whole-config shape names. Each is an input refusal, and no cache
+    entry is written."""
+    # The shapes acceptance 2.6 names, as the response bytes arrive.
+    envelope = b'<?xml version="1.0"?>\n<response type="success" code="0">\n'
+    plain_root = b'<?xml version="1.0"?>\n<config><device-group/></config>\n'
+    shapes = {
+        'no element': (b'<result></result>', 'the result holds no element'),
+        'more than one element': (b'<result><show/><address/></result>', 'not the one fact element'),
+        'the config element': (b'<result><config><device-group/></config></result>', 'holds the config element'),
+    }
+    for label, (body, phrase) in shapes.items():
+        request = _fact_request(fetch_module)
+        cache = tmp_path / label
+        data = envelope + body + b'\n</response>\n'
+        with pytest.raises(fetch_module.SourceFetchError) as excinfo:
+            fetch_module.fetch(request, cache, producer=_producer(fetch_module, data))
+        message = str(excinfo.value)
+        assert 'refusing the API response' in message, (label, message)
+        assert phrase in message, (label, message)
+        assert request.command in message, f'the refusal names the command ({label})'
+        assert not (cache / request.cache_name()).exists(), f'no cache entry for {label}'
+
+    # A root that is not `result`: the whole-config shape read by an op request, so the refusal
+    # names the fact rule, and no cache entry is written.
+    request = _fact_request(fetch_module)
+    cache = tmp_path / 'not the result element'
+    with pytest.raises(fetch_module.SourceFetchError) as excinfo:
+        fetch_module.fetch(request, cache, producer=_producer(fetch_module, plain_root))
+    message = str(excinfo.value)
+    assert 'needs the result element' in message and request.command in message, message
+    assert not (cache / request.cache_name()).exists(), 'no cache entry for a refused response'
+
+
+def test_the_op_shape_checks_the_shape_and_the_join_checks_the_element_name(fetch_module, tmp_path):
+    """AC-2.6: the boundary between F8.1 and F8.3. `result` holding any single element passes
+    the shape rule, so the fetch layer states no command-to-element table and guesses none."""
+    # An element the command does not name is still one element, so the shape rule passes.
+    body = (b'<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n'
+            b'<system><info name="Panorama"/></system>\n</result>\n</response>\n')
+    source = fetch_module.fetch(_fact_request(fetch_module), tmp_path, producer=_producer(fetch_module, body))
+    assert [child.tag for child in source.root] == ['system'], \
+        'the name check belongs to the response-to-request join (F8.3), not to the shape rule'
+
+    # The fetch layer states no command-to-element table: no dict in the module maps a command
+    # (words with spaces) to an element name.
+    tree = ast.parse((SRC_DIR / 'source_fetch.py').read_text(encoding='utf-8'))
+    tables = [node for node in ast.walk(tree) if isinstance(node, ast.Dict)
+              and any(isinstance(key, ast.Constant) and isinstance(key.value, str)
+                      and ' ' in key.value for key in node.keys)]
+    assert not tables, 'the fetch layer states no command-to-element table'
+
+
+def test_the_response_check_runs_for_the_op_shape(fetch_module, tmp_path):
+    """AC-2.3: type `success` code `0` is checked before the cache entry is written, and before
+    the shape rule, so a failed response is refused as a failed response."""
+    request = _fact_request(fetch_module)
+    failed = (b'<?xml version="1.0"?>\n<response type="error" code="14">\n'
+              b'<result><show><system/></show><address/></result>\n</response>\n')
+    with pytest.raises(fetch_module.SourceFetchError) as excinfo:
+        fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, failed))
+    assert "type 'error' code '14'" in str(excinfo.value), str(excinfo.value)
+    assert not (tmp_path / request.cache_name()).exists(), 'no cache entry for a refused response'
+
+
+def test_the_command_is_part_of_the_request_identity(fetch_module):
+    """AC-1.3 and AC-1.4: one cache entry per command, the identity stays key-free, and the
+    command reaches the URL encoded."""
+    request = _fact_request(fetch_module)
+    show = fetch_module.ApiRequest(host='panorama.test', command='show interface summary')
+    assert request.cache_name() != show.cache_name(), 'one cache entry per request identity'
+    assert 'key=' not in request.canonical(), 'the identity is the key-free shape'
+    assert f'cmd={OP_COMMAND}' in request.canonical(), 'the identity names the plain sorted shape'
+    url = request.url('SECRET-KEY-9f3')
+    assert 'cmd=show+system+info' in url, url
+    assert ' ' not in url, 'a command is words with spaces, so the query is encoded'
+    assert 'key=SECRET-KEY-9f3' in url, 'the key reaches the request URL and nothing else'
+
+
+def test_an_op_response_is_not_a_config_source(fetch_module, tmp_path):
+    """AC-2.5: the scan reads no container from a device fact, and the container table names no
+    row for a fact element, so the envelope rule is unchanged."""
+    source = fetch_module.fetch(_fact_request(fetch_module), tmp_path, producer=_producer(fetch_module, OP_FACT))
+    parents = container_coverage.parent_map(source.root)
+    assert container_coverage.scan(source, parents) == [], container_coverage.scan(source, parents)
+    assert not any(row.path.split('/')[0] == 'show' for row in container_coverage.CONTAINER_TABLE), \
+        'the table states no row for a fact element'
+    assert frozenset({'response', 'result'}) == container_coverage.ENVELOPE, \
+        'the envelope rule is unchanged by the device fact shape'
 
 
 # --- 3. The cache ---------------------------------------------------------------

@@ -2,22 +2,30 @@
 
 ## Current position
 
-The Epic 8 plan is written and committed: the second conversion path, which reads only Panorama and
-PAN-OS API responses. The task wrote documents only, so no code, no test and no fixture moved. The
-design record is `docs/API_CONVERSION_PATH.md`, and `docs/README.md` names it as the owner document for
-the path 2 rules.
+F8.1 is complete (Epic 8, Phase 8A): the three accepted request shapes and the device fact wrapper
+rule are in `src/source_fetch.py`, and the `predefined` decision is inside
+`container_coverage.SCOPE_PATH_ROOTS`, the one definition that validates a scope path. The pins are
+named in `docs/API_CONVERSION_PATH.md` §2.1, which is the owner document for the path 2 rules.
 
-The four decisions the plan took: path 2 has its own entry point module, so path 1 keeps its rules
-unchanged; it reads XML API responses only, so the tree, the line map and the entry ledger survive; its
-coverage is path 1 coverage plus the facts a live target states; and it is proven offline through
-committed response fixtures read by an injected producer, so no test calls a server.
+The two decisions F8.1 took: an op response is `result` holding exactly one element, the element the
+command names, and `result` becomes the root, read as the place the command names, so the fetch layer
+states no command-to-element table and the element name is checked by the response-to-request join
+(F8.3); and `predefined` joins the scope path set as a place, not as a scope container, so
+`SCOPE_CONTAINERS` keeps the five scope facts and `is_scope_entry` answers False for a built-in
+entry. The response success check runs for the third shape, before the cache entry is written, and
+the command is part of the request identity, so each command gets its own cache entry and its value
+reaches the URL encoded.
 
-Next: piece F8.1, the accepted request shapes. It decides the wrapper rule for the op response shape and
-how `container_coverage.SCOPE_PATH_ROOTS` reads a `predefined` path, so no later path 2 piece can be
-written before it. Then F8.2 and F8.3, the scope index read from the membership responses and the join
-between a response and the request that made it, with the offline harness (F8.4).
+Next: piece F8.2, the scope index, in `api_requests.py`, pinned by `tests/test_api_requests.py`. It
+reads the membership responses through the four membership lists `parse_associations` already reads,
+so it needs the op shape F8.1 landed and a committed response (F8.4). Then F8.3, the response to
+request join, which is where the element name a command names is checked.
 
-Test count: `python3 -m pytest` reads 1567 pins, and `ruff check .` is clean.
+Findings this piece recorded in `backlog.md`: the scan has no rule that a predefined source is
+definitions, so a predefined read reports its built-in containers as findings, and the scope path
+shape does not allow a path that names a container inside `predefined`.
+
+Test count: `python3 -m pytest` reads 1575 pins, and `ruff check .` is clean.
 
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
 facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a

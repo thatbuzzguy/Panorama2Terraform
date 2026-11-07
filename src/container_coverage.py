@@ -72,10 +72,15 @@ SCOPE_CONTAINERS = frozenset({'device-group', 'templates', 'template-stack',
 # decision reads `result` as the place a per-scope path names, not as a scanned container.
 ENVELOPE = frozenset({'response', 'result'})
 
-# The first path segment a scope path may name (F5.4 AC-1). `shared` is a place the scan
-# already knows (PATH_ROOTS), so the CLI validates against the set plus the shared section,
-# through this one definition.
-SCOPE_PATH_ROOTS = SCOPE_CONTAINERS | frozenset({'shared'})
+# The first path segment a scope path may name (F5.4 AC-1), and the one definition that validates a
+# scope path (F8.1). The set names the places a path may read: the five scope containers, the shared
+# section, and the built-in section. `predefined` joins it as a place, not as a scope container: no
+# scope fact comes from a built-in entry, so `SCOPE_CONTAINERS` keeps the five and `is_scope_entry`
+# answers False for an entry whose container is `predefined`. The decision is stated inside this set
+# and nowhere else, so the CLI, the request set, and the scan read one definition. A predefined path
+# names the place or an entry inside it, the shape `is_scope_path` already states; a path that names a
+# container inside `predefined` is outside the shape rule and is recorded in `backlog.md`.
+SCOPE_PATH_ROOTS = SCOPE_CONTAINERS | frozenset({'shared', 'predefined'})
 
 # The five scope facts (F3.1, F3.2, F6.10.5) in report order. F4.3 uses these keys for
 # the captured-field rule, so the facts are named in one place. `template_stack` is the scope a
@@ -507,11 +512,11 @@ def record_path(path: str) -> str:
     return path.strip('/') if path else ''
 
 def is_scope_path(path: str) -> bool:
-    """True when a declared path names a scope place (F5.4 AC-6.2).
+    """True when a declared path names a scope place (F5.4 AC-6.2, F8.1).
 
     The shape is `/<container>` or `/<container>/entry/<name>`, and the first segment
-    must name a declared scope container. The CLI validates through this function, so
-    the set of readable scopes is stated once.
+    must name a place the one definition validates (SCOPE_PATH_ROOTS). The CLI validates
+    through this function, so the set of readable scopes is stated once.
     """
     segments = [segment for segment in path.strip('/').split('/') if segment]
     if not segments or segments[0] not in SCOPE_PATH_ROOTS:

@@ -1,9 +1,9 @@
 # The API-only conversion path (Epic 8)
 
 The design record for the second conversion path. It states what that path reads, what it may
-decide, and what it must not state twice. No rule here is enforced yet, so each rule names the
-module and the test that will hold it. When a piece lands, this document states the rule in the
-present tense and names the pin.
+decide, and what it must not state twice. Each rule names the module and the test that holds it.
+§2.1 is enforced, so it is stated in the present tense with its pins; the rest names the module and
+the test that will hold it.
 
 Path 1 reads one declared source: a file, or the whole-config API export
 (`docs/ARCHITECTURE.md` §3). Path 2 reads only responses, and it reads one response per scope
@@ -35,19 +35,39 @@ read, so the coverage matrix, the container table, and the entry ledger stay one
 ## 2. The request set
 
 **2.1 The accepted request shapes.** Path 2 accepts three shapes, and one response shape per
-request shape (the rule `source_fetch.py` already states for the first two):
+request shape. `source_fetch.py` states them as `SHAPE_PARAMS`, and the request states its shape
+through what it declares: a command is the device fact shape, a path is the per-scope shape, and
+nothing else is the whole-config export.
 
 | Shape | Request | Response element the run reads |
 |---|---|---|
 | whole-config export | `type=export&category=configuration` | the `config` element under `result` |
 | per-scope read | `type=config&action=get&path=<scope path>` | the element the path names |
-| device fact | `type=op&cmd=<command>` | the element the command names |
+| device fact | `type=op&cmd=<command>` | the one element under `result` the command names |
 
-The op shape is new, so the wrapper rule needs one accepted shape for it before path 2 can read a
-device fact. `container_coverage.SCOPE_PATH_ROOTS` is the one definition that validates a scope
-path, so a request for `predefined` needs a decision inside that definition, not a second
-definition. `tests/test_source_fetch.py` gains the op-shape pins, and the existing pins that read
-the `src/` set must still pass unchanged.
+For the device fact shape, `result` holds exactly one element and `result` becomes the root, read
+as the place the command names, the same way the per-scope rule reads the place the path names. The
+response is a device fact, not a config, so the source states no scope and the container table names
+no row for a fact element. A response that does not match its own request is refused, not guessed,
+and the response check runs before the cache entry is written. The command is part of the request
+identity, so each command gets its own cache entry, and its value reaches the request URL encoded.
+Pinned by `tests/test_source_fetch.py` (the op-shape group):
+`test_the_request_states_which_of_the_three_shapes_it_is`,
+`test_an_op_response_holds_the_one_element_the_command_names`,
+`test_an_op_response_that_breaks_the_op_shape_is_refused`,
+`test_the_op_shape_checks_the_shape_and_the_join_checks_the_element_name`,
+`test_the_response_check_runs_for_the_op_shape`,
+`test_the_command_is_part_of_the_request_identity`, and
+`test_an_op_response_is_not_a_config_source`.
+
+`container_coverage.SCOPE_PATH_ROOTS` is the one definition that validates a scope path, so the
+`predefined` decision is stated inside that set and nowhere else: `predefined` is a place a scope
+path may read, so `/<predefined>` and `/<predefined>/entry/<name>` are scope paths. It is read as a
+place, not as a scope, so `SCOPE_CONTAINERS` keeps the five scope facts and `is_scope_entry` answers
+False for a built-in entry. The path shape is unchanged, so a path that names a container inside
+`predefined` stays outside the shape rule, and the scan rule for a built-in container is unchanged.
+Pinned by `tests/test_container_coverage.py::test_a_predefined_path_is_read_by_the_one_scope_path_definition`,
+and by `test_predefined_entries_are_not_findings` unchanged.
 
 **2.2 The scope set is read, not guessed.** Path 2 builds its scope set from the membership
 responses it read, through the same four membership lists `parse_associations` reads
@@ -59,8 +79,10 @@ run did not read, and it guesses no scope. `api_requests.py` states this rule, a
 **2.3 One response per request, checked against the request that made it.** A response is
 accepted only when the element it holds is the element its own request names, and the entry name
 inside it agrees with the scope index. This is the F5.4 wrapper rule read with the scope index, so
-the join is checked rather than assumed. `tests/test_source_fetch.py` pins the shape, and
-`tests/test_api_requests.py` pins the join with the index.
+the join is checked rather than assumed. The boundary is fixed by §2.1: `source_fetch.py` checks the
+shape, and this piece checks the element name, because the fetch layer states no command-to-element
+table. `tests/test_source_fetch.py` pins the shape, and `tests/test_api_requests.py` pins the join
+with the index.
 
 **2.4 The request set is not one tree.** Path 2 never assembles one tree from many responses,
 because the line map, the entry ledger, and the parent walk are keyed on the source that was
@@ -109,9 +131,9 @@ request shape that gives it, and each is recorded in `backlog.md` while it is bl
 |---|---|---|---|
 | rulebase per rule | per-scope read under a `pre-rulebase` or `post-rulebase` path | the four `*_policy_rules` types, and the import block for a rule entry | the accepted value string, verified against a live target (F3.5) |
 | rule position | the same request, read in document order | the import position for a rule entry | the rulebase value above |
-| device serial | the device fact shape | `target`, and `ngfw_device` as a value the run can print | an accepted op response shape, and a committed response |
+| device serial | the device fact shape | `target`, and `ngfw_device` as a value the run can print | a committed response for the accepted op shape (§2.1) |
 | per-device template variable override | the device fact shape | the per-serial value `panos_template_variable` cannot carry | a response that shows how a device states it |
-| built-in name table | a `predefined` read | the read-through rule can skip a built-in name such as `any` | `SCOPE_PATH_ROOTS` decision, and a committed response |
+| built-in name table | a `predefined` read | the read-through rule can skip a built-in name such as `any` | a committed response for a `predefined` path (§2.1 landed the definition decision) |
 
 For the rulebase, path 2 has one advantage path 1 does not: the request path names the rulebase,
 so the value is a request fact and not a guess. The rule is that the parse records the rulebase
