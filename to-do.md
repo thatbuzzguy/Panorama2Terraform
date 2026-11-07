@@ -33,10 +33,11 @@ its key-free identity, so `cache_entry` names the entry that identity names. The
 file the same run wrote, so a run that read N requests protects N entries, and no new field is needed. The rule
 is stated in `docs/API_CONVERSION_PATH.md` §2.5 with the pins named.
 
-- [ ] F8.7 The unit join. `unit_manifest.units` stays the one unit rule, and path 2 adds the fact of
-      which scope the run read for a unit. A unit with no request, and a request that answers no unit,
-      is a finding. Pins: `tests/test_api_path.py`, `tests/test_unit_manifest.py`,
-      `tests/test_ownership.py`.
+Phase 8B is closed: one response is one source with its own line map, the parse methods run per response, the
+report position names the line inside the response that held the entry, the record holds one record per request
+the run read, and the unit join reads the scope the run read for each unit. The rules are stated in
+`docs/API_CONVERSION_PATH.md` §2.4, §2.5 and §3 with their pins named, in `tests/test_api_path.py`,
+`tests/test_unit_manifest.py` and `tests/test_ownership.py`. The findings F8.7 recorded stay in `backlog.md`.
 
 Phase 8C, the gate and the entry point:
 

@@ -2,6 +2,36 @@
 
 ## Current position
 
+F8.7 is complete (Epic 8, Phase 8B, the run over many sources), and with it Phase 8B: the unit join reads the
+run's unit set through `unit_manifest.units`, so path 2 states no second unit rule and counts no unit a second
+way. The fact path 2 adds is the scope the run read for a unit, so `api_requests.join_units` answers, for each
+unit, the index entry whose request produced the response name that unit's rows carry. `api_requests.unit_findings`
+reports the two directions as data rows: a unit the join answers no entry for, because the response its rows name
+is one the index made no request for, and an index entry the run read no rows for, so no unit answers it. The join
+names no field of its own: the fact order comes from `unit_manifest` and the field name for the row's source comes
+from `ownership.SOURCE_FIELD`, which `FIELD_ORDER`, `row_key` and `scan_row` also read, so the name is stated once,
+and the response name is read through the one name rule in `source_fetch.py` (`cache_name`). The join reads the row
+set through one ledger, because the join is per response (F8.5), so for a run that read one response the row set is
+that response's rows. The join reports data rows only: no console line, no writer, no report section, and no exit
+code, which the gate decides. The rule is stated in `docs/API_CONVERSION_PATH.md` §3 with its pins named, and
+`README.md` and `docs/README.md` name them.
+
+The pins for this piece: `tests/test_api_path.py` (the unit join group) gained
+`test_the_unit_join_answers_the_scope_the_run_read_for_a_unit`,
+`test_a_unit_the_index_made_no_request_for_is_a_finding`,
+`test_an_index_entry_the_run_read_no_rows_for_is_a_finding` and
+`test_the_join_reports_the_findings_as_data_through_the_owners_names`;
+`tests/test_unit_manifest.py::test_the_join_reads_the_unit_set_through_this_rule` keeps the one unit rule, and
+`tests/test_ownership.py::test_a_path_2_row_names_the_response_name_on_the_source_field` keeps the field name. The
+import-list pin `tests/test_api_requests.py::test_the_module_reads_the_layout_rules_through_their_owners` gained
+`ownership` and `unit_manifest`, because the join now reads those two rules through their owners. The string
+constant pin and `tests/test_reference_edges.py` are unchanged.
+
+Findings F8.7 recorded in `backlog.md`: the join reads the row set through one ledger, so which row set a run that
+read more than one response joins is the run order's decision (F8.9); the join states no rule that a source the
+index made no request for is definitions, so the predefined half stays with the F8.1 finding; and no rule decides
+yet how a finding of this kind prints or whether it changes the exit code, which is the gate's work (F8.8).
+
 F8.6 is complete (Epic 8, Phase 8B, the run over many sources): the record file holds one record per request the
 path 2 run read, and the eight fields and their fixed order are unchanged. For each request the run read, `scope`
 names the path that request declared, which is the fact the door records, and `request` names its key-free
@@ -70,7 +100,7 @@ lists in sorted order, one entry per scope; and the response-to-request join, ch
 made the response through the one element-name rule (`source_fetch.names_element`). The join keeps no parser and
 calls no producer, so the origin and the line map stay the ones the door recorded.
 
-Next: piece F8.7, the unit join (`to-do.md`, Phase 8B).
+Next: piece F8.8, the request-set gate (`to-do.md`, Phase 8C).
 
 Findings F8.6 recorded in `backlog.md`: a device fact request declares no path, so its record states the door's
 default for `scope`, and the scope index makes no device fact request, so no rule decides which scope such a
@@ -91,7 +121,7 @@ entry read inside the place the entry sits at the place level so the scan report
 answers no response for a built-in place because no membership row reads `predefined`. F8.5 added no rule that
 a predefined source is definitions.
 
-Test count: `python3 -m pytest` reads 1623 pins (1620 before F8.6), and `ruff check .` is clean.
+Test count: `python3 -m pytest` reads 1629 pins (1623 before F8.7), and `ruff check .` is clean.
 
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
 facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a

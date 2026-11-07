@@ -469,8 +469,9 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   through the injected producer, and read as data by the record
 - `tests/test_api_path.py` - the run over many sources: one response is one source with its own line map, the
   section-to-response join, the parse method running over the response that holds its container, the report
-  position as the line inside that response, the row naming the source that holds the entry, and the predefined
-  read
+  position as the line inside that response, the row naming the source that holds the entry, the predefined
+  read, and the unit join: the run's unit set read through `unit_manifest.units`, the scope the run read for
+  each unit, and the two directions the join reports as data rows
 - `tests/test_shadow_coverage.py` - the cross-source shadow scan: the per-scope shape in the
   scan, the shadow fact (the key is `state_coverage.ownership_key` read with the facts the parent row
   declares, so it names the parent scope), the report section and its line shape with the parent entry
@@ -497,7 +498,8 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
 - `tests/test_unit_manifest.py` - the unit as data (`CODEBASE_MANIFEST.json`): one row per declared
   scope, the directory naming rule, the row shape read back as data, the reference names recorded by
   the reference rule, the no-change rule for the `.tf` goldens, the report bodies, the gate inputs,
-  and the exit codes, and the byte rule between two runs
+  and the exit codes, and the byte rule between two runs. F8.7: the unit join in `api_requests.py` reads
+  this unit set through `unit_manifest.units`, so path 2 states no second unit rule
 - `tests/test_reference_edges.py` - the reference between units as data (`REFERENCE_EDGES.json`): one
   row per pair, the join to the manifest and to the ownership record, the rule that the module
   resolves no name, self-reference exclusion, the acyclic rule and the report section, the unit order

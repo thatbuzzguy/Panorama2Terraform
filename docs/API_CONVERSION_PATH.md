@@ -196,13 +196,34 @@ those pins is handed by an injected producer, and the `device-group` read is the
 
 ## 3. The join to the codebase model
 
-- **The unit set.** `unit_manifest.units` is still the one unit rule, so path 2 states no second
-  unit rule. Path 2 adds one fact the join can read: the scope the run read for a unit. A unit with
-  no request, and a request that answers no unit, is a finding. `tests/test_api_path.py` pins both
-  directions, and `tests/test_unit_manifest.py` keeps the join rule.
-- **The source field on the ownership row.** `OWNERSHIP.json` already names the source for each
-  entry, so path 2 writes the same row shape with a response name instead of a file name, and
-  `tests/test_ownership.py` keeps it.
+- **The unit set.** `unit_manifest.units` is still the one unit rule, so path 2 states no second unit rule and
+  counts no unit a second way: a unit exists when the ledger has a row in it, and the facts are in the order the
+  one rule states. The fact path 2 adds is the scope the run read for a unit, so `api_requests.join_units` answers,
+  for each unit, the index entry whose request produced the response name that unit's rows carry. The join reads the
+  field name for the row's source through `ownership.SOURCE_FIELD`, so it names no field of its own and adds no
+  field to the declared row shape, and it reads the name through the one name rule in `source_fetch.py`
+  (`cache_name`), so it states no cache rule and no request identity rule. The join reads the row set through one
+  ledger, because the join is per response (§2.4), so for a run that read one response the row set is that
+  response's rows. The same content read as a place and as an entry answers the same unit twice, once for each
+  response, which is the fact path 1 cannot state.
+
+  `api_requests.unit_findings` reports the two directions as data rows: a unit the join answers no entry for,
+  because the response its rows name is one the index made no request for; and an index entry the run read no rows
+  for, so no unit answers it. Each row is the pair the join answers, and the side the join has no fact for is None.
+  The join reports these as data rows only: no console line, no writer, no report section, and no exit code, which
+  the gate decides. Pinned by `tests/test_api_path.py` (the unit join group):
+  `test_the_unit_join_answers_the_scope_the_run_read_for_a_unit`,
+  `test_a_unit_the_index_made_no_request_for_is_a_finding`,
+  `test_an_index_entry_the_run_read_no_rows_for_is_a_finding`, and
+  `test_the_join_reports_the_findings_as_data_through_the_owners_names`. The pin
+  `tests/test_unit_manifest.py::test_the_join_reads_the_unit_set_through_this_rule` keeps the one unit rule, and the
+  pins that read `src/api_requests.py` (the import list and the string constants) hold it read through its owners.
+- **The source field on the ownership row.** `ownership.SOURCE_FIELD` is the one statement of the field name, and
+  `FIELD_ORDER`, `row_key`, `scan_row` and the unit join read it through that statement. For a response read the
+  field names the response through the name rule in `source_fetch.py`, so the declared row shape is unchanged and
+  carries a response name for path 2 and the file name for path 1. Pinned by
+  `tests/test_ownership.py::test_a_path_2_row_names_the_response_name_on_the_source_field`, and the record shape
+  pins in that file pass unchanged.
 - **The order rule.** The three bases `CODEBASE_ASSEMBLY.md` §6 states do not read the input
   shape, so path 2 writes the same order. `tests/test_reference_edges.py` is unchanged.
 - **The gate.** Every existing gate rule reads the files the run wrote, so path 2 output is read by

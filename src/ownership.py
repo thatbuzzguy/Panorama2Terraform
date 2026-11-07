@@ -71,15 +71,20 @@ import unit_manifest
 
 OWNERSHIP_FILE = 'OWNERSHIP.json'
 
-# Field order. Fixed, so two runs write the same bytes and a reader does not guess.
-# The field names are the printed keys, so `parse_rows` reads a row back as itself. The fact
-# segment is `FACT_KEYS` order, so the record prints the identity in the one fact order.
-FIELD_ORDER = ('type', 'entry', 'source', 'device_group', 'vsys', 'template', 'vsys_device',
-               'template_stack', 'directory', 'owner', 'kind', 'override')
-
 # The five scope facts, read through `unit_manifest`, so the row joins to the manifest row and no
 # second fact order appears.
 FACT_KEYS = unit_manifest.FACT_KEYS
+
+# The field the record names the source on, stated once. Its value is the source name, never its path
+# (F4.2 rule 6), which for a path 2 row is the response name the request identity produced. The unit join
+# (`api_requests.py`, `docs/API_CONVERSION_PATH.md` §3) reads the field through this module, so the join
+# states no field name of its own.
+SOURCE_FIELD = 'source'
+
+# Field order. Fixed, so two runs write the same bytes and a reader does not guess.
+# The field names are the printed keys, so `parse_rows` reads a row back as itself. The fact
+# segment is `FACT_KEYS` order, so the record prints the identity in the one fact order.
+FIELD_ORDER = ('type', 'entry', SOURCE_FIELD) + FACT_KEYS + ('directory', 'owner', 'kind', 'override')
 
 # What the rule can say about an entry (rule 5), and the flag values it can state.
 KINDS = ('declared', 'definition', 'override', 'ambiguous')
@@ -118,7 +123,7 @@ def row_key(row: dict) -> tuple:
     """The order a row sorts by: the identity key, then the source, because two sources can state
     the same identity."""
     return state_coverage.ownership_key(row['type'], row['entry'], dict(zip(FACT_KEYS, row_facts(row)))) \
-        + (row['source'],)
+        + (row[SOURCE_FIELD],)
 
 
 def in_chain(facts: tuple) -> bool:
@@ -194,7 +199,7 @@ def scan_row(ledger, entry, matrix_row: dict, groups: dict) -> dict:
     return {
         'type': matrix_row['resource'],
         'entry': row['name'],
-        'source': row['source'],
+        SOURCE_FIELD: row[SOURCE_FIELD],
         **dict(zip(FACT_KEYS, facts)),
         'directory': '',      # filled by build_rows, which holds the sanitizing rule
         'owner': '',

@@ -265,7 +265,9 @@ def test_each_entry_names_the_request_the_fetch_layer_reads(tmp_path):
 def test_the_module_reads_the_layout_rules_through_their_owners():
     """The module owns the join between a name and a request, so it defines no naming rule, builds no
     console line, writes no file, states no environment name, and reads no source or membership of its
-    own. The pins that scan the `src/` set read it with the other modules.
+    own. The pins that scan the `src/` set read it with the other modules. F8.7: the unit join reads the fact
+    order through `unit_manifest` and the field name for the row's source through `ownership`, so it names no
+    field of its own.
     """
     assert not any(hasattr(api_requests, name) for name in
                    ('sanitize', 'sanitize_name', 'name_ref', 'console_line', 'check',
@@ -279,7 +281,8 @@ def test_the_module_reads_the_layout_rules_through_their_owners():
         assert rule not in source, (rule, 'the index states no second rule of this kind')
     assert [line.split()[1] for line in source.splitlines()
            if line.startswith(('import ', 'from '))] == \
-        ['dataclasses', 'container_coverage', 'source_fetch', 'xml_input'], 'the import rule'
+        ['dataclasses', 'container_coverage', 'ownership', 'source_fetch', 'unit_manifest', 'xml_input'], \
+        'the import rule, so the join reads the fact order and the row source name through their owners'
 
 
 def test_the_module_is_named_in_the_architecture_module_table():

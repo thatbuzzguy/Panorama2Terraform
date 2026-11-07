@@ -1,7 +1,7 @@
 """F8.2 the scope index, and F8.3 the response-to-request join: the set of scopes path 2 reads, as one
 entry per scope, and each response read against the request that made it.
 
-Three rules, stated once here (`docs/API_CONVERSION_PATH.md` §2.2, §2.3 and §7):
+Five rules, stated once here (`docs/API_CONVERSION_PATH.md` §2.2, §2.3, §2.4 and §3):
 
 1. The scope set is read, not guessed. It comes from the membership responses the run read, through
    the four membership lists `parse_associations` reads (`docs/ARCHITECTURE.md` §3, rule 3). Two
@@ -25,13 +25,22 @@ Three rules, stated once here (`docs/API_CONVERSION_PATH.md` §2.2, §2.3 and §
    built from many responses. The run order calls the parse method, which is the entry point's work, so
    this module keeps no parser and states no merge rule.
 
+5. The unit join (`docs/API_CONVERSION_PATH.md` §3) reads the run's unit set through `unit_manifest.units`, so
+   path 2 states no second unit rule. The fact path 2 adds is the scope the run read for a unit: each row names
+   the response its entry came from, and the join matches that name to the index entry through the name rule in
+   `source_fetch.py`. A unit the join answers no entry for, and an index entry the run read no rows for, are
+   findings the join reports as data rows: no console line, no writer, no report section, and no exit code,
+   which the gate decides.
+
 The module reads no source and no membership of its own: `source_fetch.py` reads the bytes through
 the input door, and `PanoramaParser.parse_associations` reads the four lists. What this module owns is the
 join between a name a list read and the request that reads the scope it names, the join between a response
-and the entry that asked for it, and the join between a section and the response that holds its container.
-So it states no membership reader, no request shape, no wrapper rule, no cache rule, no request identity
-rule, no path rule, no naming rule, no writer, no console line, no environment name, and no merge rule, and
-the pins that scan the `src/` set read it with the other modules. The four lists name three of the five
+and the entry that asked for it, the join between a section and the response that holds its container, and the
+join between a unit and the request that read the response for it. So it states no membership reader, no
+request shape, no wrapper rule, no cache rule, no request identity rule, no path rule, no naming rule, no
+writer, no console line, no environment name, and no merge rule, and it names no field of its own: the fact
+order comes from `unit_manifest` and the field name for the row's source comes from `ownership`. The pins that
+scan the `src/` set read it with the other modules. The four lists name three of the five
 scope facts, so the index reaches those three containers: no membership row reads `vsys` or `devices`, so
 the index makes no request for them, and the run reads such a scope as its declared scope. The module takes
 the four tables as data, so a run that read one response holds one table set, and the join of the four
@@ -52,12 +61,17 @@ Usage:
         # F8.5: the run parses each response on its own, so the join names the response for a section.
         # `name` is the entry the run read for the row's scope, which the run order states.
         response = response_for_section(section, index, name=entry.name)
+    # F8.7: the unit join reads the unit set through `unit_manifest`, and reports the two directions as data.
+    pairs = join_units(index, ledger)
+    findings = unit_findings(index, ledger)
 """
 
 from dataclasses import dataclass
 
 import container_coverage
+import ownership
 import source_fetch
+import unit_manifest
 from xml_input import ENTRY_SEGMENT
 
 # The parse method that owns the four membership lists. The lists are its rows in the container
@@ -325,3 +339,71 @@ def response_for_section(section: str, index, name: str = ''):
             "and no membership row reads this scope."
         )
     return entry
+
+
+def response_names(index) -> dict:
+    """The response name each index entry's own request produces, read through the one name rule in
+    `source_fetch.py` (`cache_name`), so the join states no cache rule and no request identity rule of its own.
+
+    That name is also the value a report row carries for the source that holds the entry, so the join reads the
+    row and the index against the same rule.
+    """
+    return {entry.request.cache_name(): entry for entry in index}
+
+
+def join_units(index, ledger) -> list:
+    """The unit join (`docs/API_CONVERSION_PATH.md` §3): the pair the join answers for each unit.
+
+    Two parts, both read through their owners. The unit set is `unit_manifest.units`, so path 2 states no
+    second unit rule and counts no unit a second way: a unit exists when the ledger has a row in it, and the
+    facts are in the order the one rule states. The field a row carries the source on is the name `ownership`
+    states, so the join holds no field name of its own and adds no field to the declared row shape.
+
+    The fact path 2 adds is the scope the run read for a unit. A row names the response its entry came from, so
+    the join answers the index entry whose request produced that name: the place response for a place read, and
+    the entry response for an entry read (F8.5). The same content read two ways gives two answers, which is the
+    fact path 1 cannot state.
+
+    The join reads the row set through one ledger, because the join is per response (F8.5), so for a run that
+    read one response the row set is that response's rows. Which row set a run that read more than one response
+    joins is the run order's decision (`backlog.md`), so this module states no merge rule here.
+
+    Returns the pairs as `(facts, entry)`, in the order `unit_manifest.units` states them, and inside a unit in
+    the order the response names sort in. A unit the join answers no entry for is not a pair here, because
+    `unit_findings` reports it.
+    """
+    names = response_names(index)
+    rows = list(ledger.rows())
+    pairs = []
+    for facts in unit_manifest.units(ledger):
+        answered = sorted({row[ownership.SOURCE_FIELD] for row in rows
+                           if unit_manifest.facts_of(row) == facts and row[ownership.SOURCE_FIELD] in names})
+        for name in answered:
+            pairs.append((facts, names[name]))
+    return pairs
+
+
+def unit_findings(index, ledger) -> list:
+    """The two directions the unit join reports as data (`docs/API_CONVERSION_PATH.md` §3).
+
+    1. A unit the join answers no entry for, because the response its rows name is one the index made no
+       request for. A whole-config response holds no scope entry, and a scope no membership row reads gains no
+       entry, so a run that read the same content as a whole-config export, or as a predefined read, holds a
+       unit with no request. The join reports the unit; it states no rule that such a source is definitions,
+       and `backlog.md` keeps that decision.
+    2. An index entry the run read no rows for, so no unit answers it. The set is read from the membership
+       responses, so an entry the index names can exist while the run read no row for it.
+
+    Each row is the pair the join answers, `(facts, entry)`, and the side the join has no fact for is None, so
+    the data states the direction. The units are in the order the one unit rule states, and the entries are in
+    the index order. The join reports these as rows only: no console line, no writer, no report section, no
+    exit code, and no gate rule, because those shapes have owners.
+    """
+    names = response_names(index)
+    rows = list(ledger.rows())
+    read = {row[ownership.SOURCE_FIELD] for row in rows}
+    findings = [(facts, None) for facts in unit_manifest.units(ledger)
+                if not any(row[ownership.SOURCE_FIELD] in names
+                           for row in rows if unit_manifest.facts_of(row) == facts)]
+    findings += [(None, entry) for entry in index if entry.request.cache_name() not in read]
+    return findings
