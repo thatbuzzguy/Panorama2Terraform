@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<!-- F8.4 offline harness: one committed response, for the whole-config export request.
+     Request identity: panorama.test?category=configuration&type=export
+     The file name is the key-free identity hash, which is the cache entry the record reads as `cache_entry`.
+     A harness pin reads these bytes through the injected producer, so no test calls a network, and the record
+     names the same bytes. A response is not a Panorama export, so this file is not corpus material: the scan
+     never runs over it and the fixture assembler never merges it. -->
+<response type="success" code="0">
+<result>
+<config version="11.1.2">
+  <device-group>
+    <entry name="Office-FW">
+      <devices><entry name="fw-1.example.com" /></devices>
+    </entry>
+  </device-group>
+  <shared>
+    <address>
+      <entry name="web-server">
+        <ip-netmask>10.0.0.7</ip-netmask>
+      </entry>
+    </address>
+  </shared>
+</config>
+</result>
+</response>

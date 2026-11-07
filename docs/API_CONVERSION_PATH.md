@@ -2,8 +2,8 @@
 
 The design record for the second conversion path. It states what that path reads, what it may
 decide, and what it must not state twice. Each rule names the module and the test that holds it.
-§2.1 is enforced, so it is stated in the present tense with its pins; the rest names the module and
-the test that will hold it.
+The parts that are enforced (§2.1, §2.2, §2.3, and the response set in §5) are stated in the present
+tense with their pins; the rest names the module and the test that will hold it.
 
 Path 1 reads one declared source: a file, or the whole-config API export
 (`docs/ARCHITECTURE.md` §3). Path 2 reads only responses, and it reads one response per scope
@@ -163,8 +163,10 @@ pin that grows.
 ## 4. The facts only a live target states
 
 These are the facts an export cannot carry. Path 1 cannot state them, and path 2 cannot read them
-offline, so each one stays blocked until a committed response shows its shape. Each fact names the
-request shape that gives it, and each is recorded in `backlog.md` while it is blocked.
+offline, so each one stays blocked until a committed response shows its shape, and until a live target
+states the fact itself. Each fact names the request shape that gives it, and each is recorded in
+`backlog.md` while it is blocked. The committed response for the device fact shape shows the shape
+(§5), so that row needs the live fact only.
 
 | Fact | Request shape | What it unlocks | Blocked on |
 |---|---|---|---|
@@ -180,11 +182,26 @@ only from the request that read the entry, and no parse method reads it off the 
 
 ## 5. Offline proof
 
-- Path 2 reads no network in a test. The producer is injected, as `tests/test_source_fetch.py`
-  does today, so Goal 1 holds for path 2.
-- The committed responses are one file per request shape, and each one names the request identity
-  that produced it, so a test can run `fetch()` through the injected producer and read the same
-  bytes the record names.
+- Path 2 reads no network in a test. The producer is injected, as `tests/test_source_fetch.py` does, so Goal 1
+  holds for path 2, and it holds for the committed set:
+  `tests/test_source_fetch.py::test_a_committed_response_is_read_through_the_injected_producer`.
+- The committed responses are one file per request shape, and each one names the request identity that produced
+  it. They live in the set `docs/ARCHITECTURE.md` §1.1 names for them (`tests/responses/`), because a response
+  is not a Panorama export and is not corpus material: the scan never runs over it, and the fixture assembler
+  never merges it. Each file name is the key-free identity hash the record reads as `cache_entry`, and the file
+  states the same identity in its prolog comment, so a reader can see which request produced it. A test reads a
+  committed response through the injected producer, so `fetch()` reads it through the door against the request
+  that produced it, writes the cache entry the record names, and answers the shape its own request states. The
+  record names the same bytes. Pinned by `tests/test_api_requests.py` (the harness group):
+  `test_one_committed_response_per_request_shape_names_the_request_identity_that_produced_it`,
+  `test_a_committed_response_reads_through_the_injected_producer_and_the_record_names_the_same_bytes`,
+  `test_the_committed_responses_are_not_corpus_material`,
+  `test_the_join_reads_the_committed_per_scope_response_through_the_injected_producer`, and
+  `test_the_committed_op_response_shows_one_shape_and_names_no_live_fact`.
+- The committed per-scope response is the membership read the scope index (§2.2) is built from, so the index and
+  the join (§2.3) read the same committed bytes. The committed device fact response shows the shape one command
+  gives and names no fact, so it does not unblock §4: the fetch layer states no command-to-element table, so the
+  one element-name rule names no element for a command, and the device serial stays blocked on a live target.
 - A run that reads only committed responses writes byte-identical output between two runs, the same
   rule the corpus pins for path 1.
 - For content that holds none of the facts in §4, path 2 writes the same `.tf` bytes as path 1 on

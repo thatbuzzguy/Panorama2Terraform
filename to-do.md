@@ -10,15 +10,11 @@ the set is read through the four membership lists, the rule is stated in
 `docs/API_CONVERSION_PATH.md` §2.2, the module is in the `docs/ARCHITECTURE.md` §1 table, and the
 pins are named there. F8.3 is complete: the join is `api_requests.join_response`, the element-name rule is
 read through `source_fetch.names_element`, and the rule is stated in `docs/API_CONVERSION_PATH.md` §2.3 with
-the pins named.
+the pins named. Phase 8A is complete: F8.4 landed the committed response set, one file per request shape,
+each named by the key-free request identity that produced it and read through the injected producer, and the
+decision about where it lives is stated in `docs/ARCHITECTURE.md` §1.1 with its pins named.
 
 ## Epic 8 — path 2 pieces
-
-Phase 8A, the read boundary:
-
-- [ ] F8.4 The offline harness. One committed response per request shape, each naming the request
-      identity that produced it, and the producer injected so no test calls a network. Pins:
-      `tests/test_api_requests.py`, and the existing no-network rule in `tests/test_source_fetch.py`.
 
 Phase 8B, the run over many sources:
 
@@ -55,8 +51,8 @@ Feature-sized items that stay blocked on a fact the tool cannot read offline are
 decision and a live target, a config entry inside a stack needs a provider location shape, the EDL
 `certificate_profile` field needs a rule that makes the EDL site resolve names, the per-entry report
 `profile_name` column needs a value the provider does not declare, the two `.github/` template files
-outside the indexes are findings, and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4 need
-a committed response for each shape.
+outside the indexes are findings, and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4 need a
+live target: the committed response set shows one shape per accepted request shape and names no fact.
 
 ## Other open pieces
 
@@ -80,4 +76,6 @@ a committed response for each shape.
 - The corpus is the directory the scan runs over. A hostile fixture in it changes the set the scan
   reports for the other fixtures, so pins that state the printed set name the fixture count. The fixture
   assembler reads the same set by rule: a fixture the F3.8 input rule refuses is skipped, and the record
-  is not an input (`tests/test_build_kitchen_sink.py`).
+  is not an input (`tests/test_build_kitchen_sink.py`). A committed API response is not corpus material, so
+  it sits in its own set (`tests/responses/`), and the pins that state the printed fixture set are not
+  changed by it (`docs/ARCHITECTURE.md` §1.1).

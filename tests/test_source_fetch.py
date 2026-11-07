@@ -14,8 +14,9 @@ Six groups, one per acceptance rule:
    names, `result` becomes the root, and the source states no scope. The path is part of
    the request identity, so each scope gets its own cache entry, and the command is part of
    the identity for the same reason. F8.3 adds the group 2c pins: the element-name rule is the one rule the
-    response-to-request join reads through this module, so the fetch layer states no shape rule for the join,
-    and it names no element for a device fact.
+   response-to-request join reads through this module, so the fetch layer states no shape rule for the join,
+   and it names no element for a device fact. Group 2d reads the committed response harness (F8.4) through
+   an injected producer, so the no-network rule holds for the committed set.
 3. The cache. The entry name is the request identity without the key. A miss calls the
    producer once and caches only the bytes that passed the door and the response
    check; a hit parses the cache bytes with no producer. Two runs on the same cache
@@ -29,8 +30,9 @@ Six groups, one per acceptance rule:
    `.tf` bytes as the file run of the same content, a fetch refusal exits 1 and
    writes no output, and the module imports the standard library only.
 
-No test calls the network: every fetch uses an injected fixture-backed producer, or
-the default producer is monkeypatched to stand in for one.
+No test calls the network: every fetch uses an injected fixture-backed producer, or the default producer is
+monkeypatched to stand in for one. The committed response harness (`tests/responses/`, F8.4) is read the same
+way, through an injected producer.
 """
 
 import ast
@@ -42,7 +44,7 @@ import pytest
 
 import container_coverage
 import xml_input
-from conftest import FIXTURES_DIR, SRC_DIR, run_main, run_pipeline, run_script
+from conftest import FIXTURES_DIR, RESPONSES_DIR, SRC_DIR, run_main, run_pipeline, run_script
 
 FETCH_FIXTURE = 'api_response.xml'
 
@@ -488,6 +490,57 @@ def test_the_element_name_rule_names_no_element_for_a_device_fact(fetch_module, 
     assert not fetch_module.names_element(held, request), \
         'the rule names no element for a command, so the join cannot check a device fact offline'
     assert not request.segments(), 'a command names no path, so no index entry names it'
+
+
+# --- 2d. The committed response harness (F8.4) -------------------------------
+
+# `tests/responses/` holds one committed response per accepted request shape, each named by the key-free
+# request identity that produced it. `tests/test_api_requests.py` holds the harness pins. The rule pinned here is
+# the fetch layer's own: a committed response is read through an injected producer, so the no-network rule holds
+# for the harness, and the wrapper decision reads it against the request that produced it. A response is read
+# through the door with an `api` origin, never as a file source, because the file producer has no request to read
+# a shape against.
+def _harness_requests(fetch_module):
+    """The three requests that produced the committed set: the words each shape states, plus the part the
+    request declares. Each one names the committed file it reads."""
+    return (fetch_module.ApiRequest(host='panorama.test'),
+            fetch_module.ApiRequest(host='panorama.test', path='device-group'),
+            fetch_module.ApiRequest(host='panorama.test', command='show system info'))
+
+
+def test_a_committed_response_is_read_through_the_injected_producer(fetch_module, tmp_path, monkeypatch):
+    """F8.4 AC-3.1 and AC-3.2: no test calls a network for a committed response, the cache entry the run writes
+    is the committed bytes, and each committed response is read against the request that produced it through the
+    one wrapper decision."""
+    monkeypatch.setattr(fetch_module, 'network_producer',
+                        lambda *args, **kwargs: (_ for _ in ()).throw(
+                            AssertionError('a harness test called the network')))
+
+    requests = _harness_requests(fetch_module)
+    files = sorted(p.name for p in RESPONSES_DIR.glob('*.xml'))
+    assert files == sorted(request.cache_name() for request in requests), \
+        'each committed response is named by the identity that produced it'
+
+    for request in requests:
+        committed = RESPONSES_DIR / request.cache_name()
+        data = committed.read_bytes()
+        cache = tmp_path / request.cache_name()[:8]
+        source = fetch_module.fetch(request, cache, producer=_producer(fetch_module, data))
+
+        entry = cache / request.cache_name()
+        assert entry.read_bytes() == data, 'the cache entry is the committed bytes as they arrived'
+        assert source.origin.kind == 'api' and source.origin.name == committed.name, \
+            'the door named the committed response, not a file'
+
+        shape = request.request_shape()
+        if shape == fetch_module.EXPORT_TYPE:
+            assert source.root.tag == 'config', 'the whole-config shape reads the config element'
+        elif shape == fetch_module.CONFIG_TYPE:
+            assert source.root.tag == 'result' and fetch_module.names_element(source.root[0], request), \
+                'the per-scope shape reads the element its own path names'
+        else:
+            assert source.root.tag == 'result' and len(list(source.root)) == 1, \
+                'the device fact shape reads the one element under result'
 
 
 # --- 3. The cache ---------------------------------------------------------------

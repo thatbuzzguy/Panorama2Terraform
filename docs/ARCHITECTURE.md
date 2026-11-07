@@ -54,8 +54,17 @@ every document under them, so a file outside an index is a finding.
   Each directory that holds files names them through its own index.
 - The canonical sample output is the golden set `tests/golden/`, which pins the bytes of a real run.
   `terraform_output/` is only the default value of `--output-dir` and holds no committed sample.
-- `tests/` is flat: the test files sit beside `fixtures/` and `golden/`, and `tests/conftest.py` is the one
-  shared helper file. No test is grouped by rule area, so the layout does not change again.
+- `tests/` is flat: the test files sit beside the three sets `fixtures/`, `golden/`, and `responses/`, and
+  `tests/conftest.py` is the one shared helper file and the one place the path to each set is built. No test
+  is grouped by rule area, so the layout does not change again.
+- A committed API response is not a Panorama export, so it is not corpus material. The response set
+  (`tests/responses/`) sits beside the corpus: the scan runs over the corpus, and the fixture assembler reads
+  the corpus, so a response enters neither the set the scan reports nor the assembler's merge set. Each
+  response file is named by the key-free request identity that produced it, which is the cache entry
+  `provenance.record_for` reads as `cache_entry`, and it is read through the injected producer and never
+  through the file producer, because the wrapper decision belongs to the request that produced it. The pins are
+  `tests/test_api_requests.py::test_the_committed_responses_are_not_corpus_material` and
+  `tests/test_build_kitchen_sink.py::test_the_assembler_reads_the_corpus_and_not_the_response_set`.
 
 The import rule: `src/` is one flat namespace, so a module in `src/` imports its siblings by plain module
 name, and no module builds a path. `pyproject.toml` `[tool.pytest.ini_options] pythonpath = ["src"]` is the

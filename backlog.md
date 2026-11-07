@@ -422,14 +422,14 @@ here with that rule named.
   provider schema, the way `LOCATION_SCHEMA` is, so the scan keeps the same-name rule until such a
   table exists.
 
-- Epic 8 (path 2) reads the facts an export cannot carry, and each one stays blocked until a
-  committed response shows its shape. The shapes, what each one unlocks, and the condition per fact
-  are in `docs/API_CONVERSION_PATH.md` §4, so this document names no shape a second time. The rule
-  that keeps these items out of `to-do.md` is that a piece cannot be written from a response the
-  project does not hold. The conditions are: a committed response for each shape, since the accepted
-  op response shape and the `SCOPE_PATH_ROOTS` decision landed with F8.1; the F3.5 rulebase value
-  verified against a live target; and a response that shows how a device states a per-device
-  template variable override.
+- Epic 8 (path 2) reads the facts an export cannot carry, and each one stays blocked until a live target
+  states it. The committed response set (`tests/responses/`, F8.4) shows one shape per accepted request shape
+  and names no fact, so the harness cannot close any of these. The shapes, what each one unlocks, and the
+  condition per fact are in `docs/API_CONVERSION_PATH.md` §4, so this document names no shape a second time.
+  The rule that keeps these items out of `to-do.md` is that a piece cannot be written from a response the
+  project does not hold. The conditions are: the F3.5 rulebase value verified against a live target; the device
+  serial, and which element a command names, against a live target; and a response that shows how a device
+  states a per-device template variable override.
 - Finding, opened by the F8.1 decision: the scan has no rule that a predefined source is definitions,
   so a run that reads a predefined scope reports its built-in containers as findings. `is_predefined`
   answers through the parent walk, and for a per-scope source the parent of the container under the
@@ -442,8 +442,11 @@ here with that rule named.
   reads only a response the index made a request for. The index makes only per-scope requests, and a device
   fact request names no scope path, so the one element-name rule (`source_fetch.names_element`) names no
   element for a command, and no module states a command-to-element table. Which element a command names is
-  therefore a fact the tool cannot read offline, and it stays here until a committed response (F8.4) shows
-  it. This touches the F8.1 finding above, because both need a fact a request cannot state.
+  therefore a fact the tool cannot read offline. The committed response for the device fact shape
+  (`tests/responses/`, F8.4) shows the shape and names no fact, so this stays here until a live target states
+  which element a command names. This touches the F8.1 finding above, because both need a fact a request cannot
+  state, and the pin `tests/test_api_requests.py::test_the_committed_op_response_shows_one_shape_and_names_no_live_fact`
+  keeps the fixture an illustration rather than a measurement.
 - Finding, opened by F8.2: the four membership lists name three of the five scope facts, so the index
   reaches no `vsys` and no device. A `vsys` is a scope fact (`ARCHITECTURE.md` §2.2), but no membership
   row reads it, so path 2 cannot request a vsys scope from membership: the run must read it as its

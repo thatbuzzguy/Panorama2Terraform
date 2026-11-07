@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<!-- F8.4 offline harness: one committed response, for the per-scope read of the `device-group` container.
+     Request identity: panorama.test?action=get&path=device-group&type=config
+     The file name is the key-free identity hash, which is the cache entry the record reads as `cache_entry`.
+     `result` holds the one element the path names, so `result` becomes the root, read as the place the path
+     names. The names inside are what the scope index reads, so the join reads these bytes against the index
+     entry whose request made it. A response is not a Panorama export, so this file is not corpus material. -->
+<response type="success" code="0">
+<result>
+<device-group>
+  <entry name="Office-FW">
+    <devices><entry name="fw-1.example.com" /></devices>
+  </entry>
+  <entry name="Unassigned-DG" />
+</device-group>
+</result>
+</response>
