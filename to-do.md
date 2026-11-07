@@ -5,22 +5,15 @@ The open feature is Epic 8, the API-only conversion path. Its design record is
 state it, and the test that will pin it. F8.1 is complete: the three request shapes and the op
 wrapper rule are in `src/source_fetch.py`, the `predefined` decision is inside
 `container_coverage.SCOPE_PATH_ROOTS`, and the pins are named in
-`docs/API_CONVERSION_PATH.md` §2.1.
-
-The completed pieces that this file carried are closed in the git history and the owner documents,
-including the certificate `REFERENCE_ONLY` fact: `resource_mapping.VALUE_VARIABLES` holds the
-`private_key` and `passphrase` rows, the emitter reads them at the print site, and the pins are
-`tests/test_variables.py` and
-`tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`.
+`docs/API_CONVERSION_PATH.md` §2.1. F8.2 is complete: the scope index is in `src/api_requests.py`,
+the set is read through the four membership lists, the rule is stated in
+`docs/API_CONVERSION_PATH.md` §2.2, the module is in the `docs/ARCHITECTURE.md` §1 table, and the
+pins are named there.
 
 ## Epic 8 — path 2 pieces
 
 Phase 8A, the read boundary:
 
-- [ ] F8.2 The scope index. The scope set comes from the membership responses the run read, through
-      the four membership lists `parse_associations` reads: one request per scope container, then one
-      request per scope entry those containers name. No scope is guessed. Module: `api_requests.py`.
-      Pin: `tests/test_api_requests.py`.
 - [ ] F8.3 The response-to-request join. A response is accepted only when the element it holds is the
       element its own request names, and the entry name inside it agrees with the scope index. Pins:
       `tests/test_source_fetch.py` for the shape, `tests/test_api_requests.py` for the join with the
