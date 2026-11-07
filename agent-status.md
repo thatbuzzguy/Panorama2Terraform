@@ -2,6 +2,32 @@
 
 ## Current position
 
+F8.5 is complete (Epic 8, Phase 8B, the run over many sources): one response is one source with its own line
+map, the parent walk and the entry ledger are keyed on the one tree that was parsed, and each parse method runs
+over the response that holds its container. The rule is stated in `docs/API_CONVERSION_PATH.md` §2.4 with its
+pins named, in `tests/test_api_path.py`, and `README.md` names that test module. The join is
+`api_requests.response_for_section`, which answers the index entry whose response holds the container a section
+names, in two parts read through their owners: the place the section names first, through `list_container`, and
+the entry inside that place that the run read, built through `scope_path` and validated through
+`is_scope_path`. `api_requests.entry_for_path` is the index lookup the join reads. `name` is data the run
+states, because a section names a container and never the entry it sits inside. The join keeps no parser and
+states no merge rule, so the run order calls the parse method, and the module's import list is unchanged.
+The join refuses a section whose first segment names no place the one definition validates, and a section
+inside a place the index has no entry for.
+
+The two things this piece fixed or decided:
+
+- `container_coverage.section_path` stated the place twice for a per-scope place read
+  (`device-group/device-group/entry/address`). The chain now states the place once, so path 2 and path 1 name
+  the same container path for the same content and the two reports disagree only on the source they name. The
+  guard reads a per-scope source, so path 1 is unchanged, and the F5.4 entry-read pin holds.
+- The predefined read: no container table row names a built-in container, so the run runs no parse method over
+  a predefined response and the entry report names no row for a built-in entry, which the ledger counts through
+  `predefined_total`. A predefined place read keeps the `predefined` element in the tree, so `is_predefined`
+  reaches it and the scan names no finding; a predefined entry read puts the entry at the place level, so the
+  scan reports the place. The join answers no response for a built-in place, because no membership row reads
+  `predefined`. Both findings stay in `backlog.md`; this piece added no rule.
+
 F8.4 is complete, and with it Phase 8A (Epic 8, the read boundary): the offline harness is one committed
 response per accepted request shape in `tests/responses/`, each named by the key-free request identity that
 produced it, read through the injected producer, and read as data by the record. The rule is stated in
@@ -28,19 +54,23 @@ lists in sorted order, one entry per scope; and the response-to-request join, ch
 made the response through the one element-name rule (`source_fetch.names_element`). The join keeps no parser and
 calls no producer, so the origin and the line map stay the ones the door recorded.
 
-Next: piece F8.5, the run over many sources (`to-do.md`, Phase 8B).
+Next: piece F8.6, one record per request (`to-do.md`, Phase 8B).
 
 Findings F8.2 recorded in `backlog.md`: the four lists name three of the five scope facts, so a
 vsys scope cannot be read from membership; `container_coverage.ContainerRow` has no field for the table
-its method returns, so the join lives as data in `api_requests.LIST_JOIN`; and the merge of the four
-tables across the responses a run read belongs to the run order, because the module states no merge
-rule. F8.3 recorded one finding there: `names_element` names no element for a device fact request, so the
-join has no fact to read a command's element name against, and it sits with the F8.1 finding about a
-predefined read, because both need a fact a request cannot state; the committed response for the device fact
-shape shows the shape and names no fact, so the finding stays open. The findings the F8.1 decision recorded
-stay there too.
+its method returns, so the join lives as data in `api_requests.LIST_JOIN`; and the join of the four tables
+across the responses a run read belongs to the run order, because the module states no merge rule and F8.5
+decided that no tree is built across responses. F8.3 recorded one finding there: `names_element` names no
+element for a device fact request, so the join has no fact to read a command's element name against, and it
+sits with the F8.1 finding about a predefined read, because both need a fact a request cannot state; the
+committed response for the device fact shape shows the shape and names no fact, so the finding stays open. The
+findings the F8.1 decision recorded stay there too, and F8.5 recorded what it measured against them: for a
+predefined place read the parent walk reaches the `predefined` element and the scan names no finding, for an
+entry read inside the place the entry sits at the place level so the scan reports the place, and the join
+answers no response for a built-in place because no membership row reads `predefined`. F8.5 added no rule that
+a predefined source is definitions.
 
-Test count: `python3 -m pytest` reads 1604 pins, and `ruff check .` is clean.
+Test count: `python3 -m pytest` reads 1620 pins (1604 before F8.5), and `ruff check .` is clean.
 
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
 facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a

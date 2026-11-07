@@ -18,18 +18,25 @@ Three rules, stated once here (`docs/API_CONVERSION_PATH.md` §2.2, §2.3 and §
    request names, read through `source_fetch.py`, and the entry name inside the response agrees with the
    index, which is what the join owns.
 
+4. The join (`docs/API_CONVERSION_PATH.md` §2.4) reads one section against the response that holds its
+   container, so the run's unit of parse stays one response: the line map, the parent walk, and the entry
+   ledger are keyed on the source that was parsed, and a report position can only name a line inside the
+   response that holds the entry. The join answers one response per section, so no section needs a tree
+   built from many responses. The run order calls the parse method, which is the entry point's work, so
+   this module keeps no parser and states no merge rule.
+
 The module reads no source and no membership of its own: `source_fetch.py` reads the bytes through
-the input door, and `PanoramaParser.parse_associations` reads the four lists. What this module owns
-is the join between a name a list read and the request that reads the scope it names, and the join
-between a response and the entry that asked for it. So it states no membership reader, no request
-shape, no wrapper rule, no cache rule, no request identity rule, no path rule, no naming rule, no
-writer, no console line, no environment name, and no merge rule, and the pins that scan the `src/`
-set read it with the other modules. The four lists name three of the five scope facts, so the
-index reaches those three containers: no membership row reads `vsys` or `devices`, so the index makes
-no request for them, and the run reads such a scope as its declared scope. The module takes the four
-tables as data, so a run that read one response holds one table set, and the merge across responses is
-the run order's work (`docs/API_CONVERSION_PATH.md` §2.4). A device fact request names no index entry,
-so the join has no fact to read its element name against, and `backlog.md` records that.
+the input door, and `PanoramaParser.parse_associations` reads the four lists. What this module owns is the
+join between a name a list read and the request that reads the scope it names, the join between a response
+and the entry that asked for it, and the join between a section and the response that holds its container.
+So it states no membership reader, no request shape, no wrapper rule, no cache rule, no request identity
+rule, no path rule, no naming rule, no writer, no console line, no environment name, and no merge rule, and
+the pins that scan the `src/` set read it with the other modules. The four lists name three of the five
+scope facts, so the index reaches those three containers: no membership row reads `vsys` or `devices`, so
+the index makes no request for them, and the run reads such a scope as its declared scope. The module takes
+the four tables as data, so a run that read one response holds one table set, and the join of the four
+tables across responses is the run order's work (`docs/API_CONVERSION_PATH.md` §2.4). A device fact request
+names no index entry, so the join has no fact to read its element name against, and `backlog.md` records that.
 
 Usage:
     from api_requests import scope_index
@@ -42,6 +49,9 @@ Usage:
     index = scope_index('panorama.example.com', membership, api_requests.membership_lists())
     for entry in index:
         source = fetch(entry.request, 'panorama_cache')   # one response per entry
+        # F8.5: the run parses each response on its own, so the join names the response for a section.
+        # `name` is the entry the run read for the row's scope, which the run order states.
+        response = response_for_section(section, index, name=entry.name)
 """
 
 from dataclasses import dataclass
@@ -257,3 +267,61 @@ def join_response(source, entry, index) -> tuple:
             f"{list(missing)} and the response holds no entry for them."
         )
     return inside
+
+
+def entry_for_path(index, path: str):
+    """The index entry for one scope path, or None when the index has no entry for it.
+
+    The join below answers which response holds a container, so it needs the entry for the shape the run
+    read, and the index is the set of shapes the run read. A path the index has no entry for is a scope the
+    run read no response for.
+    """
+    for entry in index:
+        if entry.path == path:
+            return entry
+    return None
+
+
+def response_for_section(section: str, index, name: str = ''):
+    """The run-over-many-sources join (`docs/API_CONVERSION_PATH.md` §2.4): the index entry whose response
+    holds the container a section names.
+
+    One response is one source, so the run runs each parse method over the response that holds its container,
+    and the report row for an entry names that response with the line inside it. The join answers the response
+    in two parts, both read through their owners: the place the section names first, which is the segment
+    `list_container` already states, and the entry inside that place that the run read, built through
+    `scope_path` and validated through `container_coverage.is_scope_path`, so the join states no second path
+    rule.
+
+    `name` is data the run states, because a section names a container and never the entry it sits inside. For
+    a place read the join answers the response for the place, and that response holds every entry inside it.
+    For an entry read `name` is the entry the run read for the row's scope, and that response holds the entry.
+    So the join answers one response per section, and no section needs a tree built across responses.
+
+    Two refusals, in this order:
+
+    1. A section whose first segment names no place the one definition validates names no scope, so the run
+       reads its container inside the response for the scope that holds it, and the join has no scope to
+       answer. A row that names only a container is the case this refusal states.
+    2. A section inside a place the index has no entry for is refused, because the set is read from the
+       membership responses and no membership row reads that scope, so the run read no response for it. A
+       built-in place is that case: the run can read `predefined` as a declared scope, but the index makes no
+       entry for it, and the fact the built-in name table needs is a live fact (`backlog.md`).
+    """
+    place = list_container(section)
+    if not container_coverage.is_scope_path(place):
+        raise ValueError(
+            f"refusing the section '{section}': its first segment does not name a place the one scope path "
+            "definition validates, so no response holds its container. The run reads a container inside a "
+            "config entry inside the response for the scope that entry defines, and this section names no "
+            "scope the run read."
+        )
+    shape = scope_path(place, name)
+    entry = entry_for_path(index, shape)
+    if entry is None:
+        raise ValueError(
+            f"refusing the section '{section}': the index has no entry for '{shape}', so the run read no "
+            "response for the scope that holds its container. The set is read from the membership responses, "
+            "and no membership row reads this scope."
+        )
+    return entry

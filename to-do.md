@@ -18,11 +18,15 @@ decision about where it lives is stated in `docs/ARCHITECTURE.md` §1.1 with its
 
 Phase 8B, the run over many sources:
 
-- [ ] F8.5 No merged tree. Each response stays its own `ParsedSource` with its own line map, and each
-      parse method runs over the response that holds its container. The report position is the line
-      inside that response, and the report row names the source that holds the entry. Pin:
-      `tests/test_api_path.py`, and the existing pin
-      `tests/test_entry_coverage.py::test_every_row_names_the_source_that_holds_the_entry`.
+F8.5 is complete: one response is one source with its own line map, the parent walk and the ledger are
+keyed on that one tree, and each parse method runs over the response that holds its container. The join is
+`api_requests.response_for_section`, which answers the index entry for the place a section names plus the
+entry the run read, and `api_requests.entry_for_path` is the lookup it reads. The rule is stated in
+`docs/API_CONVERSION_PATH.md` §2.4 with the pins named, in `tests/test_api_path.py`. The piece also fixed
+`container_coverage.section_path`, which stated the place twice for a per-scope place read; the guard reads
+a per-scope source, so path 1 is unchanged, and the two paths now name the same container path for the same
+content. The predefined decision this piece took is recorded in `backlog.md`.
+
 - [ ] F8.6 One record per request. The eight fields and the fixed order are unchanged, and the `scope`
       and `request` fields name the request that made the response. The prune action reads the record
       file, so a run that read N scopes protects N entries. Pins: `tests/test_provenance.py`,
