@@ -176,11 +176,23 @@ the pins that read `src/api_requests.py` (the import list, the names the module 
 string constants the join must not state) pass unchanged.
 
 **2.5 The record holds one record per request the run read.** The eight fields and the fixed order
-are unchanged (`docs/ARCHITECTURE.md` §3.3). The `scope` field names the path the request declared,
-and the `request` field names the key-free identity of that request. The prune action reads the
-record file the same run wrote, so a run that read N scopes protects N entries. No new field is
-needed. `tests/test_provenance.py::test_the_record_file_holds_one_record_per_source_read` is the
-pin that grows.
+are unchanged (`docs/ARCHITECTURE.md` §3.3). For each request the run read, the `scope` field names the path
+that request declared, which is the fact the door records, and the `request` field names the key-free identity
+of that request, which is the shape the cache entry is hashed from; `cache_entry` names the entry that identity
+names. The record file holds the records in the order the run read them, which `provenance.py` rule 6 states
+for the sources it owns; for a path 2 run that order is the membership responses, then the entries in index
+order, which is the run order's decision (F8.9), so the record module states no read rule for it. The record
+directory is the output directory, so the prune action reads the record file the same run wrote, and a run that
+read N requests protects the N entries its own record names. No new field is needed, so `parse_records` reads a
+path 2 record file back as itself. A device fact request declares no path, so its record states the
+door's default for `scope`, and the index makes no device fact request, so that case stays a finding in
+`backlog.md`. Pinned by
+`tests/test_provenance.py`: `test_the_record_file_holds_one_record_per_source_read` (the path 2 case),
+`test_the_path_2_record_names_the_request_that_made_each_response`,
+`test_a_path_2_record_file_reads_back_with_no_new_field`, and
+`test_the_prune_protects_every_entry_a_path_2_run_read`; and by
+`tests/test_write_path.py::test_the_record_directory_is_the_output_directory_for_the_prune`. Every response in
+those pins is handed by an injected producer, and the `device-group` read is the committed response set (§5).
 
 ## 3. The join to the codebase model
 

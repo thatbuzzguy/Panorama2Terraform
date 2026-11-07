@@ -5,7 +5,9 @@ function that writes bytes, and how the gate reads each set
 Four groups:
 
 1. The two sets: the unit set is the `.tf` files of one unit plus that unit's printed form, the codebase
-   root set is the records the whole codebase owns, and the two are distinct.
+   root set is the records the whole codebase owns, and the two are distinct. The path 2 case is read through
+   the same two sets: the record file a path 2 run wrote is a codebase root-set file, and the prune action
+   protects the entries its records name.
 2. How the gate reads each set: one block reader keyed by the path from the codebase root, one data rule
    that reads the records at the root as one rule over the rows of every unit, and no rule reads a report.
 3. The one write path: one function writes bytes, `newline=LF` is forced there, and no other module of the
@@ -33,6 +35,7 @@ import reference_edges
 import resource_mapping
 import sanity_checks
 import site_data
+import source_fetch
 import unit_manifest
 import write_path
 from conftest import FIXTURES_DIR, GOLDEN_DIR, SRC_DIR, run_script
@@ -66,6 +69,22 @@ UNIT_DIR = 'shared_a6577c11'
 
 # The words a flag would need to name the layout. The scan reads `--help`, so the test names none of them.
 LAYOUT_WORDS = ('unit', 'directory', 'split', 'layout', 'flat')
+
+# The path 2 requests for the pin that grows (`docs/API_CONVERSION_PATH.md` §2.5): one response per request the
+# run read, read through the injected producer, so no test calls a network. The read order is the membership
+# response first, then the entries the scope index names in path order. The byte facts come from the door, so
+# the records are built through `provenance.record_for`.
+PATH_2_HOST = 'panorama.test'
+PATH_2_PATHS = ('device-group', 'templates', 'device-group/entry/Office-FW', 'templates/entry/HQ-Networks')
+PATH_2_BODIES = {
+    'device-group': '<entry name="Office-FW"><devices><entry name="fw-1.example.com" /></devices></entry>\n'
+                    '<entry name="Unassigned-DG" />',
+    'templates': '<entry name="HQ-Networks"><devices><entry name="fw-1.example.com" /></devices></entry>',
+    'device-group/entry/Office-FW':
+        '<entry name="Office-FW"><devices><entry name="fw-1.example.com" /></devices></entry>',
+    'templates/entry/HQ-Networks':
+        '<entry name="HQ-Networks"><devices><entry name="fw-1.example.com" /></devices></entry>',
+}
 
 
 @pytest.fixture(scope='session')
@@ -102,6 +121,30 @@ def _rows(corpus_out: Path) -> list:
 def _read_files(report: sanity_checks.SanityReport) -> set:
     """The files the report named, so a test pins that a finding names a file in one of the two sets."""
     return {finding.file for result in report.checks for finding in result.findings if finding.file}
+
+
+def _path_2_response(request) -> bytes:
+    """The response for one path 2 request, in the shape that request states: `result` holds the element the
+    path names, which is the entry itself for an entry read and the container for a place read. The producer
+    hands these bytes, so no test calls a network.
+    """
+    body = PATH_2_BODIES[request.path]
+    segments = request.segments()
+    held = body if len(segments) == 3 else f'<{segments[0]}>\n{body}\n</{segments[0]}>'
+    return ('<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n'
+            + held + '\n</result>\n</response>\n').encode()
+
+
+def _path_2_records(cache_dir) -> list:
+    """The records a path 2 run writes for the requests it read, built through the fetch layer with an injected
+    producer, so the two byte facts are the door's (`docs/ARCHITECTURE.md` §3.3).
+    """
+    records = []
+    for path in PATH_2_PATHS:
+        request = source_fetch.ApiRequest(host=PATH_2_HOST, path=path)
+        source = source_fetch.fetch(request, cache_dir, producer=lambda r: _path_2_response(r))
+        records.append(provenance.record_for(source, request=request))
+    return records
 
 
 # --- 1. The two sets -------------------------------------------------------------
@@ -178,11 +221,14 @@ def test_the_run_writes_one_directory_per_unit_the_manifest_names(corpus_run):
                for directory in dirs), 'the printed form is written inside the unit directory its row names'
 
 
-def test_the_record_directory_is_the_output_directory_for_the_prune(corpus_run):
+def test_the_record_directory_is_the_output_directory_for_the_prune(corpus_run, tmp_path):
     """The record is a codebase root-set file, so the record directory is the output directory and the prune
     action reads the record file at the codebase root. A record directory of its own would be a third set, so
     there is no third builder and no path rule in the module that owns the record: the caller names the record
     path through the builder for the set the record belongs to.
+
+    The path 2 case (F8.6): a run that read N requests writes N records in the same root-set file, and the
+    action protects the N entries its own record names.
     """
     assert provenance.PROVENANCE_FILE in ROOT_TEXT, 'the record names the set it belongs to'
     record_path = write_path.root_path(corpus_run, provenance.PROVENANCE_FILE)
@@ -198,6 +244,25 @@ def test_the_record_directory_is_the_output_directory_for_the_prune(corpus_run):
         'the action reads the record as data and decides through the rule it owns'
     assert 'root_path' not in action and 'unit_path' not in action, 'the action builds no path'
     assert not hasattr(provenance, 'add_arguments'), 'the rule owner states no flag; the CLI does'
+
+    # The path 2 case: the same root-set file, N records for the N requests the run read, and the action reads
+    # the record file back as data at the codebase root. The record path is named through the builder for the
+    # set the record belongs to, because the module that owns the record states no path rule of its own.
+    cache, out = tmp_path / 'cache', tmp_path / 'out'
+    records = _path_2_records(cache)
+    assert len(records) == len(PATH_2_PATHS), 'one record per request the run read'
+    record_file = write_path.root_path(out, provenance.PROVENANCE_FILE)
+    assert record_file == out / provenance.PROVENANCE_FILE, 'the record directory is the output directory'
+    write_path.write_file(record_file, provenance.render_records(records))
+    assert len(provenance.parse_records(record_file.read_text(encoding='utf-8'))) == len(records), \
+        'the record file reads back as itself, with no new field'
+
+    stale = cache / 'an-entry-no-record-references'
+    write_path.write_file(stale, _path_2_response(source_fetch.ApiRequest(host=PATH_2_HOST, path='templates')))
+    assert provenance.prune(record_file, cache) == [stale], \
+        'the N records protect the N entries they name, and nothing else is pruned'
+    assert all((cache / record.cache_entry).is_file() for record in records), \
+        'the entry each record references stays'
 
 
 # --- 2. How the gate reads each set --------------------------------------------

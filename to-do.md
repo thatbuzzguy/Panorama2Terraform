@@ -27,10 +27,12 @@ entry the run read, and `api_requests.entry_for_path` is the lookup it reads. Th
 a per-scope source, so path 1 is unchanged, and the two paths now name the same container path for the same
 content. The predefined decision this piece took is recorded in `backlog.md`.
 
-- [ ] F8.6 One record per request. The eight fields and the fixed order are unchanged, and the `scope`
-      and `request` fields name the request that made the response. The prune action reads the record
-      file, so a run that read N scopes protects N entries. Pins: `tests/test_provenance.py`,
-      `tests/test_write_path.py::test_the_record_directory_is_the_output_directory_for_the_prune`.
+F8.6 is complete: the record file holds one record per request the path 2 run read, with the eight fields and
+the fixed order unchanged. For each request, `scope` names the path that request declared and `request` names
+its key-free identity, so `cache_entry` names the entry that identity names. The prune action reads the record
+file the same run wrote, so a run that read N requests protects N entries, and no new field is needed. The rule
+is stated in `docs/API_CONVERSION_PATH.md` §2.5 with the pins named.
+
 - [ ] F8.7 The unit join. `unit_manifest.units` stays the one unit rule, and path 2 adds the fact of
       which scope the run read for a unit. A unit with no request, and a request that answers no unit,
       is a finding. Pins: `tests/test_api_path.py`, `tests/test_unit_manifest.py`,

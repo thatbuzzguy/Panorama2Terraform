@@ -580,7 +580,9 @@ report only, because their facts compare two identities or need a second positio
 
 `main()` writes one record per source the run read, as `SOURCE.txt` in the output directory, in
 read order: the main source, then a declared parent source (F5.4), then the state source (F5.6). A
-one-source run writes the same bytes as the F5.3 rule. The record names the bytes a reader can
+one-source run writes the same bytes as the F5.3 rule. For the second path one response is one source, so the
+record file holds one record per request the run read, in the order it read them, and the record module states
+no read rule for that order (`API_CONVERSION_PATH.md` §2.5). The record names the bytes a reader can
 reopen, so a report line can be checked against the file it describes. Eight fields, in this order:
 `kind`, `name`, `path`, `scope`, `request`, `cache_entry`, `size`, `sha256`. A field that does not
 apply to the source kind is `-`, so one shape reads. Records are separated by one blank line, which
@@ -594,8 +596,9 @@ Five rules the record keeps:
   it, and a line that is not a declared field is refused. Pinned by
   `tests/test_provenance.py::test_the_record_round_trips_as_data`,
   `::test_a_record_line_that_is_not_a_field_is_refused`,
-  `::test_one_record_writes_the_same_bytes_as_the_f5_3_rule`, and
-  `::test_the_record_file_holds_one_record_per_source_read`.
+  `::test_one_record_writes_the_same_bytes_as_the_f5_3_rule`,
+  `::test_the_record_file_holds_one_record_per_source_read`, and
+  `::test_a_path_2_record_file_reads_back_with_no_new_field`.
 - **The record is not a report body.** A report body names the source name only, never the
   path (F4.2 rule 6), so the path field here cannot move a report byte. The label a report
   body uses for the source is `Source:` (`container_coverage.SOURCE_LABEL`), for both
@@ -622,10 +625,13 @@ Five rules the record keeps:
   action cannot read is a refusal (exit 1). A cache directory that holds no entry has nothing to prune, so
   it is not a refusal. The run prints one line per entry the action removed, and prints nothing when it
   removed nothing, because the action is not a finding kind and the console shape belongs to findings.
-  Pinned by `tests/test_provenance.py::test_the_reference_is_data_not_a_printed_line`,
+  A run that read N requests protects the N entries its own record names, which is the path 2 case
+  (`API_CONVERSION_PATH.md` §2.5). Pinned by
+  `tests/test_provenance.py::test_the_reference_is_data_not_a_printed_line`,
   `::test_a_printed_parent_source_is_not_a_reference`, and
   `tests/test_state_input.py::test_a_state_record_references_nothing_so_it_prunes_nothing`; the action is
-  pinned by group 6 of `tests/test_provenance.py`.
+  pinned by group 6 of `tests/test_provenance.py`, including
+  `::test_the_prune_protects_every_entry_a_path_2_run_read`.
 - **The record directory.** The record directory is the output directory, so the action reads the record
   file the same run wrote and no record directory exists. `SOURCE.txt` is a codebase root-set file, named
   through `write_path.root_path`, and the two-set decision is in

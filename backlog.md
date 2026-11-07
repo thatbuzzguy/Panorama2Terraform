@@ -454,6 +454,17 @@ here with that rule named.
   which element a command names. This touches the F8.1 finding above, because both need a fact a request cannot
   state, and the pin `tests/test_api_requests.py::test_the_committed_op_response_shows_one_shape_and_names_no_live_fact`
   keeps the fixture an illustration rather than a measurement.
+- Open, opened by F8.6: the record names the request that made each response, so `scope` names the path that
+  request declared. A device fact request declares no path, so its record states the door's default,
+  `whole-config`, and `request` is the only field that names the command. The scope index makes no device fact
+  request, so a path 2 run writes such a record only when the run order reads a command as its own source, and
+  no rule decides which scope that record should name. The pin
+  (`tests/test_api_requests.py::test_a_committed_response_reads_through_the_injected_producer_and_the_record_names_the_same_bytes`)
+  reads the default, so the record shape is unchanged and the decision stays here.
+- Open, opened by F8.6: the record file holds the records in the order the run read them, and `provenance.py`
+  states no read rule for a path 2 run, because the order is the run order's decision. The pins measure the
+  order the pin read them (the membership responses, then the entries the index names in path order), so the
+  order itself is not pinned as a rule; it belongs with the entry point (F8.9).
 - Finding, opened by F8.2: the four membership lists name three of the five scope facts, so the index
   reaches no `vsys` and no device. A `vsys` is a scope fact (`ARCHITECTURE.md` §2.2), but no membership
   row reads it, so path 2 cannot request a vsys scope from membership: the run must read it as its

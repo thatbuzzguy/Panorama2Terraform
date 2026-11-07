@@ -26,12 +26,14 @@ Six rules, stated once here.
 5. The record directory is the output directory, so `SOURCE.txt` is a codebase root-set file named through
    `write_path.root_path` (`docs/CODEBASE_ASSEMBLY.md` §14). One record file per run: the prune action reads
    the record file the same run wrote, and this module states no path rule of its own.
-6. Records are in read order: the main source, then the declared parent, then the state
-   source (F5.6). `scope` is the fact the door records, so the record does not state a naming
-   rule of its own; the one definition is `xml_input.DEFAULT_SCOPE`, a per-source run states its
-   declared path, and a state source states the workspace the run declared. A state source has no
-   request, so its two request fields are `-` and its record references nothing: it prunes
-   nothing.
+6. Records are in read order: the order the run read them. For a path 1 run that is the main source,
+   then the declared parent, then the state source (F5.6). For a path 2 run it is one record per request the
+   run read (`docs/API_CONVERSION_PATH.md` §2.5), because one response is one source. Which order a path 2 run
+   reads is the run order's decision, so this module states no read rule for it. `scope` is the fact the door
+   records, so the record does not state a naming rule of its own; the one definition is
+   `xml_input.DEFAULT_SCOPE`, a per-scope request states the path it declared, and a state source states the
+   workspace the run declared. A state source has no request, so its two request fields are `-` and its record
+   references nothing: it prunes nothing.
 
 The record is a run output, not a report body. The report bodies name the source name and
 never the path (F4.2 rule 6), so the path field here does not touch the report byte rule.

@@ -2,6 +2,22 @@
 
 ## Current position
 
+F8.6 is complete (Epic 8, Phase 8B, the run over many sources): the record file holds one record per request the
+path 2 run read, and the eight fields and their fixed order are unchanged. For each request the run read, `scope`
+names the path that request declared, which is the fact the door records, and `request` names its key-free
+identity, which is the shape the cache entry is hashed from, so `cache_entry` names the entry that identity names.
+The record file holds the records in the order the run read them; `provenance.py` rule 6 states that order for the
+sources it owns and states no read rule for a path 2 run, because the order a path 2 run reads is the run order's
+decision (F8.9). The record directory is the output directory, so the prune action reads the record file the same
+run wrote, and a run that read N requests protects the N entries its own record names. No new field is needed, so
+`parse_records` reads a path 2 record file back as itself. The rule is stated in `docs/API_CONVERSION_PATH.md` §2.5
+with its pins named, in `tests/test_provenance.py` and
+`tests/test_write_path.py::test_the_record_directory_is_the_output_directory_for_the_prune`, and `README.md` and
+`docs/README.md` name them. This piece changed no functional code: `provenance.record_for` already took the
+request as an argument, so the pins build records through the fetch layer with an injected producer and write the
+record file through `write_path.root_path` and `write_path.write_file`, because the path 2 entry point does not
+exist yet.
+
 F8.5 is complete (Epic 8, Phase 8B, the run over many sources): one response is one source with its own line
 map, the parent walk and the entry ledger are keyed on the one tree that was parsed, and each parse method runs
 over the response that holds its container. The rule is stated in `docs/API_CONVERSION_PATH.md` §2.4 with its
@@ -54,7 +70,12 @@ lists in sorted order, one entry per scope; and the response-to-request join, ch
 made the response through the one element-name rule (`source_fetch.names_element`). The join keeps no parser and
 calls no producer, so the origin and the line map stay the ones the door recorded.
 
-Next: piece F8.6, one record per request (`to-do.md`, Phase 8B).
+Next: piece F8.7, the unit join (`to-do.md`, Phase 8B).
+
+Findings F8.6 recorded in `backlog.md`: a device fact request declares no path, so its record states the door's
+default for `scope`, and the scope index makes no device fact request, so no rule decides which scope such a
+record should name; and the order a path 2 run reads is not a record rule, because the record module states no
+read rule for it, so the order the pins measure belongs with the entry point (F8.9).
 
 Findings F8.2 recorded in `backlog.md`: the four lists name three of the five scope facts, so a
 vsys scope cannot be read from membership; `container_coverage.ContainerRow` has no field for the table
@@ -70,7 +91,7 @@ entry read inside the place the entry sits at the place level so the scan report
 answers no response for a built-in place because no membership row reads `predefined`. F8.5 added no rule that
 a predefined source is definitions.
 
-Test count: `python3 -m pytest` reads 1620 pins (1604 before F8.5), and `ruff check .` is clean.
+Test count: `python3 -m pytest` reads 1623 pins (1620 before F8.6), and `ruff check .` is clean.
 
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
 facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a
