@@ -1,122 +1,100 @@
-# Acceptance criteria — F8.2, the scope index (Epic 8, Phase 8A)
+# Acceptance criteria — F8.3, the response-to-request join (Epic 8, Phase 8A)
 
-Scope: `src/api_requests.py` (the module path 2 adds first), its pins in
-`tests/test_api_requests.py`, and the `docs/ARCHITECTURE.md` §1 table row that names it. No
-response is committed (the committed harness is F8.4), no response is checked against the request
-that made it (the join is F8.3), no parse method runs over a response, no entry point is added, and
-path 1 is unchanged.
+Scope: one new function in `src/api_requests.py` (the join), the one element-name rule in
+`src/source_fetch.py` read through it, the join pins in `tests/test_source_fetch.py` (the shape) and
+`tests/test_api_requests.py` (the join with the index), and `docs/API_CONVERSION_PATH.md` §2.3 stated in
+the present tense. No response is committed (the committed harness is F8.4), no parse method runs over a
+response (F8.5), no gate rule is added (F8.8), no entry point is added (F8.9), and path 1 is unchanged.
 
-## 1. The four membership lists
+## 1. The join is one function, and it reads the shape through its owner
 
-1.1 The four lists are the `parse_associations` rows in `container_coverage.CONTAINER_TABLE`, read
-    through the table, so the module states no second list of membership containers.
+1.1 `api_requests.join_response(source, entry, index)` takes the response the door parsed and the index
+    entry whose request made it, and returns the entry names inside the response in sorted order.
 
-1.2 The join between a list and the table `parse_associations` returns for it, and the scope
-    container that defines the entries its names belong to, is stated once in the module and nowhere
-    else. The fourth list names the templates a stack applies, which are entries inside the
-    `templates` container, so its names join to that container and not to the stack.
+1.2 A response is accepted only when the element it holds is the element its own request names. That
+    check is read through `source_fetch.py`: the join runs the one wrapper decision
+    (`source_fetch.unwrap_config_root`), which names the element through the one rule in that module
+    (`source_fetch.names_element`), so the join states no shape rule, no wrapper rule, no command-to-element
+    table, no second element-name rule, and no second response success check.
 
-1.3 The module reads no membership itself: it takes what `parse_associations` returned as data, so
-    no module states a second reader of membership, and no module builds a path.
+1.3 A response the fetch layer refuses is refused through the same rule and the same error type, so the
+    join cannot accept a shape its own request does not state: a whole-config response handed to a
+    per-scope entry, and a per-scope response whose element is another container, are refused.
 
-1.4 The four lists name three of the five scope facts, so `vsys` and `devices` name no entry: the
-    index requests no scope no membership row reads, and the run reads such a scope as its declared
-    scope (`tests/test_api_requests.py::test_the_four_membership_lists_are_the_container_table_rows`).
+1.4 The join reads only a response the index made a request for. The index makes only per-scope requests,
+    so the join refuses a request that names no scope path: a whole-config response holds no scope entry,
+    and a device fact names no scope, so which element a command names is not a fact the join can read
+    offline. That fact stays recorded in `backlog.md`.
 
-1.5 The module takes the four tables as data, so it states no merge rule and owns no reader; the join
-    between a list, the table it returns, and the container that defines its names is stated once, as
-    data, and the pin reads the tables the parse method returned.
+1.5 The join is a reader, not a writer: it parses nothing, builds no path, writes no file, states no
+    naming rule, no console line, no environment name, and no membership reader, so the pins that scan the
+    `src/` set read it with the other modules unchanged. It keeps the origin and the line map, so a report
+    line still names the line the response carries (F8.5).
 
-## 2. The set is read, not guessed
+## 2. The entry name inside the response agrees with the scope index
 
-2.1 Two levels, no more: one entry per scope container the run read, then one entry per scope entry
-    those containers name. No entry is a third level.
+2.1 For a request that names an entry, the response holds that entry, so the entry name inside it equals
+    the name the index names for that entry.
 
-2.2 The names in the set are the names the lists the run read hold. A name no membership list read
-    is not in the set, so no scope is guessed.
+2.2 For a request that names a place, the entry names inside the response are the names the index read for
+    that container, so a response that holds no entry for a name the index read is refused.
 
-2.3 No request is made for a scope the run did not read. A name read through a list whose entries
-    belong to a container the run did not read enters no entry.
+2.3 The join is checked, not assumed: a container response that holds the names the index read for a
+    different container is refused even when the shape rule passes, because the shape rule reads the path
+    and the join reads the index.
 
-2.4 A device names no entry in the index. `parse_associations` keys its tables on the entry that owns
-    a list, which is a device for three tables and the stack for the fourth, and a membership entry
-    inside a list is a `bookkeeping` entry (`docs/ARCHITECTURE.md` §2.4), so a key is never a scope
-    entry the module can request.
+2.4 An entry inside a response that lists no membership name gains no entry in the index
+    (`api_requests.names_read`, F8.2), so the join compares no name for it and accepts the response. No
+    association is better than a guessed one, and the join states no rule of its own for that case.
 
-2.5 A container that lists no name gains no entry, the same way an export that lists no device gives
-    empty tables: no association is better than a guessed one.
+2.5 An entry inside a membership entry names no scope (`docs/ARCHITECTURE.md` §2.4), so the join reads only
+    the entries at the level its own request names, and an entry with no name is refused.
 
-## 3. Order and identity
+## 3. The pins
 
-3.1 The set is read in sorted order, one entry per scope: the containers first, then the entries in
-    path order, so the same names in a different document order give the same set.
+3.1 `tests/test_source_fetch.py` (the join group, the shape side):
+    `test_the_join_reads_the_element_name_rule_through_the_fetch_layer` — a per-scope response whose element
+    is another container is refused by the fetch layer's words, `names_element` is the only element-name rule
+    in the `src/` set, and the join's only module call is the wrapper decision, so `api_requests.py` states no
+    shape rule and no wrapper rule of its own.
+    `test_the_element_name_rule_names_no_element_for_a_device_fact` — the rule names no element for a request
+    that declares a command and no path, so the join has no element name to read for a device fact, and no
+    module states a command-to-element table.
 
-3.2 A name two lists read gives one entry.
+3.2 `tests/test_api_requests.py` (the join group, the join with the index):
+    `test_the_join_accepts_only_the_response_for_the_request_that_made_it` — every response read through the
+    injected producer for its own index entry is accepted, and the names inside it agree with the index.
+    `test_the_entry_name_inside_a_response_agrees_with_the_index` — the entry name inside an entry response
+    equals the index name, and the names inside a container response hold the names the index read for that
+    container; a response that holds the names the index read for another container is refused although the
+    shape rule passes, because the shape rule reads the path and the join reads the index.
+    `test_the_join_refuses_a_response_whose_element_is_not_the_element_its_request_names` — the same bytes
+    handed to another entry's request are refused, and the refusal names the path the entry states.
+    `test_the_join_refuses_a_response_the_index_made_no_request_for` — a device fact names no index entry, and
+    a whole-config response holds no scope entry, so the join refuses both.
+    `test_an_entry_that_lists_no_name_names_no_entry_for_the_join` — the F8.2 entry that lists no name is
+    accepted by the join, because the index read no name for it, and the join states no rule of its own for
+    that case.
+    `test_the_join_returns_the_entry_names_inside_the_response_in_sorted_order` — the names the run (F8.5)
+    keys its parse on, in the same order for another document order.
+    `test_an_entry_inside_a_response_with_no_name_is_refused` — an entry inside a response that carries no
+    name gives the join nothing to compare, so it is refused rather than guessed.
+    `test_the_join_reads_the_same_response_the_door_parsed` — the join builds no second tree and calls no
+    producer, so the origin and the line map are the ones the door recorded, and a cached response reads
+    through the join the same way.
+    `test_the_join_states_no_second_shape_rule_or_wrapper_rule` — the join reads the shape through
+    `source_fetch.py`, states no command-to-element table, reads the entry rule through `xml_input.py`, and
+    owns only the index agreement.
 
-3.3 One entry names the level, the scope container that defines it, the entry name, the scope path,
-    and the request that reads it. The entry name and the request are what the response-to-request
-    join (F8.3) reads, so the join is a new function in this module and not a change to this rule.
+## 4. The checks
 
-## 4. The rules the module reads through their owners
+4.1 `ruff check .` is clean.
 
-4.1 Every path in the index is a path `container_coverage.is_scope_path` validates. The module builds
-    a path through `xml_input.ENTRY_SEGMENT` and refuses one the one definition does not validate, so
-    it states no second path rule.
+4.2 `python3 -m pytest` passes with no skip: the baseline 1586 pins, plus the pins above. No existing pin
+    regresses, and no test calls the network: every response is handed by an injected producer.
 
-4.2 Each entry's request is a per-scope request built by `source_fetch.ApiRequest`, so the module
-    states no request shape, no cache rule, and no request identity rule of its own.
-
-4.3 The module states no naming rule, no writer, no console line, and no environment name, so the
-    pins that scan the `src/` set read it with the other modules: the writer scan, the environment-name
-    scan, the console-line scan, and the second-naming-rule scan pass unchanged. It writes no file, so
-    `write_path.py` stays the single writer.
-
-4.4 `api_requests.py` is named in the `docs/ARCHITECTURE.md` §1 table.
-
-4.5 No test calls the network. The pins run `fetch` through an injected producer, as
-    `tests/test_source_fetch.py` does, and the module imports the standard library and its `src/`
-    siblings only.
-
-## 5. The pins (`tests/test_api_requests.py`)
-
-5.1 `test_the_four_membership_lists_are_the_container_table_rows` — the lists are the rows, the join
-    names the four lists and no other path, and the join names three of the five scope facts.
-
-5.2 `test_the_scope_set_comes_from_the_membership_responses_the_run_read` — the index equals the names
-    the four lists read for the responses the run read, read through the injected producer and the same
-    parse rule, and the join names the tables `parse_associations` returns.
-
-5.3 `test_no_request_is_made_for_a_scope_the_run_did_not_read` — a partial read, and a name whose
-    entries belong to a container the run did not read.
-
-5.4 `test_a_container_that_lists_no_name_gains_no_entry` — an entry with no membership name.
-
-5.5 `test_a_device_key_names_no_entry_in_the_index` — a key is not a scope entry.
-
-5.6 `test_the_index_makes_one_request_per_scope_container_then_one_per_entry` — two levels, no more.
-
-5.7 `test_the_index_is_read_in_sorted_order_and_names_one_entry_per_scope` — the order, and a name two
-    lists read.
-
-5.8 `test_every_index_path_is_a_path_the_one_scope_path_definition_validates` — the module refuses a
-    name that builds a path the definition does not validate.
-
-5.9 `test_each_entry_names_the_request_the_fetch_layer_reads` — the per-scope shape, one cache entry
-    per entry, and no identity rule stated in the module.
-
-5.10 `test_the_module_reads_the_layout_rules_through_their_owners` — no second naming rule, no second
-    writer, no second console line, no environment name, no membership reader, no merge rule.
-
-5.11 `test_the_module_is_named_in_the_architecture_module_table` — the §1 row.
-
-## 6. The checks
-
-6.1 `ruff check .` is clean.
-
-6.2 `python3 -m pytest` passes with no skip: the baseline 1575 pins, plus the pins in
-    `tests/test_api_requests.py`. The pins that scan the `src/` set read the new module with the other
-    modules and pass unchanged.
-
-6.3 The commit is one ASD-STE100 message. When the rule lands, `docs/API_CONVERSION_PATH.md` §2.2
-    states it in the present tense and names the pin, `docs/ARCHITECTURE.md` §1 names the module, and
-    the completed piece leaves `to-do.md`.
+4.3 The commit is one ASD-STE100 message. When the rule lands, `docs/API_CONVERSION_PATH.md` §2.3 states it
+    in the present tense and names the pins, `docs/ARCHITECTURE.md` §1 names the join in the module row, the
+    F8.1 sentence about a command's element name is made honest in §3, the completed piece leaves `to-do.md`,
+    the findings the join touches are updated in `backlog.md`, and `agent-status.md` names the next piece
+    (F8.4, the offline harness).

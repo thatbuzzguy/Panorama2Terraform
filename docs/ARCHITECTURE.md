@@ -21,7 +21,7 @@ Every file in this table is a module in `src/`, except the test harness, which i
 | `panorama_to_terraform.py` | The converter: `PanoramaParser` (model), `TerraformGenerator` (model and write), `main()` (order) | the parser consumes only the producer contract (`ParsedSource`); it reads no file and opens no connection itself, so a source is either the file producer or the api producer |
 | `xml_input.py` | The only input read, shared by every entry point, through one producer boundary (F5.1), and the scope vocabulary a source states (F5.4) | the two byte checks are one function (`check_bytes`) every source kind runs, so the size cap and the DTD refusal are kind-independent and only the parse step is chosen by the kind; one definition of the scope a source holds (`DEFAULT_SCOPE`) and of the path segment that names an entry (`ENTRY_SEGMENT`) |
 | `source_fetch.py` | The api producer (F5.2): the https request, the cached copy, the response wrapper, and the three accepted request shapes (F5.4, F8.1) | https only; a redirect that changes the scheme is refused; the cache holds exactly the bytes the boundary parsed; the key comes from the environment only, and `API_KEY_ENV` is the only module that states its name (`CODEBASE_ASSEMBLY.md` §11); the declared path or the declared command is part of the request identity, so each scope and each command gets its own entry; a command value reaches the URL encoded |
-| `api_requests.py` | The scope index (F8.2): one entry per scope the run read, and the request that reads its response | the scope set is read from the membership responses through the four `parse_associations` lists, so no scope is guessed and no request is made for a scope the run did not read; two levels only, sorted order, one entry per scope; the path is read through `xml_input.ENTRY_SEGMENT` and `container_coverage.is_scope_path`, so no second path rule exists; the module reads no source and no membership of its own and states no naming rule, writer, console line, or environment name |
+| `api_requests.py` | The scope index (F8.2), and the response-to-request join (F8.3): one entry per scope the run read, the request that reads its response, and each response read against the entry whose request made it | the scope set is read from the membership responses through the four `parse_associations` lists, so no scope is guessed and no request is made for a scope the run did not read; two levels only, sorted order, one entry per scope; a response is accepted only when the element it holds is the element its own request names, read through `source_fetch.py`, and the entry name inside it agrees with the index; the path is read through `xml_input.ENTRY_SEGMENT` and `container_coverage.is_scope_path`, so no second path rule exists; the module reads no source and no membership of its own and states no naming rule, writer, console line, or environment name |
 | `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `DATA_SOURCE_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX`, and the scope tables `SCOPE_TYPES`, `SCOPE_PLACEMENT`, `SCOPE_ANSWER`, `SCOPE_LEVEL_ORDER` and `SCOPE_SHAPE` (F6.5), plus the value-to-variable table `VALUE_VARIABLES` (F6.6) | the single source of truth; no resource name or attribute from memory; `SCOPE_SHAPE` is the shape the provider takes, so a membership cannot be printed as a string where the provider takes an object; `VALUE_VARIABLES` covers every field `LOCATION_SCHEMA` declares, so the emitter and the gate read one table and no emitter branch decides the shape for one type |
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy` |
 | `container_coverage.py` | The container table (§3.1), the section rule, and the one scope path definition | the table is data, so a parse method cannot exist without a row |
@@ -211,9 +211,9 @@ reads it (`COVERAGE_MATRIX.md` §1). The gap that has no rule yet is recorded in
      the place the path names (§3.1). A device fact request (F8.1) declares a command, and its
      `result` must hold exactly one element, the fact element the command names; `result` becomes
      the root, read as the place the command names, and the source states no scope, because a
-     command names no scope. The producer states no command-to-element table, so which element a
-     command names is checked by the response-to-request join (`API_CONVERSION_PATH.md` §2.3) and is
-     never guessed. A shape that does not match its own request is refused: a
+     command names no scope. The producer states no command-to-element table, so the one element-name rule (`names_element`)
+     names no element for a device fact request, and the response-to-request join (`API_CONVERSION_PATH.md` §2.3) reads it here for
+     a per-scope request only. A shape that does not match its own request is refused: a
      `result` with no `config` element read by a whole-config request, a `result` that holds
      nothing, more than one element, or an element the path does not name, and a whole-config
      shape read by a per-scope request, and a whole-config or a per-scope shape read by a device
@@ -234,7 +234,9 @@ reads it (`COVERAGE_MATRIX.md` §1). The gap that has no rule yet is recorded in
      `::test_an_op_response_that_breaks_the_op_shape_is_refused`,
      `::test_the_op_shape_checks_the_shape_and_the_join_checks_the_element_name`,
      `::test_the_response_check_runs_for_the_op_shape`, and
-     `::test_an_op_response_is_not_a_config_source`.
+     `::test_an_op_response_is_not_a_config_source`, and the F8.3 join group
+      `::test_the_join_reads_the_element_name_rule_through_the_fetch_layer` and
+      `::test_the_element_name_rule_names_no_element_for_a_device_fact`.
    - **The cache holds the parsed bytes under a key-free name.** An entry is named by the
      SHA-256 hex of the host and the sorted request parameters. The key is not part of the
      name, so the credential never appears in a file name, and two requests with the same

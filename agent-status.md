@@ -2,6 +2,17 @@
 
 ## Current position
 
+F8.3 is complete (Epic 8, Phase 8A): the response-to-request join is `api_requests.join_response`, the rule
+is stated in `docs/API_CONVERSION_PATH.md` §2.3 with the pins named, and the module row in
+`docs/ARCHITECTURE.md` §1 names it. The join reads one response against the index entry whose request made
+it, and answers the entry names inside it, which is what the run (F8.5) keys its parse on. Two checks, in
+order: the element the response holds is the element its own request names, read through
+`source_fetch.names_element` by running the one wrapper decision, so no module states a second shape rule or
+a second element-name rule; and the entry name inside agrees with the index, which is what the join owns, so
+the join is checked and not assumed. The check is one-way, so an entry that lists no name compares no name,
+which keeps the F8.2 rule. The join keeps no parser and calls no producer, so the origin and the line map
+stay the ones the door recorded.
+
 F8.2 is complete (Epic 8, Phase 8A): the scope index is in `src/api_requests.py`, the rule is stated
 in `docs/API_CONVERSION_PATH.md` §2.2 with the pins named, and the module is in the
 `docs/ARCHITECTURE.md` §1 table. F8.1 landed before it: the three accepted request shapes, the op
@@ -18,19 +29,28 @@ sorted order, one entry per scope. A table key names no entry, because a key nam
 the list. The index reaches three of the five scope facts, so `vsys` and `devices` name no entry. The
 path is built through `xml_input.ENTRY_SEGMENT` and validated through
 `container_coverage.is_scope_path`, so no second path rule exists, and the entry names the request the
-fetch layer reads, which is the part F8.3 reads.
+fetch layer reads, which is the part the join reads.
 
-Next: piece F8.3, the response-to-request join, as a new function in the same module: the element a
-response holds must be the element its own request names, and the entry name inside it must agree with
-the index. Then F8.4, the offline harness with one committed response per shape.
+The decisions F8.3 took: `source_fetch._named_element` became the public `names_element`, so the wrapper
+decision and the join read one rule and no module states a second; the join runs that wrapper decision on the
+response the door parsed and keeps no parser of its own, so the origin and the line map reach the report
+unchanged; the join compares the entry names inside a response with the index, so it owns the index
+agreement and no membership rule; and it reads only a response the index made a request for, so a device
+fact request and a whole-config response are refused, because a command names no path and the rule names no
+element for it.
 
-Findings this piece recorded in `backlog.md`: the four lists name three of the five scope facts, so a
+Next: piece F8.4, the offline harness with one committed response per shape.
+
+Findings F8.2 recorded in `backlog.md`: the four lists name three of the five scope facts, so a
 vsys scope cannot be read from membership; `container_coverage.ContainerRow` has no field for the table
 its method returns, so the join lives as data in `api_requests.LIST_JOIN`; and the merge of the four
 tables across the responses a run read belongs to the run order, because the module states no merge
-rule. The findings the F8.1 decision recorded stay there too.
+rule. F8.3 recorded one finding there: `names_element` names no element for a device fact request, so the
+join has no fact to read a command's element name against, and it sits with the F8.1 finding about a
+predefined read, because both need a fact a request cannot state. The findings the F8.1 decision recorded
+stay there too.
 
-Test count: `python3 -m pytest` reads 1586 pins, and `ruff check .` is clean.
+Test count: `python3 -m pytest` reads 1597 pins, and `ruff check .` is clean.
 
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
 facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a

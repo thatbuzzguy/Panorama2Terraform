@@ -1,6 +1,7 @@
-"""F8.2 the scope index: the set of scopes path 2 reads, as one entry per scope.
+"""F8.2 the scope index, and F8.3 the response-to-request join: the set of scopes path 2 reads, as one
+entry per scope, and each response read against the request that made it.
 
-Two rules, stated once here (`docs/API_CONVERSION_PATH.md` §2.2 and §7):
+Three rules, stated once here (`docs/API_CONVERSION_PATH.md` §2.2, §2.3 and §7):
 
 1. The scope set is read, not guessed. It comes from the membership responses the run read, through
    the four membership lists `parse_associations` reads (`docs/ARCHITECTURE.md` §3, rule 3). Two
@@ -12,20 +13,23 @@ Two rules, stated once here (`docs/API_CONVERSION_PATH.md` §2.2 and §7):
 2. The set is read in sorted order, one entry per scope: the containers first, then the entries in
    path order. A name two lists read gives one entry, so the set does not depend on document order.
 
+3. The join (`docs/API_CONVERSION_PATH.md` §2.3) reads one response against the index entry whose request
+   made it, so it is checked and not assumed: the element the response holds is the element its own
+   request names, read through `source_fetch.py`, and the entry name inside the response agrees with the
+   index, which is what the join owns.
+
 The module reads no source and no membership of its own: `source_fetch.py` reads the bytes through
 the input door, and `PanoramaParser.parse_associations` reads the four lists. What this module owns
-is the join between a name a list read and the request that reads the scope it names. So it states no
-membership reader, no request shape, no cache rule, no request identity rule, no path rule, no naming
-rule, no writer, no console line, no environment name, and no merge rule, and the pins that scan the
-`src/` set read it with the other modules. The four lists name three of the five scope facts, so the
+is the join between a name a list read and the request that reads the scope it names, and the join
+between a response and the entry that asked for it. So it states no membership reader, no request
+shape, no wrapper rule, no cache rule, no request identity rule, no path rule, no naming rule, no
+writer, no console line, no environment name, and no merge rule, and the pins that scan the `src/`
+set read it with the other modules. The four lists name three of the five scope facts, so the
 index reaches those three containers: no membership row reads `vsys` or `devices`, so the index makes
 no request for them, and the run reads such a scope as its declared scope. The module takes the four
 tables as data, so a run that read one response holds one table set, and the merge across responses is
-the run order's work (`docs/API_CONVERSION_PATH.md` §2.4).
-
-The response-to-request join (`docs/API_CONVERSION_PATH.md` §2.3) is the next piece. It reads the two
-parts this rule already names: the entry name, and the request that made the response. So the join is
-a new function in this module, not a change to the rules above.
+the run order's work (`docs/API_CONVERSION_PATH.md` §2.4). A device fact request names no index entry,
+so the join has no fact to read its element name against, and `backlog.md` records that.
 
 Usage:
     from api_requests import scope_index
@@ -43,7 +47,7 @@ Usage:
 from dataclasses import dataclass
 
 import container_coverage
-from source_fetch import ApiRequest
+import source_fetch
 from xml_input import ENTRY_SEGMENT
 
 # The parse method that owns the four membership lists. The lists are its rows in the container
@@ -82,7 +86,7 @@ class ScopeIndexEntry:
     container: str        # the scope container that defines the entry
     name: str             # the entry name; '' for a container entry
     path: str             # the scope path, in the shape the record states it
-    request: ApiRequest   # the per-scope request the fetch layer reads
+    request: source_fetch.ApiRequest   # the per-scope request the fetch layer reads
 
 
 def membership_lists() -> tuple:
@@ -147,7 +151,7 @@ def scope_index(host, membership: dict, read) -> tuple[ScopeIndexEntry, ...]:
     for container in containers:
         path = scope_path(container)
         entries.append(ScopeIndexEntry(CONTAINER_LEVEL, container, '', path,
-                                       ApiRequest(host=host, path=path)))
+                                       source_fetch.ApiRequest(host=host, path=path)))
 
     # Level 2: one entry per scope entry those containers name. A name whose entries belong to a
     # container the run did not read enters no entry, so no scope is guessed.
@@ -163,6 +167,93 @@ def scope_index(host, membership: dict, read) -> tuple[ScopeIndexEntry, ...]:
             seen.add(key)
             path = scope_path(defines, name)
             entries.append(ScopeIndexEntry(ENTRY_LEVEL, defines, name, path,
-                                          ApiRequest(host=host, path=path)))
+                                           source_fetch.ApiRequest(host=host, path=path)))
 
     return tuple(sorted(entries, key=lambda entry: (entry.level, entry.path)))
+
+
+def entry_name(element) -> str:
+    """The name an `entry` element carries, or a refusal when it carries none.
+
+    An entry with no name gives the join nothing to compare with the index, so it is refused rather than
+    guessed. An entry inside a membership entry names no scope (`docs/ARCHITECTURE.md` §2.4), so the join
+    reads only the entries at the level its own request names.
+    """
+    name = element.get('name')
+    if not name:
+        raise ValueError(
+            "refusing the entry inside the response: it carries no name, so the join has nothing to "
+            "compare with the scope index."
+        )
+    return name
+
+
+def entry_names_inside(element) -> tuple:
+    """The entry names the response holds inside the element its own request names, in sorted order.
+
+    A request that names an entry makes that entry the element the response holds, so the name the element
+    carries is the one name the join compares. A request that names a place holds the entries inside it.
+    """
+    if element.tag == ENTRY_SEGMENT:
+        return (entry_name(element),)
+    return tuple(sorted(entry_name(child) for child in element if child.tag == ENTRY_SEGMENT))
+
+
+def names_in_index(index, container: str) -> tuple:
+    """The names the index has for one scope container, in sorted order."""
+    return tuple(sorted(entry.name for entry in index
+                        if entry.level == ENTRY_LEVEL and entry.name and entry.container == container))
+
+
+def join_response(source, entry, index) -> tuple:
+    """The response-to-request join (`docs/API_CONVERSION_PATH.md` §2.3): read one response against the
+    index entry whose request made it, and return the entry names inside it in sorted order.
+
+    Two checks, in this order:
+
+    1. The element the response holds is the element its own request names. The join reads this through its
+       owner, so it states no shape rule and no wrapper rule: it runs the one wrapper decision
+       (`source_fetch.unwrap_config_root`) on the response, and that decision names the element through the
+       one rule in that module (`source_fetch.names_element`). The door's origin and line map are the ones
+       the join reports, so no second tree is built and no producer is called.
+    2. The entry name inside the response agrees with the scope index, which is what the join owns, so the
+       join is checked rather than assumed. For a request that names an entry, the name inside it is the
+       name the index names for that entry. For a request that names a place, the names inside it are the
+       names the index read for that container, so a name the index read must appear inside. A name inside
+       that the index did not read gains no entry (`names_read`), so the join reads no membership here
+       and states no membership rule of its own.
+
+    The join reads only a response the index made a request for, because the index makes only per-scope
+    requests: a whole-config response holds no scope entry, and a device fact names no scope, so a
+    command's element name is not a fact the join can read offline (`backlog.md`).
+    """
+    request = entry.request
+    if not request.is_per_scope():
+        raise ValueError(
+            f"refusing the response for '{entry.path}': the join reads a response against the index entry "
+            "that made its request, and this request names no scope path, so no index entry names it."
+        )
+
+    # The response is read against the request the index entry states, so bytes that came from another
+    # request are refused here rather than assumed to belong to this entry.
+    accepted = source_fetch.unwrap_config_root(source, request)
+    held = list(accepted.root)
+    inside = entry_names_inside(held[0])
+
+    if entry.level == ENTRY_LEVEL:
+        if inside != (entry.name,):
+            raise ValueError(
+                f"refusing the response for '{entry.path}': the entry name inside it is {list(inside)}, "
+                f"which does not agree with the index, where that entry is '{entry.name}'."
+            )
+        return inside
+
+    agreed = names_in_index(index, entry.container)
+    missing = [name for name in agreed if name not in inside]
+    if missing:
+        raise ValueError(
+            f"refusing the response for '{entry.path}': the entry names inside it are {list(inside)}, "
+            f"which do not agree with the index for '{entry.container}', because the index read "
+            f"{list(missing)} and the response holds no entry for them."
+        )
+    return inside
