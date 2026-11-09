@@ -1,94 +1,129 @@
-# Acceptance criteria — F8.7, the unit join (Epic 8, Phase 8B)
+# Acceptance criteria — F8.8, the request-set rule in the gate (Phase 8C, path 2)
 
-Scope: the join between the run's unit set and the request set (`docs/API_CONVERSION_PATH.md` §3), stated in
-`src/api_requests.py` as `join_units`, and the ownership `source` field for a path 2 row. The pins are in
-`tests/test_api_path.py` (both directions of the join), `tests/test_unit_manifest.py` (the join reads the unit
-set through the one rule), and `tests/test_ownership.py` (the `source` field names a response name). Path 1 is
-unchanged.
+## Scope
 
-What this piece does not do: no second unit rule, no second naming rule, no second writer, no second console
-line, no report section for the findings, no environment name, no cache rule, no path rule, no membership
-reader, no merge rule, no request-set gate rule (F8.8), no entry point and no run order (F8.9).
-`tests/test_reference_edges.py` is unchanged, because the order rule reads no input shape.
+The rule F8.8 states: the request set must agree with the scope the run read.
+The join already reports the two directions as data rows, in
+`api_requests.unit_findings`. This piece puts a rule in front of those rows, so the
+gate decides them, and it lands the path 2 pins for the rules that already read the
+files. It belongs to Phase 8C, whose pieces F8.3 and F8.7 landed the other two rules.
 
-## 1. The unit set is read through the one rule
+F8.8 covers:
 
-1.1 `unit_manifest.units` stays the one unit rule: one unit is one combination of the five scope facts, and a
-unit exists when the ledger has a report row in it. `api_requests.join_units` reads the unit set through that
-function and through `unit_manifest.facts_of`, so path 2 states no second unit rule and counts no unit a second
-way.
+- One gate rule in `src/sanity_checks.py`, named `request_set`, that reads the join
+  through the owners and reports the findings as a report section.
+- The two findings it can make, one for each direction, pinned on both paths.
+- The path 2 pins for the rules that already read the files, so the join is tested as
+  a join, not as a fixture: each pin runs the pipeline in process with an injected
+  producer, and the coverage fact it states is read from the run's ledger.
+- The byte rule between the two runs, and the LF rule, in the style of the pins that
+  already carry them.
+- `docs/API_CONVERSION_PATH.md` §3 states the rule in the present tense and names the
+  pins that hold it.
 
-1.2 The join names no field of its own. The fact order comes from `unit_manifest`, and the field name for the
-row's source comes from `ownership.SOURCE_FIELD`, so `src/api_requests.py` holds no field name as a string
-constant, and the join adds no field to the declared manifest row shape or to the declared record shape.
+F8.8 does not cover the row set for a cross-response join, which `backlog.md` §2 keeps
+open as F8.9: the join reads one response name per fact row, so the facts read from a
+fixture and the facts the run recorded are not the same kind of set yet. The rule
+decides only what the join can already state. The path 2 read order, which `backlog.md`
+§1 keeps open as F8.6, is also F8.9's, and F8.2 keeps the vsys and device-fact scope
+facts open.
 
-1.3 The join answers the pair for each unit: the unit identity as the one rule states it, and the index entry
-whose request made the response the unit's rows came from.
+## The rule, in one sentence
 
-## 2. The fact path 2 adds
+The gate rule checks the request set against the scope set. A unit's facts must match
+the request the run made for that unit, and the request set must match the scope rows.
 
-2.1 Path 2 adds one fact the join can read: the scope the run read for a unit. Each ledger row names the
-response its entry came from, and that value is the key-free request identity `source_fetch` hashes, so the join
-matches the row to the index entry through `source_fetch`'s name rule (`cache_name`) and states no cache rule and
-no identity rule of its own.
+## The criteria
 
-2.2 The join answers which scope the run read for the unit, not which scope the unit sits in: the place response
-for a place read, and the entry response for an entry read (F8.5). Same content, two reads, two answers.
+1. **The rule is one owner.** Only `src/sanity_checks.py` decides what the gate does with
+   the join's findings: it calls `api_requests.unit_findings(index, ledger)` and turns the
+   pairs it gets back into `Finding` objects. It states no merge rule and no membership
+   rule, because the join owns both. No other module in `src/` reads the join.
+2. **Reads go through the owners.** The rule names a unit and its directory only through
+   `unit_manifest.unit_name`, `unit_manifest.directory_name` and `unit_manifest.units`,
+   reads the scope side only through `ownership.SOURCE_FIELD` and `api_requests`, and reads
+   the cache name only through `source_fetch.cache_name`. It names no table row by hand,
+   copies no row from `Corpus`, and does not reach into a private name. `api_requests` stays
+   a join: `test_api_path.py` still pins that it names no check, no report section, no
+   render, and no name that an owner owns.
+3. **Finding 1, the unit side.** A fact that is in the run's ledger for a unit, or in the
+   join's response row for that unit, but not in both, is reported. The line it names is the
+   file that carries the fact, and the file it names is the unit directory. When one side is
+   empty the finding says so, in the words the join already uses: 'no response row', or
+   'the ledger has the fact and the response row does not'.
+4. **Finding 2, the run-wide side.** A scope row for a unit that is not in the response set,
+   and a response name that has no scope row, are reported through the join. The rule reports
+   the run-wide half in the report block with `file=''`, the same shape `check_terraform`
+   uses for the root block. The rule states no row set of its own: the pairs come from
+   `unit_findings`, so the cross-response half stays open with F8.9.
+5. **The findings sort by the data rule.** The report section orders the findings by file,
+   then line, then detail, the order `check_data_files` already pins for a data check. A
+   byte rule or an LF rule cannot change that order.
+6. **The rule is a WARN, and it does not change the exit code.** A fact that compares two
+   sets is a coverage fact, not a broken output, so the block reports WARN. A WARN never
+   changes the exit code, which is the rule `docs/ARCHITECTURE.md` §4.6 already states. The
+   gate reports FAIL only for a broken output, so a run that reads the same files through
+   different paths exits the same way on both paths.
+7. **The rule prints nothing in the console summary, and prints one line in the report
+   section.** The console shape has one owner, `container_coverage`, and the pins that hold
+   it say no other module in `src/` states the prefix or the line shape. The gate reads the
+   join, so `sanity_checks` states no console line. This is the decision F8.7 left open in
+   `backlog.md` §2, and it closes it: the findings print in the report only.
+8. **The rule reports NOT RUN when it has no index.** The gate cannot build an index, because
+   no module in `src/` imports `api_requests` yet, so a call without one reports NOT RUN with
+   a note, the same shape `check_round_trip` uses for a call without a ledger.
+9. **The position.** `request_set` sits after `round_trip` and before `control_chars`. The
+   reason is the order `tests/test_round_trip.py` pins: `round_trip` sits immediately after
+   the data rule, and `terraform` sits last, so the new rule takes the next position after
+   `round_trip`. That pin is migrated, not dropped, and the order has one owner.
+10. **The pins run the pipeline in process.** A path 2 pin reads a fact from a real run
+    because the acceptance says a fact from a run must come from the run's ledger. So each
+    pin calls `run_pipeline`, injects the producer, and passes the join's index built from
+    the fixture. A fixture-only pin is allowed only for the pair a real run cannot make, and
+    the pin says what it is.
+11. **The byte rule and the LF rule between two runs.** Two pins hold them on this path, in
+    the style of `tests/test_round_trip.py`: the byte rule says a finding names the bytes
+    that carry the fact, and no finding names a byte order the run did not read; the LF rule
+    says the report file is LF bytes, and the same run through the other path reports the
+    same findings.
 
-2.3 The join reads the row set through one ledger, because the join is per response (F8.5). For a run that read
-one response, the row set is that response's rows. Which row set a run that read more than one response joins is
-the run order's decision, so this piece states no merge rule and the finding stays in `backlog.md`.
+## The pins that hold these criteria
 
-## 3. The two directions are findings
+In `tests/test_sanity_gate.py`:
 
-3.1 Direction 1: a unit the join answers no entry for, because the response its rows name is one the index made
-no request for. A whole-config response holds no scope entry, and a scope no membership row reads gains no entry,
-so a run that read the same content as a whole-config export, or as a predefined read, has a unit with no request.
+- `test_the_gate_checks_the_join_through_the_owners` — criterion 2.
+- `test_a_fact_that_the_join_and_the_ledger_do_not_agree_on_prints_in_the_report` —
+  criterion 3, both directions.
+- `test_the_run_wide_findings_print_through_the_join` — criterion 4.
+- `test_the_join_findings_sort_by_the_data_rule` — criterion 5.
+- `test_the_join_prints_no_console_line_and_stays_a_warn` — criteria 6 and 7.
+- `test_the_rule_reports_not_run_when_the_gate_has_no_index` — criterion 8.
+- `test_a_path_2_run_and_a_path_1_run_report_the_same_findings` — criteria 10 and 11,
+  the byte rule between two runs, and the LF rule on the report file.
+- `test_two_runs_read_the_same_files_and_report_the_same_findings` — criteria 6, 10 and 11,
+  the byte rule between two runs on both sides of the join.
 
-3.2 Direction 2: an index entry the run read no rows for, so no unit answers it. The set is read from the
-membership responses, so an entry the index names can exist while the run read no row for it.
+The pin list at the top of `tests/test_sanity_gate.py` names the new pins, and the pins that
+already exist are migrated where the new rule changes what they see: the pins that check the
+order, the set of results on a path 1 run, the kitchen-sink gate report, and the sample
+summary line. `tests/test_round_trip.py` keeps the order pins, the exit-code pins, and the
+byte-rule pins, and gains the path 2 pins for the rules that already read the files, so the
+cross-check is tested as a reader of the files and as a reader of the join together.
 
-3.3 The join reports both directions as data rows and nothing else: no console line, no writer, no report
-section, no exit code, and no new gate rule (F8.8). A finding is data the join reports, so this piece decides no
-predefined rule and no vsys rule.
+## Checks
 
-## 4. The ownership source field
+- `python3 -m pytest` passes with no skips. The baseline count is 1629, and the new count is
+  recorded in `agent-status.md` when the piece lands.
+- `ruff check .` reports no finding.
+- The tool imports only the standard library, and the tests run offline with injected
+  producers.
+- One owner document per rule, no document restates a table row by row, and no document states
+  a test count.
 
-4.1 `OWNERSHIP.json` keeps the same row shape and the same field order for a path 2 run, with a response name on
-the `source` field instead of a file name. No new field, no change to the order rule, and `parse_rows` reads a
-path 2 record back as itself.
+## Commit
 
-4.2 The `source` value is the source name, never its path, so a path 2 value holds no `/` and no credential.
-
-## 5. The pins
-
-5.1 `tests/test_api_path.py` (the new unit join group):
-
-1. `test_the_unit_join_answers_the_scope_the_run_read_for_a_unit` — AC-1.3, AC-2.1, AC-2.2, AC-2.3.
-2. `test_a_unit_the_index_made_no_request_for_is_a_finding` — AC-3.1.
-3. `test_an_index_entry_the_run_read_no_rows_for_is_a_finding` — AC-3.2.
-4. `test_the_join_reports_the_findings_as_data_through_the_owners_names` — AC-1.2, AC-3.3.
-
-5.2 `tests/test_unit_manifest.py` gains `test_the_join_reads_the_unit_set_through_this_rule` (AC-1.1, AC-1.2).
-
-5.3 `tests/test_ownership.py` gains `test_a_path_2_row_names_the_response_name_on_the_source_field`
-(AC-4.1, AC-4.2, AC-1.2). The existing pins that read the record shape, the order, the round trip, the refusal
-rule, and the gate are unchanged.
-
-5.4 The pin `tests/test_api_requests.py::test_the_module_reads_the_layout_rules_through_their_owners` gains the
-two names the join reads through their owners (`unit_manifest`, and `ownership` for the field name). The pin that
-reads the string constants and the names the module must not define passes unchanged.
-
-5.5 Every response in these pins is handed by an injected producer, so no test calls a network.
-
-## 6. The checks
-
-6.1 `ruff check .` is clean.
-
-6.2 `python3 -m pytest` passes with no skip: the baseline 1623 pins, plus the pins above. No existing pin
-regresses.
-
-6.3 The commit is one ASD-STE100 message. When the rule lands, `docs/API_CONVERSION_PATH.md` §3 states it in the
-present tense with the pins named, `README.md` and `docs/README.md` name the join and the pins as needed, the
-completed piece leaves `to-do.md`, the cross-response row set and the names the join cannot read stay findings in
-`backlog.md`, and `agent-status.md` names the next piece (F8.8, the request-set gate).
+- `acceptance.md` is overwritten with this page and committed as its own commit, in the style
+  of the F8.7 acceptance commit.
+- The piece's commit message records the sub-feature history in ASD-STE100: the rule, the two
+  directions, the position, the severity and exit-code decision, the console-line decision,
+  the new pins, and the documents updated.
