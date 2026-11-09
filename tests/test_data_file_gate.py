@@ -158,13 +158,15 @@ def test_the_report_names_both_file_sets(tmp_path):
 
 
 def test_check_order_puts_the_data_rule_after_the_block_rules(tmp_path):
-    """The block rules, then the run-level text rules, then the data rule, then the cross-check that reads
-    two sets, then the byte rules."""
+    """The block rules, then the run-level text rules, then the data rule, then the two rules that read two
+    sets, then the byte rules. `tests/test_round_trip.py` and `tests/test_sanity_gate.py` pin why the two
+    agreement rules sit together."""
     assert sanity_checks.CHECK_ORDER == (
         'emitted_types', 'location_present', 'data_blocks', 'import_blocks', 'scope_blocks',
         'actions', 'protocol_object', 'filter_blocks', 'certificate_blocks', 'references', 'variables',
         'data_files',
         'round_trip',
+        'request_set',
         'control_chars',
         'placeholders', 'terraform',
     )
