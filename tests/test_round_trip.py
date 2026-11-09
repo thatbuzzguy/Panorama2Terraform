@@ -16,7 +16,8 @@ Pins, one per criterion in `acceptance.md`:
   file, and no scan console line;
 - 3.1-3.10 which types the rule can compare: the scan scope, the destination kinds, the scope rows, and the
   rows no entry measures;
-- 4.1-4.6 the `CHECK_ORDER` position, the report order, the corpus, determinism, and the exit code.
+- 4.1-4.7 the `CHECK_ORDER` position, the report order, the corpus, determinism, the exit code, and the path 2
+  run, where the join reads the same ledger the cross-check reads.
 
 Four criteria could not hold as written, and each is pinned as measured with the measurement in the
 `acceptance.md` Result:
@@ -41,13 +42,14 @@ the process. The suite runs offline.
 import re
 from pathlib import Path
 
+import api_requests
 import container_coverage
 import entry_coverage
 import naming
 import panorama_to_terraform
 import sanity_checks
 import unit_manifest
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_pipeline, run_script, tf_files
+from conftest import FIXTURES_DIR, SAMPLE_CONFIG, path2_run, run_pipeline, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 
@@ -119,10 +121,11 @@ def _run(fixture: str, out_dir, extra: tuple = ()) -> tuple:
 
 def _rule_source() -> str:
     """One rule's source, so a scan pins what that rule reads. The boundaries are the ones
-    `tests/test_data_file_gate.py` pins: `check_data_files` … `check_round_trip` … `check_control_chars`.
+    `tests/test_data_file_gate.py` pins: `check_data_files` … `check_round_trip` … `check_request_set` …
+    `check_control_chars`.
     """
     source = Path(sanity_checks.__file__).read_text(encoding='utf-8')
-    return source[source.index('def check_round_trip'):source.index('def check_control_chars')]
+    return source[source.index('def check_round_trip'):source.index('def check_request_set')]
 
 
 def _fact(finding) -> tuple:
@@ -734,8 +737,8 @@ def test_the_rule_reads_no_file_name_rule(tmp_path):
 # --- 4. Gate order, determinism, and the corpus -------------------------------
 
 def test_check_order_puts_the_cross_check_after_the_data_rule():
-    """4.1: the cross-check is the only rule that reads two sets, so it sits after every rule that reads one
-    set, and the two agreement rules stay together.
+    """4.1: the cross-check and the join are the two rules that read two sets, so they sit after every rule
+    that reads one set, and the two agreement rules stay together.
     """
     order = list(sanity_checks.CHECK_ORDER)
     assert order.index('round_trip') == order.index('data_files') + 1, order
@@ -859,3 +862,36 @@ def test_not_run_does_not_change_the_exit_code(tmp_path):
     cross = [line for line in text.split('FINDINGS')[1].splitlines() if line.startswith('  ')]
     assert len(cross) == 3, cross
     assert any('[round_trip]' in line for line in text.split('FINDINGS')[1].splitlines()), text
+
+
+def test_the_cross_check_reads_the_join_ledger_on_a_path_2_run(tmp_path, monkeypatch):
+    """4.7: a path 2 run reads the join, so the cross-check compares the block set with the join's own rows
+    through the same ledger the join joins. The join answers rows, not counts, so a path 2 run reports no
+    cross-check finding: the set the cross-check compares is the set the run wrote, and the run wrote the join's
+    rows as entries. The pin plants one block for a unit the join names, so the two rules name the same unit
+    through the one unit rule.
+    """
+    out = tmp_path / 'run'
+    parser, index = path2_run(out, tmp_path / 'cache', monkeypatch)
+    join = api_requests.unit_findings(index, parser.ledger)
+    join_units = {unit_manifest.directory_name(facts, naming.sanitize) for facts, entry in join if facts}
+    assert len(join) == 7 and len(join_units) == 3, sorted(join_units)
+    assert sanity_checks.check_round_trip(tf_files(out), parser.ledger) == [], 'the run reads sets that agree'
+    # `shared_45ca31c3` is a unit both rules name, and its row is the row the container table answers for the
+    # address container, so one planted block makes the two counts disagree on a row the join reads.
+    unit = 'shared_45ca31c3'
+    assert unit in join_units, sorted(join_units)
+    (out / unit / 'planted.tf').write_text(
+        'resource "panos_address" "planted_00000000" {\n  location = { shared = {} }\n'
+        '  name = "Planted"\n}\n', encoding='utf-8')
+    findings = sanity_checks.check_round_trip(tf_files(out), parser.ledger)
+    assert len(findings) == 1, [f.render() for f in findings]
+    fact = _fact(findings[0])
+    assert fact[1] == unit and fact[1] in join_units, 'the two rules name the same unit'
+    assert fact[0] == entry_coverage.matrix_row_for('address')['resource'], fact
+    assert fact[2] < fact[3], 'the planted block is the block the reader reads and the join has no entry for'
+    # The planted block names no unit of its own: the fact is the fact the join's data holds for that unit,
+    # so the join reports the same fact shape with no position.
+    join_fact = [f for f in sanity_checks.check_request_set(index, parser.ledger)
+                 if f.file == unit]
+    assert join_fact and join_fact[0].line == 0 and join_fact[0].severity == sanity_checks.WARN, join_fact

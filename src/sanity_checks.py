@@ -10,11 +10,12 @@ never reached one. The block rules read the `.tf` files; the data rule (F6.8)
 reads the four data files, and the site record's printed form, through the
 module that owns each row shape, so no second shape rule appears.
 
-The round-trip cross-check is the one exception to that boundary, because its fact compares two sets:
-the `.tf` block set it read, and the entry set the parse read through the run's ledger (`docs/ARCHITECTURE.md`
-§4.6). It reads no report and no data file, and a call with no ledger reports the check as NOT RUN, so a
-rule that reads only the output directory is unchanged. Its finding is a coverage fact, not a broken
-output, so it is a WARN and the exit code still follows the rules that read the files.
+Two rules read the run's ledger, so they are the exceptions to that boundary: the round-trip cross-check
+compares the `.tf` block set with the entry set the parse read, and the request-set rule compares the join's rows
+with the scope index the run built (`docs/ARCHITECTURE.md` §4.6, `docs/API_CONVERSION_PATH.md` §3). Neither reads
+a report or a data file, and a call that is missing the set it needs reports the rule as NOT RUN, so a rule that
+reads only the output directory is unchanged. A fact from either rule is a coverage fact, not a broken output, so
+it is a WARN and the exit code still follows the rules that read the files.
 
 F6.10.1 (`docs/CODEBASE_ASSEMBLY.md` §14) states which set each rule reads: the block rules read the
 `.tf` files of one unit, keyed by the path from the codebase root, and the data rule reads the records at
@@ -39,6 +40,7 @@ Checks, in report order:
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a declared variable | FAIL |
 | `data_files` | every data file reads as its declared rows and agrees with the rules that produced it (F6.8) | FAIL |
 | `round_trip` | the block set agrees with the entry set the run's ledger read, per unit and row | WARN, or NOT RUN |
+| `request_set` | the request set agrees with the unit set the run read, through the join | WARN, or NOT RUN |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder is listed so the operator replaces it | WARN |
 | `terraform` | `terraform init` + `terraform validate` (`--validate` only) | FAIL or SKIPPED |
@@ -51,6 +53,12 @@ One reader serves every block kind, so a rule that covers more than one kind
 reads the same block text. A block is reported once for a fact: the presence of
 a `location` block is the `location_present` rule for both kinds, so the `data`
 rule reports the shape inside the block and not the missing block.
+
+The join (`api_requests.unit_findings`) answers the pairs between the unit set and the scope index, and
+`check_request_set` reports them as findings. The join owns the join rule, so it states no severity, no
+report section, no exit code, no console line, no merge rule, and no finding wording: the gate states those.
+A join finding names its file through the owners, `unit_manifest.directory_name` for a unit and the root
+shape for a run-wide fact, and it names no line, because the fact compares two sets.
 """
 
 import re
@@ -60,6 +68,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import api_requests
 import commit_actions
 import container_coverage
 import entry_coverage
@@ -78,6 +87,9 @@ SKIP = 'SKIPPED'
 NOT_RUN = 'NOT RUN'
 
 # Report order. The order is fixed so the report is byte-identical between runs.
+# The two rules that read two sets sit together: the cross-check reads the block set and the ledger, and the
+# join reads the ledger and the scope index, so `request_set` takes the position after `round_trip`. The plan
+# check stays last, because it is the only rule that runs a command.
 CHECK_ORDER = (
     'emitted_types',
     'location_present',
@@ -92,6 +104,7 @@ CHECK_ORDER = (
     'variables',
     'data_files',
     'round_trip',
+    'request_set',
     'control_chars',
     'placeholders',
     'terraform',
@@ -1336,6 +1349,40 @@ def check_round_trip(files: dict[str, str], ledger) -> list[Finding]:
     return sorted(findings, key=lambda finding: (finding.file, finding.line, finding.detail))
 
 
+def check_request_set(index, ledger) -> list[Finding]:
+    """The request set must agree with the scope the run read (F8.8, `docs/API_CONVERSION_PATH.md` §3).
+
+    The join owns the two directions, so this rule states no join rule, no merge rule, no membership rule,
+    no unit rule, and no naming rule: it calls `api_requests.unit_findings` and turns the pairs it answers
+    into findings. The join states no severity, no report section, no exit code, and no finding wording, so
+    this rule states those, and it reads nothing else.
+
+    One finding per pair, and the pair names the side the join has no fact for:
+
+    1. A unit the join answers no entry for, because the response its rows name is one the index made no
+       entry for. The finding names the unit, and the file it names is the unit directory read through
+       `unit_manifest.directory_name`, the one naming rule.
+    2. An index entry the run read no rows for, so no unit answers it. No unit names this fact, so it is a
+       run-wide fact and names no file: `file` is `''`, which `Finding.render` prints as the root shape, the
+       shape the plan check uses for a root result.
+
+    `line` is 0 for both, because the fact compares two sets and names no position in a file. The severity
+    is WARN: a join that does not agree names no broken output, so the exit code follows the rules that read
+    the files (`docs/ARCHITECTURE.md` §4.6). Findings sort by (file, line, detail), the order
+    `check_data_files` already states, so the report is byte-identical between runs on the same files. The
+    join states no console line, so the rule prints none of its own, and the findings print in the report.
+    """
+    findings = [
+        Finding(check='request_set', severity=WARN,
+               file=unit_manifest.directory_name(facts, naming.sanitize) if facts else '',
+               line=0,
+               detail=('the join answers no entry for the response its rows name'
+                       if facts else f'the join answers no row for the index entry {entry.path}'))
+        for facts, entry in api_requests.unit_findings(index, ledger)
+    ]
+    return sorted(findings, key=lambda finding: (finding.file, finding.line, finding.detail))
+
+
 def check_control_chars(files: dict[str, str]) -> list[Finding]:
     """No raw control character or DEL may reach a `.tf` file (F1.7).
 
@@ -1451,14 +1498,20 @@ def unit_directories(output_dir: Path) -> list[str]:
 
 def run_checks(output_dir: Path, run_terraform: bool = False,
                terraform: Optional[str] = None,
-               ledger: Optional[entry_coverage.EntryLedger] = None) -> SanityReport:
+               ledger: Optional[entry_coverage.EntryLedger] = None,
+               index: Optional[tuple[api_requests.ScopeIndexEntry, ...]] = None) -> SanityReport:
     """Run every static check on one output directory.
 
     `run_terraform` adds the terraform check. Pass `terraform=None` with
     `run_terraform=True` to report the check as SKIPPED.
 
-    `ledger` is the run's ledger for the cross-check, the one rule that reads two sets. A call with no
-    ledger reports the check as NOT RUN, so a test that reads only the output directory is unchanged.
+    `ledger` is the run's ledger for the cross-check and the join, the two rules that read two sets. A call
+    with no ledger reports both checks as NOT RUN, so a test that reads only the output directory is
+    unchanged.
+
+    `index` is the run's scope index for the join, the rule that reads the join rows and the index together.
+    A call with no index reports the join as NOT RUN in the same shape. A path 1 run builds no index, because
+    it read no request, so the entry point passes none.
     """
     files = read_tf_files(Path(output_dir))
     checks = [
@@ -1480,6 +1533,14 @@ def run_checks(output_dir: Path, run_terraform: bool = False,
                     tuple(check_round_trip(files, ledger)) if ledger is not None else (),
                     ran=ledger is not None,
                     note="the cross-check reads the run's ledger, so pass it to the gate"),
+        # The join is the other rule that reads two sets, and it needs the index and the ledger together, so
+        # a caller that passes no index gets NOT RUN, the same shape as the cross-check: an empty count would
+        # read as a rule that ran and passed.
+        CheckResult('request_set',
+                    tuple(check_request_set(index, ledger))
+                    if index is not None and ledger is not None else (),
+                    ran=index is not None and ledger is not None,
+                    note="the join reads the run's scope index and the run's ledger, so pass both to the gate"),
         CheckResult('control_chars', tuple(check_control_chars(files))),
         CheckResult('placeholders', tuple(check_placeholders(files))),
     ]
