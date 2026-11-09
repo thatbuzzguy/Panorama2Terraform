@@ -17,8 +17,10 @@ from pathlib import Path
 
 import pytest
 
+import api_requests
 import panorama_to_terraform
 import sanity_checks
+import source_fetch
 import split_device_groups
 
 TESTS_DIR = Path(__file__).parent
@@ -202,6 +204,32 @@ def make_parser(converter_module, xml_input_module):
             xml_input_module.parse_xml(FIXTURES_DIR / fixture_name))
 
     return _make
+
+
+def api_producer(request, key=None, insecure=False):
+    """The committed response for one request, handed by the name `RESPONSES_DIR` holds it under (§1.1).
+
+    A path 2 pin runs the pipeline in process with this producer, so no test calls a network. A request with
+    no committed response answers None, so a run reads only the committed set, and the join reads the set the
+    run read.
+    """
+    entry = RESPONSES_DIR / request.cache_name()
+    return None if not entry.is_file() else entry.read_bytes()
+
+
+def path2_run(output_dir, cache_dir, monkeypatch, host: str = 'panorama.test') -> tuple:
+    """A path 2 run, and the index the join reads for it.
+
+    A path 2 pin cannot use `run_script`, because the injected producer lives in this process, so the run is
+    in process and the index is built the way the run order builds it: the tables `parse_associations`
+    returned for the response the run read, and the read set the join states.
+    """
+    monkeypatch.setattr(source_fetch, 'network_producer', api_producer)
+    monkeypatch.setenv(source_fetch.API_KEY_ENV, 'test-key')
+    parser = run_pipeline(panorama_to_terraform, None, output_dir,
+                          ('--source', 'api', '--host', host, '--cache-dir', str(cache_dir)))
+    assert parser is not None, 'the run refused the input'
+    return parser, api_requests.scope_index(host, parser.parse_associations(), api_requests.membership_lists())
 
 
 def run_script(module_name, *args: str) -> subprocess.CompletedProcess:
