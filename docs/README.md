@@ -28,6 +28,7 @@ that document instead of restating the rule.
 | The destination one entry takes (the one place that answers it, and the order) | `ARCHITECTURE.md` §3.2, and `entry_coverage.py` (`EntryLedger.destination`) |
 | Emit order, location, reference resolution, policy chains, reports, gate | `ARCHITECTURE.md` §4 |
 | The round-trip cross-check (the block set against the entry set, per unit and row) | `ARCHITECTURE.md` §4.6, and `sanity_checks.check_round_trip`, which reads the scan scope through `entry_coverage.matrix_row_for` |
+| The request-set gate rule (the join's rows against the scope index, per unit and per entry) | `API_CONVERSION_PATH.md` §3, and `sanity_checks.check_request_set`, which reads the join through `api_requests.unit_findings` and the unit through `unit_manifest` |
 | The protocol object shape, the one-of mapping, and what prints | `ARCHITECTURE.md` §4.9, and `resource_mapping.PROTOCOL_SHAPE` |
 | The filter container shape, the row scope, and the path-keyed input spellings | `ARCHITECTURE.md` §4.10, and `resource_mapping.FILTER_SHAPE` |
 | The certificate container shape, the choice by presence, and the `sensitive` print | `ARCHITECTURE.md` §4.11, and `resource_mapping.CERTIFICATE_SHAPE` |

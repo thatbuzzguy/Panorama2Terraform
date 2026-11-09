@@ -2,6 +2,40 @@
 
 ## Current position
 
+F8.8 is complete (Epic 8, Phase 8C, the gate), and it is the gate piece for the join: the request-set rule
+`sanity_checks.check_request_set` reads the join's rows through `api_requests.unit_findings`, the unit through
+`unit_manifest.directory_name` and `naming.sanitize`, and the index through `api_requests`, so the rule states no
+join rule, no membership rule, no unit rule, no naming rule, no cache rule and no reader of its own. The severity,
+the report section, the console line, the order and the exit code are the gate's decision. `CHECK_ORDER` puts
+`request_set` after `round_trip` and before `control_chars`, because the two rules that read two sets sit together
+after every rule that reads one set, and the reason for that position is the join's own document. A join finding is
+a fact about the source, so it is WARN and the exit code follows the rules that read the files; the join prints no
+console line of its own, and the gate prints every finding it reads through the shape §3.2 states. `run_checks`
+takes the index as an argument, so a call that is missing the index or the ledger reports NOT RUN, and `main()`
+still passes no index, because the path 2 entry point (F8.9) is what will pass the index it builds. The rule is
+stated in `docs/API_CONVERSION_PATH.md` §3 with its pins named, and `README.md` and `docs/README.md` name them.
+
+The pins for this piece, in `tests/test_sanity_gate.py`: `test_the_gate_checks_the_join_through_the_owners`,
+`test_a_fact_that_the_join_and_the_ledger_do_not_agree_on_prints_in_the_report`,
+`test_the_run_wide_findings_print_through_the_join`, `test_the_join_findings_sort_by_the_data_rule`,
+`test_the_join_prints_no_console_line_and_stays_a_warn`,
+`test_the_rule_reports_not_run_when_the_gate_has_no_index`,
+`test_two_runs_read_the_same_files_and_report_the_same_findings`, and
+`test_a_path_2_run_and_a_path_1_run_report_the_same_findings`; and in `tests/test_round_trip.py`,
+`test_the_cross_check_reads_the_join_ledger_on_a_path_2_run`, where the cross-check compares the block set with
+the join's own rows through the same ledger and names the same unit. Two pins were migrated, not dropped: the
+order pin `tests/test_data_file_gate.py::test_check_order_puts_the_data_rule_after_the_block_rules` now reads the
+tuple with `request_set` after `round_trip`, and
+`tests/test_sanity_gate.py::test_gate_runs_and_writes_the_report` reads `request_set` as NOT RUN on a path 1 run.
+Every join pin runs the pipeline in process with an injected producer, because a fact from a run must be read from
+the run's ledger; the run and the producer are in `tests/conftest.py`, because both files read the same run.
+
+Measured against the committed whole-config export, the only committed response: 7 join rows, 3 on the unit side
+and 4 on the entry side, so every pair is a fact that does not agree. The cross-check reports nothing on that run,
+because the join's rows and the block set agree, so the pin plants one `panos_address` block for a unit the join
+names and both rules name the same unit. The gate order puts the run-wide findings first and the unit findings
+second, which is not the order the join states its rows in.
+
 F8.7 is complete (Epic 8, Phase 8B, the run over many sources), and with it Phase 8B: the unit join reads the
 run's unit set through `unit_manifest.units`, so path 2 states no second unit rule and counts no unit a second
 way. The fact path 2 adds is the scope the run read for a unit, so `api_requests.join_units` answers, for each
@@ -100,7 +134,7 @@ lists in sorted order, one entry per scope; and the response-to-request join, ch
 made the response through the one element-name rule (`source_fetch.names_element`). The join keeps no parser and
 calls no producer, so the origin and the line map stay the ones the door recorded.
 
-Next: piece F8.8, the request-set gate (`to-do.md`, Phase 8C).
+Next: piece F8.9, the path 2 entry point that passes the index and the ledger to the gate (`to-do.md`, Phase 8C).
 
 Findings F8.6 recorded in `backlog.md`: a device fact request declares no path, so its record states the door's
 default for `scope`, and the scope index makes no device fact request, so no rule decides which scope such a
@@ -121,7 +155,7 @@ entry read inside the place the entry sits at the place level so the scan report
 answers no response for a built-in place because no membership row reads `predefined`. F8.5 added no rule that
 a predefined source is definitions.
 
-Test count: `python3 -m pytest` reads 1629 pins (1623 before F8.7), and `ruff check .` is clean.
+Test count: `python3 -m pytest` reads 1638 pins (1629 before F8.8), and `ruff check .` is clean.
 
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
 facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a
