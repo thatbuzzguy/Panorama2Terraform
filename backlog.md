@@ -185,13 +185,15 @@ here with that rule named.
 - The parser extraction gaps listed above will surface in the F4.3/F4.4 reports; fix each gap when
   the report confirms it in a fixture, rather than fixing them speculatively now.
 - The sanity gate (F4.1) reads the output files, so a rule that reads only the files cannot see an entry that
-  produced no file. The round-trip cross-check is the one gate rule that reads the run's ledger, so it states
-  that case as a count that does not agree (`docs/ARCHITECTURE.md` §4.6). F4.3 is the accounting for the
-  entries that write nothing, and the gate cannot replace it.
+  produced no file. Two gate rules read the run's ledger: the round-trip cross-check (F5.7,
+  `docs/ARCHITECTURE.md` §4.6) and the request-set rule (F8.8, `docs/API_CONVERSION_PATH.md` §3). F4.3 is the
+  accounting for the entries that write nothing, and the gate cannot replace it.
 - The round-trip cross-check (`sanity_checks.check_round_trip`, pinned by `tests/test_round_trip.py`) compares
-  the block set the reader read with the entry set the run's ledger read, per unit and row. It is the one gate
-  rule that reads two sets, so it is the one exception to the boundary that the gate reads only the files it
-  wrote (`docs/ARCHITECTURE.md` §4.6). Its finding is a coverage fact, not a broken output, so it is a WARN and
+  the block set the reader read with the entry set the run's ledger read, per unit and row. It is one of the two
+  gate rules that read two sets, so it is one exception to the boundary that the gate reads only the files it
+  wrote (`docs/ARCHITECTURE.md` §4.6); the other is the request-set rule (`sanity_checks.check_request_set`,
+  `docs/API_CONVERSION_PATH.md` §3, pinned by `tests/test_sanity_gate.py`). Its finding is a coverage fact, not
+  a broken output, so it is a WARN and
   does not change the exit code, the decision `entry_coverage.PROPERTY_RULE` already states for a gap: every
   corpus fixture still exits 0, and the pins read WARN. Measured 2026-11-05 the corpus is not silent: the rule
   reports 20 findings on 9 fixtures, which `tests/test_round_trip.py` pins as `CORPUS_GAPS` and
@@ -489,16 +491,23 @@ here with that rule named.
   (`/predefined/url-list`), which is the shape the built-in name table read needs. The shape rule is
   unchanged by F8.1, so this stays outside the piece until the read that needs it is written.
 - Open, opened by F8.7: the unit join reads the row set through one ledger, because the join is per response
-  (F8.5), so for a run that read one response the row set is that response's rows. Which row set a run that read
-  more than one response joins is the run order's decision, so `api_requests.py` states no merge rule here, and
-  the joins across responses (the tables and the rows) belong with the entry point (F8.9).
+  (F8.5), so for a run that read one response the row set is that response's rows. Which cross-response read
+  set the join joins is the run order's decision, so `api_requests.py` states no merge rule here, and the joins
+  across responses (the tables and the rows) belong with the entry point (F8.9). F8.8 measures one path 2 pin
+  through the committed single-response run, and that pin uses the response the run itself read: the whole read
+  set is one response. The rule cannot know which response the run read, so a cross-response read set needs its
+  own rule before it can be pinned.
 - Finding, opened by F8.7: the join reports a unit whose rows name a response the index made no request for, and
   states no rule that such a source is definitions. The two instances the pin reads are a whole-config export read
   and a predefined read; the predefined half stays with the F8.1 finding above, because no membership row reads a
   built-in place, so the index has no entry for it and the join can only report the unit.
-- Open, opened by F8.7: the join reports its two directions as data rows, so no rule decides yet how a finding of
-  this kind prints or whether it changes the exit code. The console line shape, the report section and the exit
-  code belong with the gate (F8.8), and the pin that reports the rows states no shape of its own.
+- Measured by F8.8, the join's findings print through the gate's report shape (`docs/ARCHITECTURE.md` §3.2),
+  which names no console line for this kind: the console prints one line per finding through the shape §3.2
+  already states, so the gate's own line rule prints these findings too. The gate cannot name its own line in a
+  module that states no shape, so the join prints no line of its own, and the join stays a data module. A join
+  finding is a fact about the source, not a broken output file, so it is a WARN and the exit code does not
+  change. F8.8 measures this through the committed single-response run and names the join position and its
+  reason: `docs/API_CONVERSION_PATH.md` §3.
 
 ## Design Decisions (the value the parse cannot carry)
 

@@ -41,10 +41,13 @@ the run read, and the unit join reads the scope the run read for each unit. The 
 
 Phase 8C, the gate and the entry point:
 
-- [ ] F8.8 The request-set gate rule, read inside `sanity_checks.py` at one position in
-      `CHECK_ORDER`, and the path 2 pins for the gate rules that already read the files. The
-      round-trip cross-check reads the run's ledger, so path 2 feeds the same ledger through the same
-      `mark` rule. Pins: `tests/test_sanity_gate.py`, `tests/test_round_trip.py`.
+F8.8 is complete: the request-set gate rule is `sanity_checks.check_request_set`, and it reads the join rows
+through `api_requests.unit_findings`, the unit through `unit_manifest.directory_name` and `naming.sanitize`, and
+the index through `api_requests`. The position, the severity, the report section, the console line and the exit
+code are the gate's decision, stated in `docs/API_CONVERSION_PATH.md` §3 with the pins named, in
+`tests/test_sanity_gate.py` and `tests/test_round_trip.py`. `run_checks` takes the index as an argument, so a path
+1 run reports the rule as NOT RUN, and the entry point (F8.9) is what will pass the index it built.
+
 - [ ] F8.9 The entry point `api_to_terraform.py`: the arguments, the run order, the exit codes, the
       rule that it writes no file outside `write_path.py` and states no environment name, and the
       generated `README.md` label that names which path wrote the codebase. Pins:

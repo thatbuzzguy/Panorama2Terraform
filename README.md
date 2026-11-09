@@ -398,12 +398,13 @@ Every conversion runs a static gate on the output it wrote, then prints a
 summary and writes `SANITY_REPORT.txt`. The gate reads the files, so it reports
 what you receive, not what the generator intended. It reads the `.tf` files for
 the block rules and the four data files for the data rule, and the summary names
-both counts. The round-trip cross-check is the one exception to that boundary,
-because its fact compares two sets: the `.tf` block set it read, and the entry
-set the run's ledger read. It reads no report and no data file, and a call with
-no ledger reports the check as NOT RUN, so the rules that read only the files are
-unchanged. The rule is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6,
-and `tests/test_round_trip.py` pins it.
+both counts. Two rules read a set the gate did not write, because their facts compare two sets: the round-trip
+cross-check compares the `.tf` block set it read with the entry set the run's ledger read, and the request-set
+rule compares the join's rows with the scope index a path 2 run built. Neither reads a report and neither reads a
+data file, and a call that is missing the set it needs reports the rule as NOT RUN, so the rules that read only
+the files are unchanged. The cross-check is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6, the
+request-set rule is in [`docs/API_CONVERSION_PATH.md`](docs/API_CONVERSION_PATH.md) §3, and
+`tests/test_round_trip.py` and `tests/test_sanity_gate.py` pin both.
 
 | Check | Rule | Severity |
 |---|---|---|
@@ -420,13 +421,14 @@ and `tests/test_round_trip.py` pins it.
 | `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable the run declares | FAIL |
 | `data_files` | every data file reads as its declared rows, and the data agrees with the naming rule, the joins, the order rule, and its printed form | FAIL |
 | `round_trip` | the `.tf` block set agrees with the entry set the run's ledger read, per unit and row, where the entry side counts only the entries `entry_coverage.EntryLedger.destination` answers as `emitted`, so an entry the run reports is not counted | WARN, or NOT RUN |
+| `request_set` | the request set agrees with the scope the run read, per unit and per index entry, read through the join (`docs/API_CONVERSION_PATH.md` §3) | WARN, or NOT RUN |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
 
 A WARN does not fail the run: a placeholder is correct output that still needs
-an action before apply, and a cross-check finding names a coverage fact, not a
-broken output, so a count that does not agree keeps the exit code with the rules
+an action before apply, and a cross-check or request-set finding names a coverage fact, not a broken
+output, so a count that does not agree and a join that does not agree keep the exit code with the rules
 that read the files. A FAIL finding exits 1. A SKIPPED check never changes
 the exit code, so a run on a machine without terraform still reports the checks
 it could not run. The rules are stated once in `sanity_checks.py`; the tests
@@ -452,7 +454,10 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   outputs (skipped when the `terraform` binary is absent)
 - `tests/test_sanity_gate.py` - the post-run gate: every check detects its
   violation, no fixture trips a false positive, the report is byte-identical
-  between two runs, and the exit code follows the findings
+  between two runs, and the exit code follows the findings. F8.8: the request-set rule reads the join through
+  `api_requests.unit_findings` and the unit through `unit_manifest` and `naming`, so the file it names is the unit
+  directory, the position is 0, the run-wide direction prints through the root shape, the order is the data rule's
+  key, and the report section and the exit code are the gate's, not the join's
 - `tests/test_container_coverage.py` - the container table and the code stay
   in step: no parse method without a row, no row naming a path the method
   does not read
@@ -528,7 +533,8 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   reader and the entry set read through the run's ledger, the join through the one scope rule and the one unit
   rule, one finding per unit and row where the two counts do not agree, the position the reader read, the WARN
   severity, the NOT RUN result when the caller passes no ledger, the rows that enter no count, the findings the
-  corpus reports, and the byte rule between two runs
+  corpus reports, and the byte rule between two runs. F8.8: on a path 2 run the entry set is the join's own rows,
+  so the cross-check and the request-set rule read one ledger and name the same unit
 - `tests/test_write_path.py` - the write path (`write_path.py`): the two file sets and the rule that every file
   names one set, the one function that writes bytes and forces LF, the two path builders, the rule that no module
   of the tool writes a file outside it, the reader key as the path from the codebase root, the plan check that

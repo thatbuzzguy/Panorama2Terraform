@@ -227,11 +227,32 @@ those pins is handed by an injected producer, and the `device-group` read is the
 - **The order rule.** The three bases `CODEBASE_ASSEMBLY.md` §6 states do not read the input
   shape, so path 2 writes the same order. `tests/test_reference_edges.py` is unchanged.
 - **The gate.** Every existing gate rule reads the files the run wrote, so path 2 output is read by
-  the same rules. Path 2 adds one rule: the request set must agree with the scope the run read. Its
-  position in `sanity_checks.CHECK_ORDER` is a decision inside that module, not a second order. The
-  round-trip cross-check reads the run's ledger, so path 2 must feed the same ledger through the
-  same `mark` rule. `tests/test_round_trip.py` and `tests/test_sanity_gate.py` gain the path 2
-  pins.
+  the same rules. Path 2 adds one rule: the request set must agree with the scope the run read.
+  `sanity_checks.check_request_set` reads the join's rows and the scope index through their owners, so it states
+  no join rule, no membership rule, no unit rule, no naming rule, no cache rule, and no reader of its own, and
+  `api_requests.py` keeps no check, no report section, and no render, so the gate is the only module that turns a
+  join row into a finding. Its position in `sanity_checks.CHECK_ORDER` is after the cross-check and before the
+  byte rules, because the two rules that read two sets sit together and a rule that reads two sets is not a byte
+  rule. `run_checks` takes the index as an argument, so a call that is missing the index or the ledger reports the
+  rule as NOT RUN, which is the shape a rule that reads a run's ledger already uses; a path 1 run reads no
+  request, so `main()` passes no index and reports NOT RUN, and the path 2 entry point (F8.9) passes the index the
+  run built. A join fact names no position in a file, so its `line` is 0, its file is the unit directory the data
+  rule names through `naming.sanitize`, and the run-wide direction names no file and prints in the root shape the
+  plan check already uses. The report section orders findings by the data rule's key, so the gate order and the
+  order the join states its rows in differ. A join fact is a fact about the source, not a broken output file, so
+  the rule states WARN and the exit code follows the rules that read the files. The join prints no console line of
+  its own, because the join stays a data module, and the gate prints every finding it reads through the shape
+  §3.2 states. Pinned by `tests/test_sanity_gate.py` (the join group):
+  `test_the_gate_checks_the_join_through_the_owners`,
+  `test_a_fact_that_the_join_and_the_ledger_do_not_agree_on_prints_in_the_report`,
+  `test_the_run_wide_findings_print_through_the_join`, `test_the_join_findings_sort_by_the_data_rule`,
+  `test_the_join_prints_no_console_line_and_stays_a_warn`,
+  `test_the_rule_reports_not_run_when_the_gate_has_no_index`,
+  `test_two_runs_read_the_same_files_and_report_the_same_findings`, and
+  `test_a_path_2_run_and_a_path_1_run_report_the_same_findings`; and by
+  `tests/test_round_trip.py::test_the_cross_check_reads_the_join_ledger_on_a_path_2_run`, where the cross-check
+  compares the block set with the same ledger the join reads and names the same unit. Every join pin runs the
+  pipeline in process with an injected producer, because a fact from a run must be read from the run's ledger.
 - **The credential rule.** `CODEBASE_ASSEMBLY.md` §11 is the owner, and `source_fetch.py` is the
   only `src/` module that states the environment name. Path 2's entry point must not state it, so
   `tests/test_variables.py::test_the_generated_block_names_the_environment_the_fetch_layer_reads`
