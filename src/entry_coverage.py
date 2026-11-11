@@ -309,6 +309,10 @@ class EntryLedger:
         """The responses the run read, in run order. One ledger holds one response, so this is itself."""
         return [self]
 
+    def sources(self) -> list:
+        """The sources the run read, in run order. One ledger holds one response, so this is its own source."""
+        return [self.source]
+
     def source_of(self, entry: ET.Element) -> ParsedSource:
         """The source that holds this entry (F5.4, F8.9). For one ledger that is its own source."""
         return self.source

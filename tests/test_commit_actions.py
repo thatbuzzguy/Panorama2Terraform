@@ -198,16 +198,17 @@ def test_the_block_address_names_the_identity_the_block_states():
 
 def test_the_file_is_written_only_when_it_has_content(tmp_path):
     """A run whose units name no commit-nameable fact writes no file, the rule for the report files and the
-    four data files, and `main()` writes it as the last `.tf` file.
+    four data files, and the run sequence writes it as the last `.tf` file.
     """
     out = tmp_path / 'no_action'
     assert _run(FIXTURES_DIR / 'address_objects.xml', out).returncode == 0
     assert not parts(_files(out), ACTIONS), 'the run names no fact a commit filter can name'
-    source = inspect.getsource(converter_module.main)
+    source = inspect.getsource(converter_module.generate_run)
     assert 'if action_rows:' in source and 'for facts in tf_gen.unit_set()' in source, source
     assert 'commit_actions.ACTIONS_FILE' in source and 'write_path.unit_path' in source, \
         'the file is written through the write path, inside the unit directory'
-    # The write is the last `.tf` write in `main()`, so the gate reads the action against the completed unit.
+    # The write is the last `.tf` write in the run sequence, so the gate reads the action against the
+    # completed unit.
     tf_writes = [match.group(1) for match in re.finditer(r'(import_blocks\.IMPORT_FILE|commit_actions\.ACTIONS_FILE)',
                                                           source)]
     assert tf_writes[-1] == 'commit_actions.ACTIONS_FILE', tf_writes
