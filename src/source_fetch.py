@@ -94,6 +94,8 @@ from xml_input import (
     ParsedSource,
     SourceOrigin,
     UnsafeInputError,
+    add_max_input_argument,  # noqa: F401 -- re-exported: the entry points read the input limit through
+                              # this module, the owner of the limit, so no entry point states its own.
     parse_bytes,
     read_input,
 )
@@ -388,7 +390,7 @@ def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = Non
 def fetch(request: ApiRequest, cache_dir, producer: Optional[Callable[[ApiRequest], bytes]] = None,
           offline: bool = False, insecure: bool = False,
           max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES,
-          api_key: Optional[str] = None) -> ParsedSource:
+          api_key: Optional[str] = None) -> Optional[ParsedSource]:
     """Read the cached API export and return the parsed source (F5.2 AC-3).
 
     The origin names the cache entry as its name and its path, so a report line
@@ -426,6 +428,11 @@ def fetch(request: ApiRequest, cache_dir, producer: Optional[Callable[[ApiReques
     # The checks run inside the door, so no file is written for bytes that fail
     # them. The cache entry then holds exactly the bytes the door parsed.
     data = producer(request) if producer is not None else network_producer(request, key, insecure)
+    if data is None:
+        # A producer that has no bytes for this request answers None, so the run reads no response for it and
+        # writes no cache entry: an empty entry would be a response the record could not name. The run order
+        # then holds no part for the request, and the join reports the index entry as a finding.
+        return None
     source = parse_bytes(data, origin, max_input_bytes)
     source = unwrap_config_root(source, request)
     # The write path is the only writer (F6.10.3); bytes reach it untranslated, so the cache holds

@@ -534,10 +534,10 @@ def test_the_file_the_data_and_the_tfvars_read_the_same_run(tmp_path):
 
 
 def test_the_declaration_file_is_written_after_the_emitters(converter_module):
-    """The declaration set is the recorded pairs, so `main()` cannot write the file before the
+    """The declaration set is the recorded pairs, so the run sequence cannot write the file before the
     emitters run. The order rule for `scope.tf` is unchanged.
     """
-    calls = inspect.getsource(converter_module.main)
+    calls = inspect.getsource(converter_module.generate_run)
     assert calls.index('generate_variables()') > calls.index('generate_address_objects'), calls
     assert calls.index('generate_variables()') < calls.index('generate_readme'), calls
     assert calls.index('generate_scope_objects') < calls.index('generate_address_objects'), calls
