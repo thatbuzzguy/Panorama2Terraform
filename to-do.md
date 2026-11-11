@@ -84,6 +84,21 @@ live target: the committed response set shows one shape per accepted request sha
       of the legacy scripts comes first, so the diff stays reviewable. `tflint` integration is the
       following item.
 
+## The licensing rule (our contributions under AGPL v3)
+
+The criteria are in `acceptance.md`. The owner document is `docs/LICENSING.md`. No pin is added: the rule is a
+document rule, and the choice to keep it unpinned is recorded in `backlog.md`.
+
+- [x] L1 The acceptance criteria, and the measurement of the authorship split through `git blame`.
+- [ ] L2 `docs/LICENSING.md` as the one owner document, and `docs/DUAL-LICENSING-EXPLAINED.md` removed.
+- [ ] L3 The two corrected notices: `src/source_fetch.py` and `src/xml_input.py`, which hold no upstream line.
+      The two modules that hold upstream lines keep the upstream notice.
+- [ ] L4 The statements that must agree: `README.md` (the index entry, the License section, the fork source),
+      `docs/README.md`, `docs/USAGE_GUIDE.md`, `docs/ARCHITECTURE.md` §1.1.
+- [ ] L5 `backlog.md` and `PLAN.md`: the out-of-scope item becomes lawyer review, and what stays open is that
+      the notice set is not pinned.
+- [ ] L6 Run `ruff check .` and `pytest`, then commit.
+
 ## Rules the layout keeps
 
 - `docs/ARCHITECTURE.md` §1.1 is the owner document for the layout. `AGENTS.md` names the tracking
