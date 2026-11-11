@@ -14,12 +14,13 @@ Seven groups, one per rule in `site_data.py`, `resource_mapping.VALUE_VARIABLES`
 6. The two gate rules, and the corpus that trips neither.
 7. Determinism, and the gate rule that reads the record through this module and compares the printed
    form, and the rule that no report names a site field, with the `README.md` file-inventory label as the one
-   exception (F6.10.4).
+   exception (F6.10.4), and the entry point that the label names (F8.9).
 
 The golden bytes pin the print shape (`tests/test_golden_files.py`), and the device-name rule is
 pinned here for a device the parse names. Every test runs offline.
 """
 
+import ast
 import inspect
 import json
 import subprocess
@@ -27,14 +28,27 @@ from pathlib import Path
 
 import pytest
 
+import api_to_terraform
 import entry_coverage
 import import_blocks
 import naming
+import panorama_to_terraform
 import resource_mapping
 import sanity_checks
 import site_data
+import source_fetch
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, file_text, parts, run_script, tf_files
+from conftest import (
+    FIXTURES_DIR,
+    GOLDEN_DIR,
+    SAMPLE_CONFIG,
+    SRC_DIR,
+    api_producer,
+    file_text,
+    parts,
+    run_script,
+    tf_files,
+)
 
 CONVERTER = 'panorama_to_terraform.py'
 MANIFEST = unit_manifest.MANIFEST_FILE
@@ -703,6 +717,54 @@ def test_the_readme_names_the_site_files_and_states_no_row(tmp_path):
     assert read_text.startswith(head + '## Site values') or read_text.startswith(head), 'same head'
     assert read_text.endswith(tail), 'same tail'
     assert 'Read-through data blocks' in read_text, 'the read run adds its own label'
+
+
+def test_the_readme_names_the_entry_point_that_wrote_the_codebase(tmp_path, monkeypatch):
+    """F8.9 criterion 9: the label names the entry point that wrote the codebase, and the name is an argument, so
+    the label builder states no entry point of its own. Path 1's label names `panorama_to_terraform.py` and path
+    2's names `api_to_terraform.py`. The line is fixed text that states no row, no value, no mapping result and
+    no count, so the path name it states is digit-free, and two runs on the same bytes write the same bytes.
+    """
+    label = 'The entry point that wrote this codebase is'
+
+    def named(text: str) -> list:
+        return [line for line in text.split('\n') if label in line]
+
+    # The name is an argument, so the fixed text holds no entry point of its own.
+    call = [node for node in ast.walk(ast.parse((SRC_DIR / 'panorama_to_terraform.py').read_text(encoding='utf-8')))
+            if isinstance(node, ast.FunctionDef) and node.name == 'generate_readme']
+    assert 'entry_point' in [arg.arg for arg in call[0].args.args], 'the entry point is an argument'
+    assert not any(char.isdigit() for char in label), 'the label itself names nothing that can change'
+
+    path1 = tmp_path / 'path1'
+    assert _run(FIXTURES_DIR / KITCHEN, path1).returncode == 0
+    text1 = (path1 / 'README.md').read_text(encoding='utf-8')
+    assert named(text1) == [f'{label} `{panorama_to_terraform.ENTRY_POINT}`.'], named(text1)
+    assert named(text1)[0] in text1.split('## Site values', 1)[0], 'the line is in the head, before the site label'
+
+    # Path 2 runs in process with the injected producer, so no pin calls a network.
+    cache = tmp_path / 'cache'
+    monkeypatch.setattr(source_fetch, 'network_producer', api_producer)
+    monkeypatch.setenv(source_fetch.API_KEY_ENV, 'test-key')
+    argv = ['--host', 'panorama.test', '--cache-dir', str(cache)]
+    path2 = tmp_path / 'path2'
+    assert api_to_terraform.run(argv + ['--output-dir', str(path2)], api_producer) == 0
+    text2 = (path2 / 'README.md').read_text(encoding='utf-8')
+    assert named(text2) == [f'{label} `{api_to_terraform.ENTRY_POINT}`.'], named(text2)
+
+    for text in (text1, text2):
+        line = named(text)[0]
+        for word in (site_data.SITE_DATA_FILE, site_data.TFVARS_FILE, naming.variable_name(DEVICE), DEVICE):
+            assert word not in line, (word, 'the label states no row, no value, and no mapping result')
+        assert not any(char.isdigit() for char in line), 'no count, so the path name is digit-free'
+
+    # Two runs on the same bytes write the same bytes.
+    again = tmp_path / 'path1-again'
+    assert _run(FIXTURES_DIR / KITCHEN, again).returncode == 0
+    assert (again / 'README.md').read_text(encoding='utf-8') == text1, 'path 1 is deterministic'
+    second = tmp_path / 'path2-again'
+    assert api_to_terraform.run(argv + ['--output-dir', str(second)], api_producer) == 0
+    assert (second / 'README.md').read_text(encoding='utf-8') == text2, 'path 2 is deterministic'
 
 
 def test_site_data_defines_no_second_naming_rule():
