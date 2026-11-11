@@ -1,3 +1,35 @@
+# Acceptance criteria — CI gate: the Python version floor
+
+## Scope
+
+The CI gate fails at setup on the runner: `actions/setup-python` cannot install Python 3.9 on
+`ubuntu-latest`, which is Ubuntu 26.04 from November 2026. This task states the Python floor the
+project supports, and makes the gate read that floor. No tool module and no test changes.
+
+## The criteria
+
+1. **The matrix names only versions the runner can install.** No entry is below the floor, and no
+   entry is an exact patch pin. `setup-python` takes the tool cache first, then the build manifest
+   for the runner's Ubuntu version; Ubuntu 26.04 has no build for 3.8 or 3.9 and holds only the
+   newest few patches for the older minors, so a minor version is the request shape that resolves.
+2. **The floor is what the pinned test tools require.** `requirements.txt` pins `pytest==9.1.1`, and
+   pytest 9.0+ requires Python 3.10. A 3.9 leg cannot install the pinned pytest, so the 3.9 leg is
+   not a coverage leg: it is a broken leg.
+3. **Every statement of the floor agrees.** `pyproject.toml`, `README.md`,
+   `docs/USAGE_GUIDE.md`, and the workflow matrix state the same version.
+4. **The lint gate stays green.** `target-version` is the syntax level ruff enforces, not the floor.
+   It stays `py39` because the codebase still writes pre-3.10 typing and `zip` without `strict`
+   (101 findings at `py310`, recorded in `backlog.md`). The gate passes on every leg.
+5. **The coverage legs cover maintained releases.** The matrix reads 3.10 to 3.13.
+
+## Measured
+
+- `ruff check .` is clean with the committed configuration (`target-version = "py39"`).
+- `python3 -m pytest` passes 1641 pins on Python 3.12. The change is the workflow file, the floor
+  statements, and the tracking markdown, so no pin reads it.
+- The two `.github/` template files are not part of the document indexes, which is a finding already
+  recorded in `backlog.md`; this task does not change them.
+
 # Acceptance criteria — F8.9, the path 2 entry point (Phase 8C)
 
 ## Scope

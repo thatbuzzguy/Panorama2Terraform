@@ -66,6 +66,9 @@ live target: the committed response set shows one shape per accepted request sha
 
 ## Other open pieces
 
+- [ ] CI gate: the Python floor is 3.10, so the matrix names 3.10 to 3.13. The gate failed because
+      `actions/setup-python` has no build for 3.9 on `ubuntu-latest` (Ubuntu 26.04), and the pinned
+      `pytest==9.1.1` requires 3.10. Criteria: `acceptance.md`.
 - [ ] `ruff format` as a gate, its own task per `backlog.md` (Nice-to-Haves). The one-time format pass
       of the legacy scripts comes first, so the diff stays reviewable. `tflint` integration is the
       following item.

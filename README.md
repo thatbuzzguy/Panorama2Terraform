@@ -78,7 +78,7 @@ entry is a WARN finding. The rule is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 
 ## Requirements
 
-- Python 3.9+ (standard library only)
+- Python 3.10+ (standard library only)
 - Terraform 1.14+ for the validate gate (an `action` block is 1.14 syntax)
 - A Panorama XML export
 
