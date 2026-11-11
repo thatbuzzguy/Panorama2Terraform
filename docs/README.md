@@ -46,7 +46,8 @@ that document instead of restating the rule.
 | The second path: the committed response set, where it lives, and the rule that no test calls a network | `API_CONVERSION_PATH.md` §5, `ARCHITECTURE.md` §1.1 for the set, and `tests/test_api_requests.py`, `tests/test_source_fetch.py`, `tests/test_build_kitchen_sink.py` |
 | The second path: the accepted request shapes, the scope index, and the response-to-request join | `API_CONVERSION_PATH.md` §2, `source_fetch.py` for the shapes, `container_coverage.SCOPE_PATH_ROOTS` for the one scope path definition, and `api_requests.py` for the index and the join |
 | The second path: the run over many sources, the section-to-response join, the unit join, and the row source field | `API_CONVERSION_PATH.md` §2.4, §2.5 and §3, `api_requests.py` for the joins, `unit_manifest.units` for the unit set, `ownership.SOURCE_FIELD` for the field name the join reads, and `tests/test_api_path.py`, `tests/test_unit_manifest.py`, `tests/test_ownership.py` |
-| The second path: what it shares with the first path, and what it does not close | `API_CONVERSION_PATH.md` §1 and §6 |
+| The second path: what it shares with the first path, and what it does not close | `API_CONVERSION_PATH.md` §1 and §7 |
+| The second path: the run order, the cross-response join, and the entry point that decides both | `API_CONVERSION_PATH.md` §6, `api_to_terraform.py` for the run order, `panorama_to_terraform.py` (`join_value`) for the join rule, and `tests/test_api_path.py` |
 
 The machine-readable tables are code, not documents:
 [`../src/resource_mapping.py`](../src/resource_mapping.py),

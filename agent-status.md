@@ -2,6 +2,43 @@
 
 ## Current position
 
+F8.9 is complete (Epic 8, Phase 8C, the entry point), and it is the piece that decides the run order:
+`src/api_to_terraform.py` reads the membership responses first, in the order
+`api_requests.membership_lists()` names them, then the entries `api_requests.scope_index()` names in index order,
+and it is the only place that states that order, because `api_requests.py` states no read order and
+`provenance.py` rule 6 states no read rule for a path 2 run. One response is read once, so a container two lists
+name (`template-stack`) enters the order at the first place a list names it. The entry point joins the
+per-response tables in run order through the one join rule (`panorama_to_terraform.join_value`), and
+`generate_run` takes the run view as an argument, so the join is the entry point's decision and path 1 builds the
+same view for its one source. The entry point adds no argument of its own beyond the shared set, accepts no
+argument that names one source, reads the environment name through `source_fetch.API_KEY_ENV`, prints only through
+the owners' console lines, writes no file outside `write_path.py`, and calls `generate_run`, so it states no parse
+order and no block builder. It passes the index it built to the gate, so the join findings print through the gate
+and the exit code is the gate's decision. The generated `README.md` names the entry point that wrote the codebase,
+and the name is an argument, so the label builder states no entry point of its own. The rule is stated in
+`docs/API_CONVERSION_PATH.md` §6 with its pins named, and `README.md`, `docs/README.md` and
+`docs/ARCHITECTURE.md` §1 name them.
+
+The pins for this piece, in `tests/test_api_path.py` group 8:
+`test_the_run_order_is_the_membership_lists_then_the_index_entries`,
+`test_the_entry_point_joins_the_tables_across_the_responses_it_read`,
+`test_the_run_sequence_is_stated_once_and_both_entry_points_call_it`,
+`test_the_run_view_answers_the_entry_protocol_through_the_ledger_that_holds_the_entry`,
+`test_the_run_view_states_no_row_shape_and_no_field_name_of_its_own`,
+`test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_that_name_one_source`,
+`test_the_entry_point_passes_the_index_it_built_to_the_gate_and_keeps_the_gate_code`,
+`test_the_entry_point_states_no_rule_an_owner_states`, and
+`test_the_report_names_each_response_the_run_read_in_run_order`; plus
+`tests/test_variables.py::test_the_entry_point_names_no_environment_name_of_its_own` and
+`tests/test_site_data.py::test_the_readme_names_the_entry_point_that_wrote_the_codebase`. The three pins that read
+the run sequence read `generate_run` rather than `main()`, because the sequence moved to the run function. No pin
+calls a network: every path 2 pin runs the pipeline in process with the injected producer.
+
+Measured run order for the committed set: `device-group`, `templates`, then `device-group/entry/Office-FW` and
+`templates/entry/HQ-Networks`. The record file the run wrote names the same order, and the report names those four
+sources in the same order. `panorama_to_terraform.failed` states the unexpected-error shape once, so both entry
+points call it and neither prints a console line of its own.
+
 F8.8 is complete (Epic 8, Phase 8C, the gate), and it is the gate piece for the join: the request-set rule
 `sanity_checks.check_request_set` reads the join's rows through `api_requests.unit_findings`, the unit through
 `unit_manifest.directory_name` and `naming.sanitize`, and the index through `api_requests`, so the rule states no
@@ -134,18 +171,22 @@ lists in sorted order, one entry per scope; and the response-to-request join, ch
 made the response through the one element-name rule (`source_fetch.names_element`). The join keeps no parser and
 calls no producer, so the origin and the line map stay the ones the door recorded.
 
-Next: piece F8.9, the path 2 entry point that passes the index and the ledger to the gate (`to-do.md`, Phase 8C).
+Next: piece F8.10, the agreement pin between the two paths for a fixture with no live-only fact (`to-do.md`,
+Phase 8C).
 
 Findings F8.6 recorded in `backlog.md`: a device fact request declares no path, so its record states the door's
 default for `scope`, and the scope index makes no device fact request, so no rule decides which scope such a
-record should name; and the order a path 2 run reads is not a record rule, because the record module states no
-read rule for it, so the order the pins measure belongs with the entry point (F8.9).
+record should name; that finding stays open. The other F8.6 finding, that the order a path 2 run reads is not a
+record rule, is closed: F8.9 stated the order in the entry point, and its pins read it back from the record the
+same run wrote.
 
 Findings F8.2 recorded in `backlog.md`: the four lists name three of the five scope facts, so a
 vsys scope cannot be read from membership; `container_coverage.ContainerRow` has no field for the table
 its method returns, so the join lives as data in `api_requests.LIST_JOIN`; and the join of the four tables
 across the responses a run read belongs to the run order, because the module states no merge rule and F8.5
-decided that no tree is built across responses. F8.3 recorded one finding there: `names_element` names no
+decided that no tree is built across responses. F8.9 closed that finding for the tables: the entry point applies
+the one join rule in run order. The row half stays open, because the join still cannot know which response the
+run read. F8.3 recorded one finding there: `names_element` names no
 element for a device fact request, so the join has no fact to read a command's element name against, and it
 sits with the F8.1 finding about a predefined read, because both need a fact a request cannot state; the
 committed response for the device fact shape shows the shape and names no fact, so the finding stays open. The
@@ -155,7 +196,7 @@ entry read inside the place the entry sits at the place level so the scan report
 answers no response for a built-in place because no membership row reads `predefined`. F8.5 added no rule that
 a predefined source is definitions.
 
-Test count: `python3 -m pytest` reads 1638 pins (1629 before F8.8), and `ruff check .` is clean.
+Test count: `python3 -m pytest` reads 1650 pins (1638 before F8.9), with no skips, and `ruff check .` is clean.
 
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
 facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a

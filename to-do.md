@@ -46,12 +46,21 @@ through `api_requests.unit_findings`, the unit through `unit_manifest.directory_
 the index through `api_requests`. The position, the severity, the report section, the console line and the exit
 code are the gate's decision, stated in `docs/API_CONVERSION_PATH.md` §3 with the pins named, in
 `tests/test_sanity_gate.py` and `tests/test_round_trip.py`. `run_checks` takes the index as an argument, so a path
-1 run reports the rule as NOT RUN, and the entry point (F8.9) is what will pass the index it built.
+1 run reports the rule as NOT RUN, and the path 2 entry point passes the index it built (F8.9).
 
-- [ ] F8.9 The entry point `api_to_terraform.py`: the arguments, the run order, the exit codes, the
-      rule that it writes no file outside `write_path.py` and states no environment name, and the
-      generated `README.md` label that names which path wrote the codebase. Pins:
-      `tests/test_api_path.py`, `tests/test_variables.py`, `tests/test_site_data.py`.
+F8.9 is complete: the entry point `src/api_to_terraform.py` states the run order, the arguments, and the exit
+codes. It reads the membership responses first, in the order `api_requests.membership_lists()` names them, then
+the entries `api_requests.scope_index()` names in index order, and it is the only place that states that order;
+the record file the run wrote is the order's own statement. It joins the per-response tables in run order through
+the one join rule in `panorama_to_terraform.py`, and `generate_run` takes the run view as an argument, so the join
+is the entry point's decision. It adds no argument of its own, accepts no argument that names one source, reads
+the environment name through `source_fetch.API_KEY_ENV`, prints only through the owners' console lines, writes no
+file outside `write_path.py`, and calls `generate_run`, so it states no parse order and no block builder. The gate
+gets the index it built, and the generated `README.md` names the entry point that wrote the codebase as an
+argument. The rule is stated in `docs/API_CONVERSION_PATH.md` §6 with the pins named, in
+`tests/test_api_path.py`, `tests/test_variables.py`, and `tests/test_site_data.py`, and the module is in the
+`docs/ARCHITECTURE.md` §1 table. The findings the run order closed are removed from `backlog.md`.
+
 - [ ] F8.10 The agreement pin. For a fixture with no live-only fact, path 2 writes the same `.tf`
       bytes as path 1. The reports do not agree, because a report names its source. Pin:
       `tests/test_api_path.py`.

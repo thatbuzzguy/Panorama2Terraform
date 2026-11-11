@@ -570,8 +570,8 @@ def test_the_run_wide_findings_print_through_the_join(tmp_path, monkeypatch):
     report = sanity_checks.run_checks(tmp_path, index=index, ledger=parser.ledger)
     assert report.findings('request_set') == findings, report.render()
     assert all(f'  {finding.render()}' in report.render() for finding in run_wide), report.render()
-    # The rule states no row set of its own, so the entry set is the join's own table read through the owner,
-    # and the row set for a run that read more than one response stays open with F8.9 in `backlog.md`.
+    # The rule states no row set of its own, so the entry set is the join's own table read through the owner.
+    # F8.9 closed the table half of the cross-response join in `backlog.md`; the row half stays open.
     assert sorted(entry.path for entry in index) == sorted(entry.path for _, entry in entry_rows), index
     assert 'cross-response' in (REPO_ROOT / 'backlog.md').read_text(encoding='utf-8'), \
         'the cross-response row set is still open, so the rule reports one response only'

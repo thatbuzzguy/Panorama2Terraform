@@ -135,9 +135,9 @@ def _run(request, body: str, cache_dir):
 def _membership(cache_dir) -> dict:
     """The tables as the run holds them, read from the responses the run read.
 
-    `api_requests.py` states no merge rule, so the merge across responses is the run order's work
-    (`backlog.md`). Here the tables are only data for the join, so the pins read the join against the same
-    responses they parse.
+    `api_requests.py` states no merge rule, so the join across responses is the run order's work, stated in
+    `api_to_terraform.py` and `docs/API_CONVERSION_PATH.md` §6. Here the tables are only data for the join, so
+    the pins read the join against the same responses they parse.
     """
     tables = {}
     for container in sorted(PLACES):

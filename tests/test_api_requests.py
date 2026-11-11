@@ -1,4 +1,4 @@
-"""F8.2: the scope index (`docs/API_CONVERSION_PATH.md` §2.2 and §7).
+"""F8.2: the scope index (`docs/API_CONVERSION_PATH.md` §2.2 and §8).
 
 Five groups, one per rule in `src/api_requests.py`:
 

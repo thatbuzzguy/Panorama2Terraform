@@ -467,40 +467,30 @@ here with that rule named.
   no rule decides which scope that record should name. The pin
   (`tests/test_api_requests.py::test_a_committed_response_reads_through_the_injected_producer_and_the_record_names_the_same_bytes`)
   reads the default, so the record shape is unchanged and the decision stays here.
-- Open, opened by F8.6: the record file holds the records in the order the run read them, and `provenance.py`
-  states no read rule for a path 2 run, because the order is the run order's decision. The pins measure the
-  order the pin read them (the membership responses, then the entries the index names in path order), so the
-  order itself is not pinned as a rule; it belongs with the entry point (F8.9).
 - Finding, opened by F8.2: the four membership lists name three of the five scope facts, so the index
   reaches no `vsys` and no device. A `vsys` is a scope fact (`ARCHITECTURE.md` §2.2), but no membership
   row reads it, so path 2 cannot request a vsys scope from membership: the run must read it as its
   declared scope, which names the device the vsys sits in. The pin
   (`tests/test_api_requests.py::test_the_four_membership_lists_are_the_container_table_rows`) holds the
-  three, and a piece that reads a vsys scope needs the fact that names which device the run read, so it
-  belongs with the entry point (F8.9).
+  three. The entry point landed (F8.9) and reads no vsys, so a piece that reads one needs the fact that
+  names which device the run read.
 - Finding, opened by F8.2: `container_coverage.ContainerRow` has no field for the table its method
   returns, so a row cannot state which table `parse_associations` fills for a path. The join between a
   membership list, the table it returns, and the container that defines its names therefore lives in
   `api_requests.LIST_JOIN`, which is a second table beside the container table. If `ContainerRow` gains
   a `table` field, `LIST_JOIN` becomes data read through the table and the index states no join of its
   own.
-- Open, opened by F8.2: `parse_associations` returns the four tables for one parsed source, so a run
-  that read N membership responses must join those tables before the index can read them. F8.5 decided the
-  shape of the run: no tree is built across responses, because each response keeps its own line map, parent
-  walk and ledger, so the join is over table data only and never over elements from two responses.
-  `api_requests.py` takes the four tables as data and states no merge rule, so the join belongs to the run
-  order, which is the entry point (F8.9).
 - Finding: `is_scope_path` accepts the place or an entry inside it (`/<place>` and
   `/<place>/entry/<name>`), so a predefined read cannot name a container inside the place
   (`/predefined/url-list`), which is the shape the built-in name table read needs. The shape rule is
   unchanged by F8.1, so this stays outside the piece until the read that needs it is written.
 - Open, opened by F8.7: the unit join reads the row set through one ledger, because the join is per response
-  (F8.5), so for a run that read one response the row set is that response's rows. Which cross-response read
-  set the join joins is the run order's decision, so `api_requests.py` states no merge rule here, and the joins
-  across responses (the tables and the rows) belong with the entry point (F8.9). F8.8 measures one path 2 pin
-  through the committed single-response run, and that pin uses the response the run itself read: the whole read
-  set is one response. The rule cannot know which response the run read, so a cross-response read set needs its
-  own rule before it can be pinned.
+  (F8.5), so for a run that read one response the row set is that response's rows. F8.9 closed the table half:
+  the run order applies the one join rule in run order, so a run that read more than one response joins those
+  tables before the index reads them. The row half stays open, because `api_requests.py` states no merge rule and
+  the join cannot know which response the run read. F8.8 measures one path 2 pin through the committed
+  single-response run, and that pin uses the response the run itself read: the whole read set is one response, so
+  a cross-response read set needs its own rule before it can be pinned.
 - Finding, opened by F8.7: the join reports a unit whose rows name a response the index made no request for, and
   states no rule that such a source is definitions. The two instances the pin reads are a whole-config export read
   and a predefined read; the predefined half stays with the F8.1 finding above, because no membership row reads a

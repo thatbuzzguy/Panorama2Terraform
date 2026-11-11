@@ -2,8 +2,8 @@
 
 The design record for the second conversion path. It states what that path reads, what it may
 decide, and what it must not state twice. Each rule names the module and the test that holds it.
-The parts that are enforced (§2.1, §2.2, §2.3, §2.4, and the response set in §5) are stated in the present
-tense with their pins; the rest names the module and the test that will hold it.
+The parts that are enforced (§2.1, §2.2, §2.3, §2.4, the response set in §5, and the run order in §6) are
+stated in the present tense with their pins; the rest names the module and the test that will hold it.
 
 Path 1 reads one declared source: a file, or the whole-config API export
 (`docs/ARCHITECTURE.md` §3). Path 2 reads only responses, and it reads one response per scope
@@ -141,8 +141,7 @@ from the membership responses.
 
 The join keeps no parser and states no merge rule, so the run order calls the parse method: the join
 answers which response a section belongs to. `api_requests.py` takes the four tables as data, so a run
-that read one response holds one table set, and the merge across responses belongs to the run order
-(`backlog.md`).
+that read one response holds one table set, and the join across responses is the run order's decision (§6).
 
 Two consequences the pins hold. The report names the place a section names once, inside
 `container_coverage.section_path`, which reads `result` as the place the path names and keeps the `entry`
@@ -180,8 +179,8 @@ are unchanged (`docs/ARCHITECTURE.md` §3.3). For each request the run read, the
 that request declared, which is the fact the door records, and the `request` field names the key-free identity
 of that request, which is the shape the cache entry is hashed from; `cache_entry` names the entry that identity
 names. The record file holds the records in the order the run read them, which `provenance.py` rule 6 states
-for the sources it owns; for a path 2 run that order is the membership responses, then the entries in index
-order, which is the run order's decision (F8.9), so the record module states no read rule for it. The record
+for the sources it owns; for a path 2 run the read order is the entry point's decision (§6), so the record
+module states no read rule for it, and the record file is the order's own statement. The record
 directory is the output directory, so the prune action reads the record file the same run wrote, and a run that
 read N requests protects the N entries its own record names. No new field is needed, so `parse_records` reads a
 path 2 record file back as itself. A device fact request declares no path, so its record states the
@@ -306,7 +305,50 @@ only from the request that read the entry, and no parse method reads it off the 
   the same fixture. The report files do not agree, because the report names the source. This is the
   pin that keeps the two paths honest to each other: `tests/test_api_path.py`.
 
-## 6. What path 2 does not close
+## 6. The run order, and the join across responses
+
+**The run order is the entry point's decision.** `src/api_to_terraform.py` is the only place that states it:
+the run reads the membership responses first, in the order `api_requests.membership_lists()` names them, then
+the entries `api_requests.scope_index()` names, in index order. One response is read once, so a container two
+lists name (the two `template-stack` lists name one container) enters the order at the first place a list names
+it, and a container the run already read as a membership response is not read again for its index entry.
+`api_requests.py` states no read order and `provenance.py` rule 6 states no read rule for a path 2 run, so the
+record file the run wrote is the order's own statement (§2.5). Pinned by
+`tests/test_api_path.py::test_the_run_order_is_the_membership_lists_then_the_index_entries`, which reads the
+order through the owners' names and compares it with the record file the same run wrote.
+
+**The join across responses.** The four tables stay per response in `api_requests.py`, so a run that read N
+responses needs one set before the index can read them. The join rule is stated once, in
+`panorama_to_terraform.py` (`join_value`), and the entry point applies it in run order through `join_results`:
+a list concatenates in run order; a dict merges by key in run order, and its nested values recurse; two numbers
+for the same key add; a value that is neither of those is the later part's. One part answers the value
+unchanged, so a run that read one source writes the same bytes as before. The join is the entry point's
+decision, because `generate_run` takes the run view as an argument, and the view holds the parts in run order
+and answers the entry protocol through the ledger that holds the entry. The view states no row shape and no
+field name of its own. Pinned by `tests/test_api_path.py::test_the_entry_point_joins_the_tables_across_the_responses_it_read`
+and `test_the_run_view_answers_the_entry_protocol_through_the_ledger_that_holds_the_entry`.
+
+**What the entry point holds, and what it reads through an owner.** It states the run order, the arguments, and
+the exit codes, and nothing else. The parse order and the emission order are `generate_run`'s, so both entry
+points call it and neither names a block builder; the entry point reads the parser through one method,
+`parse_associations`, because the index needs the tables the run read. The arguments and their checks are
+`panorama_to_terraform.shared_arguments` and `shared_checks`, so the entry point adds no argument of its own and
+accepts no argument that names one source. It prints only through the owners' console lines, it writes no file
+outside `write_path.py`, and it states no environment name of its own. The gate decides the exit code, and the
+gate gets the index the entry point built, so a join finding prints through the gate rather than through a block
+the entry point states. Pinned by `tests/test_api_path.py::test_the_run_sequence_is_stated_once_and_both_entry_points_call_it`,
+`test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_that_name_one_source`,
+`test_the_entry_point_passes_the_index_it_built_to_the_gate_and_keeps_the_gate_code`, and
+`test_the_entry_point_states_no_rule_an_owner_states`; and by
+`tests/test_variables.py::test_the_entry_point_names_no_environment_name_of_its_own`.
+
+The report names one source per response the run read, in run order, through the ledger that holds it, and the
+generated `README.md` names the entry point that wrote the codebase, where the name is an argument rather than a
+word the label builder holds. Pinned by
+`tests/test_api_path.py::test_the_report_names_each_response_the_run_read_in_run_order` and
+`tests/test_site_data.py::test_the_readme_names_the_entry_point_that_wrote_the_codebase`.
+
+## 7. What path 2 does not close
 
 Path 2 is an input mechanism. It does not close a parse gap, so these stay where they are:
 
@@ -319,19 +361,19 @@ Path 2 is an input mechanism. It does not close a parse gap, so these stay where
 - The PAN-OS version matrix: a device fact is version dependent, and version matrix testing is out
   of scope.
 
-## 7. Modules path 2 adds
+## 8. Modules path 2 adds
 
 `src/` is one flat namespace, so both modules import their siblings by plain name, and each is
-named in the `docs/ARCHITECTURE.md` §1 table when it lands.
+named in the `docs/ARCHITECTURE.md` §1 table.
 
 | Module | Role | Rule it keeps |
 |---|---|---|
 | `api_requests.py` | the scope index (§2.2), and the response-to-request join (§2.3) | the set is read from the membership responses, in sorted order, one entry per scope, and every response is checked against the request that made it |
-| `api_to_terraform.py` | the path 2 entry point | the run order, the arguments, the exit codes, and no rule restated. It reads `PanoramaParser`, `TerraformGenerator`, `unit_manifest`, `sanity_checks`, and `write_path` |
+| `api_to_terraform.py` | the path 2 entry point: the run order (§6), the arguments, and the exit codes | the run order is stated here and nowhere else, and one response is read once; the arguments and their checks are read through `panorama_to_terraform.py`, so the entry point adds no argument of its own and accepts none that names one source; it calls `generate_run`, so it states no parse order and no block builder; it prints only through the owners' console lines and writes no file outside `write_path.py` |
 
 Both modules write no file except through `write_path.py`, and neither states the environment name.
 
-## 8. Piece order
+## 9. Piece order
 
 1. The accepted request shapes, including the op shape, and the `SCOPE_PATH_ROOTS` decision for
    `predefined` (§2.1). Nothing else in path 2 can be written before this decision.
