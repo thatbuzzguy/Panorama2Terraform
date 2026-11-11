@@ -6685,6 +6685,22 @@ def read_line(request) -> str:
             f"(cache entry {request.cache_name()})...")
 
 
+def state_line(path, workspace) -> str:
+    """The line that names the state reference source the run read (criterion 5). Both entry points print it,
+    so the shape is stated once here. The workspace is read through `DEFAULT_SCOPE`, the one definition, so the
+    line states no scope of its own.
+    """
+    return (f"Reading the state document {path} as a reference source "
+            f"(workspace {workspace or DEFAULT_SCOPE})...")
+
+
+def is_refusal(error) -> bool:
+    """The kinds of failure an input refusal is, stated once for both entry points (criterion 5). A refusal is
+    the run's own decision to stop before it writes, so the entry point that catches it prints `refused` and
+    exits 1; anything else is an unexpected error and keeps its traceback."""
+    return isinstance(error, (UnsafeInputError, ET.ParseError, ValueError))
+
+
 def refused(read_name: str, error) -> int:
     """The run's refusal line and the exit code for refused input (criterion 5): 1, and no file is written,
     because the refusal happens before the run writes anything.
@@ -6742,6 +6758,20 @@ def shared_arguments(parser: argparse.ArgumentParser) -> None:
     source_fetch.add_max_input_argument(parser)
 
 
+def shared_checks(parser: argparse.ArgumentParser, args) -> None:
+    """The argument checks both entry points make, stated once (criterion 5), so an entry point states no
+    argument rule of its own beyond the arguments it adds. A refusal here is an argument error, so it exits 2
+    and writes no file.
+    """
+    if args.insecure and args.offline:
+        parser.error('--insecure applies to the network producer, and --offline never calls one')
+    # F5.6: the state source is a reference source, so it applies to both entry points. The workspace names
+    # the state document, so it needs a state document to name.
+    if args.workspace and not args.state:
+        parser.error('--workspace needs --state: the workspace names the state document, and a '
+                     'run that declares no --state reads no state document')
+
+
 def data_scopes(parser: argparse.ArgumentParser, args) -> list:
     """F5.5: the read-through scopes are checked before the run. A scope outside the reference sets answers
     no reference, and a data source that declares no `name` cannot hold the entry name a reference needs, so
@@ -6775,20 +6805,20 @@ def part_for(source, request, parser=None) -> entry_coverage.RunPart:
     return entry_coverage.RunPart(source, request, parser or PanoramaParser(source))
 
 
-def generate_run(run, parts, scopes: list, index=None, parent=None, state_source=None,
+def generate_run(run, view, scopes: list, index=None, parent=None, state_source=None,
                  entry_point: str = '') -> int:
     """The run sequence (criterion 3), stated once and called by both entry points: the parse order, the
     run-order join, the writes, the gate call, the console prints, and the exit code.
 
-    `parts` is the set the run read, in run order, and `entry_point` is the fact only the entry point can
-    state: which entry point wrote the codebase. `index` is the scope index the entry point built, and path 1
-    passes none because it read no request (criterion 6). `parent` and `state_source` are the reference
-    sources the run read.
+    `view` is the run view the entry point built: the parts it read, in the order it read them, and the join
+    the entry point supplies. `entry_point` is the fact only the entry point can state: which entry point wrote
+    the codebase. `index` is the scope index the entry point built, and path 1 passes none because it read no
+    request (criterion 6). `parent` and `state_source` are the reference sources the run read.
 
     The order this function reads the parts in is the order the entry point read them in, and it is the order
     the record file the run wrote states.
     """
-    view = entry_coverage.RunView(parts, join_results)
+    parts = view.parts()
     # The parse order is the order here, so a run that read many responses parses each one in it. `answer`
     # fills once, so the response the entry point already parsed is not parsed a second time.
     results = {name: view.parse(method) for name, method in PARSE_ORDER}
@@ -7177,8 +7207,6 @@ def main():
             parser.error('--source api needs --host')
         if args.input_file:
             parser.error('--source api does not take an input file; it reads the cached API export')
-        if args.insecure and args.offline:
-            parser.error('--insecure applies to the network producer, and --offline never calls one')
         # F5.4: the parent is the second source, so it needs a child scope to compare with. A whole-config
         # source holds its own parent, and the tool does not guess which scope a run reads.
         if args.parent and not args.path:
@@ -7192,11 +7220,8 @@ def main():
                     f'({", ".join(sorted(container_coverage.SCOPE_PATH_ROOTS))})'
                 )
 
-    # F5.6: the state source is a reference source, so it applies to both source kinds. The workspace names
-    # the state document, so it needs a state document to name.
-    if args.workspace and not args.state:
-        parser.error('--workspace needs --state: the workspace names the state document, and a '
-                     'run that declares no --state reads no state document')
+    # F5.6: the state source is a reference source, so it applies to both source kinds.
+    shared_checks(parser, args)
 
     scopes = data_scopes(parser, args)
 
@@ -7244,16 +7269,17 @@ def main():
         # is a file read, so --offline needs no new rule: no producer is called for it. It is a reference
         # source, so the run writes no output from it.
         if args.state:
-            print(f"Reading the state document {args.state} as a reference source "
-                  f"(workspace {args.workspace or DEFAULT_SCOPE})...")
+            print(state_line(args.state, args.workspace))
             state_source = state_input.read_state(args.state, workspace=args.workspace,
                                                    max_input_bytes=args.max_input_bytes)
 
-        return generate_run(args, parts, scopes, entry_point=ENTRY_POINT,
-                            parent=parent, state_source=state_source)
+        # The run order for path 1 is the one source it read, and the join is the entry point's decision
+        # (criterion 2), so the view is built here with the join, in the order this entry point read.
+        return generate_run(args, entry_coverage.RunView(parts, join_results), scopes,
+                            entry_point=ENTRY_POINT, parent=parent, state_source=state_source)
 
     except Exception as e:
-        if isinstance(e, (UnsafeInputError, ET.ParseError, ValueError)):
+        if is_refusal(e):
             return refused(args.input_file or args.host, e)
         print(f"Error: {e}")
         import traceback
