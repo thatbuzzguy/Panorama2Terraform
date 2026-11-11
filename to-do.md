@@ -75,11 +75,10 @@ live target: the committed response set shows one shape per accepted request sha
 
 ## Other open pieces
 
-- [ ] The history rewrite landing. Point `development`, `dev` and `main` at the branch
-      `history-rewrite`, which needs a force-push, and drop the two PR merge commits on
-      `origin/main`. The criteria and the measured result are in `acceptance.md`.
-- [ ] The `licensing` branch: 4 commits on top of `development` need the same rebase, through
-      `git rebase --onto history-rewrite <merge-base> licensing`.
+- [ ] The force-push of the rewritten history. The rewrite is local, so `origin/development`,
+      `origin/main` and `origin/dev` still hold the old history. `origin/main` loses the two PR merge
+      commits (`708f546`, `3ae014f`), and the commit links in the two PRs break. The criteria and the
+      measurement are in `acceptance.md`.
 - [ ] `ruff format` as a gate, its own task per `backlog.md` (Nice-to-Haves). The one-time format pass
       of the legacy scripts comes first, so the diff stays reviewable. `tflint` integration is the
       following item.
