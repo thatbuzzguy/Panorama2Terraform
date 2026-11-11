@@ -1,5 +1,17 @@
 # Agent Status
 
+## Current position — the git history
+
+The main line is the branch `history-rewrite`, built in the worktree
+`/home/ryan/.local/share/opencode/worktree/1670f9/history-rewrite`. It holds the 9 upstream commits
+with their hashes and their author `devnullNZ <gordon@gswsystems.com>`, then the 46 phase 2 commits
+with the author `rdavidbrown@live.com`, then the 124 commits after Feature Drop 2. The two squashed
+Feature Drop commits are replaced by the 46 commits that produced them, so the per-commit detail is in
+the main line. No file content, no commit message and no author date changed. The tree at the landing
+point equals `development`'s tip tree. No branch pointer is moved and nothing is pushed, so
+`development`, `dev` and `main` stay where they are until the landing is confirmed. The open pieces for
+the landing are in `to-do.md`, and the criteria are in `acceptance.md`.
+
 ## Current position
 
 F8.9 is complete (Epic 8, Phase 8C, the entry point), and it is the piece that decides the run order:
