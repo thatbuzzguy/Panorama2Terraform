@@ -163,6 +163,17 @@ stack, the EDL `certificate_profile` field, the profile-name report column, and 
 template files outside the document indexes. `ruff format` as a gate stays the next actionable slice
 outside Epic 8.
 
+The CI gate reads the Python floor as 3.10, and the matrix legs are 3.10, 3.11, 3.12 and 3.13. The 3.9
+leg is dropped, not moved to an older runner image, because two facts make it unusable:
+`actions/setup-python` has no hosted build for 3.9 on Ubuntu 26.04, the image `ubuntu-latest` names
+from November 2026, and `requirements.txt` pins `pytest==9.1.1`, which requires 3.10. Each leg is a
+minor version, never an exact patch, because the build manifest for 26.04 holds only the newest
+patches for the older minors. `pyproject.toml` states the floor, and `README.md` and
+`docs/USAGE_GUIDE.md` state the same value. `target-version` stays `py39`: it states the syntax level
+the lint gate enforces, not the floor, and the codebase still writes pre-3.10 typing and `zip`
+without `strict` (101 findings at `py310`), which `backlog.md` records as its own task. No pin reads
+the workflow file.
+
 
 
 ## Rules to keep when writing documents
