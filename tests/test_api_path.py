@@ -19,11 +19,16 @@ Six groups:
 7. The unit join (`docs/API_CONVERSION_PATH.md` §3): the run's unit set is read through `unit_manifest.units`,
    and the fact path 2 adds is the scope the run read for a unit. A unit the join answers no entry for, and an
    index entry the run read no rows for, are findings the join reports as data rows.
+8. The entry point and the run view (`docs/API_CONVERSION_PATH.md` §6): the entry point decides the run order
+   and the cross-response join, and the run view answers the entry protocol through the ledger that holds the
+   entry. Both entry points call the same run sequence.
 
 Every response is read through `source_fetch.fetch` with an injected producer, so the wrapper decision, the
 origin, and the line map are the ones the run holds. No pin reads a response as a file, because the wrapper
 decision belongs to the request that produced it.
 """
+
+import ast
 
 import pytest
 
@@ -656,3 +661,119 @@ def test_the_join_reports_the_findings_as_data_through_the_owners_names():
         assert not hasattr(api_requests, name), (name, 'the join states no rule of this kind')
     for word in ('print(', 'CONSOLE_PREFIX', 'REPORT', 'MANUAL_SETUP'):
         assert word not in source, (word, 'the join prints nothing and writes nothing')
+
+
+# --- 8. the entry point and the run view (F8.9, `docs/API_CONVERSION_PATH.md` §6) ---
+
+def _read_order() -> tuple:
+    """The order a run reads these responses: the membership lists in the order `api_requests` names them, read
+    as the container that holds each list. Only the places this file holds a response for.
+    """
+    order = []
+    for name in api_requests.membership_lists():
+        container = api_requests.list_container(name)
+        if container in PLACES and container not in order:
+            order.append(container)
+    return tuple(order)
+
+
+def _parts(cache_dir, order: tuple = None) -> list:
+    """The responses one run read, as the run holds them: the source the door returned, the request that read
+    it, and the parser built on that source. Every response is read through the injected producer, so no test
+    calls a network.
+    """
+    parts = []
+    for path in (order or _read_order()):
+        request = source_fetch.ApiRequest(host=HOST, path=path)
+        source = _read(request, PLACES[path], cache_dir)
+        parts.append(entry_coverage.RunPart(source, request, panorama_to_terraform.PanoramaParser(source)))
+    return parts
+
+
+def _concat_join(values):
+    """The join as an argument, stated here so the pin measures what the view delegates to its owners. The
+    merge rule is the entry point's decision and `api_requests.py` keeps none, so it is pinned by
+    `test_the_entry_point_joins_the_tables_across_the_responses_it_read`.
+    """
+    if all(isinstance(value, list) for value in values):
+        return [item for value in values for item in value]
+    return values[-1]
+
+
+def test_the_run_view_answers_the_entry_protocol_through_the_ledger_that_holds_the_entry(tmp_path):
+    """Criterion 4: the view holds the responses in run order and answers the protocol through the ledger that
+    holds the entry, so an entry belongs to one response and no answer is built from a tree across responses. A
+    run that read one response is answered the same as that response's own ledger.
+    """
+    parts = _parts(tmp_path)
+    assert len({part.source.name for part in parts}) == len(parts), \
+        'two responses, each named by the request that read it'
+    view = entry_coverage.RunView(parts, _concat_join)
+
+    assert view.parts() == parts, 'the view holds the parts in the order the run read them'
+    assert view.entries() == [entry for part in parts for entry in part.ledger().entries()], \
+        'the entry set is the parts in run order'
+    assert view.rows() == [row for part in parts for row in part.ledger().rows()], \
+        'the row set is the parts in run order'
+    assert view.sources() == [part.source for part in parts], 'one source per response the run read'
+
+    # Every protocol answer is the answer of the ledger that holds the entry, and the parent facts are the
+    # merged per-response maps, so no entry has a parent in another response.
+    for part in parts:
+        for entry in part.ledger().entries():
+            holder = part.ledger()
+            assert view.ledger_for(entry) is holder, 'the answer goes to the ledger that holds the entry'
+            assert view.row_for(entry) == holder.row_for(entry)
+            assert view.mark_for(entry) is holder.mark_for(entry)
+            assert view.destination(entry) == holder.destination(entry)
+            assert view.is_report_entry(entry) == holder.is_report_entry(entry)
+            assert view.scope(entry) == holder.scope(entry)
+            assert view.line_of(entry) == holder.line_of(entry)
+            assert view.source_of(entry) is holder.source
+            assert view.parents[entry] is holder.parents[entry]
+            assert all(entry not in other.ledger().parents for other in parts if other is not part), \
+                'no parent crosses a response'
+
+    single = entry_coverage.RunView(parts[:1], _concat_join)
+    ledger = parts[0].ledger()
+    for name in ('entries', 'rows', 'gaps', 'counts', 'property_findings',
+                 'property_entry_total', 'predefined_total', 'gap_count'):
+        assert getattr(single, name)() == getattr(ledger, name)(), name
+
+    view.start_recording()
+    assert all(part.ledger().recording for part in parts), 'the read record is turned on for every response'
+
+
+def _class_node(module: str, name: str) -> ast.ClassDef:
+    """One class body, so a pin reads what the class states and not the module that holds it."""
+    tree = ast.parse((SRC_DIR / module).read_text(encoding='utf-8'))
+    return next(node for node in ast.walk(tree) if isinstance(node, ast.ClassDef) and node.name == name)
+
+
+def test_the_run_view_states_no_row_shape_and_no_field_name_of_its_own():
+    """Criterion 4: the view answers, it does not decide. It states no row shape, no field name, no naming
+    rule, no sort rule, no writer, no console line, and no environment name, and it takes the join as an
+    argument, because the cross-response merge is the entry point's decision.
+    """
+    node = _class_node('entry_coverage.py', 'RunView')
+    body = ast.unparse(node)
+    fields = set(unit_manifest.FIELD_ORDER) | {'line', 'source', 'container', 'destination', 'detail',
+                                               'fields', 'captured', 'property_entries'}
+    for field in sorted(fields):
+        assert f"'{field}'" not in body, (field, 'the view adds no field to the row shape its owner states')
+    assert 'sorted(' not in body, 'the view states no sort rule: the row order is the run order'
+    for name in ('print(', 'write_file', 'write_text', 'render', 'console_line', 'sanitize', 'name_ref'):
+        assert name not in body, (name, 'the view states no rule of this kind')
+
+    init = next(stmt for stmt in node.body if isinstance(stmt, ast.FunctionDef) and stmt.name == '__init__')
+    assert 'join' in [arg.arg for arg in init.args.args], 'the join is an argument, so the view states no merge rule'
+
+    # Every name the view uses is one its owners state, so no method body holds a name of its own.
+    named = []
+    for stmt in node.body:
+        if isinstance(stmt, ast.FunctionDef):
+            doc = ast.get_docstring(stmt)
+            named.extend(inner.value for inner in ast.walk(stmt)
+                         if isinstance(inner, ast.Constant) and isinstance(inner.value, str)
+                         and inner.value != doc)
+    assert named == [], named

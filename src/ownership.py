@@ -156,7 +156,7 @@ def parent_map(ledger) -> dict:
     for entry in ledger.entries():
         if entry.tag != 'entry':
             continue
-        if container_coverage.container_tag(entry, ledger.parents, ledger.source) != 'device-group':
+        if container_coverage.container_tag(entry, ledger.parents, ledger.source_of(entry)) != 'device-group':
             continue
         mark = ledger.mark_for(entry)
         captured = mark['captured'] if mark else None
