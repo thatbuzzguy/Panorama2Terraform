@@ -124,6 +124,12 @@ here with that rule named.
   entry value. Not built: the corpus holds no such entry, so the rule needs a
   fixture that shows how an export states a device-level value.
 
+- The notice set is not pinned. `docs/LICENSING.md` names the 18 files that still hold upstream text and the
+  four `src/` modules that carry a copyright notice, and `git blame` is the authority for the split. No test
+  reads a notice, so a notice can name a holder the split does not support and the gate reports nothing. A pin
+  would read every module source and compare the notice against the blame author, which is a document check
+  rather than a rule the tool enforces, so it is not built.
+
 ## Out of Scope
 
 - The orchestrator is not this tool's job. The tool writes data an orchestrator reads: the unit
@@ -141,7 +147,8 @@ here with that rule named.
   operator's re-registration: the tool changes the site row, and no plan changes the Panorama
   device entry. The fact is in `docs/CODEBASE_ASSEMBLY.md` §12.
 - PAN-OS version matrix testing.
-- Dual-license legal review.
+- Lawyer review of the licensing rule. `docs/LICENSING.md` states the rule as this project understands it, and
+  the split is measured through `git blame`, but no lawyer has read it.
 - The state source has no write path (F5.6). A run reports what a state document holds and never
   writes one, so a drift finding is an operator action, not an update.
 
@@ -150,6 +157,10 @@ here with that rule named.
 - Adopt `ruff format` as a gate. A one-time format pass of both legacy scripts is required first
   (about 1500 changed lines in `panorama_to_terraform.py`). Do it as its own task so the diff stays
   reviewable.
+- Raise `pyproject.toml` `target-version` to the Python floor (`py310`). `ruff check` reports 101
+  findings at that level: 80 `UP045` (`Optional[X]`), 16 `B905` (`zip` without `strict`), 4 `UP035`,
+  and 1 `UP007`. Do it as its own task so the diff stays reviewable. The gate stays green while
+  `target-version` states the syntax level ruff enforces, which is below the floor.
 - Deeper post-run checks (beyond the gate (F4.1): `tflint` integration. `sanity_checks.py` is the runtime home
   for the static rules.
 

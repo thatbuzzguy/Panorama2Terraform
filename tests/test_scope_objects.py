@@ -153,13 +153,13 @@ def test_entries_print_in_document_order_within_a_type(scope_parts):
     assert sorted(names) == sorted(order), names
 
 def test_the_scope_file_is_written_before_the_config_inside_it(converter_module):
-    """The order rule (`docs/CODEBASE_ASSEMBLY.md` §6): `main()` writes the scope file after
+    """The order rule (`docs/CODEBASE_ASSEMBLY.md` §6): the run sequence writes the scope file after
     `provider.tf` and before the object files.
 
     F6.6 moves `variables.tf` after the emitters, because the declaration set is the site values the
     emitters printed. The scope-file-before-the-config rule is unchanged.
     """
-    calls = re.findall(r'tf_gen\.(\w+)\(', inspect.getsource(converter_module.main))
+    calls = re.findall(r'tf_gen\.(\w+)\(', inspect.getsource(converter_module.generate_run))
     position = calls.index('generate_scope_objects')
     assert calls[:position] == ['generate_provider_config'], calls[:position]
     assert calls.index('generate_variables') > position, calls

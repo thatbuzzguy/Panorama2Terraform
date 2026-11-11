@@ -156,7 +156,7 @@ def parent_map(ledger) -> dict:
     for entry in ledger.entries():
         if entry.tag != 'entry':
             continue
-        if container_coverage.container_tag(entry, ledger.parents, ledger.source) != 'device-group':
+        if container_coverage.container_tag(entry, ledger.parents, ledger.source_of(entry)) != 'device-group':
             continue
         mark = ledger.mark_for(entry)
         captured = mark['captured'] if mark else None
@@ -293,8 +293,10 @@ def build_rows(ledger, parent_ledger, sanitize: Callable[[str], str]) -> list:
             container = current.parents.get(entry)
             if container is None:
                 continue
+            # The source is read through the entry, so the shape decision is the one rule: a run view answers
+            # the response that holds the entry (F8.9), and a single-response ledger answers its own source.
             matrix_row = entry_coverage.matrix_row_for(
-                container_coverage.section_path(container, current.parents, current.source))
+                container_coverage.section_path(container, current.parents, current.source_of(entry)))
             row = scan_row(current, entry, matrix_row, stated) if matrix_row else None
             if row is None:
                 continue

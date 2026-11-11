@@ -1,5 +1,8 @@
 # Project tool configuration.
-# Python >= 3.9: Python 3.8 is end-of-life and is no longer supported.
+# Python >= 3.10: Python 3.9 is end-of-life, and the pinned pytest 9 requires 3.10.
+# `target-version` states the syntax level the lint gate enforces, not the floor. It stays
+# py39 because the codebase still writes pre-3.10 typing (`Optional[X]`, `typing.List`) and
+# `zip` without `strict`; the one-time pass that moves it to py310 is in `backlog.md`.
 
 [tool.ruff]
 line-length = 120

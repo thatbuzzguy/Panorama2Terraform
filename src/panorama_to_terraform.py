@@ -66,7 +66,6 @@ from xml_input import (
     DEFAULT_SCOPE,
     ParsedSource,
     UnsafeInputError,
-    add_max_input_argument,
     parse_xml,
 )
 
@@ -5858,9 +5857,13 @@ provider "panos" {
         if not rows:
             return ''
 
-        lines = ['=' * 80, entry_coverage.REPORT_HEADING, '=' * 80, '',
-                 f'{container_coverage.SOURCE_LABEL} {ledger.source.name}', '',
-                 entry_coverage.RULE_PARAGRAPH, '']
+        lines = ['=' * 80, entry_coverage.REPORT_HEADING, '=' * 80, '']
+        # F8.9: the run may have read more than one response, so the label names each source in run order.
+        # One source is answered by the ledger itself, so a run that read one response writes the same line as
+        # before. The report names the source name only, never the path (F4.2 rule 6).
+        for source in ledger.sources():
+            lines.append(f'{container_coverage.SOURCE_LABEL} {source.name}')
+        lines.extend(['', entry_coverage.RULE_PARAGRAPH, ''])
         lines.extend(entry_coverage.summary_lines(ledger))
 
         gaps = ledger.gaps()
@@ -6366,7 +6369,7 @@ provider "panos" {
 
         out.write()
 
-    def generate_readme(self):
+    def generate_readme(self, entry_point: str) -> None:
         """Generate README with usage instructions.
 
         F5.5: a run that declares read-through scopes adds the label section, so a
@@ -6376,6 +6379,10 @@ provider "panos" {
         F6.10.4: the README names the site record, its printed form, and `imports.tf`, because those are the
         files a reader cannot see from a `.tf` file alone. It names the files and states no row and no value,
         so the rule that no report names a field the site data states still holds for the site record itself.
+
+        F8.9: the README names which entry point wrote the codebase, so a reader can tell a run that read one
+        source it named from a run that read the request set. The name is an argument, so this states no path
+        rule of its own, and the line is fixed text, so two runs on the same bytes write the same bytes.
         """
         # The environment name is stated once, in `source_fetch.API_KEY_ENV`, so the README cannot name a
         # second one (docs/CODEBASE_ASSEMBLY.md §11). The host name is read through the naming rule, so the
@@ -6384,6 +6391,8 @@ provider "panos" {
         head = f'''# Palo Alto Terraform Configuration
 
 This directory contains Terraform configuration files generated from Palo Alto Panorama export.
+
+The entry point that wrote this codebase is `{entry_point}`.
 
 The run writes one directory per unit the unit manifest names, and each unit directory holds that unit's `.tf`
 files and the printed form of its site row. A unit is one plan against one state, so run Terraform inside one
@@ -6531,12 +6540,625 @@ https://registry.terraform.io/providers/PaloAltoNetworks/panos/latest/docs
         self.write_root_file('README.md', head + site_label + label + tail)
 
 
+
+# --- F8.9: the one run sequence (`docs/API_CONVERSION_PATH.md` §6) ---------------
+
+# The name the README label prints. It is data, not a rule: the entry point states its own name, and
+# `generate_readme` takes it as an argument, so the sequence states no path rule of its own.
+ENTRY_POINT = 'panorama_to_terraform.py'
+
+# The parse order, stated once (criterion 3). `container_coverage.CONTAINER_TABLE` is not this order: it
+# holds no `service_object` row, and the emission order is not the parse order, so the order is a decision
+# the sequence states. Each pair is (the name the sequence reads, the parse method), in the order the run
+# runs them. `associations` is last, because the run builds the generator after the parse and reads the
+# tables through it.
+PARSE_ORDER = (
+    ('device_groups', 'parse_device_groups'),
+    ('templates', 'parse_templates'),
+    ('template_stacks', 'parse_template_stacks'),
+    ('template_variables', 'parse_template_variables'),
+    ('virtual_systems', 'parse_vsys'),
+    ('tags', 'parse_tags'),
+    ('regions', 'parse_regions'),
+    ('custom_url_categories', 'parse_custom_url_categories'),
+    ('application_groups', 'parse_application_groups'),
+    ('application_filters', 'parse_application_filters'),
+    ('external_lists', 'parse_external_lists'),
+    ('schedules', 'parse_schedules'),
+    ('addresses', 'parse_address_objects'),
+    ('address_groups', 'parse_address_groups'),
+    ('services', 'parse_service_objects'),
+    ('service_groups', 'parse_service_groups'),
+    ('security_rules', 'parse_security_rules'),
+    ('nat_rules', 'parse_nat_rules'),
+    ('decryption_rules', 'parse_decryption_rules'),
+    ('pbf_rules', 'parse_pbf_rules'),
+    ('app_override_rules', 'parse_application_override_rules'),
+    ('zones', 'parse_zones'),
+    ('interfaces', 'parse_interfaces'),
+    ('filter_containers', 'parse_filter_containers'),
+    ('virtual_routers', 'parse_virtual_routers'),
+    ('logical_routers', 'parse_logical_routers'),
+    ('security_profiles', 'parse_security_profiles'),
+    ('security_profile_groups', 'parse_security_profile_groups'),
+    ('zone_protection_profiles', 'parse_zone_protection_profiles'),
+    ('log_settings', 'parse_log_settings'),
+    ('qos_profiles', 'parse_qos_profiles'),
+    ('tunnel_monitor_profiles', 'parse_tunnel_monitor_profiles'),
+    ('pbf_monitor_profiles', 'parse_pbf_monitor_profiles'),
+    ('certificates', 'parse_certificates'),
+    ('certificate_profiles', 'parse_certificate_profiles'),
+    ('ike_gateways', 'parse_ike_gateways'),
+    ('ipsec_tunnels', 'parse_ipsec_tunnels'),
+    ('ike_crypto_profiles', 'parse_ike_crypto_profiles'),
+    ('ipsec_crypto_profiles', 'parse_ipsec_crypto_profiles'),
+    ('associations', 'parse_associations'),
+)
+
+# The summary block, in the order the run prints it. This is not the parse order: `filter_containers` prints
+# no count, the router block prints at the interfaces position, the security profile line sums the dict
+# values, and the two certificate lines print only when they have entries. The two block markers are the
+# places the run prints a block instead of one count line.
+ROUTERS_BLOCK = 'routers block'
+PROTOCOL_ROUTERS_BLOCK = 'protocol routers block'
+SUMMED_KEYS = {'security_profiles'}
+CONDITIONAL_KEYS = {'certificates', 'certificate_profiles'}
+COUNT_LINES = (
+    ('device_groups', 'device groups'),
+    ('templates', 'templates'),
+    ('template_stacks', 'template stacks'),
+    ('template_variables', 'template variables'),
+    ('virtual_systems', 'virtual systems'),
+    ('tags', 'tags'),
+    ('regions', 'regions'),
+    ('custom_url_categories', 'custom URL categories'),
+    ('application_groups', 'application groups'),
+    ('application_filters', 'application filters'),
+    ('external_lists', 'external lists'),
+    ('schedules', 'schedules'),
+    ('addresses', 'address objects'),
+    ('address_groups', 'address groups'),
+    ('services', 'service objects'),
+    ('service_groups', 'service groups'),
+    ('security_rules', 'security rules'),
+    ('nat_rules', 'NAT rules'),
+    ('decryption_rules', 'decryption rules'),
+    ('pbf_rules', 'policy-based forwarding rules'),
+    ('app_override_rules', 'application override rules'),
+    ('zones', 'zones'),
+    ('interfaces', 'interfaces'),
+    (ROUTERS_BLOCK, ''),
+    ('security_profiles', 'security profiles'),
+    ('security_profile_groups', 'security profile groups'),
+    ('zone_protection_profiles', 'zone protection profiles'),
+    ('log_settings', 'log forwarding profiles'),
+    ('qos_profiles', 'QoS profiles'),
+    ('tunnel_monitor_profiles', 'IPsec tunnel monitor profiles'),
+    ('pbf_monitor_profiles', 'PBF path monitoring profiles'),
+    ('certificates', 'certificate entries'),
+    ('certificate_profiles', 'certificate profiles'),
+    (PROTOCOL_ROUTERS_BLOCK, ''),
+    ('ike_gateways', 'IKE gateways'),
+    ('ipsec_tunnels', 'IPsec tunnels'),
+)
+
+
+def join_value(first, second):
+    """One join step, in run order (criterion 2).
+
+    A list concatenates, a dict merges by key in run order and recurses into a key both parts state, and two
+    numbers for the same key add, because a `Counter` answer is the count the same rule sums across the set.
+    A value that is neither is the later part's, because no rule here decides which response answers a fact
+    the two parts state differently. One part answers the value unchanged, so path 1 writes the same bytes as
+    before.
+    """
+    if isinstance(first, list) and isinstance(second, list):
+        return list(first) + list(second)
+    if isinstance(first, dict) and isinstance(second, dict):
+        merged = dict(first)
+        for key, value in second.items():
+            merged[key] = value if key not in merged else join_value(merged[key], value)
+        return merged
+    if isinstance(first, (int, float)) and isinstance(second, (int, float)):
+        return first + second
+    return second
+
+
+def join_results(values):
+    """The cross-response join, in run order (criterion 2). `api_requests.py` states no merge rule, so the
+    tables `parse_associations` answers stay per response and this is what joins them. One value answers
+    itself, so a run that read one response is unchanged.
+    """
+    if not values:
+        return {}
+    joined = values[0]
+    for value in values[1:]:
+        joined = join_value(joined, value)
+    return joined
+
+
+def read_line(request) -> str:
+    """The line that names what the run read (criterion 5). Both entry points print it, so the shape is
+    stated once here and not in either entry point.
+    """
+    return (f"Reading Panorama configuration from the API export of {request.https_host()} "
+            f"(cache entry {request.cache_name()})...")
+
+
+def state_line(path, workspace) -> str:
+    """The line that names the state reference source the run read (criterion 5). Both entry points print it,
+    so the shape is stated once here. The workspace is read through `DEFAULT_SCOPE`, the one definition, so the
+    line states no scope of its own.
+    """
+    return (f"Reading the state document {path} as a reference source "
+            f"(workspace {workspace or DEFAULT_SCOPE})...")
+
+
+def is_refusal(error) -> bool:
+    """The kinds of failure an input refusal is, stated once for both entry points (criterion 5). A refusal is
+    the run's own decision to stop before it writes, so the entry point that catches it prints `refused` and
+    exits 1; anything else is an unexpected error and keeps its traceback."""
+    return isinstance(error, (UnsafeInputError, ET.ParseError, ValueError))
+
+
+def refused(read_name: str, error) -> int:
+    """The run's refusal line and the exit code for refused input (criterion 5): 1, and no file is written,
+    because the refusal happens before the run writes anything.
+
+    The door's message already names the file, the limit and the measured value, so it prints unchanged
+    (F3.8), and the parse shape stays the one `main()` prints. A `SourceFetchError` is an `UnsafeInputError`
+    subclass, so a fetch refusal reaches this through the door's message. `read_name` is what the run read:
+    path 1 names its input file, path 2 names the host the run read.
+    """
+    if isinstance(error, UnsafeInputError):
+        print(f"Error: {error}")
+    elif isinstance(error, ET.ParseError):
+        print(f"Error: Failed to parse XML file: {error}")
+    else:
+        print(f"Error: rejected '{read_name}': {error}")
+    return 1
+
+
+def shared_arguments(parser: argparse.ArgumentParser) -> None:
+    """The arguments one run reads, stated once for both entry points (criterion 5).
+
+    The set names no source, because the request set is the scope set and the parent walk stays inside one
+    response (F8.5): no input file, no `--source`, no `--path`, no `--parent`. Path 1 adds the source
+    arguments of its own. The input limit is the door's rule, read through `source_fetch`.
+    """
+    parser.add_argument('--host', help='Panorama host. https only, a bare host is read as https')
+    parser.add_argument(
+        '--cache-dir',
+        default=source_fetch.DEFAULT_CACHE_DIR,
+        help=f'cache directory for API responses (default: {source_fetch.DEFAULT_CACHE_DIR})',
+    )
+    parser.add_argument('--offline', action='store_true',
+                        help='read the cache entry only; never call the network')
+    parser.add_argument('--insecure', action='store_true',
+                        help='skip certificate verification for the API request. Verification is on by default')
+    parser.add_argument('--output-dir', default='terraform_output',
+                        help='Output directory for Terraform files (default: terraform_output)')
+    parser.add_argument('--validate', action='store_true',
+                        help='Run terraform init and terraform validate on the output')
+    parser.add_argument('--data-blocks', action='append', metavar='SCOPE',
+                        help=f'a reference scope this run may read through, as a provider data source type. '
+                             f'Repeatable, or a comma-separated list. A name that no scope in this run declares '
+                             f'becomes a data block in {TerraformGenerator.READ_THROUGH_FILE} (F5.5)')
+    parser.add_argument('--import-blocks', action='store_true',
+                        help=f'write one import block per entry the run declares, in {import_blocks.IMPORT_FILE}. '
+                             'The id is base64 of the location object and the entry name (F6.4)')
+    parser.add_argument('--state', help='Terraform state document to read as a reference source (F5.6). The '
+                                        'ownership and drift sections report the entries it already owns')
+    parser.add_argument('--workspace', help='the workspace the state document belongs to, so the record can '
+                                            'name it. Needs --state (F5.6)')
+    parser.add_argument('--prune-cache', action='store_true',
+                        help='remove the cache entries no record this run wrote references. Off by default, '
+                             'because a run that declares nothing keeps its cache (F5.3 rule 4)')
+    # F3.8: the same input limit on both entry points, through the door's own argument rule.
+    source_fetch.add_max_input_argument(parser)
+
+
+def shared_checks(parser: argparse.ArgumentParser, args) -> None:
+    """The argument checks both entry points make, stated once (criterion 5), so an entry point states no
+    argument rule of its own beyond the arguments it adds. A refusal here is an argument error, so it exits 2
+    and writes no file.
+    """
+    if args.insecure and args.offline:
+        parser.error('--insecure applies to the network producer, and --offline never calls one')
+    # F5.6: the state source is a reference source, so it applies to both entry points. The workspace names
+    # the state document, so it needs a state document to name.
+    if args.workspace and not args.state:
+        parser.error('--workspace needs --state: the workspace names the state document, and a '
+                     'run that declares no --state reads no state document')
+
+
+def data_scopes(parser: argparse.ArgumentParser, args) -> list:
+    """F5.5: the read-through scopes are checked before the run. A scope outside the reference sets answers
+    no reference, and a data source that declares no `name` cannot hold the entry name a reference needs, so
+    both are argument errors. The rule is stated once, for both entry points.
+    """
+    scopes = sorted({part.strip() for scope in (args.data_blocks or [])
+                     for part in scope.split(',') if part.strip()})
+    if args.data_blocks and not scopes:
+        parser.error('--data-blocks needs at least one scope')
+    for scope in scopes:
+        if scope not in REFERENCE_SCOPES:
+            parser.error(
+                f'--data-blocks must name a scope a reference resolves against '
+                f'({", ".join(REFERENCE_SCOPES)}); {scope} answers no reference'
+            )
+        if not DATA_SOURCE_SCHEMA[scope][0]:
+            parser.error(
+                f'--data-blocks scope {scope} declares no name in the provider schema, so a '
+                f'data block for it cannot hold the entry name a reference needs'
+            )
+    return scopes
+
+
+def part_for(source, request, parser=None) -> entry_coverage.RunPart:
+    """One part: the source the door returned, the request that read it, and the parser that reads it.
+
+    The entry point builds the parser, because the parser is the object that reads one response, and the run
+    order is the entry point's decision. `run_pipeline` reads the instance back through
+    `PanoramaParser.__init__`, so the entry point builds it and the sequence does not.
+    """
+    return entry_coverage.RunPart(source, request, parser or PanoramaParser(source))
+
+
+def generate_run(run, view, scopes: list, index=None, parent=None, state_source=None,
+                 entry_point: str = '') -> int:
+    """The run sequence (criterion 3), stated once and called by both entry points: the parse order, the
+    run-order join, the writes, the gate call, the console prints, and the exit code.
+
+    `view` is the run view the entry point built: the parts it read, in the order it read them, and the join
+    the entry point supplies. `entry_point` is the fact only the entry point can state: which entry point wrote
+    the codebase. `index` is the scope index the entry point built, and path 1 passes none because it read no
+    request (criterion 6). `parent` and `state_source` are the reference sources the run read.
+
+    The order this function reads the parts in is the order the entry point read them in, and it is the order
+    the record file the run wrote states.
+    """
+    parts = view.parts()
+    # The parse order is the order here, so a run that read many responses parses each one in it. `answer`
+    # fills once, so the response the entry point already parsed is not parsed a second time.
+    results = {name: view.parse(method) for name, method in PARSE_ORDER}
+
+    all_routers = results['virtual_routers'] + results['logical_routers']
+    protocol_routers = [r for r in all_routers if any((r.get('protocol') or {}).values())]
+
+    print("Extracting configuration elements...")
+
+    print("\nFound:")
+    for key, label in COUNT_LINES:
+        if key == ROUTERS_BLOCK:
+            # The markers name a block, not a parse answer, so they read the answers the block needs.
+            virtual, logical = results['virtual_routers'], results['logical_routers']
+            if logical:
+                print(f"  - {len(virtual)} virtual routers (legacy)")
+                print(f"  - {len(logical)} logical routers (advanced routing)")
+                print(f"  - {len(all_routers)} total routers")
+            else:
+                print(f"  - {len(virtual)} virtual routers")
+            continue
+        if key == PROTOCOL_ROUTERS_BLOCK:
+            # Dynamic routing (F7.1): the counts come from the protocol levels of the router record, so the
+            # summary names the same entries the `.tf` file prints.
+            if protocol_routers:
+                print(f"  - {len(protocol_routers)} router(s) with a routing protocol")
+                for router in protocol_routers:
+                    pieces = []
+                    bgp = (router.get('protocol') or {}).get('bgp') or {}
+                    if bgp:
+                        groups = bgp.get('peer_group') or []
+                        pieces.append(
+                            f"bgp: AS {bgp.get('local_as')}, {len(groups)} peer groups, "
+                            f"{sum(len(group.get('peer') or []) for group in groups)} peers, "
+                            f"{len(bgp.get('redist_rules') or [])} redistribution rules")
+                    ospf = (router.get('protocol') or {}).get('ospf') or {}
+                    if ospf:
+                        pieces.append(f"ospf: {len(ospf.get('area') or [])} areas")
+                    print(f"    {router['name']}: " + ', '.join(pieces))
+            continue
+        count = results[key]
+        if key in CONDITIONAL_KEYS and not count:
+            continue
+        if key in SUMMED_KEYS:
+            print(f"  - {sum(len(profs) for profs in count.values())} {label}")
+        else:
+            print(f"  - {len(count)} {label}")
+
+    print(f"\nGenerating Terraform configuration in {run.output_dir}...")
+    tf_gen = TerraformGenerator(run.output_dir, results['associations'],
+                                data_scopes=scopes, ledger=view)
+
+    # F4.4: the property scan measures which keys an output reads from a captured object, so the record
+    # starts here and not during the parse, and the run view turns it on for every response it holds.
+    view.start_recording()
+
+    # Core configuration
+    tf_gen.generate_provider_config()
+
+    # F6.5: the scope objects come before the config inside them (`docs/CODEBASE_ASSEMBLY.md` §6), so
+    # `scope.tf` is the first object file the run writes.
+    tf_gen.generate_scope_objects(results['device_groups'], results['templates'],
+                                  results['template_stacks'], results['template_variables'],
+                                  results['virtual_systems'])
+
+    # New: Tags and URL/App objects
+    tf_gen.generate_tags(results['tags'])
+    tf_gen.generate_custom_url_categories(results['custom_url_categories'])
+    tf_gen.generate_application_groups(results['application_groups'])
+    # Application filters have no v2 resource: they go to the manual setup report
+    tf_gen.generate_external_lists(results['external_lists'])
+    # F2.9: schedules go to the manual setup report (v2 resource exists, but the parse reads the name,
+    # the description and the type only, and v2.0.14 has no monthly schedule support)
+
+    # Address and Service objects
+    tf_gen.generate_address_objects(results['addresses'])
+    tf_gen.generate_address_groups(results['address_groups'])
+    tf_gen.generate_service_objects(results['services'])
+    tf_gen.generate_service_groups(results['service_groups'])
+
+    # Network
+    # F2.6: interfaces emit first so zone/VR/interface .name lookups resolve to declared resources
+    tf_gen.generate_interfaces(results['interfaces'])
+    tf_gen.generate_zones(results['zones'])
+    tf_gen.generate_virtual_routers(all_routers)  # Handles both virtual & logical routers
+    tf_gen.generate_filter_containers(results['filter_containers'])  # F7.8
+    # F7.14: the two certificate containers, one block per entry, printed from `CERTIFICATE_SHAPE`.
+    tf_gen.generate_certificates(results['certificates'])
+    tf_gen.generate_certificate_profiles(results['certificate_profiles'])
+
+    # Security Profiles
+    # F2.9: zone protection, log forwarding, and IPsec tunnel monitor profiles go to the manual setup
+    # report (no v2 resource, or the v2 resource exists but the profile body is not parsed)
+    tf_gen.generate_security_profiles(results['security_profiles'])
+    tf_gen.generate_security_profile_groups(results['security_profile_groups'])
+    # F2.9: PBF path monitoring profiles emit as real v2 resources
+    tf_gen.generate_pbf_monitor_profiles(results['pbf_monitor_profiles'])
+
+    # Rules
+    # F2.9: application override rules go to the manual setup report (no v2 resource)
+    tf_gen.generate_security_rules(results['security_rules'])
+    tf_gen.generate_nat_rules(results['nat_rules'])
+    tf_gen.generate_decryption_rules(results['decryption_rules'])
+    tf_gen.generate_pbf_rules(results['pbf_rules'])
+
+    # VPN: any non-empty section emits vpn.tf (F2.8); the key management report still needs a gateway or
+    # tunnel to mention.
+    tf_gen.generate_vpn_config(results['ike_gateways'], results['ipsec_tunnels'],
+                                results['ike_crypto_profiles'], results['ipsec_crypto_profiles'])
+    if results['ike_gateways'] or results['ipsec_tunnels']:
+        tf_gen.generate_vpn_report(results['ike_gateways'], results['ipsec_tunnels'])
+
+    # Items that are not emitted (F2.9): the routing protocol entries no provider field reaches (F7.1),
+    # app filters, manual-key tunnels, app override, QoS, IPsec tunnel monitor, and log forwarding + zone
+    # protection + schedules (v2 resource exists, profile body not parsed). See resource_mapping.py.
+    manual_key_tunnels = [t for t in results['ipsec_tunnels'] if t.get('type') != 'auto-key']
+    # F4.2: scan the parsed input for a section container the container table does not cover. The scan reads
+    # one response, so it names one position, and the sections print in run order. A finding is an operator
+    # action, not a broken output, so it does not change the exit code (the F4.1 gate does).
+    scanned = [(part, container_coverage.scan(part.source, part.parser.parent_map)) for part in parts]
+    coverage_findings = [finding for _, findings in scanned for finding in findings]
+    tf_gen.generate_manual_setup_report(
+        entry_coverage.protocol_report_rows(view), results['application_filters'], manual_key_tunnels,
+        application_override_rules=results['app_override_rules'],
+        qos_profiles=results['qos_profiles'],
+        tunnel_monitor_profiles=results['tunnel_monitor_profiles'],
+        schedules=results['schedules'],
+        log_settings=results['log_settings'],
+        zone_protection_profiles=results['zone_protection_profiles'],
+        report_only_addresses=[a for a in results['addresses'] if a.get('report_only')],
+        dual_protocol_services=[
+            s for s in results['services']
+            if len(TerraformGenerator.dropped_service_protocols(s.get('protocols') or {})) > 0
+        ],
+        entry_report='\n\n'.join(
+            container_coverage.render_section(findings, part.source.name) for part, findings in scanned),
+    )
+
+    # F5.5: the read-through blocks, the unit's file, written before the reports so the label can state
+    # the count and the gate can read the file.
+    tf_gen.generate_read_through()
+
+    # F6.6: `variables.tf` is written after the emitters, because the declaration set is the site values
+    # the value-to-variable table mapped at the print sites (`generate_variables`). A file written before
+    # the emitters could not state what the run consumed.
+    tf_gen.generate_variables()
+
+    # Reports
+    tf_gen.generate_interface_report(results['interfaces'])
+    tf_gen.generate_readme(entry_point)
+
+    # F4.3: one line per entry the parse pipeline read. A gap is an operator action, not a broken output,
+    # so it does not change the exit code (the F4.1 gate does).
+    # F5.4: the parent ledger is read with the same row rule, so the matrix row that covers a parent entry
+    # is the row that covers the child entry. A run with no declared parent has no shadow to report, and the
+    # parent walk stays inside one response (F8.5), so a run that read many responses has no parent to name.
+    parent_ledger = entry_coverage.EntryLedger(parent.source) if parent is not None else None
+    shadows = shadow_coverage.shadow_findings(view, parent_ledger)
+    # F6.2: ownership as data. Every source is read with the same row rule, so the matrix row that covers a
+    # run entry is the row that covers a parent entry. A finding is an operator action, so it does not
+    # change the exit code (the F4.1 gate does), and the console prints no line for it.
+    ownership_rows = ownership.build_rows(view, parent_ledger, tf_gen.sanitize_name)
+    # F6.3: the reference between units as an edge list. The pair comes from the names `name_ref` recorded
+    # at the sites that applied the rule, joined to the ownership rows on (`type`, `entry`), so no second
+    # resolution rule and no second naming rule appears here.
+    edge_rows = reference_edges.build_rows(ownership_rows, tf_gen.unit_references(), tf_gen.sanitize_name)
+    # F6.1: the unit as data. One row per declared scope, from the ledger the parse already writes and the
+    # names `name_ref` recorded at the sites that applied the rule. The rows are built before the report,
+    # because a cycle finding reads its grouping facts through the manifest row.
+    manifest_rows = reference_edges.order(
+        unit_manifest.build_rows(view, tf_gen.unit_references(), tf_gen.sanitize_name),
+        ownership_rows, edge_rows)
+    # F5.6: the state scan reads the same row rule, so the matrix row that covers a run entry is the row
+    # that covers the state resource. A run with no declared state source reads no state, so it reports
+    # neither fact.
+    state_findings = state_coverage.state_findings(view, state_source)
+    tf_gen.generate_conversion_report(view, shadows, state_findings,
+                                      ownership.findings(ownership_rows),
+                                      reference_edges.findings(edge_rows, manifest_rows))
+
+    # F5.3: the provenance record, in the order the run read the sources. Written outside the report bodies,
+    # so the report byte rule still holds: a report body names the source name, and the record is the file
+    # that names the path. The record is also the run's own statement of the run order, so the order is read
+    # back from it (criterion 1).
+    records = [provenance.record_for(part.source, request=part.request) for part in parts]
+    if parent is not None:
+        records.append(provenance.record_for(parent.source, request=parent.request))
+    # F5.6: the state source is read last, so its record is last. It has no request, so the two api fields
+    # stay `-` and the record references nothing: it prunes nothing.
+    if state_source is not None:
+        records.append(provenance.record_for(state_source))
+    # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): a record describes the whole codebase, so it is a
+    # codebase root-set file and goes through the one write path at the root.
+    record_file = write_path.root_path(run.output_dir, provenance.PROVENANCE_FILE)
+    write_path.write_file(record_file, provenance.render_records(records))
+
+    # F6.1: the manifest, the ownership record, and the edge record, written as data and only when they
+    # have content, following the rule for the report files.
+    if manifest_rows:
+        write_path.write_file(write_path.root_path(run.output_dir, unit_manifest.MANIFEST_FILE),
+                              unit_manifest.render(manifest_rows))
+    if ownership_rows:
+        write_path.write_file(write_path.root_path(run.output_dir, ownership.OWNERSHIP_FILE),
+                              ownership.render(ownership_rows))
+    if edge_rows:
+        write_path.write_file(write_path.root_path(run.output_dir, reference_edges.EDGE_FILE),
+                              reference_edges.render(edge_rows))
+
+    # F6.6: the site data. One row per site that names a value, written as data, and only when it has
+    # content. A reader joins `directory` to the manifest row. The `.tfvars` is written from the rows, not
+    # from the generator's state, so the gate rule `data_files` (F6.8) reads the record through `parse_rows`
+    # and compares the printed form with `render_tfvars` (`ARCHITECTURE.md` §4.5).
+    site_rows = site_data.build_rows(view, tf_gen.value_variables(), tf_gen.sanitize_name)
+    if site_rows:
+        write_path.write_file(write_path.root_path(run.output_dir, site_data.SITE_DATA_FILE),
+                              site_data.render(site_rows))
+        # F6.10.3: the printed form is the unit's file, so the run writes one per unit that names a value,
+        # each holding the printed form of that unit's row.
+        for row in site_rows:
+            write_path.write_file(write_path.unit_path(run.output_dir, row['directory'], site_data.TFVARS_FILE),
+                                  site_data.render_tfvars([row]))
+
+    # F6.4: the import blocks. A `.tf` file, because the gate rule that checks an import block reads the
+    # files the operator receives, and written only when the run declares them and has rows that state an
+    # id. A row that states a rule instead of an id writes no block.
+    import_rows = [row for row in tf_gen.import_rows if row['import_id']]
+    if run.import_blocks and import_rows:
+        # F6.10.3: `imports.tf` is a `.tf` file, so it is the unit's file and the run writes one per unit
+        # that has a block. `render` prints rows in unit order, so a unit's blocks print in the same order
+        # the run read them.
+        for facts in tf_gen.unit_set():
+            directory = tf_gen.directory_of(facts)
+            unit_rows = [row for row in import_rows if row['unit'] == directory]
+            if unit_rows:
+                write_path.write_file(write_path.unit_path(run.output_dir, directory, import_blocks.IMPORT_FILE),
+                                      import_blocks.render(unit_rows))
+
+    # F6.7: the commit actions. One block per unit the manifest names, written as the last `.tf` file so
+    # the gate rule reads the action against the completed unit, and only when it has content.
+    action_rows = commit_actions.build_rows(manifest_rows, tf_gen.sanitize_name)
+    if action_rows:
+        # F6.10.3: `actions.tf` is the last `.tf` file of a unit, so the run writes one per unit the
+        # manifest names, and each file holds that unit's block.
+        for facts in tf_gen.unit_set():
+            directory = tf_gen.directory_of(facts)
+            unit_rows = [row for row in action_rows if row['directory'] == directory]
+            if unit_rows:
+                write_path.write_file(write_path.unit_path(run.output_dir, directory, commit_actions.ACTIONS_FILE),
+                                      commit_actions.render(unit_rows))
+
+    print("\n✓ Successfully generated Terraform configuration!")
+    print("\n📄 Generated Migration Reports:")
+    print("  - INTERFACE_MIGRATION_REPORT.txt (Interface and IP inventory)")
+    if view.rows():
+        print("  - CONVERSION_REPORT.txt (one line per entry the parser read)")
+    if results['ike_gateways'] or results['ipsec_tunnels']:
+        print("  - VPN_MIGRATION_REPORT.txt ⚠️  (VPN config with key management instructions)")
+    print(f"Provenance record: {record_file}")
+
+    # F4.2 and F4.3: the console blocks. Every line is built by the owner of the console line shape, and
+    # each block prints only when it has a finding, in the report section order.
+    coverage_console = container_coverage.console_lines(coverage_findings)
+    if coverage_console:
+        print()
+        for line in coverage_console:
+            print(line)
+
+    # A gap is an operator action, not a broken output, so it does not change the exit code (the F4.1 gate
+    # does). No console line when the run has no gap. The shadow line names the parent source by its name,
+    # the minimum actionable field: the path is in the provenance record.
+    gap_console = entry_coverage.console_lines(view, tf_gen._report_scope_path)
+    property_console = entry_coverage.property_console_lines(view.property_findings(), tf_gen._report_scope_path)
+    shadow_console = shadow_coverage.console_lines(shadows, tf_gen._report_scope_path)
+    if gap_console or property_console or shadow_console:
+        print()
+        for block in (entry_coverage.summary_lines(view), gap_console, property_console, shadow_console):
+            for line in block:
+                print(line)
+        print(f"Per-entry report file: {Path(run.output_dir) / entry_coverage.REPORT_FILE}")
+
+    # F4.1: the gate reads the files that were written, so it reports what the operator receives. A WARN
+    # does not fail the gate; a FAIL does. The four data files are written above, so the data rule (F6.8)
+    # reads the records the run wrote. The cross-check is the one rule that reads two sets, so the run's
+    # ledger is the second input (`docs/ARCHITECTURE.md` §4.6), and the join gets the index the entry point
+    # built (criterion 6): a run that read no request passes no index, so the join reports as NOT RUN.
+    report = sanity_checks.run_checks(run.output_dir, run_terraform=run.validate, ledger=view, index=index)
+    report_path = write_path.root_path(run.output_dir, 'SANITY_REPORT.txt')
+    write_path.write_file(report_path, report.render())
+    print()
+    print(report.console_summary())
+    print(f"Sanity report: {report_path}")
+
+    print("\nNext steps:")
+    print(f"  1. cd {run.output_dir}")
+    print("  2. Review INTERFACE_MIGRATION_REPORT.txt for interface mapping")
+    if results['ike_gateways'] or results['ipsec_tunnels']:
+        print("  3. ⚠️  Review VPN_MIGRATION_REPORT.txt and update pre-shared keys!")
+    print("  4. Review the generated .tf files")
+    print("  5. Set the host in terraform.tfvars (do not commit the file), and set the key in the "
+          f"environment ({source_fetch.API_KEY_ENV})")
+    if results['ike_gateways'] or results['ipsec_tunnels']:
+        print("  6. ⚠️  Add VPN pre-shared keys to terraform.tfvars (DO NOT COMMIT)")
+    # F6.10.3: a unit is one plan against one state, so the plan runs inside the unit directory the
+    # manifest names.
+    print("  7. Run: terraform init inside one unit directory the manifest names")
+    print("  8. Run: terraform plan")
+    print("  9. Run: terraform apply")
+
+    # F4.1: a FAIL finding is a broken output, so the conversion reports it with a non-zero exit code
+    # instead of writing files and exiting 0. The exit code is the gate's decision, for both entry points.
+    code = 1 if report.failed else 0
+
+    # F5.3 rule 4: the prune runs last, because the reference is the record file the run wrote and the gate
+    # does not read it, so the code the gate decided does not move. The action reads that file back through
+    # `parse_records`, so the reference stays data. A record the action cannot read is a refusal, so the run
+    # exits 1, and the message names the record file, not the input file. A prune that removes nothing
+    # prints nothing and changes nothing.
+    if run.prune_cache:
+        try:
+            pruned = provenance.prune(record_file, run.cache_dir)
+        except ValueError as e:
+            print(f"Error: {e}")
+            return 1
+        if pruned:
+            print()
+            print(f"Cache prune: {len(pruned)} entries no written record referenced")
+            for entry in pruned:
+                print(f"  - {entry.name}")
+
+    return code
+
+
 def main():
+    """Path 1's entry point: the arguments, the source the run read, and the run sequence (F8.9)."""
     parser = argparse.ArgumentParser(
         description='Convert Palo Alto Panorama XML output to Terraform configuration'
     )
-    # F5.2: the input is a declared source. The file source is the default and
-    # behaves as before; the api source reads the cached API export.
+    # F5.2: the input is a declared source. The file source is the default and behaves as before; the api
+    # source reads the cached API export. Path 1 is the entry point that can name one source, so these are
+    # its own arguments; the arguments one run reads are in `shared_arguments`.
     parser.add_argument(
         'input_file',
         nargs='?',
@@ -6548,12 +7170,8 @@ def main():
         default='file',
         help='where the input comes from: a file (default) or the Panorama API export (F5.2)',
     )
-    parser.add_argument(
-        '--host',
-        help='Panorama host for --source api; https only, a bare host is read as https',
-    )
-    # F5.4: a per-scope run reads one scope instead of the whole config, and the declared
-    # parent scope is the second source the shadow scan reads.
+    # F5.4: a per-scope run reads one scope instead of the whole config, and the declared parent scope is
+    # the second source the shadow scan reads.
     parser.add_argument(
         '--path',
         help='scope path for --source api, as /<container> or /<container>/entry/<name>. '
@@ -6564,74 +7182,7 @@ def main():
         help='parent scope path for --source api, read as the second source for the '
              'shadow scan (F5.4). Needs --path',
     )
-    # F5.6: the state document is a reference source, so it applies to any source kind:
-    # the run reads it for the ownership and drift facts and writes no output from it.
-    parser.add_argument(
-        '--state',
-        help='Terraform state document to read as a reference source (F5.6). The ownership '
-             'and drift sections report the entries it already owns',
-    )
-    parser.add_argument(
-        '--workspace',
-        help='the workspace the state document belongs to, so the record can name it. '
-             'Needs --state (F5.6)',
-    )
-    # F5.5: the read-through opt-in. Off by default, so a run that declares no
-    # scope writes the same bytes as before.
-    parser.add_argument(
-        '--data-blocks',
-        action='append',
-        metavar='SCOPE',
-        help='a reference scope this run may read through, as a provider data source type. '
-             'Repeatable, or a comma-separated list. A name that no scope in this run declares '
-             f'becomes a data block in {TerraformGenerator.READ_THROUGH_FILE} (F5.5)',
-    )
-    # F6.4: the import blocks are an opt-in. Off by default, so a run that declares nothing
-    # writes the same `.tf` bytes as before (`import_blocks.py` rule 1).
-    parser.add_argument(
-        '--import-blocks',
-        action='store_true',
-        help=f'write one import block per entry the run declares, in {import_blocks.IMPORT_FILE}. '
-             'The id is base64 of the location object and the entry name (F6.4)',
-    )
-    parser.add_argument(
-        '--cache-dir',
-        default=source_fetch.DEFAULT_CACHE_DIR,
-        help=f'cache directory for API responses (default: {source_fetch.DEFAULT_CACHE_DIR})',
-    )
-    # F5.3 rule 4: the prune action is an opt-in that gates a run step, following the `--data-blocks`
-    # and `--import-blocks` precedent, so a run that declares nothing keeps its cache. The reference it
-    # reads is the record file the run wrote, so it applies to the source kind that has a cache.
-    parser.add_argument(
-        '--prune-cache',
-        action='store_true',
-        help='remove the cache entries no record this run wrote references. Off by default, and '
-             'applies to --source api, because a file record references no cache entry (F5.3 rule 4)',
-    )
-    parser.add_argument(
-        '--offline',
-        action='store_true',
-        help='read the cache entry only; never call the network',
-    )
-    parser.add_argument(
-        '--insecure',
-        action='store_true',
-        help='skip certificate verification for the API request. Verification is on by default',
-    )
-    parser.add_argument(
-        '--output-dir',
-        default='terraform_output',
-        help='Output directory for Terraform files (default: terraform_output)'
-    )
-    # F3.8: the same input limit on both entry points.
-    add_max_input_argument(parser)
-    # F4.1: the static gate runs on every conversion. --validate adds the
-    # terraform init + validate check, which needs the terraform binary.
-    parser.add_argument(
-        '--validate',
-        action='store_true',
-        help='Run terraform init and terraform validate on the output',
-    )
+    shared_arguments(parser)
 
     args = parser.parse_args()
 
@@ -6644,8 +7195,7 @@ def main():
         # for the cache field, so a file run has nothing to prune.
         if args.prune_cache:
             parser.error('--prune-cache applies to --source api, and a file record references no cache entry')
-        # F5.4: a file is one source and holds its own scopes, so a declared scope path
-        # has nothing to name.
+        # F5.4: a file is one source and holds its own scopes, so a declared scope path has nothing to name.
         if args.path or args.parent:
             parser.error('--path and --parent apply to --source api, and a file source reads one scope: the file')
         # Check if input file exists
@@ -6657,11 +7207,8 @@ def main():
             parser.error('--source api needs --host')
         if args.input_file:
             parser.error('--source api does not take an input file; it reads the cached API export')
-        if args.insecure and args.offline:
-            parser.error('--insecure applies to the network producer, and --offline never calls one')
-        # F5.4: the parent is the second source, so it needs a child scope to compare with.
-        # A whole-config source holds its own parent, and the tool does not guess which
-        # scope a run reads.
+        # F5.4: the parent is the second source, so it needs a child scope to compare with. A whole-config
+        # source holds its own parent, and the tool does not guess which scope a run reads.
         if args.parent and not args.path:
             parser.error('--parent needs --path: a whole-config source holds its own parent, '
                          'and the converter does not guess which scope a run reads')
@@ -6674,545 +7221,66 @@ def main():
                 )
 
     # F5.6: the state source is a reference source, so it applies to both source kinds.
-    # The workspace names the state document, so it needs a state document to name.
-    if args.workspace and not args.state:
-        parser.error('--workspace needs --state: the workspace names the state document, and a '
-                     'run that declares no --state reads no state document')
+    shared_checks(parser, args)
 
-    # F5.5: the read-through scopes are checked before the run. A scope outside the
-    # reference sets answers no reference, and a data source that declares no `name`
-    # cannot hold the entry name a reference needs, so both are argument errors.
-    data_scopes = sorted({scope.strip() for arg in (args.data_blocks or [])
-                          for scope in arg.split(',') if scope.strip()})
-    if args.data_blocks and not data_scopes:
-        parser.error('--data-blocks needs at least one scope')
-    for scope in data_scopes:
-        if scope not in REFERENCE_SCOPES:
-            parser.error(
-                f'--data-blocks must name a scope a reference resolves against '
-                f'({", ".join(REFERENCE_SCOPES)}); {scope} answers no reference'
-            )
-        if not DATA_SOURCE_SCHEMA[scope][0]:
-            parser.error(
-                f'--data-blocks scope {scope} declares no name in the provider schema, so a '
-                f'data block for it cannot hold the entry name a reference needs'
-            )
+    scopes = data_scopes(parser, args)
 
-    # F5.3: the request the run read, so the provenance record can name the identity. A
-    # file run has no request, so the two api fields stay `-`. F5.4 adds the parent
-    # request, so the record holds one record per source the run read.
-    request = None
-    parent_request = None
-    parent_source = None
-    # F5.6: the state document is the third source the record can name. It has no request,
-    # so its two api fields stay `-` and it references nothing.
+    # One part per source the run read, with the request that read it, so the record can name the identity.
+    # A file run has no request, so the two api fields stay `-`. F5.4 adds the parent request, so the record
+    # holds one record per source the run read.
+    parts = []
+    parent = None
     state_source = None
 
     try:
         if args.source == 'file':
             print(f"Parsing Panorama configuration from {args.input_file}...")
-            source = parse_xml(args.input_file, args.max_input_bytes)
+            parts = [part_for(parse_xml(args.input_file, args.max_input_bytes), None)]
         else:
-            # F5.2: the producer hands bytes to the door, and the cache entry is
-            # what gets parsed, so the run names the entry it read.
+            # F5.2: the producer hands bytes to the door, and the cache entry is what gets parsed, so the
+            # run names the entry it read.
             request = source_fetch.ApiRequest(host=args.host, path=container_coverage.record_path(args.path))
-            print(f"Reading Panorama configuration from the API export of {request.https_host()} "
-                  f"(cache entry {request.cache_name()})...")
-            source = source_fetch.fetch(
-                request, args.cache_dir,
-                offline=args.offline, insecure=args.insecure,
-                max_input_bytes=args.max_input_bytes)
+            print(read_line(request))
+            source = source_fetch.fetch(request, args.cache_dir, offline=args.offline,
+                                        insecure=args.insecure, max_input_bytes=args.max_input_bytes)
+            # A producer that has no bytes for a request answers None, so this run read no response and has
+            # nothing to write. That is an input refusal, so it takes the refusal shape and exit 1.
+            if source is None:
+                raise ValueError(f"the producer answered no response for '{request.canonical()}'")
+            parts = [part_for(source, request)]
 
-            # F5.4: the declared parent is the second source, read through the same cached
-            # producer, so --offline covers both requests and each request keeps its own
-            # cache entry.
+            # F5.4: the declared parent is the second source, read through the same cached producer, so
+            # --offline covers both requests and each request keeps its own cache entry. The parent is a
+            # reference source, not a part: the parent walk stays inside one response (F8.5), so the run
+            # order holds no parent. It is read as data for the shadow scan, and its record is last.
             if args.parent:
                 parent_request = source_fetch.ApiRequest(host=args.host,
                                                          path=container_coverage.record_path(args.parent))
                 print(f"Reading the parent scope '{parent_request.path}' from the same host "
                       f"(cache entry {parent_request.cache_name()})...")
-                parent_source = source_fetch.fetch(
-                    parent_request, args.cache_dir,
-                    offline=args.offline, insecure=args.insecure,
-                    max_input_bytes=args.max_input_bytes)
+                parent_source = source_fetch.fetch(parent_request, args.cache_dir, offline=args.offline,
+                                                    insecure=args.insecure,
+                                                    max_input_bytes=args.max_input_bytes)
+                if parent_source is None:
+                    raise ValueError(f"the producer answered no response for '{parent_request.canonical()}'")
+                parent = entry_coverage.RunPart(parent_source, parent_request, None)
 
-        # F5.6: the state document is the third source the run reads, and it is read as a
-        # file. A state read is a file read, so --offline needs no new rule: no producer is
-        # called for it. It is a reference source, so the run writes no output from it.
+        # F5.6: the state document is the third source the run reads, and it is read as a file. A state read
+        # is a file read, so --offline needs no new rule: no producer is called for it. It is a reference
+        # source, so the run writes no output from it.
         if args.state:
-            print(f"Reading the state document {args.state} as a reference source "
-                  f"(workspace {args.workspace or DEFAULT_SCOPE})...")
+            print(state_line(args.state, args.workspace))
             state_source = state_input.read_state(args.state, workspace=args.workspace,
                                                    max_input_bytes=args.max_input_bytes)
 
-        panorama = PanoramaParser(source)
+        # The run order for path 1 is the one source it read, and the join is the entry point's decision
+        # (criterion 2), so the view is built here with the join, in the order this entry point read.
+        return generate_run(args, entry_coverage.RunView(parts, join_results), scopes,
+                            entry_point=ENTRY_POINT, parent=parent, state_source=state_source)
 
-        print("Extracting configuration elements...")
-        device_groups = panorama.parse_device_groups()
-
-        # F6.5: the scopes are objects the output writes, so the other scope containers have a
-        # parse method each, and the emitter writes them before the config inside them.
-        templates = panorama.parse_templates()
-        template_stacks = panorama.parse_template_stacks()
-        template_variables = panorama.parse_template_variables()
-        virtual_systems = panorama.parse_vsys()
-
-        # New: Tags and Regions
-        tags = panorama.parse_tags()
-        regions = panorama.parse_regions()
-
-        # New: URL and Application objects
-        custom_url_categories = panorama.parse_custom_url_categories()
-        application_groups = panorama.parse_application_groups()
-        application_filters = panorama.parse_application_filters()
-        external_lists = panorama.parse_external_lists()
-        schedules = panorama.parse_schedules()
-
-        # Address and Service objects
-        addresses = panorama.parse_address_objects()
-        address_groups = panorama.parse_address_groups()
-        services = panorama.parse_service_objects()
-        service_groups = panorama.parse_service_groups()
-
-        # Rules
-        security_rules = panorama.parse_security_rules()
-        nat_rules = panorama.parse_nat_rules()
-        decryption_rules = panorama.parse_decryption_rules()
-        pbf_rules = panorama.parse_pbf_rules()
-        app_override_rules = panorama.parse_application_override_rules()
-
-        # Network
-        zones = panorama.parse_zones()
-        interfaces = panorama.parse_interfaces()
-        filter_containers = panorama.parse_filter_containers()  # F7.8
-        virtual_routers = panorama.parse_virtual_routers()
-        logical_routers = panorama.parse_logical_routers()  # Advanced Routing Engine
-
-        # Combine virtual and logical routers for unified handling
-        all_routers = virtual_routers + logical_routers
-
-        # Security Profiles
-        security_profiles = panorama.parse_security_profiles()
-        security_profile_groups = panorama.parse_security_profile_groups()
-        zone_protection_profiles = panorama.parse_zone_protection_profiles()
-        log_settings = panorama.parse_log_settings()
-        qos_profiles = panorama.parse_qos_profiles()
-        tunnel_monitor_profiles = panorama.parse_tunnel_monitor_profiles()
-        # F2.9: PBF path monitoring profiles (a different PAN-OS object; the
-        # provider manages them as panos_monitor_profile)
-        pbf_monitor_profiles = panorama.parse_pbf_monitor_profiles()
-        # F7.14: the two certificate containers, one resource block per entry.
-        certificates = panorama.parse_certificates()
-        certificate_profiles = panorama.parse_certificate_profiles()
-
-        # Dynamic routing (F7.1): the protocol levels belong to the router record, so no separate parse
-        # call builds a routing record any more. `_parse_router` fills the `protocol` field, and the
-        # entries inside a level are marked there.
-        protocol_routers = [r for r in all_routers if any((r.get('protocol') or {}).values())]
-
-        # VPN configurations
-        ike_gateways = panorama.parse_ike_gateways()
-        ipsec_tunnels = panorama.parse_ipsec_tunnels()
-        ike_crypto_profiles = panorama.parse_ike_crypto_profiles()
-        ipsec_crypto_profiles = panorama.parse_ipsec_crypto_profiles()
-
-        print("\nFound:")
-        print(f"  - {len(device_groups)} device groups")
-        print(f"  - {len(templates)} templates")
-        print(f"  - {len(template_stacks)} template stacks")
-        print(f"  - {len(template_variables)} template variables")
-        print(f"  - {len(virtual_systems)} virtual systems")
-        print(f"  - {len(tags)} tags")
-        print(f"  - {len(regions)} regions")
-        print(f"  - {len(custom_url_categories)} custom URL categories")
-        print(f"  - {len(application_groups)} application groups")
-        print(f"  - {len(application_filters)} application filters")
-        print(f"  - {len(external_lists)} external lists")
-        print(f"  - {len(schedules)} schedules")
-        print(f"  - {len(addresses)} address objects")
-        print(f"  - {len(address_groups)} address groups")
-        print(f"  - {len(services)} service objects")
-        print(f"  - {len(service_groups)} service groups")
-        print(f"  - {len(security_rules)} security rules")
-        print(f"  - {len(nat_rules)} NAT rules")
-        print(f"  - {len(decryption_rules)} decryption rules")
-        print(f"  - {len(pbf_rules)} policy-based forwarding rules")
-        print(f"  - {len(app_override_rules)} application override rules")
-        print(f"  - {len(zones)} zones")
-        print(f"  - {len(interfaces)} interfaces")
-        if logical_routers:
-            print(f"  - {len(virtual_routers)} virtual routers (legacy)")
-            print(f"  - {len(logical_routers)} logical routers (advanced routing)")
-            print(f"  - {len(all_routers)} total routers")
-        else:
-            print(f"  - {len(virtual_routers)} virtual routers")
-
-        # Count profiles
-        profile_count = sum(len(profs) for profs in security_profiles.values())
-        print(f"  - {profile_count} security profiles")
-        print(f"  - {len(security_profile_groups)} security profile groups")
-        print(f"  - {len(zone_protection_profiles)} zone protection profiles")
-        print(f"  - {len(log_settings)} log forwarding profiles")
-        print(f"  - {len(qos_profiles)} QoS profiles")
-        print(f"  - {len(tunnel_monitor_profiles)} IPsec tunnel monitor profiles")
-        print(f"  - {len(pbf_monitor_profiles)} PBF path monitoring profiles")
-        # F7.14: the certificate counts come from the entries the two methods read.
-        if certificates:
-            print(f"  - {len(certificates)} certificate entries")
-        if certificate_profiles:
-            print(f"  - {len(certificate_profiles)} certificate profiles")
-
-        # Dynamic routing (F7.1): the counts come from the protocol levels of the router record, so the
-        # summary names the same entries the `.tf` file prints.
-        if protocol_routers:
-            print(f"  - {len(protocol_routers)} router(s) with a routing protocol")
-            for router in protocol_routers:
-                parts = []
-                bgp = (router.get('protocol') or {}).get('bgp') or {}
-                if bgp:
-                    groups = bgp.get('peer_group') or []
-                    parts.append(
-                        f"bgp: AS {bgp.get('local_as')}, {len(groups)} peer groups, "
-                        f"{sum(len(group.get('peer') or []) for group in groups)} peers, "
-                        f"{len(bgp.get('redist_rules') or [])} redistribution rules")
-                ospf = (router.get('protocol') or {}).get('ospf') or {}
-                if ospf:
-                    parts.append(f"ospf: {len(ospf.get('area') or [])} areas")
-                print(f"    {router['name']}: " + ', '.join(parts))
-
-        # VPN
-        print(f"  - {len(ike_gateways)} IKE gateways")
-        print(f"  - {len(ipsec_tunnels)} IPsec tunnels")
-
-        print(f"\nGenerating Terraform configuration in {args.output_dir}...")
-        tf_gen = TerraformGenerator(args.output_dir, panorama.parse_associations(),
-                                    data_scopes=data_scopes, ledger=panorama.ledger)
-
-        # F4.4: the property scan measures which keys an output reads from a captured
-        # object, so the record starts here and not during the parse.
-        panorama.ledger.start_recording()
-
-        # Core configuration
-        tf_gen.generate_provider_config()
-
-        # F6.5: the scope objects come before the config inside them (`docs/CODEBASE_ASSEMBLY.md`
-        # §6), so `scope.tf` is the first object file the run writes.
-        tf_gen.generate_scope_objects(device_groups, templates, template_stacks,
-                                      template_variables, virtual_systems)
-
-        # New: Tags and URL/App objects
-        tf_gen.generate_tags(tags)
-        tf_gen.generate_custom_url_categories(custom_url_categories)
-        tf_gen.generate_application_groups(application_groups)
-        # Application filters have no v2 resource: they go to the manual setup report
-        tf_gen.generate_external_lists(external_lists)
-        # F2.9: schedules go to the manual setup report (v2 resource
-        # exists, but the parse reads the name, the description and the
-        # type only, and v2.0.14 has no monthly schedule support)
-
-        # Address and Service objects
-        tf_gen.generate_address_objects(addresses)
-        tf_gen.generate_address_groups(address_groups)
-        tf_gen.generate_service_objects(services)
-        tf_gen.generate_service_groups(service_groups)
-
-        # Network
-        # F2.6: interfaces emit first so zone/VR/interface .name lookups
-        # resolve to declared resources
-        tf_gen.generate_interfaces(interfaces)
-        tf_gen.generate_zones(zones)
-        tf_gen.generate_virtual_routers(all_routers)  # Handles both virtual & logical routers
-        tf_gen.generate_filter_containers(filter_containers)  # F7.8
-        # F7.14: the two certificate containers, one block per entry, printed from `CERTIFICATE_SHAPE`.
-        tf_gen.generate_certificates(certificates)
-        tf_gen.generate_certificate_profiles(certificate_profiles)
-
-        # Security Profiles
-        # F2.9: zone protection, log forwarding, and IPsec tunnel monitor
-        # profiles go to the manual setup report (no v2 resource, or the
-        # v2 resource exists but the profile body is not parsed)
-        tf_gen.generate_security_profiles(security_profiles)
-        tf_gen.generate_security_profile_groups(security_profile_groups)
-        # F2.9: PBF path monitoring profiles emit as real v2 resources
-        tf_gen.generate_pbf_monitor_profiles(pbf_monitor_profiles)
-
-        # Rules
-        # F2.9: application override rules go to the manual setup report
-        # (no v2 resource)
-        tf_gen.generate_security_rules(security_rules)
-        tf_gen.generate_nat_rules(nat_rules)
-        tf_gen.generate_decryption_rules(decryption_rules)
-        tf_gen.generate_pbf_rules(pbf_rules)
-
-        # VPN: any non-empty section emits vpn.tf (F2.8); the key
-        # management report still needs a gateway or tunnel to mention.
-        tf_gen.generate_vpn_config(ike_gateways, ipsec_tunnels,
-                                  ike_crypto_profiles, ipsec_crypto_profiles)
-        if ike_gateways or ipsec_tunnels:
-            tf_gen.generate_vpn_report(ike_gateways, ipsec_tunnels)
-
-        # Items that are not emitted (F2.9): the routing protocol entries no provider field reaches
-        # (F7.1), app filters, manual-key tunnels, app override, QoS, IPsec tunnel monitor, and log
-        # forwarding + zone protection + schedules (v2 resource exists, profile body not parsed). See
-        # resource_mapping.py.
-        manual_key_tunnels = [t for t in ipsec_tunnels if t.get('type') != 'auto-key']
-        # F4.2: scan the parsed input for a section container the container
-        # table does not cover. A finding is an operator action, not a broken
-        # output, so it does not change the exit code (the F4.1 gate does).
-        coverage_findings = container_coverage.scan(panorama.source, panorama.parent_map)
-        tf_gen.generate_manual_setup_report(
-            entry_coverage.protocol_report_rows(panorama.ledger), application_filters, manual_key_tunnels,
-            application_override_rules=app_override_rules,
-            qos_profiles=qos_profiles,
-            tunnel_monitor_profiles=tunnel_monitor_profiles,
-            schedules=schedules,
-            log_settings=log_settings,
-            zone_protection_profiles=zone_protection_profiles,
-            report_only_addresses=[a for a in addresses if a.get('report_only')],
-            dual_protocol_services=[
-                s for s in services
-                if len(TerraformGenerator.dropped_service_protocols(s.get('protocols') or {})) > 0
-            ],
-            entry_report=container_coverage.render_section(coverage_findings, panorama.source.name),
-        )
-
-        # F5.5: the read-through blocks, the unit's file, written before the
-        # reports so the label can state the count and the gate can read the file.
-        tf_gen.generate_read_through()
-
-        # F6.6: `variables.tf` is written after the emitters, because the declaration set is the site
-        # values the value-to-variable table mapped at the print sites (`generate_variables`). A file
-        # written before the emitters could not state what the run consumed.
-        tf_gen.generate_variables()
-
-        # Reports
-        tf_gen.generate_interface_report(interfaces)
-        tf_gen.generate_readme()
-
-        # F4.3: one line per entry the parse pipeline read. A gap is an operator
-        # action, not a broken output, so it does not change the exit code (the
-        # F4.1 gate does).
-        # F5.4: the parent ledger is read with the same row rule, so the matrix row that
-        # covers a parent entry is the row that covers the child entry. A run with no
-        # declared parent has no shadow to report.
-        parent_ledger = entry_coverage.EntryLedger(parent_source) if parent_source is not None else None
-        shadows = shadow_coverage.shadow_findings(panorama.ledger, parent_ledger)
-        # F6.2: ownership as data. Both sources are read with the same row rule, so the matrix row that
-        # covers a run entry is the row that covers a parent entry. A finding is an operator action, so
-        # it does not change the exit code (the F4.1 gate does), and the console prints no line for it.
-        ownership_rows = ownership.build_rows(panorama.ledger, parent_ledger, tf_gen.sanitize_name)
-        # F6.3: the reference between units as an edge list. The pair comes from the names `name_ref`
-        # recorded at the sites that applied the rule, joined to the ownership rows on (`type`, `entry`),
-        # so no second resolution rule and no second naming rule appears here. A cycle is an operator
-        # action, so it does not change the exit code (the F4.1 gate does), and the console prints no line
-        # for it.
-        edge_rows = reference_edges.build_rows(ownership_rows, tf_gen.unit_references(),
-                                               tf_gen.sanitize_name)
-        # F6.1: the unit as data. One row per declared scope, from the ledger the parse already
-        # writes and the names `name_ref` recorded at the sites that applied the rule. Written as
-        # data, so an orchestrator reads it (docs/CODEBASE_ASSEMBLY.md §13), and written only when
-        # it has content, following the rule for the report files. F6.1 names the directory a later
-        # feature writes; it does not write one. F6.3 fills the two order fields, because the order
-        # comes from the three rules `reference_edges.py` states. The rows are built before the
-        # report, because a cycle finding reads its grouping facts through the manifest row.
-        manifest_rows = reference_edges.order(
-            unit_manifest.build_rows(panorama.ledger, tf_gen.unit_references(), tf_gen.sanitize_name),
-            ownership_rows, edge_rows)
-        # F5.6: the state scan reads the same row rule, so the matrix row that covers a run
-        # entry is the row that covers the state resource. A run with no declared state source
-        # has no state to read, so it reports neither fact.
-        state_findings = state_coverage.state_findings(panorama.ledger, state_source)
-        tf_gen.generate_conversion_report(panorama.ledger, shadows, state_findings,
-                                          ownership.findings(ownership_rows),
-                                          reference_edges.findings(edge_rows, manifest_rows))
-
-        # F5.3: the provenance record. Written outside the report bodies, so the report
-        # byte rule still holds: a report body names the source name, and the record is
-        # the file that names the path. Written as data, so the cache reference a prune
-        # action reads is the `cache_entry` field, not a printed line. F5.4: one record per
-        # source the run read, in read order, so the shadow line names a source a reader
-        # can check against the record.
-        records = [provenance.record_for(panorama.source, request=request)]
-        if parent_request is not None:
-            records.append(provenance.record_for(parent_source, request=parent_request))
-        # F5.6: the state source is read last, so its record is last. It has no request, so
-        # the two api fields stay `-` and the record references nothing: it prunes nothing.
-        if state_source is not None:
-            records.append(provenance.record_for(state_source))
-        # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): a record describes the whole codebase, so it is a
-        # codebase root-set file and goes through the one write path at the root.
-        record_file = write_path.root_path(args.output_dir, provenance.PROVENANCE_FILE)
-        write_path.write_file(record_file, provenance.render_records(records))
-
-        # F6.1: the manifest is written as data, so an orchestrator reads it. The rows are built
-        # above, before the report, because a cycle finding reads its grouping facts through them.
-        if manifest_rows:
-            write_path.write_file(write_path.root_path(args.output_dir, unit_manifest.MANIFEST_FILE),
-                                unit_manifest.render(manifest_rows))
-
-        # F6.2: the ownership record. One row per entry the coverage matrix covers, written as data,
-        # and only when it has content, following the rule for the report files and the manifest. It
-        # names the unit that declares each entry and the unit that owns its name, so a reader joins it
-        # to the manifest row on `directory`.
-        if ownership_rows:
-            write_path.write_file(write_path.root_path(args.output_dir, ownership.OWNERSHIP_FILE),
-                                ownership.render(ownership_rows))
-
-        # F6.3: the edge record. One row per pair the data can name, written as data, and only when it has
-        # content, following the rule for the report files and the two data files. A reader joins `referrer`
-        # and `target` to the manifest row on `directory`, and (`type`, `entry`) to the ownership row.
-        if edge_rows:
-            write_path.write_file(write_path.root_path(args.output_dir, reference_edges.EDGE_FILE),
-                                reference_edges.render(edge_rows))
-
-        # F6.6: the site data. One row per site that names a value, written as data, and only when it has
-        # content, following the rule for the report files and the other data files. A reader joins
-        # `directory` to the manifest row. The `.tfvars` is written from the rows, not from the generator's
-        # state. The gate rule `data_files` (F6.8) reads the record through `parse_rows` and compares the
-        # printed form with `render_tfvars` (`ARCHITECTURE.md` §4.5), so the run writes both or neither.
-        site_rows = site_data.build_rows(panorama.ledger, tf_gen.value_variables(), tf_gen.sanitize_name)
-        if site_rows:
-            write_path.write_file(write_path.root_path(args.output_dir, site_data.SITE_DATA_FILE),
-                                    site_data.render(site_rows))
-            # F6.10.3: the printed form is the unit's file, so the run writes one per unit that names a value,
-            # each holding the printed form of that unit's row.
-            for row in site_rows:
-                write_path.write_file(write_path.unit_path(args.output_dir, row['directory'], site_data.TFVARS_FILE),
-                                      site_data.render_tfvars([row]))
-
-        # F6.4: the import blocks. A `.tf` file, because the gate rule that checks an import block reads the
-        # files the operator receives (`ARCHITECTURE.md` §4.5), and written only when the run declares them and
-        # has rows that state an id. A row that states a rule instead of an id writes no block.
-        import_rows = [row for row in tf_gen.import_rows if row['import_id']]
-        if args.import_blocks and import_rows:
-            # F6.10.3: `imports.tf` is a `.tf` file, so it is the unit's file and the run writes one per
-            # unit that has a block. `render` prints rows in unit order, so a unit's blocks print in the
-            # same order the run read them.
-            for facts in tf_gen.unit_set():
-                directory = tf_gen.directory_of(facts)
-                unit_rows = [row for row in import_rows if row['unit'] == directory]
-                if unit_rows:
-                    write_path.write_file(write_path.unit_path(args.output_dir, directory, import_blocks.IMPORT_FILE),
-                                          import_blocks.render(unit_rows))
-
-        # F6.7: the commit actions. One block per unit the manifest names, written as the last `.tf`
-        # file so the gate rule reads the action against the completed unit, and only when it has
-        # content, following the rule for the report files and the four data files. Emission is default:
-        # the committed goldens pin what a default run emits, so a shape written only behind a flag could
-        # not be pinned (the F6.5 rule 1 argument).
-        action_rows = commit_actions.build_rows(manifest_rows, tf_gen.sanitize_name)
-        if action_rows:
-            # F6.10.3: `actions.tf` is the last `.tf` file of a unit, so the run writes one per unit the
-            # manifest names, and each file holds that unit's block.
-            for facts in tf_gen.unit_set():
-                directory = tf_gen.directory_of(facts)
-                unit_rows = [row for row in action_rows if row['directory'] == directory]
-                if unit_rows:
-                    write_path.write_file(write_path.unit_path(args.output_dir, directory, commit_actions.ACTIONS_FILE),
-                                          commit_actions.render(unit_rows))
-
-        print("\n✓ Successfully generated Terraform configuration!")
-        print("\n📄 Generated Migration Reports:")
-        print("  - INTERFACE_MIGRATION_REPORT.txt (Interface and IP inventory)")
-        if panorama.ledger.rows():
-            print("  - CONVERSION_REPORT.txt (one line per entry the parser read)")
-        if ike_gateways or ipsec_tunnels:
-            print("  - VPN_MIGRATION_REPORT.txt ⚠️  (VPN config with key management instructions)")
-        print(f"Provenance record: {record_file}")
-
-        # F4.2: one console line per uncovered section, so a run that read an
-        # entry it cannot model is visible without opening the report. Every line here
-        # is built by `container_coverage.console_line`, the one place the console line shape
-        # is stated (`docs/ARCHITECTURE.md` §3.2), and each block prints only when it has a finding.
-        coverage_console = container_coverage.console_lines(coverage_findings)
-        if coverage_console:
-            print()
-            for line in coverage_console:
-                print(line)
-
-        # F4.3: entry totals, then one console line per gap entry. A gap is an
-        # operator action, not a broken output, so it does not change the exit
-        # code (the F4.1 gate does). No console line when the run has no gap.
-        # F4.4 and F5.4: the property and shadow blocks print too, in the report section order. A console
-        # line names the entry, its position, and its fact, and no matrix row, because a console line has
-        # no room for the report's fixed-width column; the report keeps it. The shadow line names the
-        # parent source by its name, the minimum actionable field: the path is in the provenance record.
-        gap_console = entry_coverage.console_lines(panorama.ledger, tf_gen._report_scope_path)
-        property_console = entry_coverage.property_console_lines(
-            panorama.ledger.property_findings(), tf_gen._report_scope_path)
-        shadow_console = shadow_coverage.console_lines(shadows, tf_gen._report_scope_path)
-        if gap_console or property_console or shadow_console:
-            print()
-            for block in (entry_coverage.summary_lines(panorama.ledger),
-                          gap_console, property_console, shadow_console):
-                for line in block:
-                    print(line)
-            print(f"Per-entry report file: {Path(args.output_dir) / entry_coverage.REPORT_FILE}")
-
-        # F4.1: the gate reads the files that were written, so it reports what
-        # the operator receives. A WARN does not fail the gate; a FAIL does.
-        # The four data files are written above, so the data rule (F6.8) reads the records the run wrote.
-        # The cross-check is the one rule that reads two sets, so the run's ledger is the second input
-        # (`docs/ARCHITECTURE.md` §4.6).
-        report = sanity_checks.run_checks(args.output_dir, run_terraform=args.validate,
-                                          ledger=panorama.ledger)
-        report_path = write_path.root_path(args.output_dir, 'SANITY_REPORT.txt')
-        write_path.write_file(report_path, report.render())
-        print()
-        print(report.console_summary())
-        print(f"Sanity report: {report_path}")
-
-        print("\nNext steps:")
-        print(f"  1. cd {args.output_dir}")
-        print("  2. Review INTERFACE_MIGRATION_REPORT.txt for interface mapping")
-        if ike_gateways or ipsec_tunnels:
-            print("  3. ⚠️  Review VPN_MIGRATION_REPORT.txt and update pre-shared keys!")
-        print("  4. Review the generated .tf files")
-        print("  5. Set the host in terraform.tfvars (do not commit the file), and set the key in the "
-              f"environment ({source_fetch.API_KEY_ENV})")
-        if ike_gateways or ipsec_tunnels:
-            print("  6. ⚠️  Add VPN pre-shared keys to terraform.tfvars (DO NOT COMMIT)")
-        # F6.10.3: a unit is one plan against one state, so the plan runs inside the unit directory the
-        # manifest names.
-        print("  7. Run: terraform init inside one unit directory the manifest names")
-        print("  8. Run: terraform plan")
-        print("  9. Run: terraform apply")
-
-        # F4.1: a FAIL finding is a broken output, so the conversion reports it
-        # with a non-zero exit code instead of writing files and exiting 0.
-        code = 1 if report.failed else 0
-
-        # F5.3 rule 4: the prune runs last, because the reference is the record file the run wrote,
-        # and it is the file the gate does not read, so the code the gate decided does not move. The
-        # action reads that file back through `parse_records`, so the reference stays data. A record the
-        # action cannot read is a refusal, so the run exits 1, and the message names the record file, not
-        # the input file. A prune that removes nothing prints nothing and changes nothing.
-        if args.prune_cache:
-            try:
-                pruned = provenance.prune(record_file, args.cache_dir)
-            except ValueError as e:
-                print(f"Error: {e}")
-                return 1
-            if pruned:
-                print()
-                print(f"Cache prune: {len(pruned)} entries no written record referenced")
-                for entry in pruned:
-                    print(f"  - {entry.name}")
-
-        return code
-
-    except ET.ParseError as e:
-        print(f"Error: Failed to parse XML file: {e}")
-        return 1
-    except UnsafeInputError as e:
-        # F3.8: an input size or DTD refusal. The message already names the
-        # file, the limit and the measured value, so print it unchanged.
-        print(f"Error: {e}")
-        return 1
-    except ValueError as e:
-        print(f"Error: rejected '{args.input_file}': {e}")
-        return 1
     except Exception as e:
+        if is_refusal(e):
+            return refused(args.input_file or args.host, e)
         print(f"Error: {e}")
         import traceback
         traceback.print_exc()

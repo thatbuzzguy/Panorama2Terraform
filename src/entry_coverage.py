@@ -1,6 +1,6 @@
 """F4.3 per-entry coverage: what the parser read from each entry, and where it went.
 
-Four rules, stated once here.
+Five rules, stated once here.
 
 1. The ledger. Every parse method marks the entries it reads. A mark records the
    entry, the object the method built from it, and the destination when the
@@ -25,6 +25,10 @@ Four rules, stated once here.
    the object a mark stores records every key an output reads from it, and the
    record starts after the parse, so a key the parse method read off the XML
    element is not a property the output used.
+5. The run view (F8.9). A run may read more than one response, so `RunView` answers rules 1 to 4 for the
+   set: each protocol answer goes to the ledger that holds the entry, and the parse answers are joined in
+   the run order the entry point decided. The view states no rule of its own and takes the join as an
+   argument, so a run that read one response is answered the same as that response's own ledger.
 
 The entry name (F2.3) and the five scope facts (F3.1, F3.2, F6.10.5) are not captured
 fields: they name the object and place it, so the report shows them as the row
@@ -137,7 +141,7 @@ def protocol_report_rows(ledger: 'EntryLedger') -> list:
         container = ledger.parents.get(entry)
         if not mark or container is None or ledger.destination(entry) != 'report':
             continue
-        path = container_coverage.section_path(container, ledger.parents, ledger.source)
+        path = container_coverage.section_path(container, ledger.parents, ledger.source_of(entry))
         if '/protocol/' not in '/' + path:
             continue
         # `row_for` carries the captured object, so the report can read through it.
@@ -296,6 +300,27 @@ class EntryLedger:
         """Start recording which keys an output reads from a captured object (F4.4)."""
         self.recording = True
 
+    # --- the source part -----------------------------------------------------
+    # F8.9: a run may have read more than one response, so the source part is answered through a method
+    # rather than the attribute, and `RunView` answers the same method for its set. A single ledger holds
+    # one response, so its answer is itself, and a one-response run is unchanged.
+
+    def parts(self) -> list:
+        """The responses the run read, in run order. One ledger holds one response, so this is itself."""
+        return [self]
+
+    def sources(self) -> list:
+        """The sources the run read, in run order. One ledger holds one response, so this is its own source."""
+        return [self.source]
+
+    def source_of(self, entry: ET.Element) -> ParsedSource:
+        """The source that holds this entry (F5.4, F8.9). For one ledger that is its own source."""
+        return self.source
+
+    def line_of(self, entry: ET.Element) -> Optional[int]:
+        """The line this entry's response names, read through the source that holds it (F4.2 rule 5)."""
+        return self.source.line_of(entry)
+
     # --- marks ---------------------------------------------------------------
 
     def mark(self, entry: ET.Element, captured: dict, detail: str = '',
@@ -435,8 +460,8 @@ class EntryLedger:
             detail = ''
         if mark and mark['detail']:
             detail = f'{detail} - {mark["detail"]}' if detail else mark['detail']
-        row_data = {'line': self.source.line_of(entry),
-                    'source': self.source.name,
+        row_data = {'line': self.line_of(entry),
+                    'source': self.source_of(entry).name,
                     'container': path,
                     'name': entry.get('name') or '(no name)',
                     'destination': destination,
@@ -502,6 +527,137 @@ class EntryLedger:
             finding['unused_properties'] = unused
             findings.append(finding)
         return sorted(findings, key=lambda row: (row['line'] or 0, row['container'], row['name']))
+
+
+# --- the run view (F8.9, `docs/API_CONVERSION_PATH.md` §6) ---------------------
+
+class RunPart:
+    """One response the run read, and the tables its parse methods answered.
+
+    A part is the source the door returned, the request that read it, the parser that reads it, and the
+    answers its parse methods gave. `answer` fills once, so the run parses a response once. The run order
+    is the entry point's decision, so nothing here decides it.
+    """
+
+    def __init__(self, source: ParsedSource, request, parser, results: Optional[dict] = None):
+        self.source = source
+        self.request = request
+        self.parser = parser
+        self.results = results if results is not None else {}
+
+    def answer(self, name: str):
+        """The table one parse method answers for this response, built once."""
+        if name not in self.results:
+            self.results[name] = getattr(self.parser, name)()
+        return self.results[name]
+
+    def ledger(self) -> EntryLedger:
+        """The ledger this response's parse wrote."""
+        return self.parser.ledger
+
+
+class RunView:
+    """The entry protocol answered across the responses one run read (F8.9).
+
+    The view holds the parts in run order and answers each protocol method through the ledger that holds
+    the entry, so the protocol has one answer for a run that read many responses and the same answer as a
+    single ledger for a run that read one. It states no row shape, no field name, no naming rule, no sort
+    rule, no writer, no console line, and no environment name: every answer is the owner's answer.
+
+    It builds no tree across responses, because F8.5 keeps one line map and one parent map per response.
+    `parents` is the merged answer of the per-response maps, so an entry's parents are the parents of the
+    response that holds it, and no parent crosses a response.
+
+    The join is an argument, because the cross-response merge is the entry point's decision: this module
+    states no merge rule, and `api_requests.py` states none either. A run that read one response gets each
+    answer unchanged, so path 1 is unchanged.
+    """
+
+    def __init__(self, parts, join):
+        self.ordered = list(parts)
+        self.join = join
+        # Which response holds each entry, so a protocol answer goes to the ledger that read it. The key is
+        # the element identity, the same key the marks and the parent map use.
+        self.holder = {}
+        for part in self.ordered:
+            for entry in part.ledger().entries():
+                self.holder[id(entry)] = part
+        # The parent facts, merged in run order. Not a merged tree: each response keeps its own map.
+        self.parents = {}
+        for part in self.ordered:
+            self.parents.update(part.ledger().parents)
+
+    def parts(self) -> list:
+        """The responses the run read, in run order."""
+        return list(self.ordered)
+
+    def sources(self) -> list:
+        """The sources the run read, in run order, one per response."""
+        return [part.source for part in self.ordered]
+
+    def ledger_for(self, entry: ET.Element) -> EntryLedger:
+        """The ledger that holds this entry."""
+        return self.holder[id(entry)].ledger()
+
+    # --- the entry protocol, answered through the ledger that holds the entry ---
+
+    def entries(self) -> list:
+        """Every entry the run read, in run order. This states no sort rule of its own."""
+        return [entry for part in self.ordered for entry in part.ledger().entries()]
+
+    def row_for(self, entry: ET.Element) -> dict:
+        return self.ledger_for(entry).row_for(entry)
+
+    def mark_for(self, entry: ET.Element) -> Optional[dict]:
+        return self.ledger_for(entry).mark_for(entry)
+
+    def destination(self, entry: ET.Element) -> str:
+        return self.ledger_for(entry).destination(entry)
+
+    def is_report_entry(self, entry: ET.Element) -> bool:
+        return self.ledger_for(entry).is_report_entry(entry)
+
+    def line_of(self, entry: ET.Element) -> Optional[int]:
+        return self.ledger_for(entry).line_of(entry)
+
+    def source_of(self, entry: ET.Element) -> ParsedSource:
+        return self.ledger_for(entry).source_of(entry)
+
+    def scope(self, entry: ET.Element) -> dict:
+        return self.ledger_for(entry).scope(entry)
+
+    # --- the parse answers, joined in run order through the join the run was given ---
+
+    def parse(self, name: str):
+        """One parse method answered per response, joined in run order."""
+        return self.join([part.answer(name) for part in self.ordered])
+
+    def rows(self) -> list:
+        """Report rows for the entries the run read, in run order."""
+        return self.join([part.ledger().rows() for part in self.ordered])
+
+    def gaps(self) -> list:
+        return self.join([part.ledger().gaps() for part in self.ordered])
+
+    def counts(self) -> Counter:
+        return Counter(self.join([part.ledger().counts() for part in self.ordered]))
+
+    def property_findings(self) -> list:
+        return self.join([part.ledger().property_findings() for part in self.ordered])
+
+    def property_entry_total(self) -> int:
+        return self.join([part.ledger().property_entry_total() for part in self.ordered])
+
+    def predefined_total(self) -> int:
+        return self.join([part.ledger().predefined_total() for part in self.ordered])
+
+    def gap_count(self) -> int:
+        return len(self.gaps())
+
+    def start_recording(self) -> None:
+        """Turn on the read record for every response the run read (F4.4)."""
+        for part in self.ordered:
+            part.ledger().start_recording()
 
 
 # --- wording ---------------------------------------------------------------

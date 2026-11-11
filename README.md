@@ -78,7 +78,7 @@ entry is a WARN finding. The rule is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 
 ## Requirements
 
-- Python 3.9+ (standard library only)
+- Python 3.10+ (standard library only)
 - Terraform 1.14+ for the validate gate (an `action` block is 1.14 syntax)
 - A Panorama XML export
 
@@ -595,8 +595,8 @@ document; the others link to it.
   logical routers
 - [`docs/VPN_ROUTING_CONFIG_EXAMPLES.md`](docs/VPN_ROUTING_CONFIG_EXAMPLES.md) -
   input shapes the parser reads
-- [`docs/DUAL-LICENSING-EXPLAINED.md`](docs/DUAL-LICENSING-EXPLAINED.md) - the
-  two license options
+- [`docs/LICENSING.md`](docs/LICENSING.md) - the license rule: the fork source, the two holders, the
+  measured split, and the scope of each grant
 
 Example input and example output are in [`examples/`](examples/), and its index is
 [`examples/README.md`](examples/README.md): the committed sample input, the pointer to the pinned golden
@@ -622,13 +622,17 @@ committed sample.
 
 ## License
 
-This project is **dual-licensed**:
+The work as a whole is **AGPL v3** ([LICENSE-AGPL](LICENSE-AGPL)). This repository is a fork of
+[gswsystems/Panorama2Terraform](https://github.com/gswsystems/Panorama2Terraform), taken at v4.0.2, so the
+dual-license history is inherited. Two holders hold the work:
 
-- **AGPL v3** - free for open source use (see [LICENSE-AGPL](LICENSE-AGPL))
-- **Commercial** - for proprietary use (see [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL))
+- **The upstream author** - the lines they wrote that are still in the tree (2,172 tracked lines)
+- **Ryan Brown** - every other line (57,157 tracked lines), licensed under **AGPL v3 only**
 
-The summary of the two options, including the network copyleft rule, is in
-[`docs/DUAL-LICENSING-EXPLAINED.md`](docs/DUAL-LICENSING-EXPLAINED.md).
+[`LICENSE-COMMERCIAL](LICENSE-COMMERCIAL) is the upstream author's grant, so it covers the upstream parts
+only, and this project grants no commercial terms for its own contributions. The rule, the measured split,
+and the file set that still holds upstream text are in
+[`docs/LICENSING.md`](docs/LICENSING.md), which is the owner document.
 
 ## Additional resources
 
