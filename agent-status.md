@@ -2,6 +2,22 @@
 
 ## Current position
 
+The licensing rule is complete on branch `licensing`, in the worktree
+`/home/ryan/.local/share/opencode/worktree/1670f9/licensing`. It added no pin, because it is a document rule,
+and the choice to keep the notice set unpinned is recorded in `backlog.md`. `docs/LICENSING.md` is the owner
+document: the fork source (`gswsystems/Panorama2Terraform`, v4.0.2, commit `92cb2a3`, 2025-12-09), the two
+holders, the split measured through `git blame` (2,172 upstream lines against 57,157 ours, and 588 against
+50,008 inside `src/`, `tests/` and `tools/`), the rule that the inherited file set is measured by `git blame`
+and not decided, and the scope of each grant. `LICENSE-COMMERCIAL` is the upstream author's grant, so it covers
+the upstream parts only, and this project grants no commercial terms for its own contributions. The word
+"non-commercial" is not used as a license name, because AGPL v3 permits commercial use and §10 does not allow
+an extra non-commercial condition on a derivative work, so the choice reads as "AGPL v3 only". Two notices were
+corrected, `src/source_fetch.py` and `src/xml_input.py`, because they hold no upstream line; the two modules
+that hold upstream lines keep the upstream notice, and no header was added to a module that has none.
+`docs/DUAL-LICENSING-EXPLAINED.md` is removed, and `README.md`, `docs/README.md`, `docs/USAGE_GUIDE.md` and
+`docs/ARCHITECTURE.md` §1.1 link to the owner document instead of restating the rule. Gate: `ruff check .`
+clean, and 1,641 pins, the same count as before the change.
+
 F8.8 is complete (Epic 8, Phase 8C, the gate), and it is the gate piece for the join: the request-set rule
 `sanity_checks.check_request_set` reads the join's rows through `api_requests.unit_findings`, the unit through
 `unit_manifest.directory_name` and `naming.sanitize`, and the index through `api_requests`, so the rule states no

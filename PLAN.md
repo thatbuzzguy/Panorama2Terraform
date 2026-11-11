@@ -146,4 +146,4 @@ level are the choice levels, which state their alternatives as `selects` keys.
 ## Out of Scope (tracked in backlog.md)
 
 - PAN-OS version matrix testing
-- Dual-license legal review
+- Lawyer review of the licensing rule
