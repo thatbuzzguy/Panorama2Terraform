@@ -562,6 +562,18 @@ def test_cache_miss_then_hit_reopens_the_same_bytes(fetch_module, tmp_path):
     assert second.root.tag == first.root.tag
 
 
+def test_a_producer_with_no_bytes_answers_none_and_writes_no_entry(fetch_module, tmp_path):
+    """F8.9: the run order holds one part per response the run read, so a request the producer has no bytes for
+    answers None and writes no cache entry. An empty entry would be a response the record could not name, and
+    the join reports the index entry as a finding instead.
+    """
+    request = _request(fetch_module)
+    assert fetch_module.fetch(request, tmp_path, producer=lambda r: None) is None
+    assert not list(tmp_path.iterdir()), 'no entry for bytes that never arrived'
+    assert fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, _bytes())) is not None, \
+        'the same request with bytes is a response the run order can hold'
+
+
 def test_cache_entry_name_is_the_request_identity_without_the_key(fetch_module):
     """The identity is host and sorted params. The credential is not part of it, so
     no cache name can carry it, and two different keys find the same entry."""
