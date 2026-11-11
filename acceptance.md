@@ -1,161 +1,75 @@
-# Acceptance criteria — CI gate: the Python version floor
+# Acceptance criteria — the licensing rule: our contributions under AGPL v3
 
 ## Scope
 
-The CI gate fails at setup on the runner: `actions/setup-python` cannot install Python 3.9 on
-`ubuntu-latest`, which is Ubuntu 26.04 from November 2026. This task states the Python floor the
-project supports, and makes the gate read that floor. No tool module and no test changes.
+This repository is a fork of [gswsystems/Panorama2Terraform](https://github.com/gswsystems/Panorama2Terraform),
+taken at v4.0.2 (commit `92cb2a3`, 2025-12-09), so it carries the upstream's two license files and the
+upstream's authorship claims. Measured 2026-11-11 through `git blame` on the committed tree: 59,329 tracked
+lines, 2,172 (3.7%) authored by the upstream and 57,157 by us. In `src/`, `tests/` and `tools/`: 588 upstream
+lines against 50,008 ours. The 130 commits are 9 upstream and 121 ours.
 
-## The criteria
+The problem this task fixes: the two license files state one copyright holder for the whole program, and five
+`src/` modules carry a header that names the upstream, including two modules that hold no upstream line.
 
-1. **The matrix names only versions the runner can install.** No entry is below the floor, and no
-   entry is an exact patch pin. `setup-python` takes the tool cache first, then the build manifest
-   for the runner's Ubuntu version; Ubuntu 26.04 has no build for 3.8 or 3.9 and holds only the
-   newest few patches for the older minors, so a minor version is the request shape that resolves.
-2. **The floor is what the pinned test tools require.** `requirements.txt` pins `pytest==9.1.1`, and
-   pytest 9.0+ requires Python 3.10. A 3.9 leg cannot install the pinned pytest, so the 3.9 leg is
-   not a coverage leg: it is a broken leg.
-3. **Every statement of the floor agrees.** `pyproject.toml`, `README.md`,
-   `docs/USAGE_GUIDE.md`, and the workflow matrix state the same version.
-4. **The lint gate stays green.** `target-version` is the syntax level ruff enforces, not the floor.
-   It stays `py39` because the codebase still writes pre-3.10 typing and `zip` without `strict`
-   (101 findings at `py310`, recorded in `backlog.md`). The gate passes on every leg.
-5. **The coverage legs cover maintained releases.** The matrix reads 3.10 to 3.13.
-
-## Measured
-
-- `ruff check .` is clean with the committed configuration (`target-version = "py39"`).
-- `python3 -m pytest` passes 1641 pins on Python 3.12. The change is the workflow file, the floor
-  statements, and the tracking markdown, so no pin reads it.
-- The two `.github/` template files are not part of the document indexes, which is a finding already
-  recorded in `backlog.md`; this task does not change them.
-
-# Acceptance criteria — F8.9, the path 2 entry point (Phase 8C)
-
-## Scope
-
-The rule F8.9 states: the entry point is the place that decides the run order, and nothing
-else. `api_requests.py` owns the scope fact table, `container_coverage.py` owns the section
-model, `entry_coverage.py` owns the entry protocol, and each data file owner builds its own
-bytes. What is left, and what only an entry point can decide, is which response the run reads
-first, how the per-response tables are joined into one set for a run that read more than one
-response, and how the run reports what it read.
-
-F8.9 covers:
-
-- The entry point `src/api_to_terraform.py`: the arguments, the run order, the cross-response
-  join, the gate call, and the exit codes.
-- The run view for a set of responses: the entry protocol answered through the ledger that
-  holds the entry, and the parse methods answered per response and joined in run order.
-- The one run sequence, stated in one function that both entry points call, so path 2 writes
-  the same `.tf` bytes as path 1 for the same content.
-- The `README.md` label that names which entry point wrote the codebase.
-- `docs/API_CONVERSION_PATH.md` §6 states the run order and the join rule in the present
-  tense and names the pins that hold them.
-
-F8.9 does not cover the byte agreement pin between the two paths for a fixture with no
-live-only fact, which is F8.10. The vsys scope fact, the device-fact record scope, and the
-live-only facts stay in `backlog.md`.
+This task states the licensing rule in one owner document, corrects the two notices that name the upstream for
+content the upstream did not write, and makes every other statement of the license agree. It adds no test: the
+rule is a document rule, and the choice to keep it unpinned is recorded in `backlog.md`. No functional code
+changes.
 
 ## The rule, in one sentence
 
-The entry point decides the run order and joins the per-response tables; every other rule has
-one owner, and both entry point call the same run sequence.
+The work as a whole is AGPL v3; the upstream holds the copyright on the lines it wrote that are still in the
+tree, Ryan Brown holds the copyright on every other line, and the commercial option covers the upstream parts
+only, so this project grants no commercial terms for its own contributions.
 
 ## The criteria
 
-1. **The run order is the entry point's decision, and it is stated once.** The run reads the
-   membership responses first, in the order `api_requests.membership_lists()` names them, then
-   the entries `api_requests.scope_index()` names in index order. No module states this order:
-   `api_requests.py` states no read order, and `provenance.py` rule 6 says the read order for a
-   path 2 run is the run order's decision. The order is read back from the record file the run
-   wrote, because the record is the run's own statement of what it read and in what order.
+1. **One owner document.** `docs/LICENSING.md` is the owner of the license rule.
+   `docs/DUAL-LICENSING-EXPLAINED.md` is removed, because one rule has one owner document. `docs/README.md`
+   names the new document in its index table, `README.md` names it, and `docs/USAGE_GUIDE.md` and
+   `docs/ARCHITECTURE.md` §1.1 link to it instead of restating the rule.
+2. **The source is named.** The document names the forked repository, the version it was taken at, the commit,
+   and the measured split with the date and the method (`git blame`, by author).
+3. **The inherited set is a record.** The document lists the files that still hold upstream text, and states
+   the rule that a file enters the set by `git blame` and leaves it when its last upstream line is replaced, so
+   the set is measured and not decided.
+4. **The holders are named for each part.** The document names the holder for the retained upstream lines and
+   the holder for every other line, and states that our contributions are licensed under AGPL v3 only.
+5. **The commercial option is scoped.** The document states that `LICENSE-COMMERCIAL` is the upstream author's
+   grant, that it covers the upstream parts, and that a user cannot get the whole work under commercial terms
+   from this project, because the whole work needs a grant for both parts.
+6. **The word "non-commercial" is not used as a license name.** AGPL v3 permits commercial use; its condition
+   is the copyleft rule, including the network rule (§13). The document states this, so the choice reads as
+   "AGPL v3 only" and not as a non-commercial restriction, which AGPL §10 does not allow on a derivative work.
+7. **The AGPL duties for a derivative work are kept.** Keep the notices, include the license text, document the
+   changes, provide the source to a recipient and to a network user, and license your modifications under
+   AGPL v3.
+8. **Two notices are corrected.** `src/source_fetch.py` and `src/xml_input.py` name Ryan Brown (2026) and state
+   no commercial term, because they hold no upstream line. `src/panorama_to_terraform.py` and
+   `src/split_device_groups.py` keep the upstream notice unchanged, because they hold upstream lines. No new
+   header is added to a module that has none.
+9. **The license texts are not changed.** `LICENSE-AGPL` and `LICENSE-COMMERCIAL` stay byte-identical to the
+   upstream's files; the scope of each grant for this fork is stated in the owner document.
+10. **The gate is unchanged.** `ruff check .` is clean and `python3 -m pytest` passes the same number of pins
+    as before the change, because no pin reads a notice line and no functional code changed.
 
-2. **The cross-response join is the entry point's decision.** `api_requests.py` keeps no merge
-   rule, so the tables `parse_associations` answers stay per response, and the entry point is
-   what joins them. The join names the response each membership fact came from, which path 1
-   cannot state: the same content read as one whole-config export gives one fact, and read as
-   two per-scope responses gives two. The run view answers the join as the set the index reads,
-   in run order.
+## Measured
 
-3. **The run sequence is stated in one place, and both entry points call it.** The parse order
-   and the emission order cannot be derived from data: `container_coverage.CONTAINER_TABLE` is
-   not the parse order, it holds no `service_object` row, and the emission order is not the
-   parse order. So the sequence lives in one function, `panorama_to_terraform.generate_run`, and
-   neither entry point states a parse order of its own. Path 1 calls it with one response and
-   writes the same bytes as before; path 2 calls it with the set it read, which is what makes
-   F8.10 possible.
+Run 2026-11-11 in the worktree, on branch `licensing`, from `ba6cb17`:
 
-4. **The run view answers the entry protocol and states no rule.** It holds the responses in run
-   order and answers the protocol through the ledger that holds the entry: `row_for`, `entries`,
-   `mark_for`, `parents`, `destination`, `is_report_entry`, `line_of`, `scope`, and the source
-   part. It states no row shape, no field name, no naming rule, no sort rule, no writer, no
-   console line, and no environment name. It builds no tree across responses, because F8.5 keeps
-   one line map per response.
-
-5. **The arguments mirror path 1's api source.** The entry point accepts `--host`, `--cache-dir`,
-   `--offline`, `--insecure`, `--output-dir`, `--max-input-bytes` through
-   `source_fetch.add_max_input_argument`, `--validate`, `--data-blocks`, `--import-blocks`,
-   `--state`, `--workspace`, and `--prune-cache`. It accepts no argument that names one source:
-   no input file, no `--source`, no `--path`, no `--parent`, because the request set is the
-   scope set and the parent walk stays inside one response (F8.5). The words and the exit codes
-   are the same as path 1's: an argument error exits 2, a refused input exits 1 and writes no
-   file.
-
-6. **The gate gets the index the entry point built.** `run_checks` reports `request_set` as NOT
-   RUN when it has no index, so the entry point passes the index it built and the run view. Path
-   1 still passes no index, because it read no request. The join findings print through the gate,
-   so the entry point prints no join block of its own, and the exit code stays the gate's
-   decision.
-
-7. **The entry point states no rule an owner states.** It names no environment name of its own:
-   it reads `source_fetch.API_KEY_ENV`. It defines no second naming rule, no second writer, no
-   second console line, no container part, no position part, no scope fact, no section fact, no
-   unit rule, no join rule, no check, no report section, and no block builder. It prints the
-   blocks through the owners' block builders.
-
-8. **The report names each response the run read, in run order.** `generate_conversion_report`
-   answers the source line as the run's name, and a run of one response names that response, so a
-   path 1 report is byte-identical. The parts that need a full ledger are answered per response
-   and concatenated in run order; the parts that read the row set read the merged set.
-
-9. **The `README.md` label names the entry point that wrote the codebase.** The label is fixed
-   text, it states no row, no value, no mapping result, and no count, so the path name it states
-   is digit-free. Path 1's label names `panorama_to_terraform.py` and path 2's names
-   `api_to_terraform.py`; two runs on the same bytes write the same bytes.
-
-10. **No pin calls a network, and no pin names a path outside `conftest.py`.** Every path 2 pin
-    runs the pipeline in process with the injected producer, and a fact read from a run comes
-    from the run's own ledger or from the record file the run wrote.
-
-## The pins that hold these criteria
-
-In `tests/test_api_path.py`, the entry point group:
-
-- `test_the_run_order_is_the_membership_lists_then_the_index_entries` — criterion 1, read from
-  the record file the run wrote.
-- `test_the_entry_point_joins_the_tables_across_the_responses_it_read` — criterion 2.
-- `test_the_run_sequence_is_stated_once_and_both_entry_points_call_it` — criterion 3, including
-  the pins that read the sequence, which are migrated from `main()` to the run function.
-- `test_the_run_view_answers_the_entry_protocol_through_the_ledger_that_holds_the_entry` —
-  criterion 4.
-- `test_the_run_view_states_no_row_shape_and_no_field_name_of_its_own` — criterion 4.
-- `test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_that_name_one_source`
-  — criterion 5, and the exit code for a bad argument.
-- `test_the_entry_point_passes_the_index_it_built_to_the_gate_and_keeps_the_gate_code` —
-  criteria 6, and the exit code for a refused input.
-- `test_the_entry_point_states_no_rule_an_owner_states` — criterion 7.
-- `test_the_report_names_each_response_the_run_read_in_run_order` — criterion 8.
-
-In `tests/test_variables.py`:
-
-- `test_the_entry_point_names_no_environment_name_of_its_own` — criterion 7, in the shape of the
-  pin that scans the `src/` set for the environment name.
-
-In `tests/test_site_data.py`:
-
-- `test_the_readme_names_the_entry_point_that_wrote_the_codebase` — criterion 9.
-
-The three pins that read the run sequence from `main()` — `tests/test_scope_objects.py`,
-`tests/test_commit_actions.py`, and `tests/test_site_data.py` — are migrated to read the run
-function, because the sequence moved there.
+- `ruff check .` - all checks passed.
+- `python3 -m pytest` - 1,641 pins, the same count as before the change, exit 0, Python 3.12.3. No pin reads a
+  copyright notice, so no pin changed.
+- Criteria 1 to 9 are met by the documents and the two notices as written. Criterion 10 is met by the gate run
+  above.
+- Files the task changed: `docs/LICENSING.md` added; `docs/DUAL-LICENSING-EXPLAINED.md` removed;
+  `docs/README.md` (the index row and the owner row); `README.md` (the index entry and the License section);
+  `docs/USAGE_GUIDE.md` §License; `docs/ARCHITECTURE.md` §1.1; `src/source_fetch.py`; `src/xml_input.py`;
+  `backlog.md`; `PLAN.md`.
+- The statement check: a scan of the markdown set for the words "dual", "commercial" and "license" reports the
+  owner document, the three documents that link to it, the tracking set, and the four module notices. No
+  document restates the rule.
+- The notice check: `src/source_fetch.py` and `src/xml_input.py` name Ryan Brown (2026);
+  `panorama_to_terraform.py` and `split_device_groups.py` name the upstream; and the other 18 modules name
+  none. `git blame` reports 0 upstream lines in the two corrected modules, so each notice agrees with the
+  split.
