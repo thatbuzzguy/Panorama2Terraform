@@ -5,7 +5,7 @@ request (`type=config&action=get&path=...`) and the wrapper rule for its respons
 F8.1 adds the third accepted request shape, the device fact shape (`type=op&cmd=<command>`),
 and the wrapper rule for its response shape.
 
-Copyright (c) 2025 GSW Systems
+Copyright (c) 2026 Ryan Brown
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published
@@ -19,7 +19,8 @@ GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
-Commercial terms are in LICENSE-COMMERCIAL.
+The notice above names the author of the content in this file: no line here comes
+from the upstream, so no commercial term applies (see docs/LICENSING.md).
 
 The fetch layer reads the whole-config API export (`type=export`,
 `category=configuration`) and hands the response bytes to
