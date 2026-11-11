@@ -27,6 +27,7 @@ no name a table row states for a credential, the provider block prints the names
 printed argument is one the pinned schema marks `sensitive`.
 """
 
+import ast
 import re
 import tempfile
 import xml.etree.ElementTree as ET
@@ -34,6 +35,7 @@ from pathlib import Path
 
 import pytest
 
+import api_to_terraform
 import entry_coverage
 import naming
 import resource_mapping
@@ -259,6 +261,25 @@ def test_the_generated_block_names_the_environment_the_fetch_layer_reads(case):
     stating = [path.name for path in sorted(SRC_DIR.glob('*.py'))
                if path.name != 'source_fetch.py' and source_fetch.API_KEY_ENV in path.read_text(encoding='utf-8')]
     assert stating == [], stating
+
+
+def test_the_entry_point_names_no_environment_name_of_its_own():
+    """F8.9 criterion 7, in the shape of the pin above: `source_fetch.py` is the only tool module that states the
+    environment name, so the path 2 entry point reads it through the door and holds none of its own. The entry
+    point does not read the environment either, because the run takes the key through `source_fetch.fetch`.
+    """
+    stating = [path.name for path in sorted(SRC_DIR.glob('*.py'))
+               if path.name != 'source_fetch.py' and source_fetch.API_KEY_ENV in path.read_text(encoding='utf-8')]
+    assert stating == [], stating
+
+    entry = SRC_DIR / 'api_to_terraform.py'
+    assert entry.is_file(), 'the path 2 entry point is a tool module in the `src/` set'
+    text = entry.read_text(encoding='utf-8')
+    assert source_fetch.API_KEY_ENV not in text, 'the entry point names no environment name of its own'
+    assert not any(isinstance(node, ast.Attribute) and node.attr == 'environ'
+                   for node in ast.walk(ast.parse(text))), 'the entry point reads no environment of its own'
+    assert not hasattr(api_to_terraform, 'API_KEY_ENV'), 'the entry point holds no key rule'
+    assert f'source_fetch.{source_fetch.API_KEY_ENV}' not in text, 'the name is read through the door'
 
 
 @pytest.mark.parametrize('case', list(CASES))
