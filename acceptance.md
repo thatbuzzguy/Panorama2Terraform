@@ -159,3 +159,38 @@ In `tests/test_site_data.py`:
 The three pins that read the run sequence from `main()` — `tests/test_scope_objects.py`,
 `tests/test_commit_actions.py`, and `tests/test_site_data.py` — are migrated to read the run
 function, because the sequence moved there.
+
+## Result
+
+Measured against a baseline of 1638 pins, on the committed response set, through the injected producer:
+
+- The run order is `device-group`, `templates`, then `device-group/entry/Office-FW` and
+  `templates/entry/HQ-Networks`. The record file the same run wrote names the same order, and the report
+  names those four sources in the same order.
+- The two lists that name `template-stack` are one read: the order holds that container once, at the first
+  place a list names it.
+- Exit codes: an argument error exits 2 and writes no file; a refused input exits 1 and writes no file; a run
+  that wrote a finding takes the gate's code, measured as 1 for a planted `.tf`.
+- A run that read one response writes the same `.tf` bytes as before the join rule, because one part answers
+  the value unchanged, and path 1 prints the same console lines as before.
+- The gate gets the index the entry point built. A join finding prints through the gate as WARN, so the entry
+  point states no report section and no console line of its own.
+- Limitation of the run order pin: for the committed set the membership order and the index order are the
+  same, because both answer `device-group, templates`. The pin measures the membership parts before the entry
+  parts, the read-once rule, and that the record agrees with the parts order, not the two orders separately.
+
+## Checks
+
+- `python3 -m pytest` reads 1650 pins with no skips on Python 3.12, so this piece added 12 pins.
+- `ruff check .` reports no finding.
+- No pin calls a network: every path 2 pin runs the pipeline in process with the injected producer, and no pin
+  names a path outside `conftest.py`.
+- The entry point states no rule an owner states, holds no `src/` import of a `tests/` module, and imports only
+  the standard library.
+- One owner document per rule, no document restates a table row by row, and no document states a test count.
+
+## Commit
+
+- The criteria and the named pins are unchanged; this page adds the result.
+- Each step is its own commit, in ASD-STE100: the entry point, the pins, the documents and the tracking
+  markdown, and this result.
