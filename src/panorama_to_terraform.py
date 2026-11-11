@@ -6701,6 +6701,17 @@ def is_refusal(error) -> bool:
     return isinstance(error, (UnsafeInputError, ET.ParseError, ValueError))
 
 
+def failed(error) -> int:
+    """The shape an unexpected error takes, stated once for both entry points (criterion 7): the error line, the
+    traceback, and exit 1. A refusal is not this shape, so `is_refusal` decides which shape a failure takes, and
+    neither entry point states a console line of its own.
+    """
+    print(f"Error: {error}")
+    import traceback
+    traceback.print_exc()
+    return 1
+
+
 def refused(read_name: str, error) -> int:
     """The run's refusal line and the exit code for refused input (criterion 5): 1, and no file is written,
     because the refusal happens before the run writes anything.
@@ -7281,10 +7292,7 @@ def main():
     except Exception as e:
         if is_refusal(e):
             return refused(args.input_file or args.host, e)
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
+        return failed(e)
 
 
 if __name__ == '__main__':

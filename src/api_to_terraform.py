@@ -5,7 +5,8 @@ Four rules, stated once here.
 
 1. The run order. The run reads the membership responses first, in the order
    `api_requests.membership_lists()` names them, then the entries `api_requests.scope_index()` names in index
-   order. One response is read once, so a container the run already read as a membership response is not read
+   order. One response is read once: two lists can name one container, so a container named by two lists is read
+   at the first place a list names it, and a container the run already read as a membership response is not read
    again for its index entry. `api_requests.py` states no read order and `provenance.py` rule 6 states no read
    rule for a path 2 run, so this is the only place the order is stated, and the record file the run wrote is
    the order's own statement
@@ -93,7 +94,10 @@ def run_order(args, producer=None) -> tuple:
     """
     parts = []
     for list_path in api_requests.membership_lists():
-        part = read_part(args, api_requests.scope_path(api_requests.list_container(list_path)), producer)
+        path = api_requests.scope_path(api_requests.list_container(list_path))
+        if any(part.request.path == path for part in parts):
+            continue    # two lists can name one container, and one response is read once
+        part = read_part(args, path, producer)
         if part is not None:
             parts.append(part)
     if not parts:
@@ -148,13 +152,12 @@ def run(argv, producer=None) -> int:
                                                    state_source=state_source, entry_point=ENTRY_POINT)
 
     except Exception as e:
+        # Both shapes are stated in the module that owns the exit codes, so this entry point prints no line of
+        # its own (rule 4, and criterion 7).
         if panorama_to_terraform.is_refusal(e):
             # The read name is the host the run read, because a path 2 run names no input file (criterion 5).
             return panorama_to_terraform.refused(args.host, e)
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
+        return panorama_to_terraform.failed(e)
 
 
 def main():

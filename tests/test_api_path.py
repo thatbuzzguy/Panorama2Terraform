@@ -1,6 +1,6 @@
 """F8.5 the run over many sources (`docs/API_CONVERSION_PATH.md` §2.4): one response is one source.
 
-Six groups:
+Eight groups:
 
 1. One response keeps its own line map and its own parent walk, so the run builds no tree from many
    responses. A report position can only name a line inside the response that holds the entry.
@@ -28,18 +28,24 @@ origin, and the line map are the ones the run holds. No pin reads a response as 
 decision belongs to the request that produced it.
 """
 
+import argparse
 import ast
+import inspect
+import re
 
 import pytest
 
 import api_requests
+import api_to_terraform
 import container_coverage
 import entry_coverage
 import ownership
 import panorama_to_terraform
+import provenance
+import sanity_checks
 import source_fetch
 import unit_manifest
-from conftest import REPO_ROOT, RESPONSES_DIR, SRC_DIR
+from conftest import REPO_ROOT, RESPONSES_DIR, SRC_DIR, TESTS_DIR
 
 HOST = 'panorama.test'
 
@@ -700,6 +706,168 @@ def _concat_join(values):
     return values[-1]
 
 
+def _producer(bodies: dict = None):
+    """A producer that answers the responses this file holds, so a path 2 run can read more than the committed
+    set. A request this file holds no response for answers None, the way `conftest.api_producer` does.
+    """
+    shapes = dict(PLACES, **(ENTRIES if bodies is None else bodies))
+    return lambda request: _shape(request, shapes[request.path]) if request.path in shapes else None
+
+
+def _run_args(tmp_path) -> tuple:
+    """The arguments one path 2 run reads, through the entry point's own parser, and the directory it writes to."""
+    argv = ['--host', HOST, '--cache-dir', str(tmp_path / 'cache'), '--output-dir', str(tmp_path / 'out')]
+    parser = api_to_terraform.build_parser()
+    return parser.parse_args(argv), argv
+
+
+def _view(parts) -> entry_coverage.RunView:
+    """The run view the entry point builds, with the join the entry point supplies."""
+    return entry_coverage.RunView(parts, panorama_to_terraform.join_results)
+
+
+def test_the_run_order_is_the_membership_lists_then_the_index_entries(tmp_path):
+    """Criterion 1: the entry point is the only place that states the run order, and the record file the run
+    wrote is that order's own statement. `api_requests.py` states no read order and `provenance.py` rule 6 says
+    the read order for a path 2 run is the run order's decision, so this pin reads the order through the names
+    the owners state and never through a list this file states.
+    """
+    args, argv = _run_args(tmp_path)
+    parts, index = api_to_terraform.run_order(args, _producer())
+    read = tuple(part.request.path for part in parts)
+
+    # The order, read through the owners' names: the container each membership list names, in the order the
+    # lists name them, then the entries the index names in index order. Two lists can name one container, and one
+    # response is read once, so a container named by two lists enters the order at the first place a list names
+    # it, and the entry part holds only the entries the run had not already read.
+    named = []
+    for name in api_requests.membership_lists():
+        path = api_requests.scope_path(api_requests.list_container(name))
+        if path in read and path not in named:
+            named.append(path)
+    membership = tuple(named)
+    containers = tuple(entry.path for entry in index
+                       if entry.level == api_requests.CONTAINER_LEVEL and entry.path in read)
+    entries = tuple(entry.path for entry in index
+                    if entry.level == api_requests.ENTRY_LEVEL and entry.path in read)
+    assert membership and entries, 'the run read a membership response and an entry of its own'
+    assert len({api_requests.list_container(name) for name in api_requests.membership_lists()}) < \
+        len(api_requests.membership_lists()), 'two lists name one container, so one response is read once'
+    assert containers == membership, 'the first part of the order is the membership order'
+    assert read == membership + entries, (read, 'the membership responses first, then the entries')
+    assert len(set(read)) == len(read), 'one response is read once'
+
+    # The record the run wrote is the order's own statement, read back as data.
+    assert api_to_terraform.run(argv, _producer()) == 0
+    record = (tmp_path / 'out' / provenance.PROVENANCE_FILE).read_text(encoding='utf-8')
+    assert [row.cache_entry for row in provenance.parse_records(record)] == \
+        [part.request.cache_name() for part in parts], 'the record names the responses in the order it read them'
+
+    # The order is stated once. The entry point reads it through the owners' names, so it states no path rule,
+    # no sort, and no list of paths of its own, and no other module states it.
+    entry_source = (SRC_DIR / 'api_to_terraform.py').read_text(encoding='utf-8')
+    assert 'def run_order' in entry_source, 'the order is stated in the entry point'
+    for name in ('membership_lists', 'scope_index', 'list_container', 'scope_path'):
+        assert f'api_requests.{name}(' in entry_source, (name, 'the order is read through the owner')
+    assert 'sorted(' not in entry_source, 'the entry point states no sort rule'
+    for path in PLACES:
+        assert path not in entry_source, (path, 'no path of its own')
+    for module in ('api_requests.py', 'provenance.py', 'entry_coverage.py'):
+        text = (SRC_DIR / module).read_text(encoding='utf-8')
+        assert 'run order' in text, (module, 'names the order as the entry point\'s decision')
+        assert 'def run_order' not in text, (module, 'states no read order of its own')
+
+
+def test_the_entry_point_joins_the_tables_across_the_responses_it_read(tmp_path):
+    """Criterion 2: `api_requests.py` keeps no merge rule, so the tables `parse_associations` answers stay per
+    response and the entry point is what joins them, in the order it read them. The join names the response each
+    fact came from, which path 1 cannot state: the same content read as one whole-config export names one source
+    for its facts, and read as per-scope responses names one source per response. One response answers itself
+    through the same join, so path 1 is unchanged.
+    """
+    args, _ = _run_args(tmp_path)
+    parts, index = api_to_terraform.run_order(args, _producer())
+    view = _view(parts)
+    tables = view.parse('parse_associations')
+
+    # Each table answer stays the response's own, in the order the run read them: the join adds no fact a
+    # response did not read, and the index reads its set from the joined tables.
+    for part in parts:
+        for table, owners in part.parser.parse_associations().items():
+            for owner, names in owners.items():
+                assert tables[table][owner] == names, (part.request.path, table, owner)
+    assert api_requests.scope_index(HOST, tables, api_to_terraform.lists_read(parts)) == index, \
+        'the joined tables are the set the index reads'
+    assert api_to_terraform.lists_read(parts) == tuple(
+        name for name in api_requests.membership_lists()
+        if api_requests.scope_path(api_requests.list_container(name)) in [part.request.path for part in parts]), \
+        'the read set is what the entry point decided, not a list the join states'
+
+    # A fact names the response it came from. The same entry name in two responses is two facts, each naming its
+    # own response; read as one export the same content names one source for the same name. A whole-config
+    # request names no path, so it is read through the door's own producer, not through the path shape.
+    export = source_fetch.fetch(source_fetch.ApiRequest(host=HOST), tmp_path / 'export',
+                                producer=lambda r: SAME_CONTENT_EXPORT)
+    export_parser = panorama_to_terraform.PanoramaParser(export)
+    export_parser.parse_address_objects()
+    rows = [row for row in view.rows() if row['name'] == 'Web-Server-1']
+    assert len(rows) == len(parts), (rows, 'one fact per response the run read')
+    assert [row['source'] for row in rows] == [part.source.name for part in parts], \
+        'the facts name the responses in run order'
+    assert len({row['source'] for row in export_parser.ledger.rows()}) == 1, 'one export names one source'
+    for name in ('merge', 'merge_membership', 'join_tables', 'join_value'):
+        assert not hasattr(api_requests, name), (name, 'the join keeps no merge rule')
+
+    # One response answers itself, so a path 1 run is unchanged.
+    single = _view(parts[:1])
+    assert single.parse('parse_associations') == parts[0].parser.parse_associations()
+    assert single.rows() == parts[0].ledger().rows()
+
+
+def test_the_run_sequence_is_stated_once_and_both_entry_points_call_it():
+    """Criterion 3: the parse order and the emission order cannot be derived from data, so they live in one
+    function that both entry points call. Neither entry point states a parse order or a block builder of its own,
+    and the pins that read the sequence read the run function, not `main()`.
+    """
+    entry_source = (SRC_DIR / 'api_to_terraform.py').read_text(encoding='utf-8')
+    path1 = inspect.getsource(panorama_to_terraform.main)
+    assert 'generate_run(' in entry_source and 'generate_run(' in path1, \
+        'both entry points call the sequence the run function states'
+
+    # Neither entry point states a parse order or a block builder: the run function is the only place that names
+    # them. The entry point reads the parser through one method, `parse_associations`, because the index needs the
+    # tables the run read, and it holds no order of its own.
+    methods = sorted({method for _, method in panorama_to_terraform.PARSE_ORDER})
+
+    def called(text: str) -> list:
+        """The parse methods and block builders an entry point calls, read as code so prose does not count."""
+        out = set()
+        for node in ast.walk(ast.parse(text)):
+            if isinstance(node, ast.Call):
+                name = getattr(node.func, 'attr', None) or getattr(node.func, 'id', None)
+                if name in methods or str(name).startswith('generate_'):
+                    out.add(name)
+        return sorted(out)
+    assert called(entry_source) == ['generate_run', 'parse_associations'], \
+        (called(entry_source), 'the entry point calls the run sequence and the one read the index needs')
+    assert called(path1) == ['generate_run'], (called(path1), "path 1's entry point builds no block")
+    assert not [name for name in methods if f'{name}(' in entry_source and name != 'parse_associations'], \
+        (entry_source, 'the entry point states no parse order of its own')
+    assert not [name for name in methods if f'{name}(' in path1], (path1, 'path 1 calls no parse method')
+    assert not hasattr(api_to_terraform, 'PARSE_ORDER'), 'the entry point holds no parse order'
+
+    # The three pins that read the run sequence read the run function, because the sequence moved there.
+    for name in ('test_scope_objects.py', 'test_commit_actions.py', 'test_site_data.py'):
+        text = (TESTS_DIR / name).read_text(encoding='utf-8')
+        assert 'inspect.getsource(converter_module.generate_run)' in text, (name, 'reads the run function')
+    # No pin reads the sequence from `main()`, because the sequence is the run function's. The needle is built in
+    # two parts so this pin cannot match itself: it reads `main()` only to check that main calls the run function.
+    needle = 'getsource(converter_module' + '.main)'
+    reading_main = [path.name for path in sorted(TESTS_DIR.glob('test_*.py'))
+                    if needle in path.read_text(encoding='utf-8')]
+    assert reading_main == [], (reading_main, 'no pin reads the sequence from `main()`')
+
+
 def test_the_run_view_answers_the_entry_protocol_through_the_ledger_that_holds_the_entry(tmp_path):
     """Criterion 4: the view holds the responses in run order and answers the protocol through the ledger that
     holds the entry, so an entry belongs to one response and no answer is built from a tree across responses. A
@@ -768,12 +936,212 @@ def test_the_run_view_states_no_row_shape_and_no_field_name_of_its_own():
     init = next(stmt for stmt in node.body if isinstance(stmt, ast.FunctionDef) and stmt.name == '__init__')
     assert 'join' in [arg.arg for arg in init.args.args], 'the join is an argument, so the view states no merge rule'
 
-    # Every name the view uses is one its owners state, so no method body holds a name of its own.
-    named = []
-    for stmt in node.body:
-        if isinstance(stmt, ast.FunctionDef):
-            doc = ast.get_docstring(stmt)
-            named.extend(inner.value for inner in ast.walk(stmt)
-                         if isinstance(inner, ast.Constant) and isinstance(inner.value, str)
-                         and inner.value != doc)
-    assert named == [], named
+
+def _entry_code() -> ast.Module:
+    """The entry point as code, so a pin reads what it states and not the document around it."""
+    return ast.parse((SRC_DIR / 'api_to_terraform.py').read_text(encoding='utf-8'))
+
+
+def test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_that_name_one_source(tmp_path):
+    """Criterion 5: the arguments are `shared_arguments`, stated once for both entry points, so the entry point
+    adds none of its own. The request set is the scope set, so an argument that names one source is refused, and
+    an argument error exits 2. The limit is read through the door's own argument rule.
+    """
+    entry = api_to_terraform.build_parser()
+    shared = argparse.ArgumentParser()
+    panorama_to_terraform.shared_arguments(shared)
+    accepted = vars(entry.parse_args(['--host', HOST, '--output-dir', str(tmp_path / 'out')]))
+    shared_accepted = vars(shared.parse_args(['--host', HOST, '--output-dir', str(tmp_path / 'out')]))
+    assert sorted(accepted) == sorted(shared_accepted), 'the entry point adds no argument of its own'
+    for name in ('host', 'cache_dir', 'offline', 'insecure', 'output_dir', 'max_input_bytes', 'validate',
+                 'data_blocks', 'import_blocks', 'state', 'workspace', 'prune_cache'):
+        assert name in accepted, (name, 'the argument one run reads')
+
+    # The words that name one source are refused: the request set is the scope set, and the parent walk stays
+    # inside one response (F8.5), so no argument names one source.
+    for word in ('input_file', '--source', '--path', '--parent'):
+        with pytest.raises(SystemExit) as raised:
+            entry.parse_args([word, '--host', HOST, '--output-dir', str(tmp_path / 'out')])
+        assert raised.value.code == 2, (word, 'an argument error exits 2')
+
+    # The argument checks are `shared_checks`, so the entry point states none of its own beyond the words. An
+    # argument error exits 2, and it exits before the run reads anything.
+    entry_source = (SRC_DIR / 'api_to_terraform.py').read_text(encoding='utf-8')
+    assert 'add_argument(' not in entry_source, 'the entry point adds no argument'
+    assert 'shared_arguments(' in entry_source and 'shared_checks(' in entry_source, 'the checks are the owners'
+    for case in (['--host', HOST, '--insecure', '--offline', '--output-dir', str(tmp_path / 'out')],
+                 ['--host', HOST, '--workspace', 'ws', '--output-dir', str(tmp_path / 'out')]):
+        with pytest.raises(SystemExit) as raised:
+            api_to_terraform.run(case, _producer())
+        assert raised.value.code == 2, (case, 'an argument error exits 2')
+        assert not (tmp_path / 'out').exists(), 'an argument error writes no file'
+
+    # The input limit is the door's rule, read through `source_fetch`, so the entry point states no limit.
+    assert accepted['max_input_bytes'] == source_fetch.DEFAULT_MAX_INPUT_BYTES, 'the limit is the door default'
+    assert 'source_fetch.add_max_input_argument' in \
+        (SRC_DIR / 'panorama_to_terraform.py').read_text(encoding='utf-8'), 'the door owns the argument rule'
+    assert 'max_input_bytes=args.max_input_bytes' in entry_source, 'the limit is passed to the owners'
+
+
+def test_the_entry_point_passes_the_index_it_built_to_the_gate_and_keeps_the_gate_code(tmp_path):
+    """Criterion 6: `run_checks` reports `request_set` as NOT RUN when it has no index, so the entry point passes
+    the index and the run view it built. Path 1 still passes no index, because it read no request. The join
+    findings print through the gate, so the entry point prints no join block of its own, and the exit code stays
+    the gate's decision.
+    """
+    args, argv = _run_args(tmp_path)
+    parts, index = api_to_terraform.run_order(args, _producer())
+    view = _view(parts)
+    out = tmp_path / 'out'
+    assert api_to_terraform.run(argv, _producer()) == 0, 'the gate decided 0 for a run that wrote no finding'
+
+    # The gate reads the index the entry point built. Without it the join reports as NOT RUN, so the run's own
+    # gate call is the only place the join can run. A join finding prints through the gate: an index that holds
+    # only one of the responses the run read finds rows that name a response the index does not hold.
+    assert sanity_checks.run_checks(out).result_of('request_set') == sanity_checks.NOT_RUN
+    with_index = sanity_checks.run_checks(out, ledger=view, index=index)
+    assert with_index.result_of('request_set') != sanity_checks.NOT_RUN, 'the gate ran the join for this run'
+    read_one = parts[:1]
+    smaller = api_requests.scope_index(HOST, read_one[0].parser.parse_associations(),
+                                       api_to_terraform.lists_read(read_one))
+    assert sanity_checks.run_checks(out, ledger=view, index=smaller).findings('request_set'), \
+        'the join findings print through the gate'
+
+    entry_source = (SRC_DIR / 'api_to_terraform.py').read_text(encoding='utf-8')
+    path1 = inspect.getsource(panorama_to_terraform.main)
+    assert 'index=index' in entry_source, 'the entry point passes the index it built'
+    assert 'run_checks' not in entry_source, 'the gate call is the run sequence, stated once'
+    assert 'index=' not in path1, "path 1 passes no index: it read no request"
+
+    # The findings print through the gate, so the entry point states no join block and no report of its own.
+    for node in ast.walk(_entry_code()):
+        if isinstance(node, ast.Call) and getattr(node.func, 'id', '') == 'print':
+            assert any(getattr(inner.func, 'attr', '') in ('read_line', 'state_line')
+                       for inner in ast.walk(node) if isinstance(inner, ast.Call)), \
+                'the entry point prints only the lines the owners state'
+
+    # The exit code is the gate's decision: a file the gate fails on exits 1, and a refused input exits 1 and
+    # writes no file.
+    (out / 'planted.tf').write_text(
+        'resource "panos_address" "planted_00000000" {\n  name = "Planted"\n'
+        '  value = panos_zone.ghost.name\n}\n', encoding='utf-8')
+    assert sanity_checks.run_checks(out).result_of('references') == 'FAIL'
+    assert api_to_terraform.run(argv, _producer()) == 1, 'the gate FAIL is the run exit code'
+
+    refused_args, refused_argv = _run_args(tmp_path / 'refused run')
+    def refusing(request):
+        raise source_fetch.SourceFetchError('the response is refused by the door')
+    assert api_to_terraform.run(refused_argv, refusing) == 1, 'a refused input exits 1'
+    assert not [p for p in (tmp_path / 'refused run' / 'out').rglob('*') if p.is_file()], \
+        'a refused input writes no file'
+
+
+def test_the_entry_point_states_no_rule_an_owner_states():
+    """Criterion 7: the entry point decides the run order and the arguments, and states nothing else. Every other
+    rule has one owner, so the entry point reads each one through the module that owns it, and holds no rule
+    name of its own.
+    """
+    tree = _entry_code()
+    text = (SRC_DIR / 'api_to_terraform.py').read_text(encoding='utf-8')
+
+    # What the entry point holds is the entry point name as data, and the functions that state the order, the
+    # arguments, one read, and the run.
+    held = sorted({t.id for node in tree.body if isinstance(node, ast.Assign) for t in node.targets})
+    stated = sorted(node.name for node in tree.body if isinstance(node, ast.FunctionDef))
+    assert held == ['ENTRY_POINT'], held
+    assert stated == ['build_parser', 'lists_read', 'main', 'read_part', 'run', 'run_order'], stated
+    # The name is the one fact the entry point can state, so it is data and not a rule.
+    assert api_to_terraform.ENTRY_POINT == 'api_to_terraform.py', api_to_terraform.ENTRY_POINT
+    assert not re.search(r'\d', api_to_terraform.ENTRY_POINT), 'the path name the label states is digit-free'
+
+    # No rule an owner states. Each name below is stated by its owner, so the entry point cannot hold it, and it
+    # reads what it needs through the module that owns it.
+    owners = {
+        'naming.py': ('sanitize', 'variable_name', 'variable_text'),
+        'write_path.py': ('write_file', 'root_path'),
+        'container_coverage.py': ('CONSOLE_PREFIX', 'CONTAINER_TABLE', 'console_line', 'position_part',
+                                  'SECTION_TITLE'),
+        'entry_coverage.py': ('REPORT_HEADING', 'GAP_HEADING', 'entry_line', 'console_lines'),
+        'api_requests.py': ('scope_index', 'membership_lists', 'list_container', 'scope_path',
+                            'CONTAINER_LEVEL', 'ENTRY_LEVEL'),
+        'sanity_checks.py': ('run_checks', 'Finding', 'NOT_RUN'),
+        'unit_manifest.py': ('FIELD_ORDER', 'identity_digest', 'directory_name', 'unit_name'),
+        'source_fetch.py': ('API_KEY_ENV', 'add_max_input_argument', 'fetch', 'ApiRequest'),
+    }
+    for module, names in owners.items():
+        for name in names:
+            assert name in (SRC_DIR / module).read_text(encoding='utf-8'), (module, name, 'the owner states it')
+            assert not hasattr(api_to_terraform, name), (name, 'the entry point states no rule of this kind')
+
+    # Every module the entry point reads is an owner, so every name it uses is the owner's.
+    read = sorted({node.names[0].name for node in ast.walk(tree) if isinstance(node, ast.Import)} |
+                  {node.module.split('.')[0] for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)})
+    assert read == sorted(['api_requests', 'argparse', 'entry_coverage', 'panorama_to_terraform', 'source_fetch',
+                           'state_input', 'sys']), read
+    used = sorted({f'{node.value.id}.{node.attr}' for node in ast.walk(tree)
+                   if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                   and node.value.id in read})
+    assert all(part.split('.')[0] in read for part in used), used
+
+    # The entry point states no join rule, no block builder, no writer, no sort rule, and no file rule of its own,
+    # read as the names its code holds, not as the prose around them.
+    held_names = {getattr(node, 'attr', None) or getattr(node, 'id', None)
+                  for node in ast.walk(tree) if isinstance(node, (ast.Name, ast.Attribute))}
+    for name in ('join_value', 'merge', 'sorted', 'open', 'write_text', 'write_bytes', 'linesep'):
+        assert name not in held_names, (name, 'the entry point states no rule of this kind')
+    assert not any(str(name).startswith('generate_') and str(name) != 'generate_run'
+                   for name in held_names), 'no block builder'
+
+    # The environment name is the door's, stated once, so the entry point names no second one: the name it holds
+    # is the value `source_fetch.API_KEY_ENV`, never the word itself.
+    assert source_fetch.API_KEY_ENV not in text, 'no second environment name'
+    assert not hasattr(api_to_terraform, 'API_KEY_ENV'), 'the entry point holds no environment name'
+    assert not any(isinstance(node, ast.Attribute) and node.attr == 'environ' for node in ast.walk(tree)), \
+        'the entry point reads no environment of its own'
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and getattr(node.func, 'id', '') == 'print':
+            assert any(getattr(inner.func, 'attr', '') in ('read_line', 'state_line')
+                       for inner in ast.walk(node) if isinstance(inner, ast.Call)), \
+                'the entry point prints through the owners'
+
+
+def test_the_report_names_each_response_the_run_read_in_run_order(tmp_path):
+    """Criterion 8: the report names each source the run read, in the order it read them. One response names
+    itself, so a path 1 report is byte-identical. The parts that need a full ledger are answered per response and
+    concatenated in run order; the parts that read the row set read the merged set.
+    """
+    args, argv = _run_args(tmp_path)
+    parts, _ = api_to_terraform.run_order(args, _producer())
+    assert api_to_terraform.run(argv, _producer()) == 0
+    report = (tmp_path / 'out' / entry_coverage.REPORT_FILE).read_text(encoding='utf-8').splitlines()
+    named = [line for line in report if line.startswith(container_coverage.SOURCE_LABEL)]
+    assert named == [f'{container_coverage.SOURCE_LABEL} {part.source.name}' for part in parts], \
+        'one source line per response, in run order'
+    assert len(named) == len({part.source.name for part in parts}), 'the run read four responses'
+
+    # A run that read one response names that response only, which is the shape a path 1 report keeps.
+    single = _view(parts[:1])
+    assert single.sources() == [parts[0].source], 'one response, one source line'
+    export = source_fetch.fetch(source_fetch.ApiRequest(host=HOST), tmp_path / 'export',
+                                producer=lambda r: SAME_CONTENT_EXPORT)
+    export_parser = panorama_to_terraform.PanoramaParser(export)
+    export_parser.parse_address_objects()
+    assert export_parser.ledger.sources() == [export], 'path 1 answers its own single source'
+
+    # The parts that need a full ledger are the parts' own answers, in run order. The parts that read the row set
+    # read the merged set, so a count is the merged count and not the largest part's.
+    for name in ('rows', 'gaps', 'property_findings'):
+        answer = getattr(_view(parts), name)()
+        assert answer == [item for part in parts for item in getattr(part.ledger(), name)()], \
+            (name, 'answered per response and concatenated in run order')
+    merged = _view(parts).counts()
+    for key in {key for part in parts for key in part.ledger().counts()}:
+        assert merged[key] == sum(part.ledger().counts()[key] for part in parts if key in part.ledger().counts()), \
+            (key, 'the merged set is what the report reads')
+    for name in ('property_entry_total', 'predefined_total'):
+        assert getattr(_view(parts), name)() == sum(getattr(part.ledger(), name)() for part in parts), name
+
+    # The report holds no path and no credential, so the source lines name the cache entries only, and the same
+    # report the run wrote is the gate's input through the owners.
+    assert HOST not in report, 'the report names no host, and no path'
+    assert all(len(line.split()) == 2 for line in named), 'a source line names the source and nothing else'
