@@ -609,9 +609,9 @@ The limits are recorded in [`../backlog.md`](../backlog.md) and in
 
 ## License
 
-The project is dual-licensed: AGPL v3 for open source use, and a commercial
-license for proprietary use. The terms are in
-[DUAL-LICENSING-EXPLAINED.md](DUAL-LICENSING-EXPLAINED.md), and the license
+The work as a whole is AGPL v3, and two holders hold it: the upstream author holds the lines they wrote
+that are still in the tree, and Ryan Brown holds every other line. Our contributions are under AGPL v3 only.
+The rule, the measured split, and the scope of each grant are in [LICENSING.md](LICENSING.md), and the license
 texts are `LICENSE-AGPL` and `LICENSE-COMMERCIAL`.
 
 ## Additional resources
