@@ -15,7 +15,7 @@ that document instead of restating the rule.
 | [DEVICE_GROUP_SPLITTING.md](DEVICE_GROUP_SPLITTING.md) | Split one export into one file per device group |
 | [ADVANCED-ROUTING-ENGINE-SUPPORT.md](ADVANCED-ROUTING-ENGINE-SUPPORT.md) | Logical routers, and the routing config the converter does not read |
 | [VPN_ROUTING_CONFIG_EXAMPLES.md](VPN_ROUTING_CONFIG_EXAMPLES.md) | The XML shapes the parser reads for VPN and routing |
-| [DUAL-LICENSING-EXPLAINED.md](DUAL-LICENSING-EXPLAINED.md) | The two license options |
+| [LICENSING.md](LICENSING.md) | Who holds the copyright for each part, and what each grant covers |
 
 ## Who owns each rule
 
@@ -48,6 +48,7 @@ that document instead of restating the rule.
 | The second path: the run over many sources, the section-to-response join, the unit join, and the row source field | `API_CONVERSION_PATH.md` §2.4, §2.5 and §3, `api_requests.py` for the joins, `unit_manifest.units` for the unit set, `ownership.SOURCE_FIELD` for the field name the join reads, and `tests/test_api_path.py`, `tests/test_unit_manifest.py`, `tests/test_ownership.py` |
 | The second path: what it shares with the first path, and what it does not close | `API_CONVERSION_PATH.md` §1 and §7 |
 | The second path: the run order, the cross-response join, and the entry point that decides both | `API_CONVERSION_PATH.md` §6, `api_to_terraform.py` for the run order, `panorama_to_terraform.py` (`join_value`) for the join rule, and `tests/test_api_path.py` |
+| The license rule: the fork source, the two holders, the measured split, the notice set, and the scope of each grant | `LICENSING.md`. The `git blame` author count is the authority for the split, and the notices in `src/` agree with it |
 
 The machine-readable tables are code, not documents:
 [`../src/resource_mapping.py`](../src/resource_mapping.py),

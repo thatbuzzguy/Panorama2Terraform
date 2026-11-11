@@ -50,6 +50,8 @@ every document under them, so a file outside an index is a finding.
 - The root holds `AGENTS.md`, the readme indexes, the tracking markdown, the two license files
   (`LICENSE-AGPL` and `LICENSE-COMMERCIAL`), and the two tool-config files (`pyproject.toml`, which states
   the rules below, and `requirements.txt`, the pinned development tools). The root index names each of them.
+  The license rule is not here: `docs/LICENSING.md` is the owner of the holders and the scope of each grant,
+  and this section states only where the license files sit.
 - `docs/` holds every other document. `tests/` holds every test. `src/` holds the tool's modules.
   `tools/` holds the developer scripts. `examples/` holds the sample input and the two example text files.
   Each directory that holds files names them through its own index.
