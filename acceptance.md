@@ -1,75 +1,82 @@
-# Acceptance criteria — the licensing rule: our contributions under AGPL v3
+# Acceptance criteria — codebase review and audit
 
 ## Scope
 
-This repository is a fork of [gswsystems/Panorama2Terraform](https://github.com/gswsystems/Panorama2Terraform),
-taken at v4.0.2 (commit `92cb2a3`, 2025-12-09), so it carries the upstream's two license files and the
-upstream's authorship claims. Measured 2026-11-11 through `git blame` on the committed tree: 59,329 tracked
-lines, 2,172 (3.7%) authored by the upstream and 57,157 by us. In `src/`, `tests/` and `tools/`: 588 upstream
-lines against 50,008 ours. The 130 commits are 9 upstream and 121 ours.
-
-The problem this task fixes: the two license files state one copyright holder for the whole program, and five
-`src/` modules carry a header that names the upstream, including two modules that hold no upstream line.
-
-This task states the licensing rule in one owner document, corrects the two notices that name the upstream for
-content the upstream did not write, and makes every other statement of the license agree. It adds no test: the
-rule is a document rule, and the choice to keep it unpinned is recorded in `backlog.md`. No functional code
-changes.
-
-## The rule, in one sentence
-
-The work as a whole is AGPL v3; the upstream holds the copyright on the lines it wrote that are still in the
-tree, Ryan Brown holds the copyright on every other line, and the commercial option covers the upstream parts
-only, so this project grants no commercial terms for its own contributions.
+This task reviews the codebase and reports findings. It changes no functional code and adds no pin.
+The audit covers: the module set, the test set, the rule pins the documents name, the layout rule
+(`docs/ARCHITECTURE.md` §1.1), the import rule, and the tracking markdown.
 
 ## The criteria
 
-1. **One owner document.** `docs/LICENSING.md` is the owner of the license rule.
-   `docs/DUAL-LICENSING-EXPLAINED.md` is removed, because one rule has one owner document. `docs/README.md`
-   names the new document in its index table, `README.md` names it, and `docs/USAGE_GUIDE.md` and
-   `docs/ARCHITECTURE.md` §1.1 link to it instead of restating the rule.
-2. **The source is named.** The document names the forked repository, the version it was taken at, the commit,
-   and the measured split with the date and the method (`git blame`, by author).
-3. **The inherited set is a record.** The document lists the files that still hold upstream text, and states
-   the rule that a file enters the set by `git blame` and leaves it when its last upstream line is replaced, so
-   the set is measured and not decided.
-4. **The holders are named for each part.** The document names the holder for the retained upstream lines and
-   the holder for every other line, and states that our contributions are licensed under AGPL v3 only.
-5. **The commercial option is scoped.** The document states that `LICENSE-COMMERCIAL` is the upstream author's
-   grant, that it covers the upstream parts, and that a user cannot get the whole work under commercial terms
-   from this project, because the whole work needs a grant for both parts.
-6. **The word "non-commercial" is not used as a license name.** AGPL v3 permits commercial use; its condition
-   is the copyleft rule, including the network rule (§13). The document states this, so the choice reads as
-   "AGPL v3 only" and not as a non-commercial restriction, which AGPL §10 does not allow on a derivative work.
-7. **The AGPL duties for a derivative work are kept.** Keep the notices, include the license text, document the
-   changes, provide the source to a recipient and to a network user, and license your modifications under
-   AGPL v3.
-8. **Two notices are corrected.** `src/source_fetch.py` and `src/xml_input.py` name Ryan Brown (2026) and state
-   no commercial term, because they hold no upstream line. `src/panorama_to_terraform.py` and
-   `src/split_device_groups.py` keep the upstream notice unchanged, because they hold upstream lines. No new
-   header is added to a module that has none.
-9. **The license texts are not changed.** `LICENSE-AGPL` and `LICENSE-COMMERCIAL` stay byte-identical to the
-   upstream's files; the scope of each grant for this fork is stated in the owner document.
-10. **The gate is unchanged.** `ruff check .` is clean and `python3 -m pytest` passes the same number of pins
-    as before the change, because no pin reads a notice line and no functional code changed.
+1. **The baseline gate is measured.** `ruff check .` and `python3 -m pytest` run before and after the
+   audit. The pin count is recorded. Any finding that changes a pin is recorded, not applied, because
+   this task states findings.
+2. **The layout rule is checked as the rule states it.** Every file under an index is named by that
+   index. Every `src/` module is named in the `docs/ARCHITECTURE.md` §1 table. A file outside an index
+   is a finding.
+3. **The import rule is checked by scan.** `src/` imports only the standard library and its siblings;
+   no `src/` module imports from `tests/`; no test module imports another test module; the test path is
+   stated only in `pyproject.toml`.
+4. **Every pin a document names exists.** Each `tests/test_*.py::test_name` claim in the markdown set is
+   read against the test files. A named pin that does not exist is a finding.
+5. **The tracked counts agree with the measurement.** The counts the documents state (matrix rows,
+   data sources, fixture counts, the ruff `py310` finding count, the Python floor, the CI matrix legs)
+   are re-measured. A count that does not agree is a finding.
+6. **The code is reviewed for functional correctness.** The `src/` set is read for silent drops,
+   rule owners that state a second rule, mutation of shared state, unguarded error paths, and findings
+   that contradict the documented rule.
+7. **The tracking markdown agrees with the git history.** A piece recorded as open in `to-do.md` or
+   `agent-status.md` that is committed is a finding, because the rule says completed work leaves the
+   markdown.
+8. **Findings land in `backlog.md`.** Every actionable finding this audit measures gets an entry; the
+   report itself is the chat response plus the backlog entries. No document outside an index is created.
 
-## Measured
+## Out of scope
 
-Run 2026-11-11 in the worktree, on branch `licensing`, from `ba6cb17`:
+- Fixing the findings. This task reports; each finding names the owner module or document that would fix
+  it.
+- Live-target facts already gated on a live target in `backlog.md`.
 
-- `ruff check .` - all checks passed.
-- `python3 -m pytest` - 1,641 pins, the same count as before the change, exit 0, Python 3.12.3. No pin reads a
-  copyright notice, so no pin changed.
-- Criteria 1 to 9 are met by the documents and the two notices as written. Criterion 10 is met by the gate run
-  above.
-- Files the task changed: `docs/LICENSING.md` added; `docs/DUAL-LICENSING-EXPLAINED.md` removed;
-  `docs/README.md` (the index row and the owner row); `README.md` (the index entry and the License section);
-  `docs/USAGE_GUIDE.md` §License; `docs/ARCHITECTURE.md` §1.1; `src/source_fetch.py`; `src/xml_input.py`;
-  `backlog.md`; `PLAN.md`.
-- The statement check: a scan of the markdown set for the words "dual", "commercial" and "license" reports the
-  owner document, the three documents that link to it, the tracking set, and the four module notices. No
-  document restates the rule.
-- The notice check: `src/source_fetch.py` and `src/xml_input.py` name Ryan Brown (2026);
-  `panorama_to_terraform.py` and `split_device_groups.py` name the upstream; and the other 18 modules name
-  none. `git blame` reports 0 upstream lines in the two corrected modules, so each notice agrees with the
-  split.
+## Measured results (2026-11-11/12)
+
+Criterion 1. Gate before and after: `ruff check .` clean; `python3 -m pytest` collected 1,641 pins across
+50 modules, all pass, no skips on the audit machine (the terraform binary is present locally). The audit
+changed no code and added no pin.
+
+Criterion 2. The §1 module table names 20 of the 22 `src/` modules; `commit_actions.py` and
+`api_to_terraform.py` are findings. The indexes for `docs/`, `examples/` and `tools/` are complete; the two
+`.github/` template files are findings already recorded. `tests/` holds files with no index.
+`tests/fixtures/api_response.xml` is a committed response inside the corpus.
+
+Criterion 3. `src/` imports only the standard library and its siblings, and no `src/` module imports from
+`tests/`. The test path is stated only in `pyproject.toml`. One violation: `tests/test_real_or_report.py:33`
+imports helpers from `test_policy_order`; no pin holds this rule, so the gate reports nothing.
+
+Criterion 4. 153 pin claims read across the markdown set. 4 name a test that does not exist:
+3 defensible (an unwritable pin named by rule, an abbreviated pin name, and the profile-name pin that
+cannot be written from the schema), 1 real mismatch (`docs/API_CONVERSION_PATH.md` names
+`test_the_module_defines_no_second_naming_rule`; the function is
+`test_site_data_defines_no_second_naming_rule`). The nine F8.9 pins promised in acceptance commit `380ed26`
+exist nowhere in `tests/`.
+
+Criterion 5. Re-measured: `COVERAGE_MATRIX` holds 42 rows against the document claim of 40 and the README
+claim of 34 (`panos_certificate_import` and `panos_certificate_profile` are in the code table but not in the
+document table). `agent-status.md` states 1,641 pins at its top section but 1,638 at its test count line.
+The ruff `py310` count (101 = 80 UP045 + 16 B905 + 4 UP035 + 1 UP007) agrees, `target-version` stays `py39`.
+The CI legs (3.10-3.13), the `pytest==9.1.1` pin, and the pre-commit hooks agree. The fixture set measures
+71 (68 accepted, 3 skipped by the F3.8 rule). `docs/LICENSING.md` states 59,329 tracked lines (2,172 upstream
+against 57,157 ours); the tree now measures 59,370, so the ours side is 41 lines behind.
+
+Criterion 6. The `src/` read found no silent drops, no second rule owners, and no contradiction with the
+documented rules beyond the findings in `backlog.md`. Claims from the review agents that did not survive
+re-measurement against the actual files are not recorded (for example: `mark()` returning a bare dict,
+unsorted `rows()`, `sanitize` dropping digit-only names, `row_key` and `scan_row` in `api_requests.py`, a
+tflint mention in `tests/test_data_file_gate.py`).
+
+Criterion 7. `to-do.md` lists F8.9 as open while `git log` records its steps 1 to 3 committed
+(`720da9f`, `3d54163`, `88921c2`); `agent-status.md` names F8.9 as the next piece. `to-do.md` keeps completed
+Phase 8A and Phase 8B detail.
+
+Criterion 8. All actionable findings are recorded in `backlog.md`, section "Codebase audit findings
+(measured 2026-11-11)", plus the additions this response records: the nine missing F8.9 pins, the corrected
+schema-pin count, and the licensing line drift. No document outside an index was created.
