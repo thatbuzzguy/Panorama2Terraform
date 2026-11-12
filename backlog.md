@@ -618,3 +618,93 @@ restated here; they are in the record and the git history. Only the open items a
   part is the data file a module consumes.
 - Reports are per run. A codebase-level view (the units, the entries each owns, the managed boundary)
   is not built.
+
+## Codebase audit findings (measured 2026-11-11)
+
+The audit read the test set (50 modules, 991 test functions, 1,641 collected pins) against the layout rule
+and the import rule. Gate at both ends: `ruff check .` clean, 1,641 pins. Only the actionable findings are
+below, each with the owner that would fix it. Nothing was changed by the audit.
+
+- Import rule: `tests/test_real_or_report.py:33` imports `_check_chain_semantics` and `_rule_blocks` from
+  `test_policy_order`. It is the only cross-test-module import in the suite. Fix: move both helpers to
+  `tests/conftest.py`, the one shared helper file (§1.1). Owner: `tests/conftest.py`.
+- Layout rule: `tests/fixtures/api_response.xml` is a committed API response inside the corpus, so the
+  corpus scan reads it (`tests/test_container_coverage.py:315`, `tests/test_entry_coverage.py:204`) and the
+  assembler merges it (its entry `web-server` is in the printed tree, and the record does not hold it). Fix:
+  move it to `tests/responses/` under the key-free request identity that names it, and read it through the
+  injected producer. Owner: `docs/ARCHITECTURE.md` §1.1, and `tests/test_api_requests.py:649-650`, which
+  pins it as corpus material and so keeps the violation.
+- The response-set pin cannot see that case: `tests/test_api_requests.py:646` compares names between the two
+  sets, so a response that lives inside the corpus passes it. Fix: state the rule as a property of each file
+  (a root element of `response` is not a Panorama export), not as a name comparison. Owner:
+  `tests/test_api_requests.py`.
+- `tests/` is the only directory that holds files with no index, so its 50 test modules and its three sets are
+  named only in prose, and the three files in `tests/responses/` are named nowhere. Fix: give `tests/` an
+  index, or state in §1.1 that the test set is named by the root index. Owner: `docs/ARCHITECTURE.md` §1.1.
+- Path builder: `tests/test_golden_files.py:23` builds `GOLDEN_DIR` with `Path(__file__)`, the only set path
+  built outside `tests/conftest.py`. Its regeneration note (lines 13-14) copies `.tf` files to the case root,
+  which is not where the goldens live. Owner: `tests/conftest.py` and the file header.
+- Pins that read the tracking markdown and require an open item to stay open: `tests/test_api_path.py:462-463`
+  and `tests/test_sanity_gate.py:576-577` read `backlog.md`. `AGENTS.md` requires a completed finding to leave
+  the markdown, so a housekeeping commit fails these pins. Fix: keep the fact in the test as data and name the
+  open item in the document without asserting its wording. Owner: those two tests.
+- Second definitions of one rule: `RESOURCE_RE` is defined four times (`tests/conftest.py:40`,
+  `tests/test_coverage_matrix.py:43`, `tests/test_dependency_wiring.py:38`, `tests/test_scope_objects.py:48`)
+  and the four patterns are not the same; `TERRAFORM` is defined four times (`tests/conftest.py:37`,
+  `tests/test_dependency_wiring.py:35`, `tests/test_sanity_gate.py:68`, `tests/test_terraform_validate.py:33`).
+  Fix: read both through `tests/conftest.py` and state the capture group once. Owner: `tests/conftest.py`.
+- The §1 module table names 20 of the 22 `src/` modules: `commit_actions.py` and `api_to_terraform.py` are
+  missing. `to-do.md` states that both path 2 modules must be in that table. Owner: `docs/ARCHITECTURE.md` §1.
+- Pins that pass without measuring anything, because the golden case holds no `.tf` file at the case root:
+  `tests/test_data_blocks.py:233-234`, `tests/test_ownership.py:530-532`,
+  `tests/test_reference_edges.py:346-348`, `tests/test_unit_manifest.py:510-512` compare an empty set with an
+  empty set, and they key by `p.name`, so two units that write the same file name collapse. Fix: read the set
+  the way `tests/test_golden_files.py:42,50,54` reads it (`rglob`, keyed by the path from the case directory).
+  Owner: those four tests.
+- Guarded vacuity: `tests/test_commit_actions.py:329-330` asserts only when the run wrote a file, so a fixture
+  that writes nothing counts as a pass. Owner: `tests/test_commit_actions.py`.
+- Self-referential pin: `tests/test_api_requests.py:576` asserts the length of the test's own harness list.
+  Owner: `tests/test_api_requests.py`.
+- Provider-schema pins that never run in CI: 24 tests in 9 modules read the schema through
+  `tests/conftest.py:107-147`, which skips without the terraform binary or the provider cache. The matrix job
+  runs plain `pytest` on a runner with no terraform, and the `terraform-gate` job runs only
+  `tests/test_terraform_validate.py`, so those 24 pins hold only on a developer machine. Fix: run the nine
+  modules in the terraform-gate job, or record the pins as measured facts with the date, as the provider-fact
+  entries above do. Owner: `.github/workflows/python-tests.yml`.
+- Skip that hides a failure: `tests/conftest.py:114` and `:138` report a missing provider cache as a skip, so
+  a network failure reads as a pass. Owner: `tests/conftest.py`.
+- Two ways to exclude a hostile fixture: the tool's read rule, and a name rule (`startswith('hostile_')`) in
+  `tests/test_commit_actions.py:53`, `tests/test_data_blocks.py:41`, `tests/test_data_file_gate.py:40`,
+  `tests/test_import_blocks.py:37`, `tests/test_round_trip.py:152`, `tests/test_ownership.py:289`,
+  `tests/test_unit_manifest.py:483`, while `tests/test_container_coverage.py:318-321`,
+  `tests/test_entry_coverage.py:205-208` and `tests/test_ownership.py:291-294` use the rule. The two agree on
+  the three committed fixtures today and diverge when a fixture is refused by the rule but not named, or named
+  but accepted. Fix: read the exclusion through `tool.refusal_reason` or `xml_input.check_bytes` in every
+  corpus pin. Owner: `tests/conftest.py`.
+- Pins that restate an owner table as a measured count, so they cannot detect a wrong table entry and fail only
+  when the table changes: `tests/test_build_kitchen_sink.py:96-98,112,150,159`,
+  `tests/test_filter_containers.py:330-333,373`, `tests/test_resource_mapping.py:72-76`,
+  `tests/test_property_coverage.py:198`, `tests/test_data_file_gate.py:156-157,482`. Each carries a measured
+  date instead of a derivation. Fix: state each as a property of the table (the count derived from the rows),
+  and keep the measurement in the document. Owner: those tests.
+- Order pins that read dict insertion order: `tests/test_parse_rules.py:12,41,122,163` and
+  `tests/test_parse_profiles.py:91` assert `list(by_name) == [...]`, which pins document order and assumes the
+  names inside one fixture are unique. Owner: those tests.
+- Name collision in the flat `src/` namespace: `ROW_FIELDS` is three different row shapes
+  (`src/site_data.py:63`, `src/commit_actions.py:75`, `src/import_blocks.py:53`) and a fourth meaning in
+  `tests/test_coverage_matrix.py:166`. Owner: `docs/ARCHITECTURE.md` §1 (rename to one shape name per table).
+- Tracking counts that do not agree with measurement: `agent-status.md` states 1,638 pins against 1,641
+  collected; `docs/COVERAGE_MATRIX.md` §The matrix states 40 rows and `README.md:102` states 34, while
+  `resource_mapping.COVERAGE_MATRIX` holds 42 (`panos_certificate_import` and `panos_certificate_profile` are
+  not in the document table); `to-do.md` keeps completed phase detail for Phase 8A and Phase 8B, and lists F8.9
+  as open while `git log` records steps 1 to 3 committed (`src/api_to_terraform.py` exists). Owner: the
+  tracking markdown.
+- Document pin claims that name a test that does not exist: `backlog.md:24`
+  (`tests/test_container_coverage.py::test_report_declares_the_profile_name_column`), `docs/ARCHITECTURE.md:1527`
+  (`tests/test_parse_network.py::test_parse_rip`, actual name `test_parse_rip_reads_the_levels_the_table_states`,
+  line 549), `docs/API_CONVERSION_PATH.md:30` (`tests/test_site_data.py::test_the_module_defines_no_second_naming_rule`,
+  actual name `test_site_data_defines_no_second_naming_rule`, line 708). Owner: the three documents.
+- Documentation-wording pins: 6 pins read `docs/` prose and 2 read `backlog.md`, including negative wording
+  checks a tool cannot satisfy (`tests/test_container_coverage.py:421-426`, `tests/test_api_requests.py:292-294`,
+  `tests/test_api_requests.py:695`). A wording edit fails CI. Fix: keep these as document-review checks outside
+  the test set. Owner: those tests.
