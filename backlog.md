@@ -675,10 +675,11 @@ below, each with the owner that would fix it. Nothing was changed by the audit.
   that writes nothing counts as a pass. Owner: `tests/test_commit_actions.py`.
 - Self-referential pin: `tests/test_api_requests.py:576` asserts the length of the test's own harness list.
   Owner: `tests/test_api_requests.py`.
-- Provider-schema pins that never run in CI: 24 tests in 9 modules read the schema through
-  `tests/conftest.py:107-147`, which skips without the terraform binary or the provider cache. The matrix job
+- Provider-schema pins that never run in CI: 9 modules (20 pins read the schema fixture in their arguments,
+  more reach it through module helpers) read the schema through `tests/conftest.py:107-147`, which skips
+  without the terraform binary or the provider cache. The matrix job
   runs plain `pytest` on a runner with no terraform, and the `terraform-gate` job runs only
-  `tests/test_terraform_validate.py`, so those 24 pins hold only on a developer machine. Fix: run the nine
+  `tests/test_terraform_validate.py`, so those pins hold only on a developer machine. Fix: run the nine
   modules in the terraform-gate job, or record the pins as measured facts with the date, as the provider-fact
   entries above do. Owner: `.github/workflows/python-tests.yml`.
 - Skip that hides a failure: `tests/conftest.py:114` and `:138` report a missing provider cache as a skip, so
@@ -703,18 +704,149 @@ below, each with the owner that would fix it. Nothing was changed by the audit.
 - Name collision in the flat `src/` namespace: `ROW_FIELDS` is three different row shapes
   (`src/site_data.py:63`, `src/commit_actions.py:75`, `src/import_blocks.py:53`) and a fourth meaning in
   `tests/test_coverage_matrix.py:166`. Owner: `docs/ARCHITECTURE.md` §1 (rename to one shape name per table).
-- Tracking counts that do not agree with measurement: `agent-status.md` states 1,638 pins against 1,641
-  collected; `docs/COVERAGE_MATRIX.md` §The matrix states 40 rows and `README.md:102` states 34, while
-  `resource_mapping.COVERAGE_MATRIX` holds 42 (`panos_certificate_import` and `panos_certificate_profile` are
-  not in the document table); `to-do.md` keeps completed phase detail for Phase 8A and Phase 8B, and lists F8.9
-  as open while `git log` records steps 1 to 3 committed (`src/api_to_terraform.py` exists). Owner: the
-  tracking markdown.
+- Tracking counts that do not agree with measurement: `docs/COVERAGE_MATRIX.md` §The matrix states 40 rows and
+  `README.md:102` states 34, while `resource_mapping.COVERAGE_MATRIX` holds 42 (`panos_certificate_import` and
+  `panos_certificate_profile` are in the code table but not in the document table); `docs/LICENSING.md`
+  §The split, measured states 2,172 upstream lines and 57,157 ours against 2,155 and 57,245 measured with
+  `git blame`, 50,008 in `src/`, `tests/` and `tools/` against 50,012 measured, and 121 commits against 127;
+  `to-do.md` keeps completed phase detail for Phase 8A and Phase 8B, and lists F8.9 as open while `git log`
+  records steps 1 to 3 committed (`src/api_to_terraform.py` exists). `agent-status.md` agrees: 1,641 pins
+  against 1,641 collected, and the fixture set measures 71 (68 accepted, 3 refused by the F3.8 rule). Owner:
+  the tracking markdown.
 - Document pin claims that name a test that does not exist: `backlog.md:24`
   (`tests/test_container_coverage.py::test_report_declares_the_profile_name_column`), `docs/ARCHITECTURE.md:1527`
   (`tests/test_parse_network.py::test_parse_rip`, actual name `test_parse_rip_reads_the_levels_the_table_states`,
   line 549), `docs/API_CONVERSION_PATH.md:30` (`tests/test_site_data.py::test_the_module_defines_no_second_naming_rule`,
   actual name `test_site_data_defines_no_second_naming_rule`, line 708). Owner: the three documents.
-- Documentation-wording pins: 6 pins read `docs/` prose and 2 read `backlog.md`, including negative wording
-  checks a tool cannot satisfy (`tests/test_container_coverage.py:421-426`, `tests/test_api_requests.py:292-294`,
-  `tests/test_api_requests.py:695`). A wording edit fails CI. Fix: keep these as document-review checks outside
-  the test set. Owner: those tests.
+- Documentation-wording pins: 4 pins read `docs/` prose (`tests/test_api_requests.py:292,294,695`,
+  `tests/test_container_coverage.py:420,445`) and 2 read `backlog.md` (`tests/test_api_path.py:463`,
+  `tests/test_sanity_gate.py:576`), including negative wording checks a tool cannot satisfy. No pin reads the
+  root index, `AGENTS.md`, `examples/README.md` or `tools/README.md`, so the layout rule has no pin. A wording
+  edit fails CI. Fix: keep these as document-review checks outside the test set, and pin the index rule in one
+  place. Owner: those tests, `docs/ARCHITECTURE.md` §1.1.
+
+## Codebase audit findings (measured 2026-11-12)
+
+The audit read the parse set, the emitter set, and `src/split_device_groups.py` against the rule owners
+(`entry_coverage.py`, `write_path.py`, `naming.py`, `resource_mapping.py`, `unit_manifest.py`,
+`sanity_checks.py`). Each finding below was measured on a probe run or by a direct read. Nothing was changed
+by the audit. The report is the chat response; only the actionable findings are here. Probe inputs and outputs
+are in `/tmp/opencode/` and are not part of the tree.
+
+### Parse set
+
+- Silent drop: `parse_interfaces` stores `zone` and `virtual_router` as `None` and never assigns a value read
+  from the XML (`src/panorama_to_terraform.py:1442-1443`), and it keeps `tag` only for a subinterface entry
+  (1504). It reads the address list as `ip/entry` (1455-1458, 1496-1497), so the member form the export can
+  state is dropped, while every other field it reads through `_get_single_value` (2928) accepts both shapes.
+  No emitter prints these three fields. Measured probe `/tmp/opencode/probe5.xml`: an entry that stated tag 7,
+  zone `trust`, virtual router `vr1`, and two member addresses printed `layer3 = {}` with no field line. Fix:
+  read the three fields and both address shapes, or state them as report-only in the interface row. Owner:
+  `parse_interfaces`, and the interface row of `resource_mapping.COVERAGE_MATRIX`.
+- The property scan cannot report these drops: `captured_fields` skips a field whose value is empty
+  (`src/entry_coverage.py:102, 405-411`), so a field the parse stored as `None` is never a finding, and a field
+  the parse never stored is not in the set at all. Fix: state the scan's blind side in the F4.4 rule, or count a
+  declared field that no parse method stores. Owner: `src/entry_coverage.py` §F4.4.
+- Unrecorded read: 12 name guards `continue` without a record (`523, 1762, 1805, 2043, 2184, 2207, 2265,
+  2305, 2389, 2409, 2469`, and 6243 in `generate_vpn_report`). Every other parse method calls
+  `mark_skipped` in the same guard, so the report counts the entry as read and gives it a destination.
+  Measured probe `/tmp/opencode/probe/ospf.xml`: an unnamed `ospf/area` entry prints as
+  `emitted  panos_virtual_router  captured: name only`, and the unit file holds no block for it, so the
+  report claims an entry that produced nothing; the same fixture's unnamed zone entry, whose guard does
+  record, prints `skipped`. Fix: call `mark_skipped` in each guard. Owner: those parse methods and
+  `generate_vpn_report`.
+- Unguarded path: `parse_schedules` stores a nameless recurring child as `{'name': None}` (1184-1187), and
+  `generate_manual_setup_report` joins the names (5707) → `TypeError`, exit 1, and half-written output (probe
+  `/tmp/opencode/probe7.xml`: only `provider.tf` in the unit). Fix: skip a child with no name through the record.
+  Owner: `parse_schedules`.
+- Coverage gap: `_parse_router` reads only `routing-table/ip/static-route/entry` (1760), so an entry under
+  `protocol/static-routes` produces no block and no row of its own; it appears only as a property count on
+  the parent row. Measured probe `/tmp/opencode/probe_router.xml`: `Per-entry report: 2 entries read`,
+  `Property entries inside config-object entries: 4`, and the route `r1` printed nothing. Fix: read both
+  shapes, or state the second shape in the virtual-router row. Owner: `_parse_router`,
+  `src/entry_coverage.py`.
+- `_protocol_field` reads a `number` field with `text.isdigit()` (2675), so a negative or non-integer value is
+  dropped with no report line (probe `/tmp/opencode/probe9.xml`: `set-med -1` printed only `name`), and
+  `entry.find(xml_name)` (2666) takes only the first match. Fix: use the shape rule for a number and state the
+  single-match limit. Owner: `_protocol_field`.
+
+### Naming and printing
+
+- Second digest: the static-route block name is built as `f"{resource_name}_{route['name']}"` (5105-5112) from
+  an already-digested name, then `declare_block_name` sanitizes and digests it again (3211-3214) → measured
+  `vr1_3f0e80e0_r1_8c64c16e`, against §5. The `_declaration_index` key holds that double-digested name, so a
+  reference by the route's own name cannot resolve. Fix: pass the route name, not the built name. Owner:
+  `generate_virtual_routers`, `declare_block_name`.
+- Second source for one rule: `declare_block_name` hardcodes `'unnamed'` (3211) while `naming.UNNAMED` (27) is
+  the §5 fallback. Fix: read `naming.UNNAMED`. Owner: `src/naming.py`.
+- Collision: `printed_value` records each value under its §5 name in a dict keyed by that name (3657), so two
+  values in one unit that sanitize to the same name hold one entry and the last value wins; two
+  `REFERENCE_ONLY` entries whose names sanitize identically share one declaration. `naming.variable_name` maps
+  `-`, `.` and `_` to the same separator (`src/naming.py:32-47`). Measured by read, not by probe. Fix: refuse a
+  name collision inside a unit, or key the record by the entry. Owner: `printed_value`.
+- Order rule split: `hcl_value` prints a dict in the order the parse built it (3740-3741), while the two
+  emitters that call it sort the fields they print (3831, 3880), so one object prints in two orders at two
+  levels. No document states which order a nested object takes. Fix: state the order for nested keys. Owner:
+  `hcl_value`.
+- Redundant gate, second rule: `check_control_chars` (`src/sanity_checks.py:1386`) reads the printed `.tf`
+  text, and `escape_string` strips the remaining C0 control characters and DEL from a value (3366) before the
+  text is printed, so for a value the gate can only re-check what the escape path already removed. The tool's
+  own XML reader refuses a control character in text and in a character reference, measured both ways
+  (`&#7;` → "reference to invalid character number", a raw `0x07` byte → "not well-formed (invalid token)"), so
+  no value reaches the printer with one from the read layer. The escape rule stays needed for a value that
+  arrives from the JSON state file, which states no control-character rule, so the two rules are not the same
+  rule. Fix: state which layer owns the control-character rule, or make the gate read the value before the
+  escape. Owner: `src/sanity_checks.py`, `escape_string`, `src/xml_input.py`.
+  Whitespace is not one rule either: `_get_text` (2915), `_get_members` (2920), `_get_single_value` (2928)
+  and `_protocol_field` (2658) return the text as the export states it, while `_list_names` (447) strips.
+  the splitter's `_device_names` (`src/split_device_groups.py:56`) strips too. Measured probe
+  `/tmp/opencode/probe_ws.xml`: a device group that states `  spaced  ` prints `description = "  spaced  "`,
+  and the `control_chars` gate passes for the same run. Fix: state one rule for the value helpers. Owner: the
+  value helpers, `src/split_device_groups.py`.
+- Order contradiction: two emitters print fields in sorted order (3831, 3880) while their docstrings say the
+  fields print in the table's order (3813, 3863). `parse_filter_containers` hardcodes the six filter paths
+  (2699-2705) in an order that is not `FILTER_PATHS` (`src/resource_mapping.py:3793`, the sorted table) while
+  claiming the table is the source. Fix: print in the table's order, or state the sorted rule. Owner: those
+  emitters and `parse_filter_containers`.
+- `UnitText.add_once` decides "stated once" by testing whether the text is a substring of the text already
+  accumulated for the unit (3037-3042), so header prose that contains the section text stops the section from
+  being written. Fix: keep a per-file once record. Owner: `UnitText`.
+- Shape owner bypassed: `VALUE_VARIABLES` states `key` as `reference_only` (`src/resource_mapping.py:1261`), but
+  the IKE gateway emitter prints it as a literal through `hcl_value` (6117), so no gate reads it. The parse
+  always writes the placeholder (2799, 2847), so no credential reaches a file today. Fix: print the reference, or
+  state the exception in the table. Owner: `generate_vpn_config`, `resource_mapping.VALUE_VARIABLES`.
+
+### `src/split_device_groups.py`
+
+- Write path: the splitter writes XML through `ElementTree.write` (281), outside `write_path.py`, and the files
+  it writes have no trailing LF (measured with `od`). The writer scan lists `write_text`, `write_bytes`,
+  `os.linesep` and `open(...'w')` (`tests/test_write_path.py:441-448`), so this writer is not seen by the gate.
+  Fix: write through `write_path.py`, or add the element writer to the scan. Owner: `src/write_path.py`,
+  `tests/test_write_path.py`.
+- Naming: file names are built with two `replace` calls (275) instead of `naming.sanitize`, so a device-group
+  name that states any other character keeps it, and two names that read the same after the two replaces
+  collide. Measured probe: device groups `DG/A` and `DG A` wrote one file, `DG_A.xml`, and the second write
+  replaced the first. Reading `naming.sanitize` would put the file name under the one rule but would not
+  stop the collision, because both names sanitize to `dg_a`; the rule needs a collision decision. Fix: read
+  `naming.sanitize` and refuse or number a collision. Owner: `src/naming.py`, `src/split_device_groups.py`.
+- Identity: the splitter keeps name-keyed tables (45-53, 86-95) and takes the first entry with a name
+  (149-152), against §2.3, so a repeated device-group name is never written and one entry answers for two.
+  Fix: key by the source line, as the converter does. Owner: `src/split_device_groups.py`,
+  `docs/ARCHITECTURE.md` §2.3.
+- Shared-section merge (174-193): the dedupe reads `findall('.//entry')`, so a name matches at any depth and a
+  matched entry from a later section is dropped; an unmatched entry is appended directly under the container, so
+  its path is flattened. Measured probes: `/tmp/opencode/p1.xml` → `pout_split/DG1.xml` kept `y` as
+  `interface/entry` instead of `interface/virtual-wire/units/entry`, and the converter reports that entry as
+  `unaccounted` with "no parse method reads interface"; `/tmp/opencode/p2.xml` → `pout_split2/DG2.xml` dropped
+  the second `x` entry because the first `x` matched at a different depth. Fix: merge by path and name, and keep
+  the entry's path. Owner: `src/split_device_groups.py`, `docs/DEVICE_GROUP_SPLITTING.md`.
+- Dead branch: `if dg_config is None` (270-272) cannot be true, because `parse_device_groups` (47-51) only
+  names entries that exist in the tree. Fix: remove the branch or make the extraction able to fail. Owner:
+  `src/split_device_groups.py`.
+
+### Error rule
+
+- `is_refusal` (6697-6701) counts any `ValueError` as an input refusal, against its own docstring ("anything
+  else is an unexpected error and keeps its traceback"), so a `ValueError` raised inside the tool prints as a
+  refusal with no traceback and exit 1. `main()` catches every exception (7281-7287). Fix: state the refusal
+  kinds as the input-layer exceptions. Owner: `is_refusal`, `src/xml_input.py`.
