@@ -737,17 +737,17 @@ are in `/tmp/opencode/` and are not part of the tree.
   (`src/entry_coverage.py:102, 405-411`), so a field the parse stored as `None` is never a finding, and a field
   the parse never stored is not in the set at all. Fix: state the scan's blind side in the F4.4 rule, or count a
   declared field that no parse method stores. Owner: `src/entry_coverage.py` §F4.4.
-- Unrecorded read: 12 name guards `continue` without a record (`523, 1762, 1805, 2043, 2184, 2207, 2265,
-  2305, 2389, 2409, 2469`, and 6243 in `generate_vpn_report`). Every other parse method calls
-  `mark_skipped` in the same guard, so the report counts the entry as read and gives it a destination.
-  Measured probe `/tmp/opencode/probe/ospf.xml`: an unnamed `ospf/area` entry prints as
-  `emitted  panos_virtual_router  captured: name only`, and the unit file holds no block for it, so the
-  report claims an entry that produced nothing; the same fixture's unnamed zone entry, whose guard does
-  record, prints `skipped`. Fix: call `mark_skipped` in each guard. Owner: those parse methods and
-  `generate_vpn_report`.
+- Unrecorded read: 11 name guards `continue` without a record (`523, 1762, 1805, 2043, 2184, 2207, 2265,
+  2305, 2389, 2409, 2469`), against the report rule that one line names every entry the parse read. Every other
+  name guard (47 of the 58) calls `mark_skipped` in the same place, so its entry has a line. Measured probe
+  `/tmp/opencode/probe_area.xml`: an unnamed `ospf/area` entry produced no block and no line, the report counted
+  `skipped 0`, and only the parent `vr1` row named a gap; the same report rule states that an entry with no name
+  is "recorded by design", which the 11 guards do not record. Fix: call `mark_skipped` in each guard. Owner:
+  those parse methods.
 - Unguarded path: `parse_schedules` stores a nameless recurring child as `{'name': None}` (1184-1187), and
   `generate_manual_setup_report` joins the names (5707) → `TypeError`, exit 1, and half-written output (probe
-  `/tmp/opencode/probe7.xml`: only `provider.tf` in the unit). Fix: skip a child with no name through the record.
+  `/tmp/opencode/probe_sched3.xml`: only `provider.tf` in the unit). Fix: skip a child with no name through the
+  record.
   Owner: `parse_schedules`.
 - Coverage gap: `_parse_router` reads only `routing-table/ip/static-route/entry` (1760), so an entry under
   `protocol/static-routes` produces no block and no row of its own; it appears only as a property count on
@@ -755,9 +755,9 @@ are in `/tmp/opencode/` and are not part of the tree.
   `Property entries inside config-object entries: 4`, and the route `r1` printed nothing. Fix: read both
   shapes, or state the second shape in the virtual-router row. Owner: `_parse_router`,
   `src/entry_coverage.py`.
-- `_protocol_field` reads a `number` field with `text.isdigit()` (2675), so a negative or non-integer value is
+- `_protocol_field` reads a `number` field with `text.isdigit()` (2676), so a negative or non-integer value is
   dropped with no report line (probe `/tmp/opencode/probe9.xml`: `set-med -1` printed only `name`), and
-  `entry.find(xml_name)` (2666) takes only the first match. Fix: use the shape rule for a number and state the
+  `entry.find(xml_name)` (2665) takes only the first match. Fix: use the shape rule for a number and state the
   single-match limit. Owner: `_protocol_field`.
 
 ### Naming and printing
