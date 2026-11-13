@@ -1,9 +1,11 @@
-"""Shared test fixtures and the layout paths the tests read.
+"""Shared test fixtures and the definitions the tests read.
 
 The tool's modules live in `src/` and are not an installed package. The import rule is in
 `docs/ARCHITECTURE.md` §1.1: `src/` is one flat namespace, so a test imports a module by plain name, and
 `pyproject.toml` `pythonpath = ["src"]` is the only place the path is stated for tests. This file builds the
-paths a test reads the layout through, and states no second path rule.
+paths a test reads the layout through, states no second path rule, and holds the definitions more than one
+test module reads: the terraform binary, the two resource-line patterns, and the rule-block parser. A test
+module does not define its own copy of any of them, and no test module imports another test module.
 """
 
 import contextlib
@@ -36,8 +38,18 @@ GOLDEN_DIR = TESTS_DIR / "golden"
 RESPONSES_DIR = TESTS_DIR / "responses"
 TERRAFORM = shutil.which("terraform")
 
-# Every `resource "panos_x" "y" {` line in a Terraform file.
+# Every `resource "panos_x" "y" {` line in a Terraform file, read through this file by the test set.
+# Two named patterns, each with the rule it serves. `RESOURCE_RE` answers the resource type, which the pins
+# that read the emitted type set read. `RESOURCE_ADDRESS_RE` answers the same line with the local name
+# captured, for `tests/test_dependency_wiring.py`, which reads `findall` as (type, local name) pairs, so a
+# one-group pattern cannot serve it. Both require the block brace, so neither pattern is broader than the
+# other, and no pin passes because a merged pattern is wider. Measured 2026-11-13 on the committed goldens
+# (87 `.tf` files) and the output of a corpus run (584 `.tf` files): the three shapes the test set held
+# before answer the same 414 matches, and 0 resource lines lack the trailing brace, so the brace changes
+# nothing on the measured material; the real difference is the capture groups (42 distinct types, 262
+# distinct addresses). The decision is recorded in `acceptance.md`.
 RESOURCE_RE = re.compile(r'resource\s+"([a-z0-9_]+)"\s+"[^"]+"\s*\{')
+RESOURCE_ADDRESS_RE = re.compile(r'resource\s+"([a-z0-9_]+)"\s+"([^"]+)"\s*\{')
 
 
 def tf_files(output_dir) -> dict[str, str]:
@@ -101,6 +113,70 @@ def emitted_types() -> set[str]:
         for m in RESOURCE_RE.finditer(path.read_text()):
             types.add(m.group(1))
     return types
+
+
+# --- The rule-block parser the policy pins read (F2.5) ------------------------
+
+# `tests/test_policy_order.py` and `tests/test_real_or_report.py` both read these three functions, so they
+# live in the one shared helper file (§1.1) and neither module defines its own copy. The generated format
+# is fixed, so small structural regexes are enough: a resource block ends at the first newline followed by
+# a column-0 brace.
+
+def _search_one(body: str, pattern: str):
+    m = re.search(pattern, body, re.S)
+    return m.group(1) if m else None
+
+
+def rule_blocks(text: str, resource_type: str) -> list[dict]:
+    """Parse generated rule resources into ordered dicts (file order)."""
+    blocks = []
+    pattern = re.compile(
+        'resource "' + re.escape(resource_type) + r'" "([^"]+)" \{(.*?)\n\}', re.S)
+    for m in pattern.finditer(text):
+        local, body = m.group(1), m.group(2)
+        # The rules list holds one object per rule; the Panorama rule name
+        # is the only name = line inside it (the location block is outside).
+        rules_body = _search_one(body, r'rules = \[(.*?)\n  \]') or ''
+        rule_names = re.findall(r'name = "([^"]+)"', rules_body)
+        depends_on = _search_one(body, r'depends_on = \[([^\]]*)\]') or ''
+        blocks.append({
+            'local': local,
+            'device_group': _search_one(body, r'device_group = \{\s*name = "([^"]+)"'),
+            'where': _search_one(body, r'where = "([^"]+)"'),
+            'directly': _search_one(body, r'directly = (true|false)'),
+            'pivot': _search_one(body, r'pivot = "([^"]+)"'),
+            'depends_on': re.findall(r'([A-Za-z_][\w]*\.[A-Za-z_][\w]*)', depends_on),
+            'names': rule_names,
+        })
+    return blocks
+
+
+def check_chain_semantics(blocks: list[dict], resource_type: str,
+                          expected: list[tuple[str, list[str]]], msg: str):
+    """Assert blocks form per-DG chains with anchor + after-previous positions."""
+    assert len(blocks) == sum(len(names) for _, names in expected), msg
+    idx = 0
+    for dg, names in expected:
+        chain = blocks[idx:idx + len(names)]
+        idx += len(names)
+        for b in chain:
+            assert b['device_group'] == dg, msg
+        # Every block holds exactly one rule; the rule name sequence is the
+        # chain's XML order.
+        assert [b['names'] for b in chain] == [[n] for n in names], msg
+        # First rule of the chain: anchor at the end of the rulebase.
+        first = chain[0]
+        assert first['where'] == 'last', msg
+        assert first['pivot'] is None, msg
+        assert first['directly'] is None, msg
+        assert first['depends_on'] == [], msg
+        # Later rules: directly after the previous rule, applied after it.
+        for prev, cur in zip(chain, chain[1:]):
+            assert cur['where'] == 'after', msg
+            assert cur['directly'] == 'true', msg
+            assert cur['pivot'] == prev['names'][0], msg
+            expected_dep = f'{resource_type}.{prev["local"]}'
+            assert cur['depends_on'] == [expected_dep], msg
 
 
 @pytest.fixture(scope="session")

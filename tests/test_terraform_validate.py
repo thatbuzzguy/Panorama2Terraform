@@ -21,16 +21,16 @@ The test skips when the ``terraform`` binary is absent so the Python
 matrix jobs are unaffected; the CI ``terraform-gate`` job provides it.
 """
 
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
 import sanity_checks
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_script
+from conftest import FIXTURES_DIR, SAMPLE_CONFIG, TERRAFORM, run_script
 
-TERRAFORM = shutil.which("terraform")
+# The terraform binary is read through `tests/conftest.py` (§1.1), so the skip rule for a missing binary is
+# the same rule as the gate's.
 FIXTURES_KITCHEN = FIXTURES_DIR / "kitchen_sink.xml"
 FIXTURES_VPN_PROFILES = FIXTURES_DIR / "ike_crypto_profiles.xml"
 FIXTURES_MULTI_DEVICE = FIXTURES_DIR / "multi_device_templates.xml"

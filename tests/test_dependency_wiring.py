@@ -23,19 +23,15 @@ Pins on the dedicated fixture:
 """
 
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
 import sanity_checks
-from conftest import FIXTURES_DIR, file_text, run_script, tf_files
+from conftest import FIXTURES_DIR, RESOURCE_ADDRESS_RE, TERRAFORM, file_text, run_script, tf_files
 
-TERRAFORM = shutil.which("terraform")
 FIXTURE = FIXTURES_DIR / "dependency_wiring.xml"
-
-RESOURCE_RE = re.compile(r'resource\s+"([a-z0-9_]+)"\s+"([^"]+)"')
 
 
 @pytest.fixture(scope="module")
@@ -56,7 +52,8 @@ def _declared(out_dir: Path) -> set[tuple[str, str]]:
     """All (type, local) resource addresses declared in the output."""
     declared = set()
     for text in tf_files(out_dir).values():
-        declared.update(RESOURCE_RE.findall(text))
+        # The address pattern from `tests/conftest.py` (§1.1), the one that answers the pair this rule reads.
+        declared.update(RESOURCE_ADDRESS_RE.findall(text))
     return declared
 
 

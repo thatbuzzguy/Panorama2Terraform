@@ -39,7 +39,7 @@ Every file in this table is a module in `src/`, except the test harness, which i
 | `site_data.py` | The site as data (F6.6): one row per site that names a value, as `SITE_DATA.json` (§3.7), and the `.tfvars` written from the rows | the row joins to §3.4 on `directory`, so no second unit rule exists; the module resolves no name and names no value the run did not print; the `.tfvars` is the printed form of the data, not the generator's state; `parse_rows` refuses a shape it does not declare; the name is the §5 rule read through `naming.py` |
 | `import_blocks.py` | The import block (F6.4): one block per entry, as `imports.tf` (§4.8), and the id shape | the block is built from the same data the resource block uses, so this module states no location rule and no naming rule; the id is the base64 JSON object the provider documents, and `decode_id` refuses a shape it does not declare; the four `*_policy_rules` types are the rows `LOCATION_SCHEMA` declares `rulebase` for, so no second table names them |
 | `write_path.py` | The write path (F6.10.3): the one function that writes a file, and the two path builders, one per file set (§6) | the LF rule is enforced here and nowhere else, so no module of the tool writes a file outside it; `bytes` are written without translation, because the cache holds the bytes the input door parsed; the module states no unit rule and no naming rule, because a per-unit file names its unit only by its directory (§14 of `CODEBASE_ASSEMBLY.md`) |
-| `tests/conftest.py` | The test harness and the paths the tests read the layout through | the tests call the same implementation the tool uses, so a rule is stated once; each rule in this document names the test that pins it |
+| `tests/conftest.py` | The test harness, the paths the tests read the layout through, and the definitions more than one test module reads | the tests call the same implementation the tool uses, so a rule is stated once; each rule in this document names the test that pins it |
 
 ### 1.1 The repository layout
 
@@ -58,8 +58,10 @@ every document under them, so a file outside an index is a finding.
 - The canonical sample output is the golden set `tests/golden/`, which pins the bytes of a real run.
   `terraform_output/` is only the default value of `--output-dir` and holds no committed sample.
 - `tests/` is flat: the test files sit beside the three sets `fixtures/`, `golden/`, and `responses/`, and
-  `tests/conftest.py` is the one shared helper file and the one place the path to each set is built. No test
-  is grouped by rule area, so the layout does not change again.
+  `tests/conftest.py` is the one shared helper file and the one place the path to each set is built. A fact more
+  than one test module reads is stated there once, so a test module reads it through that file instead of
+  defining its own copy, and no test module imports another test module. No test is grouped by rule area, so the
+  layout does not change again.
 - A committed API response is not a Panorama export, so it is not corpus material. The response set
   (`tests/responses/`) sits beside the corpus: the scan runs over the corpus, and the fixture assembler reads
   the corpus, so a response enters neither the set the scan reports nor the assembler's merge set. Each
@@ -89,6 +91,13 @@ A pin that reads a module source reads it through the import rule (`Path(module.
 paths `tests/conftest.py` builds once. The writer scan reads the `src/` set: the single writer
 `src/write_path.py` is the exception, and the test harness is not a tool module, so it is outside the set
 (`tests/test_write_path.py`).
+
+The gate is the full run: `ruff check .` and `python3 -m pytest`. No subset is the default gate, because the
+pins that carry the tool's promises are the slowest ones: the plan check pins (§4.6) and the corpus pins. A
+partial run is a working loop on one area, stated as an explicit command-line selection, and a result claim and a
+commit come from the full run. A subset is not expressed as a mark or a skip, because a skipped pin proves
+nothing and `tests/conftest.py` states no marks. The measured time and the decision are in `acceptance.md`; the
+pin count and the recorded run time are in `agent-status.md`.
 
 ## 2. Data model
 

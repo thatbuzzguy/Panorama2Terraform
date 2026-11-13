@@ -9,18 +9,21 @@ the behavior change is visible in review. Reports are not in the golden
 set: only `.tf` files are, because report wording changes often and a
 byte-for-byte report pin makes a wording edit look like a behavior change.
 
-Regenerating a golden after an intended change:
+The goldens live inside the unit directory inside the case directory: `tests/golden/<case>/<unit directory>/`,
+because the run writes one directory per unit the manifest names (`docs/CODEBASE_ASSEMBLY.md` §14). No `.tf`
+file sits at the case root, so the pin reads the set as paths from the case directory. The path to the golden
+set is read through `tests/conftest.py` (§1.1), the one place the path to each test set is built.
+
+Regenerating a golden after an intended change, one unit directory at a time:
     python3 src/panorama_to_terraform.py <source.xml> --output-dir /tmp/gold
-    cp /tmp/gold/*.tf tests/golden/<case>/
+    cp /tmp/gold/<unit directory>/*.tf tests/golden/<case>/<unit directory>/
 """
 
 from pathlib import Path
 
 import pytest
 
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_script
-
-GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
+from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, run_script
 
 # case name -> (source XML, golden directory)
 CASES: dict[str, tuple[Path, Path]] = {

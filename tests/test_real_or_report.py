@@ -25,12 +25,21 @@ is not emitted:
   attribute for country/region/continent/container content);
 - the dropped leg of a dual-protocol service -> report (F3.4: panos_service
   accepts one protocol leg, a config with both fails terraform validate).
+
+The rule-block parser and the chain check are read through `tests/conftest.py` (§1.1), so this module and
+`tests/test_policy_order.py` share one implementation of the F2.5 chain semantics.
 """
 
 from pathlib import Path
 
-from conftest import FIXTURES_DIR, file_text, run_script, tf_files
-from test_policy_order import _check_chain_semantics, _rule_blocks
+from conftest import (
+    FIXTURES_DIR,
+    check_chain_semantics,
+    file_text,
+    rule_blocks,
+    run_script,
+    tf_files,
+)
 
 # The legacy comment-only placeholder text must be gone from all output.
 PLACEHOLDER_TEXT = 'Manual Terraform configuration is required'
@@ -66,8 +75,8 @@ def test_decryption_rules_emit_real_v2_resources(tmp_path):
     # run wrote for the units the fixture names, in path order.
     text = file_text(tf_files(out), 'decryption_rules.tf')
 
-    blocks = _rule_blocks(text, 'panos_decryption_policy_rules')
-    _check_chain_semantics(
+    blocks = rule_blocks(text, 'panos_decryption_policy_rules')
+    check_chain_semantics(
         blocks, 'panos_decryption_policy_rules',
         [('Production-DG', ['Decrypt-HTTPS', 'Decrypt-SSH'])],
         'decryption fixture')
@@ -102,8 +111,8 @@ def test_pbf_rules_emit_chained_v2_resources(tmp_path):
     out = _convert('pbf_rules.xml', tmp_path)
     text = file_text(tf_files(out), 'pbf_rules.tf')
 
-    blocks = _rule_blocks(text, 'panos_pbf_policy_rules')
-    _check_chain_semantics(
+    blocks = rule_blocks(text, 'panos_pbf_policy_rules')
+    check_chain_semantics(
         blocks, 'panos_pbf_policy_rules',
         [('Production-DG', ['PBF-Forward', 'PBF-ForwardVsys',
                             'PBF-Discard', 'PBF-NoPBF'])],

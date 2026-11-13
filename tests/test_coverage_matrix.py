@@ -26,7 +26,6 @@ both ethernet resource types) converts only once.
 
 import ast
 import inspect
-import re
 import tempfile
 import textwrap
 import xml.etree.ElementTree as ET
@@ -36,11 +35,11 @@ import pytest
 
 import entry_coverage
 import resource_mapping
-from conftest import FIXTURES_DIR, file_text, run_script, tf_files
+from conftest import FIXTURES_DIR, RESOURCE_RE, file_text, run_script, tf_files
 from resource_mapping import COVERAGE_MATRIX, EMITTED_TYPES
 
-# Every `resource "panos_x" "y" {` line in a Terraform file.
-RESOURCE_RE = re.compile(r'resource\s+"([a-z0-9_]+)"\s+"([^"]+)"\s*\{')
+# The resource line is read through `tests/conftest.py` (§1.1), which states the pattern once for the test set.
+# This module reads the type group, which is the rule the matrix rows name.
 
 # fixture name -> {filename: text} of the converter's .tf output.
 _OUTPUTS: dict[str, dict[str, str]] = {}

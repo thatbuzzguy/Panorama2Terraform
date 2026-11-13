@@ -38,7 +38,6 @@ the cross-check reads the same ledger the join reads.
 
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -58,6 +57,7 @@ from conftest import (
     RESPONSES_DIR,
     SAMPLE_CONFIG,
     SRC_DIR,
+    TERRAFORM,
     path2_run,
     run_main,
     run_pipeline,
@@ -65,7 +65,8 @@ from conftest import (
     tf_files,
 )
 
-TERRAFORM = shutil.which("terraform")
+# The terraform binary and the golden, fixture and source paths are read through `tests/conftest.py` (§1.1),
+# so no module resolves the binary a second time and the skip rule for a missing binary stays one rule.
 # The layout rule (`docs/ARCHITECTURE.md` §1.1): the entry points are tool modules, so they sit in `src/`.
 CONVERTER = SRC_DIR / "panorama_to_terraform.py"
 SPLITTER = SRC_DIR / "split_device_groups.py"

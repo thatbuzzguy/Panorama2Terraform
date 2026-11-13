@@ -35,7 +35,7 @@ import container_coverage
 import entry_coverage
 import resource_mapping
 import sanity_checks
-from conftest import FIXTURES_DIR, file_text, run_pipeline, run_script, tf_files
+from conftest import FIXTURES_DIR, RESOURCE_RE, file_text, run_pipeline, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 SCOPE_FILE = 'scope.tf'
@@ -44,8 +44,8 @@ NO_SCOPE_FIXTURE = 'address_objects.xml'
 PLACEMENT_FIXTURE = 'report_grouping.xml'
 PLACEHOLDER = container_coverage.PLACEHOLDER_DEVICE
 
-# Every `resource "panos_x" "y" {` line in a Terraform file.
-RESOURCE_RE = re.compile(r'resource\s+"([a-z0-9_]+)"\s+"([^"]+)"\s*\{')
+# The resource line is read through `tests/conftest.py` (§1.1), which states the pattern once for the test set.
+# This module reads the type group, which is the rule the block order pins.
 
 # The eight blocks the fixture writes: three device groups, one parent record, and one entry for
 # each of the four template shapes.

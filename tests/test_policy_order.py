@@ -16,76 +16,25 @@ where = "after", and fails the move when the pivot is missing, which is
 why the depends_on is part of the contract.
 """
 
-import re
 from pathlib import Path
 
 import pytest
 
 import sanity_checks
-from conftest import FIXTURES_DIR, GOLDEN_DIR, file_text, parts, run_script, tf_files
+from conftest import (
+    FIXTURES_DIR,
+    GOLDEN_DIR,
+    check_chain_semantics,
+    file_text,
+    parts,
+    rule_blocks,
+    run_script,
+    tf_files,
+)
 
-# ---------------------------------------------------------------------------
-# Structural parser for the generated rule files.
-#
-# The generated format is fixed, so small structural regexes are enough.
-# A resource block ends at the first newline followed by a column-0 brace.
-# ---------------------------------------------------------------------------
-
-def _search_one(body: str, pattern: str):
-    m = re.search(pattern, body, re.S)
-    return m.group(1) if m else None
-
-
-def _rule_blocks(text: str, resource_type: str) -> list[dict]:
-    """Parse generated rule resources into ordered dicts (file order)."""
-    blocks = []
-    pattern = re.compile(
-        'resource "' + re.escape(resource_type) + r'" "([^"]+)" \{(.*?)\n\}', re.S)
-    for m in pattern.finditer(text):
-        local, body = m.group(1), m.group(2)
-        # The rules list holds one object per rule; the Panorama rule name
-        # is the only name = line inside it (the location block is outside).
-        rules_body = _search_one(body, r'rules = \[(.*?)\n  \]') or ''
-        rule_names = re.findall(r'name = "([^"]+)"', rules_body)
-        depends_on = _search_one(body, r'depends_on = \[([^\]]*)\]') or ''
-        blocks.append({
-            'local': local,
-            'device_group': _search_one(body, r'device_group = \{\s*name = "([^"]+)"'),
-            'where': _search_one(body, r'where = "([^"]+)"'),
-            'directly': _search_one(body, r'directly = (true|false)'),
-            'pivot': _search_one(body, r'pivot = "([^"]+)"'),
-            'depends_on': re.findall(r'([A-Za-z_][\w]*\.[A-Za-z_][\w]*)', depends_on),
-            'names': rule_names,
-        })
-    return blocks
-
-
-def _check_chain_semantics(blocks: list[dict], resource_type: str,
-                           expected: list[tuple[str, list[str]]], msg: str):
-    """Assert blocks form per-DG chains with anchor + after-previous positions."""
-    assert len(blocks) == sum(len(names) for _, names in expected), msg
-    idx = 0
-    for dg, names in expected:
-        chain = blocks[idx:idx + len(names)]
-        idx += len(names)
-        for b in chain:
-            assert b['device_group'] == dg, msg
-        # Every block holds exactly one rule; the rule name sequence is the
-        # chain's XML order.
-        assert [b['names'] for b in chain] == [[n] for n in names], msg
-        # First rule of the chain: anchor at the end of the rulebase.
-        first = chain[0]
-        assert first['where'] == 'last', msg
-        assert first['pivot'] is None, msg
-        assert first['directly'] is None, msg
-        assert first['depends_on'] == [], msg
-        # Later rules: directly after the previous rule, applied after it.
-        for prev, cur in zip(chain, chain[1:]):
-            assert cur['where'] == 'after', msg
-            assert cur['directly'] == 'true', msg
-            assert cur['pivot'] == prev['names'][0], msg
-            expected_dep = f'{resource_type}.{prev["local"]}'
-            assert cur['depends_on'] == [expected_dep], msg
+# The structural parser for the generated rule files and the chain check are read through
+# `tests/conftest.py`, the one shared helper file (§1.1), because `tests/test_real_or_report.py` reads the
+# same two functions. A resource block ends at the first newline followed by a column-0 brace.
 
 
 @pytest.fixture(scope='module')
@@ -113,10 +62,10 @@ EXPECTED_NAT = [
 
 def test_security_chains_emit_in_xml_order_per_device_group(generated):
     """Chains appear in first-seen DG order, rules in XML order."""
-    blocks = _rule_blocks(
+    blocks = rule_blocks(
         file_text(tf_files(generated), 'security_rules.tf'),
         'panos_security_policy_rules')
-    _check_chain_semantics(blocks, 'panos_security_policy_rules',
+    check_chain_semantics(blocks, 'panos_security_policy_rules',
                            EXPECTED_SECURITY, 'security fixture')
     assert [b['device_group'] for b in blocks] == (
         ['Alpha-DG'] * 3 + ['Beta-DG'] * 2 + ['Gamma-DG']), 'security fixture'
@@ -125,7 +74,7 @@ def test_security_chains_emit_in_xml_order_per_device_group(generated):
 def test_security_single_rule_chain_has_only_the_anchor(generated):
     """Gamma-DG has one rule: anchor position, no pivot, no depends_on."""
     text = file_text(tf_files(generated), 'security_rules.tf')
-    blocks = _rule_blocks(text, 'panos_security_policy_rules')
+    blocks = rule_blocks(text, 'panos_security_policy_rules')
     gamma = [b for b in blocks if b['device_group'] == 'Gamma-DG']
     assert len(gamma) == 1
     assert gamma[0]['where'] == 'last'
@@ -136,7 +85,7 @@ def test_security_single_rule_chain_has_only_the_anchor(generated):
 def test_security_chains_do_not_cross_device_groups(generated):
     """A chain starts fresh in each DG: no pivot or depends_on from another DG."""
     text = file_text(tf_files(generated), 'security_rules.tf')
-    blocks = _rule_blocks(text, 'panos_security_policy_rules')
+    blocks = rule_blocks(text, 'panos_security_policy_rules')
     by_dg: dict[str, list[dict]] = {}
     for b in blocks:
         by_dg.setdefault(b['device_group'], []).append(b)
@@ -156,10 +105,10 @@ def test_security_chains_do_not_cross_device_groups(generated):
 # --- Fixture: NAT rules ------------------------------------------------------
 
 def test_nat_chains_follow_the_same_semantics(generated):
-    blocks = _rule_blocks(
+    blocks = rule_blocks(
         file_text(tf_files(generated), 'nat_rules.tf'),
         'panos_nat_policy_rules')
-    _check_chain_semantics(blocks, 'panos_nat_policy_rules',
+    check_chain_semantics(blocks, 'panos_nat_policy_rules',
                            EXPECTED_NAT, 'nat fixture')
 
 
@@ -183,7 +132,7 @@ def test_goldens_preserve_order_preserving_positions(fixture_file):
     resource_type = ('panos_security_policy_rules' if 'security' in name
                      else 'panos_nat_policy_rules')
     for path, text in written.items():
-        blocks = _rule_blocks(text, resource_type)
+        blocks = rule_blocks(text, resource_type)
         assert blocks, f'no rule blocks found in {path}'
         # Group consecutive blocks by device group (chains are emitted contiguously).
         expected: list[tuple[str, list[str]]] = []
@@ -192,4 +141,4 @@ def test_goldens_preserve_order_preserving_positions(fixture_file):
                 expected[-1][1].append(b['names'][0])
             else:
                 expected.append((b['device_group'], [b['names'][0]]))
-        _check_chain_semantics(blocks, resource_type, expected, path)
+        check_chain_semantics(blocks, resource_type, expected, path)
