@@ -24,8 +24,36 @@ it covers the upstream parts only, and this project grants no commercial terms f
 "non-commercial" is not used as a license name, because AGPL v3 permits commercial use and §10 does not allow an
 extra non-commercial condition on a derivative work, so the choice reads as "AGPL v3 only".
 
-Test count: `python3 -m pytest` reads 1651 pins (1650 before F8.10), with no skips, and `ruff check .` is clean.
+Test count: `python3 -m pytest` reads 1651 pins, with no skips, and `ruff check .` is clean.
 `tests/test_api_path.py` reads 30 pins (29 before F8.10).
+
+Full-suite time, measured 2026-11-13: 325.4 s, 364.6 s and 364.9 s on three runs of the same set (5 min 25 s to
+6 min 05 s). Measured pin time 335.2 s, collection 0.6 s, `ruff check .` 0.1 s. The recorded run when the test set
+held 663 pins took 35 s, so the growth is the corpus pins and the pins that run `terraform`. The slowest part is
+`tests/test_terraform_validate.py` at 121.4 s, then `tests/test_sanity_gate.py` at 49.9 s (34.0 s of it in the
+three pins that run the gate with the terraform binary), then the corpus pins at 79.8 s.
+
+Gate size, decided 2026-11-13: no smaller default gate is adopted. The measured subset that drops the pins that
+call `terraform` runs in 203.0 s (44% of the full run), and the subset that drops the corpus pins runs in about
+285 s, and each saves time by dropping the pins that carry the promise, so neither can be the gate a result claim
+comes from. The full run stays the default gate, and the plan check pins and the corpus pins stay inside it;
+nothing is removed from the full run. A smaller run is a working loop on one area only, as an explicit
+command-line selection, followed by the full run before a result is recorded or the work is committed. It is
+recorded in the report and in `docs/ARCHITECTURE.md` §1.1, and not in the tests, because the suite states no marks
+and a mark would make the smaller set the default. A smaller gate does not change the result: every pin in each
+subset passes, and the full run passes.
+
+The shared test definitions are in `tests/conftest.py`, so a test module reads them there instead of defining
+its own copy, and no test module imports another test module (`docs/ARCHITECTURE.md` §1.1). What landed: the
+rule-block parser and the chain check that `tests/test_policy_order.py` and `tests/test_real_or_report.py` share,
+the terraform binary, the golden set path, and the resource-line patterns. The pattern decision came from
+measurement against the goldens and the corpus run output: the shapes the test set held before answer the same 414
+matches, and no resource line lacks the trailing brace, so the difference was the capture groups only.
+`tests/conftest.py` therefore states two named patterns as data, both requiring the block brace, each with the rule
+it serves: `RESOURCE_RE` answers the resource type for the pins that read the emitted type set, and
+`RESOURCE_ADDRESS_RE` answers the type and the local name for `tests/test_dependency_wiring.py`, which reads
+`findall` as pairs. The measurement and the decision are recorded in the comment at the patterns and in
+`acceptance.md`. The pin count is unchanged, so no pin was weakened.
 
 The CI gate reads the Python floor as 3.10, and the matrix legs are 3.10, 3.11, 3.12 and 3.13. The 3.9
 leg is dropped, not moved to an older runner image, because two facts make it unusable:
@@ -44,7 +72,7 @@ stack, the EDL `certificate_profile` field, the profile-name report column, and 
 template files outside the document indexes. `ruff format` as a gate stays the next actionable slice
 outside Epic 8.
 
-Next: piece 1, the test set reads one shared definition (`to-do.md`).
+Next: piece 2, pins that measure nothing (`to-do.md`).
 
 ## Rules to keep when writing documents
 

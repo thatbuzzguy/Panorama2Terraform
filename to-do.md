@@ -7,21 +7,6 @@ states it, and the test that pins it. One piece is finished before the next is s
 
 ## Current series
 
-### Piece 1 — the test set reads one shared definition
-
-Owner: `tests/conftest.py`. The findings are the import rule violation, the second definitions, and the
-path builder, from `backlog.md` (measured 2026-11-11).
-
-- [ ] Move the two helpers `test_real_or_report.py` imports from `test_policy_order` into
-      `tests/conftest.py`, the one shared helper file (§1.1).
-- [ ] State `RESOURCE_RE` once in `tests/conftest.py` with one capture group, and read it through that
-      file from the four test modules that define their own copy.
-- [ ] State `TERRAFORM` once in `tests/conftest.py` and read it through that file from the four test
-      modules that define their own copy.
-- [ ] Build the golden set path in `tests/conftest.py` (the one place the path to each set is built),
-      and correct the regeneration note in `tests/test_golden_files.py` header, which names the case
-      root as where the goldens live.
-
 ### Piece 2 — pins that measure nothing
 
 Owner: `tests/conftest.py` and the pins named in `backlog.md` (measured 2026-11-11).
@@ -134,9 +119,10 @@ Nice-to-Haves), with `tflint` integration after it.
 
 - `docs/ARCHITECTURE.md` §1.1 is the owner document for the layout. `AGENTS.md` names the tracking
   markdown set, and each index names every document under it, so a file outside an index is a finding.
-- Import rule: `src/` is one flat namespace, so a module may import any `src/` module without a cycle.
-  The one test that checks the rule reads only `src/`. A test may import `src` modules and
-  `tests/conftest.py` through `importlib`; nothing under `tests/` may import another test module. `src/`
+- Import rule: `docs/ARCHITECTURE.md` §1.1 is its owner. `src/` is one flat namespace, so a module may import any
+  `src/` module without a cycle, and nothing under `tests/` may import another test module: a fact more than one
+  test module reads is stated once in `tests/conftest.py` and read from there. The one test that checks the rule
+  reads only `src/`. A test may import `src` modules and `tests/conftest.py` through `importlib`. `src/`
   may not import from `tests/`. `tools/` is not on the test path, so `tests/test_build_kitchen_sink.py`
   reads the fixture assembler through `importlib` on the path `tests/conftest.py` builds once.
 - Path 2 adds two modules, `api_requests.py` and `api_to_terraform.py`, and both must be named in the

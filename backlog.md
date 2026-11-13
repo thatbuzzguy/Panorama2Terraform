@@ -638,9 +638,6 @@ The audit read the test set (50 modules, 991 test functions, 1,641 collected pin
 and the import rule. Gate at both ends: `ruff check .` clean, 1,641 pins. Only the actionable findings are
 below, each with the owner that would fix it. Nothing was changed by the audit.
 
-- Import rule: `tests/test_real_or_report.py:33` imports `_check_chain_semantics` and `_rule_blocks` from
-  `test_policy_order`. It is the only cross-test-module import in the suite. Fix: move both helpers to
-  `tests/conftest.py`, the one shared helper file (§1.1). Owner: `tests/conftest.py`.
 - Layout rule: `tests/fixtures/api_response.xml` is a committed API response inside the corpus, so the
   corpus scan reads it (`tests/test_container_coverage.py:315`, `tests/test_entry_coverage.py:204`) and the
   assembler merges it (its entry `web-server` is in the printed tree, and the record does not hold it). Fix:
@@ -654,18 +651,10 @@ below, each with the owner that would fix it. Nothing was changed by the audit.
 - `tests/` is the only directory that holds files with no index, so its 50 test modules and its three sets are
   named only in prose, and the three files in `tests/responses/` are named nowhere. Fix: give `tests/` an
   index, or state in §1.1 that the test set is named by the root index. Owner: `docs/ARCHITECTURE.md` §1.1.
-- Path builder: `tests/test_golden_files.py:23` builds `GOLDEN_DIR` with `Path(__file__)`, the only set path
-  built outside `tests/conftest.py`. Its regeneration note (lines 13-14) copies `.tf` files to the case root,
-  which is not where the goldens live. Owner: `tests/conftest.py` and the file header.
 - Pins that read the tracking markdown and require an open item to stay open: `tests/test_api_path.py:462-463`
   and `tests/test_sanity_gate.py:576-577` read `backlog.md`. `AGENTS.md` requires a completed finding to leave
   the markdown, so a housekeeping commit fails these pins. Fix: keep the fact in the test as data and name the
   open item in the document without asserting its wording. Owner: those two tests.
-- Second definitions of one rule: `RESOURCE_RE` is defined four times (`tests/conftest.py:40`,
-  `tests/test_coverage_matrix.py:43`, `tests/test_dependency_wiring.py:38`, `tests/test_scope_objects.py:48`)
-  and the four patterns are not the same; `TERRAFORM` is defined four times (`tests/conftest.py:37`,
-  `tests/test_dependency_wiring.py:35`, `tests/test_sanity_gate.py:68`, `tests/test_terraform_validate.py:33`).
-  Fix: read both through `tests/conftest.py` and state the capture group once. Owner: `tests/conftest.py`.
 - The §1 module table names 20 of the 22 `src/` modules: `commit_actions.py` and `api_to_terraform.py` are
   missing. `to-do.md` states that both path 2 modules must be in that table. Owner: `docs/ARCHITECTURE.md` §1.
 - Pins that pass without measuring anything, because the golden case holds no `.tf` file at the case root:
