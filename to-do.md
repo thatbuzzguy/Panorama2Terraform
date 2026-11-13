@@ -108,6 +108,15 @@ Owner: the tracking markdown, `docs/ARCHITECTURE.md` §1 and §1.1, and the pins
       `src/import_blocks.py`) and a fourth meaning in a test. Give each table one shape name in the
       `docs/ARCHITECTURE.md` §1 rule, and rename the modules to match.
 
+### Piece 8 — the membership entry read
+
+Owner: `docs/API_CONVERSION_PATH.md` §2.4 and §6, `api_requests.py`, `tests/test_api_path.py`.
+
+- [ ] Decide what a run does when a membership response and an entry response hold the same entry:
+      the index names each entry as its own scope, so the entry is read twice. Pin the decision in
+      `tests/test_api_path.py`. This piece needs the content that shows the shape; the F8.10 agreement
+      holds only for content that states no membership list.
+
 ## Feature-sized items that stay blocked
 
 Feature-sized items that stay blocked on a fact the tool cannot read offline are recorded in
