@@ -1,83 +1,124 @@
 # To Do
 
-The open feature is Epic 8, the API-only conversion path. Its design record is
-`docs/API_CONVERSION_PATH.md`, and each piece below names the rule it holds, the module that will
-state it, and the test that will pin it. F8.1 is complete: the three request shapes and the op
-wrapper rule are in `src/source_fetch.py`, the `predefined` decision is inside
-`container_coverage.SCOPE_PATH_ROOTS`, and the pins are named in
-`docs/API_CONVERSION_PATH.md` §2.1. F8.2 is complete: the scope index is in `src/api_requests.py`,
-the set is read through the four membership lists, the rule is stated in
-`docs/API_CONVERSION_PATH.md` §2.2, the module is in the `docs/ARCHITECTURE.md` §1 table, and the
-pins are named there. F8.3 is complete: the join is `api_requests.join_response`, the element-name rule is
-read through `source_fetch.names_element`, and the rule is stated in `docs/API_CONVERSION_PATH.md` §2.3 with
-the pins named. Phase 8A is complete: F8.4 landed the committed response set, one file per request shape,
-each named by the key-free request identity that produced it and read through the injected producer, and the
-decision about where it lives is stated in `docs/ARCHITECTURE.md` §1.1 with its pins named.
+The tracking markdown for the completed Epic 8 phases is removed here; the git history and the owner
+documents hold it. Epic 8 has one open piece (F8.10), then the actionable findings the 2026-11-11 and
+2026-11-12 audits recorded in `backlog.md`. Each piece below names the rule it holds, the module that
+states it, and the test that pins it. One piece is finished before the next is started.
 
-## Epic 8 — path 2 pieces
+## Current series
 
-Phase 8B, the run over many sources:
-
-F8.5 is complete: one response is one source with its own line map, the parent walk and the ledger are
-keyed on that one tree, and each parse method runs over the response that holds its container. The join is
-`api_requests.response_for_section`, which answers the index entry for the place a section names plus the
-entry the run read, and `api_requests.entry_for_path` is the lookup it reads. The rule is stated in
-`docs/API_CONVERSION_PATH.md` §2.4 with the pins named, in `tests/test_api_path.py`. The piece also fixed
-`container_coverage.section_path`, which stated the place twice for a per-scope place read; the guard reads
-a per-scope source, so path 1 is unchanged, and the two paths now name the same container path for the same
-content. The predefined decision this piece took is recorded in `backlog.md`.
-
-F8.6 is complete: the record file holds one record per request the path 2 run read, with the eight fields and
-the fixed order unchanged. For each request, `scope` names the path that request declared and `request` names
-its key-free identity, so `cache_entry` names the entry that identity names. The prune action reads the record
-file the same run wrote, so a run that read N requests protects N entries, and no new field is needed. The rule
-is stated in `docs/API_CONVERSION_PATH.md` §2.5 with the pins named.
-
-Phase 8B is closed: one response is one source with its own line map, the parse methods run per response, the
-report position names the line inside the response that held the entry, the record holds one record per request
-the run read, and the unit join reads the scope the run read for each unit. The rules are stated in
-`docs/API_CONVERSION_PATH.md` §2.4, §2.5 and §3 with their pins named, in `tests/test_api_path.py`,
-`tests/test_unit_manifest.py` and `tests/test_ownership.py`. The findings F8.7 recorded stay in `backlog.md`.
-
-Phase 8C, the gate and the entry point:
-
-F8.8 is complete: the request-set gate rule is `sanity_checks.check_request_set`, and it reads the join rows
-through `api_requests.unit_findings`, the unit through `unit_manifest.directory_name` and `naming.sanitize`, and
-the index through `api_requests`. The position, the severity, the report section, the console line and the exit
-code are the gate's decision, stated in `docs/API_CONVERSION_PATH.md` §3 with the pins named, in
-`tests/test_sanity_gate.py` and `tests/test_round_trip.py`. `run_checks` takes the index as an argument, so a path
-1 run reports the rule as NOT RUN, and the path 2 entry point passes the index it built (F8.9).
-
-F8.9 is complete: the entry point `src/api_to_terraform.py` states the run order, the arguments, and the exit
-codes. It reads the membership responses first, in the order `api_requests.membership_lists()` names them, then
-the entries `api_requests.scope_index()` names in index order, and it is the only place that states that order;
-the record file the run wrote is the order's own statement. It joins the per-response tables in run order through
-the one join rule in `panorama_to_terraform.py`, and `generate_run` takes the run view as an argument, so the join
-is the entry point's decision. It adds no argument of its own, accepts no argument that names one source, reads
-the environment name through `source_fetch.API_KEY_ENV`, prints only through the owners' console lines, writes no
-file outside `write_path.py`, and calls `generate_run`, so it states no parse order and no block builder. The gate
-gets the index it built, and the generated `README.md` names the entry point that wrote the codebase as an
-argument. The rule is stated in `docs/API_CONVERSION_PATH.md` §6 with the pins named, in
-`tests/test_api_path.py`, `tests/test_variables.py`, and `tests/test_site_data.py`, and the module is in the
-`docs/ARCHITECTURE.md` §1 table. The findings the run order closed are removed from `backlog.md`.
+### Piece 1 — F8.10, the agreement pin (Epic 8, Phase 8C)
 
 - [ ] F8.10 The agreement pin. For a fixture with no live-only fact, path 2 writes the same `.tf`
       bytes as path 1. The reports do not agree, because a report names its source. Pin:
       `tests/test_api_path.py`.
 
+### Piece 2 — the test set reads one shared definition
+
+Owner: `tests/conftest.py`. The findings are the import rule violation, the second definitions, and the
+path builder, from `backlog.md` (measured 2026-11-11).
+
+- [ ] Move the two helpers `test_real_or_report.py` imports from `test_policy_order` into
+      `tests/conftest.py`, the one shared helper file (§1.1).
+- [ ] State `RESOURCE_RE` once in `tests/conftest.py` with one capture group, and read it through that
+      file from the four test modules that define their own copy.
+- [ ] State `TERRAFORM` once in `tests/conftest.py` and read it through that file from the four test
+      modules that define their own copy.
+- [ ] Build the golden set path in `tests/conftest.py` (the one place the path to each set is built),
+      and correct the regeneration note in `tests/test_golden_files.py` header, which names the case
+      root as where the goldens live.
+
+### Piece 3 — pins that measure nothing
+
+Owner: `tests/conftest.py` and the pins named in `backlog.md` (measured 2026-11-11).
+
+- [ ] Read the golden `.tf` set through `rglob`, keyed by the path from the case directory, in the four
+      pins that compare an empty set with an empty set: `tests/test_data_blocks.py`,
+      `tests/test_ownership.py`, `tests/test_reference_edges.py`, `tests/test_unit_manifest.py`.
+- [ ] `tests/test_commit_actions.py`: assert the file exists, so a fixture that writes nothing is not a
+      pass.
+- [ ] `tests/test_api_requests.py`: pin a rule the module states, not the length of the test's own
+      harness list.
+- [ ] Read the hostile-fixture exclusion through the tool's read rule (`tool.refusal_reason` or
+      `xml_input.check_bytes`) in every corpus pin, so the name rule is gone.
+
+### Piece 4 — the parse set reads what its rows state
+
+Owner: the parse methods named in `backlog.md` (measured 2026-11-12), and the coverage matrix rows.
+
+- [ ] `parse_interfaces`: read `zone`, `virtual_router` and `tag` for every entry kind, and read both
+      address shapes (`ip/entry` and `ip/member`); or state the fields as report-only on the interface
+      row. Decide which, and make the property scan able to see the difference (the `captured_fields`
+      rule that skips an empty value).
+- [ ] Call `mark_skipped` in the 11 name guards that `continue` without a record, so the per-entry
+      report keeps its one-line-per-entry rule.
+- [ ] `parse_schedules`: skip a nameless recurring child through the record, so the report writer does
+      not raise and the run does not leave half-written output.
+- [ ] `_parse_router`: read the entry shape under `protocol/static-routes`, or state that shape on the
+      virtual-router row.
+- [ ] `_protocol_field`: use the shape rule for a number instead of `text.isdigit()`, and state the
+      single-match limit.
+
+### Piece 5 — naming and printing state one rule
+
+Owner: `src/naming.py`, `src/panorama_to_terraform.py`, `src/sanity_checks.py`, `src/xml_input.py`, as
+`backlog.md` (measured 2026-11-12) names them.
+
+- [ ] Build the static-route block name from the route's own name, so the declaration index holds the
+      name a reference can resolve (§5, one digest per name).
+- [ ] Read `naming.UNNAMED` instead of hardcoding the fallback word in `declare_block_name`.
+- [ ] Decide the collision rule for `printed_value`: refuse a name collision inside a unit, or key the
+      record by the entry.
+- [ ] State the order rule for nested keys once, so an object does not print in two orders at two
+      levels, and make the two emitters read the table order their docstrings claim.
+- [ ] State which layer owns the control-character rule, or make the gate read the value before the
+      escape.
+- [ ] State one whitespace rule for the value helpers (`_get_text`, `_get_members`,
+      `_get_single_value`, `_protocol_field`, `_list_names`, and the splitter's `_device_names`).
+- [ ] `UnitText.add_once`: keep a per-file once record, so header prose cannot stop a section.
+- [ ] `generate_vpn_config`: print the `VALUE_VARIABLES` `key` as the reference the table states, or
+      state the exception in the table.
+
+### Piece 6 — the splitter reads the owners' rules, and the error rule names its kinds
+
+Owner: `src/split_device_groups.py`, `src/naming.py`, `src/write_path.py`, `src/xml_input.py`,
+`docs/DEVICE_GROUP_SPLITTING.md`, `docs/ARCHITECTURE.md` §2.3.
+
+- [ ] Write the split files through `write_path.py`, so the single writer and the LF rule cover them.
+- [ ] Build the file name through `naming.sanitize`, and add the collision decision for two names that
+      sanitize to the same value.
+- [ ] Key the splitter's tables by the source line, as §2.3 states, so a repeated device-group name is
+      not answered by one entry.
+- [ ] Merge the shared section by path and name, and keep each entry's path.
+- [ ] Remove the dead branch, or make the extraction able to fail.
+- [ ] `is_refusal`: state the refusal kinds as the input-layer exceptions, so a `ValueError` raised
+      inside the tool keeps its traceback.
+
+### Piece 7 — the indexes and the documents agree with measurement
+
+Owner: the tracking markdown, `docs/ARCHITECTURE.md` §1 and §1.1, and the pins `backlog.md` names.
+
+- [ ] Name `commit_actions.py` and `api_to_terraform.py` in the `docs/ARCHITECTURE.md` §1 module table.
+- [ ] Give `tests/` an index, or state in §1.1 that the test set is named by the root index, and name
+      the three files in `tests/responses/`.
+- [ ] Correct the three document pin claims that name a test that does not exist.
+- [ ] Re-measure the counts the documents state (matrix rows against `COVERAGE_MATRIX`, the licensing
+      split, the fixture set) and correct them, or state them as derived from the table.
+- [ ] Keep the document-wording checks outside the test set, and pin the index rule in one place;
+      migrate the pins that read `backlog.md` so a housekeeping commit does not fail them.
+
+## Feature-sized items that stay blocked
+
 Feature-sized items that stay blocked on a fact the tool cannot read offline are recorded in
 `backlog.md` and are not pieces here: the four `*_policy_rules` types wait for the F3.5 rulebase
 decision and a live target, a config entry inside a stack needs a provider location shape, the EDL
 `certificate_profile` field needs a rule that makes the EDL site resolve names, the per-entry report
-`profile_name` column needs a value the provider does not declare, the two `.github/` template files
-outside the indexes are findings, and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4 need a
-live target: the committed response set shows one shape per accepted request shape and names no fact.
+`profile_name` column needs a value the provider does not declare, and the path 2 live facts in
+`docs/API_CONVERSION_PATH.md` §4 need a live target: the committed response set shows one shape per
+accepted request shape and names no fact.
 
-## Other open pieces
-
-- [ ] `ruff format` as a gate, its own task per `backlog.md` (Nice-to-Haves). The one-time format pass
-      of the legacy scripts comes first, so the diff stays reviewable. `tflint` integration is the
-      following item.
+`ruff format` as a gate stays the next actionable slice outside this series (`backlog.md`,
+Nice-to-Haves), with `tflint` integration after it.
 
 ## Rules the layout keeps
 
