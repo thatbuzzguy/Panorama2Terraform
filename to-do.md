@@ -35,6 +35,9 @@ Owner: `tests/conftest.py` and the pins named in `backlog.md` (measured 2026-11-
       harness list.
 - [ ] Read the hostile-fixture exclusion through the tool's read rule (`tool.refusal_reason` or
       `xml_input.check_bytes`) in every corpus pin, so the name rule is gone.
+- [ ] Order pins that read dict insertion order (`tests/test_parse_rules.py`,
+      `tests/test_parse_profiles.py`) assume the names inside one fixture are unique. Read the order as
+      the rule states it, or state the uniqueness rule as a pin.
 
 ### Piece 3 — the parse set reads what its rows state
 
@@ -101,6 +104,9 @@ Owner: the tracking markdown, `docs/ARCHITECTURE.md` §1 and §1.1, and the pins
       split, the fixture set) and correct them, or state them as derived from the table.
 - [ ] Keep the document-wording checks outside the test set, and pin the index rule in one place;
       migrate the pins that read `backlog.md` so a housekeeping commit does not fail them.
+- [ ] `ROW_FIELDS` names three different row shapes (`src/site_data.py`, `src/commit_actions.py`,
+      `src/import_blocks.py`) and a fourth meaning in a test. Give each table one shape name in the
+      `docs/ARCHITECTURE.md` §1 rule, and rename the modules to match.
 
 ## Feature-sized items that stay blocked
 
