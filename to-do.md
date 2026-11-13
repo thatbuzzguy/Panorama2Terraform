@@ -3,28 +3,32 @@
 The tracking markdown for the completed Epic 8 phases is removed here; the git history and the owner
 documents hold it. Epic 8 is complete. The open pieces are the actionable findings the 2026-11-11 and
 2026-11-12 audits recorded in `backlog.md`. Each piece below names the rule it holds, the module that
-states it, and the test that pins it. One piece is finished before the next is started.
+states it, and the test that pins it. One piece is finished before the next is started. The piece completed
+on 2026-11-13 is kept below with the pins it names; the piece numbers follow the audit order.
 
 ## Current series
 
-### Piece 2 — pins that measure nothing
+### Piece 3 — pins that measure nothing (complete, committed 2026-11-13)
 
-Owner: `tests/conftest.py` and the pins named in `backlog.md` (measured 2026-11-11).
+Owner: `tests/conftest.py` and the pins the 2026-11-11 audit named. Each of the five items now measures content,
+and no pin failed once it measured content. The criteria and the measurement are in `acceptance.md`.
 
-- [ ] Read the golden `.tf` set through `rglob`, keyed by the path from the case directory, in the four
-      pins that compare an empty set with an empty set: `tests/test_data_blocks.py`,
-      `tests/test_ownership.py`, `tests/test_reference_edges.py`, `tests/test_unit_manifest.py`.
-- [ ] `tests/test_commit_actions.py`: assert the file exists, so a fixture that writes nothing is not a
-      pass.
-- [ ] `tests/test_api_requests.py`: pin a rule the module states, not the length of the test's own
-      harness list.
-- [ ] Read the hostile-fixture exclusion through the tool's read rule (`tool.refusal_reason` or
-      `xml_input.check_bytes`) in every corpus pin, so the name rule is gone.
-- [ ] Order pins that read dict insertion order (`tests/test_parse_rules.py`,
-      `tests/test_parse_profiles.py`) assume the names inside one fixture are unique. Read the order as
-      the rule states it, or state the uniqueness rule as a pin.
+- The golden byte pins read the `.tf` set through `tf_bytes`, keyed by the path from the case directory, and
+  state that both sides hold content: `tests/test_data_blocks.py::
+  test_a_run_that_declares_no_read_through_scope_writes_the_golden_bytes`, `tests/test_ownership.py::
+  test_the_goldens_are_byte_identical`, `tests/test_reference_edges.py::test_the_golden_tf_bytes_are_unchanged`,
+  `tests/test_unit_manifest.py::test_the_generated_tf_bytes_are_unchanged`.
+- `tests/test_commit_actions.py::test_no_false_positive_across_the_corpus`: the guard is gone, and the pin states
+  the two cases through `commit_actions.build_rows`.
+- `tests/test_api_requests.py::
+  test_one_committed_response_per_request_shape_names_the_request_identity_that_produced_it` and
+  `test_the_committed_responses_are_not_corpus_material`: both read `source_fetch.SHAPE_PARAMS`.
+- The hostile-fixture name rule is gone: the pins read `corpus_fixtures()`, which is `input_refusal`
+  (`xml_input.check_bytes`, then the parse), in 12 test modules.
+- The five order pins hold the document order `docs/ARCHITECTURE.md` §4.4 states and assert the uniqueness rule:
+  `tests/test_parse_rules.py` (four pins) and `tests/test_parse_profiles.py::test_parse_pbf_monitor_profiles`.
 
-### Piece 3 — the parse set reads what its rows state
+### Piece 4 — the parse set reads what its rows state
 
 Owner: the parse methods named in `backlog.md` (measured 2026-11-12), and the coverage matrix rows.
 
@@ -41,7 +45,7 @@ Owner: the parse methods named in `backlog.md` (measured 2026-11-12), and the co
 - [ ] `_protocol_field`: use the shape rule for a number instead of `text.isdigit()`, and state the
       single-match limit.
 
-### Piece 4 — naming and printing state one rule
+### Piece 5 — naming and printing state one rule
 
 Owner: `src/naming.py`, `src/panorama_to_terraform.py`, `src/sanity_checks.py`, `src/xml_input.py`, as
 `backlog.md` (measured 2026-11-12) names them.
@@ -61,7 +65,7 @@ Owner: `src/naming.py`, `src/panorama_to_terraform.py`, `src/sanity_checks.py`, 
 - [ ] `generate_vpn_config`: print the `VALUE_VARIABLES` `key` as the reference the table states, or
       state the exception in the table.
 
-### Piece 5 — the splitter reads the owners' rules, and the error rule names its kinds
+### Piece 6 — the splitter reads the owners' rules, and the error rule names its kinds
 
 Owner: `src/split_device_groups.py`, `src/naming.py`, `src/write_path.py`, `src/xml_input.py`,
 `docs/DEVICE_GROUP_SPLITTING.md`, `docs/ARCHITECTURE.md` §2.3.
@@ -76,7 +80,7 @@ Owner: `src/split_device_groups.py`, `src/naming.py`, `src/write_path.py`, `src/
 - [ ] `is_refusal`: state the refusal kinds as the input-layer exceptions, so a `ValueError` raised
       inside the tool keeps its traceback.
 
-### Piece 6 — the indexes and the documents agree with measurement
+### Piece 7 — the indexes and the documents agree with measurement
 
 Owner: the tracking markdown, `docs/ARCHITECTURE.md` §1 and §1.1, and the pins `backlog.md` names.
 

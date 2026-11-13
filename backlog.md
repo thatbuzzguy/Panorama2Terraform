@@ -657,16 +657,6 @@ below, each with the owner that would fix it. Nothing was changed by the audit.
   open item in the document without asserting its wording. Owner: those two tests.
 - The §1 module table names 20 of the 22 `src/` modules: `commit_actions.py` and `api_to_terraform.py` are
   missing. `to-do.md` states that both path 2 modules must be in that table. Owner: `docs/ARCHITECTURE.md` §1.
-- Pins that pass without measuring anything, because the golden case holds no `.tf` file at the case root:
-  `tests/test_data_blocks.py:233-234`, `tests/test_ownership.py:530-532`,
-  `tests/test_reference_edges.py:346-348`, `tests/test_unit_manifest.py:510-512` compare an empty set with an
-  empty set, and they key by `p.name`, so two units that write the same file name collapse. Fix: read the set
-  the way `tests/test_golden_files.py:42,50,54` reads it (`rglob`, keyed by the path from the case directory).
-  Owner: those four tests.
-- Guarded vacuity: `tests/test_commit_actions.py:329-330` asserts only when the run wrote a file, so a fixture
-  that writes nothing counts as a pass. Owner: `tests/test_commit_actions.py`.
-- Self-referential pin: `tests/test_api_requests.py:576` asserts the length of the test's own harness list.
-  Owner: `tests/test_api_requests.py`.
 - Provider-schema pins that never run in CI: 9 modules (20 pins read the schema fixture in their arguments,
   more reach it through module helpers) read the schema through `tests/conftest.py:107-147`, which skips
   without the terraform binary or the provider cache. The matrix job
@@ -676,23 +666,12 @@ below, each with the owner that would fix it. Nothing was changed by the audit.
   entries above do. Owner: `.github/workflows/python-tests.yml`.
 - Skip that hides a failure: `tests/conftest.py:114` and `:138` report a missing provider cache as a skip, so
   a network failure reads as a pass. Owner: `tests/conftest.py`.
-- Two ways to exclude a hostile fixture: the tool's read rule, and a name rule (`startswith('hostile_')`) in
-  `tests/test_commit_actions.py:53`, `tests/test_data_blocks.py:41`, `tests/test_data_file_gate.py:40`,
-  `tests/test_import_blocks.py:37`, `tests/test_round_trip.py:152`, `tests/test_ownership.py:289`,
-  `tests/test_unit_manifest.py:483`, while `tests/test_container_coverage.py:318-321`,
-  `tests/test_entry_coverage.py:205-208` and `tests/test_ownership.py:291-294` use the rule. The two agree on
-  the three committed fixtures today and diverge when a fixture is refused by the rule but not named, or named
-  but accepted. Fix: read the exclusion through `tool.refusal_reason` or `xml_input.check_bytes` in every
-  corpus pin. Owner: `tests/conftest.py`.
 - Pins that restate an owner table as a measured count, so they cannot detect a wrong table entry and fail only
   when the table changes: `tests/test_build_kitchen_sink.py:96-98,112,150,159`,
   `tests/test_filter_containers.py:330-333,373`, `tests/test_resource_mapping.py:72-76`,
   `tests/test_property_coverage.py:198`, `tests/test_data_file_gate.py:156-157,482`. Each carries a measured
   date instead of a derivation. Fix: state each as a property of the table (the count derived from the rows),
   and keep the measurement in the document. Owner: those tests.
-- Order pins that read dict insertion order: `tests/test_parse_rules.py:12,41,122,163` and
-  `tests/test_parse_profiles.py:91` assert `list(by_name) == [...]`, which pins document order and assumes the
-  names inside one fixture are unique. Owner: those tests.
 - Name collision in the flat `src/` namespace: `ROW_FIELDS` is three different row shapes
   (`src/site_data.py:63`, `src/commit_actions.py:75`, `src/import_blocks.py:53`) and a fourth meaning in
   `tests/test_coverage_matrix.py:166`. Owner: `docs/ARCHITECTURE.md` §1 (rename to one shape name per table).

@@ -72,7 +72,21 @@ stack, the EDL `certificate_profile` field, the profile-name report column, and 
 template files outside the document indexes. `ruff format` as a gate stays the next actionable slice
 outside Epic 8.
 
-Next: piece 2, pins that measure nothing (`to-do.md`).
+Piece 3 (pins that measure nothing) is complete. The five findings the 2026-11-11 audit recorded in
+`backlog.md` are fixed, each by making the pin read the material its own rule names, and no pin failed when it
+started measuring content, so no new finding is recorded. What landed: `tests/conftest.py` states the three
+definitions more than one module reads — the `.tf` read shape `tf_bytes` (keyed by the path from the case
+directory, because the run writes one directory per unit), the input read rule `input_refusal`
+(`xml_input.check_bytes`, then the parse), and the accepted corpus set `corpus_fixtures()`. No test module states
+the hostile-fixture name rule, so the 18 read sites in 12 test modules read the accepted set, and no corpus pin
+needs a guard because an accepted fixture cannot fail the parse. The four golden byte pins, the actions corpus
+pin, the two response-set length pins, and the five order pins now measure content; the order pins state the
+document order `docs/ARCHITECTURE.md` §4.4 states and each asserts the uniqueness rule the name-keyed read
+depends on. The pin count is 1,651 before and after, so no pin was added, removed, or weakened. The acceptance
+criteria and the measurement are in `acceptance.md`. Gate after, measured 2026-11-13: `ruff check .` clean,
+`python3 -m pytest` passes with no skips, 1,651 pins in 293.0 s.
+
+Next: piece 4, the parse set reads what its rows state (`to-do.md`).
 
 ## Rules to keep when writing documents
 
