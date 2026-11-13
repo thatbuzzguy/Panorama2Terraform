@@ -32,12 +32,14 @@ import sanity_checks
 import site_data
 import unit_manifest
 import write_path
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_script, written_bytes
+from conftest import FIXTURES_DIR, SAMPLE_CONFIG, corpus_fixtures, run_script, written_bytes
 
 CONVERTER = 'panorama_to_terraform.py'
 KITCHEN = 'kitchen_sink.xml'
 
-FIXTURES = sorted(p.name for p in FIXTURES_DIR.glob('*.xml') if not p.name.startswith('hostile_'))
+# The fixtures the corpus pins read: the read rule's accepted set, not a name rule. A fixture the rule refuses
+# writes no file, so the gate never sees it (tests/test_robustness.py pins that path).
+FIXTURES = corpus_fixtures()
 
 # A unit the manifest names, and a unit only the ownership record names: the declared parent source
 # case (F5.4), which the join rule allows.

@@ -35,7 +35,18 @@ import sanity_checks
 import site_data
 import source_fetch
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, RESPONSES_DIR, SAMPLE_CONFIG, SRC_DIR, file_text, run_script, tf_files
+from conftest import (
+    FIXTURES_DIR,
+    GOLDEN_DIR,
+    RESPONSES_DIR,
+    SAMPLE_CONFIG,
+    SRC_DIR,
+    corpus_fixtures,
+    file_text,
+    run_script,
+    tf_bytes,
+    tf_files,
+)
 
 CONVERTER = 'panorama_to_terraform.py'
 HOST = 'panorama.test'
@@ -479,9 +490,9 @@ def test_every_recorded_name_belongs_to_a_unit_the_ledger_shows(converter_module
     """The row set is the units the ledger shows, so a recorded name cannot name a unit the run did
     not read. Pinned across the fixture corpus.
     """
-    for fixture in sorted(FIXTURES_DIR.glob('*.xml')):
-        if fixture.name.startswith('hostile_'):
-            continue
+    # The read rule's accepted set, so an accepted fixture cannot fail here.
+    for name in corpus_fixtures():
+        fixture = FIXTURES_DIR / name
         out = tmp_path / fixture.stem
         parser, generator = _pipeline(converter_module, fixture, out)
         units = {unit_manifest.facts_of(row) for row in parser.ledger.rows()}
@@ -507,8 +518,12 @@ def test_the_generated_tf_bytes_are_unchanged(tmp_path):
         out = tmp_path / case
         proc = _run(source, out)
         assert proc.returncode == 0, proc.stdout + proc.stderr
-        goldens = {p.name: p.read_bytes() for p in sorted((GOLDEN_DIR / case).glob('*.tf'))}
-        generated = {p.name: p.read_bytes() for p in sorted(out.glob('*.tf'))}
+        goldens = tf_bytes(GOLDEN_DIR / case)
+        generated = tf_bytes(out)
+        # Both sets must hold content, or the comparison measures nothing.
+        # The tool reads inputs through tests/conftest.py (see the module header).
+        assert goldens, (case, 'the golden case holds no .tf content to compare')
+        assert generated, (case, 'the run wrote no .tf content')
         assert generated == goldens, case
 
 

@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,7 @@ import panorama_to_terraform
 import sanity_checks
 import source_fetch
 import split_device_groups
+import xml_input
 
 TESTS_DIR = Path(__file__).parent
 REPO_ROOT = TESTS_DIR.parent
@@ -89,6 +91,47 @@ def written_bytes(output_dir) -> dict[str, bytes]:
     """
     out = Path(output_dir)
     return {str(path.relative_to(out)): path.read_bytes() for path in sorted(out.rglob('*')) if path.is_file()}
+
+
+def tf_bytes(output_dir) -> dict[str, bytes]:
+    """The `.tf` bytes a directory holds, keyed by the path from that directory (F6.10.3, §14).
+
+    A golden case is the output of one run, so the `.tf` set sits inside the unit directories and not at the
+    case root: a read of `glob('*.tf')` at the case root answers nothing, and a pin built on it compares two
+    empty sets. Keyed by the file name, two units that write the same file name collapse, so the key is the
+    path. This is the shape `tests/test_golden_files.py` reads. A pin that compares two directories through it
+    states that both sets are not empty, so the pin measures content.
+    """
+    return {key: value for key, value in written_bytes(output_dir).items() if Path(key).suffix == '.tf'}
+
+
+# --- The corpus read rule the corpus pins read (F3.8, F3.9) ---------------------
+
+def input_refusal(path) -> str | None:
+    """What the tool's input rule answers for one committed fixture: the refusal reason, or None when it accepts.
+
+    The rule is `xml_input.check_bytes`, then the parse, read on the committed bytes. This is the one place the
+    test set decides which fixtures a corpus pin reads, so the exclusion is the tool's read rule and not a file
+    name. `tools/build_kitchen_sink.py` states the same rule for the same reason, and
+    `tests/test_build_kitchen_sink.py` pins that the two agree on the committed corpus. A fixture this answers
+    None for cannot fail the parse, so a pin that reads it needs no guard.
+    """
+    try:
+        xml_input.parse_xml(path)
+    except xml_input.UnsafeInputError as exc:
+        return str(exc)
+    except ET.ParseError as exc:
+        return f'the parse cannot read it: {exc}'
+    return None
+
+
+def corpus_fixtures() -> list[str]:
+    """The fixture names a corpus pin reads: the committed corpus, less the fixtures the read rule refuses.
+
+    Names, in the order the corpus pins read them, so a pin's failure message names the fixture. The rule is
+    `input_refusal`; a fixture name is not a rule.
+    """
+    return [path.name for path in sorted(FIXTURES_DIR.glob('*.xml')) if input_refusal(path) is None]
 
 
 def declared_provider() -> tuple[str, str]:

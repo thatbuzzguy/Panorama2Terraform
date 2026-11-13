@@ -27,13 +27,12 @@ because its containers are the ones the table does not cover.
 import ast
 import inspect
 import textwrap
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import container_coverage
 import entry_coverage
 import xml_input
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, run_pipeline, run_script
+from conftest import FIXTURES_DIR, SAMPLE_CONFIG, corpus_fixtures, run_pipeline, run_script
 
 GAP_FIXTURE = 'entry_gaps.xml'
 UNKNOWN_FIXTURE = 'unknown_containers.xml'
@@ -201,11 +200,9 @@ def test_corpus_entries_in_a_covered_container_are_all_marked(converter_module):
     defines a scope and the report shows it as bookkeeping. `unknown_containers.xml`
     is the other exception: its containers have no table row to report against.
     """
-    for path in sorted(FIXTURES_DIR.glob('*.xml')) + [SAMPLE_CONFIG]:
-        try:
-            parser = converter_module.PanoramaParser(xml_input.parse_xml(path))
-        except (ET.ParseError, xml_input.UnsafeInputError):
-            continue  # the hostile fixtures are refused before the parse
+    # The read rule's accepted set, so the parse cannot fail here.
+    for path in [FIXTURES_DIR / name for name in corpus_fixtures()] + [SAMPLE_CONFIG]:
+        parser = converter_module.PanoramaParser(xml_input.parse_xml(path))
         _parse_every(parser)
         ledger = parser.ledger
         for entry in ledger.entries():

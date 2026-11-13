@@ -1,4 +1,10 @@
-"""Unit tests for PanoramaParser rule parse methods (security, NAT, decryption, PBF, schedules, app-override)."""
+"""Unit tests for PanoramaParser rule parse methods (security, NAT, decryption, PBF, schedules, app-override).
+
+Order decision (`docs/ARCHITECTURE.md` §4.4): the pins that assert a list of names hold the document order the
+policy-chain rule states, so each asserted list is the order the fixture names its entries. Each of those pins
+reads one rule by name, so each also states the uniqueness rule the name-keyed read depends on: it holds one row
+per name only when the fixture names each rule once.
+"""
 
 
 def _parser(make_parser, fixture_name):
@@ -9,6 +15,7 @@ def test_parse_security_rules(make_parser):
     p = _parser(make_parser, "security_rules.xml")
     rules = p.parse_security_rules()
     by_name = {r["name"]: r for r in rules}
+    assert len(by_name) == len(rules), "the fixture names each rule once, so the name-keyed read holds one row"
     assert list(by_name) == ["Allow-Web-Traffic", "Block-Risky-Apps"]
 
     allow = by_name["Allow-Web-Traffic"]
@@ -38,6 +45,7 @@ def test_parse_nat_rules(make_parser):
     p = _parser(make_parser, "nat_rules.xml")
     rules = p.parse_nat_rules()
     by_name = {r["name"]: r for r in rules}
+    assert len(by_name) == len(rules), "the fixture names each rule once, so the name-keyed read holds one row"
     assert list(by_name) == ["Outbound-NAT", "Inbound-Web-NAT", "Member-Form-NAT", "Multi-Member-NAT"]
 
     outbound = by_name["Outbound-NAT"]
@@ -119,6 +127,7 @@ def test_parse_pbf_rules(make_parser):
     p = _parser(make_parser, "pbf_rules.xml")
     rules = p.parse_pbf_rules()
     by_name = {r["name"]: r for r in rules}
+    assert len(by_name) == len(rules), "the fixture names each rule once, so the name-keyed read holds one row"
     assert list(by_name) == ["PBF-Forward", "PBF-ForwardVsys", "PBF-Discard", "PBF-NoPBF"]
 
     # F2.9: the device group scopes the v2 resource location and chain
@@ -160,6 +169,7 @@ def test_parse_application_override_rules(make_parser):
     p = _parser(make_parser, "application_override_rules.xml")
     rules = p.parse_application_override_rules()
     by_name = {r["name"]: r for r in rules}
+    assert len(by_name) == len(rules), "the fixture names each rule once, so the name-keyed read holds one row"
     assert list(by_name) == ["Override-443", "Override-RDP"]
 
     rule = by_name["Override-443"]

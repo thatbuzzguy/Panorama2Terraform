@@ -35,7 +35,17 @@ import sanity_checks
 import state_coverage
 import state_input
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, SRC_DIR, run_main, run_pipeline, run_script
+from conftest import (
+    FIXTURES_DIR,
+    GOLDEN_DIR,
+    SAMPLE_CONFIG,
+    SRC_DIR,
+    corpus_fixtures,
+    run_main,
+    run_pipeline,
+    run_script,
+    tf_bytes,
+)
 
 CONVERTER = 'panorama_to_terraform.py'
 RECORD = reference_edges.EDGE_FILE
@@ -142,12 +152,11 @@ def _pipeline(module, source: Path, out_dir: Path, extra: tuple = ()) -> tuple:
 def _sets(module, source: Path, out_dir: Path, extra: tuple = ()) -> tuple:
     """The three sets one run builds: the ownership rows, the edge rows, the ordered manifest rows.
 
-    The same three calls `main()` makes, so the test reads the rule through the modules that hold it.
-    Returns None for a fixture the run refuses before the parse.
+    The same three calls `main()` makes, so the test reads the rule through the modules that hold it. The corpus
+    loops read the set the input rule accepts, so a fixture reaching here is one the run read.
     """
     parser, generator, _code = _pipeline(module, source, out_dir, extra)
-    if parser is None:
-        return None
+    assert parser is not None, (source, 'the run refused the input')
     ownership_rows = ownership.build_rows(parser.ledger, None, generator.sanitize_name)
     edge_rows = reference_edges.build_rows(ownership_rows, generator.unit_references(),
                                            generator.sanitize_name)
@@ -192,10 +201,9 @@ def test_the_record_is_one_row_per_edge_the_data_can_name(converter_module, tmp_
     starts producing an edge must be added to it in the same change.
     """
     edges = {}
-    for path in sorted(FIXTURES_DIR.glob('*.xml')):
+    # The read rule's accepted set, so an accepted fixture cannot be refused here.
+    for path in [FIXTURES_DIR / name for name in corpus_fixtures()]:
         sets = _sets(converter_module, path, tmp_path / path.stem)
-        if sets is None:
-            continue    # the hostile fixtures are refused before the parse
         _owners, edge_rows, _rows = sets
         if edge_rows:
             edges[path.name] = [tuple(row[key] for key in reference_edges.FIELD_ORDER) for row in edge_rows]
@@ -311,10 +319,9 @@ def test_a_self_reference_writes_no_row(converter_module, tmp_path):
         [{'type': 'panos_ethernet_interface', 'entry': 'ethernet1/1', 'directory': own, 'owner': own}],
         {facts: ('ethernet1/1',)}, gen.sanitize_name) == []
     across = []
-    for path in sorted(FIXTURES_DIR.glob('*.xml')):
+    # The read rule's accepted set, so an accepted fixture cannot be refused here.
+    for path in [FIXTURES_DIR / name for name in corpus_fixtures()]:
         sets = _sets(converter_module, path, tmp_path / path.stem)
-        if sets is None:
-            continue    # the hostile fixtures are refused before the parse
         _owners, edge_rows, _rows = sets
         across.extend(row for row in edge_rows if row['referrer'] == row['target'])
     assert not across, 'no fixture produces a row that names one unit'
@@ -343,8 +350,12 @@ def test_the_golden_tf_bytes_are_unchanged(tmp_path):
     for case, source in (('sample', SAMPLE_CONFIG), ('kitchen_sink', FIXTURES_DIR / KITCHEN)):
         out = tmp_path / case
         assert _run(source, out).returncode == 0
-        goldens = {p.name: p.read_bytes() for p in sorted((GOLDEN_DIR / case).glob('*.tf'))}
-        generated = {p.name: p.read_bytes() for p in sorted(out.glob('*.tf'))}
+        goldens = tf_bytes(GOLDEN_DIR / case)
+        generated = tf_bytes(out)
+        # Both sets must hold content, or the comparison measures nothing.
+        # The tool reads inputs through tests/conftest.py (see the module header).
+        assert goldens, (case, 'the golden case holds no .tf content to compare')
+        assert generated, (case, 'the run wrote no .tf content')
         assert generated == goldens, case
 
 
@@ -375,10 +386,9 @@ def test_no_corpus_fixture_produces_a_cycle_finding(converter_module, tmp_path):
     so a fixture that starts producing one must be added here in the same change.
     """
     found = {}
-    for path in sorted(FIXTURES_DIR.glob('*.xml')):
+    # The read rule's accepted set, so an accepted fixture cannot be refused here.
+    for path in [FIXTURES_DIR / name for name in corpus_fixtures()]:
         sets = _sets(converter_module, path, tmp_path / path.stem)
-        if sets is None:
-            continue    # the hostile fixtures are refused before the parse
         _owners, edge_rows, manifest_rows = sets
         findings = reference_edges.findings(edge_rows, manifest_rows)
         if findings:
@@ -502,10 +512,9 @@ def test_after_never_names_the_unit_itself(converter_module, tmp_path):
     """AC-4.3 and AC-4.4: the same rule that excludes a self edge keeps a unit out of its own `after`,
     and `after` is sorted.
     """
-    for path in sorted(FIXTURES_DIR.glob('*.xml')):
+    # The read rule's accepted set, so an accepted fixture cannot be refused here.
+    for path in [FIXTURES_DIR / name for name in corpus_fixtures()]:
         sets = _sets(converter_module, path, tmp_path / path.stem)
-        if sets is None:
-            continue    # the hostile fixtures are refused before the parse
         _owners, _edges, rows = sets
         for row in rows:
             assert row['directory'] not in row['after'], (path.name, row)
@@ -516,10 +525,9 @@ def test_rank_is_a_total_order_that_respects_every_dependency(converter_module, 
     """AC-4.5: `rank` is a position from 1, so for an acyclic graph every unit has a rank, each unit
     comes after everything in its `after`, and a unit with no dependency states an empty list.
     """
-    for path in sorted(FIXTURES_DIR.glob('*.xml')):
+    # The read rule's accepted set, so an accepted fixture cannot be refused here.
+    for path in [FIXTURES_DIR / name for name in corpus_fixtures()]:
         sets = _sets(converter_module, path, tmp_path / path.stem)
-        if sets is None:
-            continue    # the hostile fixtures are refused before the parse
         _owners, edges, rows = sets
         if not rows or reference_edges.cycles(edges):
             continue    # the cycle fixture is pinned by AC-3.4

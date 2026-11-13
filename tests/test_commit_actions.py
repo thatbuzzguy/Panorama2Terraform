@@ -42,15 +42,25 @@ import panorama_to_terraform as converter_module
 import resource_mapping
 import sanity_checks
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, SRC_DIR, TERRAFORM, parts, run_script, tf_files
+from conftest import (
+    FIXTURES_DIR,
+    GOLDEN_DIR,
+    SAMPLE_CONFIG,
+    SRC_DIR,
+    TERRAFORM,
+    corpus_fixtures,
+    parts,
+    run_script,
+    tf_files,
+)
 
 CONVERTER = 'panorama_to_terraform.py'
 ACTIONS = commit_actions.ACTIONS_FILE
 MANIFEST = unit_manifest.MANIFEST_FILE
 KITCHEN = 'kitchen_sink.xml'
 
-# The fixtures that produce output. The hostile fixtures fail before they write a file.
-FIXTURES = sorted(p.name for p in FIXTURES_DIR.glob('*.xml') if not p.name.startswith('hostile_'))
+# The fixtures the corpus pins read: the read rule's accepted set, not a name rule.
+FIXTURES = corpus_fixtures()
 
 
 def _run(source: Path, out_dir: Path, extra: tuple = ()) -> subprocess.CompletedProcess:
@@ -64,8 +74,13 @@ def _files(out_dir: Path) -> dict:
 
 
 def _manifest(out_dir: Path) -> list:
-    """The manifest the run wrote, read back as data."""
-    return unit_manifest.parse_rows((out_dir / MANIFEST).read_text(encoding='utf-8'))
+    """The manifest the run wrote, read back as data.
+
+    A run scoped to a scope writes no manifest, so this answers no row for it, and a pin that reads the corpus
+    reads no row for that fixture.
+    """
+    path = out_dir / MANIFEST
+    return unit_manifest.parse_rows(path.read_text(encoding='utf-8')) if path.is_file() else []
 
 
 def _row(facts: dict) -> dict:
@@ -326,13 +341,26 @@ def test_an_address_that_does_not_answer_the_names_inside_is_a_finding():
 def test_no_false_positive_across_the_corpus(tmp_path):
     """Every run the corpus writes agrees with the rule, including a run scoped to a scope it writes no
     block for, which is why the rule does not resolve a filter name against the blocks the run declares.
+
+    The pin measures content: every accepted fixture writes at least one `.tf` file, so the read set is never
+    empty, and the two cases are stated separately. Which case a fixture is in is read through
+    `commit_actions.build_rows`, the rule owner, so the test states no second rule and names no fixture: for a
+    fixture the rule answers with rows, the actions file exists; for a fixture it answers with no row, no
+    actions file exists, which is the content rule section 1 pins.
     """
-    for fixture in FIXTURES:
-        out = tmp_path / fixture
-        assert _run(FIXTURES_DIR / fixture, out).returncode == 0
+    for name in FIXTURES:
+        out = tmp_path / name
+        assert _run(FIXTURES_DIR / name, out).returncode == 0
         files = _files(out)
-        if files:
-            assert sanity_checks.check_actions(files) == [], fixture
+        assert files, (name, 'the run wrote no .tf content for the rule to read')
+        assert sanity_checks.check_actions(files) == [], name
+
+        rows = commit_actions.build_rows(_manifest(out), naming.sanitize)
+        wrote = parts(files, ACTIONS)
+        if rows:
+            assert wrote, (name, 'the rule answers with rows, so the file the rule writes exists')
+        else:
+            assert not wrote, (name, 'the rule answers with no row, so no file is written')
 
 
 def test_the_goldens_pass_the_rule(tmp_path):

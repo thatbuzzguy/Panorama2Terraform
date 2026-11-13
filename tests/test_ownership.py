@@ -43,10 +43,12 @@ from conftest import (
     RESPONSES_DIR,
     SAMPLE_CONFIG,
     SRC_DIR,
+    corpus_fixtures,
     file_text,
     run_main,
     run_pipeline,
     run_script,
+    tf_bytes,
     tf_files,
 )
 
@@ -285,13 +287,11 @@ def test_a_row_names_the_unit_the_export_declares_the_entry_inside(converter_mod
 
 def test_every_row_belongs_to_a_unit_the_manifest_shows(converter_module, tmp_path):
     """AC-2.2: pinned across the fixture corpus, so a row cannot name a unit the run did not read."""
-    for fixture in sorted(FIXTURES_DIR.glob('*.xml')):
-        if fixture.name.startswith('hostile_'):
-            continue
+    # The read rule's accepted set, so an accepted fixture cannot fail here.
+    for name in corpus_fixtures():
+        fixture = FIXTURES_DIR / name
         out = tmp_path / fixture.stem
         parser, generator, _code = _pipeline(converter_module, fixture, out)
-        if parser is None:
-            continue    # the hostile fixtures are refused before the parse
         units = {unit_manifest.facts_of(row) for row in parser.ledger.rows()}
         for row in ownership.build_rows(parser.ledger, None, generator.sanitize_name):
             assert _facts(row) in units, (fixture.name, row)
@@ -527,8 +527,12 @@ def test_the_goldens_are_byte_identical(tmp_path):
         out = tmp_path / case
         proc = _run(source, out)
         assert proc.returncode == 0, proc.stdout + proc.stderr
-        goldens = {p.name: p.read_bytes() for p in sorted((GOLDEN_DIR / case).glob('*.tf'))}
-        generated = {p.name: p.read_bytes() for p in sorted(out.glob('*.tf'))}
+        goldens = tf_bytes(GOLDEN_DIR / case)
+        generated = tf_bytes(out)
+        # Both sets must hold content, or the comparison measures nothing.
+        # The tool reads inputs through tests/conftest.py (see the module header).
+        assert goldens, (case, 'the golden case holds no .tf content to compare')
+        assert generated, (case, 'the run wrote no .tf content')
         assert generated == goldens, case
 
 
@@ -836,13 +840,12 @@ def test_the_corpus_findings_are_the_whole_set(converter_module, tmp_path):
     starts producing a finding must be added to it in the same change.
     """
     findings = {}
-    for path in sorted(FIXTURES_DIR.glob('*.xml')):
-        out = tmp_path / path.stem
-        parser = run_pipeline(converter_module, path.name, out)
-        if parser is None:
-            continue    # the hostile fixtures are refused before the parse
+    # The read rule's accepted set, so an accepted fixture cannot be refused here.
+    for name in corpus_fixtures():
+        out = tmp_path / name
+        parser = run_pipeline(converter_module, name, out)
         generator = converter_module.TerraformGenerator(str(out))
         found = ownership.findings(ownership.build_rows(parser.ledger, None, generator.sanitize_name))
         if found:
-            findings[path.name] = sorted((_facts(row)[0], row['entry'], row['reason']) for row in found)
+            findings[name] = sorted((_facts(row)[0], row['entry'], row['reason']) for row in found)
     assert findings == CORPUS_FINDINGS, findings

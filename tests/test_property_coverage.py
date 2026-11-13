@@ -38,7 +38,7 @@ by `PROTOCOL_SHAPE` instead of by the row.
 import container_coverage
 import entry_coverage
 import xml_input
-from conftest import FIXTURES_DIR, run_pipeline, run_script, written_bytes
+from conftest import FIXTURES_DIR, corpus_fixtures, run_pipeline, run_script, written_bytes
 from resource_mapping import COVERAGE_MATRIX, protocol_row
 
 ROWS = list(COVERAGE_MATRIX)
@@ -110,12 +110,11 @@ CORPUS_FINDINGS = {
 
 
 def _corpus_ledgers(converter_module, tmp_path):
-    """(fixture name, ledger) for every fixture the run accepted."""
-    for path in sorted(FIXTURES_DIR.glob('*.xml')):
-        parser = run_pipeline(converter_module, path.name, tmp_path)
-        if parser is None:
-            continue  # the hostile fixtures are refused before the parse
-        yield path.name, parser.ledger
+    """(fixture name, ledger) for every fixture the read rule accepts, read through `conftest.py`."""
+    for name in corpus_fixtures():
+        parser = run_pipeline(converter_module, name, tmp_path)
+        assert parser is not None, (name, 'the run refused the input')
+        yield name, parser.ledger
 
 
 def _read_set(ledger) -> dict:

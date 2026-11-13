@@ -572,21 +572,31 @@ def _read_committed(request, cache_dir):
 def test_one_committed_response_per_request_shape_names_the_request_identity_that_produced_it():
     """AC-2.1 to AC-2.3: the response set holds one file per accepted shape, and each file is named by the
     identity that produced it, in the shape the record reads as `cache_entry`. The identity is key-free, so no
-    file name can carry a credential."""
-    assert len(HARNESS) == 3, 'the three accepted shapes'
+    file name can carry a credential.
+
+    The shape set is read through `source_fetch.SHAPE_PARAMS`, the table that states it, so no pin here measures
+    this file's own harness list: the harness holds one entry per accepted shape the table states, and the params
+    the table states for a shape are inside the identity that names that shape's committed response.
+    """
+    assert len(HARNESS) == len(source_fetch.SHAPE_PARAMS), 'one entry per accepted shape the table states'
     files = sorted(p.name for p in RESPONSES_DIR.glob('*.xml'))
-    assert files == sorted(request.cache_name() for _shape, request, _identity in HARNESS), files
+    assert files == sorted(request.cache_name() for _label, request, _identity in HARNESS), files
 
     # The shape comes from what each request declares, so a file is read by the request whose shape named it.
-    assert sorted(request.request_shape() for _shape, request, _identity in HARNESS) == \
-        sorted((source_fetch.EXPORT_TYPE, source_fetch.CONFIG_TYPE, source_fetch.OP_TYPE))
+    shapes = sorted(request.request_shape() for _label, request, _identity in HARNESS)
+    assert shapes == sorted(source_fetch.SHAPE_PARAMS), shapes
 
-    for shape, request, identity in HARNESS:
+    for label, request, identity in HARNESS:
+        shape = request.request_shape()
         text = (RESPONSES_DIR / request.cache_name()).read_text(encoding='utf-8')
-        assert request.canonical() == identity, (shape, request.canonical())
-        assert identity in text, (shape, 'the fixture names the request identity that produced it')
-        assert 'key=' not in identity and 'key=' not in text, (shape, 'the identity is the key-free shape')
-        assert 'F8.4 offline harness' in text, (shape, 'the fixture names itself as harness bytes')
+        assert request.canonical() == identity, (label, request.canonical())
+        assert identity in text, (label, 'the fixture names the request identity that produced it')
+        assert 'key=' not in identity and 'key=' not in text, (label, 'the identity is the key-free shape')
+        assert 'F8.4 offline harness' in text, (label, 'the fixture names itself as harness bytes')
+        # Each param the table states for this shape is inside the identity, so the identity is the shape the
+        # table states plus the part the request declares.
+        for key, value in source_fetch.SHAPE_PARAMS[shape]:
+            assert f'{key}={value}' in identity, (label, key, value, identity)
 
 
 def test_a_committed_response_reads_through_the_injected_producer_and_the_record_names_the_same_bytes(
@@ -639,7 +649,8 @@ def test_the_committed_responses_are_not_corpus_material():
 
     harness = sorted(p.name for p in RESPONSES_DIR.glob('*.xml'))
     corpus = sorted(p.name for p in FIXTURES_DIR.glob('*.xml'))
-    assert len(harness) == 3, harness
+    assert len(harness) == len(source_fetch.SHAPE_PARAMS), \
+        (harness, 'one committed response per accepted shape the table states')
     assert not (set(harness) & set(corpus)), 'no response file is in the set the scan runs over'
     assert all(p.is_file() for p in FIXTURES_DIR.iterdir()), \
         'the corpus is one flat directory, so a response cannot enter the set the pins state'

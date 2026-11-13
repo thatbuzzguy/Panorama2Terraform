@@ -49,7 +49,7 @@ import naming
 import panorama_to_terraform
 import sanity_checks
 import unit_manifest
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, path2_run, run_pipeline, run_script, tf_files
+from conftest import FIXTURES_DIR, SAMPLE_CONFIG, corpus_fixtures, path2_run, run_pipeline, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 
@@ -145,11 +145,6 @@ def _count_rows() -> set:
     return {matrix['resource'] for matrix in
             (entry_coverage.matrix_row_for(container.path)
              for container in container_coverage.CONTAINER_TABLE) if matrix is not None}
-
-
-def _corpus_fixtures() -> list:
-    """The corpus the pins read: the committed fixtures, and not the hostile inputs a byte rule reads."""
-    return sorted(p.name for p in FIXTURES_DIR.glob('*.xml') if not p.name.startswith('hostile_'))
 
 
 # --- 1. What the rule reads ----------------------------------------------------
@@ -774,11 +769,10 @@ def test_the_rule_reports_nothing_across_the_corpus(tmp_path):
     assert 'Result: PASS (0 FAIL, 0 WARN)' in text, text
     assert re.search(r'^round_trip\s+PASS$', text, re.M), text
     assert 'FINDINGS' in text and '(No finding.)' in text.split('FINDINGS')[1], text
-    for fixture in _corpus_fixtures():
+    for fixture in corpus_fixtures():
         out = tmp_path / fixture
+        # An accepted fixture cannot be refused, so no guard is needed here.
         parser = run_pipeline(panorama_to_terraform, fixture, out)
-        if parser is None:
-            continue
         findings = sanity_checks.check_round_trip(tf_files(out), parser.ledger)
         if fixture in CORPUS_GAPS:
             assert findings, fixture
@@ -795,11 +789,10 @@ def test_the_rule_reports_the_gaps_the_corpus_contains(tmp_path):
     base = tmp_path / 'corpus'
     total = 0
     by_category = dict.fromkeys(CATEGORY_COUNTS, 0)
-    for fixture in _corpus_fixtures():
+    for fixture in corpus_fixtures():
         out = base / fixture
+        # An accepted fixture cannot be refused, so no guard is needed here.
         parser = run_pipeline(panorama_to_terraform, fixture, out)
-        if parser is None:
-            continue
         findings = sanity_checks.check_round_trip(tf_files(out), parser.ledger)
         total += len(findings)
         assert sorted(_fact(f) for f in findings) == sorted(CORPUS_GAPS.get(fixture, [])), \

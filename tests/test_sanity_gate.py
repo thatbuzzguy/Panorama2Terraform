@@ -58,6 +58,7 @@ from conftest import (
     SAMPLE_CONFIG,
     SRC_DIR,
     TERRAFORM,
+    corpus_fixtures,
     path2_run,
     run_main,
     run_pipeline,
@@ -71,11 +72,9 @@ from conftest import (
 CONVERTER = SRC_DIR / "panorama_to_terraform.py"
 SPLITTER = SRC_DIR / "split_device_groups.py"
 
-# The fixtures that produce output. The hostile fixtures fail before they write
-# a file, so the gate never sees them (tests/test_robustness.py pins that path).
-FIXTURES = sorted(
-    p.name for p in FIXTURES_DIR.glob("*.xml") if not p.name.startswith("hostile_")
-)
+# The fixtures the corpus pins read: the read rule's accepted set, not a name rule. A fixture the rule refuses
+# writes no file, so the gate never sees it (tests/test_robustness.py pins that path).
+FIXTURES = corpus_fixtures()
 
 
 def _generate(source: Path, out_dir: Path, extra_args: tuple[str, ...] = ()) -> subprocess.CompletedProcess:

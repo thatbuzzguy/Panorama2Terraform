@@ -38,7 +38,7 @@ from pathlib import Path
 
 import container_coverage
 import xml_input
-from conftest import FIXTURES_DIR, REPO_ROOT, SRC_DIR, run_script
+from conftest import FIXTURES_DIR, REPO_ROOT, SRC_DIR, corpus_fixtures, run_script
 
 # A path-like string constant in a parse method: a tag name or a tag chain.
 PATH_STRING_RE = re.compile(r'^[A-Za-z0-9_.\-/]+$')
@@ -312,14 +312,12 @@ def test_committed_corpus_has_no_findings():
     The coverage fixture is the exception: it is the input that demonstrates the
     report, so it is the one fixture that produces findings.
     """
-    for path in sorted(FIXTURES_DIR.glob('*.xml')):
-        if path.name == UNKNOWN_FIXTURE:
-            continue
-        try:
-            source, parents, findings = _scan(path.name)
-        except (ET.ParseError, xml_input.UnsafeInputError):
-            continue  # the hostile fixtures are refused before the parse
-        assert findings == [], (path.name, findings)
+    # The read rule's accepted set, so the parse cannot fail here.
+    for name in corpus_fixtures():
+        if name == UNKNOWN_FIXTURE:
+            continue    # the fixture that demonstrates the report
+        source, parents, findings = _scan(name)
+        assert findings == [], (name, findings)
 
 
 def test_report_line_wording_counts_the_entries():

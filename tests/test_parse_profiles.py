@@ -1,4 +1,10 @@
-"""Unit tests for PanoramaParser profile parse methods."""
+"""Unit tests for PanoramaParser profile parse methods.
+
+Order decision (`docs/ARCHITECTURE.md` §4.4): the pin that asserts a list of names holds the document order the
+policy-chain rule states, so the asserted list is the order the fixture names its entries. The pin reads one
+profile by name, so it also states the uniqueness rule the name-keyed read depends on: it holds one row per name
+only when the fixture names each profile once.
+"""
 
 
 def _parser(make_parser, fixture_name):
@@ -88,6 +94,7 @@ def test_parse_pbf_monitor_profiles(make_parser):
     p = _parser(make_parser, "pbf_monitor_profiles.xml")
     profiles = p.parse_pbf_monitor_profiles()
     by_name = {prof["name"]: prof for prof in profiles}
+    assert len(by_name) == len(profiles), "the fixture names each profile once, so the name-keyed read holds one row"
     assert list(by_name) == ["PM-Branch", "PM-HQ"]
 
     branch = by_name["PM-Branch"]

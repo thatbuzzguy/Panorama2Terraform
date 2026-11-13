@@ -30,15 +30,26 @@ import pytest
 import resource_mapping
 import sanity_checks
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, file_text, parts, run_pipeline, run_script, tf_files
+from conftest import (
+    FIXTURES_DIR,
+    GOLDEN_DIR,
+    SAMPLE_CONFIG,
+    corpus_fixtures,
+    file_text,
+    parts,
+    run_pipeline,
+    run_script,
+    tf_bytes,
+    tf_files,
+)
 from panorama_to_terraform import ADDR_SCOPES, REFERENCE_SCOPES, TerraformGenerator
 
 CONVERTER = 'panorama_to_terraform.py'
 READ_THROUGH = 'read_through.tf'
 
-# The fixtures that produce output. The hostile fixtures fail before they write a
-# file, so the gate never sees them (tests/test_robustness.py pins that path).
-FIXTURES = sorted(p.name for p in FIXTURES_DIR.glob('*.xml') if not p.name.startswith('hostile_'))
+# The fixtures the corpus pins read: the read rule's accepted set, not a name rule. The refused set writes no
+# file, so the gate never sees it (tests/test_robustness.py pins that path).
+FIXTURES = corpus_fixtures()
 
 # The read-through scopes, as the CLI would take them: only a reference scope whose
 # row declares `name` can be a target.
@@ -230,8 +241,13 @@ def test_a_run_that_declares_no_read_through_scope_writes_the_golden_bytes(tmp_p
     and no read-through file is written."""
     result = _run(SAMPLE_CONFIG, tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
-    golden = {path.name: path.read_bytes() for path in sorted((GOLDEN_DIR / 'sample').glob('*.tf'))}
-    assert {path.name: path.read_bytes() for path in sorted(tmp_path.glob('*.tf'))} == golden
+    golden = tf_bytes(GOLDEN_DIR / 'sample')
+    generated = tf_bytes(tmp_path)
+    # Both sets must hold content, or the comparison measures nothing.
+    # The tool reads inputs through tests/conftest.py (see the module header).
+    assert golden, 'the golden case holds no .tf content to compare'
+    assert generated, 'the run wrote no .tf content'
+    assert generated == golden
     assert READ_THROUGH not in _files(tmp_path)
 
 

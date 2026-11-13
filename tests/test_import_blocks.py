@@ -28,13 +28,24 @@ import import_blocks
 import panorama_to_terraform as module
 import sanity_checks
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SAMPLE_CONFIG, SRC_DIR, file_text, parts, run_script, tf_files
+from conftest import (
+    FIXTURES_DIR,
+    GOLDEN_DIR,
+    SAMPLE_CONFIG,
+    SRC_DIR,
+    corpus_fixtures,
+    file_text,
+    parts,
+    run_script,
+    tf_files,
+)
 
 CONVERTER = 'panorama_to_terraform.py'
 IMPORTS = import_blocks.IMPORT_FILE
 
-# The fixtures that produce output. The hostile fixtures fail before they write a file.
-FIXTURES = sorted(p.name for p in FIXTURES_DIR.glob('*.xml') if not p.name.startswith('hostile_'))
+# The fixtures the corpus pins read: the read rule's accepted set, not a name rule. A fixture the rule refuses
+# writes no file, so the gate never sees it.
+FIXTURES = corpus_fixtures()
 
 # The object the pinned provider docs import line for `panos_address` encodes (§12), in the key order
 # `build_id` writes.
