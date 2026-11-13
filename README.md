@@ -478,7 +478,8 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   read, and the unit join: the run's unit set read through `unit_manifest.units`, the scope the run read for
   each unit, and the two directions the join reports as data rows. It also pins the entry point
   `api_to_terraform.py`: the run order, the join across the responses the run read, the arguments, the exit codes,
-  the run view, the report source lines in run order, and that the entry point states no rule an owner states
+  the run view, the report source lines in run order, and that the entry point states no rule an owner states. It
+  also pins the byte agreement between the two paths for content that holds no fact from `API_CONVERSION_PATH.md` §4
 - `tests/test_shadow_coverage.py` - the cross-source shadow scan: the per-scope shape in the
   scan, the shadow fact (the key is `state_coverage.ownership_key` read with the facts the parent row
   declares, so it names the parent scope), the report section and its line shape with the parent entry

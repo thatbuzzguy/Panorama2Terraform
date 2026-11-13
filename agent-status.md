@@ -2,222 +2,30 @@
 
 ## Current position
 
-The licensing rule is complete, applied to `main` from branch `new-lic`. It added no pin, because it is a
-document rule, and the choice to keep the notice set unpinned is recorded in `backlog.md`. `docs/LICENSING.md`
-is the owner document: the fork source (`gswsystems/Panorama2Terraform`, v4.0.2, commit `92cb2a3`, 2025-12-09),
-the two holders, the split measured through `git blame` (2,172 upstream lines against 57,157 ours, and 588
-against 50,008 inside `src/`, `tests/` and `tools/`), the rule that the inherited file set is measured by
-`git blame` and not decided, and the scope of each grant. `LICENSE-COMMERCIAL` is the upstream author's grant,
-so it covers the upstream parts only, and this project grants no commercial terms for its own contributions.
-The word "non-commercial" is not used as a license name, because AGPL v3 permits commercial use and §10 does
-not allow an extra non-commercial condition on a derivative work, so the choice reads as "AGPL v3 only". Two
-notices were corrected, `src/source_fetch.py` and `src/xml_input.py`, because they hold no upstream line; the
-two modules that hold upstream lines keep the upstream notice, and no header was added to a module that has
-none. `docs/DUAL-LICENSING-EXPLAINED.md` is removed, and `README.md`, `docs/README.md`, `docs/USAGE_GUIDE.md`
-and `docs/ARCHITECTURE.md` §1.1 link to the owner document instead of restating the rule. Gate on the
-committed tree: `ruff check .` clean, and 1,650 pins, the same count as before the change.
+Epic 8 (the second path) is complete with piece F8.10. The rules it landed are in
+`docs/API_CONVERSION_PATH.md`, the modules are `src/api_requests.py` and `src/api_to_terraform.py`, and the pins
+are in `tests/test_api_requests.py`, `tests/test_api_path.py`, `tests/test_unit_manifest.py`,
+`tests/test_ownership.py`, `tests/test_provenance.py`, `tests/test_sanity_gate.py`, `tests/test_variables.py`, and
+`tests/test_site_data.py`. The completed piece detail is not kept here; the git history holds it.
 
-F8.9 is complete (Epic 8, Phase 8C, the entry point), and it is the piece that decides the run order:
-`src/api_to_terraform.py` reads the membership responses first, in the order
-`api_requests.membership_lists()` names them, then the entries `api_requests.scope_index()` names in index order,
-and it is the only place that states that order, because `api_requests.py` states no read order and
-`provenance.py` rule 6 states no read rule for a path 2 run. One response is read once, so a container two lists
-name (`template-stack`) enters the order at the first place a list names it. The entry point joins the
-per-response tables in run order through the one join rule (`panorama_to_terraform.join_value`), and
-`generate_run` takes the run view as an argument, so the join is the entry point's decision and path 1 builds the
-same view for its one source. The entry point adds no argument of its own beyond the shared set, accepts no
-argument that names one source, reads the environment name through `source_fetch.API_KEY_ENV`, prints only through
-the owners' console lines, writes no file outside `write_path.py`, and calls `generate_run`, so it states no parse
-order and no block builder. It passes the index it built to the gate, so the join findings print through the gate
-and the exit code is the gate's decision. The generated `README.md` names the entry point that wrote the codebase,
-and the name is an argument, so the label builder states no entry point of its own. The rule is stated in
-`docs/API_CONVERSION_PATH.md` §6 with its pins named, and `README.md`, `docs/README.md` and
-`docs/ARCHITECTURE.md` §1 name them.
+F8.10 is the agreement pin: for content that holds none of the five facts `docs/API_CONVERSION_PATH.md` §4 names,
+path 2 writes the same `.tf` bytes as path 1, and the two reports agree on every field except `line` and `source`.
+The pin is `tests/test_api_path.py::test_content_with_no_live_only_fact_writes_the_same_tf_bytes_as_path_1`. The
+content lives in the test file (`AGREEMENT` and `AGREEMENT_EXPORT`), so the committed response set stays at 3
+files, and no test reads a network or a committed response. Measured: 10 `.tf` files byte-for-byte the same,
+4 resources, 4 report rows each read through the ledgers, the two source sets disjoint, and the gate reports no
+finding for either run, with `request_set` NOT RUN for path 1 and PASS for path 2. The content states no
+membership list, because a membership list makes the entry its own scope, so the same entry is read twice and the
+bytes do not agree; that is a finding in `backlog.md`, with its owner.
 
-The pins for this piece, in `tests/test_api_path.py` group 8:
-`test_the_run_order_is_the_membership_lists_then_the_index_entries`,
-`test_the_entry_point_joins_the_tables_across_the_responses_it_read`,
-`test_the_run_sequence_is_stated_once_and_both_entry_points_call_it`,
-`test_the_run_view_answers_the_entry_protocol_through_the_ledger_that_holds_the_entry`,
-`test_the_run_view_states_no_row_shape_and_no_field_name_of_its_own`,
-`test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_that_name_one_source`,
-`test_the_entry_point_passes_the_index_it_built_to_the_gate_and_keeps_the_gate_code`,
-`test_the_entry_point_states_no_rule_an_owner_states`, and
-`test_the_report_names_each_response_the_run_read_in_run_order`; plus
-`tests/test_variables.py::test_the_entry_point_names_no_environment_name_of_its_own` and
-`tests/test_site_data.py::test_the_readme_names_the_entry_point_that_wrote_the_codebase`. The three pins that read
-the run sequence read `generate_run` rather than `main()`, because the sequence moved to the run function. No pin
-calls a network: every path 2 pin runs the pipeline in process with the injected producer.
+The licensing rule is in `docs/LICENSING.md`, the owner document: the fork source, the two holders, the split
+measured through `git blame`, and the scope of each grant. `LICENSE-COMMERCIAL` is the upstream author's grant, so
+it covers the upstream parts only, and this project grants no commercial terms for its own contributions. The word
+"non-commercial" is not used as a license name, because AGPL v3 permits commercial use and §10 does not allow an
+extra non-commercial condition on a derivative work, so the choice reads as "AGPL v3 only".
 
-Measured run order for the committed set: `device-group`, `templates`, then `device-group/entry/Office-FW` and
-`templates/entry/HQ-Networks`. The record file the run wrote names the same order, and the report names those four
-sources in the same order. `panorama_to_terraform.failed` states the unexpected-error shape once, so both entry
-points call it and neither prints a console line of its own.
-
-F8.8 is complete (Epic 8, Phase 8C, the gate), and it is the gate piece for the join: the request-set rule
-`sanity_checks.check_request_set` reads the join's rows through `api_requests.unit_findings`, the unit through
-`unit_manifest.directory_name` and `naming.sanitize`, and the index through `api_requests`, so the rule states no
-join rule, no membership rule, no unit rule, no naming rule, no cache rule and no reader of its own. The severity,
-the report section, the console line, the order and the exit code are the gate's decision. `CHECK_ORDER` puts
-`request_set` after `round_trip` and before `control_chars`, because the two rules that read two sets sit together
-after every rule that reads one set, and the reason for that position is the join's own document. A join finding is
-a fact about the source, so it is WARN and the exit code follows the rules that read the files; the join prints no
-console line of its own, and the gate prints every finding it reads through the shape §3.2 states. `run_checks`
-takes the index as an argument, so a call that is missing the index or the ledger reports NOT RUN, and `main()`
-still passes no index, because the path 2 entry point (F8.9) is what will pass the index it builds. The rule is
-stated in `docs/API_CONVERSION_PATH.md` §3 with its pins named, and `README.md` and `docs/README.md` name them.
-
-The pins for this piece, in `tests/test_sanity_gate.py`: `test_the_gate_checks_the_join_through_the_owners`,
-`test_a_fact_that_the_join_and_the_ledger_do_not_agree_on_prints_in_the_report`,
-`test_the_run_wide_findings_print_through_the_join`, `test_the_join_findings_sort_by_the_data_rule`,
-`test_the_join_prints_no_console_line_and_stays_a_warn`,
-`test_the_rule_reports_not_run_when_the_gate_has_no_index`,
-`test_two_runs_read_the_same_files_and_report_the_same_findings`, and
-`test_a_path_2_run_and_a_path_1_run_report_the_same_findings`; and in `tests/test_round_trip.py`,
-`test_the_cross_check_reads_the_join_ledger_on_a_path_2_run`, where the cross-check compares the block set with
-the join's own rows through the same ledger and names the same unit. Two pins were migrated, not dropped: the
-order pin `tests/test_data_file_gate.py::test_check_order_puts_the_data_rule_after_the_block_rules` now reads the
-tuple with `request_set` after `round_trip`, and
-`tests/test_sanity_gate.py::test_gate_runs_and_writes_the_report` reads `request_set` as NOT RUN on a path 1 run.
-Every join pin runs the pipeline in process with an injected producer, because a fact from a run must be read from
-the run's ledger; the run and the producer are in `tests/conftest.py`, because both files read the same run.
-
-Measured against the committed whole-config export, the only committed response: 7 join rows, 3 on the unit side
-and 4 on the entry side, so every pair is a fact that does not agree. The cross-check reports nothing on that run,
-because the join's rows and the block set agree, so the pin plants one `panos_address` block for a unit the join
-names and both rules name the same unit. The gate order puts the run-wide findings first and the unit findings
-second, which is not the order the join states its rows in.
-
-F8.7 is complete (Epic 8, Phase 8B, the run over many sources), and with it Phase 8B: the unit join reads the
-run's unit set through `unit_manifest.units`, so path 2 states no second unit rule and counts no unit a second
-way. The fact path 2 adds is the scope the run read for a unit, so `api_requests.join_units` answers, for each
-unit, the index entry whose request produced the response name that unit's rows carry. `api_requests.unit_findings`
-reports the two directions as data rows: a unit the join answers no entry for, because the response its rows name
-is one the index made no request for, and an index entry the run read no rows for, so no unit answers it. The join
-names no field of its own: the fact order comes from `unit_manifest` and the field name for the row's source comes
-from `ownership.SOURCE_FIELD`, which `FIELD_ORDER`, `row_key` and `scan_row` also read, so the name is stated once,
-and the response name is read through the one name rule in `source_fetch.py` (`cache_name`). The join reads the row
-set through one ledger, because the join is per response (F8.5), so for a run that read one response the row set is
-that response's rows. The join reports data rows only: no console line, no writer, no report section, and no exit
-code, which the gate decides. The rule is stated in `docs/API_CONVERSION_PATH.md` §3 with its pins named, and
-`README.md` and `docs/README.md` name them.
-
-The pins for this piece: `tests/test_api_path.py` (the unit join group) gained
-`test_the_unit_join_answers_the_scope_the_run_read_for_a_unit`,
-`test_a_unit_the_index_made_no_request_for_is_a_finding`,
-`test_an_index_entry_the_run_read_no_rows_for_is_a_finding` and
-`test_the_join_reports_the_findings_as_data_through_the_owners_names`;
-`tests/test_unit_manifest.py::test_the_join_reads_the_unit_set_through_this_rule` keeps the one unit rule, and
-`tests/test_ownership.py::test_a_path_2_row_names_the_response_name_on_the_source_field` keeps the field name. The
-import-list pin `tests/test_api_requests.py::test_the_module_reads_the_layout_rules_through_their_owners` gained
-`ownership` and `unit_manifest`, because the join now reads those two rules through their owners. The string
-constant pin and `tests/test_reference_edges.py` are unchanged.
-
-Findings F8.7 recorded in `backlog.md`: the join reads the row set through one ledger, so which row set a run that
-read more than one response joins is the run order's decision (F8.9); the join states no rule that a source the
-index made no request for is definitions, so the predefined half stays with the F8.1 finding; and no rule decides
-yet how a finding of this kind prints or whether it changes the exit code, which is the gate's work (F8.8).
-
-F8.6 is complete (Epic 8, Phase 8B, the run over many sources): the record file holds one record per request the
-path 2 run read, and the eight fields and their fixed order are unchanged. For each request the run read, `scope`
-names the path that request declared, which is the fact the door records, and `request` names its key-free
-identity, which is the shape the cache entry is hashed from, so `cache_entry` names the entry that identity names.
-The record file holds the records in the order the run read them; `provenance.py` rule 6 states that order for the
-sources it owns and states no read rule for a path 2 run, because the order a path 2 run reads is the run order's
-decision (F8.9). The record directory is the output directory, so the prune action reads the record file the same
-run wrote, and a run that read N requests protects the N entries its own record names. No new field is needed, so
-`parse_records` reads a path 2 record file back as itself. The rule is stated in `docs/API_CONVERSION_PATH.md` §2.5
-with its pins named, in `tests/test_provenance.py` and
-`tests/test_write_path.py::test_the_record_directory_is_the_output_directory_for_the_prune`, and `README.md` and
-`docs/README.md` name them. This piece changed no functional code: `provenance.record_for` already took the
-request as an argument, so the pins build records through the fetch layer with an injected producer and write the
-record file through `write_path.root_path` and `write_path.write_file`, because the path 2 entry point does not
-exist yet.
-
-F8.5 is complete (Epic 8, Phase 8B, the run over many sources): one response is one source with its own line
-map, the parent walk and the entry ledger are keyed on the one tree that was parsed, and each parse method runs
-over the response that holds its container. The rule is stated in `docs/API_CONVERSION_PATH.md` §2.4 with its
-pins named, in `tests/test_api_path.py`, and `README.md` names that test module. The join is
-`api_requests.response_for_section`, which answers the index entry whose response holds the container a section
-names, in two parts read through their owners: the place the section names first, through `list_container`, and
-the entry inside that place that the run read, built through `scope_path` and validated through
-`is_scope_path`. `api_requests.entry_for_path` is the index lookup the join reads. `name` is data the run
-states, because a section names a container and never the entry it sits inside. The join keeps no parser and
-states no merge rule, so the run order calls the parse method, and the module's import list is unchanged.
-The join refuses a section whose first segment names no place the one definition validates, and a section
-inside a place the index has no entry for.
-
-The two things this piece fixed or decided:
-
-- `container_coverage.section_path` stated the place twice for a per-scope place read
-  (`device-group/device-group/entry/address`). The chain now states the place once, so path 2 and path 1 name
-  the same container path for the same content and the two reports disagree only on the source they name. The
-  guard reads a per-scope source, so path 1 is unchanged, and the F5.4 entry-read pin holds.
-- The predefined read: no container table row names a built-in container, so the run runs no parse method over
-  a predefined response and the entry report names no row for a built-in entry, which the ledger counts through
-  `predefined_total`. A predefined place read keeps the `predefined` element in the tree, so `is_predefined`
-  reaches it and the scan names no finding; a predefined entry read puts the entry at the place level, so the
-  scan reports the place. The join answers no response for a built-in place, because no membership row reads
-  `predefined`. Both findings stay in `backlog.md`; this piece added no rule.
-
-F8.4 is complete, and with it Phase 8A (Epic 8, the read boundary): the offline harness is one committed
-response per accepted request shape in `tests/responses/`, each named by the key-free request identity that
-produced it, read through the injected producer, and read as data by the record. The rule is stated in
-`docs/API_CONVERSION_PATH.md` §5 with the pins named, and the decision about where the set lives is in
-`docs/ARCHITECTURE.md` §1.1. `docs/README.md` names the owner of that decision, and `README.md` names the
-test module `tests/test_api_requests.py`, which its index did not name before this piece.
-
-The decisions F8.4 took: a committed response is not a Panorama export, so it is not corpus material and lives
-in its own set beside `fixtures/` and `golden/`; `tests/conftest.py` is the one place the path to each set is
-built, so a harness pin reads the response set through it and states no path of its own. Each file name is the
-identity hash the record reads as `cache_entry`, and each file states the same identity in its prolog comment, so
-a reader can see which request produced it and no name can carry a credential. A committed response is read
-through the fetch layer and never through the file producer, because the wrapper decision belongs to the request
-that produced it and the file producer has no request to read a shape against. The three files are the
-whole-config export, the per-scope read of `device-group`, and the device fact for `show system info`. The
-per-scope file is the membership read the scope index is built from, so the index and the join read the same
-committed bytes. The device fact file shows the shape one command gives and names no fact, so
-`docs/API_CONVERSION_PATH.md` §4 stays blocked on a live target. The response set changes no count the corpus
-pins state, so the printed fixture set (68 accepted, 67 read, 3 skipped) is unchanged.
-
-Phase 8A landed four rules, and each is stated in `docs/API_CONVERSION_PATH.md` §2.1, §2.2 and §2.3 with its
-pins: the three accepted request shapes and the op wrapper rule; the scope index read from the four membership
-lists in sorted order, one entry per scope; and the response-to-request join, checked against the request that
-made the response through the one element-name rule (`source_fetch.names_element`). The join keeps no parser and
-calls no producer, so the origin and the line map stay the ones the door recorded.
-
-Next: piece F8.10, the agreement pin between the two paths for a fixture with no live-only fact (`to-do.md`,
-Phase 8C).
-
-Findings F8.6 recorded in `backlog.md`: a device fact request declares no path, so its record states the door's
-default for `scope`, and the scope index makes no device fact request, so no rule decides which scope such a
-record should name; that finding stays open. The other F8.6 finding, that the order a path 2 run reads is not a
-record rule, is closed: F8.9 stated the order in the entry point, and its pins read it back from the record the
-same run wrote.
-
-Findings F8.2 recorded in `backlog.md`: the four lists name three of the five scope facts, so a
-vsys scope cannot be read from membership; `container_coverage.ContainerRow` has no field for the table
-its method returns, so the join lives as data in `api_requests.LIST_JOIN`; and the join of the four tables
-across the responses a run read belongs to the run order, because the module states no merge rule and F8.5
-decided that no tree is built across responses. F8.9 closed that finding for the tables: the entry point applies
-the one join rule in run order. The row half stays open, because the join still cannot know which response the
-run read. F8.3 recorded one finding there: `names_element` names no
-element for a device fact request, so the join has no fact to read a command's element name against, and it
-sits with the F8.1 finding about a predefined read, because both need a fact a request cannot state; the
-committed response for the device fact shape shows the shape and names no fact, so the finding stays open. The
-findings the F8.1 decision recorded stay there too, and F8.5 recorded what it measured against them: for a
-predefined place read the parent walk reaches the `predefined` element and the scan names no finding, for an
-entry read inside the place the entry sits at the place level so the scan reports the place, and the join
-answers no response for a built-in place because no membership row reads `predefined`. F8.5 added no rule that
-a predefined source is definitions.
-
-Test count: `python3 -m pytest` reads 1650 pins (1638 before F8.9), with no skips, and `ruff check .` is clean.
-
-The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
-facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a
-stack, the EDL `certificate_profile` field, the profile-name report column, and the two `.github/`
-template files outside the document indexes. `ruff format` as a gate stays the next actionable slice
-outside Epic 8.
+Test count: `python3 -m pytest` reads 1651 pins (1650 before F8.10), with no skips, and `ruff check .` is clean.
+`tests/test_api_path.py` reads 30 pins (29 before F8.10).
 
 The CI gate reads the Python floor as 3.10, and the matrix legs are 3.10, 3.11, 3.12 and 3.13. The 3.9
 leg is dropped, not moved to an older runner image, because two facts make it unusable:
@@ -230,7 +38,13 @@ the lint gate enforces, not the floor, and the codebase still writes pre-3.10 ty
 without `strict` (101 findings at `py310`), which `backlog.md` records as its own task. No pin reads
 the workflow file.
 
+The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
+facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a
+stack, the EDL `certificate_profile` field, the profile-name report column, and the two `.github/`
+template files outside the document indexes. `ruff format` as a gate stays the next actionable slice
+outside Epic 8.
 
+Next: piece 1, the test set reads one shared definition (`to-do.md`).
 
 ## Rules to keep when writing documents
 

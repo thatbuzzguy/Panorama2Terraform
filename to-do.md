@@ -1,19 +1,13 @@
 # To Do
 
 The tracking markdown for the completed Epic 8 phases is removed here; the git history and the owner
-documents hold it. Epic 8 has one open piece (F8.10), then the actionable findings the 2026-11-11 and
+documents hold it. Epic 8 is complete. The open pieces are the actionable findings the 2026-11-11 and
 2026-11-12 audits recorded in `backlog.md`. Each piece below names the rule it holds, the module that
 states it, and the test that pins it. One piece is finished before the next is started.
 
 ## Current series
 
-### Piece 1 — F8.10, the agreement pin (Epic 8, Phase 8C)
-
-- [ ] F8.10 The agreement pin. For a fixture with no live-only fact, path 2 writes the same `.tf`
-      bytes as path 1. The reports do not agree, because a report names its source. Pin:
-      `tests/test_api_path.py`.
-
-### Piece 2 — the test set reads one shared definition
+### Piece 1 — the test set reads one shared definition
 
 Owner: `tests/conftest.py`. The findings are the import rule violation, the second definitions, and the
 path builder, from `backlog.md` (measured 2026-11-11).
@@ -28,7 +22,7 @@ path builder, from `backlog.md` (measured 2026-11-11).
       and correct the regeneration note in `tests/test_golden_files.py` header, which names the case
       root as where the goldens live.
 
-### Piece 3 — pins that measure nothing
+### Piece 2 — pins that measure nothing
 
 Owner: `tests/conftest.py` and the pins named in `backlog.md` (measured 2026-11-11).
 
@@ -42,7 +36,7 @@ Owner: `tests/conftest.py` and the pins named in `backlog.md` (measured 2026-11-
 - [ ] Read the hostile-fixture exclusion through the tool's read rule (`tool.refusal_reason` or
       `xml_input.check_bytes`) in every corpus pin, so the name rule is gone.
 
-### Piece 4 — the parse set reads what its rows state
+### Piece 3 — the parse set reads what its rows state
 
 Owner: the parse methods named in `backlog.md` (measured 2026-11-12), and the coverage matrix rows.
 
@@ -59,7 +53,7 @@ Owner: the parse methods named in `backlog.md` (measured 2026-11-12), and the co
 - [ ] `_protocol_field`: use the shape rule for a number instead of `text.isdigit()`, and state the
       single-match limit.
 
-### Piece 5 — naming and printing state one rule
+### Piece 4 — naming and printing state one rule
 
 Owner: `src/naming.py`, `src/panorama_to_terraform.py`, `src/sanity_checks.py`, `src/xml_input.py`, as
 `backlog.md` (measured 2026-11-12) names them.
@@ -79,7 +73,7 @@ Owner: `src/naming.py`, `src/panorama_to_terraform.py`, `src/sanity_checks.py`, 
 - [ ] `generate_vpn_config`: print the `VALUE_VARIABLES` `key` as the reference the table states, or
       state the exception in the table.
 
-### Piece 6 — the splitter reads the owners' rules, and the error rule names its kinds
+### Piece 5 — the splitter reads the owners' rules, and the error rule names its kinds
 
 Owner: `src/split_device_groups.py`, `src/naming.py`, `src/write_path.py`, `src/xml_input.py`,
 `docs/DEVICE_GROUP_SPLITTING.md`, `docs/ARCHITECTURE.md` §2.3.
@@ -94,11 +88,12 @@ Owner: `src/split_device_groups.py`, `src/naming.py`, `src/write_path.py`, `src/
 - [ ] `is_refusal`: state the refusal kinds as the input-layer exceptions, so a `ValueError` raised
       inside the tool keeps its traceback.
 
-### Piece 7 — the indexes and the documents agree with measurement
+### Piece 6 — the indexes and the documents agree with measurement
 
 Owner: the tracking markdown, `docs/ARCHITECTURE.md` §1 and §1.1, and the pins `backlog.md` names.
 
-- [ ] Name `commit_actions.py` and `api_to_terraform.py` in the `docs/ARCHITECTURE.md` §1 module table.
+- [ ] Name `commit_actions.py` in the `docs/ARCHITECTURE.md` §1 module table. `api_to_terraform.py` is named
+      there since F8.9, so this item covers the one module the table still does not name.
 - [ ] Give `tests/` an index, or state in §1.1 that the test set is named by the root index, and name
       the three files in `tests/responses/`.
 - [ ] Correct the three document pin claims that name a test that does not exist.

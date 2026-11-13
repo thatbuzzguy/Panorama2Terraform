@@ -1,104 +1,73 @@
-# Acceptance criteria — codebase review and audit
+# Acceptance criteria — F8.10, the agreement pin (Epic 8, Phase 8C)
 
 ## Scope
 
-This task reviews the codebase and reports findings. It changes no functional code and adds no pin.
-The audit covers: the module set, the test set, the rule pins the documents name, the layout rule
-(`docs/ARCHITECTURE.md` §1.1), the import rule, and the tracking markdown.
+One pin: `tests/test_api_path.py::test_content_with_no_live_only_fact_writes_the_same_tf_bytes_as_path_1`, in
+group 4 of that module. The pin changes no functional code and states no new rule. It measures that, for content
+that holds none of the facts in `docs/API_CONVERSION_PATH.md` §4, path 2 writes the same `.tf` bytes as path 1,
+and that the two reports agree on every field except the source each row names and the line inside that source.
 
 ## The criteria
 
-1. **The baseline gate is measured.** `ruff check .` and `python3 -m pytest` run before and after the
-   audit. The pin count is recorded. Any finding that changes a pin is recorded, not applied, because
-   this task states findings.
-2. **The layout rule is checked as the rule states it.** Every file under an index is named by that
-   index. Every `src/` module is named in the `docs/ARCHITECTURE.md` §1 table. A file outside an index
-   is a finding.
-3. **The import rule is checked by scan.** `src/` imports only the standard library and its siblings;
-   no `src/` module imports from `tests/`; no test module imports another test module; the test path is
-   stated only in `pyproject.toml`.
-4. **Every pin a document names exists.** Each `tests/test_*.py::test_name` claim in the markdown set is
-   read against the test files. A named pin that does not exist is a finding.
-5. **The tracked counts agree with the measurement.** The counts the documents state (matrix rows,
-   data sources, fixture counts, the ruff `py310` finding count, the Python floor, the CI matrix legs)
-   are re-measured. A count that does not agree is a finding.
-6. **The code is reviewed for functional correctness.** The `src/` set is read for silent drops,
-   rule owners that state a second rule, mutation of shared state, unguarded error paths, and findings
-   that contradict the documented rule.
-7. **The tracking markdown agrees with the git history.** A piece recorded as open in `to-do.md` or
-   `agent-status.md` that is committed is a finding, because the rule says completed work leaves the
-   markdown.
-8. **Findings land in `backlog.md`.** Every actionable finding this audit measures gets an entry; the
-   report itself is the chat response plus the backlog entries. No document outside an index is created.
+1. **The content is named by the pin and lives in the test file.** The committed response set stays at three
+   files, which `tests/test_api_path.py::test_the_committed_responses_are_not_corpus_material` pins, so no fourth
+   committed response is added. The content is `AGREEMENT` (the two place bodies) and `AGREEMENT_EXPORT` (the
+   whole-config read of the same content), read through `_agreement_producer`.
+2. **The pin states why the content holds no §4 fact, and measures it on the content.** No `rulebase` element, so
+   no rule and no rule to order; no `device` element, so no device entry; no `variable` element; no `predefined`
+   element. The measurement reads the element names the content holds in both shapes it is read in, so the claim
+   is a measurement on the content rather than an assertion in prose.
+3. **Both paths run in process, and path 2 reads no network.** Every response path 2 reads comes from an injected
+   producer. Every response is read through `source_fetch.fetch`, never as a file, so the wrapper decision, the
+   origin, and the line map are the ones the run holds.
+4. **The output is read the way the gate reads it.** `conftest.tf_files` reads through
+   `sanity_checks.read_tf_files`, keyed by the path from the output directory. The reports are read through the
+   ledgers (`path1.ledger.rows()` and `RunView.rows()`), never by parsing report text.
+5. **The path 2 rows are read from the view the run itself built, after the emission.** The values a report row
+   carries for the captured object are recorded by the emission, so a view built from a separate read of the same
+   content answers nothing. The hook is the shape `conftest.run_pipeline` uses for path 1's parser, and it keeps
+   the original function so the run is not read twice.
+6. **No new rule.** The pin adds no second naming rule, writer, console line, environment name, path rule,
+   response-shape rule, and no test path outside `pyproject.toml`. No test reads the tracking markdown.
+7. **The gate reads the same file set for both runs and reports nothing for either.** `request_set` is NOT RUN for
+   path 1, which holds no index, and PASS for path 2. `terraform` is NOT RUN for both, because this pin does not
+   run terraform. Green means no finding for either run.
+8. **The gate stays green.** `ruff check .` is clean, and `python3 -m pytest` passes with no skips. No existing
+   pin is weakened.
 
 ## Out of scope
 
-- Fixing the findings. This task reports; each finding names the owner module or document that would fix
-  it.
-- Live-target facts already gated on a live target in `backlog.md`.
+- The membership list. The content states none, because a membership list makes the entry its own scope: the index
+  names it, path 2 reads the entry twice (the membership read and the entry read), writes the same address in two
+  blocks with `_2` names, and `request_set` reports a finding. That is a finding for
+  `docs/API_CONVERSION_PATH.md` §2.4 and §6, recorded in `backlog.md`.
+- The five facts in §4. They stay blocked on a live target.
+- The report files. The pin compares rows through the ledgers, not report text, and states no rule that the
+  report files agree.
 
-## Measured results (2026-11-11/12)
+## Measured results (2026-11-13)
 
-Criterion 1. Gate before and after: `ruff check .` clean; `python3 -m pytest` collected 1,641 pins across
-50 modules, all pass, no skips on the audit machine (the terraform binary is present locally). The audit
-changed no code and added no pin.
+Criterion 1 and 2. The content holds two entries: `Office-FW` in `device-group` with the address `10.0.0.7`, and
+`HQ-Networks` in `templates` with the address `10.0.0.9`. The element names it holds, measured in both shapes, are
+`address`, `config`, `device-group`, `entry`, `ip-netmask`, `panorama`, `response`, `result`, `templates`. None of
+the four §4 element names is present.
 
-Criterion 2. The §1 module table names 20 of the 22 `src/` modules; `commit_actions.py` and
-`api_to_terraform.py` are findings. The indexes for `docs/`, `examples/` and `tools/` are complete; the two
-`.github/` template files are findings already recorded. `tests/` holds files with no index.
-`tests/fixtures/api_response.xml` is a committed response inside the corpus.
+Criterion 3 and 5. Path 2 read two responses, one per place: `device-group` and `templates`; a request for
+`template-stack` answers nothing. The index holds 2 entries, which are the two places. Path 1 read one response,
+the whole-config read of the same content. Both runs read through `fetch`, and the responses landed in the cache
+directories the runs wrote, not in the committed response set. Path 1's source is not per-scope; path 2's two
+parts are.
 
-Criterion 3. `src/` imports only the standard library and its siblings, and no `src/` module imports from
-`tests/`. The test path is stated only in `pyproject.toml`. One violation: `tests/test_real_or_report.py:33`
-imports helpers from `test_policy_order`; no pin holds this rule, so the gate reports nothing.
+Criterion 4 and 7. The file set agrees: 10 `.tf` files, byte-for-byte the same, 4 resources, and the gate counts
+agree for both runs (10 files, 2 data files, 4 resources). Each report holds 4 rows. The rows agree on every
+field, and the keys that differ are `line` and `source` for all four rows. The printed entry line agrees apart
+from the position. The path 1 lines are 7, 9, 14, 16; the path 2 lines are 5, 7, 5, 7. The two source sets are
+disjoint: path 1 names one response
+(`241cbc8980537850768efb4f106eaf6665bbc113a5ecd7c9fbd42449f200d34f.xml`), path 2 names two
+(`181d42732d20ea918cb4ea333000da9280a02de1e818ee6d26300cf4b98d759c.xml` and
+`de9bdaf007529c7a6ad27da998b86d8643720bbf7d20e704219ef0adb50c0ec0.xml`). The gate reports no finding for either
+run. `request_set` is NOT RUN for path 1 and PASS for path 2, and `terraform` is NOT RUN for both.
 
-Criterion 4. 156 claims read across the markdown set in the `tests/test_*.py::test_name` form. 6 name a test
-that does not exist, across 3 names, each claimed twice: the profile-name pin (`backlog.md`),
-`test_parse_rip` (`backlog.md` and `docs/ARCHITECTURE.md`), and `test_the_module_defines_no_second_naming_rule`
-(`backlog.md` and `docs/API_CONVERSION_PATH.md`; the function is
-`test_site_data_defines_no_second_naming_rule`, line 708). One further claim names a constant, not a pin
-(`docs/COVERAGE_MATRIX.md` names `tests/test_scope_objects.py::PRINTED_BY_ANOTHER_BLOCK`).
-`docs/ARCHITECTURE.md:1015` names `test_policy_order` as a module, not a pin. The nine F8.9 pins earlier
-recorded under commit `380ed26` are a disproof: that commit's acceptance file names no pin, and the pins
-`docs/API_CONVERSION_PATH.md` §6 names for F8.9 all exist.
-
-Criterion 5. Re-measured: `COVERAGE_MATRIX` holds 42 rows against the document claim of 40 and the README
-claim of 34 (`panos_certificate_import` and `panos_certificate_profile` are in the code table but not in the
-document table). The ruff `py310` count agrees (101 = 80 UP045 + 16 B905 + 4 UP035 + 1 UP007 measured with
-`--target-version py310`), `target-version` stays `py39`. The CI legs (3.10-3.13), the `pytest==9.1.1` pin, and
-the pre-commit hooks agree. The fixture set measures 71 (68 accepted, 3 refused by the F3.8 rule).
-`docs/LICENSING.md` §The split, measured states 2,172 upstream and 57,157 ours against 2,155 and 57,245
-measured with `git blame`, 50,008 against 50,012 for `src/`, `tests/` and `tools/`, and 121 commits against 127.
-`agent-status.md` agrees with the measurement (1,641 pins, 991 test functions, 50 modules); the 1,638 figure
-earlier recorded as internal drift is a disproof, because no markdown states it.
-
-Criterion 6. The first `src/` read (2026-11-11) found no silent drops in the coverage and record modules.
-The 2026-11-12 read of the parse set, the emitter set and `src/split_device_groups.py` measured silent drops,
-second rule owners and unguarded paths; they are recorded in `backlog.md`, section "Codebase audit findings
-(measured 2026-11-12)". Five of them are measured by a probe run: an entry a name guard skips has no report
-line at all, against the report's own rule of one line per entry the parse read (`skipped` reads 0 for it);
-a nameless schedule child raises `TypeError`, exit 1, and leaves half-written output; two device-group names
-that read the same after the file-name rule write one file, and the second write replaces the first; the
-written file has no trailing LF; a device group that states `  spaced  ` prints `description = "  spaced  "`.
-Claims that did not survive re-measurement against the actual files are not recorded: `display_name` (the name
-is nowhere in `src/`), `entry_name_field` (no such function), `parse_rules` (the parse set has no method of
-that name), `_device_names` as a parse helper (it is the splitter's, at `src/split_device_groups.py:56`),
-`sanitize` taking a name kind with a 40-character maximum and a trailing-underscore form
-(`src/naming.py:30` takes one argument and states no length), `docs/STE_VOCABULARY.md` and
-`tests/test_naming.py` (neither file exists), a whitespace pin at `tests/test_parse_helpers.py:439` (no pin
-names the whitespace rule), the splitter running no gate against `src/api_to_terraform.py:20`
-(`docs/DEVICE_GROUP_SPLITTING.md:71-72` states the gate run for it), `tools/sweep_facts.py` and
-`tools/sweep_facts_report.txt` (neither file exists, and no markdown names `sweep_facts`), `tests/test_real_or_report.py`
-described by `tools/README.md` as the read report (that index lists two scripts and no test file), the
-interface matrix row naming `zone` and `virtual_router` (the row names `tag` only), and a §6 sorted-key rule
-for `hcl_value` (no such rule), an entry skipped by a name guard being counted as `emitted` (the measured probe
-counts `skipped` as 0 and prints no line for it), and the tool being silent for a device group with no address
-or group objects (not measured).
-
-Criterion 7. `to-do.md` lists F8.9 as open while `git log` records its steps 1 to 3 committed
-(`720da9f`, `3d54163`, `88921c2`); `agent-status.md` names F8.9 as the next piece. `to-do.md` keeps completed
-Phase 8A and Phase 8B detail.
-
-Criterion 8. All actionable findings are recorded in `backlog.md`, section "Codebase audit findings
-(measured 2026-11-11)", plus the additions this response records: the nine missing F8.9 pins, the corrected
-schema-pin count, and the licensing line drift. No document outside an index was created.
+Criterion 8. Gate before: `ruff check .` clean, 1,650 pins, no skips. Gate after: `ruff check .` clean, 1,651 pins,
+no skips. `tests/test_api_path.py` reads 29 pins before and 30 after. The only file the piece changed is
+`tests/test_api_path.py`.

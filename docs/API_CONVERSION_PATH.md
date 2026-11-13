@@ -303,7 +303,10 @@ only from the request that read the entry, and no parse method reads it off the 
   rule the corpus pins for path 1.
 - For content that holds none of the facts in §4, path 2 writes the same `.tf` bytes as path 1 on
   the same fixture. The report files do not agree, because the report names the source. This is the
-  pin that keeps the two paths honest to each other: `tests/test_api_path.py`.
+  pin that keeps the two paths honest to each other:
+  `tests/test_api_path.py::test_content_with_no_live_only_fact_writes_the_same_tf_bytes_as_path_1`. The pin reads
+  the content through an injected producer, so no test reads a network or a committed response, and the content is
+  not corpus material.
 
 ## 6. The run order, and the join across responses
 

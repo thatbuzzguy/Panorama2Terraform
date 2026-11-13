@@ -11,7 +11,8 @@ Eight groups:
    produces name entries inside that response.
 4. The report position and the source name for a path 2 run: the report row names the response that holds
    the entry, with the line inside it, and the place a section names is stated once, so the same content
-   agrees with path 1 except for the source.
+   agrees with path 1 except for the source. For content that holds no fact from §4, the agreement reaches
+   the bytes the run writes.
 5. The predefined read: no container table row names a built-in container, so the run runs no parse method
    over a predefined response and the entry report names no row for a built-in entry.
 6. No test calls a network: every response is handed by an injected producer, as `tests/test_source_fetch.py`
@@ -32,6 +33,7 @@ import argparse
 import ast
 import inspect
 import re
+import xml.etree.ElementTree as ET
 
 import pytest
 
@@ -45,7 +47,7 @@ import provenance
 import sanity_checks
 import source_fetch
 import unit_manifest
-from conftest import REPO_ROOT, RESPONSES_DIR, SRC_DIR, TESTS_DIR
+from conftest import REPO_ROOT, RESPONSES_DIR, SRC_DIR, TESTS_DIR, run_pipeline, tf_files
 
 HOST = 'panorama.test'
 
@@ -106,6 +108,23 @@ SAME_CONTENT_EXPORT = (
     + '<device-group>\n' + DEVICE_GROUP + '</device-group>\n</panorama>\n</config>\n</result>\n</response>\n'
 ).encode()
 
+# The content the byte-agreement pin reads: two scope entries, `Office-FW` in `device-group` and
+# `HQ-Networks` in `templates`, each with one address object, and nothing else. The content states no membership
+# list, so path 2 reads one response per place and each entry is read once. With a membership list the index
+# names the entry as its own scope, the run reads the entry as a second response, and the same address is then
+# written in two blocks with `_2` names, so the two paths would not write the same bytes.
+AGREEMENT = {
+    'device-group': '<entry name="Office-FW">\n<address>\n'
+                    '<entry name="10.0.0.7"><ip-netmask>10.0.0.7</ip-netmask></entry>\n</address>\n</entry>\n',
+    'templates': '<entry name="HQ-Networks">\n<address>\n'
+                 '<entry name="10.0.0.9"><ip-netmask>10.0.0.9</ip-netmask></entry>\n</address>\n</entry>\n',
+}
+AGREEMENT_EXPORT = (
+    '<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n<config>\n<panorama>\n'
+    + ''.join(f'<{place}>\n{AGREEMENT[place]}</{place}>\n' for place in sorted(AGREEMENT))
+    + '</panorama>\n</config>\n</result>\n</response>\n'
+).encode()
+
 # A predefined read in each shape the one definition validates: the place, and one built-in entry inside it.
 PREDEFINED_PLACE = ('<predefined>\n<url-list>\n'
                     '<entry name="url-list"><description>built-in</description></entry>\n'
@@ -119,6 +138,11 @@ def _shape(request, body: str) -> bytes:
     held = body if len(segments) == 3 else f'<{segments[0]}>\n{body}</{segments[0]}>\n'
     return ('<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n'
             + held + '</result>\n</response>\n').encode()
+
+
+def _content_tags(body: str) -> set:
+    """The element names the content holds, so a pin can state which of the §4 live-only facts it holds none of."""
+    return {element.tag for element in ET.fromstring(body).iter()}
 
 
 def _read(request, body: str, cache_dir):
@@ -414,6 +438,124 @@ def test_the_same_content_agrees_with_path_1_except_for_the_source(tmp_path):
     assert {row['source'] for row in parser.ledger.rows()} == {per_scope.name}
     assert export.name != per_scope.name, 'the only disagreement is the source the report names'
     assert parser.source.is_per_scope and not export.is_per_scope, 'one is a scope read, one is not'
+
+
+def _agreement_producer(request, key=None, insecure=False):
+    """The content above, handed by an injected producer: one response per place, and the whole-config export
+    for a request that names no path. No test calls a network, so path 2 reads only this content and path 1
+    reads the same content as one response.
+    """
+    if request.path == '':
+        return AGREEMENT_EXPORT
+    return _shape(request, AGREEMENT[request.path]) if request.path in AGREEMENT else None
+
+
+def _path2_run(argv, producer, monkeypatch) -> tuple:
+    """A path 2 run, and the parts and the index the entry point built for it.
+
+    `run()` answers only the exit code, and the values a report row carries for the captured object are recorded
+    by the emission, so a pin that reads a report row reads the parts the run itself built, after the run. The
+    hook is the shape `run_pipeline` uses for path 1's parser. `conftest.path2_run` cannot serve here, because it
+    forces the producer for the committed response set, and this pin reads content that is not in that set.
+    """
+    captured = {}
+    original = api_to_terraform.run_order
+
+    def hooked(*args, **kwargs):
+        result = original(*args, **kwargs)
+        captured['parts'], captured['index'] = result
+        return result
+
+    monkeypatch.setattr(api_to_terraform, 'run_order', hooked)
+    return api_to_terraform.run(argv, producer), captured['parts'], captured['index']
+
+
+def test_content_with_no_live_only_fact_writes_the_same_tf_bytes_as_path_1(tmp_path, monkeypatch):
+    """Path 2 writes the same `.tf` bytes as path 1 for content that holds no fact from
+    `docs/API_CONVERSION_PATH.md` §4.
+
+    Content: `AGREEMENT` and `AGREEMENT_EXPORT`, named above, read through `_agreement_producer` as one
+    whole-config response for path 1 and as one response per place for path 2. The entries are `Office-FW` in
+    `device-group` with the address `10.0.0.7`, and `HQ-Networks` in `templates` with the address `10.0.0.9`.
+
+    Why the content holds no §4 fact, measured on the content:
+
+    - Rulebase per rule, and rule position: no `rulebase` element, so no rule and no rule to order.
+    - Device serial: no `device` element, so no device entry.
+    - Per-device template variable override: no `variable` element.
+    - Built-in name table: no `predefined` element.
+
+    So every fact the two reports can hold comes from the same content, and the pin measures that they agree on
+    it. The rows agree on every field, and the two that differ are the source each row names and the line inside
+    that source, because a position is a line inside the response that holds the entry (§2.4). Path 2 reads no
+    network here: every response it reads is this content. The output is read the way the gate reads it, through
+    `tf_files`, and the reports through the ledgers.
+    """
+    out1, cache1 = tmp_path / 'path1', tmp_path / 'cache1'
+    args, argv = _run_args(tmp_path)
+
+    # Why the content holds no §4 fact, measured on the elements it holds in both shapes it is read in: no
+    # rulebase, so no rule and no rule to order; no device entry; no variable; no predefined.
+    facts = {'rulebase', 'device', 'variable', 'predefined'}
+    held = _content_tags(AGREEMENT_EXPORT.decode())
+    for place, body in sorted(AGREEMENT.items()):
+        held |= _content_tags(_shape(source_fetch.ApiRequest(host=HOST, path=place), body).decode())
+    assert not held & facts, (sorted(held), 'the content holds a §4 fact')
+
+    monkeypatch.setenv(source_fetch.API_KEY_ENV, 'test-key')
+    monkeypatch.setattr(source_fetch, 'network_producer', _agreement_producer)
+    path1 = run_pipeline(panorama_to_terraform, None, out1,
+                         ('--source', 'api', '--host', HOST, '--cache-dir', str(cache1)))
+    assert path1 is not None, 'path 1 refused the content'
+    code, parts, index = _path2_run(argv, _agreement_producer, monkeypatch)
+    assert code == 0, 'the path 2 run'
+
+    # Path 2 read one response per place, and every response it read is this content. Both runs read through
+    # `fetch`, so the response landed in the cache the run wrote, never as a file in the corpus.
+    assert len(parts) == len(AGREEMENT), (parts, 'one response per place')
+    assert all(part.request.path in AGREEMENT for part in parts), 'path 2 read a response outside the content'
+    assert not path1.source.is_per_scope and all(part.source.is_per_scope for part in parts), \
+        'path 1 read one response, path 2 one per place'
+    assert path1.source.origin.path.parent == cache1 and \
+        all(part.source.origin.path.parent == tmp_path / 'cache' for part in parts), \
+        (path1.source.origin.path, [part.source.origin.path for part in parts], 'read through fetch')
+
+    # The bytes, read the way the gate reads them.
+    files1, files2 = tf_files(out1), tf_files(args.output_dir)
+    assert files1 and files1 == files2, (sorted(files1), sorted(files2), 'the same .tf bytes')
+
+    # The reports, read through the ledgers the runs wrote them from.
+    rows1 = sorted(path1.ledger.rows(), key=lambda row: (row['container'], row['name']))
+    view = _view(parts)
+    rows2 = sorted(view.rows(), key=lambda row: (row['container'], row['name']))
+    assert rows1 and len(rows1) == len(rows2), (rows1, rows2, 'the pin needs rows to read')
+    for row1, row2 in zip(rows1, rows2):
+        assert {key for key in row1 if row1[key] != row2.get(key)} == {'line', 'source'}, (row1, row2)
+        # The printed entry line agrees apart from the position, so the report differs only on the source.
+        line1, line2 = f'line {row1["line"]:>4}', f'line {row2["line"]:>4}'
+        assert entry_coverage.entry_line(row1).replace(line1, 'line') == \
+            entry_coverage.entry_line(row2).replace(line2, 'line'), (row1, row2)
+    assert {row['source'] for row in rows1}.isdisjoint({row['source'] for row in rows2}), \
+        'the two read sets name no source in common'
+
+    # The gate reads the same file set for both runs and reports nothing for either. `request_set` is the one
+    # rule the two cannot answer the same way, because path 1 holds no index: the index is the run order's
+    # decision, and the gate reports a rule it has no index for as NOT RUN.
+    gate1 = sanity_checks.run_checks(out1, run_terraform=False, ledger=path1.ledger)
+    gate2 = sanity_checks.run_checks(args.output_dir, run_terraform=False, ledger=view, index=index)
+    assert (gate1.file_count, gate1.data_file_count, gate1.resource_count) == \
+        (gate2.file_count, gate2.data_file_count, gate2.resource_count), (gate1, gate2)
+    assert not [finding for c in gate1.checks + gate2.checks for finding in c.findings], (gate1.checks, gate2.checks)
+    results1, results2 = {c.check: c.result for c in gate1.checks}, {c.check: c.result for c in gate2.checks}
+    # Green means no finding for either run. The one result that is not PASS is `terraform`, because this pin
+    # reads the gate without running terraform, and it is NOT RUN for both runs.
+    assert all(result == 'PASS' for name, result in results2.items() if name != 'terraform') and \
+        results1['terraform'] == results2['terraform'] == sanity_checks.NOT_RUN, (results1, results2)
+    assert {name: value for name, value in results1.items() if name != 'request_set'} == \
+        {name: value for name, value in results2.items() if name != 'request_set'}, (results1, results2)
+    assert results1['request_set'] == sanity_checks.NOT_RUN and results2['request_set'] == 'PASS', \
+        (results1, results2, 'path 1 holds no index to answer the join with')
+    assert len(index) == len(AGREEMENT), 'the index reads the places the content names'
 
 
 # --- 5. the predefined read ---------------------------------------------------

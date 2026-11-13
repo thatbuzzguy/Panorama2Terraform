@@ -509,6 +509,19 @@ here with that rule named.
   finding is a fact about the source, not a broken output file, so it is a WARN and the exit code does not
   change. F8.8 measures this through the committed single-response run and names the join position and its
   reason: `docs/API_CONVERSION_PATH.md` §3.
+- Finding, measured by F8.10 (`tests/test_api_path.py::test_content_with_no_live_only_fact_writes_the_same_tf_bytes_as_path_1`):
+  the byte agreement between the two paths holds only for content that states no membership list. Measured on the
+  same two entries with a membership list in each (`<devices><member>HQ-Networks</member></devices>`): the index
+  then names each entry as its own scope, so the run reads four responses instead of two, and the same entry is
+  read twice, once as the place response and once as its own entry response. Path 2 writes 4 address blocks
+  against path 1's 2, so the names carry `_2`, and the bytes do not agree. The gate reports this through
+  `round_trip` as 2 WARN findings, one per unit, each stating that the ledger reads 2 entries and the reader
+  reads 1 block; `request_set` reports nothing, because both responses are in the read set. No rule decides what
+  a run does when a membership response and an entry response hold the same entry: §2.4 states that one response
+  is one source, and §6 states that a container two lists name enters the order at the first place a list names
+  it, so neither rule covers an entry a list names that is also the entry the run read. Owner:
+  `docs/API_CONVERSION_PATH.md` §2.4 and §6. The F8.10 content states no membership list, so the pin holds for the
+  content it names.
 
 ## Design Decisions (the value the parse cannot carry)
 
