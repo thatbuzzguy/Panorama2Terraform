@@ -652,9 +652,10 @@ def value_shape(raw: str) -> str:
         return 'string'
     if raw in ('true', 'false'):
         return 'bool'
-    if raw.isdigit():
+    if raw.isdigit() or (raw.startswith('-') and raw[1:].isdigit()):
         # F7.1: a number is the shape the reader reads for `metric`, which the shape table states as a
-        # `number` field, so the reader's inverse states it as its own word.
+        # `number` field, so the reader's inverse states it as its own word. The sign is part of the value,
+        # so the inverse reads `-1` as the same word the reader read.
         return 'number'
     return ''
 

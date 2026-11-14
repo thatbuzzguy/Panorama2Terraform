@@ -9,7 +9,9 @@ Six groups:
    keys the corpus outputs read from the entries that row covers. This is a measurement
    over the corpus, not a restatement of the matrix.
 3. The scan. Captured fields minus the keys an output read are findings, and the corpus
-   findings are pinned below. Each is recorded as a follow-up in backlog.md.
+   findings are pinned below. Each is recorded as a follow-up in backlog.md. The scan reads
+   the set the parse kept, so its blind side is pinned too: a field stored with an empty
+   value is not a captured field, and a field the parse never stored is not in the set.
 4. The report section. The findings print in their own section, grouped by the F3.9 scope
    rule, byte-identical between runs. A finding is an operator action, so it does not
    change the exit code, which the F4.1 gate still decides.
@@ -25,7 +27,8 @@ Six groups:
    its entry reaches; a `nested-block` container is closed by the entry line naming only the fields
    the print reads, because a nested block prints only what its type declares; a `bookkeeping`
    container is closed by the entry line naming no field, because the fact its row records is a relation the
-   entry carries no value for. Eight pins, one per gap.
+   entry carries no value for. Nine pins, one per gap; the ninth is the name the writer joins,
+   which the scan cannot measure because the name is the row identity, not a captured field.
 
 The scan scope is the entries a matrix row covers. A report, inventory, bookkeeping,
 count-only, or nested-block container has no matrix row, so the scan does not report it;
@@ -563,8 +566,8 @@ def test_scan_scope_is_the_entries_a_matrix_row_covers(converter_module, tmp_pat
     nothing there names a property an emitter reads. The nested-block fixture holds such a container, so the
     pin can show the rule against a real one: `parse_interfaces` marks the virtual-wire unit `ethernet1/4.1`,
     and the type the block prints declares no `parent` attribute, so `parent` is not a property that entry can
-    carry — the name states the parent part. The rule that keeps its line honest is the one
-    `docs/COVERAGE_MATRIX.md` §1 states for this shape, and gap 7 pins it:
+    carry — the name states the parent part. `tag` is a property there because the row declares it and the emitter
+    reads it through the recorded object for every interface kind, and gap 7 pins the two shapes:
     `::test_the_nested_block_line_names_only_the_fields_the_emitter_reads`.
 
     The `count-only` row is in the same scope, so the scan measures nothing for a region entry either. Its
@@ -587,7 +590,7 @@ def test_scan_scope_is_the_entries_a_matrix_row_covers(converter_module, tmp_pat
     entry = next(e for e in ledger.entries() if e.get('name') == 'ethernet1/4.1')
     mark = ledger.mark_for(entry)
     fields = ledger.captured_fields(mark)
-    assert fields == ('comment', 'mode', 'type'), fields
+    assert fields == ('comment', 'mode', 'tag', 'type'), fields
     # Every field the line names is a field the print reads, so the line is honest.
     assert set(fields) <= set(mark['captured'].used_keys()), mark['captured'].used_keys()
     path = container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source)
@@ -623,6 +626,61 @@ def test_scan_scope_is_the_entries_a_matrix_row_covers(converter_module, tmp_pat
     assert multi.ledger.captured_fields(multi.ledger.mark_for(membership)) == (), \
         multi.ledger.captured_fields(multi.ledger.mark_for(membership))
     assert multi.ledger.property_findings() == [], multi.ledger.property_findings()
+
+
+def test_the_scan_cannot_see_a_field_the_parse_stored_empty(converter_module, tmp_path):
+    """F4.4 rule 4 blind side: the scan reads the set the parse kept, not the row's declared properties.
+
+    Measured 2026-11-13 on `tests/fixtures/tags.xml`, the entry `web`: the parse kept `color` with a value
+    and stored `comments` and `disable_override` as `None`, and it never stored `description` at all. All
+    four are declared properties of the `panos_administrative_tag` row, and the emitter reads all four
+    through the recorded object, so the read record names them — but the finding set compares the reads
+    against the fields the parse kept, so the entry produces no finding. The parity measurement can name a
+    field the parse did not keep because `RecordingDict.get()` records the key even when the object holds no
+    value for it; the scan cannot, because `captured_fields` drops a key whose value is empty and a key the
+    object never held is not in the set.
+
+    The other side is the entry that keeps every field with a value, `env-prod` on the same fixture, and the
+    entry the scan does report: `service_groups.xml` `Web-Services` keeps `description` with a value that no
+    output read, so that one is a finding.
+    """
+    parser = run_pipeline(converter_module, 'tags.xml', tmp_path)
+    assert parser is not None, 'tags.xml'
+    ledger = parser.ledger
+    row = next(r for r in ROWS if r['resource'] == 'panos_administrative_tag')
+    assert row['properties'] == ('color', 'comments', 'description', 'disable_override'), row['properties']
+
+    entry = next(e for e in ledger.entries() if e.get('name') == 'web')
+    mark = ledger.mark_for(entry)
+    stored = {key: value for key, value in mark['captured'].items()
+              if key not in entry_coverage.NON_FIELD_KEYS}
+    assert stored == {'color': 'blue', 'comments': None, 'disable_override': None}, stored
+    # The two empty fields are dropped by the rule, and `description` is absent from the object.
+    assert ledger.captured_fields(mark) == ('color',), ledger.captured_fields(mark)
+    # The emitter reads all four, so the read record names them and the finding set stays empty.
+    assert sorted(set(mark['captured'].used_keys()) - entry_coverage.NON_FIELD_KEYS) == \
+        sorted(row['properties']), mark['captured'].used_keys()
+    assert ledger.property_findings() == [], ledger.property_findings()
+
+    # The entry that keeps every field with a value: the same rule keeps all three, and the emitter reads them.
+    kept = next(e for e in ledger.entries() if e.get('name') == 'env-prod')
+    kept_mark = ledger.mark_for(kept)
+    assert ledger.captured_fields(kept_mark) == ('color', 'comments', 'disable_override'), \
+        ledger.captured_fields(kept_mark)
+    assert set(ledger.captured_fields(kept_mark)) <= set(kept_mark['captured'].used_keys()), \
+        kept_mark['captured'].used_keys()
+
+    # A field the parse kept with a value that no output read is a finding, so the blind side is the empty
+    # value and the missing key, not the rule itself. `tags.xml` is not in the pinned corpus findings, and the
+    # contrast entry is.
+    assert 'tags.xml' not in CORPUS_FINDINGS, sorted(CORPUS_FINDINGS)
+    service = run_pipeline(converter_module, 'service_groups.xml', tmp_path / 'service_groups')
+    assert service is not None, 'service_groups.xml'
+    assert _finding_rows(service.ledger) == CORPUS_FINDINGS['service_groups.xml'], \
+        _finding_rows(service.ledger)
+    assert CORPUS_FINDINGS['service_groups.xml'][0][1:3] == ('Web-Services', 'panos_service_group'), \
+        CORPUS_FINDINGS['service_groups.xml']
+    assert CORPUS_FINDINGS['service_groups.xml'][0][3] == ('description',), CORPUS_FINDINGS['service_groups.xml']
 
 
 # --- 4. The report section ------------------------------------------------
@@ -960,13 +1018,17 @@ def test_the_nested_block_line_names_only_the_fields_the_emitter_reads(converter
     and `panos_ethernet_interface` declares none, so no line of the block for `ethernet1/4.1` can print a
     parent. `parent` is therefore not a property of that entry: it is a fact of the parent entry, and the unit
     name states the part, which the `name` line prints as the row identity. So `parse_interfaces` keeps no
-    `parent` value for the entry, and the line names `comment`, `mode` and `type` — the comment line, the block
-    key `virtual_wire = {}`, and the resource type from `INTERFACE_RESOURCE_TYPES`. `matrix_row_for` answers
+    `parent` value for the entry, and the line names `comment`, `mode`, `tag` and `type` — the comment line, the
+    block key `virtual_wire = {}`, the field the emitter reads through the recorded object, and the resource type
+    from `INTERFACE_RESOURCE_TYPES`. `tag` is on the line because the interface row for this kind declares it and
+    the emitter reads it through the recorded object for every interface kind; the print emits a `tag` line only
+    for a layer-3 subinterface type, so this entry's read prints nothing. `matrix_row_for` answers
     None for the row, so the pin is the only thing that can keep a `nested-block` field honest.
 
     The other side of the rule is measured on the same fixture: `parent` stays a captured property for a kind
     whose row declares it, and the emitter reads it through the child object and prints it
-    (`tests/test_interfaces.py::test_ethernet_subinterface_unit_emits_with_parent_reference`).
+    (`tests/test_interfaces.py::test_ethernet_subinterface_unit_emits_with_parent_reference`). The same is true of
+    `tag` for the subinterface unit `ethernet1/1.10`, whose type declares the attribute and prints it.
     """
     out = tmp_path / 'interfaces_ethernet'
     parser = run_pipeline(converter_module, 'interfaces_ethernet.xml', out)
@@ -974,22 +1036,28 @@ def test_the_nested_block_line_names_only_the_fields_the_emitter_reads(converter
     ledger = parser.ledger
     entry, mark = _gap_mark(ledger, 'ethernet1/4.1')
     fields = ledger.captured_fields(mark)
-    assert fields == ('comment', 'mode', 'type'), fields
+    assert fields == ('comment', 'mode', 'tag', 'type'), fields
 
     report = written_bytes(out)[entry_coverage.REPORT_FILE].decode(encoding='utf-8')
     line = next(line for line in report.splitlines() if 'ethernet1/4.1' in line)
     # The scope part is the last part of the line, so the captured part is read inside it.
-    assert 'captured: comment, mode, type  [vsys1]' in line, line
+    assert 'captured: comment, mode, tag, type  [vsys1]' in line, line
     for key in fields:
         assert key in mark['captured'].used_keys(), (key, mark['captured'].used_keys())
 
-    # The three fields reach the block: the printed line, the block key, the resource type.
+    # The fields the line names reach the outputs: `comment` is the printed line, `mode` is the block key, `type`
+    # is the resource type. `tag` is read by the emitter but prints nothing here, because the type this entry
+    # prints declares no tag attribute.
     tf = '\n'.join(text.decode(encoding='utf-8') for text in written_bytes(out).values())
     start = tf.index('name = "ethernet1/4.1"')
     block = tf[start:tf.index('}\n\n', start)]
     assert 'comment = "Wire unit on ethernet1/4"' in block, block
     assert 'virtual_wire = {}' in block, block
-    assert 'parent' not in block, block
+    assert 'parent' not in block and 'tag' not in block, block
+    # The same field prints for a kind whose type declares it, measured on the same fixture.
+    sub_start = tf.index('name = "ethernet1/1.10"')
+    sub_block = tf[sub_start:tf.index('}\n\n', sub_start)]
+    assert 'tag = 10' in sub_block and 'parent = ' in sub_block, sub_block
 
     path = container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source)
     assert entry_coverage.covering_row(path).destination == 'nested-block', path
@@ -1069,6 +1137,70 @@ def test_the_bookkeeping_line_names_no_field_for_the_membership_entry_it_marks(c
     template, template_row, _template_path = covered('HQ-Networks', 'templates')
     assert template_row.destination == 'emitted', template_row
     assert 'devices' not in ledger.mark_for(template)['captured'], ledger.mark_for(template)['captured']
+    assert ledger.property_findings() == [], ledger.property_findings()
+
+
+def test_a_nameless_recurring_child_reaches_the_record_and_not_the_join(converter_module, tmp_path):
+    """Gap 9: the report joins the recurring names it kept, so a child the record holds is not in the join.
+
+    `parse_schedules` reads the recurring child name through the record: a child with no name is
+    `mark_skipped` and never enters the list the report writer joins (`docs/ARCHITECTURE.md` §5 — the report
+    joins the name it prints, so a name stored as `None` raises and leaves half-written output). Before the
+    change this content raised `TypeError` and the run wrote only `provider.tf`.
+
+    The child is inside the schedule entry, so it is a property level and prints no line of its own: the
+    record is its report, and the parent row counts it. `schedule` is a `report` row, so `matrix_row_for`
+    answers None and the scan measures nothing for the entry.
+    """
+    content = tmp_path / 'nameless_recurring_child.xml'
+    content.write_text(
+        '<?xml version="1.0"?>\n<config version="10.0.0">\n  <shared>\n    <schedule>\n'
+        '      <entry name="Nightly">\n        <description>Weekly window</description>\n'
+        '        <schedule-type>\n          <recurring>\n'
+        '            <entry name="Monday"><member>09:00</member></entry>\n'
+        '            <entry><member>10:00</member></entry>\n'
+        '          </recurring>\n        </schedule-type>\n      </entry>\n    </schedule>\n'
+        '  </shared>\n</config>\n', encoding='utf-8')
+    # The content path is the source the report names, so `run_pipeline` is called directly rather than
+    # through `_gap_run`, which builds its output directory from the fixture name.
+    out = tmp_path / 'out'
+    parser = run_pipeline(converter_module, str(content), out)
+    assert parser is not None, 'the run refused the input'
+    ledger = parser.ledger
+    written = written_bytes(out)
+    # `entry_coverage.REPORT_FILE` is the per-entry report; `MANUAL_SETUP_REPORT.txt` is the section the
+    # schedule row writes, and the join is the part of that section the writer builds from the names.
+    entry_report = written[entry_coverage.REPORT_FILE].decode(encoding='utf-8')
+    manual_report = written['MANUAL_SETUP_REPORT.txt'].decode(encoding='utf-8')
+
+    child = next(e for e in ledger.entries() if e.get('name') is None)
+    mark = ledger.mark_for(child)
+    assert mark['destination'] == 'skipped', mark['destination']
+    assert mark['detail'] == 'entry has no name attribute', mark['detail']
+    assert not ledger.is_report_entry(child), child
+
+    parent = next(e for e in ledger.entries() if e.get('name') == 'Nightly')
+    parent_row = ledger.row_for(parent)
+    assert parent_row['destination'] == 'report', parent_row
+    assert parent_row['property_entries'] == 2, parent_row
+    # The child prints no line, so the per-entry report holds the parent row only.
+    assert [entry_coverage.entry_line(r) for r in ledger.rows()] == \
+        [entry_coverage.entry_line(parent_row)], ledger.rows()
+    assert entry_coverage.entry_line(parent_row) in entry_report, entry_report
+
+    # The join names the child the parse kept, and nothing for the skipped one.
+    line = next(line for line in manual_report.splitlines() if 'Nightly' in line)
+    assert line == '  Nightly (Weekly window): type=recurring, entries=Monday', line
+    assert '10:00' not in manual_report, manual_report
+
+    # The schedule entry has no `.tf` block: `schedule` is a `report` row, so the run writes no block for it and
+    # the `.tf` set holds the root files only, in the unit directory the run named for the shared scope. The
+    # resource name appears in the reports, in the gap section that states the resource exists and the parse
+    # cannot model it.
+    tf = {name: text for name, text in written.items() if name.endswith('.tf')}
+    assert sorted(name.rsplit('/', 1)[-1] for name in tf) == ['provider.tf', 'variables.tf'], sorted(tf)
+    assert 'panos_schedule' not in '\n'.join(text.decode(encoding='utf-8') for text in tf.values()), sorted(tf)
+    assert 'panos_schedule' in manual_report, manual_report
     assert ledger.property_findings() == [], ledger.property_findings()
 
 

@@ -25,6 +25,14 @@ Five rules, stated once here.
    the object a mark stores records every key an output reads from it, and the
    record starts after the parse, so a key the parse method read off the XML
    element is not a property the output used.
+   The scan has one blind side: it reads the set of fields the parse kept, so it
+   cannot see a field the parse did not keep. `captured_fields` drops a key whose
+   value is in `EMPTY_FIELD_VALUES`, so a declared field stored as `None` or as an
+   empty list is not a captured field and cannot be a finding, and a field the
+   parse never stored is not in the set at all. A `RecordingDict` records a key an
+   output reads even when the object holds no value for it, so the parity
+   measurement can still name a field the parse did not keep; the finding set
+   cannot (`tests/test_property_coverage.py::test_the_scan_cannot_see_a_field_the_parse_stored_empty`).
 5. The run view (F8.9). A run may read more than one response, so `RunView` answers rules 1 to 4 for the
    set: each protocol answer goes to the ledger that holds the entry, and the parse answers are joined in
    the run order the entry point decided. The view states no rule of its own and takes the join as an

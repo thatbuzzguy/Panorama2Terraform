@@ -510,17 +510,23 @@ class PanoramaParser:
         # one mark.
         for entry in self.root.findall('.//device-group/entry'):
             name = entry.get('name')
-            if name:
-                for device in self._list_names(entry, 'devices'):
-                    tables['device_groups'].setdefault(device, []).append(name)
+            if not name:
+                # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                self.mark_skipped(entry, 'entry has no name attribute')
+                continue
+            for device in self._list_names(entry, 'devices'):
+                tables['device_groups'].setdefault(device, []).append(name)
         for entry in self.root.findall('.//templates/entry'):
             name = entry.get('name')
-            if name:
-                for device in self._list_names(entry, 'devices'):
-                    tables['templates'].setdefault(device, []).append(name)
+            if not name:
+                self.mark_skipped(entry, 'entry has no name attribute')
+                continue
+            for device in self._list_names(entry, 'devices'):
+                tables['templates'].setdefault(device, []).append(name)
         for entry in self.root.findall('.//template-stack/entry'):
             name = entry.get('name')
             if not name:
+                self.mark_skipped(entry, 'entry has no name attribute')
                 continue
             devices = self._list_names(entry, 'devices')
             templates = self._list_names(entry, 'templates')
@@ -1183,6 +1189,12 @@ class PanoramaParser:
                 sched_obj['schedule_type'] = 'recurring'
                 for entry in recurring.findall('entry'):
                     rec_name = entry.get('name')
+                    if not rec_name:
+                        # F4.3: the entry was read, so the record must hold it. A nameless child is a
+                        # property level inside the schedule entry, so the report counts it on the parent
+                        # row instead of printing a line of its own.
+                        self.mark_skipped(entry, 'entry has no name attribute')
+                        continue
                     rec_obj = self.mark(entry, {'name': rec_name})
                     sched_obj['recurring'].append(rec_obj)
 
@@ -1432,6 +1444,11 @@ class PanoramaParser:
                 self.mark_skipped(iface, "entry has no name attribute")
                 continue
 
+            # F4.4: the object holds the fields the row for this kind declares, plus the entry name and
+            # the five scope facts, and nothing else. `parent` is not a field for a physical entry: the
+            # provider declares no parent attribute on `panos_ethernet_interface`, and the name states the
+            # parent part. The zone and the virtual router are read from the other side (`panos_zone` and
+            # `panos_virtual_router` hold the membership), so this object carries no key for either.
             iface_obj = self.mark(iface, {
                 'name': name,
                 'type': 'ethernet',
@@ -1439,11 +1456,9 @@ class PanoramaParser:
                 'mode': None,
                 'ip_addresses': [],
                 'ipv6_addresses': [],
-                'zone': None,
-                'virtual_router': None,
                 'management_profile': None,
                 'comment': self._get_text(iface, 'comment'),
-                'parent': None
+                'tag': self._interface_tag(iface, name)
             })
 
             # Determine mode (layer3, layer2, virtual-wire, tap, ha, aggregate-group)
@@ -1451,17 +1466,11 @@ class PanoramaParser:
                 iface_obj['mode'] = 'layer3'
                 l3 = iface.find('layer3')
 
-                # Get IP addresses
-                for ip in l3.findall('.//ip/entry'):
-                    ip_name = ip.get('name')
-                    if ip_name:
-                        iface_obj['ip_addresses'].append(ip_name)
+                # Get IP addresses, in either export form
+                iface_obj['ip_addresses'] = self._list_values(l3, 'ip')
 
-                # Get IPv6 addresses
-                for ip in l3.findall('.//ipv6/address/entry'):
-                    ip_name = ip.get('name')
-                    if ip_name:
-                        iface_obj['ipv6_addresses'].append(ip_name)
+                # Get IPv6 addresses, in either export form
+                iface_obj['ipv6_addresses'] = self._list_values(l3, 'ipv6/address')
 
                 # Management profile
                 mgmt_profile = l3.find('interface-management-profile')
@@ -1493,15 +1502,11 @@ class PanoramaParser:
                     'type': 'ethernet-subinterface',
                     **self.identity_of(unit),
                     'mode': 'layer3',
-                    'ip_addresses': [ip.get('name') for ip in unit.findall('.//ip/entry')
-                                     if ip.get('name')],
-                    'ipv6_addresses': [ip.get('name') for ip in unit.findall('.//ipv6/address/entry')
-                                       if ip.get('name')],
-                    'zone': None,
-                    'virtual_router': None,
+                    'ip_addresses': self._list_values(unit, 'ip'),
+                    'ipv6_addresses': self._list_values(unit, 'ipv6/address'),
                     'management_profile': None,
                     'comment': self._get_text(unit, 'comment'),
-                    'tag': unit_name,
+                    'tag': self._interface_tag(unit, f'{name}.{unit_name}'),
                     'parent': name,
                 })
                 interfaces.append(sub)
@@ -1521,18 +1526,15 @@ class PanoramaParser:
                 'mode': 'virtual-wire',
                 'ip_addresses': [],
                 'ipv6_addresses': [],
-                'zone': None,
-                'virtual_router': None,
                 'management_profile': None,
                 'comment': self._get_text(iface, 'comment'),
-                # F4.4: `parent` is not a field for a nested-block entry, so it stays empty here. The
-                # pinned provider declares no `parent` attribute on `panos_ethernet_interface`, so no line of
-                # this block can print a parent. The parent is a fact of the parent entry, and for a unit name
-                # the child's own name states it (`ethernet1/4.1` is unit 1 of `ethernet1/4`), which the print
-                # reads through the name: the name is the row identity. The entry line therefore names only the
-                # fields the print reads: `mode` for the block key, `type` for the parent type, and `comment`
-                # when the entry carries one (`docs/COVERAGE_MATRIX.md` §1).
-                'parent': None,
+                'tag': self._interface_tag(iface, name),
+                # F4.4: `parent` is not a field for a nested-block entry, so this object carries no key
+                # for it: the pinned provider declares no `parent` attribute on `panos_ethernet_interface`,
+                # and for a unit name the child's own name states the parent part (`ethernet1/4.1` is unit 1
+                # of `ethernet1/4`). The entry line therefore names only the fields the print reads: `mode`
+                # for the block key, `type` for the parent type, `tag` for the unit, and `comment` when the
+                # entry carries one (`docs/COVERAGE_MATRIX.md` §1).
             })
             interfaces.append(iface_obj)
 
@@ -1551,27 +1553,13 @@ class PanoramaParser:
                 'type': 'vlan',
                 **self.identity_of(iface),
                 'mode': 'layer3',
-                'ip_addresses': [],
-                'ipv6_addresses': [],
-                'zone': None,
-                'virtual_router': None,
+                'ip_addresses': self._list_values(iface, 'ip'),
+                'ipv6_addresses': self._list_values(iface, 'ipv6/address'),
                 'management_profile': None,
                 'comment': self._get_text(iface, 'comment'),
-                'tag': self._get_text(iface, 'tag'),
+                'tag': self._interface_tag(iface, full_name),
                 'parent': None
             })
-
-            # Get IP addresses
-            for ip in iface.findall('.//ip/entry'):
-                ip_name = ip.get('name')
-                if ip_name:
-                    iface_obj['ip_addresses'].append(ip_name)
-
-            # Get IPv6 addresses
-            for ip in iface.findall('.//ipv6/address/entry'):
-                ip_name = ip.get('name')
-                if ip_name:
-                    iface_obj['ipv6_addresses'].append(ip_name)
 
             # Management profile
             mgmt_profile = iface.find('interface-management-profile')
@@ -1585,36 +1573,23 @@ class PanoramaParser:
             name = iface.get('name')
             # Dedupe on the namespaced name so a loopback unit number
             # does not collide with a vlan/tunnel unit of the same number.
-            full_name = f'loopback.{name}'
             if not name:
                 self.mark_skipped(iface, "entry has no name attribute")
                 continue
+            full_name = f'loopback.{name}'
 
             iface_obj = self.mark(iface, {
                 'name': full_name,
                 'type': 'loopback',
                 **self.identity_of(iface),
                 'mode': 'layer3',
-                'ip_addresses': [],
-                'ipv6_addresses': [],
-                'zone': None,
-                'virtual_router': None,
+                'ip_addresses': self._list_values(iface, 'ip'),
+                'ipv6_addresses': self._list_values(iface, 'ipv6/address'),
                 'management_profile': None,
                 'comment': self._get_text(iface, 'comment'),
+                'tag': self._interface_tag(iface, full_name),
                 'parent': None
             })
-
-            # Get IP addresses
-            for ip in iface.findall('.//ip/entry'):
-                ip_name = ip.get('name')
-                if ip_name:
-                    iface_obj['ip_addresses'].append(ip_name)
-
-            # Get IPv6 addresses
-            for ip in iface.findall('.//ipv6/address/entry'):
-                ip_name = ip.get('name')
-                if ip_name:
-                    iface_obj['ipv6_addresses'].append(ip_name)
 
             interfaces.append(iface_obj)
 
@@ -1623,36 +1598,23 @@ class PanoramaParser:
             name = iface.get('name')
             # Dedupe on the namespaced name so a tunnel unit number
             # does not collide with a vlan/loopback unit of the same number.
-            full_name = f'tunnel.{name}'
             if not name:
                 self.mark_skipped(iface, "entry has no name attribute")
                 continue
+            full_name = f'tunnel.{name}'
 
             iface_obj = self.mark(iface, {
                 'name': full_name,
                 'type': 'tunnel',
                 **self.identity_of(iface),
                 'mode': 'layer3',
-                'ip_addresses': [],
-                'ipv6_addresses': [],
-                'zone': None,
-                'virtual_router': None,
+                'ip_addresses': self._list_values(iface, 'ip'),
+                'ipv6_addresses': self._list_values(iface, 'ipv6/address'),
                 'management_profile': None,
                 'comment': self._get_text(iface, 'comment'),
+                'tag': self._interface_tag(iface, full_name),
                 'parent': None
             })
-
-            # Get IP addresses
-            for ip in iface.findall('.//ip/entry'):
-                ip_name = ip.get('name')
-                if ip_name:
-                    iface_obj['ip_addresses'].append(ip_name)
-
-            # Get IPv6 addresses
-            for ip in iface.findall('.//ipv6/address/entry'):
-                ip_name = ip.get('name')
-                if ip_name:
-                    iface_obj['ipv6_addresses'].append(ip_name)
 
             # Management profile
             mgmt_profile = iface.find('interface-management-profile')
@@ -1675,15 +1637,13 @@ class PanoramaParser:
                 'mode': None,
                 'ip_addresses': [],
                 'ipv6_addresses': [],
-                'zone': None,
-                'virtual_router': None,
                 'management_profile': None,
                 'comment': self._get_text(iface, 'comment'),
                 # An aggregate entry name can already be a subinterface
                 # (ae1.101); the parent is the aggregate group name and the
-                # unit number is the tag.
+                # unit number is the tag (F3.3).
                 'parent': name.split('.')[0] if '.' in name else None,
-                'tag': name.split('.')[1] if '.' in name else None
+                'tag': self._interface_tag(iface, name)
             })
             units = []
 
@@ -1692,13 +1652,11 @@ class PanoramaParser:
                 iface_obj['mode'] = 'layer3'
                 l3 = iface.find('layer3')
 
-                # Get IP addresses from the main interface only. Use a
-                # direct-child lookup so subinterface IPs (nested under
-                # <units>) do not leak into the parent's address list.
-                for ip in l3.findall('ip/entry'):
-                    ip_name = ip.get('name')
-                    if ip_name:
-                        iface_obj['ip_addresses'].append(ip_name)
+                # `_list_values` reads direct children only, so subinterface
+                # addresses (nested under <units>) cannot leak into the parent's
+                # address list.
+                iface_obj['ip_addresses'] = self._list_values(l3, 'ip')
+                iface_obj['ipv6_addresses'] = self._list_values(l3, 'ipv6/address')
 
                 # Management profile
                 mgmt_profile = l3.find('interface-management-profile')
@@ -1708,35 +1666,30 @@ class PanoramaParser:
                 # Get subinterfaces (units)
                 for unit in l3.findall('.//units/entry'):
                     unit_name = unit.get('name')
-                    if unit_name:
+                    if not unit_name:
+                        # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                        self.mark_skipped(unit, 'entry has no name attribute')
+                        continue
 
-                        unit_obj = self.mark(unit, {
-                            'name': unit_name,
-                            'type': 'aggregate-subinterface',
-                            **self.identity_of(unit),
-                            'mode': 'layer3',
-                            'ip_addresses': [],
-                            'ipv6_addresses': [],
-                            'zone': None,
-                            'virtual_router': None,
-                            'management_profile': None,
-                            'comment': self._get_text(unit, 'comment'),
-                            'tag': self._get_text(unit, 'tag'),
-                            'parent': name
-                        })
+                    unit_obj = self.mark(unit, {
+                        'name': unit_name,
+                        'type': 'aggregate-subinterface',
+                        **self.identity_of(unit),
+                        'mode': 'layer3',
+                        'ip_addresses': self._list_values(unit, 'ip'),
+                        'ipv6_addresses': self._list_values(unit, 'ipv6/address'),
+                        'management_profile': None,
+                        'comment': self._get_text(unit, 'comment'),
+                        'tag': self._interface_tag(unit, unit_name),
+                        'parent': name
+                    })
 
-                        # Get IP addresses
-                        for ip in unit.findall('.//ip/entry'):
-                            ip_name = ip.get('name')
-                            if ip_name:
-                                unit_obj['ip_addresses'].append(ip_name)
+                    # Management profile
+                    unit_mgmt = unit.find('interface-management-profile')
+                    if unit_mgmt is not None:
+                        unit_obj['management_profile'] = unit_mgmt.text
 
-                        # Management profile
-                        unit_mgmt = unit.find('interface-management-profile')
-                        if unit_mgmt is not None:
-                            unit_obj['management_profile'] = unit_mgmt.text
-
-                        units.append(unit_obj)
+                    units.append(unit_obj)
 
             elif iface.find('layer2') is not None:
                 iface_obj['mode'] = 'layer2'
@@ -1760,6 +1713,8 @@ class PanoramaParser:
         for route in router.findall('.//routing-table/ip/static-route/entry'):
             route_name = route.get('name')
             if not route_name:
+                # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                self.mark_skipped(route, 'entry has no name attribute')
                 continue
             static_routes.append(self.mark(route, {
                 'name': route_name,
@@ -1768,6 +1723,12 @@ class PanoramaParser:
                 'nexthop_interface': self._get_text(route, f'nexthop/{next_hop_tag}'),
                 'metric': self._get_text(route, 'metric'),
             }))
+        # F4.3, `docs/ARCHITECTURE.md` §4.9: the static routes this parse models are the entries under
+        # `routing-table/ip/static-route`, the shape the row states. A `protocol/static-routes` entry is a
+        # level `PROTOCOL_SHAPE` states no row for, so it cannot be modeled; the parse records each entry it
+        # reads as skipped, and the record names the level.
+        for entry in router.findall('.//protocol/static-routes/entry'):
+            self.mark_skipped(entry, 'no row states the protocol/static-routes level')
         # F7.1, F7.2: `protocol` is a captured field of the router entry, so the entry keeps one mark and the
         # protocol levels are the properties of that one entry. Each level is built by the parse method the
         # `protocol` row names, in the table order, so this method states no field name of its own (F7.5).
@@ -1803,6 +1764,8 @@ class PanoramaParser:
         routers = []
         for elem in self.root.findall(f'.//network/{container_tag}/entry'):
             if not elem.get('name'):
+                # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                self.mark_skipped(elem, 'entry has no name attribute')
                 continue
             obj = self.mark(elem, self._parse_router(elem, next_hop_tag))
             if router_type:
@@ -2013,10 +1976,15 @@ class PanoramaParser:
             # Parse class bandwidth settings
             for cls in prof.findall('.//class/entry'):
                 cls_name = cls.get('name')
-                if cls_name:
-                    prof_obj['class_bandwidth_type'][cls_name] = {
-                        'priority': self._get_text(cls, 'priority')
-                    }
+                if not cls_name:
+                    # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                    # A class entry is inside the profile entry, so the report shows it as the count on the
+                    # parent row instead of a line of its own.
+                    self.mark_skipped(cls, 'entry has no name attribute')
+                    continue
+                prof_obj['class_bandwidth_type'][cls_name] = {
+                    'priority': self._get_text(cls, 'priority')
+                }
 
             profiles.append(prof_obj)
 
@@ -2041,6 +2009,8 @@ class PanoramaParser:
             for prof in self.root.findall(path):
                 name = prof.get('name')
                 if not name:
+                    # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                    self.mark_skipped(prof, 'entry has no name attribute')
                     continue
 
                 profiles.append(self.mark(prof, {
@@ -2182,6 +2152,8 @@ class PanoramaParser:
         for group in bgp.findall('.//peer-group/entry'):
             name = group.get('name')
             if not name:
+                # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                self.mark_skipped(group, 'entry has no name attribute')
                 continue
             captured = self._protocol_level(group, group_path)
             choice_path = 'protocol/bgp/peer_group/type'
@@ -2198,13 +2170,19 @@ class PanoramaParser:
             # A peer inside the peer-group element belongs to that entry, so the shape table states `peer`
             # as a field of the peer-group level.
             for peer in group.findall('./peer/entry'):
-                if peer.get('name'):
-                    entry[self._protocol_field_name(peer_path)].append(
-                        self.mark(peer, self._protocol_level(peer, peer_path)))
+                peer_name = peer.get('name')
+                if not peer_name:
+                    # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                    self.mark_skipped(peer, 'entry has no name attribute')
+                    continue
+                entry[self._protocol_field_name(peer_path)].append(
+                    self.mark(peer, self._protocol_level(peer, peer_path)))
 
         for peer in bgp.findall('./peer/entry'):
             name = peer.get('name')
             if not name:
+                # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                self.mark_skipped(peer, 'entry has no name attribute')
                 continue
             captured = self._protocol_level(peer, peer_path)
             group = self._get_text(peer, 'peer-group')
@@ -2217,9 +2195,13 @@ class PanoramaParser:
                 self.mark(peer, captured, 'no peer group names it', destination='report')
         redist_path = 'protocol/bgp/redist_rules'
         for rule in bgp.findall('.//redist-rules/entry'):
-            if rule.get('name'):
-                level[self._protocol_field_name(redist_path)].append(
-                    self.mark(rule, self._protocol_level(rule, redist_path)))
+            rule_name = rule.get('name')
+            if not rule_name:
+                # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                self.mark_skipped(rule, 'entry has no name attribute')
+                continue
+            level[self._protocol_field_name(redist_path)].append(
+                self.mark(rule, self._protocol_level(rule, redist_path)))
         # F7.6: the `policy` level and its subtree are read through the table. The four levels inside it that
         # hold entries are the levels the container table names, so this method states their paths; a level
         # inside an entry is filled by `_protocol_body`, which reaches it through the table and so states no
@@ -2262,7 +2244,10 @@ class PanoramaParser:
             return {}
         level = self._protocol_areas(ospf, ospf_path)
         for iface in ospf.findall('./interface/entry'):
-            if not iface.get('name'):
+            iface_name = iface.get('name')
+            if not iface_name:
+                # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                self.mark_skipped(iface, 'entry has no name attribute')
                 continue
             # The provider declares an interface only inside an area, so an interface at the OSPF level
             # cannot be expressed and the manual report prints it. The row note is the reason, so the mark
@@ -2298,11 +2283,18 @@ class PanoramaParser:
         level = self._protocol_areas(ospfv3, ospfv3_path)
         export_path = f'{ospfv3_path}/export_rules'
         for rule in ospfv3.findall('.//export-rules/entry'):
-            if rule.get('name'):
-                level[self._protocol_field_name(export_path)].append(
-                    self.mark(rule, self._protocol_level(rule, export_path)))
+            rule_name = rule.get('name')
+            if not rule_name:
+                # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                self.mark_skipped(rule, 'entry has no name attribute')
+                continue
+            level[self._protocol_field_name(export_path)].append(
+                self.mark(rule, self._protocol_level(rule, export_path)))
         for iface in ospfv3.findall('./interface/entry'):
-            if not iface.get('name'):
+            iface_name = iface.get('name')
+            if not iface_name:
+                # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                self.mark_skipped(iface, 'entry has no name attribute')
                 continue
             # The provider declares an interface only inside an area, so an interface at the level cannot be
             # expressed and the manual report prints it, the same rule as `parse_ospf`.
@@ -2387,6 +2379,8 @@ class PanoramaParser:
         for area in container.findall('.//area/entry'):
             name = area.get('name')
             if not name:
+                # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                self.mark_skipped(area, 'entry has no name attribute')
                 continue
             captured = self._protocol_level(area, area_path)
             field = self._protocol_field_name(type_path)
@@ -2406,7 +2400,10 @@ class PanoramaParser:
                                   (link_path, area.findall('.//virtual-link/entry'))):
                 self._protocol_entries(path, entry[self._protocol_field_name(path)], entries)
             for iface in area.findall('./interface/entry'):
-                if not iface.get('name'):
+                iface_name = iface.get('name')
+                if not iface_name:
+                    # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                    self.mark_skipped(iface, 'entry has no name attribute')
                     continue
                 captured_iface, reason = self._protocol_interface(iface, base)
                 marked = self.mark(iface, captured_iface, reason, destination='report' if reason else None)
@@ -2467,6 +2464,10 @@ class PanoramaParser:
         table = table or resource_mapping.PROTOCOL_TABLE
         for entry in entries:
             if not entry.get('name'):
+                # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                # A nameless entry inside a config-object entry is a property level, so the report shows
+                # it as the count on the parent row instead of a line of its own.
+                self.mark_skipped(entry, 'entry has no name attribute')
                 continue
             captured = self._protocol_level(entry, path, True, table)
             reason = (self._protocol_body(path, entry, captured, table)
@@ -2673,7 +2674,11 @@ class PanoramaParser:
             # uses for `accept-summary`.
             return text == 'yes' or not text
         if shape == 'number':
-            return int(text) if text.isdigit() else ''
+            # A signed integer is what the provider reads for a number field, so `set-med -1` is a value.
+            # `isdigit` answers false for the sign, so the sign is read before the digits (F7.1 rule 8).
+            if text.isdigit() or (text.startswith('-') and text[1:].isdigit()):
+                return int(text)
+            return ''
         if shape == 'block':
             # Presence is the value: the provider reads an empty block as the export having stated it, so
             # the field prints `{}` when the element is there and prints nothing when it is not (F7.1).
@@ -2761,14 +2766,19 @@ class PanoramaParser:
                 proxy_ids = []
                 for proxy in auto_key.findall('.//proxy-id/entry'):
                     proxy_name = proxy.get('name')
-                    if proxy_name:
-                        proxy_config = self.mark(proxy, {
-                            'name': proxy_name,
-                            'local': self._get_text(proxy, 'local'),
-                            'remote': self._get_text(proxy, 'remote'),
-                            'protocol': self._get_text(proxy, 'protocol/number')
-                        })
-                        proxy_ids.append(proxy_config)
+                    if not proxy_name:
+                        # F4.3: the entry was read, so the record holds it even when the name guard skips
+                        # it. A proxy entry sits inside the tunnel entry, so the report counts it on the
+                        # parent row instead of printing a line of its own.
+                        self.mark_skipped(proxy, 'entry has no name attribute')
+                        continue
+                    proxy_config = self.mark(proxy, {
+                        'name': proxy_name,
+                        'local': self._get_text(proxy, 'local'),
+                        'remote': self._get_text(proxy, 'remote'),
+                        'protocol': self._get_text(proxy, 'protocol/number')
+                    })
+                    proxy_ids.append(proxy_config)
                 tunnel_config['proxy_ids'] = proxy_ids
 
             # Check for manual key
@@ -2933,6 +2943,10 @@ class PanoramaParser:
         the members when the element holds them. One member is the value the field can hold; more
         than one is the set it cannot hold, so the parse keeps the list and the emitter prints the
         `# NOTE:` line that names it (F2.9: never a silent drop).
+
+        The limit is the read: `find` answers one element, so this rule can only hold a field the
+        provider declares as one value. A field the provider declares as `['list', 'string']` must be a
+        `member_list` row instead, which is what the shape table pins (`docs/ARCHITECTURE.md` §4.9).
         """
         elem = element.find(path)
         if elem is None:
@@ -2941,6 +2955,50 @@ class PanoramaParser:
         if not members:
             return elem.text
         return members[0] if len(members) == 1 else members
+
+    def _list_values(self, element: ET.Element, path: str) -> list[str]:
+        """Read a list field, in either export form (F4.4).
+
+        A list field is the values under the element the field names, and the export states them as
+        entry children or as member children. Only direct children count, so a container the element
+        also holds (a `units` list under `layer3`) cannot reach the parent's list.
+
+        An entry child is an entry the parse reads, so F4.3 rule 1 reaches it: the record holds it, and
+        one with no name is recorded as skipped. A member child is a value, not an entry, so the rule
+        does not reach it.
+        """
+        elem = element.find(path)
+        if elem is None:
+            return []
+        names = []
+        for child in elem.findall('entry'):
+            child_name = child.get('name')
+            if not child_name:
+                # F4.3: the entry was read, so the record holds it even when the name guard skips it.
+                # It sits inside the entry that owns the field, so the report counts it on that row.
+                self.mark_skipped(child, 'entry has no name attribute')
+                continue
+            names.append(child_name)
+        return names or [child.text for child in elem.findall('member') if child.text]
+
+    def _interface_tag(self, entry: ET.Element, name: str) -> Optional[str]:
+        """Read the `tag` field every interface row declares, from either place the export states it.
+
+        The export states the unit tag as a direct child of the entry, or inside the mode block for a
+        virtual-wire or tap entry, which `_get_text` cannot read because it reads direct children only.
+        When the export states no tag element, the name carries the unit (F3.3), so the unit part of the
+        name is the value the row states.
+        """
+        tag = entry.find('tag')
+        if tag is None:
+            for mode in ('virtual-wire', 'tap'):
+                block = entry.find(mode)
+                if block is not None and block.find('tag') is not None:
+                    tag = block.find('tag')
+                    break
+        if tag is not None and tag.text:
+            return tag.text
+        return name.rsplit('.', 1)[1] if '.' in name else None
 
 
 class HclRef:

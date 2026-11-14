@@ -1,6 +1,6 @@
 """F4.3 per-entry coverage: the ledger, the report rows, and the report file.
 
-Four groups of checks:
+Five groups of checks:
 
 1. The mark mechanism. `mark` records the entry and returns the object it built,
    which is the recorded object the parse method works through, and `mark_skipped`
@@ -8,13 +8,18 @@ Four groups of checks:
 2. The read-but-not-marked rule. A parse method that reads config-object entries
    marks them, and a method that reads entries without marking them fails. A
    negative control pins that the check really fails. The corpus check runs the
-   parse methods, so it checks the marks the parse actually made.
+   parse methods, so it checks the marks the parse actually made. The entry-name
+   guard is part of this rule: a guard that skips a nameless entry must record it,
+   and a nameless entry reaches the report line or the parent row count.
 3. The row rules. Object type is the F4.2 `section_path`, destination is answered in
    one place, in the order: the per-entry fact on the recorded object, the destination
    `mark` recorded, the container table row. A scope entry takes the destination its
-   table row states (F6.5), a property entry is counted on the parent row, and a
-   `predefined` entry is not a row.
-4. The report. One line per row, the gap section, file name only, byte-identical
+   table row states (F6.5), a property entry is counted on the parent row, a
+   `predefined` entry is not a row, and an entry at a level the table states no row
+   for still holds a record.
+4. Captured fields. The names a report line prints, without the identity and scope
+   facts.
+5. The report. One line per row, the gap section, file name only, byte-identical
    between runs, and no file when the input has no entries. A gap does not change
    the exit code.
 
@@ -32,7 +37,7 @@ from pathlib import Path
 import container_coverage
 import entry_coverage
 import xml_input
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, corpus_fixtures, run_pipeline, run_script
+from conftest import FIXTURES_DIR, SAMPLE_CONFIG, corpus_fixtures, run_pipeline, run_script, written_bytes
 
 GAP_FIXTURE = 'entry_gaps.xml'
 UNKNOWN_FIXTURE = 'unknown_containers.xml'
@@ -164,6 +169,142 @@ def _marks_in(cls, method_name: str) -> bool:
                     and isinstance(node.func.value, ast.Name) and node.func.value.id == 'self':
                 pending.append(node.func.attr)
     return False
+
+
+def _name_guards(cls) -> list:
+    """Every entry-name guard as (method name, guard form, the branch that skips the entry).
+
+    A guard is an `if` whose test is the truthiness of the entry name: the name read through
+    `.get('name')`, or through a variable the method assigns from that call. The branch that skips the
+    entry is the body of the negative form (`if not name`) and the `else` of the positive form
+    (`if name`), so the pin reads the branch the skip happens in.
+    """
+    guards = []
+    for method_name in sorted(n for n in dir(cls) if n.startswith('parse_') or n.startswith('_')):
+        try:
+            source = inspect.getsource(getattr(cls, method_name))
+        except (TypeError, AttributeError):
+            continue
+        tree = ast.parse(textwrap.dedent(source))
+        # The variables a method assigns from `.get('name')`, so a guard that tests one of them tests the
+        # same entry name.
+        name_vars = {node.targets[0].id for node in ast.walk(tree)
+                     if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)
+                     and isinstance(node.value.func, ast.Attribute) and node.value.func.attr == 'get'
+                     and node.value.args and isinstance(node.value.args[0], ast.Constant)
+                     and node.value.args[0].value == 'name'
+                     and isinstance(node.targets[0], ast.Name)}
+
+        # `name_vars` is bound as a default so the nested function reads this method's set, not the last
+        # one the loop leaves behind.
+        def tests_name(node, bound=name_vars) -> bool:
+            if isinstance(node, ast.Name):
+                return node.id in bound
+            return (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == 'get' and node.args
+                    and isinstance(node.args[0], ast.Constant) and node.args[0].value == 'name')
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.If):
+                continue
+            if isinstance(node.test, ast.UnaryOp) and isinstance(node.test.op, ast.Not) \
+                    and tests_name(node.test.operand):
+                guards.append((method_name, 'negative', node.body, node.lineno))
+            elif tests_name(node.test):
+                guards.append((method_name, 'positive', node.orelse, node.lineno))
+    return guards
+
+
+def _records_in_branch(statements) -> bool:
+    """True when the branch calls `mark_skipped`, the call that gives a skipped entry a record."""
+    return any(isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+               and node.func.attr == 'mark_skipped'
+               for statement in statements for node in ast.walk(statement))
+
+
+def test_every_name_guard_records_the_entry_it_reads(converter_module):
+    """Every entry-name guard records the entry it skips (F4.3 rule 1, `GAP_RULE`).
+
+    Measured 2026-11-13: 69 guards, 68 of them call `mark_skipped` in the branch that skips. `_list_names`
+    is the one the rule does not reach: its name can come from a `member` child, which is not an entry, and
+    it marks every `entry` child before the guard, so a nameless entry there still has a record. Before the
+    change the same definition measured 77 guards and 47 records, 11 negative-form guards and 19
+    positive-form guards with no record.
+    """
+    cls = converter_module.PanoramaParser
+    guards = _name_guards(cls)
+    assert len(guards) == 69, len(guards)
+    unrecorded = [(g[0], g[1]) for g in guards if not _records_in_branch(g[2])]
+    assert unrecorded == [('_list_names', 'positive')], unrecorded
+    # The exception is honest: the mark is before the guard, so the guard is not the record for that entry.
+    guard = next(g for g in guards if g[0] == '_list_names')
+    tree = ast.parse(textwrap.dedent(inspect.getsource(cls._list_names)))
+    loop = next(n for n in ast.walk(tree) if isinstance(n, ast.For))
+    marked = [c.lineno for c in ast.walk(loop) if isinstance(c, ast.Call)
+              and isinstance(c.func, ast.Attribute) and c.func.attr == 'mark']
+    assert marked and min(marked) < guard[3], (marked, guard[3])
+
+
+def test_a_nameless_entry_reaches_the_record_and_the_report(converter_module, tmp_path):
+    """A nameless entry has a record, and the report prints its line when its container is a section.
+
+    The content holds one nameless entry at the `tag` section level and one nameless entry inside an address
+    entry. The first is a report entry, so its row prints a line. The second is a property level (§3.2), so
+    `is_report_entry` answers False, no line prints for it, and the parent row counts it as a property entry.
+    Both have a record with the reason, and the run writes its `.tf` file for the entries it models. Before
+    the change neither entry had a record.
+    """
+    content = tmp_path / 'nameless_entry.xml'
+    content.write_text(
+        '<?xml version="1.0"?>\n<config version="10.0.0">\n  <shared>\n'
+        '    <tag>\n      <entry name="Named-Tag"><color>red</color></entry>\n'
+        '      <entry><comments>Nameless at the section level</comments></entry>\n'
+        '    </tag>\n    <address>\n      <entry name="Parent-Address">\n'
+        '        <type>ip-netmask</type>\n        <value>10.0.0.1/32</value>\n'
+        '        <tag><entry><color>Nameless inside the entry</color></entry></tag>\n'
+        '      </entry>\n    </address>\n  </shared>\n</config>\n', encoding='utf-8')
+    # `run_pipeline` builds the report, so the content path is the source the report names. An absolute path
+    # passes through `FIXTURES_DIR /` unchanged.
+    out = tmp_path / 'out'
+    parser = run_pipeline(converter_module, str(content), out)
+    assert parser is not None, 'the run refused the input'
+    ledger = parser.ledger
+    nameless = [e for e in ledger.entries() if e.get('name') is None]
+    assert len(nameless) == 2, nameless
+    for entry in nameless:
+        mark = ledger.mark_for(entry)
+        assert mark is not None, entry
+        assert mark['destination'] == 'skipped', mark['destination']
+        assert mark['detail'] == 'entry has no name attribute', mark['detail']
+
+    # The section-level entry is a report entry, so the report prints its line.
+    section_entry = next(e for e in nameless if ledger.is_report_entry(e))
+    assert ledger.row_for(section_entry)['property_entries'] == 0, ledger.row_for(section_entry)
+    report = written_bytes(out)[entry_coverage.REPORT_FILE].decode(encoding='utf-8')
+    line = next(line for line in report.splitlines() if 'tag/' in line)
+    assert line == entry_coverage.entry_line(ledger.row_for(section_entry)), line
+    assert 'skipped' in line and 'captured: name only' in line, line
+    assert str(content) not in report
+
+    # The entry inside the address entry prints no line of its own: the record is its report, and the parent
+    # row counts it. `rows()` holds only report entries, so the child is not in it.
+    child = next(e for e in nameless if not ledger.is_report_entry(e))
+    child_row = ledger.row_for(child)
+    assert child_row['name'] == '(no name)' and child_row['destination'] == 'skipped', child_row
+    parent = next(e for e in ledger.entries() if e.get('name') == 'Parent-Address')
+    parent_row = ledger.row_for(parent)
+    assert parent_row['name'] == 'Parent-Address' and parent_row['property_entries'] == 1, parent_row
+    assert parent_row in ledger.rows(), ledger.rows()
+    # The two tag rows are the report rows, so the child has no row of its own.
+    assert [r['name'] for r in ledger.rows()] == ['Named-Tag', '(no name)', 'Parent-Address'], ledger.rows()
+    # No line prints for the child, so its value text appears nowhere in the report.
+    assert 'Nameless inside the entry' not in report, report
+
+    # The `.tf` set holds the two entries the parse modelled and nothing for the nameless ones.
+    tf = '\n'.join(text.decode(encoding='utf-8') for text in written_bytes(out).values())
+    # The named entries the parse modelled: the tag block, and no block for the nameless entry.
+    assert 'name = "Named-Tag"' in tf and 'name = "Parent-Address"' not in tf, tf
+    assert tf.count('resource "panos_administrative_tag"') == 1, tf
 
 
 def test_every_parse_method_that_reads_entries_marks_them(converter_module):
@@ -363,6 +504,53 @@ def test_property_entries_are_counted_on_the_parent_row():
     # The entry inside it is a property level, so it is not a row of its own.
     assert 'hourly' not in names
     assert ledger.property_entry_total() > 0
+
+
+def test_an_entry_at_a_level_the_table_states_no_row_is_recorded(converter_module, tmp_path):
+    """A level the container table states no row for still holds a record for the entry it reads.
+
+    `protocol/static-routes` is such a level: the provider declares `panos_virtual_router.protocol` without
+    `static_routes`, so `PROTOCOL_SHAPE` states no row for it and no method reads it. `_parse_router` records
+    each entry the export states there as skipped, naming the level. The entry is inside the router entry, so
+    it is a property level and prints no line of its own: the record is its report and the parent row counts it.
+    Before the change the entry had no record and the parent row counted nothing.
+    """
+    content = tmp_path / 'static_routes_level.xml'
+    content.write_text(
+        '<?xml version="1.0"?>\n<config version="10.0.0">\n  <shared>\n'
+        '    <network>\n      <virtual-router>\n        <entry name="VR-Static">\n'
+        '          <protocol>\n            <static-routes>\n'
+        '              <entry name="via-peer"><prefix>10.0.0.0/8</prefix></entry>\n'
+        '            </static-routes>\n            <bgp><enabled>yes</enabled></bgp>\n'
+        '          </protocol>\n        </entry>\n      </virtual-router>\n    </network>\n  </shared>\n</config>\n',
+        encoding='utf-8')
+    out = tmp_path / 'out'
+    parser = run_pipeline(converter_module, str(content), out)
+    assert parser is not None, 'the run refused the input'
+    ledger = parser.ledger
+    route = next(e for e in ledger.entries() if e.get('name') == 'via-peer')
+    mark = ledger.mark_for(route)
+    assert mark is not None, 'the entry the parse read has no record'
+    assert mark['destination'] == 'skipped', mark['destination']
+    assert mark['detail'] == 'no row states the protocol/static-routes level', mark['detail']
+    assert ledger.captured_fields(mark) == (), ledger.captured_fields(mark)
+
+    # The level the reason names is a level the table states no row for, so the entry is not a row of its own.
+    assert entry_coverage.covering_row('protocol/static-routes') is None
+    assert entry_coverage.matrix_row_for('protocol/static-routes') is None
+    router = next(e for e in ledger.entries() if e.get('name') == 'VR-Static')
+    parent_row = ledger.row_for(router)
+    assert parent_row['name'] == 'VR-Static' and parent_row['property_entries'] == 1, parent_row
+    # The entry is not a report entry, so the report prints one line: the parent row, with the count.
+    report = written_bytes(out)[entry_coverage.REPORT_FILE].decode(encoding='utf-8')
+    assert entry_coverage.entry_line(parent_row) in report, report
+    assert [r['name'] for r in ledger.rows()] == ['VR-Static'], ledger.rows()
+
+    # The `.tf` bytes hold no block for the entry, because no resource prints a level no row states.
+    tf = '\n'.join(text.decode(encoding='utf-8') for text in written_bytes(out).values())
+    assert 'panos_virtual_router_static_route' not in tf, tf
+    assert 'via-peer' not in tf, tf
+    assert 'name = "VR-Static"' in tf, tf
 
 
 def test_predefined_entries_are_not_rows():

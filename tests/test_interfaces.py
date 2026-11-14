@@ -4,11 +4,16 @@ The provider has no virtual-wire resource type: virtual-wire and tap entries
 are nested blocks on panos_ethernet_interface. Subinterface resources carry a
 parent reference to the physical interface or aggregate group declared in the
 same run.
+
+The last two pins read the parse object, not the print, so they run in process: `tag` is a field every
+interface row declares, and a list field has two export shapes (`docs/COVERAGE_MATRIX.md` §1).
 """
 
 import re
 
-from conftest import FIXTURES_DIR, RESOURCE_RE, file_text, run_script, tf_files
+import container_coverage
+import entry_coverage
+from conftest import FIXTURES_DIR, RESOURCE_RE, file_text, run_pipeline, run_script, tf_files
 
 
 def _generate(fixture: str, tmp_path) -> str:
@@ -127,3 +132,194 @@ def test_interfaces_are_template_scoped(tmp_path):
     text = _generate('interfaces_other.xml', tmp_path)
     assert 'device_group' not in text
     assert 'template = {' in text
+
+
+INTERFACE_KIND_CONTENT = '''<?xml version="1.0"?>
+<config version="10.0.0">
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+          <network>
+            <interface>
+              <ethernet>
+                <entry name="ethernet1/1">
+                  <mode>layer3</mode>
+                  <tag>7</tag>
+                  <layer3>
+                    <interface-management-profile>Mgmt-A</interface-management-profile>
+                    <ip><entry name="10.1.1.1/24"/></ip>
+                    <ipv6><address><member>2001:db8::1/64</member></address></ipv6>
+                  </layer3>
+                  <comment>Physical entry</comment>
+                </entry>
+                <entry name="ethernet1/4.1">
+                  <mode>virtual-wire</mode>
+                  <virtual-wire><tag>101</tag></virtual-wire>
+                  <comment>Virtual-wire unit</comment>
+                </entry>
+              </ethernet>
+              <vlan>
+                <units>
+                  <entry name="20">
+                    <comment>Vlan unit</comment>
+                    <ip><entry name="10.1.20.1/24"/></ip>
+                    <ipv6><address><entry name="2001:db8::20/64"/></address></ipv6>
+                    <interface-management-profile>Mgmt-C</interface-management-profile>
+                  </entry>
+                </units>
+              </vlan>
+              <loopback>
+                <units>
+                  <entry name="1">
+                    <comment>Loopback unit</comment>
+                    <ip><member>10.1.1.2/32</member></ip>
+                    <ipv6><address><member>2001:db8::2/128</member></address></ipv6>
+                    <interface-management-profile>Mgmt-D</interface-management-profile>
+                  </entry>
+                </units>
+              </loopback>
+              <tunnel>
+                <units>
+                  <entry name="2">
+                    <comment>Tunnel unit</comment>
+                    <ip><entry name="10.1.1.3/32"/></ip>
+                    <ipv6><address><member>2001:db8::3/128</member></address></ipv6>
+                    <interface-management-profile>Mgmt-E</interface-management-profile>
+                  </entry>
+                </units>
+              </tunnel>
+              <aggregate-ethernet>
+                <entry name="ae1">
+                  <comment>Aggregate group</comment>
+                  <layer3>
+                    <ip><member>10.1.101.1/24</member></ip>
+                    <ipv6><address><member>2001:db8::101/128</member></address></ipv6>
+                    <interface-management-profile>Mgmt-F</interface-management-profile>
+                  </layer3>
+                </entry>
+                <entry name="ae1.101">
+                  <comment>Aggregate subinterface</comment>
+                  <layer3>
+                    <ip><member>10.1.102.1/24</member></ip>
+                    <ipv6><address><member>2001:db8::102/128</member></address></ipv6>
+                    <interface-management-profile>Mgmt-G</interface-management-profile>
+                  </layer3>
+                </entry>
+              </aggregate-ethernet>
+            </interface>
+          </network>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>
+'''
+
+
+def _run_in_process(converter_module, content: str, out_dir):
+    """Run content this pin wrote, in process, so the read record survives.
+
+    The parse object is what these pins read, so the run cannot be a subprocess: `run_script`
+    loses the ledger with the process. The content is in `tmp_path`, not in `tests/fixtures/`,
+    so the corpus set is unchanged.
+    """
+    source = out_dir.parent / (out_dir.name + '.xml')
+    source.write_text(content, encoding='utf-8')
+    parser = run_pipeline(converter_module, str(source), out_dir)
+    assert parser is not None, source
+    return parser.ledger
+
+
+def test_the_interface_object_holds_the_fields_its_row_declares(converter_module, tmp_path):
+    """For every interface row, the keys the parse stored are the fields that row declares (F4.4).
+
+    One entry per kind, each stating every field its row declares, so the stored key set is the row's
+    properties plus `name` and the five scope facts, and holds no key the row does not state. `zone` and
+    `virtual_router` are not interface fields: the provider models membership from the other side
+    (`panos_zone.interfaces`, `panos_virtual_router.interfaces`), so the interface object carries no key for
+    either. `parent` is a field only for the kinds whose row declares it, so a physical entry and a
+    virtual-wire unit hold no parent key.
+
+    Before the change a physical entry stored no `tag`, and every kind stored `zone` and `virtual_router`.
+    """
+    ledger = _run_in_process(converter_module, INTERFACE_KIND_CONTENT, tmp_path / 'kinds')
+    stored = {}
+    for entry in ledger.entries():
+        mark = ledger.mark_for(entry)
+        if mark is None:
+            continue
+        captured = mark['captured']
+        row = entry_coverage.matrix_row_for(
+            container_coverage.section_path(ledger.parents[entry], ledger.parents, ledger.source))
+        assert row is not None and row['resource'].startswith('panos_'), entry.get('name')
+        fields = set(captured) - entry_coverage.NON_FIELD_KEYS
+        assert fields == set(row['properties']), (captured.get('type'), sorted(fields), sorted(row['properties']))
+        # Only the interface parse objects carry a stored name; the scope entry records the scope facts.
+        if captured.get('name') is not None:
+            stored[captured['name']] = captured
+    assert sorted(stored) == ['ae1', 'ae1.101', 'ethernet1/1', 'ethernet1/4.1',
+                              'loopback.1', 'tunnel.2', 'vlan.20'], sorted(stored)
+
+    # The `tag` the row states, from either place the export states it, or from the name when the name
+    # carries the unit (`TerraformParser._interface_tag`). The aggregate group has no unit in its name, so
+    # the rule states no value for it, and `captured_fields` cannot see an empty field (F4.4 rule 4).
+    assert {name: obj['tag'] for name, obj in stored.items()} == {
+        'ethernet1/1': '7',        # the entry's own `tag` element
+        'ethernet1/4.1': '101',    # the `tag` inside the mode block
+        'vlan.20': '20',           # the unit part of the name
+        'loopback.1': '1',
+        'tunnel.2': '2',
+        'ae1': None,
+        'ae1.101': '101',
+    }, {name: obj['tag'] for name, obj in stored.items()}
+    # Only the kinds whose row declares a parent hold the key.
+    assert {name: ('parent' in obj) for name, obj in stored.items()} == {
+        'ethernet1/1': False, 'ethernet1/4.1': False, 'vlan.20': True,
+        'loopback.1': True, 'tunnel.2': True, 'ae1': True, 'ae1.101': True,
+    }
+
+
+def test_a_list_field_is_read_in_both_export_shapes(converter_module, tmp_path):
+    """A list field is the entry names or the member texts under the element the field names (F4.4).
+
+    Before the change the interface parse read only the entry form, so a member-form address was dropped.
+    The two forms are one field read by one rule, `_list_values`, which is the list form of the value rule
+    that already accepts both. Only direct children count, so a `units` container inside the read scope
+    cannot put its entries' values into the parent's list; the aggregate branch is the shape that shows
+    it, because its units sit inside `layer3`, inside the element the parent's field reads.
+    """
+    content = '''<?xml version="1.0"?>
+<config version="10.0.0">
+  <shared>
+    <network>
+      <interface>
+        <aggregate-ethernet>
+          <entry name="ae1">
+            <layer3>
+              <ip><member>10.1.1.1/24</member></ip>
+              <ipv6><address><entry name="2001:db8::1/64"/></address></ipv6>
+              <units>
+                <entry name="10"><ip><member>10.1.10.1/24</member></ip></entry>
+              </units>
+            </layer3>
+          </entry>
+        </aggregate-ethernet>
+      </interface>
+    </network>
+  </shared>
+</config>
+'''
+    ledger = _run_in_process(converter_module, content, tmp_path / 'shapes')
+    recorded = {entry.get('name'): ledger.mark_for(entry)['captured']
+                for entry in ledger.entries() if ledger.mark_for(entry) is not None}
+    parent = recorded['ae1']
+    # The member form is read, and the parent's list holds only its own member: the `units` container
+    # inside `layer3` did not reach it.
+    assert parent['ip_addresses'] == ['10.1.1.1/24'], parent['ip_addresses']
+    # The entry form is read: the entry name under `ipv6/address` is the value.
+    assert parent['ipv6_addresses'] == ['2001:db8::1/64'], parent['ipv6_addresses']
+    # The unit entry keeps its own value, on its own object, through the same rule.
+    unit = recorded['10']
+    assert unit['ip_addresses'] == ['10.1.10.1/24'], unit['ip_addresses']
+    assert unit['parent'] == 'ae1', unit['parent']

@@ -4443,6 +4443,12 @@ COVERAGE_MATRIX = (
         # measured as the field of the peer entry that holds it, and the fields inside it are not. An interface
         # entry sits inside an area entry, so the fields the two interface rows gained stay grounded by the
         # table and add no property here.
+        # `static_routes` is grounded by the read record, not by a protocol level: `generate_virtual_routers`
+        # reads the key and prints one resource block per entry, so no block prints the key as a field. The
+        # provider declares `protocol` with no `static_routes`, so `PROTOCOL_SHAPE` states no row for the
+        # `protocol/static-routes` level and no method reads it. The parse records each entry the export states
+        # there as skipped, which `tests/test_entry_coverage.py` measures through the record
+        # (`test_an_entry_at_a_level_the_table_states_no_row_is_recorded`).
         'properties': ('action', 'address_family_identifier', 'advertise_filters',
                        'aggregate_route_attributes', 'aggregated_confed_as_path', 'ah', 'as_set',
                        'authentication', 'bfd', 'connection_options', 'cutoff',

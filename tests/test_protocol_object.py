@@ -24,7 +24,9 @@ Pins:
 - a sensitive field as the variable reference, and `VALUE_VARIABLES` as the one shape owner for a printed
   value;
 - one negative test per gate finding, the gate reporting no finding on a run, and two runs writing the
-  same bytes.
+  same bytes;
+- the value rule read back: the inverse reads a signed integer as `number`, so the block prints the sign the
+  export states, and the level the shape table states no row for is a level the record holds instead.
 """
 
 import ast
@@ -40,7 +42,7 @@ import resource_mapping
 import sanity_checks
 import site_data
 import unit_manifest
-from conftest import FIXTURES_DIR, GOLDEN_DIR, file_text, run_script, tf_files
+from conftest import FIXTURES_DIR, GOLDEN_DIR, file_text, run_pipeline, run_script, tf_files
 
 CONVERTER = 'panorama_to_terraform.py'
 
@@ -517,12 +519,56 @@ def test_the_six_rows_are_the_whole_measurement(provider_schema):
     assert len(resource_mapping.PROTOCOL_SHAPE) == 194, len(resource_mapping.PROTOCOL_SHAPE)
 
 
+def test_the_shape_table_states_no_row_for_the_level_the_router_records(provider_schema, converter_module,
+                                                                        tmp_path):
+    """F4.9: `protocol/static-routes` is a level the shape table states no row for, so the record is its report.
+
+    Measured 2026-11-13 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14` through
+    `tests/conftest.py::provider_schemas`): `panos_virtual_router.protocol` declares the six levels
+    `PROTOCOL_SHAPE` states rows for, and no `static_routes`, so `protocol_row` answers None for the level and
+    the scan has no row to measure it against. `_parse_router` reads the shape the row states instead — the
+    entries under `routing-table/ip/static-route` — and records each entry the export states at the level with
+    no row. The record half is pinned in `tests/test_entry_coverage.py`
+    (`test_an_entry_at_a_level_the_table_states_no_row_is_recorded`).
+
+    The virtual-router row owns two paths: `protocol`, the object field the block prints, and `static_routes`,
+    which the read record grounds because `generate_virtual_routers` reads the key and prints one resource block
+    per entry, so no golden prints the key as a field of the router block.
+    """
+    attributes = _schema_node(provider_schema, 'protocol')['nested_type']['attributes']
+    assert 'static_routes' not in attributes, sorted(attributes)
+    assert set(resource_mapping.protocol_row(resource_mapping.PROTOCOL_FIELD)['fields']) == set(attributes)
+    assert resource_mapping.protocol_row('protocol/static-routes') is None
+
+    # The shape the row states for the entries the parse models.
+    static_row = next(row for row in resource_mapping.COVERAGE_MATRIX
+                      if row['resource'] == 'panos_virtual_router_static_route_ipv4')
+    assert static_row['properties'] == ('destination', 'metric', 'nexthop_interface', 'nexthop_ip'), \
+        static_row['properties']
+    router_row = next(row for row in resource_mapping.COVERAGE_MATRIX
+                      if row['resource'] == 'panos_virtual_router')
+    assert 'protocol' in router_row['properties'] and 'static_routes' in router_row['properties'], \
+        router_row['properties']
+
+    # `static_routes` is grounded by the read record, so the pin measures the record on a run.
+    parser = run_pipeline(converter_module, 'virtual_routers.xml', tmp_path)
+    assert parser is not None, 'virtual_routers.xml'
+    ledger = parser.ledger
+    router = next(e for e in ledger.entries() if e.get('name') == 'default')
+    read = set(ledger.mark_for(router)['captured'].used_keys()) - entry_coverage.NON_FIELD_KEYS
+    assert {'protocol', 'static_routes'} <= read, read
+    assert not [path for path in GOLDEN_DIR.rglob('*.tf')
+                if 'static_routes = [' in path.read_text(encoding='utf-8')], 'no golden prints the key'
+
+
 def test_value_shape_is_the_reader_inverse_for_every_shape_word():
     """`value_shape` reads back each shape word the table states, including `number` and `block` (F6.7, F7.1).
 
     A specialization reads back as the family word the reader reads, which `sanity_checks.SHAPE_READS_AS` states
     in one place: `one_of` and `block` are object values, and a `member_list` is a `[` value whose members are
-    values and not entries.
+    values and not entries. The sign is part of a `number` value, so the inverse reads a signed integer as the
+    same word the reader read; before the change `text.isdigit()` read an unsigned value only, so `-1` read as
+    `''` and the gate reported "is not a number value" for a value the reader had accepted.
     """
     samples = {'string': '"host"', 'bool': 'true', 'number': '10', 'object': '{}',
                'string_list': '["a"]', 'member_list': '["a"]', 'one_of': '{ebgp = {}}', 'block': '{}'}
@@ -530,6 +576,9 @@ def test_value_shape_is_the_reader_inverse_for_every_shape_word():
         expected = sanity_checks.SHAPE_READS_AS.get(word, word)
         assert sanity_checks.value_shape(text) == expected, (word, text)
     assert set(samples) == set(resource_mapping.SHAPE_WORDS), resource_mapping.SHAPE_WORDS
+    # F7.1: the signed form reads back as `number`, the same word as the unsigned form.
+    assert sanity_checks.value_shape('-1') == 'number', sanity_checks.value_shape('-1')
+    assert sanity_checks.value_shape('-') == '', sanity_checks.value_shape('-')
 
 
 # --- 2. the one-of mapping ---------------------------------------------------

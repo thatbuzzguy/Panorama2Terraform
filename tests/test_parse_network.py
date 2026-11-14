@@ -78,7 +78,12 @@ def test_parse_interfaces_other_types(make_parser):
 
 
 def test_parse_ethernet_subinterface_units(make_parser):
-    """F3.3: ethernet subinterface units are individual entries."""
+    """F3.3: ethernet subinterface units are individual entries.
+
+    F4.4: `parent` is a field only for a kind whose row declares it, so the subinterface object carries it and
+    the physical entry carries no key for it (`docs/COVERAGE_MATRIX.md` §1). F3.3 criterion 3 reads as: every
+    entry carries kind, mode and vsys, and `parent` where its row declares it.
+    """
     p = _parser(make_parser, "interfaces_ethernet.xml")
     ifaces = p.parse_interfaces()
     by_name = {i["name"]: i for i in ifaces}
@@ -90,9 +95,10 @@ def test_parse_ethernet_subinterface_units(make_parser):
     assert sub["ip_addresses"] == ["192.168.1.10/24"]
     # The physical entry keeps only its own address.
     assert by_name["ethernet1/1"]["ip_addresses"] == ["192.168.1.1/24"]
-    # F3.3 criterion 3: every entry carries kind, mode, parent, vsys.
-    assert all(i["parent"] is not None or i["type"] in ("ethernet", "vlan",
-                                                         "loopback", "tunnel")
+    # F3.3 criterion 3, read against the row for each kind.
+    assert "parent" not in by_name["ethernet1/1"], sorted(by_name["ethernet1/1"])
+    assert all(i.get("parent") is not None or i["type"] in ("ethernet", "vlan",
+                                                             "loopback", "tunnel")
                for i in ifaces)
 
 
@@ -102,7 +108,7 @@ def test_parse_virtual_wire_units(make_parser):
     F4.4: the parse keeps no `parent` value for a nested-block entry. The type the block prints
     (`panos_ethernet_interface`) declares no `parent` attribute, so `parent` is not a property the entry can
     carry: it is a fact of the parent entry, and the child's name states the parent part. The rule is in
-    `docs/COVERAGE_MATRIX.md` §1.
+    `docs/COVERAGE_MATRIX.md` §1, so the object carries no key for it and the entry line names no `parent`.
     """
     p = _parser(make_parser, "interfaces_ethernet.xml")
     by_name = {i["name"]: i for i in p.parse_interfaces()}
@@ -110,8 +116,8 @@ def test_parse_virtual_wire_units(make_parser):
     vw = by_name["ethernet1/4.1"]
     assert vw["type"] == "ethernet"
     assert vw["mode"] == "virtual-wire"
-    # No value, so the key is not a captured field (F4.3 rule 3).
-    assert vw["parent"] is None, vw["parent"]
+    # No key, so no captured field for it (F4.3 rule 3).
+    assert "parent" not in vw, sorted(vw)
     assert vw["comment"] == "Wire unit on ethernet1/4"
 
     # An ethernet entry that is itself in virtual-wire or tap mode keeps
