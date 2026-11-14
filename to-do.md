@@ -28,22 +28,39 @@ and no pin failed once it measured content. The criteria and the measurement are
 - The five order pins hold the document order `docs/ARCHITECTURE.md` §4.4 states and assert the uniqueness rule:
   `tests/test_parse_rules.py` (four pins) and `tests/test_parse_profiles.py::test_parse_pbf_monitor_profiles`.
 
-### Piece 4 — the parse set reads what its rows state
+### Piece 4 — the parse set reads what its rows state (complete, committed 2026-11-13)
 
-Owner: the parse methods named in `backlog.md` (measured 2026-11-12), and the coverage matrix rows.
+Owner: `src/panorama_to_terraform.py`, `src/sanity_checks.py`, `src/entry_coverage.py`, and the coverage matrix
+rows they read. The criteria and the measurement are in `acceptance.md`.
 
-- [ ] `parse_interfaces`: read `zone`, `virtual_router` and `tag` for every entry kind, and read both
-      address shapes (`ip/entry` and `ip/member`); or state the fields as report-only on the interface
-      row. Decide which, and make the property scan able to see the difference (the `captured_fields`
-      rule that skips an empty value).
-- [ ] Call `mark_skipped` in the 11 name guards that `continue` without a record, so the per-entry
-      report keeps its one-line-per-entry rule.
-- [ ] `parse_schedules`: skip a nameless recurring child through the record, so the report writer does
-      not raise and the run does not leave half-written output.
-- [ ] `_parse_router`: read the entry shape under `protocol/static-routes`, or state that shape on the
-      virtual-router row.
-- [ ] `_protocol_field`: use the shape rule for a number instead of `text.isdigit()`, and state the
-      single-match limit.
+- `tag` is read for every entry kind through one rule, `TerraformParser._interface_tag`: the entry's own `tag`
+  element, the `tag` inside the mode block, or the unit part of the name when the name carries the unit.
+  `tests/test_interfaces.py::test_the_interface_object_holds_the_fields_its_row_declares`.
+- Both address shapes are one field read by one rule, `TerraformParser._list_values`, the list form of
+  `_get_single_value`, and only direct children count.
+  `tests/test_interfaces.py::test_a_list_field_is_read_in_both_export_shapes`.
+- `zone` and `virtual_router` are not interface fields and nothing reads them, so the interface object carries no
+  key for either; `parent` is a field only for the kinds whose row declares it.
+- The scan's blind side is stated in `src/entry_coverage.py` §F4.4, and
+  `tests/test_property_coverage.py::test_the_scan_cannot_see_a_field_the_parse_stored_empty` measures it.
+- Every entry name guard in the parse set records the entry it skips, and
+  `tests/test_entry_coverage.py::test_every_name_guard_records_the_entry_it_reads` measures the set through
+  `ast`; `tests/test_entry_coverage.py::test_a_nameless_entry_reaches_the_record_and_the_report` measures a
+  nameless entry at a section level and inside a config-object entry.
+- `parse_schedules` skips a nameless recurring child through the record, so the report writer joins only the names
+  it kept: `tests/test_property_coverage.py::test_a_nameless_recurring_child_reaches_the_record_and_not_the_join`.
+- `_parse_router` keeps reading only the shape the virtual-router row states and records each entry the export
+  states under `protocol/static-routes` as skipped:
+  `tests/test_entry_coverage.py::test_an_entry_at_a_level_the_table_states_no_row_is_recorded`, with the schema
+  half in `tests/test_protocol_object.py::test_the_shape_table_states_no_row_for_the_level_the_router_records`.
+- `_protocol_field` reads a `number` as the shape states it, so the reader's inverse
+  `src/sanity_checks.py::value_shape` reads a signed integer back as `number`:
+  `tests/test_protocol_object.py::test_a_number_field_prints_the_signed_integer_the_shape_states`. The four
+  `member_list` corrections the audit named are not applied, because the pinned provider schema states all four
+  fields as `string`.
+
+One part of the last finding stays open in `backlog.md`: a `number` text the value rule cannot read.
+
 
 ### Piece 5 — naming and printing state one rule
 

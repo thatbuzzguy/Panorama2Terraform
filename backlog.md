@@ -706,40 +706,18 @@ are in `/tmp/opencode/` and are not part of the tree.
 
 ### Parse set
 
-- Silent drop: `parse_interfaces` stores `zone` and `virtual_router` as `None` and never assigns a value read
-  from the XML (`src/panorama_to_terraform.py:1442-1443`), and it keeps `tag` only for a subinterface entry
-  (1504). It reads the address list as `ip/entry` (1455-1458, 1496-1497), so the member form the export can
-  state is dropped, while every other field it reads through `_get_single_value` (2928) accepts both shapes.
-  No emitter prints these three fields. Measured probe `/tmp/opencode/probe5.xml`: an entry that stated tag 7,
-  zone `trust`, virtual router `vr1`, and two member addresses printed `layer3 = {}` with no field line. Fix:
-  read the three fields and both address shapes, or state them as report-only in the interface row. Owner:
-  `parse_interfaces`, and the interface row of `resource_mapping.COVERAGE_MATRIX`.
-- The property scan cannot report these drops: `captured_fields` skips a field whose value is empty
-  (`src/entry_coverage.py:102, 405-411`), so a field the parse stored as `None` is never a finding, and a field
-  the parse never stored is not in the set at all. Fix: state the scan's blind side in the F4.4 rule, or count a
-  declared field that no parse method stores. Owner: `src/entry_coverage.py` §F4.4.
-- Unrecorded read: 11 name guards `continue` without a record (`523, 1762, 1805, 2043, 2184, 2207, 2265,
-  2305, 2389, 2409, 2469`), against the report rule that one line names every entry the parse read. Every other
-  name guard (47 of the 58) calls `mark_skipped` in the same place, so its entry has a line. Measured probe
-  `/tmp/opencode/probe_area.xml`: an unnamed `ospf/area` entry produced no block and no line, the report counted
-  `skipped 0`, and only the parent `vr1` row named a gap; the same report rule states that an entry with no name
-  is "recorded by design", which the 11 guards do not record. Fix: call `mark_skipped` in each guard. Owner:
-  those parse methods.
-- Unguarded path: `parse_schedules` stores a nameless recurring child as `{'name': None}` (1184-1187), and
-  `generate_manual_setup_report` joins the names (5707) → `TypeError`, exit 1, and half-written output (probe
-  `/tmp/opencode/probe_sched3.xml`: only `provider.tf` in the unit). Fix: skip a child with no name through the
-  record.
-  Owner: `parse_schedules`.
-- Coverage gap: `_parse_router` reads only `routing-table/ip/static-route/entry` (1760), so an entry under
-  `protocol/static-routes` produces no block and no row of its own; it appears only as a property count on
-  the parent row. Measured probe `/tmp/opencode/probe_router.xml`: `Per-entry report: 2 entries read`,
-  `Property entries inside config-object entries: 4`, and the route `r1` printed nothing. Fix: read both
-  shapes, or state the second shape in the virtual-router row. Owner: `_parse_router`,
-  `src/entry_coverage.py`.
-- `_protocol_field` reads a `number` field with `text.isdigit()` (2676), so a negative or non-integer value is
-  dropped with no report line (probe `/tmp/opencode/probe9.xml`: `set-med -1` printed only `name`), and
-  `entry.find(xml_name)` (2665) takes only the first match. Fix: use the shape rule for a number and state the
-  single-match limit. Owner: `_protocol_field`.
+The five findings this audit recorded were closed by `to-do.md` Piece 4 on 2026-11-13 (`parse_interfaces`, the
+scan's blind side, the name guards, `parse_schedules`, and `_parse_router`), and the criteria and the measurement
+are in `acceptance.md`. One part of the last finding stays open:
+
+- `_protocol_field`: a `number` text the value rule cannot read keeps no value, so the field prints nothing and
+  the gate sees no field to check. F2.9's mechanism for an unreadable value is a `# NOTE:` line inside the block,
+  but the protocol emitter prints dict keys, so a note cannot be a key, and `mark` records detail per entry while
+  `_protocol_field` returns only a value. The signed-integer reading is pinned
+  (`tests/test_protocol_object.py::test_a_number_field_prints_the_signed_integer_the_shape_states`), so what stays
+  open is the report for a text the rule cannot read. Fix: state which output reports an unreadable number, or
+  refuse the value at the input layer. Owner: `_protocol_field`.
+
 
 ### Naming and printing
 

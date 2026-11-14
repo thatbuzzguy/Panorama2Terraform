@@ -86,7 +86,22 @@ depends on. The pin count is 1,651 before and after, so no pin was added, remove
 criteria and the measurement are in `acceptance.md`. Gate after, measured 2026-11-13: `ruff check .` clean,
 `python3 -m pytest` passes with no skips, 1,651 pins in 293.0 s.
 
-Next: piece 4, the parse set reads what its rows state (`to-do.md`).
+Piece 4 (the parse set reads what its rows state) is complete, committed 2026-11-13. The five findings the
+2026-11-12 audit recorded for the parse set are closed, and one part of the last finding stays open in
+`backlog.md` with owner `_protocol_field`: a `number` text the value rule cannot read has no report. What landed:
+`tag` is read for every interface kind through one rule, `_interface_tag`, and both address shapes through one
+rule, `_list_values`; `zone` and `virtual_router` are gone from the interface object, and `parent` is a field only
+for the kinds whose row declares it; every entry name guard records the entry it skips, and
+`_list_names` is the one guard the rule does not reach; `parse_schedules` skips a nameless recurring child through
+the record, so the writer joins only the names it kept; `_parse_router` records an entry at the level the shape
+table states no row for; `value_shape` reads a signed integer back as `number`. The criteria and the measurement
+are in `acceptance.md`. Gate after: `ruff check .` clean, `python3 -m pytest` passes with no skips, 1,659 pins in
+270.21 s, against 1,651 in 334.6 s before the piece. Counts by module: `tests/test_interfaces.py` 8 to 10,
+`tests/test_entry_coverage.py` 29 to 32, `tests/test_property_coverage.py` 31 to 33,
+`tests/test_protocol_object.py` 45 to 46; two pins in `tests/test_parse_network.py` changed what they assert, and
+its count is unchanged at 24. No pin was weakened.
+
+Next: piece 5, naming and printing state one rule (`to-do.md`).
 
 ## Rules to keep when writing documents
 
