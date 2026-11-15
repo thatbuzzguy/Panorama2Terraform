@@ -19,6 +19,8 @@ Pins:
 - one test per finding: a field the row does not declare, a value read as another shape, the block states no
   entry name, the exactly-one choice `certificate/local` states as `selects`, a `sensitive` field printed as a
   literal, and an element inside a `[` container that states no name;
+- the block prints its fields in the order its row states them, at the entry level, which is the one order rule
+  (`hcl_value`, `docs/ARCHITECTURE.md` §4.9);
 - the gate reads the real run and reports nothing, the gate order puts the rule after `filter_blocks`, and the
   report is byte-identical between two runs, so no golden moves;
 - a `sensitive` field prints as `var.` plus the §5 name of the entry that holds the field, read through
@@ -362,6 +364,31 @@ def _printed_level(fields: dict, path: str, level: str) -> dict:
             return {}
         fields = import_blocks.fields_at(import_blocks.container_body(value))
     return fields
+
+
+def test_the_block_prints_the_fields_in_the_order_the_row_states(tmp_path):
+    """A block prints its fields in the order its row states them, at the entry level (`hcl_value`, §4.9).
+
+    Every certificate row already states an order that the old name-first sort produced, so this pin measures the
+    rule rather than a change: it is what holds the rule for a row a reorder would move. The rule that no print
+    site states a second order is pinned in
+    `tests/test_filter_containers.py::test_the_print_sites_state_no_second_order_rule`, for the reason the
+    certificate rows cannot show it as content.
+    """
+    _run(FIXTURE, tmp_path)
+    table = resource_mapping.CERTIFICATE_TABLE
+    read = 0
+    for block in sanity_checks.blocks(tf_files(tmp_path), ('resource',)):
+        path = resource_mapping.certificate_path(block.rtype)
+        if path is None:
+            continue
+        # `location` is the placement sub-block, which `location_present` owns.
+        fields = {key: value for key, value in import_blocks.fields_at(block.body).items()
+                  if key != 'location'}
+        assert list(fields) == [field for field in table.row(path)['fields'] if field in fields], (
+            path, list(fields))
+        read += 1
+    assert read == 3, 'the fixture holds two certificate entries and one profile entry'
 
 
 def test_a_sensitive_field_prints_as_the_name_the_entry_names(tmp_path):

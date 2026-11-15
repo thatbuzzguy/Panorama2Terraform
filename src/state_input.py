@@ -20,6 +20,11 @@ Six rules, stated once here.
 5. Refusals are input refusals (`UnsafeInputError`), so the CLI exits 1 and writes no record:
    the bytes are not JSON, the document is not an object, the document holds no `resources`
    array, or a resource item is not an object that names its type and name.
+7. The control-character rule is the read layer's (`xml_input.CONTROL_CHARS`), and this door applies it to
+   the values it reads. A JSON document can state a control character as an escape (`\u0007`), which the XML
+   door refuses as a character reference, so the state door is the only place that can refuse it. The printer
+   states no control-character rule: it states only the escape shapes (`xml_input.ESCAPE_SHAPES`), so text
+   that reaches a `.tf` file is text the door accepted, and the gate rule `control_chars` reads the same set.
 6. The state source is a reference source, so the run writes no output from it and no name comes
    from it. Its origin kind is `state`, and its `scope` names the workspace the run declared, or
    the default (`xml_input.DEFAULT_SCOPE`), so the provenance record needs no new field.
@@ -47,6 +52,7 @@ from xml_input import (
     SourceOrigin,
     UnsafeInputError,
     check_bytes,
+    control_chars,
     origin_phrase,
     read_input,
 )
@@ -159,6 +165,13 @@ def parse_state(data: bytes, origin: SourceOrigin, workspace: str = '',
         if not isinstance(module, str):
             raise _refusal(origin, f'the resource {resource_type}.{resource_name} names a module that is not a path')
         for attributes in _attributes(resource):
+            # Rule 7: a JSON document can state a control character as an escape, so this door is the only
+            # place that can refuse one. The set is `xml_input.CONTROL_CHARS`, the read layer's statement.
+            for key, value in attributes.items():
+                items = value if isinstance(value, list) else [value]
+                for item in items:
+                    if isinstance(item, str) and control_chars(item):
+                        raise _refusal(origin, f'the value of {key} holds a control character the read layer refuses')
             entries.append(StateEntry(module=module, resource_type=resource_type,
                                       resource_name=resource_name, attributes=attributes))
 

@@ -12,7 +12,11 @@ Pins:
 - each check detects its own violation (one negative test per rule);
 - the gate reports no FAIL finding on every fixture, so it does not lie;
 - a placeholder is WARN, not FAIL, so a run that only needs an operator action
-  still exits 0;
+  still exits 0; the marker it reports is the table's one statement, `resource_mapping.PLACEHOLDER_TEXT`, read
+  by the print site, the report, and this rule; a `reference_only` field the export cannot carry has no value, so
+  the block prints the marker and the run records no pair for it;
+- the control-character rule is the read layer's (`xml_input.CONTROL_CHARS`), so the gate reads the definition
+  and states no second one;
 - a FAIL finding exits non-zero;
 - `--validate` runs `terraform init` + `terraform validate`, and a missing
   terraform binary is SKIPPED, never a failure, so the suite stays offline;
@@ -36,10 +40,13 @@ and a path 1 pin is unchanged. The join pins are in this file, and one is in `te
 the cross-check reads the same ledger the join reads.
 """
 
+import ast
+import inspect
 import os
 import re
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -47,10 +54,13 @@ import pytest
 import api_requests
 import naming
 import panorama_to_terraform
+import resource_mapping
 import sanity_checks
+import site_data
 import source_fetch
 import unit_manifest
 import write_path
+import xml_input
 from conftest import (
     FIXTURES_DIR,
     REPO_ROOT,
@@ -59,6 +69,7 @@ from conftest import (
     SRC_DIR,
     TERRAFORM,
     corpus_fixtures,
+    file_text,
     path2_run,
     run_main,
     run_pipeline,
@@ -253,6 +264,39 @@ def test_data_file_check_detects_a_row_that_is_not_the_data_it_declares(tmp_path
     assert 'level rule' in findings[0].detail, findings[0].render()
 
 
+def test_the_control_character_rule_is_stated_once_in_src():
+    """The read layer owns the control-character rule, so the gate reads the definition and states no second one.
+
+    A source scan, for the reason `acceptance.md` records: a state value never reaches a `.tf` file, so no run
+    pin can show the gate firing on tool output. The content halves are
+    `tests/test_state_input.py::test_the_state_door_refuses_a_control_character_in_a_value`, which measures the
+    door's refusal, and `tests/test_robustness.py::test_escape_string_prints_the_shapes_it_escapes`, which
+    measures that the escape holds no strip.
+    """
+    # One definition of the set, in the read layer.
+    text = {path.name: path.read_text(encoding='utf-8') for path in sorted(SRC_DIR.glob('*.py'))}
+    assert 'CONTROL_CHARS = {chr(code) for code in range(0x20)} | {chr(0x7f)}' in text['xml_input.py']
+    holders = [name for name, source in text.items() if 'CONTROL_CHARS =' in source]
+    assert holders == ['xml_input.py'], holders
+    # The state door and the gate rule read the set through the owner, so neither states a second definition.
+    for name in ('state_input.py', 'sanity_checks.py'):
+        assert 'CONTROL_CHARS' in text[name], name
+        assert 'from xml_input import' in text[name] or 'import xml_input' in text[name], name
+        assert 'CONTROL_CHARS =' not in text[name], (name, 'a reader states no second set')
+    assert not hasattr(sanity_checks, 'CONTROL_CHARS'), 'the gate holds no copy of the set'
+
+    # No module holds a strip, which is the rule the escape path used to state before the change.
+    for name, source in text.items():
+        assert 'ord(ch) < 32' not in source, name
+        assert "ch >= ' '" not in source, name
+
+    # The escape states only the shapes a printed string needs, and the shapes are the read layer's set.
+    escape = inspect.getsource(panorama_to_terraform.TerraformGenerator.escape_string)
+    shapes = {node.value for node in ast.walk(ast.parse(textwrap.dedent(escape)))
+              if isinstance(node, ast.Constant) and isinstance(node.value, str) and len(node.value) == 1}
+    assert shapes == {'\\', '"'} | set(xml_input.ESCAPE_SHAPES), shapes
+
+
 def test_control_char_check_detects_a_raw_control_character():
     files = {'bad.tf': 'resource "panos_address" "host_00000000" {\n  location = { shared = {} }\n'
                        '  name = "a\x01b"\n}\n'}
@@ -267,14 +311,41 @@ def test_control_char_check_detects_a_raw_control_character():
     assert len(sanity_checks.check_control_chars({'d.tf': 'name = "a\x7fb"\n'})) == 1
 
 
+def test_the_placeholder_is_stated_once_in_src():
+    """The marker is `resource_mapping.PLACEHOLDER_TEXT`, stated once, so no print site or gate states it again.
+
+    A source scan, for the reason `acceptance.md` records: a second statement prints the same string, so no run
+    can show which statement answered. The content halves are
+    `test_a_reference_only_field_with_no_value_prints_the_marker`, which measures the marker a run printed, and
+    `test_placeholder_check_warns_and_does_not_fail`, which measures the gate reading the same fact.
+    """
+    text = {path.name: path.read_text(encoding='utf-8') for path in sorted(SRC_DIR.glob('*.py'))}
+    # One statement of the marker.
+    holders = [name for name, source in text.items() if 'PLACEHOLDER_TEXT =' in source]
+    assert holders == ['resource_mapping.py'], holders
+    for name, source in text.items():
+        assert resource_mapping.PLACEHOLDER_TEXT not in source or 'PLACEHOLDER_TEXT =' in source, \
+            (name, 'a reader states no second copy of the marker')
+    # The print site, the gate rule, and the report read it through the owner.
+    for name in ('panorama_to_terraform.py', 'sanity_checks.py'):
+        assert 'resource_mapping.PLACEHOLDER_TEXT' in text[name] or 'PLACEHOLDER_TEXT' in text[name], name
+        assert 'PLACEHOLDER_TEXT =' not in text[name], (name, 'a reader states no second statement')
+    assert not hasattr(sanity_checks, 'PLACEHOLDER_TEXT'), 'the gate holds no copy of the marker'
+    assert sanity_checks.EXPECTED_PLACEHOLDERS == (resource_mapping.PLACEHOLDER_TEXT,)
+
+
 def test_placeholder_check_warns_and_does_not_fail():
+    """The marker the gate reports is the table's one statement, so the check reads the same fact the print
+    site wrote, and it is a WARN, not a FAIL."""
+    marker = resource_mapping.PLACEHOLDER_TEXT
+    assert (marker,) == sanity_checks.EXPECTED_PLACEHOLDERS, sanity_checks.EXPECTED_PLACEHOLDERS
     files = {'vpn.tf': 'resource "panos_ipsec_tunnel" "t_00000000" {\n'
-                       '  location = { shared = {} }\n  key = "***CHANGE_ME***"\n}\n'}
+                        f'  location = {{ shared = {{}} }}\n  key = "{marker}"\n}}\n'}
     findings = sanity_checks.check_placeholders(files)
     assert len(findings) == 1
     assert findings[0].severity == sanity_checks.WARN
     # A comment that names the marker is documentation, not an emitted value.
-    commented = {'vpn.tf': '# Search for "***CHANGE_ME***" and replace it.\n'}
+    commented = {'vpn.tf': f'# Search for "{marker}" and replace it.\n'}
     assert sanity_checks.check_placeholders(commented) == []
     # A WARN-only run is not a failed gate.
     report = sanity_checks.SanityReport(
@@ -282,6 +353,52 @@ def test_placeholder_check_warns_and_does_not_fail():
         file_count=1, resource_count=1)
     assert report.result_of('placeholders') == 'WARN'
     assert not report.failed
+
+
+def test_a_reference_only_field_with_no_value_prints_the_marker(tmp_path, make_parser, converter_module):
+    """F7.7: a `reference_only` field the export cannot carry has no value, so the block prints the marker.
+
+    `VALUE_VARIABLES` is the only place that decides the shape of a field the provider marks `sensitive`, and the
+    name rule has nothing to name for a field the run read no value for, because a value cannot name itself and a
+    pair needs a source. So no pair is recorded: the run declares no variable for it and the `.tfvars` writer
+    writes no line for it. The parse stores no value either, which is what `REFERENCE_ONLY` states for a fact the
+    export does not carry.
+    """
+    out = tmp_path / 'out'
+    result = run_script('panorama_to_terraform.py', str(FIXTURES_DIR / 'ike_gateways.xml'),
+                        '--output-dir', str(out))
+    assert result.returncode == 0, result.stdout + result.stderr
+    marker = resource_mapping.PLACEHOLDER_TEXT
+
+    # The parse holds no value for the field: the export states the authentication method, not the key.
+    gateways = make_parser('ike_gateways.xml').parse_ike_gateways()
+    assert gateways, 'the pin needs an entry to measure'
+    for gateway in gateways:
+        assert gateway.get('auth_type') == 'pre-shared-key', gateway
+        assert not [key for key in gateway if 'key' in key], gateway
+
+    # The block prints the marker, through the print site, on the field the table states as `reference_only`.
+    text = file_text(tf_files(out), 'vpn.tf')
+    assert f'key = "{marker}"' in text, text
+    # The same call on the same field answers the marker, which is the path the bytes came from.
+    generator = converter_module.TerraformGenerator(str(tmp_path / 'gen'))
+    facts = unit_manifest.facts_of(gateways[0])
+    assert generator.printed_value('key', '', facts) == f'"{marker}"'
+
+    # No pair is recorded for a field with no value, so the record holds no row for the entry and the unit
+    # declares no variable for it. `site_data.py` rule 2 states that a name with no value writes no line.
+    name = naming.variable_name(gateways[0]['name'])
+    written = tf_files(out)
+    declared = [key for key in written if Path(key).name == 'variables.tf']
+    assert declared, 'the pin needs the unit the run wrote'
+    for key in declared:
+        assert f'variable "{name}"' not in written[key], (key, written[key])
+    record = out / site_data.SITE_DATA_FILE
+    if record.is_file():
+        assert not [row for row in site_data.parse_rows(record.read_text(encoding='utf-8'))
+                    if name in row['variables']], record
+    else:
+        assert not [key for key in written if key.endswith('.tfvars')], 'no row, so no printed form'
 
 
 # --- No false positives --------------------------------------------------------

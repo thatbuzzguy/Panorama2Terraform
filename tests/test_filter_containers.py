@@ -19,7 +19,9 @@ Pins:
   has one owner;
 - the parse read, the emitter print, the gate rule, and the path-keyed input spellings: the map holds 15 pairs,
   and one fixture entry states each one, so a pair is grounded by the element the entry holds and by the field
-  name the run printed for it, read from the run's output and validated against the pinned provider;
+  name the run printed for it, read from the run's output and validated against the pinned provider; the parse
+  reads the six paths through `FILTER_PATHS` and states no path of its own, and the block prints in the entry
+  row's order, which is the one order rule (`hcl_value`, `docs/ARCHITECTURE.md` §4.9);
 - the choice rows: the 14 levels `terraform validate` reads as exactly one, the gate refusing a choice level
   that states two of them or none, and the run printing the one key each choice level states;
 - one negative test per gate rule, and the gate reporting no finding on a real run.
@@ -426,24 +428,42 @@ def test_the_matrix_rows_are_the_entry_rows():
 
 # --- 3. the parse read ------------------------------------------------------
 
-def test_the_parse_method_states_the_six_paths_and_no_field_name(converter_module):
-    """The parse method states the six container paths and no field name of its own (F7.1 rule).
+def test_the_parse_method_states_no_path_of_its_own(converter_module):
+    """The parse method reads the six container paths through the table, so it states no path of its own
+    (F7.1 rule, `docs/ARCHITECTURE.md` §4.9).
 
-    Each level is read through `FILTER_TABLE`, so a table word written as a string constant inside the method
-    would be a second shape owner. `name` is the one word the method states, because the entry name is the
-    attribute the mark is read from, not a field of a row.
+    `FILTER_PATHS` is the one statement of the six paths, so a path written as a string constant inside the
+    method would be a second shape owner. The two words the method states are the ones the walk must name:
+    `entry`, the element it reads, and `name`, the attribute the mark is read from, which is not a field of a
+    row.
     """
     method = converter_module.PanoramaParser.parse_filter_containers
-    constants = {node.value for node in ast.walk(ast.parse(textwrap.dedent(inspect.getsource(method))))
+    text = inspect.getsource(method)
+    constants = {node.value for node in ast.walk(ast.parse(textwrap.dedent(text)))
                  if isinstance(node, ast.Constant) and isinstance(node.value, str)}
+    assert 'resource_mapping.FILTER_PATHS' in text, 'the method reads the paths through the table'
     stated = {value for value in constants if value.startswith('network/routing-profile/filters/')}
-    assert stated == set(resource_mapping.FILTER_PATHS), stated
+    assert stated == set(), (stated, 'the method states no path of its own')
     words = {value for value in constants if '/' not in value and ' ' not in value and '\n' not in value}
     assert words == {'name'}, constants
+    # The walk names the two shapes it reads, and the path the walk reads is the table's.
+    assert {'.//', './entry'} <= constants, constants
     # Every row is reachable from one of the six paths, through the field the path names.
     for path in sorted(resource_mapping.FILTER_SHAPE):
-        assert _container_of(path) in stated, (path, _container_of(path))
+        assert _container_of(path) in set(resource_mapping.FILTER_PATHS), (path, _container_of(path))
         assert resource_mapping.FILTER_TABLE.field_name(path) == path.rsplit('/', 1)[-1], path
+
+
+def test_the_parse_reads_the_paths_the_table_states(converter_module, xml_input_module):
+    """The container keys the parse returns are `FILTER_PATHS`, in the order the table states them (F7.1 rule).
+
+    The return order is what `tests/test_multi_vsys_location.py` reads, so the order the method answers is the
+    order the one statement of the six paths states, not an order the method wrote of its own.
+    """
+    source = xml_input_module.parse_xml(FIXTURES_DIR / FIXTURE)
+    containers = converter_module.PanoramaParser(source).parse_filter_containers()
+    assert list(containers) == list(resource_mapping.FILTER_PATHS), list(containers)
+    assert set(containers) == set(resource_mapping.FILTER_PATHS), sorted(containers)
 
 
 def test_the_parse_marks_every_entry_it_reads(converter_module, xml_input_module):
@@ -480,9 +500,10 @@ def test_the_emitter_prints_the_fields_the_entry_row_declares(tmp_path):
     """One block per entry, in the entry row's field order, in the one file the run writes.
 
     A level the row states as `object` prints as one object, a `string_list` level prints one object per
-    element, and the block prints the entry name first and then the fields the input states, in sorted order.
-    The pin reads every entry the fixture holds, so the entries that state an input spelling are printed by the
-    same rule as the entry the matrix row names.
+    element, and the block prints the fields the input states in the order the row states them, because the row
+    order is the one order rule (`hcl_value`, `docs/ARCHITECTURE.md` §4.9). `name` is a field of the row, so it
+    prints where the row states it rather than first. The pin reads every entry the fixture holds, so the
+    entries that state an input spelling are printed by the same rule as the entry the matrix row names.
     """
     files = _run(FIXTURE, tmp_path)
     blocks = _printed_blocks(tf_files(tmp_path))
@@ -495,18 +516,42 @@ def test_the_emitter_prints_the_fields_the_entry_row_declares(tmp_path):
             printed = {key: value for key, value in import_blocks.fields_at(block.body).items()
                        if key != 'location'}
             assert set(printed) == {'name'} | set(_stated(path, entry)), (path, name, sorted(printed))
-            assert list(printed) == sorted(printed, key=lambda key: (key != 'name', key)), (path, list(printed))
+            # The print order is the row order, read back from the bytes the run wrote.
+            row_fields = list(_row(path)['fields'])
+            assert list(printed) == [field for field in row_fields if field in printed], (path, list(printed))
             for field, shape_word in _row(path)['fields'].items():
                 if field in printed:
                     reads_as = sanity_checks.SHAPE_READS_AS.get(shape_word, shape_word)
                     assert sanity_checks.value_shape(printed[field]) == reads_as, (path, field, shape_word)
+    # The rule is measured on rows that state `name` off the first position, so it is not the name-first shape
+    # seen from the other side: all six entry rows state `name` after another field, so every filter block moves.
+    moved = [path for path in resource_mapping.FILTER_PATHS
+            if list(_row(path)['fields']).index('name') != 0]
+    assert len(moved) == 6, sorted(moved)
     # The per-entry report is the same mark the parse wrote, so it names the entry and its properties.
     report = files['CONVERSION_REPORT.txt']
     for path, name in sorted(ENTRIES.items()):
         line = next(line for line in report.split('\n') if name in line)
         assert f'{path}/{name}' in line and resource_mapping.FILTER_TYPES[path] in line, line
+        # The report's own order is `entry_coverage.captured_fields`, which states sorted order.
         captured = line.split('captured: ')[1].split('  property entries:')[0].split(', ')
         assert captured == sorted(field for field in _row(path)['fields'] if field != 'name'), (path, captured)
+
+
+def test_the_print_sites_state_no_second_order_rule(converter_module):
+    """The order rule is `hcl_value`'s, so the two emitters that print a shape-table row state no sort.
+
+    Content cannot show this for the certificate rows: every certificate row prints the same order under the row
+    order and under the name-first sort, so the print sites are the only place content can reach. The order
+    itself is pinned as content by `test_the_emitter_prints_the_fields_the_entry_row_declares`, which measures
+    filter rows whose row order differs from the sorted order.
+    """
+    for method in (converter_module.TerraformGenerator.generate_filter_containers,
+                   converter_module.TerraformGenerator._generate_certificate_blocks):
+        text = inspect.getsource(method)
+        assert 'sorted(' not in text, method.__name__
+        # The fields come from the table through the one walk, so the print site states no order of its own.
+        assert '_protocol_fields(' in text, (method.__name__, 'the print reads the row through the table')
 
 
 def test_the_choice_levels_state_one_key_in_the_run(tmp_path):

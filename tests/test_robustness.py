@@ -3,6 +3,7 @@
 Hostile input must fail cleanly (non-zero exit, no traceback, no data leak).
 Degenerate input must produce valid output or skip safely.
 """
+import hashlib
 import re
 import subprocess
 import sys
@@ -169,9 +170,51 @@ def test_escape_string_escapes_control_chars(generator):
     assert generator.escape_string('a"b\\c') == '"a\\"b\\\\c"'
 
 
-def test_escape_string_strips_illegal_control_chars(generator):
-    assert generator.escape_string('a\x01b') == '"ab"'
-    assert generator.escape_string('a\x7fb') == '"ab"'
+def test_escape_string_prints_the_shapes_it_escapes(generator):
+    """The escape states only the shapes an HCL quoted string needs, so it holds no control-character rule.
+
+    The rule is the read layer's (`xml_input.CONTROL_CHARS`), so a value that holds a control character is
+    refused at the door and cannot reach the printer. A hand-written file is the material the gate can still
+    refuse, and `tests/test_sanity_gate.py::test_control_char_check_detects_a_raw_control_character` pins that
+    half. This pin hands the escape a control character and measures that it prints the text it was given.
+    """
+    for shape, escaped in (('\t', '\\t'), ('\r', '\\r'), ('\n', '\\n'), ('"', '\\"'), ('\\', '\\\\')):
+        assert generator.escape_string(f'a{shape}b') == f'"a{escaped}b"', shape
+    # A control character is printed as the text, because removing one is not this method's rule.
+    assert generator.escape_string('a\x01b') == '"a\x01b"'
+    assert generator.escape_string('a\x7fb') == '"a\x7fb"'
+
+
+def test_a_static_route_block_digests_the_route_name_once(generator):
+    """§5, F2.7: a static-route block name digests the route's own name, not a name the emitter built for it.
+
+    An emitter cannot digest a name before §5 digests one, so the name a prefix built was a second digest of the
+    same fact, and `_declaration_index` held a key no reference by the route's name could read. The router is not
+    part of a route's identity, so one route name is one digest.
+    """
+    import panorama_to_terraform
+
+    router = {'name': 'vr1', 'type': 'virtual-router', 'device_group': 'DG-A', 'vsys': '',
+              'template': '', 'vsys_device': '', 'interfaces': [],
+              'static_routes': [{'name': 'r-1', 'destination': '10.2.0.0/24', 'nexthop_ip': '10.0.0.1'},
+                                {'name': 'r_2', 'destination': '10.3.0.0/24', 'nexthop_ip': '10.0.0.2'}]}
+    generator.generate_virtual_routers([router])
+    text = file_text(tf_files(generator.output_dir), 'virtual_routers.tf')
+    blocks = re.findall(r'resource "panos_virtual_router_static_route_ipv4" "([^"]+)"', text)
+    scope = 'panos_virtual_router_static_route_ipv4'
+    # The §5 shape of each route's own name, read through the naming rule the class holds.
+    identity = f'{generator.scope_context(router)}|{router.get("vsys") or ""}'
+    expected = []
+    for route in router['static_routes']:
+        digest = hashlib.sha256(f'{scope}|{identity}|{route["name"]}'.encode()).hexdigest()[:8]
+        expected.append(f'{generator.sanitize_name(route["name"])}_{digest}')
+    assert blocks == expected, blocks
+    # The same digest is the key the reference rule reads, so a reference by the route's name reaches the block
+    # the run declared for it. Before the change it answered the plain name, because the index held the prefix.
+    for route, local in zip(router['static_routes'], expected):
+        ref = generator.name_ref(route['name'], (scope,), router)
+        assert isinstance(ref, panorama_to_terraform.HclRef), route['name']
+        assert ref.expr == f'{scope}.{local}.name', route['name']
 
 
 def test_declare_resource_name_avoids_collisions(generator):

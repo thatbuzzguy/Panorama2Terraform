@@ -11,7 +11,8 @@ Four groups:
 2. How the gate reads each set: one block reader keyed by the path from the codebase root, one data rule
    that reads the records at the root as one rule over the rows of every unit, and no rule reads a report.
 3. The one write path: one function writes bytes, `newline=LF` is forced there, and no other module of the
-   tool writes a file, so the byte rule (`docs/ARCHITECTURE.md` §6) is enforced in one place.
+   tool writes a file, so the byte rule (`docs/ARCHITECTURE.md` §6) is enforced in one place. A section header
+   is stated once per unit, read through the file's own once record rather than through the text it holds.
 4. Default output, not an opt-in: no flag names the layout, so a golden can pin what a default run emits.
 
 Every test reads the corpus run through the rules. The run writes one directory per unit
@@ -481,6 +482,33 @@ def test_the_write_path_states_two_builders_one_per_set():
         'the tool names which builder each writer uses'
     assert 'def write_file' in Path(write_path.__file__).read_text(encoding='utf-8'), \
         'the one function that writes bytes'
+
+
+def test_add_once_keeps_its_own_once_record(converter_module, tmp_path):
+    """§14: "once" is the text this file stated for one unit, read through the file's own record, so header
+    prose cannot stop a section.
+
+    The pin builds a file whose header contains the section text and reads the bytes the run wrote. A substring
+    test on the accumulated text finds the section inside the header and skips it, so the record is kept apart
+    from the text. A second call for the same text states nothing, which is what "once" says, and the record is
+    per unit, so another unit's file still gets its own section.
+    """
+    generator = converter_module.TerraformGenerator(str(tmp_path / 'gen'))
+    section = 'one action per unit\n'
+    header = '# Actions (F6.7): the file states one action per unit\nThe block names its own unit.\n\n'
+    assert section in header, 'the pin needs the header to contain the section text'
+    out = converter_module.UnitText(generator, 'actions.tf', header)
+    first = {'name': 'Edge-DG'}
+    second = {'name': 'Core-DG'}
+    out.add_once(first, section)
+    out.add_once(first, section)
+    out.add_once(second, section)
+    out.write()
+
+    for entry in (first, second):
+        path = tmp_path / 'gen' / generator.unit_directory(entry) / 'actions.tf'
+        assert path.is_file(), sorted((tmp_path / 'gen').iterdir())
+        assert path.read_text(encoding='utf-8') == header + section, path.read_text(encoding='utf-8')
 
 
 def test_the_bytes_a_run_writes_hold_no_cr(corpus_run):

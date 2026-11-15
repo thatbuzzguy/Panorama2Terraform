@@ -175,9 +175,10 @@ def _name_guards(cls) -> list:
     """Every entry-name guard as (method name, guard form, the branch that skips the entry).
 
     A guard is an `if` whose test is the truthiness of the entry name: the name read through
-    `.get('name')`, or through a variable the method assigns from that call. The branch that skips the
-    entry is the body of the negative form (`if not name`) and the `else` of the positive form
-    (`if name`), so the pin reads the branch the skip happens in.
+    `.get('name')`, or through a variable the method assigns from that call, or from the one text rule applied
+    to that call (`xml_input.read_text`, §6 rule 2). The branch that skips the entry is the body of the
+    negative form (`if not name`) and the `else` of the positive form (`if name`), so the pin reads the branch
+    the skip happens in.
     """
     guards = []
     for method_name in sorted(n for n in dir(cls) if n.startswith('parse_') or n.startswith('_')):
@@ -186,13 +187,21 @@ def _name_guards(cls) -> list:
         except (TypeError, AttributeError):
             continue
         tree = ast.parse(textwrap.dedent(source))
-        # The variables a method assigns from `.get('name')`, so a guard that tests one of them tests the
-        # same entry name.
+
+        def is_name_call(node) -> bool:
+            """The call that reads the entry name, directly or through the text rule."""
+            if not isinstance(node, ast.Call):
+                return False
+            if isinstance(node.func, ast.Attribute) and node.func.attr == 'get':
+                return bool(node.args) and isinstance(node.args[0], ast.Constant) \
+                    and node.args[0].value == 'name'
+            return (isinstance(node.func, ast.Name) and node.func.id == 'read_text'
+                    and any(is_name_call(arg) for arg in node.args))
+
+        # The variables a method assigns from that call, so a guard that tests one of them tests the same
+        # entry name.
         name_vars = {node.targets[0].id for node in ast.walk(tree)
-                     if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)
-                     and isinstance(node.value.func, ast.Attribute) and node.value.func.attr == 'get'
-                     and node.value.args and isinstance(node.value.args[0], ast.Constant)
-                     and node.value.args[0].value == 'name'
+                     if isinstance(node, ast.Assign) and is_name_call(node.value)
                      and isinstance(node.targets[0], ast.Name)}
 
         # `name_vars` is bound as a default so the nested function reads this method's set, not the last
@@ -200,9 +209,7 @@ def _name_guards(cls) -> list:
         def tests_name(node, bound=name_vars) -> bool:
             if isinstance(node, ast.Name):
                 return node.id in bound
-            return (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-                    and node.func.attr == 'get' and node.args
-                    and isinstance(node.args[0], ast.Constant) and node.args[0].value == 'name')
+            return is_name_call(node)
 
         for node in ast.walk(tree):
             if not isinstance(node, ast.If):

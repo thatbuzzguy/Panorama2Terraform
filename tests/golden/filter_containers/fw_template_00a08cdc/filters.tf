@@ -6,8 +6,8 @@ resource "panos_filters_access_list_routing_profile" "acl_filter_1e6135f8" {
       name = "FW-Template"
     }
   }
-  name = "ACL-Filter"
   description = "deny the test host"
+  name = "ACL-Filter"
   type = {
     ipv4 = {
       ipv4_entries = [
@@ -29,8 +29,8 @@ resource "panos_filters_access_list_routing_profile" "acl_filter_v6_d3ef6b7c" {
       name = "FW-Template"
     }
   }
-  name = "ACL-Filter-v6"
   description = "deny the test host over ipv6"
+  name = "ACL-Filter-v6"
   type = {
     ipv6 = {
       ipv6_entries = [
@@ -52,7 +52,6 @@ resource "panos_filters_as_path_access_list_routing_profile" "aspath_filter_ca3a
       name = "FW-Template"
     }
   }
-  name = "ASPath-Filter"
   aspath_entries = [
     {
       action = "permit"
@@ -61,6 +60,7 @@ resource "panos_filters_as_path_access_list_routing_profile" "aspath_filter_ca3a
     }
   ]
   description = "the four-byte ASNs"
+  name = "ASPath-Filter"
 }
 
 resource "panos_filters_community_list_routing_profile" "community_filter_60c44efc" {
@@ -69,8 +69,8 @@ resource "panos_filters_community_list_routing_profile" "community_filter_60c44e
       name = "FW-Template"
     }
   }
-  name = "Community-Filter"
   description = "the lab communities"
+  name = "Community-Filter"
   type = {
     regular = {
       regular_entries = [
@@ -90,8 +90,8 @@ resource "panos_filters_community_list_routing_profile" "community_filter_extend
       name = "FW-Template"
     }
   }
-  name = "Community-Filter-Extended"
   description = "the extended community pattern"
+  name = "Community-Filter-Extended"
   type = {
     extended = {
       extended_entries = [
@@ -111,8 +111,8 @@ resource "panos_filters_community_list_routing_profile" "community_filter_large_
       name = "FW-Template"
     }
   }
-  name = "Community-Filter-Large"
   description = "the large community pattern"
+  name = "Community-Filter-Large"
   type = {
     large = {
       large_entries = [
@@ -132,8 +132,8 @@ resource "panos_filters_prefix_list_routing_profile" "prefix_filter_bd77f8a6" {
       name = "FW-Template"
     }
   }
-  name = "Prefix-Filter"
   description = "the lab ranges"
+  name = "Prefix-Filter"
   type = {
     ipv4 = {
       ipv4_entries = [
@@ -159,8 +159,8 @@ resource "panos_filters_prefix_list_routing_profile" "prefix_filter_v6_e7da7c05"
       name = "FW-Template"
     }
   }
-  name = "Prefix-Filter-v6"
   description = "the lab ranges over ipv6"
+  name = "Prefix-Filter-v6"
   type = {
     ipv6 = {
       ipv6_entries = [
@@ -186,8 +186,8 @@ resource "panos_filters_bgp_route_map_routing_profile" "routemap_filter_1dfe434a
       name = "FW-Template"
     }
   }
-  name = "RouteMap-Filter"
   description = "the lab route map"
+  name = "RouteMap-Filter"
   route_map = [
     {
       action = "permit"
@@ -209,7 +209,6 @@ resource "panos_filters_route_maps_redistribution_routing_profile" "redist_filte
       name = "FW-Template"
     }
   }
-  name = "Redist-Filter"
   bgp = {
     ospf = {
       route_map = [
@@ -228,6 +227,7 @@ resource "panos_filters_route_maps_redistribution_routing_profile" "redist_filte
     }
   }
   description = "the redistribution route map"
+  name = "Redist-Filter"
 }
 
 resource "panos_filters_route_maps_redistribution_routing_profile" "redist_filter_set_9cc6b5fd" {
@@ -236,8 +236,8 @@ resource "panos_filters_route_maps_redistribution_routing_profile" "redist_filte
       name = "FW-Template"
     }
   }
-  name = "Redist-Filter-Set"
   description = "the set leg of the redistribution route map"
+  name = "Redist-Filter-Set"
   ospf = {
     bgp = {
       route_map = [

@@ -13,7 +13,7 @@ resource "panos_virtual_router" "default_c03bed95" {
   interfaces = ["ethernet1/1", "ethernet1/2"]
 }
 
-resource "panos_virtual_router_static_route_ipv4" "default_c03bed95_default_gw_96fe6d2d" {
+resource "panos_virtual_router_static_route_ipv4" "default_gw_d46236a3" {
   location = {
     template = {
       name = "FW-Template"
@@ -28,7 +28,7 @@ resource "panos_virtual_router_static_route_ipv4" "default_c03bed95_default_gw_9
   metric = 10
 }
 
-resource "panos_virtual_router_static_route_ipv4" "default_c03bed95_dmz_route_9f887ae9" {
+resource "panos_virtual_router_static_route_ipv4" "dmz_route_bd1cecad" {
   location = {
     template = {
       name = "FW-Template"
@@ -54,7 +54,7 @@ resource "panos_virtual_router" "lr_main_2258b30f" {
   interfaces = ["ethernet1/1"]
 }
 
-resource "panos_virtual_router_static_route_ipv4" "lr_main_2258b30f_lr_default_2029ebbd" {
+resource "panos_virtual_router_static_route_ipv4" "lr_default_1cf3681f" {
   location = {
     template = {
       name = "FW-Template"

@@ -36,6 +36,7 @@ from xml_input import (
     UnsafeInputError,
     add_max_input_argument,
     parse_xml,
+    read_text,
 )
 
 
@@ -66,9 +67,10 @@ def _device_names(entry: ET.Element) -> list:
         return names
     for node in list(listing):
         if node.tag == 'entry':
-            name = node.get('name')
+            # Both shapes read the name through the one text rule (`xml_input.read_text`).
+            name = read_text(node.get('name'))
         elif node.tag == 'member':
-            name = (node.text or '').strip()
+            name = read_text(node.text)
         else:
             continue
         if name:

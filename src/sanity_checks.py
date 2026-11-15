@@ -80,6 +80,7 @@ import resource_mapping
 import site_data
 import unit_manifest
 import write_path
+import xml_input
 
 FAIL = 'FAIL'
 WARN = 'WARN'
@@ -134,9 +135,11 @@ CONSUMER_RE = re.compile(r'\bvar\.([A-Za-z0-9_]+)')
 REFERENCE_RE = re.compile(r'\b(data\.)?(panos_[a-z0-9_]+)\.([a-z0-9_]+)\.name\b')
 ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
 
-# Placeholders the generator writes on purpose. The operator must replace them
-# before apply. They are an expected output, so they are a WARN, not a failure.
-EXPECTED_PLACEHOLDERS = ('***CHANGE_ME***',)
+# The marker the generator writes on purpose for a `reference_only` value the export cannot carry. The marker is
+# `resource_mapping.PLACEHOLDER_TEXT`, the table's one statement, so the print site, the report, and this gate
+# rule read the same fact. The operator must replace it before apply, so it is an expected output and a WARN,
+# not a failure.
+EXPECTED_PLACEHOLDERS = (resource_mapping.PLACEHOLDER_TEXT,)
 
 
 @dataclass(frozen=True)
@@ -1389,11 +1392,15 @@ def check_control_chars(files: dict[str, str]) -> list[Finding]:
 
     LF is the only legal raw control byte. A tab or a CR means an escape was
     missed, because HCL quoted strings carry `\\t` and `\\r`, not the raw byte.
+
+    The set is `xml_input.CONTROL_CHARS`, the read layer's statement of the rule, so this check reads the
+    definition and states no second one. It reads the printed text, which the door never saw: a hand-written
+    file is a file the gate can still refuse.
     """
     findings = []
     for name in sorted(files):
         for line, text in enumerate(files[name].split('\n'), start=1):
-            bad = sorted({ord(ch) for ch in text if ord(ch) < 32 or ord(ch) == 127})
+            bad = sorted({ord(ch) for ch in text if ch in xml_input.CONTROL_CHARS})
             if bad:
                 codes = ' '.join(f'0x{code:02x}' for code in bad)
                 findings.append(Finding(

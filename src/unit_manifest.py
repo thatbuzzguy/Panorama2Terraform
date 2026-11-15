@@ -59,6 +59,7 @@ import json
 from typing import Callable
 
 import container_coverage
+from naming import UNNAMED
 
 MANIFEST_FILE = 'CODEBASE_MANIFEST.json'
 
@@ -85,8 +86,8 @@ DIGEST_HEX = 8
 # fact value: the shared unit is the unit whose five facts are empty.
 SHARED_UNIT = 'Shared'
 
-# A name that sanitizes to nothing, as §5 states it.
-UNNAMED = 'unnamed'
+# A name that sanitizes to nothing is `naming.UNNAMED`, the one definition of the §5 fallback (rule 2),
+# read through the import above, so this module states no second copy of the word.
 
 
 def facts_of(obj: dict) -> tuple:

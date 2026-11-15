@@ -1241,6 +1241,11 @@ REFERENCE_ONLY = 'reference_only'
 # `reference_only` shape without the `sensitive` marking, because neither fact is a secret: the marking stays the
 # `reference_only` row's rule alone, so the credential rule (§11) has no row in this table.
 OPERATOR_SUPPLIED = 'operator_supplied'
+# The printed form of a `reference_only` field the export cannot carry: a credential-shaped fact the parse has
+# no value for, so the name rule has nothing to name (F7.7) and the block prints this marker instead. The
+# operator replaces it before apply, which is the gate rule `check_placeholders` reports as a WARN. One
+# statement, read by the print site (`printed_value`), the gate, the report, and the pins.
+PLACEHOLDER_TEXT = '***CHANGE_ME***'
 VALUE_VARIABLES = {
     # The device the site names. Hardware replacement changes the serial, and a literal prints in every
     # resource inside the template, so this is the value a codebase changes per site (§9 rule 1).
@@ -1256,7 +1261,9 @@ VALUE_VARIABLES = {
     # The parse records no rulebase (F3.5), so no value reaches the block.
     'rulebase': LITERAL,
     # The three provider `sensitive` facts in the protocol object (F7.1, F7.7): the run reads them, the block
-    # prints the reference, the run declares the variable, and no generated file states the value.
+    # prints the reference, the run declares the variable, and no generated file states the value. The export
+    # carries no value for `key` on an IKE gateway, so the run reads nothing there and the block prints
+    # `PLACEHOLDER_TEXT`, the same shape word read through the print site.
     'secret': REFERENCE_ONLY,
     'key': REFERENCE_ONLY,
     'password': REFERENCE_ONLY,
@@ -4509,7 +4516,6 @@ COVERAGE_MATRIX = (
             'peer_address',
             'peer_address_type',
             'peer_id',
-            'pre_shared_key',
             'version',
         ),
     }, {

@@ -1,6 +1,6 @@
 """F5.6 state producer: the Terraform state document, read as a declared reference source.
 
-Six groups, one per acceptance rule:
+Seven groups, one per acceptance rule:
 
 1. The door keeps its two byte checks for every source kind. The size check is
    kind-independent, and the DTD check asks the parser, so a JSON document reaches no DOCTYPE:
@@ -13,6 +13,8 @@ Six groups, one per acceptance rule:
 5. The CLI argument rules, and the exit codes that do not change.
 6. The read stays offline: a state read is a file read, so `--offline` covers the api producer
    only, and every test here uses a committed fixture.
+7. The control-character rule is the read layer's (`xml_input.CONTROL_CHARS`), read here as the rule the state
+   door applies to the values it reads, because `json.loads` accepts `\\u0007` inside a string.
 
 The fixture is `tests/fixtures/state_workspace.json`; the run side is
 `tests/fixtures/address_objects.xml`.
@@ -137,6 +139,44 @@ def test_a_document_the_scan_cannot_key_is_an_input_refusal(document: bytes, phr
     with pytest.raises(xml_input.UnsafeInputError) as refused:
         state_input.parse_state(document, _origin())
     assert phrase in str(refused.value), str(refused.value)
+
+
+def test_the_state_door_refuses_a_control_character_in_a_value(tmp_path):
+    """Rule 7: the state door applies the read layer's control-character rule to the values it reads.
+
+    `json.loads` accepts `\\u0007` inside a string, so the door's byte checks cannot see one: the bytes hold the
+    six characters of an escape, not the character. The state door is therefore the only place that can refuse a
+    control character in a state value, and the refusal runs on the decoded value. The set is
+    `xml_input.CONTROL_CHARS`, so the pin states no second set, and the three escape shapes are the characters a
+    source may state as content, so a document that holds one is not a refusal.
+    """
+    refused_names = []
+    for shape in sorted(xml_input.CONTROL_CHARS - xml_input.ESCAPE_SHAPES):
+        document = _document([_entry('host', {'name': f'a{shape}b'})])
+        # The bytes the door checked hold no control character, so this is a refusal on the decoded value.
+        assert not xml_input.control_chars(document.decode('utf-8')), document
+        with pytest.raises(xml_input.UnsafeInputError) as refused:
+            state_input.parse_state(document, _origin())
+        assert 'control character' in str(refused.value), str(refused.value)
+        refused_names.append(ord(shape))
+    assert len(refused_names) == 30, refused_names
+
+    # An escape shape is content, not a refusal, because a print escapes it.
+    for shape in sorted(xml_input.ESCAPE_SHAPES):
+        document = _document([_entry('host', {'name': f'a{shape}b'})])
+        entries = state_input.parse_state(document, _origin()).entries
+        assert entries[0].attributes['name'] == f'a{shape}b', entries
+
+    # The refusal is the door's shape through the CLI: exit 1, the origin named, no record written. The file
+    # holds the escape, not the character, because `json.dumps` states a control character as an escape.
+    path = tmp_path / 'state_with_control_char.json'
+    path.write_text(_document([_entry('host', {'name': 'a\x07b'})]).decode('utf-8'), encoding='utf-8')
+    assert '\\u0007' in path.read_text(encoding='utf-8'), path.read_text(encoding='utf-8')
+    result = run_script('panorama_to_terraform.py', str(FIXTURES_DIR / RUN_FIXTURE),
+                        '--state', str(path), '--output-dir', str(tmp_path / 'out'))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert path.name in result.stdout and 'control character' in result.stdout, result.stdout
+    assert not (tmp_path / 'out' / provenance.PROVENANCE_FILE).exists(), 'a refusal writes no record'
 
 
 def test_a_refusal_names_the_origin_and_exits_1(tmp_path):

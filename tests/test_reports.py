@@ -10,11 +10,14 @@ The fixture (tests/fixtures/report_grouping.xml) puts the same names in two
 device groups, which is the case a flat report cannot tell apart.
 
 The manual setup report's routing section (F7.1) names only the protocol entries the
-`.tf` cannot hold, and its rows come from the ledger, so it uses the same grouping rule.
+`.tf` cannot hold, and its rows come from the ledger, so it uses the same grouping rule. The marker the VPN
+section names is the table's one statement, `resource_mapping.PLACEHOLDER_TEXT`, so the report, the print site
+that wrote it, and the gate rule read the same fact.
 """
 
 import re
 
+import resource_mapping
 from conftest import FIXTURES_DIR, run_script
 
 FIXTURE = 'report_grouping.xml'
@@ -182,7 +185,8 @@ def test_per_gateway_placeholder_line_survives(tmp_path):
     for _title, body in _sections(vpn).items():
         # 'Gateway: ' at the entry line, not the tunnel's IKE Gateway reference.
         assert body.count('***MUST BE UPDATED***') == body.count('\nGateway: ')
-        assert '***CHANGE_ME***' in body
+        # The marker is the table's one statement, read through `resource_mapping.PLACEHOLDER_TEXT`.
+        assert resource_mapping.PLACEHOLDER_TEXT in body, body
 
 
 def test_vpn_footer_is_one_shared_block(tmp_path):

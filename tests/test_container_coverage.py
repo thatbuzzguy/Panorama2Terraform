@@ -25,7 +25,9 @@ Three groups of checks:
 
 Path matching is by segment presence: a method may reach a container through a
 helper, so a row path matches when the method, or a method it calls, names each
-segment. It is a presence check, not a full path comparison.
+segment. It is a presence check, not a full path comparison. A method may also read
+the segments through a table constant it names (`resource_mapping.FILTER_PATHS`), so the
+scan reads the value of such a constant as the paths the method states.
 """
 
 import ast
@@ -37,6 +39,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import container_coverage
+import resource_mapping
 import xml_input
 from conftest import FIXTURES_DIR, REPO_ROOT, SRC_DIR, corpus_fixtures, run_script
 
@@ -60,6 +63,9 @@ def _segments_of_method(cls, method_name: str) -> set[str]:
 
     F7.6: a row path is the input's spelling of a level the method states as a table path, so each segment is
     also read through `_protocol_xml_name`, the one rule that turns a table name into the tag the input spells.
+
+    A method that reads the paths through a table constant states no path literal, so the scan reads the
+    constant's value through the module it names. This keeps one statement of the paths: the table.
     """
     segments: set[str] = set()
     pending = [method_name]
@@ -72,6 +78,14 @@ def _segments_of_method(cls, method_name: str) -> set[str]:
             if spell is not None:
                 segments.add(spell(part))
 
+    def add_value(value) -> None:
+        if isinstance(value, str):
+            if PATH_STRING_RE.match(value):
+                add(value)
+        elif isinstance(value, (tuple, list, set, frozenset)):
+            for item in value:
+                add_value(item)
+
     while pending:
         name = pending.pop()
         if name in seen:
@@ -82,6 +96,9 @@ def _segments_of_method(cls, method_name: str) -> set[str]:
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 if PATH_STRING_RE.match(node.value):
                     add(node.value)
+            elif (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                  and node.value.id == 'resource_mapping' and hasattr(resource_mapping, node.attr)):
+                add_value(getattr(resource_mapping, node.attr))
             elif isinstance(node, ast.JoinedStr):
                 for part in node.values:
                     if isinstance(part, ast.Constant) and PATH_STRING_RE.match(part.value):

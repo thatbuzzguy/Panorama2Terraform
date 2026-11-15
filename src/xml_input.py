@@ -57,6 +57,22 @@ a per-scope source names its own declared path. The field is a fact the producer
 so `container_coverage` and `entry_coverage` read it through the contract, and the
 provenance record states it.
 
+The text rule, stated once here for the text every reader of a source uses:
+
+1. Control character. A source text holds no control character except the three it can state as
+   content — tab, CR, LF — because those three are the shapes a print escapes. The XML door refuses
+   the rest through the parser (``&#7;`` is "reference to invalid character number", a raw ``0x07``
+   byte is "not well-formed (invalid token)"), so no value reaches the printer with one. A JSON state
+   document states no such rule, because ``json.loads`` accepts ``\\u0007`` inside a string, so the
+   state door applies this rule to the values it reads. ``sanity_checks.check_control_chars`` reads the
+   same set for the printed files, so the gate is the check on the print, not a second rule, and
+   ``escape_string`` states only the escape shapes.
+2. Whitespace. The whitespace around text read from the tree is the export's formatting, not part of the
+   value, so a value is read without it (``read_text``). A name read from the ``name`` attribute is read
+   through §5, and ``naming.sanitize`` strips it the same way, so the value rule and the naming rule agree.
+   A JSON state string is read as it states itself, because whitespace inside a quoted JSON string is part
+   of the value, not the export's formatting.
+
 Facts this module depends on, verified against expat 2.6.1 (the parser
 behind ``xml.etree``):
 
@@ -96,6 +112,26 @@ DEFAULT_MAX_INPUT_BYTES = 64 * 1024 * 1024
 # `source_fetch.py`, which may import only this module.
 DEFAULT_SCOPE = 'whole-config'
 ENTRY_SEGMENT = 'entry'
+
+# The control characters, as the text rule above states them. One definition, read by the state door
+# (`state_input.py`) and by the gate rule `control_chars` (`sanity_checks.py`). The three escape shapes
+# are the characters a source may state as content, so the door does not refuse them.
+CONTROL_CHARS = {chr(code) for code in range(0x20)} | {chr(0x7f)}
+ESCAPE_SHAPES = frozenset('\t\r\n')
+
+
+def control_chars(text: str) -> list[str]:
+    """The control characters in text that the read layer refuses, in the order they appear."""
+    return [ch for ch in text if ch in CONTROL_CHARS and ch not in ESCAPE_SHAPES]
+
+
+def read_text(text: Optional[str]) -> Optional[str]:
+    """Text read from the tree, as the text rule above states it: without the whitespace around it.
+
+    An element that is not there answers None, so the rule never turns an absent field into an empty one.
+    """
+    return None if text is None else text.strip()
+
 
 # One MiB, for the human-readable part of a size message.
 _MIB = 1024 * 1024

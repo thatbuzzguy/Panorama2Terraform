@@ -6,7 +6,8 @@ Seven groups, one per rule in `unit_manifest.py` (`docs/CODEBASE_ASSEMBLY.md` §
    `entry_coverage.py` already writes, so F6.1 adds no parse data. F8.7: the unit join in
    `api_requests.py` reads this set through `units`, so path 2 states no second unit rule.
 2. The directory naming rule. `sanitize(unit name) + '_' + 8-hex digest of the unit identity`,
-   always, so a name depends on the unit alone and not on the other units in the run.
+   always, so a name depends on the unit alone and not on the other units in the run. The §5 fallback word is
+   stated once, in `naming.py`, so no module holds a second definition of it.
 3. The row shape. Fixed fields in the declared order, rows in identity order, read back as data.
 4. The reference names, recorded by `name_ref` at the site that applies the reference rule.
 5. The no-change rule. The `.tf` bytes, the report bytes, the gate inputs, and the exit codes.
@@ -16,6 +17,7 @@ Seven groups, one per rule in `unit_manifest.py` (`docs/CODEBASE_ASSEMBLY.md` §
 The manifest names the directory; F6.1 does not write one. Every test runs offline.
 """
 
+import ast
 import contextlib
 import hashlib
 import io
@@ -29,6 +31,7 @@ import pytest
 import api_requests
 import container_coverage
 import entry_coverage
+import naming
 import ownership
 import reference_edges
 import sanity_checks
@@ -38,6 +41,7 @@ import unit_manifest
 from conftest import (
     FIXTURES_DIR,
     GOLDEN_DIR,
+    RESOURCE_ADDRESS_RE,
     RESPONSES_DIR,
     SAMPLE_CONFIG,
     SRC_DIR,
@@ -275,6 +279,62 @@ def test_a_name_that_sanitizes_to_nothing_keeps_the_shape(gen):
     assert gen.sanitize_name('Sales & Eng') == 'sales___eng'
     assert unit_manifest.directory_name(facts, gen.sanitize_name) == \
         f'sales___eng_{unit_manifest.identity_digest(facts)}'
+
+
+def test_the_word_prints_the_same_string_at_both_print_sites(tmp_path):
+    """§5 rule 2 as content: the two sites that name a thing with no name print the same word for one unit.
+
+    A source scan cannot show which definition answered, because two definitions of one word print the same
+    string, so the pin that fails before the change is `test_the_fallback_word_is_stated_once_in_src`. This pin
+    measures the content the rule prints: the unit directory name `generate_units` wrote, and the block name the
+    run printed in that directory, for content whose name sanitizes to nothing. Both come from `naming.UNNAMED`.
+    """
+    source = tmp_path / 'no_name.xml'
+    source.write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n<config>\n  <templates>\n'
+        '    <entry name="!"><devices><entry name="fw-2.example.com"/></devices>\n'
+        '      <network><address>\n'
+        '        <entry name="!"><type>IP</type><ip-net-block>10.0.0.1</ip-net-block></entry>\n'
+        '      </address></network>\n    </entry>\n  </templates>\n</config>\n', encoding='utf-8')
+    out = tmp_path / 'out'
+    result = _run(source, out)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    facts = ('', '', '!', '', '')
+    row = _row(_manifest(out), facts)
+    # The unit half: the §5 shape of the unit name, with the owner's fallback.
+    directory = row['directory']
+    assert directory == f'{naming.sanitize(unit_manifest.unit_name(facts)) or naming.UNNAMED}' \
+                        f'_{unit_manifest.identity_digest(facts)}', row
+
+    # The block half, read from the bytes the run wrote in that directory.
+    text = file_text(tf_files(out), 'scope.tf')
+    address = RESOURCE_ADDRESS_RE.search(text).group(2)
+    assert address.startswith(f'{naming.UNNAMED}_'), (address, text)
+    assert address != directory, (address, directory, 'the digest is the entry identity, not the unit identity')
+
+
+def test_the_fallback_word_is_stated_once_in_src():
+    """§5 rule 2: `naming.UNNAMED` is the one statement of the fallback word, so no module states it twice.
+
+    A source scan, for the reason `acceptance.md` records: two definitions print the same string, so no run can
+    show which definition answered. The content half is
+    `test_the_word_prints_the_same_string_at_both_print_sites`, which measures the word a run wrote at both
+    places, and `tests/test_robustness.py::test_declare_empty_name_gets_a_stable_name`, which measures the shape
+    the word prints for a name.
+    """
+    holders = {}
+    for path in sorted(SRC_DIR.glob('*.py')):
+        tree = ast.parse(path.read_text(encoding='utf-8'))
+        held = [node.value for node in ast.walk(tree)
+                if isinstance(node, ast.Constant) and node.value == unit_manifest.UNNAMED]
+        if held:
+            holders[path.name] = len(held)
+    assert holders == {'naming.py': 1}, holders
+    # The two readers read the word through the owner, so the rule has one place.
+    for name in ('unit_manifest.py', 'panorama_to_terraform.py'):
+        text = (SRC_DIR / name).read_text(encoding='utf-8')
+        assert 'naming.UNNAMED' in text or 'from naming import UNNAMED' in text, name
 
 
 def test_the_digest_is_always_present_not_only_on_a_collision(converter_module, tmp_path):

@@ -67,6 +67,7 @@ from xml_input import (
     ParsedSource,
     UnsafeInputError,
     parse_xml,
+    read_text,
 )
 
 
@@ -462,10 +463,11 @@ class PanoramaParser:
             return names
         for node in list(listing):
             if node.tag == 'entry':
-                name = node.get('name')
+                # Both shapes read the name through the one text rule (`xml_input.read_text`).
+                name = read_text(node.get('name'))
                 self.mark(node, {})
             elif node.tag == 'member':
-                name = (node.text or '').strip()
+                name = read_text(node.text)
             else:
                 continue
             if name:
@@ -2657,14 +2659,14 @@ class PanoramaParser:
         return (table or resource_mapping.PROTOCOL_TABLE).xml_name(field, path)
 
     def _protocol_field(self, entry: ET.Element, field: str, xml_name: str, shape: str):
-        """One protocol field, read as the shape table states it (F7.1)."""
+        """One protocol field, read as the shape table states it (F7.1), through the one text rule."""
         if entry is None:
             return ''
         if field == 'name':
             # The entry name inside a list element is the entry's own `name` (F7.1 rule 1).
-            return entry.get('name') or ''
+            return read_text(entry.get('name')) or ''
         node = entry.find(xml_name)
-        text = (node.text or '') if node is not None else ''
+        text = (read_text(node.text) or '') if node is not None else ''
         if shape == 'bool':
             if node is None:
                 # The export states a flag by its presence, so an element that is not there is no value:
@@ -2702,12 +2704,8 @@ class PanoramaParser:
         """
         table = resource_mapping.FILTER_TABLE
         containers = {}
-        for path in ('network/routing-profile/filters/access-list',
-                     'network/routing-profile/filters/as-path-access-list',
-                     'network/routing-profile/filters/prefix-list',
-                     'network/routing-profile/filters/community-list',
-                     'network/routing-profile/filters/route-maps/bgp/bgp-entry',
-                     'network/routing-profile/filters/route-maps/redistribution/redist-entry'):
+        # The paths are read through the table, so the method states no path of its own (F7.1).
+        for path in resource_mapping.FILTER_PATHS:
             entries = []
             for container in self.root.findall(f'.//{path}'):
                 for entry in container.findall('./entry'):
@@ -2806,7 +2804,6 @@ class PanoramaParser:
                 'version': 'ikev1',  # Default
                 'peer_address': None,
                 'local_address': None,
-                'pre_shared_key': '***CHANGE_ME***',  # Generic placeholder
                 'auth_type': 'pre-shared-key',
                 'ike_crypto_profile': None,
                 'local_id': None,
@@ -2852,9 +2849,9 @@ class PanoramaParser:
             if auth is not None:
                 # Check for pre-shared key (won't have actual value in export for security)
                 if auth.find('pre-shared-key') is not None:
+                    # The export states the authentication method, not the key, so the entry records the fact
+                    # and no value: the block prints `PLACEHOLDER_TEXT` for it (F7.7).
                     gateway_config['auth_type'] = 'pre-shared-key'
-                    # Note: Actual key not in export for security reasons
-                    gateway_config['pre_shared_key'] = '***CHANGE_ME***'
                 elif auth.find('certificate') is not None:
                     gateway_config['auth_type'] = 'certificate'
                     cert = auth.find('certificate')
@@ -2923,16 +2920,17 @@ class PanoramaParser:
         return profiles
 
     def _get_text(self, element: ET.Element, path: str) -> Optional[str]:
-        """Safely get text from an XML element"""
+        """Safely get text from an XML element, read through the one text rule (`xml_input.read_text`)."""
         elem = element.find(path)
-        return elem.text if elem is not None else None
+        return read_text(elem.text) if elem is not None else None
 
     def _get_members(self, element: ET.Element, path: str) -> list[str]:
-        """Get list of members from an XML element"""
+        """Get list of members from an XML element, through the same text rule."""
         members = []
         for member in element.findall(f'.//{path}/member'):
-            if member.text:
-                members.append(member.text)
+            text = read_text(member.text)
+            if text:
+                members.append(text)
         return members
 
     def _get_single_value(self, element: ET.Element, path: str) -> str | list[str] | None:
@@ -2947,13 +2945,15 @@ class PanoramaParser:
         The limit is the read: `find` answers one element, so this rule can only hold a field the
         provider declares as one value. A field the provider declares as `['list', 'string']` must be a
         `member_list` row instead, which is what the shape table pins (`docs/ARCHITECTURE.md` §4.9).
+
+        Both shapes read the text through the one text rule (`xml_input.read_text`).
         """
         elem = element.find(path)
         if elem is None:
             return None
-        members = [member.text for member in elem.findall('member') if member.text]
+        members = [read_text(member.text) for member in elem.findall('member') if read_text(member.text)]
         if not members:
-            return elem.text
+            return read_text(elem.text)
         return members[0] if len(members) == 1 else members
 
     def _list_values(self, element: ET.Element, path: str) -> list[str]:
@@ -3082,6 +3082,10 @@ class UnitText:
         self.name = name
         self.header = header
         self._text: dict[str, str] = {}
+        # The once record is the set of texts this file stated for each unit, kept apart from the text. Testing
+        # the accumulated text for a substring would let header prose that contains a section text stop the
+        # section from being written (F6.10.3).
+        self._once: dict[str, set] = {}
 
     def add(self, entry, text: str) -> None:
         """One piece of the text, for the unit `entry` belongs to, in the order the run read it.
@@ -3093,11 +3097,17 @@ class UnitText:
         self._text[directory] = self._text.get(directory, self.header) + text
 
     def add_once(self, entry, text: str) -> None:
-        """Text a file states once per unit, which is what a section header is (F6.10.3)."""
+        """Text a file states once per unit, which is what a section header is (F6.10.3).
+
+        "Once" is read through this file's own record of the texts it stated for the unit, not by searching
+        the text already accumulated, so header prose that contains the section text cannot stop the section.
+        """
         facts = entry if isinstance(entry, tuple) else unit_manifest.facts_of(entry)
         directory = self.generator.directory_of(facts)
-        if text not in self._text.setdefault(directory, self.header):
-            self._text[directory] += text
+        if text in self._once.setdefault(directory, set()):
+            return
+        self._once[directory].add(text)
+        self._text[directory] = self._text.setdefault(directory, self.header) + text
 
     def write(self) -> None:
         """Write the file for every unit that has content, in the order the manifest rows print."""
@@ -3266,7 +3276,8 @@ class TerraformGenerator:
         `record_import_row` makes. The reference rule reads the declaring unit from this record, so no
         second unit rule and no second naming key exists.
         """
-        base = self.sanitize_name(name) or 'unnamed'
+        # The §5 fallback is `naming.UNNAMED`, the one definition of the word (F6.6).
+        base = self.sanitize_name(name) or naming.UNNAMED
         unit = unit_manifest.facts_of(obj)
         identity = f'{context}|{vsys}' if kind == 'resource' else unit_manifest.identity_digest(unit)
         digest = hashlib.sha256(f'{scope}|{identity}|{name}'.encode()).hexdigest()[:8]
@@ -3324,10 +3335,15 @@ class TerraformGenerator:
         """The recorded site values, keyed by the unit's five scope facts, in name order (F6.6).
 
         Recorded at the site that applied the value-to-variable table, so `site_data.py` can state the row
-        without resolving a name, and `generate_variables` declares exactly the values the run printed.
+        without resolving a name, and `generate_variables` declares exactly the values the run printed. The
+        record holds the pair as (name, source) through `site_data.record_pair`, so this read states the value
+        only for a row whose source is a value: a name the run holds with no value names its field or its entry
+        (F7.1, F6.10.4), and a row is a value the run read (§9 rule 2).
         """
-        return {facts: {name: values[name] for name in sorted(values) if values[name] is not None}
-                for facts, values in self._value_variables.items()}
+        shapes = self._value_shapes
+        return {facts: {name: store[name] for name in sorted(store)
+                        if shapes.get(facts, {}).get(name) == resource_mapping.VARIABLE}
+                for facts, store in self._value_variables.items()}
 
     def value_shapes(self) -> dict:
         """The recorded shapes, keyed by the unit's five scope facts, in name order (F6.10.4).
@@ -3415,13 +3431,15 @@ class TerraformGenerator:
             return '""'
         # Escape special characters. HCL quoted strings support the escape
         # sequences below and no other raw control characters.
+        # This method states only the escape shapes. The control-character rule is the read layer's
+        # (`xml_input`), so a value that holds a control character is refused at the door and cannot reach
+        # here; `sanity_checks.check_control_chars` reads the same set on the printed text, so a missed
+        # escape is a gate finding rather than a silent strip.
         value = value.replace('\\', '\\\\')
         value = value.replace('"', '\\"')
         value = value.replace('\t', '\\t')
         value = value.replace('\r', '\\r')
         value = value.replace('\n', '\\n')
-        # Strip any remaining C0 control characters and DEL.
-        value = ''.join(ch for ch in value if ch >= ' ' and ch != '\x7f')
         return f'"{value}"'
 
     # Provider v2 requires a location block on every resource. A type is template-scoped when its
@@ -3695,6 +3713,10 @@ class TerraformGenerator:
         a declaration with no consumer. `localhost.localdomain` never reaches a location (F3.5), so it
         never reaches this method and names no variable.
 
+        The pair is recorded through `site_data.record_pair`, the one statement of the rule that one name
+        names one source, so this site and the `.tfvars` writer cannot give one name two sources (§9 rule 4).
+        A name that holds one value here can only hold that value in the row and in the printed form.
+
         A field the table states as `reference_only` is a value the provider marks `sensitive`: no
         generated file may state it, so the run records the name with no value, and the `.tfvars` writer
         writes no line for it. The name is the §5 name of the entry, because a secret cannot name itself.
@@ -3711,8 +3733,18 @@ class TerraformGenerator:
             return self.escape_string(value)
         # A name the run holds no value for is named by the entry (F7.1) or by the field (F6.10.4), because a
         # value cannot name itself and an unread fact has no value.
-        name = naming.variable_name(key if shape == resource_mapping.OPERATOR_SUPPLIED else value)
-        self._value_variables.setdefault(facts, {})[name] = value if shape == resource_mapping.VARIABLE else None
+        source = key if shape == resource_mapping.OPERATOR_SUPPLIED else value
+        if shape == resource_mapping.REFERENCE_ONLY and not source:
+            # The export carries no value for a credential-shaped field (the IKE gateway key), so the name rule
+            # has nothing to name (F7.7) and the block prints the marker the table states. No pair is recorded,
+            # so no site row and no declaration names it, and the gate reports the marker as an action.
+            return self.escape_string(resource_mapping.PLACEHOLDER_TEXT)
+        name = naming.variable_name(source)
+        # One name names one source: `site_data.record_pair` states the rule and refuses a second source for a
+        # name, so two entries whose names sanitize to one name (for example `AP-1` and `AP_1`) cannot share
+        # one declaration. The value helpers fold `-`, `.` and `_` to the same separator (`naming.py` §5), so a
+        # name can hold two entries only when they state two different sources.
+        site_data.record_pair(self._value_variables.setdefault(facts, {}), name, source)
         self._value_shapes.setdefault(facts, {})[name] = shape
         return naming.variable_text(name)
 
@@ -3781,6 +3813,10 @@ class TerraformGenerator:
             }
         Use HclRef for raw expressions (resource references) that must be
         emitted without quoting.
+
+        This is the one order rule for a nested object: a dict prints its keys in the order it was built, and
+        the emitter builds it from a shape table row, so a block prints in the row's order at every level
+        (`docs/ARCHITECTURE.md` §4.9). No emitter sorts the fields it prints.
         """
         if isinstance(value, HclRef):
             return value.expr
@@ -3886,7 +3922,8 @@ class TerraformGenerator:
                 out.add(entry, self.location_block(resource, entry, block_name))
                 printed = self._protocol_fields(path, entry, entry, entry['name'],
                                           resource_mapping.FILTER_TABLE)
-                for field in sorted(printed, key=lambda key: (key != 'name', key)):
+                # The row order is the print order (F7.1, §4.9), so no field is sorted here.
+                for field in printed:
                     out.add(entry, f'  {field} = {self.hcl_value(printed[field])}\n')
                 out.add(entry, '}\n\n')
                 wrote = True
@@ -3919,7 +3956,7 @@ class TerraformGenerator:
         """One resource block per certificate entry, printed from the shape table (F7.14).
 
         `path` is the entry row of `CERTIFICATE_SHAPE`, so the printed fields are the row's fields in the row's
-        order, and `name` is printed first because the block states the entry name before its content. The
+        order, which is the one order rule (`hcl_value`), and `name` prints where the row states it. The
         resource type comes from `CERTIFICATE_TYPES`, read through the same path.
         """
         if not entries:
@@ -3935,7 +3972,9 @@ class TerraformGenerator:
             out.add(entry, f'resource "{resource}" "{block_name}" {{\n')
             out.add(entry, self.location_block(resource, entry, block_name))
             printed = self._protocol_fields(path, entry, entry, name, table)
-            for field in sorted(printed, key=lambda key: (key != 'name', key)):
+            # The row order is the print order (F7.1, §4.9), so no field is sorted here and `name`
+            # prints where the row states it.
+            for field in printed:
                 out.add(entry, f'  {field} = {self.hcl_value(printed[field])}\n')
             out.add(entry, '}\n\n')
         out.write()
@@ -4015,8 +4054,11 @@ provider "panos" {
                   f'# reads {source_fetch.API_KEY_ENV} from the environment (docs/CODEBASE_ASSEMBLY.md §11).\n')
         for facts in self.unit_set():
             recorded = self._value_variables.get(facts) or {}
-            # F7.1: a reference-only name is a declaration with no value held for it.
-            values = {name: value for name, value in recorded.items() if value is not None}
+            shapes = self._value_shapes.get(facts) or {}
+            # F7.1: a pair whose source is not a value is a declaration with no value held for it, so the shape
+            # record is what separates the two halves of the file.
+            values = {name: source for name, source in recorded.items()
+                      if shapes.get(name) == resource_mapping.VARIABLE}
             content = header
             if values:
                 content += (f'# Site values (F6.6): one variable per value `resource_mapping.VALUE_VARIABLES` maps.\n'
@@ -4027,8 +4069,7 @@ provider "panos" {
                                 f'  description = "Site value (F6.6), read from {site_data.TFVARS_FILE}"\n'
                                 f'  type        = {kind}\n'
                                 '}\n\n')
-            held = {name for name in recorded if recorded[name] is None}
-            shapes = self._value_shapes.get(facts) or {}
+            held = {name for name, shape in shapes.items() if shape != resource_mapping.VARIABLE}
             for name in sorted(held):
                 # F7.1 marks a held name `sensitive` when its table row is `reference_only`; F6.10.4 names a
                 # fact the tool cannot read, and neither is a secret, so the marking follows the row. The
@@ -5161,9 +5202,10 @@ provider "panos" {
             # Generate static routes (v2: panos_virtual_router_static_route_ipv4)
             if router.get('static_routes'):
                 for route in router['static_routes']:
-                    route_key = f"{resource_name}_{route['name']}"
+                    # §5 digests the route's own name once, so the declaration index holds the key a
+                    # reference by that name reads. The router is not part of the route's identity.
                     route_resource = self.declare_resource_name(
-                        route_key, 'panos_virtual_router_static_route_ipv4', router,
+                        route['name'], 'panos_virtual_router_static_route_ipv4', router,
                         context=self.scope_context(router), vsys=router.get('vsys') or ''
                     )
 
@@ -6032,7 +6074,7 @@ provider "panos" {
                        '# IPsec VPN Configuration\n'
                        '# IMPORTANT: Pre-shared keys are set to generic placeholders.\n'
                        '# You MUST update all pre-shared keys before applying!\n'
-                       '# Search for "***CHANGE_ME***" and replace with actual keys.\n\n')
+                       f'# Search for "{resource_mapping.PLACEHOLDER_TEXT}" and replace with actual keys.\n\n')
 
         # IKE Crypto Profiles (v2: encryption/hash/dh_group lists + lifetime block)
         if ike_profiles:
@@ -6119,7 +6161,8 @@ provider "panos" {
         if ike_gateways:
             for facts in self.units_of(ike_gateways):
                 out.add_once(facts, '# IKE Gateways\n')
-                out.add_once(facts, '# WARNING: Pre-shared keys use placeholder "***CHANGE_ME***"\n')
+                out.add_once(facts,
+                             f'# WARNING: Pre-shared keys use placeholder "{resource_mapping.PLACEHOLDER_TEXT}"\n')
                 out.add_once(facts, '# Update these with actual keys from your key management system!\n\n')
 
             for gw in ike_gateways:
@@ -6171,8 +6214,11 @@ provider "panos" {
 
                 # v2 authentication object; pre-shared key only (cert auth is manual)
                 auth_type = gw.get('auth_type', 'pre-shared-key')
-                if auth_type == 'pre-shared-key' and gw.get('pre_shared_key'):
-                    key_obj = self.hcl_value({'pre_shared_key': {'key': gw['pre_shared_key']}})
+                if auth_type == 'pre-shared-key':
+                    # The key prints through `printed_value`, so `VALUE_VARIABLES` is the only place that decides
+                    # its shape (F7.1): the run read no value for it, so the block prints the table's marker.
+                    key_ref = HclRef(self.printed_value('key', '', unit_manifest.facts_of(gw)))
+                    key_obj = self.hcl_value({'pre_shared_key': {'key': key_ref}})
                     out.add(gw, f'  authentication = {key_obj}  # *** CHANGE THIS KEY ***\n')
 
                 if gw.get('local_id'):
@@ -6270,7 +6316,7 @@ provider "panos" {
 
         content += '⚠️  CRITICAL: PRE-SHARED KEY MANAGEMENT\n\n'
         content += 'Pre-shared keys are NOT included in Panorama exports for security reasons.\n'
-        content += 'All VPN configurations use placeholder keys: ***CHANGE_ME***\n\n'
+        content += f'All VPN configurations use placeholder keys: {resource_mapping.PLACEHOLDER_TEXT}\n\n'
         content += 'REQUIRED ACTIONS:\n'
         content += '1. Retrieve actual pre-shared keys from your secure key management system\n'
         content += '2. Update vpn.tf file with real keys before applying\n'
@@ -6315,7 +6361,7 @@ provider "panos" {
 
                         if entry.get('auth_type') == 'pre-shared-key':
                             content += '  ⚠️  Pre-Shared Key: ***MUST BE UPDATED***\n'
-                            content += '     Current placeholder: ***CHANGE_ME***\n'
+                            content += f'     Current placeholder: {resource_mapping.PLACEHOLDER_TEXT}\n'
                             content += '     Action: Replace with actual key in vpn.tf\n'
 
                         content += f'  IKE Crypto Profile: {entry.get("ike_crypto_profile", "N/A")}\n'

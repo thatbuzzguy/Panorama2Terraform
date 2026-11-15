@@ -6,7 +6,9 @@ declared variable that no `.tf` file references is a failure. (The old `device_g
 location is derived per resource from the source XML, so no global device-group variable has a consumer.)
 
 F6.6 adds the second half of the declaration set: the site values the value-to-variable table mapped. The
-set is read through `site_data.parse_rows`, so the file and the data cannot disagree.
+set is read through `site_data.parse_rows`, so the file and the data cannot disagree. §9 rule 4 is the rule for
+one pair: one name names one source, stated once as `site_data.record_pair` and read both by the site that
+records the pair and by the writer that merges the rows, so one name cannot hold two sources.
 
 F7.1 adds the sensitive rule: `sensitive = true` is the table's `reference_only` row, so a name that is not
 in the table is never a secret.
@@ -317,3 +319,46 @@ def test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_o
                         if row == resource_mapping.OPERATOR_SUPPLIED}]
     assert named, (case, 'the run declares the names the tool cannot read')
     assert all('sensitive' not in body for body in named), (case, named)
+
+
+def test_the_record_refuses_two_entries_that_name_one_variable(tmp_path):
+    """§9 rule 4: one name names one source, so a second source for one name is a refusal the writer cannot print.
+
+    The rule is stated once as `site_data.record_pair`, and both sites read it: `printed_value` records the pair
+    when it applies the shape table, and `render_tfvars` merges the rows through the same function. The pin
+    measures both halves as content, so the print site and the writer cannot state the rule differently.
+
+    The reachable case inside one unit is two entries whose names sanitize to one name, because
+    `naming.variable_name` maps `-`, `.` and `_` to the same separator. A `VARIABLE` value cannot collide inside
+    one unit, because the only `VARIABLE` row names the device and the unit key already holds that fact. The pin
+    writes its own content, because the corpus holds no two entries that name one variable.
+    """
+    source = tmp_path / 'one_name_two_sources.xml'
+    source.write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n<config>\n  <templates>\n'
+        '    <entry name="Lab-Template"><devices><entry name="fw-2.example.com"/></devices>\n'
+        '      <network><certificate>\n'
+        '        <entry name="AP-1"><local><pem><private-key>one</private-key></pem></local></entry>\n'
+        '        <entry name="AP_1"><local><pem><private-key>two</private-key></pem></local></entry>\n'
+        '      </certificate></network>\n    </entry>\n  </templates>\n</config>\n', encoding='utf-8')
+    out = tmp_path / 'out'
+    result = run_script('panorama_to_terraform.py', str(source), '--output-dir', str(out))
+    assert result.returncode == 1, result.stdout + result.stderr
+    message = result.stdout + result.stderr
+    # The refusal names the name and both sources, so the operator can tell which entry is the other one.
+    assert 'ap_1' in message and "'AP-1'" in message and "'AP_1'" in message, message
+
+    # A refusal is a stop before the run writes the record, so the name holds no row and prints no line.
+    assert not (out / site_data.SITE_DATA_FILE).is_file(), 'a refusal writes no record'
+    assert not [key for key in tf_files(out) if key.endswith('.tfvars')], sorted(tf_files(out))
+
+    # The writer half reads the same function, so its message is the message the run printed.
+    store = {'ap_1': 'AP-1'}
+    with pytest.raises(ValueError) as caught:
+        site_data.record_pair(store, 'ap_1', 'AP_1')
+    assert str(caught.value) in message, (caught.value, message)
+    # The same source recorded twice is a merge, not a refusal, which is the other half of the rule.
+    merged = {}
+    site_data.record_pair(merged, 'ap_1', 'AP-1')
+    site_data.record_pair(merged, 'ap_1', 'AP-1')
+    assert merged == {'ap_1': 'AP-1'}, merged

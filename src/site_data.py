@@ -146,19 +146,33 @@ def value_text(value) -> str:
     raise ValueError(f'not a declared site value kind: {value!r}')
 
 
+def record_pair(store: dict, name: str, source: str) -> None:
+    """Rule 4, stated once as one function: one name names one source, and a second source for a name is a
+    refusal.
+
+    `source` is the fact the name names: the value for a site value, the field for a fact the tool cannot read,
+    and the entry name for a name the run records with no value (F7.7), because a value cannot name itself. The
+    record site (`TerraformGenerator.printed_value`) and the writer below both read this function, so no site
+    states the rule a second time. The refusal is the writer's decision, the way `parse_rows` refuses a row that
+    is not the declared shape: the file cannot print one line for one name twice, and a reference cannot name two
+    entries.
+    """
+    if name in store and store[name] != source:
+        raise ValueError(f'name {name} states two values: {store[name]!r} and {source!r}')
+    store[name] = source
+
+
 def render_tfvars(rows: list) -> str:
     """The `.tfvars` the tool writes from the data: one line per variable, in name order.
 
     A name two rows state prints one line, because the name is the §5 shape of the value, so one value
-    cannot produce two names. If two rows state one name with two different values the file cannot
-    print one line for it, so the writer refuses. No line states a timestamp or a path.
+    cannot produce two names. If two rows state one name with two different sources, `record_pair` refuses.
+    No line states a timestamp or a path.
     """
     values: dict[str, object] = {}
     for row in rows:
         for name, value in row['variables'].items():
-            if name in values and values[name] != value:
-                raise ValueError(f'name {name} states two values: {values[name]!r} and {value!r}')
-            values[name] = value
+            record_pair(values, name, value)
     lines = [TFVARS_HEADER]
     for name in sorted(values):
         lines.append(f'{name} = {value_text(values[name])}\n')
