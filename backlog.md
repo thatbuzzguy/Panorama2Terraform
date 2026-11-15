@@ -728,35 +728,15 @@ each pin, and the gate measurement are in `acceptance.md`. Nothing from this sec
 
 ### `src/split_device_groups.py`
 
-- Write path: the splitter writes XML through `ElementTree.write` (281), outside `write_path.py`, and the files
-  it writes have no trailing LF (measured with `od`). The writer scan lists `write_text`, `write_bytes`,
-  `os.linesep` and `open(...'w')` (`tests/test_write_path.py:441-448`), so this writer is not seen by the gate.
-  Fix: write through `write_path.py`, or add the element writer to the scan. Owner: `src/write_path.py`,
-  `tests/test_write_path.py`.
-- Naming: file names are built with two `replace` calls (275) instead of `naming.sanitize`, so a device-group
-  name that states any other character keeps it, and two names that read the same after the two replaces
-  collide. Measured probe: device groups `DG/A` and `DG A` wrote one file, `DG_A.xml`, and the second write
-  replaced the first. Reading `naming.sanitize` would put the file name under the one rule but would not
-  stop the collision, because both names sanitize to `dg_a`; the rule needs a collision decision. Fix: read
-  `naming.sanitize` and refuse or number a collision. Owner: `src/naming.py`, `src/split_device_groups.py`.
-- Identity: the splitter keeps name-keyed tables (45-53, 86-95) and takes the first entry with a name
-  (149-152), against §2.3, so a repeated device-group name is never written and one entry answers for two.
-  Fix: key by the source line, as the converter does. Owner: `src/split_device_groups.py`,
-  `docs/ARCHITECTURE.md` §2.3.
-- Shared-section merge (174-193): the dedupe reads `findall('.//entry')`, so a name matches at any depth and a
-  matched entry from a later section is dropped; an unmatched entry is appended directly under the container, so
-  its path is flattened. Measured probes: `/tmp/opencode/p1.xml` → `pout_split/DG1.xml` kept `y` as
-  `interface/entry` instead of `interface/virtual-wire/units/entry`, and the converter reports that entry as
-  `unaccounted` with "no parse method reads interface"; `/tmp/opencode/p2.xml` → `pout_split2/DG2.xml` dropped
-  the second `x` entry because the first `x` matched at a different depth. Fix: merge by path and name, and keep
-  the entry's path. Owner: `src/split_device_groups.py`, `docs/DEVICE_GROUP_SPLITTING.md`.
-- Dead branch: `if dg_config is None` (270-272) cannot be true, because `parse_device_groups` (47-51) only
-  names entries that exist in the tree. Fix: remove the branch or make the extraction able to fail. Owner:
-  `src/split_device_groups.py`.
+The six findings this audit recorded here were closed by `to-do.md` Piece 6 on 2026-11-15: the writer, the file
+name and its collision decision, the name-keyed tables, the shared-section merge, the dead branch, and the
+refusal kinds. Each decision, each pin, and the gate measurement are in `acceptance.md`. One part stays open, in
+the tracking-count item above: `docs/LICENSING.md` still states 130 lines for `src/split_device_groups.py` and
+calls it "the upstream, unchanged", while the file now measures 383 lines and holds the piece's decisions.
 
 ### Error rule
 
-- `is_refusal` (6697-6701) counts any `ValueError` as an input refusal, against its own docstring ("anything
-  else is an unexpected error and keeps its traceback"), so a `ValueError` raised inside the tool prints as a
-  refusal with no traceback and exit 1. `main()` catches every exception (7281-7287). Fix: state the refusal
-  kinds as the input-layer exceptions. Owner: `is_refusal`, `src/xml_input.py`.
+The finding this audit recorded here was closed by `to-do.md` Piece 6 on 2026-11-15: `is_refusal` names the two
+input-layer exceptions, and a plain `ValueError` keeps the shape `failed()` states. The decision, the pin, and the
+gate measurement are in `acceptance.md`. Nothing from this section stays open.
+

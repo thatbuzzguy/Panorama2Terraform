@@ -109,20 +109,50 @@ measurement are in `acceptance.md`.
   `docs/CODEBASE_ASSEMBLY.md` §11, and `tests/test_property_coverage.py` measures the row against what a run
   reads.
 
-### Piece 6 — the splitter reads the owners' rules, and the error rule names its kinds
+### Piece 6 — the splitter reads the owners' rules, and the error rule names its kinds (complete, committed 2026-11-15)
 
 Owner: `src/split_device_groups.py`, `src/naming.py`, `src/write_path.py`, `src/xml_input.py`,
-`docs/DEVICE_GROUP_SPLITTING.md`, `docs/ARCHITECTURE.md` §2.3.
+`src/panorama_to_terraform.py`, `docs/DEVICE_GROUP_SPLITTING.md`, `docs/ARCHITECTURE.md` §2.3. Each item states
+the rule, the decision, and the pin that measures content. The criteria, the pin changes, and the gate
+measurement are in `acceptance.md`.
 
-- [ ] Write the split files through `write_path.py`, so the single writer and the LF rule cover them.
-- [ ] Build the file name through `naming.sanitize`, and add the collision decision for two names that
-      sanitize to the same value.
-- [ ] Key the splitter's tables by the source line, as §2.3 states, so a repeated device-group name is
-      not answered by one entry.
-- [ ] Merge the shared section by path and name, and keep each entry's path.
-- [ ] Remove the dead branch, or make the extraction able to fail.
-- [ ] `is_refusal`: state the refusal kinds as the input-layer exceptions, so a `ValueError` raised
-      inside the tool keeps its traceback.
+- Item 1 — the single writer: the splitter serializes the tree to text and hands it to `write_path.write_file`, so
+  the byte rule and the `LF` rule cover the split files, and the text ends with the final line the single writer
+  states. The splitter owns its own output path, so it names no builder from `write_path.py`. The writer scan now
+  reads the element-writer shape. `tests/test_write_path.py::
+  test_one_function_writes_bytes_and_no_other_module_writes_a_file` (the scan pin, the pin that fails before the
+  change), `test_the_splitter_writes_through_the_single_writer`, and the content pin
+  `tests/test_split_device_groups.py::test_a_split_file_is_the_text_the_single_writer_writes`.
+- Item 2 — the file name: `naming.variable_name` is the one name rule, so `DG-Internet` writes `dg_internet.xml`
+  and a name that sanitizes to nothing writes `unnamed.xml`. The collision decision is refuse, not number, because
+  the numbering a run would pick depends on the order the entries appear in (§6); the refusal is the input-layer
+  kind, so the run stops before it writes and the output directory is never made.
+  `tests/test_split_device_groups.py::test_the_split_file_name_is_the_naming_rule_applied_to_the_name` and
+  `test_two_names_that_read_one_file_name_are_refused_and_no_file_is_written`.
+- Item 3 — the tables are keyed by the source line: `parse_device_groups` answers one row per entry, the row holds
+  the line, the path, the name, the entry and its devices, the join answers each entry's own devices, and the rows
+  are in source line order, so the name sort is gone. `tests/test_split_device_groups.py::
+  test_the_splitter_tables_are_keyed_by_the_source_line`,
+  `test_two_entries_with_one_name_are_two_rows_that_answer_their_own_devices`, and
+  `test_the_join_answers_the_rows_in_source_line_order`; the splitter pins in `tests/test_edge_cases.py` and
+  `tests/test_multi_device_template.py` read the row and the parsed source through the door.
+- Item 4 — the shared merge: the dedupe is the pair (path, name) at the level the path names, the first occurrence
+  of a path is the container, an entry inside an entry travels with its parent copy, and an empty section writes no
+  container. `tests/test_split_device_groups.py::test_the_merge_keeps_an_entry_at_the_path_it_sits_at`,
+  `test_the_merge_dedupes_the_pair_path_and_name_at_its_own_level`,
+  `test_the_run_writes_one_container_per_path`, and `test_an_empty_shared_section_writes_no_container`.
+- Item 5 — the dead branch: `extract_device_group_config` takes the row, so the lookup cannot exist and the warning
+  print and its troubleshooting row are gone.
+  `tests/test_split_device_groups.py::test_the_extraction_states_no_lookup_and_no_warning` (the scan pin, for the
+  reason `acceptance.md` states) and `test_the_extraction_answers_through_the_row_it_was_given`.
+- Item 6 — the refusal kinds: `is_refusal` answers True only for `xml_input.UnsafeInputError` and
+  `ET.ParseError`, so a plain `ValueError` raised inside the tool keeps the shape `failed()` states. `refused()`
+  lost the branch that could no longer fire and its `read_name` argument, and both entry points pass the error
+  alone. `tests/test_safe_input.py::test_the_refusal_kinds_name_only_the_input_layer_exceptions` and
+  `tests/test_variables.py::test_the_record_refuses_two_entries_that_name_one_variable`.
+
+Gate: `ruff check .` clean, 1,687 pins in 51 modules, all pass, no skips. The pins that fail before the change are
+listed with their measurement in `acceptance.md`.
 
 ### Piece 7 — the indexes and the documents agree with measurement
 

@@ -24,7 +24,7 @@ it covers the upstream parts only, and this project grants no commercial terms f
 "non-commercial" is not used as a license name, because AGPL v3 permits commercial use and §10 does not allow an
 extra non-commercial condition on a derivative work, so the choice reads as "AGPL v3 only".
 
-Test count: `python3 -m pytest` reads 1,673 pins, with no skips, and `ruff check .` is clean.
+Test count: `python3 -m pytest` reads 1,687 pins in 51 test modules, with no skips, and `ruff check .` is clean.
 `tests/test_api_path.py` reads 30 pins (29 before F8.10).
 
 Full-suite time, measured 2026-11-13: 325.4 s, 364.6 s and 364.9 s on three runs of the same set (5 min 25 s to
@@ -130,7 +130,35 @@ Gate after, measured 2026-11-15: `ruff check .` clean, `python3 -m pytest` passe
 `virtual_routers.tf`, and the filter-container golden's `filters.tf`. The criteria, the pin changes, the pins that
 fail before the change, and the counts by module are in `acceptance.md`.
 
-Next: piece 6, the splitter reads the owners' rules, and the error rule names its kinds (`to-do.md`).
+Piece 6 (the splitter reads the owners' rules, and the error rule names its kinds) is complete, committed
+2026-11-15. The six findings the 2026-11-12 audit recorded for `src/split_device_groups.py` and the error rule are
+closed, each by reading the rule through its owner. What landed: the splitter serializes the tree to text and writes
+it through `write_path.write_file`, so the byte rule and the `LF` rule cover the split files and the text ends with
+the final line the single writer states, and the writer scan now reads the element-writer shape; the file name is
+`naming.variable_name` applied to the device-group name, and two names that read to one file name are refused as an
+input-layer refusal with no file written, because a numbering would depend on the order the entries appear in; the
+splitter's tables are keyed by the source line the read layer records, so one entry produces one row and the join
+answers each entry's own devices in source line order; the shared merge dedupes the pair (path, name) at the level
+the path names and keeps each entry at its own path; the dead branch and its troubleshooting row are gone, because
+the extraction takes the row it was given; and `is_refusal` names only `xml_input.UnsafeInputError` and
+`ET.ParseError`, so a plain `ValueError` keeps the shape `failed()` states and `refused()` lost the branch that
+could no longer fire and its `read_name` argument.
+
+Two pins are source scans, each with the reason `acceptance.md` states: the writer scan cannot show which writer
+wrote a file, because an element writer can produce the same bytes for the same tree, and a branch that cannot fire
+cannot be shown by a run at all. Each of those items keeps a content pin as well. Measured against the code before
+the change, 23 of the pins fail, and the same 23 pass after it (`/tmp/opencode/piece6/before`). The pins that
+measure a claim and cannot fail before the change are recorded in `acceptance.md`, each with the reason.
+
+Gate after, measured 2026-11-15: `ruff check .` clean, `python3 -m pytest` passes with no skips, 1,687 pins in 51
+modules in 343.02 s, against 1,673 pins in 50 modules in 258.2 s before the piece. Counts by module:
+`tests/test_split_device_groups.py` is new at 12, `tests/test_write_path.py` 19 to 20, `tests/test_safe_input.py`
+36 to 37; the other four modules are unchanged. No pin was weakened. One finding stays open for Piece 7:
+`docs/LICENSING.md` still states 130 lines for `src/split_device_groups.py` and calls it "the upstream, unchanged",
+while the file now measures 383 lines.
+
+Next: piece 7, the indexes and the documents agree with measurement (`to-do.md`).
+
 
 ## Rules to keep when writing documents
 
@@ -352,9 +380,17 @@ the
 - A cycle test needs two units that each declare a name the other one uses, because the rule
   resolves a
   name only inside the unit that declared it (`tests/fixtures/reference_cycle.xml`).
+- The splitter (`src/split_device_groups.py`) reads the rules its owners state and defines none of its own: the
+  single writer for the bytes of a split file, `naming.py` §5 for the file name, and the source line as the identity
+  of an entry for its three tables. It owns its own output path, so it names no builder from `write_path.py`, and the
+  writer scan reads the element-writer shape so no module can add a writer of its own. A file name two entries read
+  to is a refusal, not a numbering, because a numbering depends on the order the entries appear in (§6). The shared
+  merge dedupes the pair (path, name) at the level the path names, so an entry stays at its own path and one name at
+  two depths is two entries.
 - The LF rule is a byte rule, so the goldens and the no-change tests change with the write
   path. The rule is in
   the one write function, and `docs/ARCHITECTURE.md` §6 states it.
+
 - Path 2 (Epic 8) adds `api_requests.py` and `api_to_terraform.py`, and both are read by the pins that
   scan the `src/` set: the writer scan, the environment-name scan, the console-line scan, and the
   second-naming-rule scan. So path 2 states no second rule of any kind, and each new path 2 rule names
