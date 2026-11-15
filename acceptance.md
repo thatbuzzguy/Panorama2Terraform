@@ -139,12 +139,11 @@ Pins:
 - `tests/test_split_device_groups.py::test_the_splitter_tables_are_keyed_by_the_source_line` — content: the keys
   of the three association tables are the source lines `line_of` answers for the entries the run read, and each
   row names its own entry. Fails before the change.
-- `tests/test_split_device_groups.py::test_a_repeated_device_group_name_writes_one_file_per_entry` — content: two
-  entries with one name write two files, each holding its own entry, read back through the door. Fails before the
-  change.
 - `tests/test_split_device_groups.py::test_two_entries_with_one_name_are_two_rows_that_answer_their_own_devices` —
   content: for each of two same-named entries the row holds only that entry's devices, and the tree the run built
-  for a row copies only the template that targets that row's device. Fails before the change.
+  for a row copies only the template that targets that row's device, and holds that row's own entry as a copy. The
+  run writes no file for this pair, because the two entries read one file name and are refused (item 2), so the
+  row rule and the refusal are the two halves of the same content. Fails before the change.
 - `tests/test_split_device_groups.py::test_the_join_answers_the_rows_in_source_line_order` — content: two template
   entries that list one shared device, stated in the content in an order an alphabetical name sort would change.
   Fails before the change.
