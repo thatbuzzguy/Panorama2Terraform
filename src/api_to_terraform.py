@@ -156,7 +156,7 @@ def run(argv, producer=None) -> int:
         # its own (rule 4, and criterion 7).
         if panorama_to_terraform.is_refusal(e):
             # The read name is the host the run read, because a path 2 run names no input file (criterion 5).
-            return panorama_to_terraform.refused(args.host, e)
+            return panorama_to_terraform.refused(e)
         return panorama_to_terraform.failed(e)
 
 

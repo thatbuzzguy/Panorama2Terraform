@@ -348,6 +348,26 @@ def test_parser_and_splitter_use_the_shared_default(xml_input_module, converter_
     assert splitter_module.split_panorama_config(str(source), str(tmp_path / 'split')) is False
 
 
+# --- The refusal kinds (criterion 5) ----------------------------------------
+
+def test_the_refusal_kinds_name_only_the_input_layer_exceptions(converter_module, xml_input_module,
+                                                                fetch_module):
+    """Criterion 5: a refusal is the run's own decision to stop before it writes, so the kinds are the two the
+    input layer states. A `ValueError` raised inside the tool is an unexpected error and keeps the shape
+    `failed` states, so it is not a refusal kind.
+
+    The content pin for the entry point is `tests/test_variables.py::
+    test_the_record_refuses_two_entries_that_name_one_variable`, which measures the shape a plain `ValueError`
+    takes at the console. `SourceFetchError` is read here as a subclass of the input-layer kind, which is what
+    the fetch pins already depend on.
+    """
+    assert converter_module.is_refusal(xml_input_module.UnsafeInputError('the door refuses the input'))
+    assert converter_module.is_refusal(ET.ParseError('the parse cannot read the input'))
+    assert not converter_module.is_refusal(ValueError('a rule inside the tool'))
+    assert converter_module.is_refusal(fetch_module.SourceFetchError('a refused response')), \
+        'a subclass of the input-layer kind is the same kind'
+
+
 # --- F4.2: the same read records the source line ---------------------------
 
 def _shape(elem):
@@ -456,8 +476,9 @@ def test_line_tracking_does_not_change_the_tree(xml_input_module, tmp_path):
 def test_a_copied_element_has_no_line(xml_input_module, tmp_path):
     """The line map covers the tree that was parsed, not a copy built from it.
 
-    The device-group splitter builds new trees from copies, so it writes XML and
-    never asks for a line.
+    The device-group splitter keys its tables by the line of the source entries it reads (§2.3), so it asks for
+    a line for those, and gets none for a copy: the split trees it builds are copies, and the entry a split file
+    holds is not the entry the input stated.
     """
     source = tmp_path / 'copy.xml'
     source.write_text(f'<?xml version="1.0"?>\n{BODY}', encoding='utf-8')

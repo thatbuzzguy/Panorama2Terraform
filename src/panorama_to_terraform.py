@@ -6801,8 +6801,13 @@ def state_line(path, workspace) -> str:
 def is_refusal(error) -> bool:
     """The kinds of failure an input refusal is, stated once for both entry points (criterion 5). A refusal is
     the run's own decision to stop before it writes, so the entry point that catches it prints `refused` and
-    exits 1; anything else is an unexpected error and keeps its traceback."""
-    return isinstance(error, (UnsafeInputError, ET.ParseError, ValueError))
+    exits 1; anything else is an unexpected error and keeps its traceback.
+
+    The kinds are the two the input layer states: `xml_input.UnsafeInputError` (the door, with
+    `source_fetch.SourceFetchError` as a subclass) and `xml.etree.ElementTree.ParseError`. A `ValueError` raised
+    by a rule inside the tool is not one of them, so it keeps the shape `failed` states.
+    """
+    return isinstance(error, (UnsafeInputError, ET.ParseError))
 
 
 def failed(error) -> int:
@@ -6816,21 +6821,20 @@ def failed(error) -> int:
     return 1
 
 
-def refused(read_name: str, error) -> int:
+def refused(error) -> int:
     """The run's refusal line and the exit code for refused input (criterion 5): 1, and no file is written,
     because the refusal happens before the run writes anything.
 
-    The door's message already names the file, the limit and the measured value, so it prints unchanged
-    (F3.8), and the parse shape stays the one `main()` prints. A `SourceFetchError` is an `UnsafeInputError`
-    subclass, so a fetch refusal reaches this through the door's message. `read_name` is what the run read:
-    path 1 names its input file, path 2 names the host the run read.
+    The two lines are the two kinds `is_refusal` names, so this function states no third shape. The door's
+    message already names the file, the limit and the measured value, so it prints unchanged (F3.8), and the
+    parse line is the parse shape. A `SourceFetchError` is an `UnsafeInputError` subclass, so a fetch refusal
+    reaches this through the door's message.
     """
     if isinstance(error, UnsafeInputError):
         print(f"Error: {error}")
-    elif isinstance(error, ET.ParseError):
-        print(f"Error: Failed to parse XML file: {error}")
     else:
-        print(f"Error: rejected '{read_name}': {error}")
+        # The other kind `is_refusal` names.
+        print(f"Error: Failed to parse XML file: {error}")
     return 1
 
 
@@ -7395,7 +7399,7 @@ def main():
 
     except Exception as e:
         if is_refusal(e):
-            return refused(args.input_file or args.host, e)
+            return refused(e)
         return failed(e)
 
 

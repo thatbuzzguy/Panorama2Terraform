@@ -286,7 +286,9 @@ class ParsedSource:
     ``lines`` is keyed by ``id(element)``. The root holds the whole tree, so
     every element stays alive while the source is held and an id cannot be
     reused. An element copied out of this tree is not in the map, so the
-    device-group splitter, which builds new trees from copies, gets no line.
+    device-group splitter gets a line for the source entries its tables key by,
+    and gets none for a copy: the entry a split file holds is a copy, not the
+    entry the input stated.
 
     ``size`` and ``sha256`` are the facts the F5.3 provenance record states: measured on
     the bytes the door parsed, so the record names the bytes it checked, not a file that

@@ -322,11 +322,13 @@ def test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_o
 
 
 def test_the_record_refuses_two_entries_that_name_one_variable(tmp_path):
-    """§9 rule 4: one name names one source, so a second source for one name is a refusal the writer cannot print.
+    """§9 rule 4: one name names one source, so a second source for one name is a stop the writer cannot print.
 
     The rule is stated once as `site_data.record_pair`, and both sites read it: `printed_value` records the pair
     when it applies the shape table, and `render_tfvars` merges the rows through the same function. The pin
-    measures both halves as content, so the print site and the writer cannot state the rule differently.
+    measures both halves as content, so the print site and the writer cannot state the rule differently. The
+    stop is raised inside the tool, not at the input door, so the entry point prints it as the shape an
+    unexpected error takes (criterion 7), not as an input refusal.
 
     The reachable case inside one unit is two entries whose names sanitize to one name, because
     `naming.variable_name` maps `-`, `.` and `_` to the same separator. A `VARIABLE` value cannot collide inside
@@ -347,6 +349,10 @@ def test_the_record_refuses_two_entries_that_name_one_variable(tmp_path):
     message = result.stdout + result.stderr
     # The refusal names the name and both sources, so the operator can tell which entry is the other one.
     assert 'ap_1' in message and "'AP-1'" in message and "'AP_1'" in message, message
+    # A rule inside the tool is not an input-layer refusal, so the run prints the shape `failed` states: the
+    # error line and the traceback. `tests/test_safe_input.py::
+    # test_the_refusal_kinds_name_only_the_input_layer_exceptions` holds the kinds.
+    assert 'Traceback' in result.stderr, message
 
     # A refusal is a stop before the run writes the record, so the name holds no row and prints no line.
     assert not (out / site_data.SITE_DATA_FILE).is_file(), 'a refusal writes no record'

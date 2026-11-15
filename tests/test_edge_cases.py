@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+import xml_input
 from conftest import FIXTURES_DIR, file_text, run_script, tf_files
 
 
@@ -27,20 +28,49 @@ def _fixture(name: str):
     return ET.parse(str(FIXTURES_DIR / name)).getroot()
 
 
+def _fixture_source(name: str):
+    """A fixture read through the door, so the splitter pins read the line map the reports read (F4.2)."""
+    return xml_input.parse_xml(FIXTURES_DIR / name)
+
+
+def _splitter_rows(splitter_module, name: str):
+    """The source and the device-group rows its table answers for it (§2.3: one entry, one row)."""
+    source = _fixture_source(name)
+    return source, splitter_module.parse_device_groups(source)
+
+
+def _splitter_tree(splitter_module, source, row: dict):
+    """The tree the extraction builds for one row. The join is an argument, so the pin hands the tables the same
+    source answers and the extraction states no lookup of its own."""
+    return splitter_module.extract_device_group_config(
+        source, row, splitter_module.device_associations(source))
+
+
 # --- 1. Quoted device-group names (splitter) --------------------------------
 
 def test_splitter_finds_dg_with_single_quote_in_name(splitter_module):
-    """A DG name with a single quote must resolve (no f-string XPath)."""
-    root = _fixture("edge_quoted_dg_names.xml")
-    extracted = splitter_module.extract_device_group_config(root, "DG-It's Here")
-    assert extracted is not None
+    """A DG name with a single quote reaches a row, and the tree built for that row holds that entry.
+
+    The old code interpolated the name into an f-string XPath, which a quote character broke or silently
+    mismatched. The extraction takes the row it was given, so no name is a lookup key and a quote cannot
+    change the answer.
+    """
+    source, rows = _splitter_rows(splitter_module, "edge_quoted_dg_names.xml")
+    row = rows[0]
+    assert row['name'] == "DG-It's Here", rows
+    tree = _splitter_tree(splitter_module, source, row)
+    held = tree.find('.//device-group/entry')
+    assert held.get('name') == row['name'], row
 
 
 def test_splitter_finds_dg_with_double_quote_in_name(splitter_module):
-    """A DG name with double quotes must resolve too."""
-    root = _fixture("edge_quoted_dg_names.xml")
-    extracted = splitter_module.extract_device_group_config(root, 'DG-"East" Prod')
-    assert extracted is not None
+    """A DG name with double quotes reaches its own row, as the single-quote name does."""
+    source, rows = _splitter_rows(splitter_module, "edge_quoted_dg_names.xml")
+    row = rows[1]
+    assert row['name'] == 'DG-"East" Prod', rows
+    tree = _splitter_tree(splitter_module, source, row)
+    held = tree.find('.//device-group/entry')
+    assert held.get('name') == row['name'], row
 
 
 def test_quoted_dg_objects_parse(make_parser):

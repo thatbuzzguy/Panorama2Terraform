@@ -16,7 +16,8 @@ Four contracts:
 3. The naming context of a template-scoped object is its template, else its
    device, so the same name on two firewalls or in two templates stays two
    resources.
-4. The splitter joins a device group and a template on a shared device name.
+4. The splitter joins a device group and a template on a shared device name, and the tables it builds are
+   keyed by the source line the read layer records (§2.3), so the extraction is handed a row, not a name.
 5. A reference resolves inside the unit that declared the name (F6.10.2), so the device the export
    names is a naming fact, not a second reference rule.
 """
@@ -27,6 +28,7 @@ import pytest
 
 import naming
 import unit_manifest
+import xml_input
 from conftest import FIXTURES_DIR, file_text, tf_files
 from panorama_to_terraform import TerraformGenerator
 
@@ -46,8 +48,21 @@ FW1 = 'fw-1.example.com'
 FW2 = 'fw-2.example.com'
 
 
-def _fixture_root(name: str) -> ET.Element:
-    return ET.parse(str(FIXTURES_DIR / name)).getroot()
+def _fixture_source(name: str):
+    """A fixture read through the door, so the splitter pins read the line map the tables key by (F4.2, §2.3)."""
+    return xml_input.parse_xml(FIXTURES_DIR / name)
+
+
+def _table_row(splitter_module, source, name: str) -> dict:
+    """The device-group row the table answers for a name, so the extraction is handed the row it reads."""
+    return next(row for row in splitter_module.parse_device_groups(source) if row['name'] == name)
+
+
+def _splitter_tree(splitter_module, source, row: dict):
+    """The tree the extraction builds for one row. The join is an argument, so the pin hands the tables the same
+    source answers and the extraction states no lookup of its own."""
+    return splitter_module.extract_device_group_config(
+        source, row, splitter_module.device_associations(source))
 
 
 def _resources(text: str) -> dict:
@@ -364,34 +379,37 @@ def test_splitter_joins_template_and_device_group_by_device(splitter_module):
     old code stripped a 'DG-' prefix and then tested whether the device group
     name appeared inside the template name, so it copied nothing here.
     """
-    root = _fixture_root('multi_device_templates.xml')
-    extracted = splitter_module.extract_device_group_config(root, 'Office-FW')
+    source = _fixture_source('multi_device_templates.xml')
+    row = _table_row(splitter_module, source, 'Office-FW')
+    extracted = _splitter_tree(splitter_module, source, row)
     templates = extracted.findall('.//templates/entry')
     assert [t.get('name') for t in templates] == ['HQ-Networks']
 
 
 def test_splitter_copies_the_template_stack_by_device(splitter_module):
     """A stack belongs to the device group that holds one of its devices."""
-    root = _fixture_root('multi_device_templates.xml')
-    extracted = splitter_module.extract_device_group_config(root, 'Office-FW')
+    source = _fixture_source('multi_device_templates.xml')
+    row = _table_row(splitter_module, source, 'Office-FW')
+    extracted = _splitter_tree(splitter_module, source, row)
     assert extracted.findall('.//template-stack/entry') == []
 
-    root = _fixture_root('multi_device_templates.xml')
-    tables = splitter_module.device_associations(root)
-    assert tables['template_stacks']['Branch-Stack']['devices'] == \
-        {'fw-3.example.com'}
+    tables = splitter_module.device_associations(source)
+    # The table is keyed by the source line (§2.3), so the row is read through the key, not the name.
+    stack = next(row for row in tables['template_stacks'].values() if row['name'] == 'Branch-Stack')
+    assert set(stack['devices']) == {'fw-3.example.com'}
 
 
 def test_splitter_copies_no_template_without_a_shared_device(splitter_module):
     """A device group whose devices no template targets copies none."""
-    root = _fixture_root('multi_device_templates.xml')
-    extracted = splitter_module.extract_device_group_config(root, 'Datacenter-FW')
+    source = _fixture_source('multi_device_templates.xml')
+    row = _table_row(splitter_module, source, 'Datacenter-FW')
+    extracted = _splitter_tree(splitter_module, source, row)
     # DC-Networks does target fw-2, so it is copied; Unassigned-DG is not.
     assert [t.get('name') for t in extracted.findall('.//templates/entry')] == \
         ['DC-Networks']
 
-    root = _fixture_root('multi_device_templates.xml')
-    extracted = splitter_module.extract_device_group_config(root, 'Unassigned-DG')
+    row = _table_row(splitter_module, source, 'Unassigned-DG')
+    extracted = _splitter_tree(splitter_module, source, row)
     assert extracted.findall('.//templates/entry') == []
     assert extracted.findall('.//template-stack/entry') == []
 
@@ -409,31 +427,32 @@ def test_splitter_leaves_the_source_tree_intact(splitter_module):
     Both mutate what the next extraction reads, so the splitter copies with
     `copy.deepcopy` and the export keeps its own entries.
     """
-    root = _fixture_root('multi_device_templates.xml')
-    before = _entry_shapes(root)
-    splitter_module.extract_device_group_config(root, 'Office-FW')
-    splitter_module.extract_device_group_config(root, 'Datacenter-FW')
-    assert _entry_shapes(root) == before
+    source = _fixture_source('multi_device_templates.xml')
+    before = _entry_shapes(source.root)
+    for row in splitter_module.parse_device_groups(source):
+        _splitter_tree(splitter_module, source, row)
+    assert _entry_shapes(source.root) == before
 
 
-def test_splitter_merges_shared_sections_without_touching_the_source(splitter_module):
+def test_splitter_merges_shared_sections_without_touching_the_source(splitter_module, tmp_path):
     """Two shared sections merge into every split file, source unchanged.
 
     The merge appends the second section's entries into the first section's
     element. Without a copy that append lands in the source tree, so the
     export grows an entry per device group.
     """
-    root = ET.fromstring(
+    source_file = tmp_path / 'two_shared_sections.xml'
+    source_file.write_text(
         '<config>'
         '<devices><entry name="localhost.localdomain"><device-group>'
         '<entry name="DG-A"/><entry name="DG-B"/>'
         '</device-group></entry></devices>'
         '<shared><address><entry name="a1"/></address></shared>'
         '<shared><address><entry name="a2"/></address></shared>'
-        '</config>'
-    )
-    for device_group in ('DG-A', 'DG-B'):
-        extracted = splitter_module.extract_device_group_config(root, device_group)
+        '</config>', encoding='utf-8')
+    source = xml_input.parse_xml(source_file)
+    for row in splitter_module.parse_device_groups(source):
+        extracted = _splitter_tree(splitter_module, source, row)
         names = [e.get('name') for e in extracted.findall('.//shared//entry')]
-        assert names == ['a1', 'a2'], device_group
-    assert [e.get('name') for e in root.findall('.//shared//entry')] == ['a1', 'a2']
+        assert names == ['a1', 'a2'], row['name']
+    assert [e.get('name') for e in source.root.findall('.//shared//entry')] == ['a1', 'a2']

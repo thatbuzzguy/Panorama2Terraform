@@ -432,7 +432,9 @@ def test_the_plan_check_runs_on_one_directory_per_unit(corpus_run, tmp_path, mon
 def test_one_function_writes_bytes_and_no_other_module_writes_a_file():
     """The LF rule is in the one write function, so the byte rule holds on every desktop: `open(..., 'w')`
     writes `os.linesep`, so a run on a Windows desktop writes CRLF and the goldens stop matching byte for
-    byte. The scan reads the tool's modules, so no module can write a file outside the write path.
+    byte. The scan reads the tool's modules, so no module can write a file outside the write path. An element
+    writer is in the set as well, because a module that builds one writes a file outside the single writer,
+    which is what the splitter did before this piece.
     """
     source = Path(write_path.__file__).read_text(encoding='utf-8')
     assert "LF = '\\n'" in source and 'newline=LF' in source, 'the byte rule is stated in the write path'
@@ -449,11 +451,28 @@ def test_one_function_writes_bytes_and_no_other_module_writes_a_file():
         for line in path.read_text(encoding='utf-8').splitlines():
             # `write_file` is the single writer, so a module that calls it is not a writer itself.
             if 'write_text' in line or 'write_bytes' in line or 'os.linesep' in line or \
+                    'ET.ElementTree(' in line or \
                     'open(' in line and ("'w'" in line or '"w"' in line or "'a'" in line):
                 writers.append((path.name, line.strip()))
     assert not writers, writers
     assert not [line for line in Path(CONVERTER).read_text(encoding='utf-8').splitlines()
                 if 'write_text' in line], 'the tool writes through the write path'
+
+
+def test_the_splitter_writes_through_the_single_writer():
+    """The splitter hands its serialized tree to the single writer, so the byte rule covers the files it writes.
+
+    A source scan, for the reason `acceptance.md` states: an element writer can produce the same bytes as the
+    single writer for the same tree, so a run cannot show which writer wrote a split file. The content half is
+    `tests/test_split_device_groups.py::test_a_split_file_is_the_text_the_single_writer_writes`, which reads the
+    bytes a run wrote and shows the final line the single writer ends a text with. The scan pin above is the
+    one that changed for this piece.
+    """
+    source = (SRC_DIR / 'split_device_groups.py').read_text(encoding='utf-8')
+    assert 'from write_path import' in source, 'the splitter reads the byte rule from its owner'
+    assert 'write_file(' in source, 'the splitter writes through the single writer'
+    for word in ('ET.ElementTree(', '.write(', 'open('):
+        assert word not in source, (word, 'the splitter states no writer of its own')
 
 
 def test_a_record_module_renders_rows_and_writes_no_file():
