@@ -32,6 +32,7 @@ The rule-block parser and the chain check are read through `tests/conftest.py` (
 
 from pathlib import Path
 
+import resource_mapping
 from conftest import (
     FIXTURES_DIR,
     check_chain_semantics,
@@ -41,8 +42,9 @@ from conftest import (
     tf_files,
 )
 
-# The legacy comment-only placeholder text must be gone from all output.
-PLACEHOLDER_TEXT = 'Manual Terraform configuration is required'
+# The legacy comment-only placeholder text must be gone from all output. The marker is the table's one
+# statement, so the pins read it through `resource_mapping.PLACEHOLDER_TEXT` rather than holding a copy.
+PLACEHOLDER_TEXT = resource_mapping.PLACEHOLDER_TEXT
 
 # The .tf files that used to contain comments only. They must not be
 # written anymore: their data lives in MANUAL_SETUP_REPORT.txt.
