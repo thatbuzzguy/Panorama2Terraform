@@ -24,7 +24,7 @@ it covers the upstream parts only, and this project grants no commercial terms f
 "non-commercial" is not used as a license name, because AGPL v3 permits commercial use and §10 does not allow an
 extra non-commercial condition on a derivative work, so the choice reads as "AGPL v3 only".
 
-Test count: `python3 -m pytest` reads 1651 pins, with no skips, and `ruff check .` is clean.
+Test count: `python3 -m pytest` reads 1,673 pins, with no skips, and `ruff check .` is clean.
 `tests/test_api_path.py` reads 30 pins (29 before F8.10).
 
 Full-suite time, measured 2026-11-13: 325.4 s, 364.6 s and 364.9 s on three runs of the same set (5 min 25 s to
@@ -101,7 +101,36 @@ are in `acceptance.md`. Gate after: `ruff check .` clean, `python3 -m pytest` pa
 `tests/test_protocol_object.py` 45 to 46; two pins in `tests/test_parse_network.py` changed what they assert, and
 its count is unchanged at 24. No pin was weakened.
 
-Next: piece 5, naming and printing state one rule (`to-do.md`).
+Piece 5 (naming and printing state one rule) is complete, committed 2026-11-15. The eight findings the
+2026-11-12 audit recorded for naming and printing are closed, each by stating the rule once in its owner module
+and pinning it with a test that measures the content of a run. What landed: `generate_virtual_routers` passes the
+route's own name to `declare_block_name`, so one name is digested once and the declaration index holds the name a
+reference reads; `naming.UNNAMED` is the one statement of the fallback word, read by `unit_manifest` and
+`declare_block_name`; `site_data.record_pair` is the one statement of the pair rule, so a second source for one
+name is a refusal; `hcl_value` states that the row order is the print order at every level, so the two `sorted()`
+calls are gone and `parse_filter_containers` reads `FILTER_PATHS`; `xml_input.CONTROL_CHARS` is the read layer's
+statement of the control-character rule, the state door refuses one in a value, and `escape_string` keeps only the
+escape shapes; `xml_input.read_text` owns the whitespace rule and the six value helpers read it, with an absent
+element answering `None`; `UnitText` keeps its own once record per file; and the placeholder marker is stated once
+as `resource_mapping.PLACEHOLDER_TEXT`, printed only for a `reference_only` field the export cannot carry, with the
+gate rule reading it through the owner. `pre_shared_key` is dropped from the `COVERAGE_MATRIX` row for
+`panos_ike_gateway`, because the parse holds no value for it.
+
+Five pins are source scans rather than content reads, each with the reason stated in `acceptance.md`: the two
+"stated once" rules (items 2 and 8), which no run can show because two statements of one word print the same
+string, the "no print site states a second order" rule (item 4, two pins), which content cannot show for the
+certificate rows, and the "the read layer owns the rule" decision (item 5), which no run can show because a state
+value never reaches a `.tf` file. Each of those items keeps a content pin as well. Measured against the code
+before the change, 28 of the 1,673 pins fail: 23 pins and the five `tests/test_real_or_report.py` pins, which
+stop the run at their collection because they read a constant the table did not state. The pins that measure the
+rule and cannot fail before the change are recorded in `acceptance.md`, each with the reason.
+
+Gate after, measured 2026-11-15: `ruff check .` clean, `python3 -m pytest` passes with no skips, 1,673 pins in
+258.2 s, against 1,659 in 270.2 s before the piece. Three goldens moved: the kitchen-sink `filters.tf` and
+`virtual_routers.tf`, and the filter-container golden's `filters.tf`. The criteria, the pin changes, the pins that
+fail before the change, and the counts by module are in `acceptance.md`.
+
+Next: piece 6, the splitter reads the owners' rules, and the error rule names its kinds (`to-do.md`).
 
 ## Rules to keep when writing documents
 

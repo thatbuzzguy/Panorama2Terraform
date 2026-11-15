@@ -1546,16 +1546,18 @@ block's own level as well as at each level below.
    `tests/test_protocol_object.py::test_the_choice_rule_reads_a_level_and_an_entry`. The same rule and the same
    wording serve the filter table (F7.13), where the gate also reads the choice at the block's own level, which
    is the entry row the walk enters for a filter block (§4.10 rule 1).
-8. **A sensitive field prints as the variable reference**, through `VALUE_VARIABLES`
-   (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2), and no generated file states the value. F7.7: the run can
-   read a value for such a field inside an entry, and the name it prints is the §5 name of the entry
+8. **A sensitive field prints as the variable reference when the run read a value for it**, through
+   `VALUE_VARIABLES` (`docs/CODEBASE_ASSEMBLY.md` §9 rule 2), and no generated file states the value. F7.7: the
+   run can read a value for such a field inside an entry, and the name it prints is the §5 name of the entry
    that holds the field, because a value cannot name itself. The entry names itself when the field is
    its own, and a level inside an entry names the entry that holds it. The run writes no `.tfvars` line
-   and no site row for the name, and `variables.tf` declares it with `sensitive = true`.
-   `SHAPE_WORDS` is the word list the table uses, and `sanity_checks.value_shape` is its reader inverse.
-   A specialization is read back as its family word through `sanity_checks.SHAPE_READS_AS`, and
-   `sanity_checks.SHAPE_LEVELS` states which words name a level the walk enters, so a member list is
-   never walked. Pinned by
+   and no site row for the name, and `variables.tf` declares it with `sensitive = true`. When the source
+   carries no value for the field, as a pre-shared key does, there is no source to name, so the block prints the
+   marker stated once as `resource_mapping.PLACEHOLDER_TEXT` and the operator supplies the value before apply;
+   the gate reads the marker through the same statement and reports it as a WARN. `SHAPE_WORDS` is the word list
+   the table uses, and `sanity_checks.value_shape` is its reader inverse. A specialization is read back as its
+   family word through `sanity_checks.SHAPE_READS_AS`, and `sanity_checks.SHAPE_LEVELS` states which words name a
+   level the walk enters, so a member list is never walked. Pinned by
    `tests/test_protocol_object.py::test_value_shape_is_the_reader_inverse_for_every_shape_word`,
    `tests/test_protocol_object.py::test_an_auth_profile_prints_the_reference_the_entry_names`,
    `tests/test_variables.py::test_a_variable_block_is_sensitive_when_the_table_marks_its_name_reference_only`

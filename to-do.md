@@ -1,10 +1,10 @@
 # To Do
 
-The tracking markdown for the completed Epic 8 phases is removed here; the git history and the owner
-documents hold it. Epic 8 is complete. The open pieces are the actionable findings the 2026-11-11 and
-2026-11-12 audits recorded in `backlog.md`. Each piece below names the rule it holds, the module that
-states it, and the test that pins it. One piece is finished before the next is started. The piece completed
-on 2026-11-13 is kept below with the pins it names; the piece numbers follow the audit order.
+The tracking markdown for the completed pieces is removed here; the git history and the owner documents hold
+it. The open pieces are the actionable findings the 2026-11-11 and 2026-11-12 audits recorded in `backlog.md`.
+Each piece below names the rule it holds, the module that states it, and the test that pins it. One piece is
+finished before the next is started. Pieces 3, 4 and 5 are kept below with the pins they name; the piece
+numbers follow the audit order.
 
 ## Current series
 
@@ -62,25 +62,52 @@ rows they read. The criteria and the measurement are in `acceptance.md`.
 One part of the last finding stays open in `backlog.md`: a `number` text the value rule cannot read.
 
 
-### Piece 5 — naming and printing state one rule
+### Piece 5 — naming and printing state one rule (complete, committed 2026-11-15)
 
-Owner: `src/naming.py`, `src/panorama_to_terraform.py`, `src/sanity_checks.py`, `src/xml_input.py`, as
-`backlog.md` (measured 2026-11-12) names them.
+Owner: `src/naming.py`, `src/panorama_to_terraform.py`, `src/sanity_checks.py`, `src/xml_input.py`,
+`src/site_data.py`, `src/unit_manifest.py`, and the pins `backlog.md` (measured 2026-11-12) named. Each item
+states the rule, the decision, and the pin that measures content. The criteria, the pin changes, and the gate
+measurement are in `acceptance.md`.
 
-- [ ] Build the static-route block name from the route's own name, so the declaration index holds the
-      name a reference can resolve (§5, one digest per name).
-- [ ] Read `naming.UNNAMED` instead of hardcoding the fallback word in `declare_block_name`.
-- [ ] Decide the collision rule for `printed_value`: refuse a name collision inside a unit, or key the
-      record by the entry.
-- [ ] State the order rule for nested keys once, so an object does not print in two orders at two
-      levels, and make the two emitters read the table order their docstrings claim.
-- [ ] State which layer owns the control-character rule, or make the gate read the value before the
-      escape.
-- [ ] State one whitespace rule for the value helpers (`_get_text`, `_get_members`,
-      `_get_single_value`, `_protocol_field`, `_list_names`, and the splitter's `_device_names`).
-- [ ] `UnitText.add_once`: keep a per-file once record, so header prose cannot stop a section.
-- [ ] `generate_vpn_config`: print the `VALUE_VARIABLES` `key` as the reference the table states, or
-      state the exception in the table.
+- Item 1 — static-route block name: `generate_virtual_routers` passes the route's own name to
+  `declare_block_name`, so the digest is taken once and `_declaration_index` holds the name a reference reads.
+  `tests/test_robustness.py::test_a_static_route_block_digests_the_route_name_once`, and the kitchen-sink
+  `virtual_routers.tf` golden.
+- Item 2 — the fallback word: `naming.UNNAMED` is the one statement, and `unit_manifest` and
+  `declare_block_name` read it. `tests/test_unit_manifest.py::test_the_fallback_word_is_stated_once_in_src`
+  (the scan pin, the pin that fails before the change),
+  `tests/test_unit_manifest.py::test_the_word_prints_the_same_string_at_both_print_sites` (the content pin), and
+  `tests/test_robustness.py::test_declare_empty_name_gets_a_stable_name`.
+- Item 3 — one name names one source: the rule is `site_data.record_pair`, read by `printed_value` and
+  `render_tfvars`; a second source for one name is a refusal. `tests/test_variables.py::
+  test_the_record_refuses_two_entries_that_name_one_variable`, built on two names `sanitize_name` collapses.
+- Item 4 — the order rule: `hcl_value` states that the row order is the print order at every level, and the two
+  emitters read it, so both `sorted()` calls are gone and `parse_filter_containers` reads `FILTER_PATHS`.
+  `tests/test_filter_containers.py::test_the_print_sites_state_no_second_order_rule` (the scan pin),
+  `test_the_parse_reads_the_paths_the_table_states`, `test_the_emitter_prints_the_fields_the_entry_row_declares`
+  with the filter goldens, and `tests/test_certificate_blocks.py::
+  test_the_block_prints_the_fields_in_the_order_the_row_states`.
+- Item 5 — the control-character rule is the read layer's (`xml_input.CONTROL_CHARS`): the door refuses it in
+  both input shapes, `escape_string` keeps only the escape shapes, and the gate reads the definition.
+  `tests/test_state_input.py::test_the_state_door_refuses_a_control_character_in_a_value`,
+  `tests/test_robustness.py::test_escape_string_prints_the_shapes_it_escapes`, and the scan pin
+  `tests/test_sanity_gate.py::test_the_control_character_rule_is_stated_once_in_src`.
+- Item 6 — one whitespace rule: `xml_input.read_text` owns it and the six value helpers read it; an absent
+  element answers `None`. `tests/test_parse_helpers.py::
+  test_the_value_helpers_read_the_text_the_read_layer_states` and
+  `test_a_value_with_surrounding_whitespace_prints_without_it`; `tests/test_entry_coverage.py::_name_guards`
+  counts a name read through `read_text` as the same guard.
+- Item 7 — `UnitText.add_once` keeps its own once record, so header prose cannot stop a section.
+  `tests/test_write_path.py::test_add_once_keeps_its_own_once_record`.
+- Item 8 — the placeholder: the block prints the reference only when the run read a value, so a
+  `reference_only` field the export cannot carry prints the marker stated once as
+  `resource_mapping.PLACEHOLDER_TEXT`, and the gate rule stays as the reader of the printed text.
+  `tests/test_sanity_gate.py::test_a_reference_only_field_with_no_value_prints_the_marker`,
+  `test_the_placeholder_is_stated_once_in_src`, `test_placeholder_check_warns_and_does_not_fail`, and
+  `tests/test_reports.py::test_per_gateway_placeholder_line_survives`. `pre_shared_key` is dropped from the
+  `COVERAGE_MATRIX` row for `panos_ike_gateway`, because the parse holds no value for it; the rule's owner is
+  `docs/CODEBASE_ASSEMBLY.md` §11, and `tests/test_property_coverage.py` measures the row against what a run
+  reads.
 
 ### Piece 6 — the splitter reads the owners' rules, and the error rule names its kinds
 

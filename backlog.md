@@ -721,49 +721,10 @@ are in `acceptance.md`. One part of the last finding stays open:
 
 ### Naming and printing
 
-- Second digest: the static-route block name is built as `f"{resource_name}_{route['name']}"` (5105-5112) from
-  an already-digested name, then `declare_block_name` sanitizes and digests it again (3211-3214) → measured
-  `vr1_3f0e80e0_r1_8c64c16e`, against §5. The `_declaration_index` key holds that double-digested name, so a
-  reference by the route's own name cannot resolve. Fix: pass the route name, not the built name. Owner:
-  `generate_virtual_routers`, `declare_block_name`.
-- Second source for one rule: `declare_block_name` hardcodes `'unnamed'` (3211) while `naming.UNNAMED` (27) is
-  the §5 fallback. Fix: read `naming.UNNAMED`. Owner: `src/naming.py`.
-- Collision: `printed_value` records each value under its §5 name in a dict keyed by that name (3657), so two
-  values in one unit that sanitize to the same name hold one entry and the last value wins; two
-  `REFERENCE_ONLY` entries whose names sanitize identically share one declaration. `naming.variable_name` maps
-  `-`, `.` and `_` to the same separator (`src/naming.py:32-47`). Measured by read, not by probe. Fix: refuse a
-  name collision inside a unit, or key the record by the entry. Owner: `printed_value`.
-- Order rule split: `hcl_value` prints a dict in the order the parse built it (3740-3741), while the two
-  emitters that call it sort the fields they print (3831, 3880), so one object prints in two orders at two
-  levels. No document states which order a nested object takes. Fix: state the order for nested keys. Owner:
-  `hcl_value`.
-- Redundant gate, second rule: `check_control_chars` (`src/sanity_checks.py:1386`) reads the printed `.tf`
-  text, and `escape_string` strips the remaining C0 control characters and DEL from a value (3366) before the
-  text is printed, so for a value the gate can only re-check what the escape path already removed. The tool's
-  own XML reader refuses a control character in text and in a character reference, measured both ways
-  (`&#7;` → "reference to invalid character number", a raw `0x07` byte → "not well-formed (invalid token)"), so
-  no value reaches the printer with one from the read layer. The escape rule stays needed for a value that
-  arrives from the JSON state file, which states no control-character rule, so the two rules are not the same
-  rule. Fix: state which layer owns the control-character rule, or make the gate read the value before the
-  escape. Owner: `src/sanity_checks.py`, `escape_string`, `src/xml_input.py`.
-  Whitespace is not one rule either: `_get_text` (2915), `_get_members` (2920), `_get_single_value` (2928)
-  and `_protocol_field` (2658) return the text as the export states it, while `_list_names` (447) strips.
-  the splitter's `_device_names` (`src/split_device_groups.py:56`) strips too. Measured probe
-  `/tmp/opencode/probe_ws.xml`: a device group that states `  spaced  ` prints `description = "  spaced  "`,
-  and the `control_chars` gate passes for the same run. Fix: state one rule for the value helpers. Owner: the
-  value helpers, `src/split_device_groups.py`.
-- Order contradiction: two emitters print fields in sorted order (3831, 3880) while their docstrings say the
-  fields print in the table's order (3813, 3863). `parse_filter_containers` hardcodes the six filter paths
-  (2699-2705) in an order that is not `FILTER_PATHS` (`src/resource_mapping.py:3793`, the sorted table) while
-  claiming the table is the source. Fix: print in the table's order, or state the sorted rule. Owner: those
-  emitters and `parse_filter_containers`.
-- `UnitText.add_once` decides "stated once" by testing whether the text is a substring of the text already
-  accumulated for the unit (3037-3042), so header prose that contains the section text stops the section from
-  being written. Fix: keep a per-file once record. Owner: `UnitText`.
-- Shape owner bypassed: `VALUE_VARIABLES` states `key` as `reference_only` (`src/resource_mapping.py:1261`), but
-  the IKE gateway emitter prints it as a literal through `hcl_value` (6117), so no gate reads it. The parse
-  always writes the placeholder (2799, 2847), so no credential reaches a file today. Fix: print the reference, or
-  state the exception in the table. Owner: `generate_vpn_config`, `resource_mapping.VALUE_VARIABLES`.
+The findings this audit recorded here were closed by `to-do.md` Piece 5 on 2026-11-15: the second digest, the
+second statement of `UNNAMED`, the name collision, the order rule split and the order contradiction, the
+control-character rule, the whitespace rule, `UnitText.add_once`, and the placeholder value. Each decision,
+each pin, and the gate measurement are in `acceptance.md`. Nothing from this section stays open.
 
 ### `src/split_device_groups.py`
 
