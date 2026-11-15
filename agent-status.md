@@ -151,7 +151,7 @@ the change, 23 of the pins fail, and the same 23 pass after it (`/tmp/opencode/p
 measure a claim and cannot fail before the change are recorded in `acceptance.md`, each with the reason.
 
 Gate after, measured 2026-11-15: `ruff check .` clean, `python3 -m pytest` passes with no skips, 1,687 pins in 51
-modules in 343.02 s, against 1,673 pins in 50 modules in 258.2 s before the piece. Counts by module:
+modules in 355.14 s, against 1,673 pins in 50 modules in 258.2 s before the piece. Counts by module:
 `tests/test_split_device_groups.py` is new at 12, `tests/test_write_path.py` 19 to 20, `tests/test_safe_input.py`
 36 to 37; the other four modules are unchanged. No pin was weakened. One finding stays open for Piece 7:
 `docs/LICENSING.md` still states 130 lines for `src/split_device_groups.py` and calls it "the upstream, unchanged",

@@ -245,10 +245,10 @@ Pins:
 
 ## Measurement
 
-Gate, measured 2026-11-15 against the working tree after the change: `ruff check .` clean, and the full
-`python3 -m pytest` = 1,687 pins in 51 test modules, all pass, no skips, exit 0, 257.51 s. Counts by module:
-`/tmp/opencode/piece6_after_collect.txt`. The run output is `/tmp/opencode/piece6_final_pytest.txt` (257.51 s, 343.02 s on the run before the last document edit), and the
-failing set is `/tmp/opencode/piece6/before_failing.txt`.
+Gate, measured 2026-11-15 against the committed tree: `ruff check .` clean, and the full
+`python3 -m pytest` = 1,687 pins in 51 test modules, all pass, no skips, exit 0, 355.14 s (257.51 s on the working
+tree before the documents were committed). Counts by module: `/tmp/opencode/piece6_after_collect.txt`. The run
+output is `/tmp/opencode/piece6_committed_pytest.txt`, and the failing set is `/tmp/opencode/piece6/before_failing.txt`.
 
 Baseline before the change: 1,673 pins in 50 modules, all pass, no skips (`/tmp/opencode/baseline_piece6_pytest.txt`,
 counts in `/tmp/opencode/collect_before_piece6.txt`). The change adds 12 pins in
