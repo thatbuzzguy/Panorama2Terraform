@@ -140,7 +140,10 @@ themselves).
 
 - One `<entry>` produces one dict. Each parse method returns a list of those dicts,
   except `parse_security_profiles`, which groups them by profile category.
-- No parse method deduplicates by name, and no method keeps a name-keyed dict.
+- No parse method deduplicates by name, and no method keeps a name-keyed dict. Where a
+  table needs a key for an entry, the key is the source line the read layer records for it
+  (F4.2), so two entries that state one name are two rows. The device-group splitter's three
+  tables read this rule, and `parse_device_groups` returns one row per device-group entry.
 - An entry with no `name` is skipped. An entry whose only content is an `<id>`
   pointer is skipped too (`_is_reference_pointer`): it references a shared
   definition and has no content of its own.
@@ -149,6 +152,7 @@ themselves).
 
 Pinned by `tests/test_robustness.py::test_entry_without_name_is_skipped`,
 `tests/test_edge_cases.py::test_address_emit_covers_v2_types_and_reports_the_rest`,
+`tests/test_split_device_groups.py::test_the_splitter_tables_are_keyed_by_the_source_line`,
 and the duplicate-name tests above.
 
 One parse method returns a table instead of an object: `parse_associations` (the
@@ -156,6 +160,13 @@ membership the export declares). `parse_bgp` and `parse_ospf` return one level o
 the router's `protocol` object (§4.9), and the router entry is marked once by
 `_parse_router`, so they fill the `protocol` field of that mark instead of keeping
 a record of their own.
+
+The splitter's extraction takes a row, not a name, so it states no lookup of its own and
+answers no absent value: every row names an entry the read layer saw, and the warning the
+old code stated for an absent answer is gone with the lookup. Pinned by
+`tests/test_split_device_groups.py::test_the_extraction_states_no_lookup_and_no_warning`
+(the source scan, for the reason `acceptance.md` states: a branch that cannot fire cannot be
+shown by a run) and `::test_the_extraction_answers_through_the_row_it_was_given`.
 
 ### 2.4 Where each parsed entry goes
 
@@ -1728,6 +1739,13 @@ is written there.
   (`naming.variable_text`), so the emitter, the gate, and the tests cannot give one value two shapes. The rule
   is idempotent, so an id that states the mapping result instead of the value cannot be detected: the writer
   keeps the value in the id, and the gate reads the id as the value.
+- The device-group splitter's output file name reads this one rule, so the splitter states no second naming
+  rule and keeps no character of its own. Two source names that read the same shape name one file, so the run
+  refuses the pair instead of numbering it: the number a run would pick depends on the order the entries appear
+  in, which §6 says is not a rule a run may depend on. Pinned by
+  `tests/test_split_device_groups.py::test_the_split_file_name_is_the_naming_rule_applied_to_the_name` and
+  `::test_two_names_that_read_one_file_name_are_refused_and_no_file_is_written`, and the decision is documented
+  in [`DEVICE_GROUP_SPLITTING.md`](DEVICE_GROUP_SPLITTING.md).
 - Taken names are tracked per type (one domain per `scope`), for both block kinds.
   A true duplicate gets a numeric suffix (`_2`), so the output is always valid HCL.
   The suffix is a validity guard, not the identity mechanism: two different
@@ -1763,11 +1781,20 @@ Windows desktop writes CRLF and the goldens stop matching byte for byte. Text ta
 written without translation, because the write path receives the source cache bytes the input door parsed, and
 the rule for those bytes is "no change". No module of the tool writes a file outside the write path, and no
 module builds a path for a file it does not own: the two builders name the two sets (§14 of
-`CODEBASE_ASSEMBLY.md`). Pinned by `tests/test_write_path.py`
+`CODEBASE_ASSEMBLY.md`). The device-group splitter is inside this rule too: it serializes its tree and hands
+the text to `write_file`, so the split files are the single writer's bytes, and the scan now reads the element
+writer shape as well. Pinned by `tests/test_write_path.py`
 `test_one_function_writes_bytes_and_no_other_module_writes_a_file`,
-`test_the_write_path_states_two_builders_one_per_set`, and `test_the_bytes_a_run_writes_hold_no_cr`.
+`test_the_write_path_states_two_builders_one_per_set`, `test_the_bytes_a_run_writes_hold_no_cr`, and
+`test_the_splitter_writes_through_the_single_writer` (the scan, for the reason `acceptance.md` states: an
+element writer can produce the same bytes for the same tree, so a run cannot show which writer wrote the file);
+the content half for a split file is `tests/test_split_device_groups.py::
+test_a_split_file_is_the_text_the_single_writer_writes`.
 
-- Association tables sort names. Report sections sort by level, entries by name.
+- Association tables sort names. Report sections sort by level, entries by name. The device-group splitter
+  states no name sort of its own: its tables are keyed by the source line and answer in that order, so the copy
+  order is the order the input states (`tests/test_split_device_groups.py::
+  test_the_join_answers_the_rows_in_source_line_order`).
 - Names come from the identity digest, not from emission order.
 - Order that the input states is preserved on purpose: XML order inside a policy
   chain, and first-seen order of chains.
