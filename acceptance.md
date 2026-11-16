@@ -1,281 +1,134 @@
-# Acceptance — Piece 6, the splitter reads the owners' rules, and the error rule names its kinds
+# Acceptance — Piece 7, the indexes and the documents agree with measurement
 
-Criteria set 2026-11-15 for `to-do.md` Piece 6, the six findings the 2026-11-12 audit recorded in
-`backlog.md` (`src/split_device_groups.py` and the error rule). Each item states the rule, the module that
-owns it, the decision, and the test that pins it. A pin measures content: it reads the table a module
-returns, the split XML file a run wrote, or the `.tf` bytes a run wrote, and no pin reads the tracking
-markdown. A pin that fails on content is a finding recorded in `backlog.md`, not a pin to relax.
+Criteria set 2026-11-16 for `to-do.md` Piece 7, the findings the 2026-11-11 audit recorded in `backlog.md`
+against the indexes, the documents, and the pins that read markdown. Each item states the rule, the owner
+document, the decision, and the measurement that closes it.
+
+Rules this piece works under, from `agent-status.md` §Rules to keep when writing documents:
+
+- One owner document per rule; every other document links to it.
+- No test counts in a document. A document names the test that pins a rule.
+- A claim about what the tool does names the module or the test that holds it, and a test name a document
+  states must be a test the test set defines.
+- A document explains a table and never restates it row by row, so a count a document states must either
+  agree with the measurement or be stated as derived from the table.
 
 Gate before commit: `ruff check .` clean, and the full `python3 -m pytest` with every pin passing and no
-skips. Baseline before this piece: 1,673 pins in 50 test modules, all pass, no skips, exit 0
-(`/tmp/opencode/baseline_piece6_pytest.txt`), measured 2026-11-15. Counts by module are in
-`/tmp/opencode/collect_before_piece6.txt`. No pin may be weakened; a pin may change what it asserts when the
-rule changes, and each such change is recorded in the next section.
+skips. Baseline before this piece: 1,687 pins in 51 test modules, all pass, no skips, exit 0, measured
+2026-11-15 (`/tmp/opencode/piece7_collect_baseline.txt`, counts by module). No pin may be weakened; a pin
+that fails on content is a finding recorded in `backlog.md`.
 
-Two items keep a source scan, and each states why content cannot show its rule. Item 1's rule is "no module
-writes a file outside the single writer": an element writer can produce the same bytes as the single writer for
-the same tree, so a run shows only the trailing LF, not which writer wrote the file, and the scan is what holds
-the rule for a module that could add a writer later. Item 5's rule is "the extraction states no lookup of its
-own": a branch that cannot fire cannot be shown by a run at all. Each of those two items keeps a content pin as
-well, and each item has at least one pin that fails on the code before the change.
+## The two decisions this piece sets
 
-What the splitter writes is not the codebase the gate reads: the split XML files are not the unit set or the
-codebase root set, so the gate pins (`tests/test_sanity_gate.py::test_splitter_output_has_no_tf_for_the_gate`)
-hold only that the splitter writes no data file. The pins for the splitter's own output read the split files as
-the bytes the run wrote.
+**1. The test set does not read document wording.** A wording edit is a document review, not a code
+failure, so a pin cannot hold it: a pin that asserts a phrase in a document fails when the phrase is
+reworded correctly. The test set keeps one pin for the index rule — that a name is present — in one place,
+`tests/test_layout.py`. The wording checks move to `tools/check_documents.py`, a developer script named by
+`tools/README.md`. The tool prints what disagrees and exits non-zero; it is not part of the gate, and the
+test set does not read it (`docs/ARCHITECTURE.md` §1.1: `tools/` is not on the test path). A pin that
+reads a markdown file reads an index, not its wording.
 
-## Pins that changed
+**2. The test set is named by the root index.** `tests/` gets no index of its own, because the root index
+already names 27 of the 51 test modules; completing that list is the smaller change and keeps the index set
+`AGENTS.md` states. The root index therefore names every test module, `tests/conftest.py`, and the three
+files in `tests/responses/`. `docs/ARCHITECTURE.md` §1.1 states this as the rule, and the pin measures it.
 
-A pin changes when the rule it measures changes. Each change is recorded here, with what the pin asserted
-before. A pin that cannot fail before the change says so.
+The pin excludes `.github/`: the two template files sit outside every index, which `backlog.md` records as
+its own finding, so a pin cannot read them as a violation. `tests/fixtures/` and `tests/golden/` are sets the
+documents describe by rule, not file by file, so the pin reads the test modules and the response set only.
 
-- `tests/test_write_path.py::test_one_function_writes_bytes_and_no_other_module_writes_a_file`: the writer scan
-  now reads the element writer shape (`ET.ElementTree(`) as well as `write_text`, `write_bytes`, `os.linesep` and
-  `open(...'w')`. Before: the scan read only the four words, so a module that built an element tree and wrote it
-  was not in the set. Fails before the change, on the splitter.
-- `tests/test_multi_device_template.py` (four splitter pins: `test_splitter_joins_template_and_device_group_by_device`,
-  `test_splitter_copies_the_template_stack_by_device`, `test_splitter_copies_no_template_without_a_shared_device`,
-  `test_splitter_leaves_the_source_tree_intact`,
-  `test_splitter_merges_shared_sections_without_touching_the_source`): the helper now parses through the door
-  (`xml_input.parse_xml`) instead of `ET.parse`, so the pin hands a `ParsedSource` and the extraction takes the
-  table row instead of a name. Before: the helper returned the root element with no line map, and the extraction
-  looked the name up in the tree. Fails before the change at the read of the contract, because the pre-change
-  functions take a root. The asserted content is unchanged for the three pins that read the copied entries, and
-  the stack pin reads the row through the table key.
-- `tests/test_edge_cases.py` (two quote pins: `test_splitter_finds_dg_with_single_quote_in_name`,
-  `test_splitter_finds_dg_with_double_quote_in_name`): the pin reads a row from `parse_device_groups` and hands
-  the row, so it states no lookup of its own. Before: the pin named the device group and read the returned tree.
-  Fails before the change, at the read of the contract.
-- `tests/test_variables.py::test_the_record_refuses_two_entries_that_name_one_variable`: adds the assertion that
-  the run prints the shape an unexpected error takes (the error line and the traceback), because a `ValueError`
-  raised inside the tool is no longer a refusal. Before: the pin asserted exit 1 and the message, and the run
-  printed the refusal line with no traceback. Fails before the change. The message half and the no-record half
-  are unchanged.
-- `tests/test_safe_input.py::test_a_copied_element_has_no_line`: the docstring claim changes, the assertion does
-  not. The splitter records the line of the source entries it reads, and still gets no line for a copy. Before:
-  the claim said the splitter never asks for a line. It cannot fail before the change, because the copy answers
-  None on both sides; it is recorded here because the claim it states moves.
-- `tests/test_parse_helpers.py::test_the_value_helpers_read_the_text_the_read_layer_states`: unchanged.
-  `_device_names` keeps the entry as its argument, because the join reads devices as a set and the line is the
-  row key, not the device order. It cannot fail before the change.
+## Criteria, by item
 
-## 1. The split files go through the single writer
+### 1. The §1 module table names every `src/` module
 
-Rule: `docs/ARCHITECTURE.md` §6 — one function writes a file (`write_path.py` `write_file`), and no module of the
-tool writes a file outside it. `LF` is the only line ending a run writes.
+`docs/ARCHITECTURE.md` §1 must name all 22 modules in `src/`. Measured: 21 named, `commit_actions.py`
+missing. The row is added with its role and its rule. Measured 2026-11-16: 22 rows for the 22 modules.
 
-Decision: the splitter serializes the tree to text (`ET.tostring(..., encoding='unicode', xml_declaration=True)`)
-and hands that text to `write_file`, so the byte rule is enforced at the print site and not in an operator note.
-The splitter owns its own output path: the split files are not the unit set or the codebase root set, so the
-splitter names no builder from `write_path.py` and keeps its own output directory rule
-(`docs/DEVICE_GROUP_SPLITTING.md`). The text ends with `LF`, because the single writer writes text with `LF` and
-the element writer wrote no final line.
+### 2. The test set is named by one index
 
-Measured before the change: a split file ended with the closing `>` byte and no `LF` (`od -c`), and the writer
-scan named no writer for the splitter (`src/split_device_groups.py` line 281, `tree.write(output_file, ...)`).
+The root index must name every test module (51 before this piece, 52 with `tests/test_layout.py`),
+`tests/conftest.py`, and the three files in `tests/responses/`. Measured before: 27 of 51 named. §1.1 states
+the rule and names the three response files. Measurement after: every test module named, and the three
+response files named by the request identity that produced them.
 
-Owner: `src/write_path.py` (the byte rule and the one writer), `src/split_device_groups.py` (the print site).
+### 3. A document that names a test names a test that exists
 
-Pins:
+Measured 2026-11-16 with a scan of every markdown file (141 claims, `tests/<module>.py::<name>`):
 
-- `tests/test_write_path.py::test_the_splitter_writes_through_the_single_writer` — source scan, for the reason
-  stated above: the splitter reads `write_file` and states no writer of its own. Fails before the change.
-- `tests/test_write_path.py::test_one_function_writes_bytes_and_no_other_module_writes_a_file` — the scan pin
-  changed as recorded above. Fails before the change.
-- `tests/test_split_device_groups.py::test_a_split_file_is_the_text_the_single_writer_writes` — content: the bytes
-  a run wrote for one device group hold no CR, end with `LF`, and read back through the door as the tree the run
-  built for that group. Fails before the change (no trailing `LF`).
+- `backlog.md` §Parser extraction gaps names `test_report_declares_the_profile_name_column`. No pin holds
+  that rule, because the pinned provider declares no profile-name attribute, so the claim becomes "no pin
+  holds it", not a name.
+- `docs/ARCHITECTURE.md` §4.9 names `tests/test_parse_network.py::test_parse_rip`. The pin is
+  `test_parse_rip_reads_the_levels_the_table_states` (line 555). The claim takes the real name.
+- `docs/API_CONVERSION_PATH.md` §1 names
+  `tests/test_site_data.py::test_the_module_defines_no_second_naming_rule`. The pin is
+  `test_site_data_defines_no_second_naming_rule` (line 770). The claim takes the real name.
+- `to-do.md` Piece 4 and `backlog.md` §Parse set name
+  `tests/test_protocol_object.py::test_a_number_field_prints_the_signed_integer_the_shape_states`. The pin is
+  `test_value_shape_is_the_reader_inverse_for_every_shape_word` (line 564), which asserts `value_shape('-1')`
+  as `number`. The claims take the real name.
 
-## 2. The file name is the naming rule, with a collision decision
+A claim that names a helper or a module constant (`_reference_names`, `_parse_every`, `_name_guards`,
+`PRINTED_BY_ANOTHER_BLOCK`) is not a pin claim; the scan reads them as names the module defines.
 
-Rule: `src/naming.py` §5 — a name is the §5 shape of the name, stated once there, and no module defines a second
-one. A name that sanitizes to nothing is `UNNAMED`.
+### 4. The counts a document states agree with measurement
 
-Decision: the file name is `naming.sanitize(name) or UNNAMED` plus `.xml`, so the splitter states no second
-naming rule and keeps no character of its own. The collision decision is **refuse**, not number. Two names that
-read the same §5 shape name one file, and the numbering a run would pick depends on the order the entries appear
-in, which §6 says is not a rule a run may depend on. The refusal is an input-layer refusal
-(`xml_input.UnsafeInputError`), so it prints the refusal line and exits 1, and no file is written: every name is
-resolved and refused before the output directory is made. The message names both source names and the file name
-they read to, so the operator can tell which entry is the other one.
+- `docs/COVERAGE_MATRIX.md` states 40 rows and shows 40. `resource_mapping.COVERAGE_MATRIX` holds 42: the
+  `panos_certificate_import` and `panos_certificate_profile` rows are missing from the document table. Fix:
+  add the two rows, and state the count as derived from `EMITTED_TYPES` instead of as a stored number.
+- `README.md` states 34 rows for the same table. Fix: the root index links to the owner document and states
+  no count.
+- `docs/LICENSING.md` §The split, measured and §The inherited set are stale. Re-measured with `git blame` on
+  2026-11-16, by author: whole tree 2,064 upstream (`devnullNZ`, 3.3%) against 60,389 ours (`Ryan Brown`);
+  `src/`, `tests/` and `tools/` 503 against 52,690; commits 9 against 194. The inherited set is 18 files,
+  2,064 upstream lines. `docs/LICENSING.md` is the owner of the split, so `README.md` keeps no counts and
+  links to it.
+- The notice table calls `src/panorama_to_terraform.py` and `src/split_device_groups.py` "the upstream,
+  unchanged". Measured: 408 upstream lines in a 7,407-line file, and 68 in a 383-line file. Neither is
+  unchanged, so the table states the notice as the header text and the split as the measured share.
+- The fixture set measures 71 (68 accepted, 3 refused by the F3.8 rule), which `agent-status.md` states and
+  `tests/test_build_kitchen_sink.py` measures. No document states a fixture count, so nothing to correct;
+  the pins that state the printed set as a fixed number are the separate audit finding that stays in
+  `backlog.md` (out of this piece).
 
-Measured before the change: the file name was the name with `/` and a space replaced, so a name that stated any
-other character kept it (`DG-Internet.xml`, and a device group named `.` wrote `..xml`), and the two names `DG/A`
-and `DG A` wrote one file, `DG_A.xml`, where the second write replaced the first.
+### 5. The index rule has one pin, and the wording checks sit outside the test set
 
-Owner: `src/naming.py` (the rule), `src/split_device_groups.py` (the print site and the decision),
-`docs/DEVICE_GROUP_SPLITTING.md` (the decision as documented).
+`tests/test_layout.py` holds one pin that measures: each index names every document under it; the root
+index names every test module and the three response files; every `src/` module is named in the §1 table.
+The two pins that read `backlog.md` keep their facts as data in the test and stop reading the markdown. The
+five pins that read `docs/` prose move to `tools/check_documents.py`.
 
-Pins:
+### 6. Each row shape has one name
 
-- `tests/test_split_device_groups.py::test_the_split_file_name_is_the_naming_rule_applied_to_the_name` —
-  content: a run writes `dg_internet.xml` for `DG-Internet` and `unnamed.xml` for a name that sanitizes to
-  nothing, read through `naming`. Fails before the change.
-- `tests/test_split_device_groups.py::test_two_names_that_read_one_file_name_are_refused_and_no_file_is_written`
-  — content: `DG/A` and `DG A` are refused with exit 1, the message names both source names, and the output
-  directory holds no file and was never made. Fails before the change.
+`ROW_FIELDS` is four different row shapes in one flat namespace. Each table takes the name of its own rule:
+`SITE_ROW_FIELDS` (`src/site_data.py`), `ACTION_ROW_FIELDS` (`src/commit_actions.py`), `IMPORT_ROW_FIELDS`
+(`src/import_blocks.py`), `MATRIX_ROW_FIELDS` (`tests/test_coverage_matrix.py`, the test that reads the matrix
+row shape). The §1 rule column names each shape. The pins that read the shapes read them through the names.
 
-## 3. The splitter tables are keyed by the source line
+## Pins that change
 
-Rule: `docs/ARCHITECTURE.md` §2.3 — one entry produces one object, no parse method deduplicates by name, and no
-method keeps a name-keyed dict. The source line is the identity the read layer records for an entry (F4.2), so it
-is the key.
+- `tests/test_layout.py::test_the_indexes_name_every_file_under_them` (new, the one index-rule pin): reads the
+  four indexes and the tree, and asserts the naming rule. It cannot read wording, and it does not read
+  `backlog.md`.
+- `tests/test_api_requests.py::test_the_module_is_named_in_the_architecture_module_table`: removed. Both
+  halves are the index rule, and the new pin measures them for all 22 modules, not for one.
+- `tests/test_api_requests.py::test_the_committed_op_response_shows_one_shape_and_names_no_live_fact`:
+  loses its `docs/API_CONVERSION_PATH.md` wording assert, which moves to the tool. The code half stays.
+- `tests/test_container_coverage.py::test_the_architecture_document_states_the_console_line_shape_once`:
+  removed; the check moves to the tool. The module keeps the code half of the rule (no second console line).
+- `tests/test_container_coverage.py::test_architecture_points_at_the_table_instead_of_restating_it`:
+  removed; the check moves to the tool.
+- `tests/test_api_path.py::test_a_predefined_entry_read_reports_the_place_as_a_finding`: loses the
+  `backlog.md` assert. The fact it asserted is the scan's own rule, which the pin already measures: the scan
+  answers no destination for a built-in place.
+- `tests/test_sanity_gate.py::test_the_run_wide_findings_print_through_the_join`: loses the `backlog.md`
+  assert. The fact it asserted is data in the pin: the join reports one response, so the run-wide direction
+  prints with no file, which the pin measures.
+- `tests/test_site_data.py::test_the_fields_print_in_the_declared_order` and the pins that read the row shape
+  in `tests/test_coverage_matrix.py`: the name changes, the asserted content does not.
 
-Decision: `parse_device_groups` returns one row per device-group entry, and each table row holds the name, the
-source line, the path, and the entry element. The join answers the devices of the entry it read, so one entry
-does not answer for two. The join's rows are in source line order, because the order the input states is
-preserved on purpose (§6); the name sort is gone, so it is not a second order rule. The splitter reads the
-`ParsedSource`, not a root, so the line is the same line the reports read, and the copy rule holds: a copy has no
-line, so the pins that read a split file read the source row for its line.
-
-Measured before the change: two device-group entries named `DG-Dup` answered one row, wrote one file, and the
-file held the first entry while the join copied the templates of both entries (the device sets were merged by
-name); the join order was the name sort (`T-a` before `T-b`) when the source stated `T-b` first.
-
-Owner: `src/split_device_groups.py`, `docs/ARCHITECTURE.md` §2.3 and §6, `src/xml_input.py` (the line map).
-
-Pins:
-
-- `tests/test_split_device_groups.py::test_the_splitter_tables_are_keyed_by_the_source_line` — content: the keys
-  of the three association tables are the source lines `line_of` answers for the entries the run read, and each
-  row names its own entry. Fails before the change.
-- `tests/test_split_device_groups.py::test_two_entries_with_one_name_are_two_rows_that_answer_their_own_devices` —
-  content: for each of two same-named entries the row holds only that entry's devices, and the tree the run built
-  for a row copies only the template that targets that row's device, and holds that row's own entry as a copy. The
-  run writes no file for this pair, because the two entries read one file name and are refused (item 2), so the
-  row rule and the refusal are the two halves of the same content. Fails before the change.
-- `tests/test_split_device_groups.py::test_the_join_answers_the_rows_in_source_line_order` — content: two template
-  entries that list one shared device, stated in the content in an order an alphabetical name sort would change.
-  Fails before the change.
-
-## 4. The shared merge merges by path and name and keeps the path
-
-Rule: `docs/DEVICE_GROUP_SPLITTING.md` (this item's owner document) — several `shared` sections merge into one,
-and the dedupe is the pair (path, name): an entry belongs to the level the container names, so a name at two
-depths is two entries, and each entry keeps the path it sits at. This is the same level rule the parse set states
-for `member` lists (`docs/ARCHITECTURE.md` §2.3, and `_list_values` reads only direct children).
-
-Decision: the first occurrence of a path is the container in the merged section, the content that path states
-comes from that first occurrence, and entries are appended at their own path, deduped by (path, name) at that
-level. An entry inside an entry travels with the entry copy that holds it, because the level the field names is
-the level the dedupe reads.
-
-Measured before the change: the dedupe read `findall('.//entry')`, so a name matched at any depth — content with
-`address/entry[x]` in one section and `address/group/entry[x]` in another dropped the second `x`, and the `group`
-path was gone; an unmatched entry from a later section was appended directly under the container, so content with
-`interface/virtual-wire/units/entry[y]` in a second section wrote `y` as `interface/entry`.
-
-Owner: `src/split_device_groups.py`, `docs/DEVICE_GROUP_SPLITTING.md`.
-
-Pins:
-
-- `tests/test_split_device_groups.py::test_the_merge_keeps_an_entry_at_the_path_it_sits_at` — content: a nested
-  entry stated in a second `shared` section is read back at its own path in the split file. Fails before the
-  change.
-- `tests/test_split_device_groups.py::test_the_merge_dedupes_the_pair_path_and_name_at_its_own_level` — content:
-  one name at two depths keeps both entries, and a second entry with the same name at the same path is merged
-  once. Fails before the change.
-- `tests/test_split_device_groups.py::test_the_run_writes_one_container_per_path` — content: the tree the run built
-  for a row holds one container per path, and an entry is read back under the path its row states. Fails before
-  the change, because the pre-change code named the container per kind (`templates` for a row at `template`) and
-  built an empty container for a second entry at a path.
-- `tests/test_split_device_groups.py::test_an_empty_shared_section_writes_no_container` — content: a `shared`
-  section that states no entry writes no container. Fails before the change, because the pre-change code wrote a
-  container for every `shared` section the export had, empty or not.
-- `tests/test_multi_device_template.py::test_splitter_merges_shared_sections_without_touching_the_source` — the
-  unchanged half of the rule: the merge copies, so the source keeps its own entries. Changed signature only; it
-  fails before the change at the read of the contract, as recorded above.
-
-## 5. The extraction answers through the row it was given
-
-Rule: `src/split_device_groups.py` — the extraction takes the table row, so the lookup the dead branch guarded
-against cannot exist: every row names an entry the run read, and the answer is never the absent answer.
-
-Decision: remove the branch, because the row is the entry. `extract_device_group_config` takes the row, states no
-lookup, and cannot answer None, so the warning print and the troubleshooting row in
-`docs/DEVICE_GROUP_SPLITTING.md` are gone with it. Making the extraction able to fail would need a rule that the
-table already read an entry the run did not read, which is not a state the tool can reach.
-
-Measured before the change: the branch could not fire — `parse_device_groups` named only entries that were in the
-tree, so a run never printed `Could not extract config for {name}`. A branch that cannot fire is why this item
-keeps a source scan.
-
-Owner: `src/split_device_groups.py`, `docs/DEVICE_GROUP_SPLITTING.md` (troubleshooting table).
-
-Pins:
-
-- `tests/test_split_device_groups.py::test_the_extraction_states_no_lookup_and_no_warning` — source scan, for the
-  reason stated above: the method takes the row, states no `findall` lookup of its own, answers no absent value,
-  and prints no warning. Fails before the change.
-- `tests/test_split_device_groups.py::test_the_extraction_answers_through_the_row_it_was_given` — content: for each
-  row the tree the run built holds that row's own entry, so the row and the tree name the same entry. Fails
-  before the change, at the read of the contract.
-
-## 6. `is_refusal` names only the input-layer exceptions
-
-Rule: `src/panorama_to_terraform.py::is_refusal` (criterion 5) — a refusal is the run's own decision to stop
-before it writes, and anything else is an unexpected error and keeps its traceback. The input layer states its
-refusals as two exceptions: `xml_input.UnsafeInputError` (with `source_fetch.SourceFetchError` as a subclass) and
-`xml.etree.ElementTree.ParseError`.
-
-Decision: the refusal kinds are the two input-layer exceptions, and a plain `ValueError` raised inside the tool is
-an unexpected error, so it keeps the shape `failed()` states: the error line, the traceback, exit 1. The rule that
-refuses a pair with two sources (`site_data.record_pair`, §9 rule 4) raises a plain `ValueError`, so the run shows
-it as a failure and not as an input refusal. The pins that call a data-module function directly
-(`pytest.raises(ValueError)`) read the rule, not the entry point, so they are unchanged, and the fetch pin that
-reads a `SourceFetchError` reads a subclass of the input-layer kind, so it is unchanged.
-
-Measured before the change: content with two certificate entries named `AP-1` and `AP_1` printed
-`Error: rejected '...': name ap_1 states two values: 'AP-1' and 'AP_1'` with exit 1 and no traceback.
-
-Owner: `src/panorama_to_terraform.py::is_refusal`, read by both entry points; `src/xml_input.py` (the kinds).
-
-Pins:
-
-- `tests/test_safe_input.py::test_the_refusal_kinds_name_only_the_input_layer_exceptions` — content: the rule
-  answers True for `UnsafeInputError` and `ET.ParseError` and False for a plain `ValueError`, read through the
-  function itself. Fails before the change.
-- `tests/test_variables.py::test_the_record_refuses_two_entries_that_name_one_variable` — content, as recorded in
-  the pin-change section: the entry point prints the traceback shape for this content and exits 1, and the message
-  still names both source names. Fails before the change.
-- `tests/test_robustness.py` and `tests/test_safe_input.py` clean-failure pins (hostile input, over-limit input,
-  a directory as input): unchanged, and they cannot fail before the change, because every material they read is
-  refused through an input-layer exception on both sides of the change.
+Pin count: 1,687 before, 1,685 after (5 pins removed with the wording checks, 1 index pin added), 52 modules.
 
 ## Measurement
 
-Gate, measured 2026-11-15 against the committed tree: `ruff check .` clean, and the full
-`python3 -m pytest` = 1,687 pins in 51 test modules, all pass, no skips, exit 0, 355.14 s (257.51 s on the working
-tree before the documents were committed). Counts by module: `/tmp/opencode/piece6_after_collect.txt`. The run
-output is `/tmp/opencode/piece6_committed_pytest.txt`, and the failing set is `/tmp/opencode/piece6/before_failing.txt`.
-
-Baseline before the change: 1,673 pins in 50 modules, all pass, no skips (`/tmp/opencode/baseline_piece6_pytest.txt`,
-counts in `/tmp/opencode/collect_before_piece6.txt`). The change adds 12 pins in
-`tests/test_split_device_groups.py` (50 modules → 51), 1 in `tests/test_write_path.py` (19 → 20), and 1 in
-`tests/test_safe_input.py` (36 → 37).
-
-Failing set before the change, measured in a scratch tree of the committed `src/` with the pins as they now read
-(`/tmp/opencode/piece6/before`): 23 pins fail, and the same 23 pass in the working tree.
-
-- `tests/test_split_device_groups.py`: all 12.
-- `tests/test_edge_cases.py`: the two quote pins.
-- `tests/test_multi_device_template.py`: all 5 splitter pins.
-- `tests/test_variables.py`: `test_the_record_refuses_two_entries_that_name_one_variable`.
-- `tests/test_write_path.py`: both pins.
-- `tests/test_safe_input.py`: `test_the_refusal_kinds_name_only_the_input_layer_exceptions`.
-
-Two pins record a claim that moves without a measurement change, so they pass before the change:
-`tests/test_safe_input.py::test_a_copied_element_has_no_line` (docstring claim) and
-`tests/test_parse_helpers.py::test_the_value_helpers_read_the_text_the_read_layer_states` (unchanged).
-
-Before-change content, recorded in `/tmp/opencode/piece6/`: the collision pair writing one file
-(`p_collision.xml`, `out_collision/DG_A.xml` holding the second entry), a split file with no final line
-(`od -c` of `c.xml`), `DG-Internet.xml` and `..xml` for the name `.` (`p_unnamed.xml`), one row for two
-same-named entries (`p_repeat.xml`), the join order after the name sort (`p_join_order.xml`), the merge depth
-(`p_depth.xml`), a nested entry merged at the container level (`p_nested.xml`, `p_nested_second.xml`), and the
-plain `ValueError` printed as a refusal with no traceback (`p_plain_value_error.xml`).
-
-Finding, left to Piece 7: `docs/LICENSING.md` states 130 lines for `src/split_device_groups.py` and calls it
-"the upstream, unchanged". It is now 383 lines and no longer upstream code, so the count and that row need
-Piece 7's pass over the licensing document.
-
+To be recorded after the gate run.
