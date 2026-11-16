@@ -3,7 +3,7 @@
 The tracking markdown for the completed pieces is removed here; the git history and the owner documents hold
 it. The open pieces are the actionable findings the 2026-11-11 and 2026-11-12 audits recorded in `backlog.md`.
 Each piece below names the rule it holds, the module that states it, and the test that pins it. One piece is
-finished before the next is started. Pieces 3, 4 and 5 are kept below with the pins they name; the piece
+finished before the next is started. Pieces 3 to 7 are kept below with the pins they name; the piece
 numbers follow the audit order.
 
 ## Current series
@@ -55,9 +55,9 @@ rows they read. The criteria and the measurement are in `acceptance.md`.
   half in `tests/test_protocol_object.py::test_the_shape_table_states_no_row_for_the_level_the_router_records`.
 - `_protocol_field` reads a `number` as the shape states it, so the reader's inverse
   `src/sanity_checks.py::value_shape` reads a signed integer back as `number`:
-  `tests/test_protocol_object.py::test_a_number_field_prints_the_signed_integer_the_shape_states`. The four
-  `member_list` corrections the audit named are not applied, because the pinned provider schema states all four
-  fields as `string`.
+  `tests/test_protocol_object.py::test_value_shape_is_the_reader_inverse_for_every_shape_word`. The pin prints
+  through the same branch, so a signed integer is printed as the shape states. The four `member_list` corrections
+  the audit named are not applied, because the pinned provider schema states all four fields as `string`.
 
 One part of the last finding stays open in `backlog.md`: a `number` text the value rule cannot read.
 
@@ -154,22 +154,35 @@ measurement are in `acceptance.md`.
 Gate: `ruff check .` clean, 1,687 pins in 51 modules, all pass, no skips. The pins that fail before the change are
 listed with their measurement in `acceptance.md`.
 
-### Piece 7 — the indexes and the documents agree with measurement
+### Piece 7 — the indexes and the documents agree with measurement (complete, committed 2026-11-16)
 
-Owner: the tracking markdown, `docs/ARCHITECTURE.md` §1 and §1.1, and the pins `backlog.md` names.
+Owner: the tracking markdown, `docs/ARCHITECTURE.md` §1 and §1.1, `README.md`, `tools/README.md`, and the pins
+`backlog.md` named. The criteria, the two decisions, the pins that changed, and the gate measurement are in
+`acceptance.md`. Each item states the rule, the decision, and what measures it.
 
-- [ ] Name `commit_actions.py` in the `docs/ARCHITECTURE.md` §1 module table. `api_to_terraform.py` is named
-      there since F8.9, so this item covers the one module the table still does not name.
-- [ ] Give `tests/` an index, or state in §1.1 that the test set is named by the root index, and name
-      the three files in `tests/responses/`.
-- [ ] Correct the three document pin claims that name a test that does not exist.
-- [ ] Re-measure the counts the documents state (matrix rows against `COVERAGE_MATRIX`, the licensing
-      split, the fixture set) and correct them, or state them as derived from the table.
-- [ ] Keep the document-wording checks outside the test set, and pin the index rule in one place;
-      migrate the pins that read `backlog.md` so a housekeeping commit does not fail them.
-- [ ] `ROW_FIELDS` names three different row shapes (`src/site_data.py`, `src/commit_actions.py`,
-      `src/import_blocks.py`) and a fourth meaning in a test. Give each table one shape name in the
-      `docs/ARCHITECTURE.md` §1 rule, and rename the modules to match.
+- Item 1 — the module table names every `src/` module. `commit_actions.py` is now a row in the §1 table, which
+  completes the set for all 22 modules. `tests/test_layout.py` measures it, so a module that is not named in the
+  table fails.
+- Item 2 — the test set is named by the root index, so `tests/` keeps no index of its own. `README.md` names
+  every test module, `tests/conftest.py`, and the three files in `tests/responses/`; `docs/ARCHITECTURE.md` §1.1
+  states the rule and names the four index scopes. `tests/test_layout.py` measures it.
+- Item 3 — a document that names a test names a test that exists. Four claims took the real name
+  (`docs/ARCHITECTURE.md` §4.9, `docs/API_CONVERSION_PATH.md` §1, `to-do.md` Piece 4, and the profile-name claim
+  in `backlog.md` §Parser extraction gaps, which states no pin name because no pin holds the rule). The tool
+  checks every claim, in every markdown file, at each run.
+- Item 4 — no document states a count it did not measure. `docs/COVERAGE_MATRIX.md` shows the 42 rows and states
+  the count as derived from the table; `docs/LICENSING.md` states the split measured with `git blame` at commit
+  `ac7609e` and the inherited total as the sum of its rows; the notice table states the split as a measured share
+  instead of "the upstream, unchanged", and names all four `src/` modules that carry the notice. `README.md`
+  states no counts and links to the owner documents.
+- Item 5 — one pin holds the index rule, and the wording checks sit outside the test set.
+  `tests/test_layout.py::test_the_indexes_name_every_document_under_them` is the only index pin. Five wording
+  asserts across three pins moved to `tools/check_documents.py`; two pins that read `backlog.md` keep their facts
+  as data. The tool is a document-review script, not part of the gate, and the test set does not read it.
+- Item 6 — each row shape has one name: `SITE_ROW_FIELDS` (`src/site_data.py`), `ACTION_ROW_FIELDS`
+  (`src/commit_actions.py`), `IMPORT_ROW_FIELDS` (`src/import_blocks.py`), `MATRIX_ROW_FIELDS`
+  (`tests/test_coverage_matrix.py`). Each is named in the rule column of its §1 table row, and no `ROW_FIELDS`
+  is left in the flat namespace.
 
 ### Piece 8 — the membership entry read
 

@@ -24,14 +24,16 @@ it covers the upstream parts only, and this project grants no commercial terms f
 "non-commercial" is not used as a license name, because AGPL v3 permits commercial use and §10 does not allow an
 extra non-commercial condition on a derivative work, so the choice reads as "AGPL v3 only".
 
-Test count: `python3 -m pytest` reads 1,687 pins in 51 test modules, with no skips, and `ruff check .` is clean.
-`tests/test_api_path.py` reads 30 pins (29 before F8.10).
+Test count: `python3 -m pytest` reads 1,685 pins in 52 test modules, with no skips, and `ruff check .` is clean.
+`tests/test_api_path.py` reads 30 pins (29 before F8.10). `pyproject.toml` sets `addopts = "-q"`, so a second `-q`
+suppresses the summary line; the count is read from the per-module collection counts.
 
 Full-suite time, measured 2026-11-13: 325.4 s, 364.6 s and 364.9 s on three runs of the same set (5 min 25 s to
 6 min 05 s). Measured pin time 335.2 s, collection 0.6 s, `ruff check .` 0.1 s. The recorded run when the test set
 held 663 pins took 35 s, so the growth is the corpus pins and the pins that run `terraform`. The slowest part is
 `tests/test_terraform_validate.py` at 121.4 s, then `tests/test_sanity_gate.py` at 49.9 s (34.0 s of it in the
-three pins that run the gate with the terraform binary), then the corpus pins at 79.8 s.
+three pins that run the gate with the terraform binary), then the corpus pins at 79.8 s. The Piece 7 runs, measured
+2026-11-16, took 4 min 24 s and 6 min 25 s for the same set.
 
 Gate size, decided 2026-11-13: no smaller default gate is adopted. The measured subset that drops the pins that
 call `terraform` runs in 203.0 s (44% of the full run), and the subset that drops the corpus pins runs in about
@@ -153,11 +155,29 @@ measure a claim and cannot fail before the change are recorded in `acceptance.md
 Gate after, measured 2026-11-15: `ruff check .` clean, `python3 -m pytest` passes with no skips, 1,687 pins in 51
 modules in 355.14 s, against 1,673 pins in 50 modules in 258.2 s before the piece. Counts by module:
 `tests/test_split_device_groups.py` is new at 12, `tests/test_write_path.py` 19 to 20, `tests/test_safe_input.py`
-36 to 37; the other four modules are unchanged. No pin was weakened. One finding stays open for Piece 7:
-`docs/LICENSING.md` still states 130 lines for `src/split_device_groups.py` and calls it "the upstream, unchanged",
-while the file now measures 383 lines.
+36 to 37; the other four modules are unchanged. No pin was weakened.
 
-Next: piece 7, the indexes and the documents agree with measurement (`to-do.md`).
+Piece 7 (the indexes and the documents agree with measurement) is complete, committed 2026-11-16. The findings the
+2026-11-11 audit recorded for the indexes, the documents, and the pins that read documents are closed. What landed:
+the `docs/ARCHITECTURE.md` §1 module table names all 22 `src/` modules, with `commit_actions.py` as a row; the test
+set is named by the root index, which names every test module, `tests/conftest.py` and the three files in
+`tests/responses/`, so `tests/` keeps no index of its own; four document claims took the real pin names; the counts
+the documents state are measured at commit `ac7609e` or stated as derived from the table, and `README.md` states no
+counts and links to the owner documents; the index rule has one pin,
+`tests/test_layout.py::test_the_indexes_name_every_document_under_them`, and the wording checks moved to
+`tools/check_documents.py`; three pins became redundant with the tool and were removed, one in
+`tests/test_api_requests.py` and two in `tests/test_container_coverage.py`, and the two pins that read
+`backlog.md` keep their facts as data; each row shape has one name (`SITE_ROW_FIELDS`, `ACTION_ROW_FIELDS`,
+`IMPORT_ROW_FIELDS`, `MATRIX_ROW_FIELDS`). Decision 1 records that no pin in the test set reads document wording,
+with the reason.
+
+Gate after, measured 2026-11-16: `ruff check .` clean, `python3 -m pytest` passes 1,685 pins in 52 modules with no
+skips in 4 min 24 s, against 1,687 pins in 51 modules before the piece (3 pins removed with the wording checks, 1
+index pin added). `python3 tools/check_documents.py` reports no finding. No pin was weakened. Two findings stay open
+in `backlog.md`: the two `.github/` template files sit outside every index, and the pins that state the fixture set
+as a fixed number.
+
+Next: piece 8, the membership entry read (`to-do.md`).
 
 
 ## Rules to keep when writing documents
@@ -167,6 +187,9 @@ Next: piece 7, the indexes and the documents agree with measurement (`to-do.md`)
   row by row, so a regenerated table cannot drift.
 - No test counts in a document. A document names the test that pins a rule; the
   count lives in `agent-status.md` and the git history.
+- A document that names a test names a test that exists.
+- A pin measures content or a name, never the wording of a document. A wording check is a document review, so it
+  lives in `tools/check_documents.py`, which the test set does not read.
 - A claim about what the tool does must name the module or the test that holds it. A
   feature id is written only when a module or a test uses it as a name.
 - ASD-STE100 Simplified Technical English, no marketing voice, no emoji.

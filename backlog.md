@@ -20,8 +20,7 @@ Completed work is not recorded here; the git history and the owner document hold
 - Parser extraction gaps found by the parse unit tests: none. Each gap was a parse method that dropped data, and
   each was fixed when a report confirmed it in a fixture. What stays open is the fact a report cannot state, not
   a gap: no certificate type declares a `profile-name` attribute, so the per-entry report has no profile-name
-  fact for the certificate container, and the pin that would hold the rule
-  (`tests/test_container_coverage.py::test_report_declares_the_profile_name_column`) cannot be written from the
+  fact for the certificate container, and no pin holds one — the pin the audit named cannot be written from the
   schema.
 
 - Service objects with both tcp and udp legs cannot be emitted whole. The v2
@@ -648,15 +647,6 @@ below, each with the owner that would fix it. Nothing was changed by the audit.
   sets, so a response that lives inside the corpus passes it. Fix: state the rule as a property of each file
   (a root element of `response` is not a Panorama export), not as a name comparison. Owner:
   `tests/test_api_requests.py`.
-- `tests/` is the only directory that holds files with no index, so its 50 test modules and its three sets are
-  named only in prose, and the three files in `tests/responses/` are named nowhere. Fix: give `tests/` an
-  index, or state in §1.1 that the test set is named by the root index. Owner: `docs/ARCHITECTURE.md` §1.1.
-- Pins that read the tracking markdown and require an open item to stay open: `tests/test_api_path.py:462-463`
-  and `tests/test_sanity_gate.py:576-577` read `backlog.md`. `AGENTS.md` requires a completed finding to leave
-  the markdown, so a housekeeping commit fails these pins. Fix: keep the fact in the test as data and name the
-  open item in the document without asserting its wording. Owner: those two tests.
-- The §1 module table names 20 of the 22 `src/` modules: `commit_actions.py` and `api_to_terraform.py` are
-  missing. `to-do.md` states that both path 2 modules must be in that table. Owner: `docs/ARCHITECTURE.md` §1.
 - Provider-schema pins that never run in CI: 9 modules (20 pins read the schema fixture in their arguments,
   more reach it through module helpers) read the schema through `tests/conftest.py:107-147`, which skips
   without the terraform binary or the provider cache. The matrix job
@@ -672,29 +662,6 @@ below, each with the owner that would fix it. Nothing was changed by the audit.
   `tests/test_property_coverage.py:198`, `tests/test_data_file_gate.py:156-157,482`. Each carries a measured
   date instead of a derivation. Fix: state each as a property of the table (the count derived from the rows),
   and keep the measurement in the document. Owner: those tests.
-- Name collision in the flat `src/` namespace: `ROW_FIELDS` is three different row shapes
-  (`src/site_data.py:63`, `src/commit_actions.py:75`, `src/import_blocks.py:53`) and a fourth meaning in
-  `tests/test_coverage_matrix.py:166`. Owner: `docs/ARCHITECTURE.md` §1 (rename to one shape name per table).
-- Tracking counts that do not agree with measurement: `docs/COVERAGE_MATRIX.md` §The matrix states 40 rows and
-  `README.md:102` states 34, while `resource_mapping.COVERAGE_MATRIX` holds 42 (`panos_certificate_import` and
-  `panos_certificate_profile` are in the code table but not in the document table); `docs/LICENSING.md`
-  §The split, measured states 2,172 upstream lines and 57,157 ours against 2,155 and 57,245 measured with
-  `git blame`, 50,008 in `src/`, `tests/` and `tools/` against 50,012 measured, and 121 commits against 127;
-  `to-do.md` keeps completed phase detail for Phase 8A and Phase 8B, and lists F8.9 as open while `git log`
-  records steps 1 to 3 committed (`src/api_to_terraform.py` exists). `agent-status.md` agrees: 1,641 pins
-  against 1,641 collected, and the fixture set measures 71 (68 accepted, 3 refused by the F3.8 rule). Owner:
-  the tracking markdown.
-- Document pin claims that name a test that does not exist: `backlog.md:24`
-  (`tests/test_container_coverage.py::test_report_declares_the_profile_name_column`), `docs/ARCHITECTURE.md:1527`
-  (`tests/test_parse_network.py::test_parse_rip`, actual name `test_parse_rip_reads_the_levels_the_table_states`,
-  line 549), `docs/API_CONVERSION_PATH.md:30` (`tests/test_site_data.py::test_the_module_defines_no_second_naming_rule`,
-  actual name `test_site_data_defines_no_second_naming_rule`, line 708). Owner: the three documents.
-- Documentation-wording pins: 4 pins read `docs/` prose (`tests/test_api_requests.py:292,294,695`,
-  `tests/test_container_coverage.py:420,445`) and 2 read `backlog.md` (`tests/test_api_path.py:463`,
-  `tests/test_sanity_gate.py:576`), including negative wording checks a tool cannot satisfy. No pin reads the
-  root index, `AGENTS.md`, `examples/README.md` or `tools/README.md`, so the layout rule has no pin. A wording
-  edit fails CI. Fix: keep these as document-review checks outside the test set, and pin the index rule in one
-  place. Owner: those tests, `docs/ARCHITECTURE.md` §1.1.
 
 ## Codebase audit findings (measured 2026-11-12)
 
@@ -714,7 +681,7 @@ are in `acceptance.md`. One part of the last finding stays open:
   the gate sees no field to check. F2.9's mechanism for an unreadable value is a `# NOTE:` line inside the block,
   but the protocol emitter prints dict keys, so a note cannot be a key, and `mark` records detail per entry while
   `_protocol_field` returns only a value. The signed-integer reading is pinned
-  (`tests/test_protocol_object.py::test_a_number_field_prints_the_signed_integer_the_shape_states`), so what stays
+  (`tests/test_protocol_object.py::test_value_shape_is_the_reader_inverse_for_every_shape_word`), so what stays
   open is the report for a text the rule cannot read. Fix: state which output reports an unreadable number, or
   refuse the value at the input layer. Owner: `_protocol_field`.
 
