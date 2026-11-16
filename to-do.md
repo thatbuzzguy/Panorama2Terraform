@@ -3,8 +3,8 @@
 The tracking markdown for the completed pieces is removed here; the git history and the owner documents hold
 it. The open pieces are the actionable findings the 2026-11-11 and 2026-11-12 audits recorded in `backlog.md`.
 Each piece below names the rule it holds, the module that states it, and the test that pins it. One piece is
-finished before the next is started. Pieces 3 to 7 are kept below with the pins they name; the piece
-numbers follow the audit order.
+finished before the next is started. Pieces 3 to 7, and Piece 9, are kept below with the pins they name; the piece
+numbers follow the audit order, apart from Piece 9, which is a `backlog.md` Nice-to-Haves item.
 
 ## Current series
 
@@ -193,6 +193,30 @@ Owner: `docs/API_CONVERSION_PATH.md` §2.4 and §6, `api_requests.py`, `tests/te
       `tests/test_api_path.py`. This piece needs the content that shows the shape; the F8.10 agreement
       holds only for content that states no membership list.
 
+### Piece 9 — `ruff format` as a gate (complete, committed 2026-11-16)
+
+Owner: `docs/ARCHITECTURE.md` §1.1 for the gate rule, `.github/workflows/python-tests.yml` for the CI step, and the
+pins that read a module source spelling. The criteria, the two decisions, and the measurement are in
+`acceptance.md`. The piece is a `backlog.md` Nice-to-Haves item, not an audit finding.
+
+- Item 1 — the one-time pass covers the Python files of the repository: 22 modules in `src/`, 49 in `tests/`, 2 in
+  `tools/`. Ruff's default double-quote style is adopted with no `pyproject.toml` change, and the pass is its own
+  commit so the diff stays reviewable. Ten string literals over the 120-line limit cannot be split by ruff, so they
+  are split by hand and the value is unchanged: `src/resource_mapping.py` (1), `tests/test_api_requests.py` (5),
+  `tests/test_provenance.py` (2), `tests/test_write_path.py` (2).
+- Item 2 — eight pins read the single-quote spelling of a module source, so they read the double-quote spelling the
+  pass enforces: `tests/test_commit_actions.py` (1), `tests/test_ownership.py` (1), `tests/test_round_trip.py` (2),
+  `tests/test_sanity_gate.py` (1), `tests/test_write_path.py` (3). Each pin holds the same fact, and no pin is
+  weakened.
+- Item 3 — the gate is the full run with the format check in it, stated in the CI workflow and in the documents that
+  own the rule (`README.md` §Testing, `docs/ARCHITECTURE.md` §1.1, `docs/COVERAGE_MATRIX.md`,
+  `docs/USAGE_GUIDE.md`, `PLAN.md` §Current State, `tools/README.md`), and not pinned by a test, because no pin
+  reads the CI workflow file. `tools/check_documents.py` reads each notice's file total at the commit
+  `docs/LICENSING.md` names, so the pass cannot move a document fact.
+
+Gate: `ruff check .` clean, `ruff format --check .` clean, 1,685 pins in 52 modules, all pass, no skips, 333.87 s.
+`python3 tools/check_documents.py` reports no finding. The finding the pass recorded is closed in `acceptance.md`.
+
 ## Feature-sized items that stay blocked
 
 Feature-sized items that stay blocked on a fact the tool cannot read offline are recorded in
@@ -203,8 +227,8 @@ decision and a live target, a config entry inside a stack needs a provider locat
 `docs/API_CONVERSION_PATH.md` §4 need a live target: the committed response set shows one shape per
 accepted request shape and names no fact.
 
-`ruff format` as a gate stays the next actionable slice outside this series (`backlog.md`,
-Nice-to-Haves), with `tflint` integration after it.
+`ruff format` as a gate is complete, so `tflint` integration (`backlog.md`, Nice-to-Haves) is the next actionable
+slice outside this series.
 
 ## Rules the layout keeps
 

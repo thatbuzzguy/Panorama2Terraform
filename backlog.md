@@ -153,9 +153,6 @@ here with that rule named.
 
 ## Nice-to-Haves
 
-- Adopt `ruff format` as a gate. A one-time format pass of both legacy scripts is required first
-  (about 1500 changed lines in `panorama_to_terraform.py`). Do it as its own task so the diff stays
-  reviewable.
 - Raise `pyproject.toml` `target-version` to the Python floor (`py310`). `ruff check` reports 101
   findings at that level: 80 `UP045` (`Optional[X]`), 16 `B905` (`zip` without `strict`), 4 `UP035`,
   and 1 `UP007`. Do it as its own task so the diff stays reviewable. The gate stays green while

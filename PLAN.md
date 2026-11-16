@@ -136,8 +136,8 @@ the generated HCL back through the one gate reader and compares the block count 
 unit and per coverage matrix row. The `report_only` timing fact that rule measured is landed and closed here,
 through the destination rule in Current State. The certificate `REFERENCE_ONLY` rows for `private_key` and
 `passphrase` are landed in `resource_mapping.VALUE_VARIABLES`, read by the emitter, the gate and the `.tfvars`
-writer through the same table, so that feature is closed. The next actionable slice is `ruff format` as a gate,
-which `backlog.md` records as its own task. The gated
+writer through the same table, so that feature is closed. `ruff format` as a gate is landed and closed here.
+The next actionable slice is `tflint` integration, which `backlog.md` records as its own task. The gated
 pieces that stay held in `backlog.md` are the four `*_policy_rules` types, which wait for the F3.5 rulebase
 decision and a live target, and a config entry inside a stack, which needs a provider location shape before the
 emitter can write a block for it. The rows that state fewer fields than the pinned provider declares for their

@@ -24,8 +24,9 @@ it covers the upstream parts only, and this project grants no commercial terms f
 "non-commercial" is not used as a license name, because AGPL v3 permits commercial use and §10 does not allow an
 extra non-commercial condition on a derivative work, so the choice reads as "AGPL v3 only".
 
-Test count: `python3 -m pytest` reads 1,685 pins in 52 test modules, with no skips, and `ruff check .` is clean.
-`tests/test_api_path.py` reads 30 pins (29 before F8.10). `pyproject.toml` sets `addopts = "-q"`, so a second `-q`
+Test count: `python3 -m pytest` reads 1,685 pins in 52 test modules, with no skips. `ruff check .` is clean and
+`ruff format --check .` is clean on the 100 Python files. `tests/test_api_path.py` reads 30 pins (29 before
+F8.10). `pyproject.toml` sets `addopts = "-q"`, so a second `-q`
 suppresses the summary line; the count is read from the per-module collection counts.
 
 Full-suite time, measured 2026-11-13: 325.4 s, 364.6 s and 364.9 s on three runs of the same set (5 min 25 s to
@@ -71,8 +72,8 @@ the workflow file.
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
 facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a
 stack, the EDL `certificate_profile` field, the profile-name report column, and the two `.github/`
-template files outside the document indexes. `ruff format` as a gate stays the next actionable slice
-outside Epic 8.
+template files outside the document indexes. The next actionable slice outside Epic 8 is `tflint` integration
+(`backlog.md`, Nice-to-Haves).
 
 Piece 3 (pins that measure nothing) is complete. The five findings the 2026-11-11 audit recorded in
 `backlog.md` are fixed, each by making the pin read the material its own rule names, and no pin failed when it
@@ -176,6 +177,25 @@ skips in 4 min 24 s, against 1,687 pins in 51 modules before the piece (3 pins r
 index pin added). `python3 tools/check_documents.py` reports no finding. No pin was weakened. Two findings stay open
 in `backlog.md`: the two `.github/` template files sit outside every index, and the pins that state the fixture set
 as a fixed number.
+
+Piece 9 (`ruff format` as a gate, the `backlog.md` Nice-to-Haves item) is complete, committed 2026-11-16. What
+landed: the one-time format pass over the Python files — 22 modules in `src/`, 49 in `tests/`, 2 in `tools/` — with
+ruff's default double-quote style and no `pyproject.toml` change; ten string literals over the 120-line limit
+split by hand, with the value unchanged; eight pins that read the single-quote spelling of a module source,
+retargeted to the double-quote spelling the pass enforces, one of which reads the hex spelling ruff normalizes
+(`chr(0x7F)` in `tests/test_sanity_gate.py`); and `tools/check_documents.py` reading each notice's file total at
+the commit `docs/LICENSING.md` names, so a format pass cannot move a document fact. The gate adoption is the CI
+step and the documents that state the gate: `README.md` §Testing, `docs/ARCHITECTURE.md` §1.1,
+`docs/COVERAGE_MATRIX.md`, `docs/USAGE_GUIDE.md`, `PLAN.md` §Current State, and `tools/README.md`. No pin reads the
+CI workflow file, so the gate is stated and not pinned.
+
+Gate after, measured 2026-11-16 at commit `7df0570`: `ruff check .` clean, `ruff format --check .` clean,
+`python3 -m pytest` passes 1,685 pins in 52 modules with no skips in 333.87 s, and
+`python3 tools/check_documents.py` reports no finding. The same set passes in 305.95 s on the tree that carries
+these edits, with no finding. The pin count is unchanged, so no pin was weakened. One
+finding was recorded and closed inside the piece: the format commit alone reports 2 findings from
+`tools/check_documents.py`, because a notice's file total was read from the working tree, while the document
+measures at commit `ac7609e`.
 
 Next: piece 8, the membership entry read (`to-do.md`).
 
