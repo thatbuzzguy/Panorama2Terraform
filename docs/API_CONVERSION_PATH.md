@@ -27,7 +27,7 @@ Rule 1: path 2 states no second version of any part of that table. The pins that
 set read path 2's modules with the other modules, so a second naming rule, a second writer, or a
 second console line in path 2 fails CI. The pins are `tests/test_write_path.py`,
 `tests/test_variables.py`, `tests/test_container_coverage.py`, and
-`tests/test_site_data.py::test_the_module_defines_no_second_naming_rule`.
+`tests/test_site_data.py::test_site_data_defines_no_second_naming_rule`.
 
 Rule 2: path 2 changes no path 1 rule. A table row that path 2 needs must be a row both paths
 read, so the coverage matrix, the container table, and the entry ledger stay one set.
@@ -387,7 +387,7 @@ Both modules write no file except through `write_path.py`, and neither states th
 4. The run over many sources: the parse methods per response, the report position, and the record
    per request (§2.4, §2.5).
 5. The unit join, and the ownership source field (§3).
-6. The gate: the request-set rule, and the path 2 pins for the rules that already read the files
+6. The gate: the request-set rule, and the pins that read the path 2 rules on the files already written
    (§3).
 7. The entry point: the arguments, the run order, the exit codes, and the generated `README.md`
    label that names which path wrote the codebase.

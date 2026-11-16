@@ -99,8 +99,9 @@ The mapping and rationale are in
 The provider-resource <-> Panorama-XML-element coverage matrix — one
 row per emitted type with the XML element, fixture, and expected name,
 enforced by `tests/test_coverage_matrix.py` — is in
-[`COVERAGE_MATRIX`](src/resource_mapping.py) (machine-readable, 34 rows) and
-[`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md) (table + method).
+[`COVERAGE_MATRIX`](src/resource_mapping.py) (machine-readable) and
+[`docs/COVERAGE_MATRIX.md`](docs/COVERAGE_MATRIX.md) (table + method). No row count is stated here; the
+document states it as the table's own rows.
 
 ## Dependency wiring
 
@@ -449,9 +450,199 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   conformance runs `terraform providers schema -json` against the pinned
   version (skipped when the `terraform` binary or registry access is
   unavailable).
+- `tests/test_layout.py` - the index rule, pinned in one place: each index names every document under it,
+  the root index names the test set and the response set, and the §1 module table names every `src/` module.
+  It reads names, not document wording, so a correct rewording cannot fail it. The document-wording checks
+  are not pins: they are `tools/check_documents.py`.
+
+The set, by area. Each module is named once here, because the root index names the test set.
+
+Input and the read layer:
+
+- `tests/test_safe_input.py` - the two byte checks at the door, both entry points, and the shape a refusal
+  takes
+- `tests/test_source_fetch.py` - the api producer: bytes handed to the shared door, the response wrapper, the
+  key-free cache name, `--offline`, the https rules, and the key from the environment. No test calls the
+  network, and the committed response set is read through an injected producer
+- `tests/test_state_input.py` - the state producer: the two byte checks on the state bytes, the entry
+  shape a scan can read, the document refusals, the record facts, the CLI argument rules, and the
+  offline run that calls no producer
+- `tests/test_parse_helpers.py` - the six value readers call the read layer's whitespace rule, and an absent
+  element answers `None`
+
+The parse set:
+
+- `tests/test_parse_objects.py` - the object-level parse methods, the parser data contract the generator
+  depends on
+- `tests/test_parse_network.py` - the network parse methods: zones, interfaces, routers, and the routing
+  levels the shape table states
+- `tests/test_parse_profiles.py` - the profile parse methods, and the document order the §4.4 rule states
+- `tests/test_parse_rules.py` - the rule parse methods, and the same document-order rule for the policy chains
+- `tests/test_parse_vpn.py` - the VPN parse methods: IPsec tunnels, IKE gateways, and crypto profiles
+- `tests/test_policy_order.py` - the per-device-group rule chain, on the multi-device-group fixture and the
+  goldens
+- `tests/test_interfaces.py` - every interface kind emits the type its row declares, `tag` is read through one
+  rule, and both address shapes read through one rule
+- `tests/test_real_or_report.py` - every area is a real resource or an explicit report, never a comment, with
+  the rule-block parser the order pins share
+
+The emit set and the naming rules:
+
+- `tests/test_dependency_wiring.py` - the name reference rule: a name the referrer's own unit declared prints
+  as a `.name` reference, and a name outside the export stays a plain string
+- `tests/test_variables.py` - every declared variable has a `var.` consumer, the pair rule that one name names
+  one source, and the environment name the fetch layer reads
+- `tests/test_resource_mapping.py` - the mapping tables against the live provider schema: every emitted type
+  exists in it, and no report-only type is in it
+- `tests/test_schema_conformance.py` - the provider schema as the single source of truth for what may emit,
+  read against the committed goldens
+- `tests/test_data_source_schema.py` - the data source table against the live provider schema: the rows,
+  the required `location` and `name`, the 22 rows that declare no `name`, and the pin between
+  `DATA_SOURCE_SCHEMA` and `LOCATION_SCHEMA`
+- `tests/test_data_blocks.py` - the read-through data blocks: the one block reader for every block kind,
+  the gate rule for a `data` block, the kind rule for a reference, the opt-in emit path (a run that
+  declares nothing writes the golden bytes), the CLI argument rules, the report rule, the generated
+  `README.md` label, and the byte rule between two runs
+- `tests/test_protocol_object.py` - the `protocol` object on `panos_virtual_router`: the shape table against
+  the live provider schema, the print shape (`protocol = { ... }`, not a block), the one-of mapping, the body of
+  a chosen level read from inside the chosen element, the peer inside its peer group, the interface inside its
+  area, the entry the file cannot express, a sensitive field as
+  the variable reference, `VALUE_VARIABLES` as the one shape owner, each violation type of the gate rule, and
+  the byte rule between two runs
+- `tests/test_filter_containers.py` - the six routing-profile filter containers: `FILTER_SHAPE` against the live
+  provider schema, the 14 rows that state an exactly-one choice and the gate refusing two of them or none, the
+  row scope that stops at a `match` or `set` row, the six `CONTAINER_TABLE`,
+  `COVERAGE_MATRIX`, `EMITTED_TYPES` and `LOCATION_SCHEMA` entries with `FILTER_TYPES` as the one decision owner,
+  the parse read and the print, the path-keyed input spellings with every pair grounded by a fixture entry and
+  read from a real run, and each violation type of the gate rule
+- `tests/test_certificate_blocks.py` - the certificate gate rule: `CERTIFICATE_SHAPE` against the live provider
+  schema, the choice the export states by presence, the `sensitive` field printed as the variable reference, and
+  each violation type
+- `tests/test_scope_objects.py` - the scope objects (`scope.tf`): one block per scope entry, the level
+  order and the document order, the file written before the config inside it, the file written only when
+  it has content, emission as the default with no flag, the name field for the parent record, the value
+  shape against the live provider schema and against the rows that declare it, the device membership as
+  the objects the provider takes, the placeholder device never entering a printed list, the placement rule
+  and the skipped entry, each violation type of the gate rule, and the byte rule between two runs
+- `tests/test_import_blocks.py` - the import blocks (`imports.tf`): the id encoding and its inverse, the
+  agreement gate rule and each violation type, the rule that the corpus writes no finding, the decision
+  for the four `*_policy_rules` types, the rule that the block and the id come from one location rule and
+  one naming rule, the order, and the byte rules between two runs and for a run that declares nothing
+- `tests/test_commit_actions.py` - the commit action per unit (`actions.tf`): one block per unit the
+  manifest names, the fact its own unit selects, the unit that writes no action, the address that answers
+  the names inside the block, the order, the file written only when it has content, each violation type of
+  the gate rule, the field inside `config`, the one field mapping and the one answer table and the one level
+  rule, `ACTION_SCHEMA` against the live provider schema, the Terraform minimum, and the byte rule between
+  two runs
+
+The records, the reports, and the write path:
+
+- `tests/test_unit_manifest.py` - the unit as data (`CODEBASE_MANIFEST.json`): one row per declared
+  scope, the directory naming rule, the row shape read back as data, the reference names recorded by
+  the reference rule, the no-change rule for the `.tf` goldens, the report bodies, the gate inputs,
+  and the exit codes, and the byte rule between two runs. F8.7: the unit join in `api_requests.py` reads
+  this unit set through `unit_manifest.units`, so path 2 states no second unit rule
+- `tests/test_ownership.py` - the owner of a repeated name as data (`OWNERSHIP.json`): one row per entry a
+  matrix row covers, the join to the manifest, the seven emitters that print the flag, the finding the rule
+  cannot decide, and the golden bytes
+- `tests/test_reference_edges.py` - the reference between units as data (`REFERENCE_EDGES.json`): one
+  row per pair, the join to the manifest and to the ownership record, the rule that the module
+  resolves no name, self-reference exclusion, the acyclic rule and the report section, the unit order
+  and its three bases, the gate inputs, the exit codes, and the byte rule between two runs
+- `tests/test_site_data.py` - the site as data (`SITE_DATA.json`) and the `.tfvars` written from it: the
+  value-to-variable table against `LOCATION_SCHEMA`, the row shape read back as data, the join to the manifest
+  on the unit directory, the `.tfvars` bytes for a string and for a list, the device-name rule at the print
+  site, the declaration set, both directions of the variable gate rule, the corpus rows, the rule that the
+  corpus trips neither, the gate inputs, the report bodies, the rule that the module defines no second naming
+  rule, and the byte rule between two runs
+- `tests/test_data_file_gate.py` - the gate rule that reads the four data files (`data_files`): the file set
+  the gate reads, the `CHECK_ORDER` position, each finding, the row ordinal as the finding position, the rule
+  that each row shape is read through its own module, the truth across the corpus, and the byte rule between
+  two runs
+- `tests/test_round_trip.py` - the cross-check (`round_trip`): the `.tf` block set read through the one gate
+  reader and the entry set read through the run's ledger, the join through the one scope rule and the one unit
+  rule, one finding per unit and row where the two counts do not agree, the position the reader read, the WARN
+  severity, the NOT RUN result when the caller passes no ledger, the rows that enter no count, the findings the
+  corpus reports, and the byte rule between two runs. F8.8: on a path 2 run the entry set is the join's own rows,
+  so the cross-check and the request-set rule read one ledger and name the same unit
+- `tests/test_write_path.py` - the write path (`write_path.py`): the two file sets and the rule that every file
+  names one set, the one function that writes bytes and forces LF, the two path builders, the rule that no module
+  of the tool writes a file outside it, the reader key as the path from the codebase root, the plan check that
+  runs once per unit directory and names the directory it ran on, the rule that no flag names the layout, the
+  golden set read as paths from the case directory, the single-unit case, and the byte rule between two runs
+- `tests/test_provenance.py` - the provenance record (`SOURCE.txt`): the fields, the record
+  read back as data, one record per source the run read, one record per request the path 2 run read with the
+  `scope` field naming the path that request declared, the `Source:` label for both sources,
+  the rule that a cache entry is not pruned while a written record references it, the action reading the record
+  file the same run wrote, and the record byte rule between two runs
+- `tests/test_reports.py` - the two operator-facing migration reports name the scope each entry came from,
+  grouped by one rule
+- `tests/test_golden_files.py` - the golden byte-for-byte gates, read as paths from the case directory
+
+The coverage sets:
+
+- `tests/test_container_coverage.py` - the container table and the code stay
+  in step: no parse method without a row, no row naming a path the method
+  does not read
+- `tests/test_entry_coverage.py` - every parse method that reads entries
+  marks them, so the per-entry report cannot lie
+- `tests/test_property_coverage.py` - what a matrix row declares against what an output reads, per container
+  kind, measured on a run rather than restated from the row
+- `tests/test_shadow_coverage.py` - the cross-source shadow scan: the per-scope shape in the
+  scan, the shadow fact (the key is `state_coverage.ownership_key` read with the facts the parent row
+  declares, so it names the parent scope), the report section and its line shape with the parent entry
+  field, one finding per parent entry, the report order, the console line, the CLI argument rules, and the
+  offline run reading both cache entries
+- `tests/test_state_coverage.py` - the state scan: the ownership key, the drift rule, the two report
+  sections and their line shapes, the rule that a state read is not an output read, the exit code, and
+  the record read back with no new field
+- `tests/test_coverage_matrix.py` - the matrix row set, the element grounding, the per-row pipeline run, the
+  row shape, and the property grounding, one check per row where the method names one
+
+The path 2 set and the splitter:
+
+- `tests/test_api_requests.py` - the scope index and the response-to-request join (`api_requests.py`): the four
+  membership lists as the container table rows, the scope set read from the membership responses, the sorted
+  one-entry-per-scope order, the join checked against the request that made the response, and the offline
+  harness: one committed response per request shape, each named by the request identity that produced it, read
+  through the injected producer, and read as data by the record
+- `tests/test_api_path.py` - the run over many sources: one response is one source with its own line map, the
+  section-to-response join, the parse method running over the response that holds its container, the report
+  position as the line inside that response, the row naming the source that holds the entry, the predefined
+  read, and the unit join: the run's unit set read through `unit_manifest.units`, the scope the run read for
+  each unit, and the two directions the join reports as data rows. It also pins the entry point
+  `api_to_terraform.py`: the run order, the join across the responses the run read, the arguments, the exit codes,
+  the run view, the report source lines in run order, and that the entry point states no rule an owner states. It
+  also pins the byte agreement between the two paths for content that holds no fact from `API_CONVERSION_PATH.md` §4
+- `tests/test_split_device_groups.py` - the splitter reads the owners' rules: the single writer, the file name,
+  the tables keyed by the source line, the shared merge, the extraction that takes the row, and the refusal kinds
+
+The gate, the fixtures, and the corpus:
+
+- `tests/test_sanity_gate.py` - the post-run gate: every check detects its
+  violation, no fixture trips a false positive, the report is byte-identical
+  between two runs, and the exit code follows the findings. F8.8: the request-set rule reads the join through
+  `api_requests.unit_findings` and the unit through `unit_manifest` and `naming`, so the file it names is the unit
+  directory, the position is 0, the run-wide direction prints through the root shape, the order is the data rule's
+  key, and the report section and the exit code are the gate's, not the join's
 - `tests/test_terraform_validate.py` - `terraform init` + `terraform
   validate` on the sample, kitchen-sink, and crypto-profile-only
   outputs (skipped when the `terraform` binary is absent)
+- `tests/test_smoke.py` - both scripts run end to end without crashing
+- `tests/test_robustness.py` - hostile input fails cleanly with no data leak, and degenerate input produces
+  valid output or skips safely
+- `tests/test_edge_cases.py` - the corpus edge cases: duplicate names across device groups and vsys, IPv6
+  address objects, dual-leg service objects, and the emit-side vsys identity
+- `tests/test_multi_device_template.py` - the multi-device, template-aware parse: the device group joins the
+  template on the device the export lists, and the splitter pins read the row and the parsed source through the
+  door
+- `tests/test_multi_vsys_location.py` - the multi-vsys identity and the `location` sub-block choice per type
+- `tests/test_build_kitchen_sink.py` - the fixture assembler (`tools/`): the read rule read on the committed
+  bytes, so a hostile fixture is skipped by rule and not by name and the tool's decision agrees with `xml_input`
+  for every committed fixture; the rule that the tool names no fixture except its own record, writes no file,
+  and is a generator rather than a pin on the record; the three merge cases; the byte rule between two runs; and
+  the rule that the tool reads the corpus and not the committed response set
+- `ruff check .` - lint
 - `tests/test_sanity_gate.py` - the post-run gate: every check detects its
   violation, no fixture trips a false positive, the report is byte-identical
   between two runs, and the exit code follows the findings. F8.8: the request-set rule reads the join through
@@ -574,7 +765,13 @@ recorded in the git history and in `agent-status.md`.
 `tests/` is flat: the test files sit beside the three sets `fixtures/`, `golden/`, and `responses/`, and
 `tests/conftest.py` is the one shared helper file and the one place the path to each set is built. A committed
 API response is not a Panorama export, so it lives in `tests/responses/` and is not corpus material: the scan
-and the fixture assembler read the corpus only. `pyproject.toml` `testpaths = ["tests"]` keeps discovery at the root, and
+and the fixture assembler read the corpus only. The three files the response set holds, each named by the
+key-free request identity that produced it, are
+`tests/responses/241cbc8980537850768efb4f106eaf6665bbc113a5ecd7c9fbd42449f200d34f.xml`
+(the whole-config export), `tests/responses/181d42732d20ea918cb4ea333000da9280a02de1e818ee6d26300cf4b98d759c.xml`
+(the per-scope read), and
+`tests/responses/38ee51b9258c5975d45325e2e56479901f2ac1d303012a16c442d62a61f0df53.xml`
+(the device fact). `pyproject.toml` `testpaths = ["tests"]` keeps discovery at the root, and
 `pythonpath = ["src"]` is the only place a test path is stated, so a test imports a tool module by name.
 The rule is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1.1.
 
@@ -627,15 +824,13 @@ committed sample.
 
 The work as a whole is **AGPL v3** ([LICENSE-AGPL](LICENSE-AGPL)). This repository is a fork of
 [gswsystems/Panorama2Terraform](https://github.com/gswsystems/Panorama2Terraform), taken at v4.0.2, so the
-dual-license history is inherited. Two holders hold the work:
-
-- **The upstream author** - the lines they wrote that are still in the tree (2,172 tracked lines)
-- **Ryan Brown** - every other line (57,157 tracked lines), licensed under **AGPL v3 only**
+dual-license history is inherited. Two holders hold the work: the upstream author holds the lines they wrote
+that are still in the tree, and Ryan Brown holds every other line under **AGPL v3 only**.
 
 [`LICENSE-COMMERCIAL](LICENSE-COMMERCIAL) is the upstream author's grant, so it covers the upstream parts
 only, and this project grants no commercial terms for its own contributions. The rule, the measured split,
 and the file set that still holds upstream text are in
-[`docs/LICENSING.md`](docs/LICENSING.md), which is the owner document.
+[`docs/LICENSING.md`](docs/LICENSING.md), which is the owner document; no count is restated here.
 
 ## Additional resources
 

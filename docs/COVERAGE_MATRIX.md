@@ -21,9 +21,11 @@ The document index is in [README.md](README.md).
 
 ## The matrix
 
-One row per emitted provider resource type (40 rows: 34 before F7.8, plus the six routing-profile filter
-containers, of which the six scope rows F6.5 added are part of the 34). The table below shows the
-six identity fields; the Row schema section names the other two, which are too
+One row per emitted provider resource type, so the count is the number of rows in the table below and no
+number is stored here: `tests/test_coverage_matrix.py::test_matrix_covers_exactly_the_emitted_types` measures
+the table against `EMITTED_TYPES`, and `tools/check_documents.py` measures the table below against the code
+table. The six routing-profile filter containers are the F7.8 rows, and the six scope rows are the F6.5 rows.
+The table below shows the six identity fields; the Row schema section names the other two, which are too
 long to read in a table. Read a whole row from the command at the top of this
 document.
 
@@ -42,6 +44,8 @@ document.
 | `panos_decryption_policy_rules` | `decryption/rules/entry` | `Decrypt-HTTPS` | `Decrypt-HTTPS` | `decryption_rules.xml` | `decryption_rules.tf` |
 | `panos_pbf_policy_rules` | `pbf/rules/entry` | `PBF-Forward` | `PBF-Forward` | `pbf_rules.xml` | `pbf_rules.tf` |
 | `panos_security_profile_group` | `profile-group/entry` | `Strict-Profile` | `Strict-Profile` | `security_profile_groups.xml` | `security_profile_groups.tf` |
+| `panos_certificate_import` | `certificate/entry` | `Edge-Cert` | `Edge-Cert` | `certificates.xml` | `certificates.tf` |
+| `panos_certificate_profile` | `certificate-profile/entry` | `Strict-OCSP` | `Strict-OCSP` | `certificates.xml` | `certificate_profiles.tf` |
 | `panos_monitor_profile` | `profiles/monitor-profile/entry` | `PM-Branch` | `PM-Branch` | `pbf_monitor_profiles.xml` | `monitor_profiles.tf` |
 | `panos_ethernet_interface` | `ethernet/entry` | `ethernet1/1` | `ethernet1/1` | `interfaces_ethernet.xml` | `interfaces.tf` |
 | `panos_ethernet_layer3_subinterface` | `ethernet/entry` | `ethernet1/1` | `ethernet1/1.0` | `interfaces_ethernet.xml` | `interfaces.tf` |

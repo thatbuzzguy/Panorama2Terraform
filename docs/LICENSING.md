@@ -25,45 +25,50 @@ with them.
 
 ## The split, measured
 
-Measured 2026-11-11 through `git blame` on the committed tree, counted by author:
+Measured 2026-11-16 at commit `ac7609e` through `git blame --line-porcelain` on the committed tree, counted by
+author. The tool that checks these numbers against the same commit is `tools/check_documents.py`.
 
 | Measure | Upstream (`devnullNZ`) | Ours (`Ryan Brown`) |
 |---|---|---|
-| Tracked lines, whole tree | 2,172 (3.7%) | 57,157 |
-| Tracked lines in `src/`, `tests/`, `tools/` | 588 (1.2%) | 50,008 |
-| Commits | 9 | 121 |
+| Tracked lines, whole tree | 2,064 (3.3%) | 60,242 |
+| Tracked lines in `src/`, `tests/`, `tools/` | 503 (0.9%) | 52,690 |
+| Commits | 9 | 195 |
 
 The rewrite is the reason this project asserts its own copyright for its contributions. `git blame` is the
 authority for the split, so the inherited set is measured and not decided: a file is in the set while it holds
-at least one line the upstream wrote, and it leaves the set when its last upstream line is replaced.
+at least one line the upstream wrote, and it leaves the set when its last upstream line is replaced. The
+commit named above is the measurement, so a later edit that changes a count needs a new measurement, not a
+new number here.
 
 ## The inherited set
 
-Measured 2026-11-11. Each file in this set still holds upstream text, so its notice stays the upstream's.
+Measured at the same commit. Each file in this set still holds upstream text, so its notice stays the
+upstream's.
 
 | File | Upstream lines |
 |---|---|
 | `LICENSE-AGPL` | 594 |
-| `src/panorama_to_terraform.py` | 431 |
+| `src/panorama_to_terraform.py` | 408 |
 | `LICENSE-COMMERCIAL` | 241 |
 | `examples/sample_panorama_config.xml` | 228 |
-| `src/split_device_groups.py` | 130 |
 | `docs/VPN_ROUTING_CONFIG_EXAMPLES.md` | 127 |
 | `examples/example_interface_report.txt` | 73 |
+| `src/split_device_groups.py` | 68 |
 | `docs/MIGRATION_GUIDE.md` | 63 |
-| `docs/DEVICE_GROUP_SPLITTING.md` | 48 |
+| `docs/DEVICE_GROUP_SPLITTING.md` | 45 |
 | `.gitignore` | 39 |
-| `README.md` | 38 |
+| `README.md` | 35 |
 | `docs/USAGE_GUIDE.md` | 29 |
 | `tools/quick_start.sh` | 27 |
 | `.github/ISSUE_TEMPLATE.md` | 26 |
-| `.github/workflows/python-tests.yml` | 21 |
 | `.github/PULL_REQUEST_TEMPLATE.md` | 21 |
+| `.github/workflows/python-tests.yml` | 20 |
 | `docs/ADVANCED-ROUTING-ENGINE-SUPPORT.md` | 16 |
 | `examples/example_terraform_output.txt` | 4 |
 
-`docs/DUAL-LICENSING-EXPLAINED.md` held 16 upstream lines. This document replaces it, and no upstream line
-carries into this document, so the set is 18 files and 2,156 upstream lines after the removal.
+The set is 18 files and 2,064 upstream lines, which is the sum of the rows above. `docs/LICENSING.md` is this
+document; the file it replaced, `docs/DUAL-LICENSING-EXPLAINED.md`, is gone from the tree, so no upstream line
+carries into it.
 
 ## The copyright notices in `src/`
 
@@ -71,10 +76,13 @@ Four of the 22 modules carry a notice, and each notice names the holder for the 
 
 | Module | Upstream lines | Notice |
 |---|---|---|
-| `src/panorama_to_terraform.py` | 431 | The upstream, unchanged |
-| `src/split_device_groups.py` | 130 | The upstream, unchanged |
+| `src/panorama_to_terraform.py` | 408 | GSW Systems, 2025, for the lines it wrote: 408 of 7,407 |
+| `src/split_device_groups.py` | 68 | GSW Systems, 2025, for the lines it wrote: 68 of 383 |
 | `src/source_fetch.py` | 0 | Ryan Brown, 2026. States no commercial term. |
 | `src/xml_input.py` | 0 | Ryan Brown, 2026. States no commercial term. |
+
+Neither of the two GSW Systems files is upstream whole, so the notice covers the lines the header names and
+not the file. A notice that said "the upstream, unchanged" would claim more than the measurement supports.
 
 The other 18 modules carry no notice. This document is the authority for them, and no header is added: a
 notice that names one holder for a file the two holders share is a claim the split does not support. The
