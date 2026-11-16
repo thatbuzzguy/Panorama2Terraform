@@ -52,44 +52,44 @@ from conftest import (
     tf_files,
 )
 
-CONVERTER = 'panorama_to_terraform.py'
-HOST = 'panorama.test'
-GROUPING = 'report_grouping.xml'
-MULTI = 'multi_device_templates.xml'
+CONVERTER = "panorama_to_terraform.py"
+HOST = "panorama.test"
+GROUPING = "report_grouping.xml"
+MULTI = "multi_device_templates.xml"
 MANIFEST = unit_manifest.MANIFEST_FILE
 
 # The reference names the grouping fixture produces, keyed by the referrer's five facts.
 GROUPING_REFERENCES = {
-    ('', '', '', '', ''): ('IKE-DEFAULT',),
-    ('Datacenter-FW', '', '', '', ''): ('IKE-DEFAULT', 'IPSEC-DEFAULT'),
-    ('Datacenter-FW', 'vsys2', '', '', ''): ('IKE-DEFAULT',),
-    ('Office-FW', '', '', '', ''): ('IKE-DEFAULT', 'IPSEC-DEFAULT'),
+    ("", "", "", "", ""): ("IKE-DEFAULT",),
+    ("Datacenter-FW", "", "", "", ""): ("IKE-DEFAULT", "IPSEC-DEFAULT"),
+    ("Datacenter-FW", "vsys2", "", "", ""): ("IKE-DEFAULT",),
+    ("Office-FW", "", "", "", ""): ("IKE-DEFAULT", "IPSEC-DEFAULT"),
 }
 
 # The units the grouping fixture shows, in the order the rows sort by the identity.
 GROUPING_UNITS = [
-    ('', '', '', '', ''),
-    ('', '', '', 'fw-2.example.com', ''),
-    ('', '', 'DC-Networks', '', ''),
-    ('', '', 'DC-Networks', container_coverage.PLACEHOLDER_DEVICE, ''),
-    ('', '', 'HQ-Networks', '', ''),
-    ('', '', 'HQ-Networks', 'fw-1.example.com', ''),
-    ('Datacenter-FW', '', '', '', ''),
-    ('Datacenter-FW', '', '', 'fw-2.example.com', ''),
-    ('Datacenter-FW', 'vsys2', '', '', ''),
-    ('Office-FW', '', '', '', ''),
-    ('Office-FW', '', '', 'fw-1.example.com', ''),
+    ("", "", "", "", ""),
+    ("", "", "", "fw-2.example.com", ""),
+    ("", "", "DC-Networks", "", ""),
+    ("", "", "DC-Networks", container_coverage.PLACEHOLDER_DEVICE, ""),
+    ("", "", "HQ-Networks", "", ""),
+    ("", "", "HQ-Networks", "fw-1.example.com", ""),
+    ("Datacenter-FW", "", "", "", ""),
+    ("Datacenter-FW", "", "", "fw-2.example.com", ""),
+    ("Datacenter-FW", "vsys2", "", "", ""),
+    ("Office-FW", "", "", "", ""),
+    ("Office-FW", "", "", "fw-1.example.com", ""),
 ]
 
 
 def _run(source: Path, out_dir: Path, extra: tuple = ()) -> subprocess.CompletedProcess:
     """Run the converter as a script and return the process result."""
-    return run_script(CONVERTER, str(source), '--output-dir', str(out_dir), *extra)
+    return run_script(CONVERTER, str(source), "--output-dir", str(out_dir), *extra)
 
 
 def _manifest(out_dir: Path) -> list:
     """A written manifest, read back as data."""
-    return unit_manifest.parse_rows((out_dir / MANIFEST).read_text(encoding='utf-8'))
+    return unit_manifest.parse_rows((out_dir / MANIFEST).read_text(encoding="utf-8"))
 
 
 def _row(rows: list, facts: tuple) -> dict:
@@ -111,24 +111,24 @@ def _pipeline(converter_module, source: Path, out_dir: Path, extra: tuple = ()) 
 
     def init_parser(self, *args, **kwargs):
         parser_init(self, *args, **kwargs)
-        caught['parser'] = self
+        caught["parser"] = self
 
     def init_generator(self, *args, **kwargs):
         generator_init(self, *args, **kwargs)
-        caught['generator'] = self
+        caught["generator"] = self
 
     saved_argv = list(sys.argv)
     converter_module.PanoramaParser.__init__ = init_parser
     generator_class.__init__ = init_generator
     try:
-        sys.argv = [CONVERTER, str(source), '--output-dir', str(out_dir), *[str(a) for a in extra]]
+        sys.argv = [CONVERTER, str(source), "--output-dir", str(out_dir), *[str(a) for a in extra]]
         with contextlib.redirect_stdout(io.StringIO()):
             converter_module.main()
     finally:
         converter_module.PanoramaParser.__init__ = parser_init
         generator_class.__init__ = generator_init
         sys.argv = saved_argv
-    return caught['parser'], caught['generator']
+    return caught["parser"], caught["generator"]
 
 
 @pytest.fixture
@@ -137,10 +137,11 @@ def gen(converter_module, tmp_path):
 
     The class the script holds, so the test and the run share one sanitizing rule.
     """
-    return converter_module.TerraformGenerator(str(tmp_path / 'gen'))
+    return converter_module.TerraformGenerator(str(tmp_path / "gen"))
 
 
 # --- 1. the unit ---------------------------------------------------------------
+
 
 def test_one_row_per_combination_of_the_five_facts(converter_module, tmp_path):
     """A unit is one combination of the five scope facts, and the rows come from the ledger."""
@@ -148,7 +149,7 @@ def test_one_row_per_combination_of_the_five_facts(converter_module, tmp_path):
     rows = _manifest(tmp_path)
     units = sorted({unit_manifest.facts_of(row) for row in parser.ledger.rows()})
     assert [tuple(row[key] for key in unit_manifest.FACT_KEYS) for row in rows] == units == GROUPING_UNITS
-    assert sum(row['entry_count'] for row in rows) == len(parser.ledger.rows())
+    assert sum(row["entry_count"] for row in rows) == len(parser.ledger.rows())
 
 
 def test_the_join_reads_the_unit_set_through_this_rule(converter_module, tmp_path):
@@ -156,36 +157,39 @@ def test_the_join_reads_the_unit_set_through_this_rule(converter_module, tmp_pat
     path 2 states no second unit rule and counts no unit a second way. A unit exists only when the ledger has
     a row in it, so a run that read no rows gives the join nothing to answer and nothing to report.
     """
-    request = source_fetch.ApiRequest(host=HOST, path='device-group')
-    source = source_fetch.fetch(request, tmp_path / 'read',
-                                producer=lambda r: (RESPONSES_DIR / r.cache_name()).read_bytes())
+    request = source_fetch.ApiRequest(host=HOST, path="device-group")
+    source = source_fetch.fetch(
+        request, tmp_path / "read", producer=lambda r: (RESPONSES_DIR / r.cache_name()).read_bytes()
+    )
     parser = converter_module.PanoramaParser(source)
     tables = parser.parse_associations()
     parser.parse_device_groups()
     rows = parser.ledger.rows()
-    assert rows, 'the join needs rows to read'
+    assert rows, "the join needs rows to read"
 
-    pairs = api_requests.join_units(api_requests.scope_index(HOST, tables, ('device-group/entry/devices',)),
-                                    parser.ledger)
+    pairs = api_requests.join_units(
+        api_requests.scope_index(HOST, tables, ("device-group/entry/devices",)), parser.ledger
+    )
     units = unit_manifest.units(parser.ledger)
     assert [facts for facts, _entry in pairs] == units, pairs
-    assert len(pairs) == len(units), 'one answer per unit, so no unit is counted a second way'
-    assert len({facts for facts, _entry in pairs}) == len(pairs), 'the join reports a unit once'
+    assert len(pairs) == len(units), "one answer per unit, so no unit is counted a second way"
+    assert len({facts for facts, _entry in pairs}) == len(pairs), "the join reports a unit once"
 
     # The answer names the index entry the row's source names, read through the name rule in `source_fetch`,
     # so the join holds no field name and no cache name of its own.
     answered = dict(pairs)
-    assert all(answered[unit_manifest.facts_of(row)].request.cache_name() == row[ownership.SOURCE_FIELD]
-               for row in rows), (answered, rows)
+    assert all(
+        answered[unit_manifest.facts_of(row)].request.cache_name() == row[ownership.SOURCE_FIELD] for row in rows
+    ), (answered, rows)
 
     # A unit exists only when the ledger has a row in it, so the set the join reads is the set the rows show.
     assert set(units) == {unit_manifest.facts_of(row) for row in rows}, (units, rows)
 
     # Path 2 names no unit rule of its own: the fact order is read through this module.
-    source_text = (SRC_DIR / 'api_requests.py').read_text(encoding='utf-8')
-    assert 'unit_manifest.units(' in source_text and 'unit_manifest.facts_of(' in source_text
+    source_text = (SRC_DIR / "api_requests.py").read_text(encoding="utf-8")
+    assert "unit_manifest.units(" in source_text and "unit_manifest.facts_of(" in source_text
     for key in unit_manifest.FACT_KEYS:
-        assert f"'{key}'" not in source_text, (key, 'the join names no fact of its own')
+        assert f"'{key}'" not in source_text, (key, "the join names no fact of its own")
 
 
 def test_the_scope_entry_is_one_of_its_rows(converter_module, tmp_path):
@@ -194,11 +198,10 @@ def test_the_scope_entry_is_one_of_its_rows(converter_module, tmp_path):
     F6.5: a scope entry is an object, so the row that defines the unit is an `emitted` row.
     """
     parser, _gen = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
-    defining = [row for row in parser.ledger.rows()
-                if unit_manifest.facts_of(row) == ('Datacenter-FW', '', '', '', '')]
-    assert [row for row in defining if row['name'] == 'Datacenter-FW']
-    assert [row for row in defining if row['destination'] == 'emitted']
-    assert _row(_manifest(tmp_path), ('Datacenter-FW', '', '', '', ''))['entry_count'] == len(defining)
+    defining = [row for row in parser.ledger.rows() if unit_manifest.facts_of(row) == ("Datacenter-FW", "", "", "", "")]
+    assert [row for row in defining if row["name"] == "Datacenter-FW"]
+    assert [row for row in defining if row["destination"] == "emitted"]
+    assert _row(_manifest(tmp_path), ("Datacenter-FW", "", "", "", ""))["entry_count"] == len(defining)
 
 
 def test_the_property_level_is_counted_on_the_parent_row(converter_module, tmp_path):
@@ -206,11 +209,11 @@ def test_the_property_level_is_counted_on_the_parent_row(converter_module, tmp_p
     own: the parent row shows the count.
     """
     parser, _gen = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
-    office = [row for row in parser.ledger.rows() if unit_manifest.facts_of(row) == ('Office-FW', '', '', '', '')]
-    parent = next(row for row in office if row['name'] == 'ethernet1/1')
-    assert parent['property_entries'] == 1
-    assert '10.1.1.1/24' not in [row['name'] for row in office], 'the ip entry is a property level'
-    assert _row(_manifest(tmp_path), ('Office-FW', '', '', '', ''))['entry_count'] == len(office)
+    office = [row for row in parser.ledger.rows() if unit_manifest.facts_of(row) == ("Office-FW", "", "", "", "")]
+    parent = next(row for row in office if row["name"] == "ethernet1/1")
+    assert parent["property_entries"] == 1
+    assert "10.1.1.1/24" not in [row["name"] for row in office], "the ip entry is a property level"
+    assert _row(_manifest(tmp_path), ("Office-FW", "", "", "", ""))["entry_count"] == len(office)
 
 
 def test_the_shared_unit_is_the_unit_with_empty_facts_and_is_named_shared(converter_module, tmp_path):
@@ -218,9 +221,9 @@ def test_the_shared_unit_is_the_unit_with_empty_facts_and_is_named_shared(conver
     states the name.
     """
     _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
-    row = _row(_manifest(tmp_path), ('', '', '', '', ''))
-    assert row['unit'] == unit_manifest.SHARED_UNIT
-    assert row['device_group'] == '', 'Shared is the name of the unit, not a fact value'
+    row = _row(_manifest(tmp_path), ("", "", "", "", ""))
+    assert row["unit"] == unit_manifest.SHARED_UNIT
+    assert row["device_group"] == "", "Shared is the name of the unit, not a fact value"
 
 
 def test_shared_in_device_group_is_not_a_fact_value(converter_module, tmp_path):
@@ -228,10 +231,9 @@ def test_shared_in_device_group_is_not_a_fact_value(converter_module, tmp_path):
     so it never enters the identity. The state scan holds the same rule.
     """
     parser, _gen = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
-    entry = next(row for row in parser.ledger.rows() if row['name'] == 'ethernet1/9')
-    assert entry['device_group'] == ''
-    object_facts = {'device_group': 'Shared', 'vsys': '', 'template': '', 'vsys_device': '',
-                    'template_stack': ''}
+    entry = next(row for row in parser.ledger.rows() if row["name"] == "ethernet1/9")
+    assert entry["device_group"] == ""
+    object_facts = {"device_group": "Shared", "vsys": "", "template": "", "vsys_device": "", "template_stack": ""}
     assert unit_manifest.facts_of(object_facts) == unit_manifest.facts_of(entry)
 
 
@@ -242,10 +244,11 @@ def test_the_rows_are_sorted_by_the_identity_not_by_document_order(converter_mod
     _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
     rows = _manifest(tmp_path)
     assert [tuple(row[key] for key in unit_manifest.FACT_KEYS) for row in rows] == GROUPING_UNITS
-    assert rows[0]['device_group'] == '' and rows[-1]['device_group'] == 'Office-FW'
+    assert rows[0]["device_group"] == "" and rows[-1]["device_group"] == "Office-FW"
 
 
 # --- 2. the directory naming rule --------------------------------------------
+
 
 def test_the_directory_name_is_the_sanitized_name_plus_the_digest(gen, tmp_path):
     """The §5 shape, read through `TerraformGenerator.sanitize_name`, so no second naming rule
@@ -253,32 +256,32 @@ def test_the_directory_name_is_the_sanitized_name_plus_the_digest(gen, tmp_path)
     """
     _run(FIXTURES_DIR / GROUPING, tmp_path)
     rows = _manifest(tmp_path)
-    shared = hashlib.sha256(b'||||').hexdigest()[:8]
-    assert _row(rows, ('', '', '', '', ''))['directory'] == f'{gen.sanitize_name("Shared")}_{shared}'
+    shared = hashlib.sha256(b"||||").hexdigest()[:8]
+    assert _row(rows, ("", "", "", "", ""))["directory"] == f"{gen.sanitize_name('Shared')}_{shared}"
 
-    facts = ('Datacenter-FW', 'vsys2', '', '', '')
-    digest = hashlib.sha256(b'Datacenter-FW|vsys2|||').hexdigest()[:8]
-    assert _row(rows, facts)['directory'] == f'{gen.sanitize_name("vsys2")}_{digest}'
+    facts = ("Datacenter-FW", "vsys2", "", "", "")
+    digest = hashlib.sha256(b"Datacenter-FW|vsys2|||").hexdigest()[:8]
+    assert _row(rows, facts)["directory"] == f"{gen.sanitize_name('vsys2')}_{digest}"
 
 
 def test_the_manifest_defines_no_second_sanitize_or_naming_rule():
     """The manifest takes the §5 sanitizing rule as an argument, so the rule it owns is the identity
     digest and the unit name only.
     """
-    assert not any(hasattr(unit_manifest, name) for name in ('sanitize_name', 'sanitize', 'name_ref'))
+    assert not any(hasattr(unit_manifest, name) for name in ("sanitize_name", "sanitize", "name_ref"))
 
 
 def test_a_name_that_sanitizes_to_nothing_keeps_the_shape(gen):
     """§5: an empty name becomes `unnamed`, so a directory name is never empty, and the shape a name
     sanitizes to is the §5 shape, not a second rule.
     """
-    facts = ('!', '', '', '', '')
-    assert unit_manifest.directory_name(facts, gen.sanitize_name) == \
-        f'unnamed_{unit_manifest.identity_digest(facts)}'
-    facts = ('Sales & Eng', '', '', '', '')
-    assert gen.sanitize_name('Sales & Eng') == 'sales___eng'
-    assert unit_manifest.directory_name(facts, gen.sanitize_name) == \
-        f'sales___eng_{unit_manifest.identity_digest(facts)}'
+    facts = ("!", "", "", "", "")
+    assert unit_manifest.directory_name(facts, gen.sanitize_name) == f"unnamed_{unit_manifest.identity_digest(facts)}"
+    facts = ("Sales & Eng", "", "", "", "")
+    assert gen.sanitize_name("Sales & Eng") == "sales___eng"
+    assert (
+        unit_manifest.directory_name(facts, gen.sanitize_name) == f"sales___eng_{unit_manifest.identity_digest(facts)}"
+    )
 
 
 def test_the_word_prints_the_same_string_at_both_print_sites(tmp_path):
@@ -289,29 +292,33 @@ def test_the_word_prints_the_same_string_at_both_print_sites(tmp_path):
     measures the content the rule prints: the unit directory name `generate_units` wrote, and the block name the
     run printed in that directory, for content whose name sanitizes to nothing. Both come from `naming.UNNAMED`.
     """
-    source = tmp_path / 'no_name.xml'
+    source = tmp_path / "no_name.xml"
     source.write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n<config>\n  <templates>\n'
         '    <entry name="!"><devices><entry name="fw-2.example.com"/></devices>\n'
-        '      <network><address>\n'
+        "      <network><address>\n"
         '        <entry name="!"><type>IP</type><ip-net-block>10.0.0.1</ip-net-block></entry>\n'
-        '      </address></network>\n    </entry>\n  </templates>\n</config>\n', encoding='utf-8')
-    out = tmp_path / 'out'
+        "      </address></network>\n    </entry>\n  </templates>\n</config>\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "out"
     result = _run(source, out)
     assert result.returncode == 0, result.stdout + result.stderr
 
-    facts = ('', '', '!', '', '')
+    facts = ("", "", "!", "", "")
     row = _row(_manifest(out), facts)
     # The unit half: the §5 shape of the unit name, with the owner's fallback.
-    directory = row['directory']
-    assert directory == f'{naming.sanitize(unit_manifest.unit_name(facts)) or naming.UNNAMED}' \
-                        f'_{unit_manifest.identity_digest(facts)}', row
+    directory = row["directory"]
+    assert (
+        directory == f"{naming.sanitize(unit_manifest.unit_name(facts)) or naming.UNNAMED}"
+        f"_{unit_manifest.identity_digest(facts)}"
+    ), row
 
     # The block half, read from the bytes the run wrote in that directory.
-    text = file_text(tf_files(out), 'scope.tf')
+    text = file_text(tf_files(out), "scope.tf")
     address = RESOURCE_ADDRESS_RE.search(text).group(2)
-    assert address.startswith(f'{naming.UNNAMED}_'), (address, text)
-    assert address != directory, (address, directory, 'the digest is the entry identity, not the unit identity')
+    assert address.startswith(f"{naming.UNNAMED}_"), (address, text)
+    assert address != directory, (address, directory, "the digest is the entry identity, not the unit identity")
 
 
 def test_the_fallback_word_is_stated_once_in_src():
@@ -324,17 +331,20 @@ def test_the_fallback_word_is_stated_once_in_src():
     the word prints for a name.
     """
     holders = {}
-    for path in sorted(SRC_DIR.glob('*.py')):
-        tree = ast.parse(path.read_text(encoding='utf-8'))
-        held = [node.value for node in ast.walk(tree)
-                if isinstance(node, ast.Constant) and node.value == unit_manifest.UNNAMED]
+    for path in sorted(SRC_DIR.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        held = [
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and node.value == unit_manifest.UNNAMED
+        ]
         if held:
             holders[path.name] = len(held)
-    assert holders == {'naming.py': 1}, holders
+    assert holders == {"naming.py": 1}, holders
     # The two readers read the word through the owner, so the rule has one place.
-    for name in ('unit_manifest.py', 'panorama_to_terraform.py'):
-        text = (SRC_DIR / name).read_text(encoding='utf-8')
-        assert 'naming.UNNAMED' in text or 'from naming import UNNAMED' in text, name
+    for name in ("unit_manifest.py", "panorama_to_terraform.py"):
+        text = (SRC_DIR / name).read_text(encoding="utf-8")
+        assert "naming.UNNAMED" in text or "from naming import UNNAMED" in text, name
 
 
 def test_the_digest_is_always_present_not_only_on_a_collision(converter_module, tmp_path):
@@ -345,32 +355,32 @@ def test_the_digest_is_always_present_not_only_on_a_collision(converter_module, 
     rows = _manifest(tmp_path)
     for row in rows:
         facts = tuple(row[key] for key in unit_manifest.FACT_KEYS)
-        assert row['directory'].rsplit('_', 1)[1] == unit_manifest.identity_digest(facts)
+        assert row["directory"].rsplit("_", 1)[1] == unit_manifest.identity_digest(facts)
     # Two units that sanitize to the same base stay apart, by the digest alone.
-    same_base = [row for row in rows if row['unit'] == 'fw-2.example.com']
-    assert len(same_base) == 2 and len({row['directory'] for row in same_base}) == 2
+    same_base = [row for row in rows if row["unit"] == "fw-2.example.com"]
+    assert len(same_base) == 2 and len({row["directory"] for row in same_base}) == 2
 
 
 def test_a_directory_name_does_not_move_when_an_unrelated_unit_is_added(tmp_path):
     """The name depends on the unit alone, so the same unit in two different runs gets the same
     directory name. The multi fixture names the stack unit, which the grouping fixture does not.
     """
-    _run(FIXTURES_DIR / GROUPING, tmp_path / 'first')
-    _run(FIXTURES_DIR / MULTI, tmp_path / 'second')
-    unit = ('Datacenter-FW', '', '', '', '')
-    first = _row(_manifest(tmp_path / 'first'), unit)
-    second = _row(_manifest(tmp_path / 'second'), unit)
-    assert first['directory'] == second['directory']
-    assert first['unit'] == second['unit']
+    _run(FIXTURES_DIR / GROUPING, tmp_path / "first")
+    _run(FIXTURES_DIR / MULTI, tmp_path / "second")
+    unit = ("Datacenter-FW", "", "", "", "")
+    first = _row(_manifest(tmp_path / "first"), unit)
+    second = _row(_manifest(tmp_path / "second"), unit)
+    assert first["directory"] == second["directory"]
+    assert first["unit"] == second["unit"]
 
 
 def test_the_deepest_declared_scope_names_the_unit(converter_module, tmp_path):
     """The unit name is the deepest scope the export declares, in the F3.9 level order."""
     _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
     rows = _manifest(tmp_path)
-    assert _row(rows, ('Datacenter-FW', 'vsys2', '', '', ''))['unit'] == 'vsys2'
-    assert _row(rows, ('', '', 'HQ-Networks', '', ''))['unit'] == 'HQ-Networks'
-    assert _row(rows, ('', '', 'HQ-Networks', 'fw-1.example.com', ''))['unit'] == 'fw-1.example.com'
+    assert _row(rows, ("Datacenter-FW", "vsys2", "", "", ""))["unit"] == "vsys2"
+    assert _row(rows, ("", "", "HQ-Networks", "", ""))["unit"] == "HQ-Networks"
+    assert _row(rows, ("", "", "HQ-Networks", "fw-1.example.com", ""))["unit"] == "fw-1.example.com"
 
 
 def test_the_stack_names_its_unit(converter_module, tmp_path):
@@ -380,37 +390,48 @@ def test_the_stack_names_its_unit(converter_module, tmp_path):
     `tests/fixtures/scope_objects.xml` is the fixture that carries the stack entry and the variable
     inside it, so the run names the stack unit and counts both entries in it.
     """
-    _pipeline(converter_module, FIXTURES_DIR / 'scope_objects.xml', tmp_path)
+    _pipeline(converter_module, FIXTURES_DIR / "scope_objects.xml", tmp_path)
     rows = _manifest(tmp_path)
-    stack = ('', '', '', '', 'Edge-Stack')
+    stack = ("", "", "", "", "Edge-Stack")
     row = _row(rows, stack)
-    assert row['unit'] == 'Edge-Stack'
-    assert row['directory'] == f'edge_stack_{unit_manifest.identity_digest(stack)}'
-    assert row['entry_count'] == 2, 'the stack entry and the variable inside it'
+    assert row["unit"] == "Edge-Stack"
+    assert row["directory"] == f"edge_stack_{unit_manifest.identity_digest(stack)}"
+    assert row["entry_count"] == 2, "the stack entry and the variable inside it"
     # The level order, read innermost first: a template inside a stack names its template.
-    assert unit_manifest.named_fact(('', '', 'Edge-Networks', '', 'Edge-Stack')) == ('template', 'Edge-Networks')
-    assert unit_manifest.named_fact(stack) == ('template_stack', 'Edge-Stack')
+    assert unit_manifest.named_fact(("", "", "Edge-Networks", "", "Edge-Stack")) == ("template", "Edge-Networks")
+    assert unit_manifest.named_fact(stack) == ("template_stack", "Edge-Stack")
 
 
 def test_the_placeholder_device_names_no_unit(converter_module, tmp_path):
     """F3.5: `localhost.localdomain` names no firewall, so the unit takes the scope above it."""
     _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
-    row = _row(_manifest(tmp_path), ('', '', 'DC-Networks', container_coverage.PLACEHOLDER_DEVICE, ''))
-    assert row['unit'] == 'DC-Networks'
-    assert row['vsys_device'] == container_coverage.PLACEHOLDER_DEVICE
+    row = _row(_manifest(tmp_path), ("", "", "DC-Networks", container_coverage.PLACEHOLDER_DEVICE, ""))
+    assert row["unit"] == "DC-Networks"
+    assert row["vsys_device"] == container_coverage.PLACEHOLDER_DEVICE
 
 
 # --- 3. the row shape ---------------------------------------------------------
+
 
 def test_the_row_fields_are_the_declared_shape_in_order(tmp_path):
     """The row is data, so the field order is fixed and a document describes it without restating a
     row.
     """
-    assert unit_manifest.FIELD_ORDER == ('unit', 'device_group', 'vsys', 'template', 'vsys_device',
-                                         'template_stack', 'directory', 'entry_count', 'references',
-                                         'rank', 'after')
+    assert unit_manifest.FIELD_ORDER == (
+        "unit",
+        "device_group",
+        "vsys",
+        "template",
+        "vsys_device",
+        "template_stack",
+        "directory",
+        "entry_count",
+        "references",
+        "rank",
+        "after",
+    )
     _run(FIXTURES_DIR / GROUPING, tmp_path)
-    text = (tmp_path / MANIFEST).read_text(encoding='utf-8')
+    text = (tmp_path / MANIFEST).read_text(encoding="utf-8")
     assert list(json.loads(text)[0]) == list(unit_manifest.FIELD_ORDER)
     # Fields print in the declared order, not alphabetically.
     assert text.index('"unit"') < text.index('"device_group"') < text.index('"directory"')
@@ -425,26 +446,36 @@ def test_the_manifest_round_trips_as_data(gen, tmp_path):
     assert rows and all(set(row) == set(unit_manifest.FIELD_ORDER) for row in rows)
     for row in rows:
         facts = tuple(row[key] for key in unit_manifest.FACT_KEYS)
-        assert row['unit'] == unit_manifest.unit_name(facts)
-        assert row['directory'] == unit_manifest.directory_name(facts, gen.sanitize_name)
+        assert row["unit"] == unit_manifest.unit_name(facts)
+        assert row["directory"] == unit_manifest.directory_name(facts, gen.sanitize_name)
 
 
 def test_a_row_that_is_not_the_declared_shape_is_refused():
     """The manifest is data, so a reader cannot fall back to reading prose."""
-    good = {'unit': 'Shared', 'device_group': '', 'vsys': '', 'template': '', 'vsys_device': '',
-            'template_stack': '', 'directory': 'shared_45ca31c3', 'entry_count': 2,
-            'references': [], 'rank': 1, 'after': []}
-    assert unit_manifest.parse_rows(json.dumps([good]))[0]['directory'] == 'shared_45ca31c3'
+    good = {
+        "unit": "Shared",
+        "device_group": "",
+        "vsys": "",
+        "template": "",
+        "vsys_device": "",
+        "template_stack": "",
+        "directory": "shared_45ca31c3",
+        "entry_count": 2,
+        "references": [],
+        "rank": 1,
+        "after": [],
+    }
+    assert unit_manifest.parse_rows(json.dumps([good]))[0]["directory"] == "shared_45ca31c3"
     bad_rows = (
-        json.dumps({'unit': 'Shared'}),                       # not a list of rows
-        json.dumps(['Shared']),                               # a row that is not an object
-        json.dumps([dict(good, source_line=4)]),              # a field the shape does not declare
-        json.dumps([{key: value for key, value in good.items() if key != 'entry_count'}]),
-        json.dumps([dict(good, entry_count='2')]),
-        json.dumps([dict(good, references='IKE-DEFAULT')]),
+        json.dumps({"unit": "Shared"}),  # not a list of rows
+        json.dumps(["Shared"]),  # a row that is not an object
+        json.dumps([dict(good, source_line=4)]),  # a field the shape does not declare
+        json.dumps([{key: value for key, value in good.items() if key != "entry_count"}]),
+        json.dumps([dict(good, entry_count="2")]),
+        json.dumps([dict(good, references="IKE-DEFAULT")]),
         json.dumps([dict(good, vsys=None)]),
-        json.dumps([dict(good, rank='1')]),                   # F6.3: rank is a position
-        json.dumps([dict(good, after='shared_45ca31c3')]),    # F6.3: after is a list of directories
+        json.dumps([dict(good, rank="1")]),  # F6.3: rank is a position
+        json.dumps([dict(good, after="shared_45ca31c3")]),  # F6.3: after is a list of directories
     )
     for bad in bad_rows:
         with pytest.raises(ValueError):
@@ -465,16 +496,17 @@ def test_the_manifest_is_one_file_for_the_codebase(tmp_path):
     rows = _manifest(tmp_path)
     assert len(rows) == len(GROUPING_UNITS)
     assert (tmp_path / MANIFEST).is_file()
-    data_files = {MANIFEST, ownership.OWNERSHIP_FILE, reference_edges.EDGE_FILE,
-                  site_data.SITE_DATA_FILE}
-    assert not any(p.name.endswith('.json') and p.name not in data_files for p in tmp_path.iterdir())
+    data_files = {MANIFEST, ownership.OWNERSHIP_FILE, reference_edges.EDGE_FILE, site_data.SITE_DATA_FILE}
+    assert not any(p.name.endswith(".json") and p.name not in data_files for p in tmp_path.iterdir())
     # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the directory name the row decides is the directory the run
     # writes, so the codebase root holds the records and each unit directory holds the unit set.
-    assert sorted(p.name for p in tmp_path.iterdir() if p.is_dir()) == \
-        sorted(row['directory'] for row in rows), 'one directory per unit the row names'
+    assert sorted(p.name for p in tmp_path.iterdir() if p.is_dir()) == sorted(row["directory"] for row in rows), (
+        "one directory per unit the row names"
+    )
 
 
 # --- 4. the reference names ---------------------------------------------------
+
 
 def test_the_reference_names_are_recorded_for_the_referrers_facts(converter_module, tmp_path):
     """The names `name_ref` could not resolve inside the referrer's own unit, keyed by the referrer's
@@ -484,9 +516,9 @@ def test_the_reference_names_are_recorded_for_the_referrers_facts(converter_modu
     assert generator.unit_references() == GROUPING_REFERENCES
     rows = _manifest(tmp_path)
     for facts, names in GROUPING_REFERENCES.items():
-        assert _row(rows, facts)['references'] == list(names)
+        assert _row(rows, facts)["references"] == list(names)
     for row in rows:
-        assert row['references'] == sorted(row['references'])
+        assert row["references"] == sorted(row["references"])
 
 
 def test_a_contextless_call_site_records_the_name_for_the_referrers_unit(converter_module, tmp_path):
@@ -494,10 +526,10 @@ def test_a_contextless_call_site_records_the_name_for_the_referrers_unit(convert
     name is recorded for it; the office referrer records for its own unit.
     """
     _parser, generator = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
-    shared = ('', '', '', '', '')
-    office = ('Office-FW', '', '', '', '')
-    assert generator.unit_references()[shared] == ('IKE-DEFAULT',)
-    assert 'IPSEC-DEFAULT' in generator.unit_references()[office]
+    shared = ("", "", "", "", "")
+    office = ("Office-FW", "", "", "", "")
+    assert generator.unit_references()[shared] == ("IKE-DEFAULT",)
+    assert "IPSEC-DEFAULT" in generator.unit_references()[office]
 
 
 def test_a_name_the_referrers_unit_declares_is_not_recorded(converter_module, tmp_path):
@@ -506,9 +538,9 @@ def test_a_name_the_referrers_unit_declares_is_not_recorded(converter_module, tm
     """
     _parser, generator = _pipeline(converter_module, FIXTURES_DIR / GROUPING, tmp_path)
     recorded = {name for names in generator.unit_references().values() for name in names}
-    assert 'GW-Common' not in recorded
-    assert 'GW-Shared' not in recorded
-    assert recorded == {'IKE-DEFAULT', 'IPSEC-DEFAULT'}
+    assert "GW-Common" not in recorded
+    assert "GW-Shared" not in recorded
+    assert recorded == {"IKE-DEFAULT", "IPSEC-DEFAULT"}
 
 
 def test_the_record_names_the_referrers_unit_not_the_declaring_unit(gen):
@@ -517,33 +549,58 @@ def test_the_record_names_the_referrers_unit_not_the_declaring_unit(gen):
     fact is the referrer's. The edge list (F6.3) is the feature that names the other unit, so this
     record keeps one fact, and the case is recorded here.
     """
-    gen.generate_interfaces([
-        {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
-         'device_group': 'Shared', 'vsys': '', 'template': '', 'vsys_device': 'fw-1.example.com'},
-        {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
-         'device_group': 'Shared', 'vsys': '', 'template': '', 'vsys_device': 'fw-2.example.com'},
-    ])
-    router = {'name': 'vr-shared', 'type': 'virtual-router', 'vsys': '', 'template': '',
-              'vsys_device': '', 'interfaces': ['ethernet1/1']}
+    gen.generate_interfaces(
+        [
+            {
+                "name": "ethernet1/1",
+                "type": "ethernet",
+                "mode": "layer3",
+                "device_group": "Shared",
+                "vsys": "",
+                "template": "",
+                "vsys_device": "fw-1.example.com",
+            },
+            {
+                "name": "ethernet1/1",
+                "type": "ethernet",
+                "mode": "layer3",
+                "device_group": "Shared",
+                "vsys": "",
+                "template": "",
+                "vsys_device": "fw-2.example.com",
+            },
+        ]
+    )
+    router = {
+        "name": "vr-shared",
+        "type": "virtual-router",
+        "vsys": "",
+        "template": "",
+        "vsys_device": "",
+        "interfaces": ["ethernet1/1"],
+    }
     gen.generate_virtual_routers([router])
-    text = file_text(tf_files(gen.output_dir), 'virtual_routers.tf')
-    assert 'panos_ethernet_interface.' not in text
-    assert 'data.panos_ethernet_interface' not in text
-    assert gen.unit_references() == {('', '', '', '', ''): ('ethernet1/1',)}
+    text = file_text(tf_files(gen.output_dir), "virtual_routers.tf")
+    assert "panos_ethernet_interface." not in text
+    assert "data.panos_ethernet_interface" not in text
+    assert gen.unit_references() == {("", "", "", "", ""): ("ethernet1/1",)}
 
 
 def test_a_read_through_name_is_recorded(converter_module, tmp_path):
     """A name that became a read-through `data` block (F5.5) is an outside name, so the row states
     it. Every block the run writes is one recorded name.
     """
-    _parser, generator = _pipeline(converter_module, SAMPLE_CONFIG, tmp_path,
-                                   ('--data-blocks', 'panos_address,panos_zone'))
-    blocks = [line.split(' = ')[1].strip('"') for line in
-              file_text(tf_files(tmp_path), 'read_through.tf').splitlines()
-              if line.startswith('  name = ')]
+    _parser, generator = _pipeline(
+        converter_module, SAMPLE_CONFIG, tmp_path, ("--data-blocks", "panos_address,panos_zone")
+    )
+    blocks = [
+        line.split(" = ")[1].strip('"')
+        for line in file_text(tf_files(tmp_path), "read_through.tf").splitlines()
+        if line.startswith("  name = ")
+    ]
     recorded = {name for names in generator.unit_references().values() for name in names}
     assert blocks and set(blocks) <= recorded
-    assert 'any' in recorded
+    assert "any" in recorded
 
 
 def test_every_recorded_name_belongs_to_a_unit_the_ledger_shows(converter_module, tmp_path):
@@ -565,16 +622,17 @@ def test_a_name_is_stored_once_per_unit(converter_module, tmp_path):
     _parser, generator = _pipeline(converter_module, SAMPLE_CONFIG, tmp_path)
     for names in generator.unit_references().values():
         assert len(set(names)) == len(names)
-    row = _row(_manifest(tmp_path), ('Production-DG', '', '', 'localhost.localdomain', ''))
-    assert row['references'].count('any') == 1
-    assert row['references'] == sorted(row['references'])
+    row = _row(_manifest(tmp_path), ("Production-DG", "", "", "localhost.localdomain", ""))
+    assert row["references"].count("any") == 1
+    assert row["references"] == sorted(row["references"])
 
 
 # --- 5. the no-change rule ----------------------------------------------------
 
+
 def test_the_generated_tf_bytes_are_unchanged(tmp_path):
     """Both golden cases write the same bytes as the committed goldens."""
-    for case, source in (('sample', SAMPLE_CONFIG), ('kitchen_sink', FIXTURES_DIR / 'kitchen_sink.xml')):
+    for case, source in (("sample", SAMPLE_CONFIG), ("kitchen_sink", FIXTURES_DIR / "kitchen_sink.xml")):
         out = tmp_path / case
         proc = _run(source, out)
         assert proc.returncode == 0, proc.stdout + proc.stderr
@@ -582,8 +640,8 @@ def test_the_generated_tf_bytes_are_unchanged(tmp_path):
         generated = tf_bytes(out)
         # Both sets must hold content, or the comparison measures nothing.
         # The tool reads inputs through tests/conftest.py (see the module header).
-        assert goldens, (case, 'the golden case holds no .tf content to compare')
-        assert generated, (case, 'the run wrote no .tf content')
+        assert goldens, (case, "the golden case holds no .tf content to compare")
+        assert generated, (case, "the run wrote no .tf content")
         assert generated == goldens, case
 
 
@@ -595,69 +653,76 @@ def test_the_gate_reads_the_manifest_through_unit_manifest(tmp_path):
     """
     _run(SAMPLE_CONFIG, tmp_path)
     files = sanity_checks.read_tf_files(tmp_path)
-    assert files and all(name.endswith('.tf') for name in files), 'the block reader is .tf-only'
+    assert files and all(name.endswith(".tf") for name in files), "the block reader is .tf-only"
     assert dict(sanity_checks.DATA_FILES)[MANIFEST] is unit_manifest
-    assert not hasattr(unit_manifest, 'check'), 'the manifest owns no gate check'
+    assert not hasattr(unit_manifest, "check"), "the manifest owns no gate check"
     report = sanity_checks.run_checks(tmp_path)
     assert [result.check for result in report.checks] == list(sanity_checks.CHECK_ORDER)
     assert report.file_count == len(files)
-    assert report.data_file_count == 2, 'the sample run writes the manifest and the ownership record'
-    assert report.findings('data_files') == []
-    assert 'Files checked: 14 .tf files, 2 data files.' in report.render(), report.render()
+    assert report.data_file_count == 2, "the sample run writes the manifest and the ownership record"
+    assert report.findings("data_files") == []
+    assert "Files checked: 14 .tf files, 2 data files." in report.render(), report.render()
 
 
 def test_no_report_names_a_field_the_manifest_states(tmp_path):
     """The manifest is a data file, not a report body: no report names it or restates a row."""
     _run(SAMPLE_CONFIG, tmp_path)
-    for name in (entry_coverage.REPORT_FILE, 'MANUAL_SETUP_REPORT.txt',
-                 'INTERFACE_MIGRATION_REPORT.txt', 'SANITY_REPORT.txt', 'SOURCE.txt', 'README.md'):
+    for name in (
+        entry_coverage.REPORT_FILE,
+        "MANUAL_SETUP_REPORT.txt",
+        "INTERFACE_MIGRATION_REPORT.txt",
+        "SANITY_REPORT.txt",
+        "SOURCE.txt",
+        "README.md",
+    ):
         path = tmp_path / name
         if not path.is_file():
-            continue    # a report is written only when it has content
-        text = path.read_text(encoding='utf-8')
+            continue  # a report is written only when it has content
+        text = path.read_text(encoding="utf-8")
         assert MANIFEST not in text, name
-        assert 'entry_count' not in text, name
+        assert "entry_count" not in text, name
 
 
 def test_the_exit_codes_are_unchanged(tmp_path):
     """0 when the gate reports no FAIL finding, 1 for an input refusal, 2 for an argument error."""
-    assert _run(SAMPLE_CONFIG, tmp_path / 'run').returncode == 0
-    assert _run(tmp_path / 'missing.xml', tmp_path / 'refused').returncode == 1
-    assert not (tmp_path / 'refused' / MANIFEST).is_file(), 'a refusal writes no manifest'
-    assert run_script(CONVERTER, str(SAMPLE_CONFIG), '--offline').returncode == 2
-    assert run_script(CONVERTER, str(SAMPLE_CONFIG), '--data-blocks', 'panos_made_up').returncode == 2
+    assert _run(SAMPLE_CONFIG, tmp_path / "run").returncode == 0
+    assert _run(tmp_path / "missing.xml", tmp_path / "refused").returncode == 1
+    assert not (tmp_path / "refused" / MANIFEST).is_file(), "a refusal writes no manifest"
+    assert run_script(CONVERTER, str(SAMPLE_CONFIG), "--offline").returncode == 2
+    assert run_script(CONVERTER, str(SAMPLE_CONFIG), "--data-blocks", "panos_made_up").returncode == 2
 
 
 # --- 6. the CLI and the content rule ------------------------------------------
+
 
 def test_a_plain_run_writes_the_manifest_without_a_flag(tmp_path):
     """The unit boundary is a fact of every run, so the manifest is not opt-in and the CLI takes no
     flag for it.
     """
-    assert 'manifest' not in run_script(CONVERTER, '--help').stdout.lower()
+    assert "manifest" not in run_script(CONVERTER, "--help").stdout.lower()
     assert _run(SAMPLE_CONFIG, tmp_path).returncode == 0
     assert (tmp_path / MANIFEST).is_file()
     assert _manifest(tmp_path)
 
 
 def test_the_manifest_is_written_only_when_it_has_content(tmp_path):
-    """A run that read no entry writes no manifest, and the record is still written.
-    """
-    empty = tmp_path / 'empty.xml'
-    empty.write_text('<?xml version="1.0"?>\n<config>\n<device-group/>\n</config>\n', encoding='utf-8')
-    out = tmp_path / 'out'
+    """A run that read no entry writes no manifest, and the record is still written."""
+    empty = tmp_path / "empty.xml"
+    empty.write_text('<?xml version="1.0"?>\n<config>\n<device-group/>\n</config>\n', encoding="utf-8")
+    out = tmp_path / "out"
     assert _run(empty, out).returncode == 0
     assert not (out / MANIFEST).is_file()
-    assert (out / 'SOURCE.txt').is_file()
+    assert (out / "SOURCE.txt").is_file()
 
 
 # --- 7. determinism -------------------------------------------------------------
+
 
 def test_two_runs_write_the_same_bytes(tmp_path):
     """The rows are sorted by the identity and the names are sorted, so two runs on the same input
     write the same bytes.
     """
-    first, second = tmp_path / 'run1', tmp_path / 'run2'
+    first, second = tmp_path / "run1", tmp_path / "run2"
     assert _run(FIXTURES_DIR / GROUPING, first).returncode == 0
     assert _run(FIXTURES_DIR / GROUPING, second).returncode == 0
     assert (first / MANIFEST).read_bytes() == (second / MANIFEST).read_bytes()
@@ -667,10 +732,10 @@ def test_the_manifest_names_no_path_and_no_timestamp(tmp_path):
     """Two runs on the same bytes from different output directories write the same bytes, so no
     field states where the run wrote them or when.
     """
-    first, second = tmp_path / 'a' / 'out', tmp_path / 'b' / 'out'
+    first, second = tmp_path / "a" / "out", tmp_path / "b" / "out"
     assert _run(SAMPLE_CONFIG, first).returncode == 0
     assert _run(SAMPLE_CONFIG, second).returncode == 0
     assert (first / MANIFEST).read_bytes() == (second / MANIFEST).read_bytes()
-    text = (first / MANIFEST).read_text(encoding='utf-8')
+    text = (first / MANIFEST).read_text(encoding="utf-8")
     assert str(tmp_path) not in text
-    assert 'timestamp' not in text
+    assert "timestamp" not in text

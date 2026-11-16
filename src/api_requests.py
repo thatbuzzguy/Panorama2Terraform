@@ -76,7 +76,7 @@ from xml_input import ENTRY_SEGMENT
 
 # The parse method that owns the four membership lists. The lists are its rows in the container
 # table, so this module states no second list (`tests/test_api_requests.py`).
-MEMBERSHIP_METHOD = 'parse_associations'
+MEMBERSHIP_METHOD = "parse_associations"
 
 # The join between a membership list and the table `parse_associations` returns for it, and the scope
 # container that defines the entries its names belong to. The four lists are the `MEMBERSHIP_METHOD`
@@ -84,10 +84,10 @@ MEMBERSHIP_METHOD = 'parse_associations'
 # list names the templates a stack applies, and a template is defined inside the `templates`
 # container, so its names join to that container and not to the stack.
 LIST_JOIN = {
-    'device-group/entry/devices': ('device_groups', 'device-group'),
-    'templates/entry/devices': ('templates', 'templates'),
-    'template-stack/entry/devices': ('template_stacks', 'template-stack'),
-    'template-stack/entry/templates': ('stack_templates', 'templates'),
+    "device-group/entry/devices": ("device_groups", "device-group"),
+    "templates/entry/devices": ("templates", "templates"),
+    "template-stack/entry/devices": ("template_stacks", "template-stack"),
+    "template-stack/entry/templates": ("stack_templates", "templates"),
 }
 
 # The two levels the index has. A third level would be an entry inside a membership entry, and the
@@ -106,22 +106,21 @@ class ScopeIndexEntry:
     leading slash, so the index, the request identity, and `SOURCE.txt` name the same string.
     """
 
-    level: int            # CONTAINER_LEVEL or ENTRY_LEVEL
-    container: str        # the scope container that defines the entry
-    name: str             # the entry name; '' for a container entry
-    path: str             # the scope path, in the shape the record states it
-    request: source_fetch.ApiRequest   # the per-scope request the fetch layer reads
+    level: int  # CONTAINER_LEVEL or ENTRY_LEVEL
+    container: str  # the scope container that defines the entry
+    name: str  # the entry name; '' for a container entry
+    path: str  # the scope path, in the shape the record states it
+    request: source_fetch.ApiRequest  # the per-scope request the fetch layer reads
 
 
 def membership_lists() -> tuple:
     """The four membership lists, read through the container table rows `parse_associations` owns."""
-    return tuple(sorted(row.path for row in container_coverage.CONTAINER_TABLE
-                        if row.method == MEMBERSHIP_METHOD))
+    return tuple(sorted(row.path for row in container_coverage.CONTAINER_TABLE if row.method == MEMBERSHIP_METHOD))
 
 
 def list_container(list_path: str) -> str:
     """The scope container the response holds for a membership list: the segment the row names first."""
-    return list_path.split('/')[0]
+    return list_path.split("/")[0]
 
 
 def names_read(membership: dict, list_path: str) -> tuple:
@@ -135,14 +134,14 @@ def names_read(membership: dict, list_path: str) -> tuple:
     return tuple(sorted({name for names in membership.get(table, {}).values() for name in names}))
 
 
-def scope_path(container: str, name: str = '') -> str:
+def scope_path(container: str, name: str = "") -> str:
     """The scope path an entry names, in the shape the record states it.
 
     Built from the definitions the owners state: `ENTRY_SEGMENT` from `xml_input.py`, and the shape
     `container_coverage.is_scope_path` validates, so the module states no second path rule. A name
     that builds a path the one definition does not validate is refused.
     """
-    path = container if not name else f'{container}/{ENTRY_SEGMENT}/{name}'
+    path = container if not name else f"{container}/{ENTRY_SEGMENT}/{name}"
     if not container_coverage.is_scope_path(path):
         raise ValueError(
             f"refusing the scope index entry '{path}': the name '{name}' builds a shape the one scope "
@@ -174,8 +173,9 @@ def scope_index(host, membership: dict, read) -> tuple[ScopeIndexEntry, ...]:
     entries = []
     for container in containers:
         path = scope_path(container)
-        entries.append(ScopeIndexEntry(CONTAINER_LEVEL, container, '', path,
-                                       source_fetch.ApiRequest(host=host, path=path)))
+        entries.append(
+            ScopeIndexEntry(CONTAINER_LEVEL, container, "", path, source_fetch.ApiRequest(host=host, path=path))
+        )
 
     # Level 2: one entry per scope entry those containers name. A name whose entries belong to a
     # container the run did not read enters no entry, so no scope is guessed.
@@ -187,11 +187,12 @@ def scope_index(host, membership: dict, read) -> tuple[ScopeIndexEntry, ...]:
         for name in names_read(membership, list_path):
             key = (defines, name)
             if key in seen:
-                continue    # one entry per scope, so a name two lists read gives one entry
+                continue  # one entry per scope, so a name two lists read gives one entry
             seen.add(key)
             path = scope_path(defines, name)
-            entries.append(ScopeIndexEntry(ENTRY_LEVEL, defines, name, path,
-                                           source_fetch.ApiRequest(host=host, path=path)))
+            entries.append(
+                ScopeIndexEntry(ENTRY_LEVEL, defines, name, path, source_fetch.ApiRequest(host=host, path=path))
+            )
 
     return tuple(sorted(entries, key=lambda entry: (entry.level, entry.path)))
 
@@ -203,7 +204,7 @@ def entry_name(element) -> str:
     guessed. An entry inside a membership entry names no scope (`docs/ARCHITECTURE.md` §2.4), so the join
     reads only the entries at the level its own request names.
     """
-    name = element.get('name')
+    name = element.get("name")
     if not name:
         raise ValueError(
             "refusing the entry inside the response: it carries no name, so the join has nothing to "
@@ -225,8 +226,11 @@ def entry_names_inside(element) -> tuple:
 
 def names_in_index(index, container: str) -> tuple:
     """The names the index has for one scope container, in sorted order."""
-    return tuple(sorted(entry.name for entry in index
-                        if entry.level == ENTRY_LEVEL and entry.name and entry.container == container))
+    return tuple(
+        sorted(
+            entry.name for entry in index if entry.level == ENTRY_LEVEL and entry.name and entry.container == container
+        )
+    )
 
 
 def join_response(source, entry, index) -> tuple:
@@ -296,7 +300,7 @@ def entry_for_path(index, path: str):
     return None
 
 
-def response_for_section(section: str, index, name: str = ''):
+def response_for_section(section: str, index, name: str = ""):
     """The run-over-many-sources join (`docs/API_CONVERSION_PATH.md` §2.4): the index entry whose response
     holds the container a section names.
 
@@ -376,8 +380,13 @@ def join_units(index, ledger) -> list:
     rows = list(ledger.rows())
     pairs = []
     for facts in unit_manifest.units(ledger):
-        answered = sorted({row[ownership.SOURCE_FIELD] for row in rows
-                           if unit_manifest.facts_of(row) == facts and row[ownership.SOURCE_FIELD] in names})
+        answered = sorted(
+            {
+                row[ownership.SOURCE_FIELD]
+                for row in rows
+                if unit_manifest.facts_of(row) == facts and row[ownership.SOURCE_FIELD] in names
+            }
+        )
         for name in answered:
             pairs.append((facts, names[name]))
     return pairs
@@ -402,8 +411,10 @@ def unit_findings(index, ledger) -> list:
     names = response_names(index)
     rows = list(ledger.rows())
     read = {row[ownership.SOURCE_FIELD] for row in rows}
-    findings = [(facts, None) for facts in unit_manifest.units(ledger)
-                if not any(row[ownership.SOURCE_FIELD] in names
-                           for row in rows if unit_manifest.facts_of(row) == facts)]
+    findings = [
+        (facts, None)
+        for facts in unit_manifest.units(ledger)
+        if not any(row[ownership.SOURCE_FIELD] in names for row in rows if unit_manifest.facts_of(row) == facts)
+    ]
     findings += [(None, entry) for entry in index if entry.request.cache_name() not in read]
     return findings

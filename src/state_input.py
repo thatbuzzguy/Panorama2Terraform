@@ -57,16 +57,16 @@ from xml_input import (
     read_input,
 )
 
-STATE_KIND = 'state'
+STATE_KIND = "state"
 
 # The fields a state document states, in the shape format version 4 writes.
-RESOURCES_FIELD = 'resources'
-INSTANCE_FIELD = 'instances'
-ATTRIBUTE_FIELD = 'attributes'
-VALUE_FIELD = 'values'
+RESOURCES_FIELD = "resources"
+INSTANCE_FIELD = "instances"
+ATTRIBUTE_FIELD = "attributes"
+VALUE_FIELD = "values"
 
 # The root module names no path, so a resource in it is addressed as `type.name`.
-ROOT_MODULE = 'root'
+ROOT_MODULE = "root"
 
 
 @dataclass(frozen=True)
@@ -81,13 +81,13 @@ class StateEntry:
     @property
     def address(self) -> str:
         """The position a state entry has: the resource address Terraform uses."""
-        base = f'{self.resource_type}.{self.resource_name}'
-        return base if self.module in ('', ROOT_MODULE) else f'{self.module}:{base}'
+        base = f"{self.resource_type}.{self.resource_name}"
+        return base if self.module in ("", ROOT_MODULE) else f"{self.module}:{base}"
 
     @property
     def entry_name(self) -> str:
         """The entry name the identity key reads: the name the provider stored in the values."""
-        return self.attributes.get('name') or ''
+        return self.attributes.get("name") or ""
 
 
 @dataclass(frozen=True)
@@ -100,7 +100,7 @@ class StateSource:
     origin: SourceOrigin
     entries: tuple[StateEntry, ...] = ()
     size: int = 0
-    sha256: str = ''
+    sha256: str = ""
     scope: str = DEFAULT_SCOPE
 
     @property
@@ -131,8 +131,9 @@ def _attributes(resource: dict) -> Iterator[dict]:
         yield values
 
 
-def parse_state(data: bytes, origin: SourceOrigin, workspace: str = '',
-                max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> StateSource:
+def parse_state(
+    data: bytes, origin: SourceOrigin, workspace: str = "", max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES
+) -> StateSource:
     """The state door (F5.6): check the bytes, then read them as one JSON document.
 
     The two door checks run through `xml_input.check_bytes`, so the size check applies to a JSON
@@ -145,25 +146,25 @@ def parse_state(data: bytes, origin: SourceOrigin, workspace: str = '',
     try:
         document = json.loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        message = getattr(exc, 'msg', str(exc))
-        raise _refusal(origin, f'the state document is not JSON ({message})') from None
+        message = getattr(exc, "msg", str(exc))
+        raise _refusal(origin, f"the state document is not JSON ({message})") from None
     if not isinstance(document, dict):
-        raise _refusal(origin, f'a state document is one object, not {type(document).__name__}')
+        raise _refusal(origin, f"a state document is one object, not {type(document).__name__}")
     resources = document.get(RESOURCES_FIELD)
     if not isinstance(resources, list):
-        raise _refusal(origin, 'the state document holds no `resources` array')
+        raise _refusal(origin, "the state document holds no `resources` array")
 
     entries = []
     for resource in resources:
         if not isinstance(resource, dict):
-            raise _refusal(origin, 'a `resources` item is not an object, so the scan cannot read it')
-        resource_type = resource.get('type') or ''
-        resource_name = resource.get('name') or ''
+            raise _refusal(origin, "a `resources` item is not an object, so the scan cannot read it")
+        resource_type = resource.get("type") or ""
+        resource_name = resource.get("name") or ""
         if not resource_type or not resource_name:
-            raise _refusal(origin, 'a resource names no type or no name, so the identity key cannot read it')
-        module = resource.get('module') or ROOT_MODULE
+            raise _refusal(origin, "a resource names no type or no name, so the identity key cannot read it")
+        module = resource.get("module") or ROOT_MODULE
         if not isinstance(module, str):
-            raise _refusal(origin, f'the resource {resource_type}.{resource_name} names a module that is not a path')
+            raise _refusal(origin, f"the resource {resource_type}.{resource_name} names a module that is not a path")
         for attributes in _attributes(resource):
             # Rule 7: a JSON document can state a control character as an escape, so this door is the only
             # place that can refuse one. The set is `xml_input.CONTROL_CHARS`, the read layer's statement.
@@ -171,9 +172,12 @@ def parse_state(data: bytes, origin: SourceOrigin, workspace: str = '',
                 items = value if isinstance(value, list) else [value]
                 for item in items:
                     if isinstance(item, str) and control_chars(item):
-                        raise _refusal(origin, f'the value of {key} holds a control character the read layer refuses')
-            entries.append(StateEntry(module=module, resource_type=resource_type,
-                                      resource_name=resource_name, attributes=attributes))
+                        raise _refusal(origin, f"the value of {key} holds a control character the read layer refuses")
+            entries.append(
+                StateEntry(
+                    module=module, resource_type=resource_type, resource_name=resource_name, attributes=attributes
+                )
+            )
 
     return StateSource(
         origin=origin,
@@ -184,8 +188,7 @@ def parse_state(data: bytes, origin: SourceOrigin, workspace: str = '',
     )
 
 
-def read_state(path, workspace: str = '',
-               max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> StateSource:
+def read_state(path, workspace: str = "", max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> StateSource:
     """The state producer (F5.6): read the file, then check and read the bytes.
 
     The size is checked before the read, so an over-limit file is never allocated, exactly as

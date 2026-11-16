@@ -46,7 +46,7 @@ import container_coverage
 import xml_input
 from conftest import FIXTURES_DIR, RESPONSES_DIR, SRC_DIR, run_main, run_pipeline, run_script
 
-FETCH_FIXTURE = 'api_response.xml'
+FETCH_FIXTURE = "api_response.xml"
 
 # Physical lines of the fixture: prolog 1, response 2, result 3, config 4,
 # device-group 5, entry Edge 6, address 7, entry web-server 8.
@@ -58,7 +58,7 @@ def _bytes():
     return (FIXTURES_DIR / FETCH_FIXTURE).read_bytes()
 
 
-def _request(fetch_module, host='panorama.test', path=''):
+def _request(fetch_module, host="panorama.test", path=""):
     return fetch_module.ApiRequest(host=host, path=path)
 
 
@@ -68,6 +68,7 @@ def _producer(fetch_module, data):
 
 
 # --- 1. The door ------------------------------------------------------------
+
 
 def test_fetch_hands_producer_bytes_to_the_door(fetch_module, tmp_path, monkeypatch):
     """No producer keeps its own check: fetch hands its bytes to parse_bytes."""
@@ -80,13 +81,13 @@ def test_fetch_hands_producer_bytes_to_the_door(fetch_module, tmp_path, monkeypa
         calls.append((len(handed), origin.kind, origin.name))
         return real(handed, origin, limit)
 
-    monkeypatch.setattr(fetch_module, 'parse_bytes', recording)
+    monkeypatch.setattr(fetch_module, "parse_bytes", recording)
     source = fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, data))
-    assert calls == [(len(data), 'api', request.cache_name())], calls
-    assert source.origin.kind == 'api'
+    assert calls == [(len(data), "api", request.cache_name())], calls
+    assert source.origin.kind == "api"
     assert source.origin.name == request.cache_name()
     assert source.origin.path == tmp_path / request.cache_name()
-    assert source.name == request.cache_name(), 'the report value names bytes a reader can reopen'
+    assert source.name == request.cache_name(), "the report value names bytes a reader can reopen"
 
 
 def test_fetch_refuses_producer_bytes_through_the_door_and_writes_no_entry(fetch_module, tmp_path):
@@ -96,51 +97,51 @@ def test_fetch_refuses_producer_bytes_through_the_door_and_writes_no_entry(fetch
     data = _bytes()
 
     with pytest.raises(fetch_module.UnsafeInputError) as size:
-        fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, data),
-                           max_input_bytes=16)
-    assert request.cache_name() in str(size.value), 'the refusal names the cache entry'
-    assert 'larger than the limit' in str(size.value)
+        fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, data), max_input_bytes=16)
+    assert request.cache_name() in str(size.value), "the refusal names the cache entry"
+    assert "larger than the limit" in str(size.value)
 
-    dtd = b'<?xml version="1.0"?>\n<!DOCTYPE config>\n' + data.split(b'\n', 1)[1]
+    dtd = b'<?xml version="1.0"?>\n<!DOCTYPE config>\n' + data.split(b"\n", 1)[1]
     with pytest.raises(fetch_module.UnsafeInputError) as scanned:
         fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, dtd))
-    assert 'declares a DTD' in str(scanned.value)
+    assert "declares a DTD" in str(scanned.value)
 
-    assert not (tmp_path / request.cache_name()).exists(), 'no cache entry for refused bytes'
+    assert not (tmp_path / request.cache_name()).exists(), "no cache entry for refused bytes"
 
 
 def test_fetch_returns_the_contract_not_a_model(fetch_module, tmp_path):
     """fetch returns origin, tree, and line map; it builds no device-object model."""
-    source = fetch_module.fetch(_request(fetch_module), tmp_path,
-                                producer=_producer(fetch_module, _bytes()))
+    source = fetch_module.fetch(_request(fetch_module), tmp_path, producer=_producer(fetch_module, _bytes()))
     assert isinstance(source, fetch_module.ParsedSource)
-    assert hasattr(source.root, 'tag'), 'the tree is the ElementTree tree'
+    assert hasattr(source.root, "tag"), "the tree is the ElementTree tree"
     assert callable(source.line_of)
 
 
 # --- 2. The wrapper decision --------------------------------------------------
+
 
 def test_fetch_root_is_the_config_element_under_result(fetch_module, tmp_path):
     """The root moves to the config element, and the line map survives unwrapping."""
     data = _bytes()
     request = _request(fetch_module)
     parsed = fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, data))
-    assert parsed.root.tag == 'config'
+    assert parsed.root.tag == "config"
     entry = parsed.root.find(".//entry[@name='web-server']")
     assert parsed.line_of(parsed.root) == CONFIG_LINE
-    assert parsed.line_of(entry) == ENTRY_LINE, 'a report line names the line the response carries'
+    assert parsed.line_of(entry) == ENTRY_LINE, "a report line names the line the response carries"
     scope = parsed.root.find(".//entry[@name='Edge']")
     assert parsed.line_of(scope) == 6
 
     # The unwrap is not a reparse: it takes the parsed source and hands back the
     # same origin and the same line map, with a different root.
-    direct = fetch_module.parse_bytes(data, fetch_module.SourceOrigin(
-        kind='api', name=request.cache_name(), path=tmp_path / request.cache_name()))
+    direct = fetch_module.parse_bytes(
+        data, fetch_module.SourceOrigin(kind="api", name=request.cache_name(), path=tmp_path / request.cache_name())
+    )
     unwrapped = fetch_module.unwrap_config_root(direct)
     assert unwrapped.origin is direct.origin
-    assert unwrapped.lines is direct.lines, 'the same line map, not a copy'
-    assert unwrapped.root is direct.root.find('result').find('config')
-    assert unwrapped.line_of(unwrapped.root) == direct.line_of(direct.root.find('result').find('config'))
+    assert unwrapped.lines is direct.lines, "the same line map, not a copy"
+    assert unwrapped.root is direct.root.find("result").find("config")
+    assert unwrapped.line_of(unwrapped.root) == direct.line_of(direct.root.find("result").find("config"))
 
 
 def test_result_root_and_plain_config_root_are_accepted(fetch_module, tmp_path):
@@ -150,140 +151,144 @@ def test_result_root_and_plain_config_root_are_accepted(fetch_module, tmp_path):
     response of another shape.
     """
     result_only = b'<?xml version="1.0"?>\n<result>\n<config>\n<device-group/>\n</config>\n</result>\n'
-    source = fetch_module.fetch(_request(fetch_module), tmp_path / 'a',
-                                producer=_producer(fetch_module, result_only))
-    assert source.root.tag == 'config'
+    source = fetch_module.fetch(_request(fetch_module), tmp_path / "a", producer=_producer(fetch_module, result_only))
+    assert source.root.tag == "config"
     assert source.line_of(source.root) == 3
 
     plain = b'<?xml version="1.0"?>\n<config>\n<device-group/>\n</config>\n'
-    source = fetch_module.fetch(_request(fetch_module), tmp_path / 'b',
-                                producer=_producer(fetch_module, plain))
-    assert source.root.tag == 'config'
+    source = fetch_module.fetch(_request(fetch_module), tmp_path / "b", producer=_producer(fetch_module, plain))
+    assert source.root.tag == "config"
     assert source.line_of(source.root) == 2
 
 
 def test_failed_response_is_refused_before_the_cache_entry_is_written(fetch_module, tmp_path):
     """A response that is not success code 0 is refused, and the entry is not written."""
-    failed = (b'<?xml version="1.0"?>\n<response type="error" code="14">\n'
-              b'<result><config><device-group/></config></result>\n</response>\n')
+    failed = (
+        b'<?xml version="1.0"?>\n<response type="error" code="14">\n'
+        b"<result><config><device-group/></config></result>\n</response>\n"
+    )
     request = _request(fetch_module)
     with pytest.raises(fetch_module.SourceFetchError) as excinfo:
         fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, failed))
     message = str(excinfo.value)
-    assert "type 'error' code '14'" in message, 'the refusal names the type and the code'
+    assert "type 'error' code '14'" in message, "the refusal names the type and the code"
     assert request.cache_name() in message
-    assert not (tmp_path / request.cache_name()).exists(), 'no cache entry for a refused response'
+    assert not (tmp_path / request.cache_name()).exists(), "no cache entry for a refused response"
 
 
 def test_one_shape_per_request_shape(fetch_module, tmp_path):
     """The wrapper decision has one branch per shape (F5.2, F5.4, F8.1), and each request
     reads its own shape: the response is not guessed from what it looks like."""
-    whole = (b'<?xml version="1.0"?>\n<response type="success" code="0">\n'
-             b'<result><config><device-group/></config></result>\n</response>\n')
-    scoped = (b'<?xml version="1.0"?>\n<response type="success" code="0">\n'
-              b'<result><device-group name="Edge"><entry name="Edge"/></device-group></result>\n</response>\n')
+    whole = (
+        b'<?xml version="1.0"?>\n<response type="success" code="0">\n'
+        b"<result><config><device-group/></config></result>\n</response>\n"
+    )
+    scoped = (
+        b'<?xml version="1.0"?>\n<response type="success" code="0">\n'
+        b'<result><device-group name="Edge"><entry name="Edge"/></device-group></result>\n</response>\n'
+    )
 
     # The whole-config request reads the per-scope shape: refused by its own rule.
     with pytest.raises(fetch_module.SourceFetchError) as excinfo:
-        fetch_module.fetch(_request(fetch_module), tmp_path,
-                           producer=_producer(fetch_module, scoped))
-    assert 'no config element' in str(excinfo.value)
-    assert 'F5.4' in str(excinfo.value)
+        fetch_module.fetch(_request(fetch_module), tmp_path, producer=_producer(fetch_module, scoped))
+    assert "no config element" in str(excinfo.value)
+    assert "F5.4" in str(excinfo.value)
 
     # The per-scope request reads the whole-config shape: refused by its own rule.
-    path = 'device-group/entry/Edge'
+    path = "device-group/entry/Edge"
     with pytest.raises(fetch_module.SourceFetchError) as excinfo:
-        fetch_module.fetch(_request(fetch_module, path=path), tmp_path / 'b',
-                           producer=_producer(fetch_module, whole))
-    assert 'does not match the path' in str(excinfo.value), str(excinfo.value)
+        fetch_module.fetch(_request(fetch_module, path=path), tmp_path / "b", producer=_producer(fetch_module, whole))
+    assert "does not match the path" in str(excinfo.value), str(excinfo.value)
 
     # A whole-config body handed to a per-scope request is refused by the same rule: the
     # per-scope branch needs the result element, not the config element.
     body = b'<?xml version="1.0"?>\n<config><device-group><entry name="Edge"/></device-group></config>\n'
-    parsed = xml_input.parse_bytes(body, xml_input.SourceOrigin(kind='api', name='whole.xml'))
+    parsed = xml_input.parse_bytes(body, xml_input.SourceOrigin(kind="api", name="whole.xml"))
     with pytest.raises(fetch_module.SourceFetchError) as excinfo:
         fetch_module.unwrap_config_root(parsed, _request(fetch_module, path=path))
-    assert 'needs the result element' in str(excinfo.value), str(excinfo.value)
-    assert 'whole-config shape' in str(excinfo.value), str(excinfo.value)
+    assert "needs the result element" in str(excinfo.value), str(excinfo.value)
+    assert "whole-config shape" in str(excinfo.value), str(excinfo.value)
 
 
 def test_a_per_scope_response_holds_the_element_the_path_names(fetch_module, tmp_path):
     """AC-1.2 and AC-1.3: `result` holds the element the path names, `result` becomes the
     root, and the origin and the line map are the same objects."""
-    data = (FIXTURES_DIR / 'scope_child.xml').read_bytes()
-    path = 'device-group/entry/Production-DG'
+    data = (FIXTURES_DIR / "scope_child.xml").read_bytes()
+    path = "device-group/entry/Production-DG"
     request = _request(fetch_module, path=path)
     source = fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, data))
-    assert source.root.tag == 'result'
+    assert source.root.tag == "result"
     assert source.scope == path
-    assert [child.get('name') for child in source.root] == ['Production-DG']
-    assert source.line_of(source.root) == 7, 'the line map is the response bytes, not a reparse'
-    assert source.line_of(source.root.find(".//entry[@name='Web-Server-1']")) == 10, \
-        'the line the report prints is the line the response bytes carry'
+    assert [child.get("name") for child in source.root] == ["Production-DG"]
+    assert source.line_of(source.root) == 7, "the line map is the response bytes, not a reparse"
+    assert source.line_of(source.root.find(".//entry[@name='Web-Server-1']")) == 10, (
+        "the line the report prints is the line the response bytes carry"
+    )
 
     # A path that names a container reads the element with that tag.
-    parent = (FIXTURES_DIR / 'scope_parent.xml').read_bytes()
-    scoped = _request(fetch_module, path='shared')
-    source = fetch_module.fetch(scoped, tmp_path / 'b', producer=_producer(fetch_module, parent))
-    assert source.root[0].tag == 'shared'
-    assert source.scope == 'shared'
+    parent = (FIXTURES_DIR / "scope_parent.xml").read_bytes()
+    scoped = _request(fetch_module, path="shared")
+    source = fetch_module.fetch(scoped, tmp_path / "b", producer=_producer(fetch_module, parent))
+    assert source.root[0].tag == "shared"
+    assert source.scope == "shared"
     assert source.line_of(source.root[0]) == 8
 
 
 def test_a_per_scope_response_that_does_not_match_its_path_is_refused(fetch_module, tmp_path):
     """AC-1.6: `result` holds nothing, more than one element, or an element the path does
     not name. Each is an input refusal, and no cache entry is written."""
-    path = 'device-group/entry/Edge'
+    path = "device-group/entry/Edge"
     request = _request(fetch_module, path=path)
     shapes = {
-        'no element': b'<result></result>',
-        'two elements': b'<result><device-group name="Edge"><entry name="Edge"/></device-group>'
-                        b'<address><entry name="Edge"/></address></result>',
-        'another name': b'<result><entry name="Other"/></result>',
-        'another container': b'<result><service-group><entry name="Edge"/></service-group></result>',
+        "no element": b"<result></result>",
+        "two elements": b'<result><device-group name="Edge"><entry name="Edge"/></device-group>'
+        b'<address><entry name="Edge"/></address></result>',
+        "another name": b'<result><entry name="Other"/></result>',
+        "another container": b'<result><service-group><entry name="Edge"/></service-group></result>',
     }
     for label, body in shapes.items():
         cache = tmp_path / label
-        data = b'<?xml version="1.0"?>\n<response type="success" code="0">\n' + body + b'\n</response>\n'
+        data = b'<?xml version="1.0"?>\n<response type="success" code="0">\n' + body + b"\n</response>\n"
         with pytest.raises(fetch_module.SourceFetchError) as excinfo:
             fetch_module.fetch(request, cache, producer=_producer(fetch_module, data))
         message = str(excinfo.value)
-        assert 'result holds' in message or 'does not match the path' in message, (label, message)
-        assert not (cache / request.cache_name()).exists(), f'no cache entry for {label}'
+        assert "result holds" in message or "does not match the path" in message, (label, message)
+        assert not (cache / request.cache_name()).exists(), f"no cache entry for {label}"
 
 
 def test_the_response_check_runs_for_both_shapes(fetch_module, tmp_path):
     """AC-1.5: type `success` code `0` is checked before the cache entry is written, for a
     whole-config request and for a per-scope request."""
-    request = _request(fetch_module, path='shared')
-    failed = (b'<?xml version="1.0"?>\n<response type="error" code="14">\n'
-              b'<result><shared><address><entry name="x"/></address></shared></result>\n</response>\n')
+    request = _request(fetch_module, path="shared")
+    failed = (
+        b'<?xml version="1.0"?>\n<response type="error" code="14">\n'
+        b'<result><shared><address><entry name="x"/></address></shared></result>\n</response>\n'
+    )
     with pytest.raises(fetch_module.SourceFetchError) as excinfo:
         fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, failed))
     assert "type 'error' code '14'" in str(excinfo.value), str(excinfo.value)
-    assert not (tmp_path / request.cache_name()).exists(), 'no cache entry for a refused response'
+    assert not (tmp_path / request.cache_name()).exists(), "no cache entry for a refused response"
 
 
 def test_the_declared_path_is_part_of_the_request_identity(fetch_module):
     """AC-1.1: each scope gets its own cache entry, and the identity stays key-free."""
     plain = _request(fetch_module)
-    scoped = _request(fetch_module, path='shared')
+    scoped = _request(fetch_module, path="shared")
     # F8.1: a per-scope request states the words its own shape states, so the identity carries
     # the shape words plus the declared path. The path is still part of the identity.
-    assert 'path=shared' in scoped.canonical(), scoped.canonical()
-    assert scoped.canonical().startswith('panorama.test?'), scoped.canonical()
-    assert scoped.cache_name() != plain.cache_name(), 'one cache entry per request identity'
-    assert 'key=' not in scoped.canonical(), 'the identity is the key-free shape'
-    assert 'key=' not in scoped.url('SECRET-KEY-9f3').split('?')[0]
-    assert 'path=shared' in scoped.url('SECRET-KEY-9f3'), 'the path is the path the request states'
+    assert "path=shared" in scoped.canonical(), scoped.canonical()
+    assert scoped.canonical().startswith("panorama.test?"), scoped.canonical()
+    assert scoped.cache_name() != plain.cache_name(), "one cache entry per request identity"
+    assert "key=" not in scoped.canonical(), "the identity is the key-free shape"
+    assert "key=" not in scoped.url("SECRET-KEY-9f3").split("?")[0]
+    assert "path=shared" in scoped.url("SECRET-KEY-9f3"), "the path is the path the request states"
 
 
 def test_container_table_names_no_wrapper_row():
     """The wrapper sits above the config root, so the table never scans it and
     needs no row for it."""
-    assert not any('response' in row.path or 'result' in row.path
-                   for row in container_coverage.CONTAINER_TABLE)
-    assert not {'response', 'result'} & container_coverage.PATH_ROOTS
+    assert not any("response" in row.path or "result" in row.path for row in container_coverage.CONTAINER_TABLE)
+    assert not {"response", "result"} & container_coverage.PATH_ROOTS
 
 
 # --- 2b. The device fact shape (F8.1) ------------------------------------
@@ -291,61 +296,66 @@ def test_container_table_names_no_wrapper_row():
 # An op response as the bytes arrive. The pins use these bytes inline, because the committed
 # response harness is F8.4: no op fixture is committed by this piece.
 # Physical lines: prolog 1, response 2, result 3, show 4, system 5, info 6.
-OP_FACT = (b'<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n'
-           b'<show><system><info name="Panorama"/></system></show>\n</result>\n</response>\n')
-OP_COMMAND = 'show system info'
+OP_FACT = (
+    b'<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n'
+    b'<show><system><info name="Panorama"/></system></show>\n</result>\n</response>\n'
+)
+OP_COMMAND = "show system info"
 RESULT_LINE = 3
 FACT_ELEMENT_LINE = 4
 
 
 def _fact_request(fetch_module, command=OP_COMMAND):
-    return fetch_module.ApiRequest(host='panorama.test', command=command)
+    return fetch_module.ApiRequest(host="panorama.test", command=command)
 
 
 def test_the_request_states_which_of_the_three_shapes_it_is(fetch_module):
     """AC-1.1 and AC-1.2: the shape comes from what the request declares, so a shape is
     never guessed from what a response looks like."""
-    assert fetch_module.SHAPE_PARAMS[fetch_module.EXPORT_TYPE] == (
-        ('type', 'export'), ('category', 'configuration'))
-    assert fetch_module.SHAPE_PARAMS[fetch_module.CONFIG_TYPE] == (
-        ('type', 'config'), ('action', 'get'))
-    assert fetch_module.SHAPE_PARAMS[fetch_module.OP_TYPE] == (('type', 'op'),)
+    assert fetch_module.SHAPE_PARAMS[fetch_module.EXPORT_TYPE] == (("type", "export"), ("category", "configuration"))
+    assert fetch_module.SHAPE_PARAMS[fetch_module.CONFIG_TYPE] == (("type", "config"), ("action", "get"))
+    assert fetch_module.SHAPE_PARAMS[fetch_module.OP_TYPE] == (("type", "op"),)
 
     assert _request(fetch_module).request_shape() == fetch_module.EXPORT_TYPE
-    assert _request(fetch_module, path='shared').request_shape() == fetch_module.CONFIG_TYPE
+    assert _request(fetch_module, path="shared").request_shape() == fetch_module.CONFIG_TYPE
     assert _fact_request(fetch_module).request_shape() == fetch_module.OP_TYPE
 
     # The params the identity hashes are the words the shape states plus the part declared.
-    assert _fact_request(fetch_module).request_params() == (('cmd', OP_COMMAND), ('type', 'op'))
-    assert _request(fetch_module, path='shared').request_params() == (
-        ('action', 'get'), ('path', 'shared'), ('type', 'config'))
+    assert _fact_request(fetch_module).request_params() == (("cmd", OP_COMMAND), ("type", "op"))
+    assert _request(fetch_module, path="shared").request_params() == (
+        ("action", "get"),
+        ("path", "shared"),
+        ("type", "config"),
+    )
     fact = _fact_request(fetch_module)
-    assert fact.is_device_fact() and not fact.is_per_scope(), 'a command names no scope'
+    assert fact.is_device_fact() and not fact.is_per_scope(), "a command names no scope"
 
 
 def test_an_op_response_holds_the_one_element_the_command_names(fetch_module, tmp_path):
     """AC-2.1, AC-2.4 and AC-2.5: `result` becomes the root, read as the place the command
     names, through the same origin and the same line map, and the source states no scope."""
     request = _fact_request(fetch_module)
-    origin = xml_input.SourceOrigin(kind='api', name=request.cache_name(), path=tmp_path / request.cache_name())
+    origin = xml_input.SourceOrigin(kind="api", name=request.cache_name(), path=tmp_path / request.cache_name())
     parsed = xml_input.parse_bytes(OP_FACT, origin)
     unwrapped = fetch_module.unwrap_config_root(parsed, request)
 
-    assert unwrapped.root.tag == 'result', 'the root is the place the command names'
-    assert [child.tag for child in unwrapped.root] == ['show'], 'the one element the command names'
-    assert unwrapped.origin is parsed.origin and unwrapped.lines is parsed.lines, \
-        'the same origin and the same line map, not a reparse'
+    assert unwrapped.root.tag == "result", "the root is the place the command names"
+    assert [child.tag for child in unwrapped.root] == ["show"], "the one element the command names"
+    assert unwrapped.origin is parsed.origin and unwrapped.lines is parsed.lines, (
+        "the same origin and the same line map, not a reparse"
+    )
     assert unwrapped.line_of(unwrapped.root) == RESULT_LINE
-    assert unwrapped.line_of(unwrapped.root[0]) == FACT_ELEMENT_LINE, \
-        'the line the report prints is the line the response bytes carry'
-    assert unwrapped.scope == 'whole-config' and not unwrapped.is_per_scope, \
-        'a device fact names no scope, so the source states no scope'
-    assert unwrapped.scope_container == ''
+    assert unwrapped.line_of(unwrapped.root[0]) == FACT_ELEMENT_LINE, (
+        "the line the report prints is the line the response bytes carry"
+    )
+    assert unwrapped.scope == "whole-config" and not unwrapped.is_per_scope, (
+        "a device fact names no scope, so the source states no scope"
+    )
+    assert unwrapped.scope_container == ""
 
     source = fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, OP_FACT))
-    assert source.root.tag == 'result', 'the same rule through the fetch, so a cached fact reads the same'
-    assert (tmp_path / request.cache_name()).read_bytes() == OP_FACT, \
-        'the cache entry is the bytes as they arrived'
+    assert source.root.tag == "result", "the same rule through the fetch, so a cached fact reads the same"
+    assert (tmp_path / request.cache_name()).read_bytes() == OP_FACT, "the cache entry is the bytes as they arrived"
 
 
 def test_an_op_response_that_breaks_the_op_shape_is_refused(fetch_module, tmp_path):
@@ -356,76 +366,84 @@ def test_an_op_response_that_breaks_the_op_shape_is_refused(fetch_module, tmp_pa
     envelope = b'<?xml version="1.0"?>\n<response type="success" code="0">\n'
     plain_root = b'<?xml version="1.0"?>\n<config><device-group/></config>\n'
     shapes = {
-        'no element': (b'<result></result>', 'the result holds no element'),
-        'more than one element': (b'<result><show/><address/></result>', 'not the one fact element'),
-        'the config element': (b'<result><config><device-group/></config></result>', 'holds the config element'),
+        "no element": (b"<result></result>", "the result holds no element"),
+        "more than one element": (b"<result><show/><address/></result>", "not the one fact element"),
+        "the config element": (b"<result><config><device-group/></config></result>", "holds the config element"),
     }
     for label, (body, phrase) in shapes.items():
         request = _fact_request(fetch_module)
         cache = tmp_path / label
-        data = envelope + body + b'\n</response>\n'
+        data = envelope + body + b"\n</response>\n"
         with pytest.raises(fetch_module.SourceFetchError) as excinfo:
             fetch_module.fetch(request, cache, producer=_producer(fetch_module, data))
         message = str(excinfo.value)
-        assert 'refusing the API response' in message, (label, message)
+        assert "refusing the API response" in message, (label, message)
         assert phrase in message, (label, message)
-        assert request.command in message, f'the refusal names the command ({label})'
-        assert not (cache / request.cache_name()).exists(), f'no cache entry for {label}'
+        assert request.command in message, f"the refusal names the command ({label})"
+        assert not (cache / request.cache_name()).exists(), f"no cache entry for {label}"
 
     # A root that is not `result`: the whole-config shape read by an op request, so the refusal
     # names the fact rule, and no cache entry is written.
     request = _fact_request(fetch_module)
-    cache = tmp_path / 'not the result element'
+    cache = tmp_path / "not the result element"
     with pytest.raises(fetch_module.SourceFetchError) as excinfo:
         fetch_module.fetch(request, cache, producer=_producer(fetch_module, plain_root))
     message = str(excinfo.value)
-    assert 'needs the result element' in message and request.command in message, message
-    assert not (cache / request.cache_name()).exists(), 'no cache entry for a refused response'
+    assert "needs the result element" in message and request.command in message, message
+    assert not (cache / request.cache_name()).exists(), "no cache entry for a refused response"
 
 
 def test_the_op_shape_checks_the_shape_and_the_join_checks_the_element_name(fetch_module, tmp_path):
     """AC-2.6: the boundary between F8.1 and F8.3. `result` holding any single element passes
     the shape rule, so the fetch layer states no command-to-element table and guesses none."""
     # An element the command does not name is still one element, so the shape rule passes.
-    body = (b'<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n'
-            b'<system><info name="Panorama"/></system>\n</result>\n</response>\n')
+    body = (
+        b'<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n'
+        b'<system><info name="Panorama"/></system>\n</result>\n</response>\n'
+    )
     source = fetch_module.fetch(_fact_request(fetch_module), tmp_path, producer=_producer(fetch_module, body))
-    assert [child.tag for child in source.root] == ['system'], \
-        'the name check belongs to the response-to-request join (F8.3), not to the shape rule'
+    assert [child.tag for child in source.root] == ["system"], (
+        "the name check belongs to the response-to-request join (F8.3), not to the shape rule"
+    )
 
     # The fetch layer states no command-to-element table: no dict in the module maps a command
     # (words with spaces) to an element name.
-    tree = ast.parse((SRC_DIR / 'source_fetch.py').read_text(encoding='utf-8'))
-    tables = [node for node in ast.walk(tree) if isinstance(node, ast.Dict)
-              and any(isinstance(key, ast.Constant) and isinstance(key.value, str)
-                      and ' ' in key.value for key in node.keys)]
-    assert not tables, 'the fetch layer states no command-to-element table'
+    tree = ast.parse((SRC_DIR / "source_fetch.py").read_text(encoding="utf-8"))
+    tables = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Dict)
+        and any(isinstance(key, ast.Constant) and isinstance(key.value, str) and " " in key.value for key in node.keys)
+    ]
+    assert not tables, "the fetch layer states no command-to-element table"
 
 
 def test_the_response_check_runs_for_the_op_shape(fetch_module, tmp_path):
     """AC-2.3: type `success` code `0` is checked before the cache entry is written, and before
     the shape rule, so a failed response is refused as a failed response."""
     request = _fact_request(fetch_module)
-    failed = (b'<?xml version="1.0"?>\n<response type="error" code="14">\n'
-              b'<result><show><system/></show><address/></result>\n</response>\n')
+    failed = (
+        b'<?xml version="1.0"?>\n<response type="error" code="14">\n'
+        b"<result><show><system/></show><address/></result>\n</response>\n"
+    )
     with pytest.raises(fetch_module.SourceFetchError) as excinfo:
         fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, failed))
     assert "type 'error' code '14'" in str(excinfo.value), str(excinfo.value)
-    assert not (tmp_path / request.cache_name()).exists(), 'no cache entry for a refused response'
+    assert not (tmp_path / request.cache_name()).exists(), "no cache entry for a refused response"
 
 
 def test_the_command_is_part_of_the_request_identity(fetch_module):
     """AC-1.3 and AC-1.4: one cache entry per command, the identity stays key-free, and the
     command reaches the URL encoded."""
     request = _fact_request(fetch_module)
-    show = fetch_module.ApiRequest(host='panorama.test', command='show interface summary')
-    assert request.cache_name() != show.cache_name(), 'one cache entry per request identity'
-    assert 'key=' not in request.canonical(), 'the identity is the key-free shape'
-    assert f'cmd={OP_COMMAND}' in request.canonical(), 'the identity names the plain sorted shape'
-    url = request.url('SECRET-KEY-9f3')
-    assert 'cmd=show+system+info' in url, url
-    assert ' ' not in url, 'a command is words with spaces, so the query is encoded'
-    assert 'key=SECRET-KEY-9f3' in url, 'the key reaches the request URL and nothing else'
+    show = fetch_module.ApiRequest(host="panorama.test", command="show interface summary")
+    assert request.cache_name() != show.cache_name(), "one cache entry per request identity"
+    assert "key=" not in request.canonical(), "the identity is the key-free shape"
+    assert f"cmd={OP_COMMAND}" in request.canonical(), "the identity names the plain sorted shape"
+    url = request.url("SECRET-KEY-9f3")
+    assert "cmd=show+system+info" in url, url
+    assert " " not in url, "a command is words with spaces, so the query is encoded"
+    assert "key=SECRET-KEY-9f3" in url, "the key reaches the request URL and nothing else"
 
 
 def test_an_op_response_is_not_a_config_source(fetch_module, tmp_path):
@@ -434,13 +452,16 @@ def test_an_op_response_is_not_a_config_source(fetch_module, tmp_path):
     source = fetch_module.fetch(_fact_request(fetch_module), tmp_path, producer=_producer(fetch_module, OP_FACT))
     parents = container_coverage.parent_map(source.root)
     assert container_coverage.scan(source, parents) == [], container_coverage.scan(source, parents)
-    assert not any(row.path.split('/')[0] == 'show' for row in container_coverage.CONTAINER_TABLE), \
-        'the table states no row for a fact element'
-    assert frozenset({'response', 'result'}) == container_coverage.ENVELOPE, \
-        'the envelope rule is unchanged by the device fact shape'
+    assert not any(row.path.split("/")[0] == "show" for row in container_coverage.CONTAINER_TABLE), (
+        "the table states no row for a fact element"
+    )
+    assert frozenset({"response", "result"}) == container_coverage.ENVELOPE, (
+        "the envelope rule is unchanged by the device fact shape"
+    )
 
 
 # --- 2c. The response-to-request join (F8.3) -------------------------------
+
 
 def test_the_join_reads_the_element_name_rule_through_the_fetch_layer(fetch_module, tmp_path):
     """F8.3 AC-1.2 and AC-1.3: the fetch layer holds the one element-name rule, and the join runs the
@@ -448,36 +469,47 @@ def test_the_join_reads_the_element_name_rule_through_the_fetch_layer(fetch_modu
     refused by the fetch layer's words, and `api_requests.py` states no shape rule of its own."""
     # A per-scope request and a response that holds another container: the shape rule reads the path, so
     # the refusal names the path the request states.
-    data = (b'<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n'
-            b'<templates><entry name="Edge"/></templates>\n</result>\n</response>\n')
-    request = _request(fetch_module, path='device-group')
+    data = (
+        b'<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n'
+        b'<templates><entry name="Edge"/></templates>\n</result>\n</response>\n'
+    )
+    request = _request(fetch_module, path="device-group")
     with pytest.raises(fetch_module.SourceFetchError) as excinfo:
         fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, data))
     message = str(excinfo.value)
-    assert 'does not match the path' in message and request.path in message, message
-    assert not (tmp_path / request.cache_name()).exists(), 'no cache entry for a refused response'
+    assert "does not match the path" in message and request.path in message, message
+    assert not (tmp_path / request.cache_name()).exists(), "no cache entry for a refused response"
 
     # One definition, so the join reads it rather than keeping a second copy. It is public, because the
     # join reads it through its owner.
-    source_text = (SRC_DIR / 'source_fetch.py').read_text(encoding='utf-8')
-    assert 'def names_element(' in source_text, 'the one element-name rule'
+    source_text = (SRC_DIR / "source_fetch.py").read_text(encoding="utf-8")
+    assert "def names_element(" in source_text, "the one element-name rule"
     for path in sorted(SRC_DIR.iterdir()):
-        if path.suffix == '.py' and path.name != 'source_fetch.py':
-            assert 'def names_element(' not in path.read_text(encoding='utf-8'), \
-                (path.name, 'no module states a second element-name rule')
+        if path.suffix == ".py" and path.name != "source_fetch.py":
+            assert "def names_element(" not in path.read_text(encoding="utf-8"), (
+                path.name,
+                "no module states a second element-name rule",
+            )
 
     # The join states no shape rule and no wrapper rule: it calls the wrapper decision, and it reads the
     # path rule through its owner. It keeps no parser of its own, so no second tree is built.
-    join_text = (SRC_DIR / 'api_requests.py').read_text(encoding='utf-8')
+    join_text = (SRC_DIR / "api_requests.py").read_text(encoding="utf-8")
     tree = ast.parse(join_text)
-    module_calls = sorted({(node.func.value.id, node.func.attr) for node in ast.walk(tree)
-                           if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-                           and isinstance(node.func.value, ast.Name)
-                           and node.func.value.id in ('source_fetch', 'container_coverage', 'xml_input')})
-    assert ('source_fetch', 'unwrap_config_root') in module_calls, module_calls
-    assert ('container_coverage', 'is_scope_path') in module_calls, module_calls
-    assert not any(attr in ('parse_bytes', 'parse', 'fromstring') for _, attr in module_calls), \
-        'the join reads the response the door parsed, and builds no second tree'
+    module_calls = sorted(
+        {
+            (node.func.value.id, node.func.attr)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id in ("source_fetch", "container_coverage", "xml_input")
+        }
+    )
+    assert ("source_fetch", "unwrap_config_root") in module_calls, module_calls
+    assert ("container_coverage", "is_scope_path") in module_calls, module_calls
+    assert not any(attr in ("parse_bytes", "parse", "fromstring") for _, attr in module_calls), (
+        "the join reads the response the door parsed, and builds no second tree"
+    )
 
 
 def test_the_element_name_rule_names_no_element_for_a_device_fact(fetch_module, tmp_path):
@@ -485,14 +517,16 @@ def test_the_element_name_rule_names_no_element_for_a_device_fact(fetch_module, 
     and the join has no fact to read a command's element name against."""
     request = _fact_request(fetch_module)
     source = fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, OP_FACT))
-    held = source.root[0]      # the shape rule passes for any single element under `result`
-    assert held.tag == 'show', 'the shape rule read the fact element, and no name rule with it'
-    assert not fetch_module.names_element(held, request), \
-        'the rule names no element for a command, so the join cannot check a device fact offline'
-    assert not request.segments(), 'a command names no path, so no index entry names it'
+    held = source.root[0]  # the shape rule passes for any single element under `result`
+    assert held.tag == "show", "the shape rule read the fact element, and no name rule with it"
+    assert not fetch_module.names_element(held, request), (
+        "the rule names no element for a command, so the join cannot check a device fact offline"
+    )
+    assert not request.segments(), "a command names no path, so no index entry names it"
 
 
 # --- 2d. The committed response harness (F8.4) -------------------------------
+
 
 # `tests/responses/` holds one committed response per accepted request shape, each named by the key-free
 # request identity that produced it. `tests/test_api_requests.py` holds the harness pins. The rule pinned here is
@@ -503,23 +537,28 @@ def test_the_element_name_rule_names_no_element_for_a_device_fact(fetch_module, 
 def _harness_requests(fetch_module):
     """The three requests that produced the committed set: the words each shape states, plus the part the
     request declares. Each one names the committed file it reads."""
-    return (fetch_module.ApiRequest(host='panorama.test'),
-            fetch_module.ApiRequest(host='panorama.test', path='device-group'),
-            fetch_module.ApiRequest(host='panorama.test', command='show system info'))
+    return (
+        fetch_module.ApiRequest(host="panorama.test"),
+        fetch_module.ApiRequest(host="panorama.test", path="device-group"),
+        fetch_module.ApiRequest(host="panorama.test", command="show system info"),
+    )
 
 
 def test_a_committed_response_is_read_through_the_injected_producer(fetch_module, tmp_path, monkeypatch):
     """F8.4 AC-3.1 and AC-3.2: no test calls a network for a committed response, the cache entry the run writes
     is the committed bytes, and each committed response is read against the request that produced it through the
     one wrapper decision."""
-    monkeypatch.setattr(fetch_module, 'network_producer',
-                        lambda *args, **kwargs: (_ for _ in ()).throw(
-                            AssertionError('a harness test called the network')))
+    monkeypatch.setattr(
+        fetch_module,
+        "network_producer",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("a harness test called the network")),
+    )
 
     requests = _harness_requests(fetch_module)
-    files = sorted(p.name for p in RESPONSES_DIR.glob('*.xml'))
-    assert files == sorted(request.cache_name() for request in requests), \
-        'each committed response is named by the identity that produced it'
+    files = sorted(p.name for p in RESPONSES_DIR.glob("*.xml"))
+    assert files == sorted(request.cache_name() for request in requests), (
+        "each committed response is named by the identity that produced it"
+    )
 
     for request in requests:
         committed = RESPONSES_DIR / request.cache_name()
@@ -528,22 +567,26 @@ def test_a_committed_response_is_read_through_the_injected_producer(fetch_module
         source = fetch_module.fetch(request, cache, producer=_producer(fetch_module, data))
 
         entry = cache / request.cache_name()
-        assert entry.read_bytes() == data, 'the cache entry is the committed bytes as they arrived'
-        assert source.origin.kind == 'api' and source.origin.name == committed.name, \
-            'the door named the committed response, not a file'
+        assert entry.read_bytes() == data, "the cache entry is the committed bytes as they arrived"
+        assert source.origin.kind == "api" and source.origin.name == committed.name, (
+            "the door named the committed response, not a file"
+        )
 
         shape = request.request_shape()
         if shape == fetch_module.EXPORT_TYPE:
-            assert source.root.tag == 'config', 'the whole-config shape reads the config element'
+            assert source.root.tag == "config", "the whole-config shape reads the config element"
         elif shape == fetch_module.CONFIG_TYPE:
-            assert source.root.tag == 'result' and fetch_module.names_element(source.root[0], request), \
-                'the per-scope shape reads the element its own path names'
+            assert source.root.tag == "result" and fetch_module.names_element(source.root[0], request), (
+                "the per-scope shape reads the element its own path names"
+            )
         else:
-            assert source.root.tag == 'result' and len(list(source.root)) == 1, \
-                'the device fact shape reads the one element under result'
+            assert source.root.tag == "result" and len(list(source.root)) == 1, (
+                "the device fact shape reads the one element under result"
+            )
 
 
 # --- 3. The cache ---------------------------------------------------------------
+
 
 def test_cache_miss_then_hit_reopens_the_same_bytes(fetch_module, tmp_path):
     """The entry holds exactly the bytes the door parsed, and a hit calls no producer."""
@@ -551,10 +594,10 @@ def test_cache_miss_then_hit_reopens_the_same_bytes(fetch_module, tmp_path):
     request = _request(fetch_module)
     first = fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, data))
     entry = tmp_path / request.cache_name()
-    assert entry.read_bytes() == data, 'the cache entry is what gets parsed'
+    assert entry.read_bytes() == data, "the cache entry is what gets parsed"
 
     def no_call(request):
-        raise AssertionError('a cache hit must not call the producer')
+        raise AssertionError("a cache hit must not call the producer")
 
     second = fetch_module.fetch(request, tmp_path, producer=no_call)
     assert second.origin == first.origin
@@ -569,9 +612,10 @@ def test_a_producer_with_no_bytes_answers_none_and_writes_no_entry(fetch_module,
     """
     request = _request(fetch_module)
     assert fetch_module.fetch(request, tmp_path, producer=lambda r: None) is None
-    assert not list(tmp_path.iterdir()), 'no entry for bytes that never arrived'
-    assert fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, _bytes())) is not None, \
-        'the same request with bytes is a response the run order can hold'
+    assert not list(tmp_path.iterdir()), "no entry for bytes that never arrived"
+    assert fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, _bytes())) is not None, (
+        "the same request with bytes is a response the run order can hold"
+    )
 
 
 def test_cache_entry_name_is_the_request_identity_without_the_key(fetch_module):
@@ -579,17 +623,17 @@ def test_cache_entry_name_is_the_request_identity_without_the_key(fetch_module):
     no cache name can carry it, and two different keys find the same entry."""
     request = _request(fetch_module)
     fields = {f.name for f in dataclasses.fields(request)}
-    assert 'key' not in fields, 'the request holds no key'
-    assert 'key' not in request.canonical()
-    assert 'key' not in request.cache_name()
-    assert 'key=' in request.url('SECRET-KEY-9f3'), 'the key reaches the request URL'
-    assert request.cache_name().endswith('.xml')
+    assert "key" not in fields, "the request holds no key"
+    assert "key" not in request.canonical()
+    assert "key" not in request.cache_name()
+    assert "key=" in request.url("SECRET-KEY-9f3"), "the key reaches the request URL"
+    assert request.cache_name().endswith(".xml")
 
     # A different key is the same identity.
-    same = fetch_module.ApiRequest(host='panorama.test')
+    same = fetch_module.ApiRequest(host="panorama.test")
     assert same.cache_name() == request.cache_name()
-    other = fetch_module.ApiRequest(host='panorama.test', params=(('type', 'export'),))
-    assert other.cache_name() != request.cache_name(), 'a different request is a different entry'
+    other = fetch_module.ApiRequest(host="panorama.test", params=(("type", "export"),))
+    assert other.cache_name() != request.cache_name(), "a different request is a different entry"
 
 
 def test_cache_hit_over_the_limit_is_refused_through_the_door(fetch_module, tmp_path):
@@ -598,36 +642,40 @@ def test_cache_hit_over_the_limit_is_refused_through_the_door(fetch_module, tmp_
     request = _request(fetch_module)
     fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, data))
     with pytest.raises(fetch_module.UnsafeInputError) as excinfo:
-        fetch_module.fetch(request, tmp_path,
-                           producer=lambda r: (_ for _ in ()).throw(AssertionError('the door must decide')),
-                           max_input_bytes=16)
+        fetch_module.fetch(
+            request,
+            tmp_path,
+            producer=lambda r: (_ for _ in ()).throw(AssertionError("the door must decide")),
+            max_input_bytes=16,
+        )
     assert request.cache_name() in str(excinfo.value)
 
 
 # --- 4. Offline ---------------------------------------------------------------
+
 
 def test_offline_refuses_a_missing_entry_and_calls_no_producer(fetch_module, tmp_path):
     """--offline reads the cache only; the refusal names the entry it looked for."""
     request = _request(fetch_module)
 
     def no_call(request):
-        raise AssertionError('the offline path must not call the producer')
+        raise AssertionError("the offline path must not call the producer")
 
     with pytest.raises(fetch_module.SourceFetchError) as excinfo:
         fetch_module.fetch(request, tmp_path, producer=no_call, offline=True)
     assert request.cache_name() in str(excinfo.value)
-    assert '--offline reads the cache only' in str(excinfo.value)
+    assert "--offline reads the cache only" in str(excinfo.value)
 
 
 def test_offline_refuses_a_missing_entry_for_the_second_request(fetch_module, tmp_path):
     """F5.4: `--offline` covers both requests, and each request needs its own entry."""
-    child = _request(fetch_module, path='device-group/entry/Production-DG')
-    parent = _request(fetch_module, path='shared')
-    child_data = (FIXTURES_DIR / 'scope_child.xml').read_bytes()
+    child = _request(fetch_module, path="device-group/entry/Production-DG")
+    parent = _request(fetch_module, path="shared")
+    child_data = (FIXTURES_DIR / "scope_child.xml").read_bytes()
     fetch_module.fetch(child, tmp_path, producer=_producer(fetch_module, child_data))
 
     def no_call(request):
-        raise AssertionError('the offline path must not call the producer')
+        raise AssertionError("the offline path must not call the producer")
 
     with pytest.raises(fetch_module.SourceFetchError) as excinfo:
         fetch_module.fetch(parent, tmp_path, producer=no_call, offline=True)
@@ -635,7 +683,7 @@ def test_offline_refuses_a_missing_entry_for_the_second_request(fetch_module, tm
 
     # The first request still reads its own entry from the cache.
     source = fetch_module.fetch(child, tmp_path, producer=no_call, offline=True)
-    assert source.scope == child.path, 'the cached response is read by the request that declared its path'
+    assert source.scope == child.path, "the cached response is read by the request that declared its path"
 
 
 def test_offline_reopens_an_entry_with_no_key(fetch_module, tmp_path, monkeypatch):
@@ -644,178 +692,216 @@ def test_offline_reopens_an_entry_with_no_key(fetch_module, tmp_path, monkeypatc
     data = _bytes()
     request = _request(fetch_module)
     fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, data))
-    source = fetch_module.fetch(request, tmp_path,
-                                producer=lambda r: (_ for _ in ()).throw(AssertionError('no producer')),
-                                offline=True)
-    assert source.root.tag == 'config'
-    assert source.origin.kind == 'api'
+    source = fetch_module.fetch(
+        request, tmp_path, producer=lambda r: (_ for _ in ()).throw(AssertionError("no producer")), offline=True
+    )
+    assert source.root.tag == "config"
+    assert source.origin.kind == "api"
 
 
 # --- 5. The https rules and the key rule ---------------------------------------
 
+
 def test_the_producer_accepts_https_only(fetch_module):
     """A bare host is read as https; any other scheme is refused before the fetch,
     so the rule holds for a cache hit too."""
-    assert fetch_module.ApiRequest(host='panorama.test').https_host() == 'panorama.test'
-    assert fetch_module.ApiRequest(host='https://panorama.test/api').https_host() == 'panorama.test'
+    assert fetch_module.ApiRequest(host="panorama.test").https_host() == "panorama.test"
+    assert fetch_module.ApiRequest(host="https://panorama.test/api").https_host() == "panorama.test"
     with pytest.raises(fetch_module.SourceFetchError) as excinfo:
-        fetch_module.ApiRequest(host='http://panorama.test').https_host()
+        fetch_module.ApiRequest(host="http://panorama.test").https_host()
     assert "scheme 'http'" in str(excinfo.value)
 
 
 def test_a_redirect_that_changes_the_scheme_is_refused(fetch_module):
     handler = fetch_module._SameSchemeRedirectHandler()
-    request = urllib.request.Request('https://panorama.test/api/?type=export')
+    request = urllib.request.Request("https://panorama.test/api/?type=export")
     with pytest.raises(fetch_module.SourceFetchError) as excinfo:
-        handler.redirect_request(request, None, 301, None, {}, 'http://panorama.test/api/')
-    assert 'changes the scheme' in str(excinfo.value)
-    kept = handler.redirect_request(request, None, 302, None, {}, 'https://panorama.test/api2/')
-    assert kept is not None and kept.full_url.startswith('https://'), 'same scheme may be followed'
+        handler.redirect_request(request, None, 301, None, {}, "http://panorama.test/api/")
+    assert "changes the scheme" in str(excinfo.value)
+    kept = handler.redirect_request(request, None, 302, None, {}, "https://panorama.test/api2/")
+    assert kept is not None and kept.full_url.startswith("https://"), "same scheme may be followed"
 
 
 def test_verification_is_on_by_default_and_insecure_is_explicit(fetch_module):
     """--insecure is the only way off, and it is a flag, not a default."""
-    assert fetch_module._ssl_context(False).check_hostname, 'verification on by default'
-    assert not fetch_module._ssl_context(True).check_hostname, '--insecure is the explicit opt-out'
+    assert fetch_module._ssl_context(False).check_hostname, "verification on by default"
+    assert not fetch_module._ssl_context(True).check_hostname, "--insecure is the explicit opt-out"
 
 
 def test_the_key_never_reaches_the_cache_name_or_the_output(fetch_module, converter_module, tmp_path, monkeypatch):
     """The key reaches the request URL and nothing else."""
-    monkeypatch.setenv(fetch_module.API_KEY_ENV, 'SECRET-KEY-9f3')
+    monkeypatch.setenv(fetch_module.API_KEY_ENV, "SECRET-KEY-9f3")
     request = _request(fetch_module)
-    cache = tmp_path / 'cache'
-    out_dir = tmp_path / 'out'
+    cache = tmp_path / "cache"
+    out_dir = tmp_path / "out"
 
     # The default producer stands in for the network inside the process.
-    monkeypatch.setattr(fetch_module, 'network_producer',
-                        lambda req, key, insecure=False: _bytes())
-    exit_code = run_main(converter_module, ['--source', 'api', '--host', 'panorama.test',
-                                            '--cache-dir', cache, '--output-dir', out_dir])
+    monkeypatch.setattr(fetch_module, "network_producer", lambda req, key, insecure=False: _bytes())
+    exit_code = run_main(
+        converter_module, ["--source", "api", "--host", "panorama.test", "--cache-dir", cache, "--output-dir", out_dir]
+    )
     assert exit_code == 0
 
     entry = cache / request.cache_name()
     assert entry.is_file()
-    assert 'SECRET-KEY-9f3' not in entry.name
-    assert b'SECRET-KEY-9f3' not in entry.read_bytes()
-    for path in sorted(out_dir.rglob('*')):
+    assert "SECRET-KEY-9f3" not in entry.name
+    assert b"SECRET-KEY-9f3" not in entry.read_bytes()
+    for path in sorted(out_dir.rglob("*")):
         if path.is_file():
-            assert b'SECRET-KEY-9f3' not in path.read_bytes(), f'the key reached {path.name}'
+            assert b"SECRET-KEY-9f3" not in path.read_bytes(), f"the key reached {path.name}"
 
-    help_text = run_script('panorama_to_terraform.py', '--help').stdout
-    assert '--key' not in help_text, 'the key comes from the environment, never from argv'
+    help_text = run_script("panorama_to_terraform.py", "--help").stdout
+    assert "--key" not in help_text, "the key comes from the environment, never from argv"
 
 
 # --- 6. CLI and gate ----------------------------------------------------------
 
+
 def test_parser_consumes_the_producer_contract(fetch_module, converter_module, tmp_path):
     """PanoramaParser takes the contract, not a path: the same shape for every source."""
-    source = fetch_module.fetch(_request(fetch_module), tmp_path,
-                                producer=_producer(fetch_module, _bytes()))
+    source = fetch_module.fetch(_request(fetch_module), tmp_path, producer=_producer(fetch_module, _bytes()))
     parser = converter_module.PanoramaParser(source)
     assert parser.source is source
     addresses = parser.parse_address_objects()
-    assert [a['name'] for a in addresses] == ['web-server']
-    assert parser.line_of(
-        next(e for e in source.root.iter() if e.get('name') == 'web-server')) == ENTRY_LINE
+    assert [a["name"] for a in addresses] == ["web-server"]
+    assert parser.line_of(next(e for e in source.root.iter() if e.get("name") == "web-server")) == ENTRY_LINE
 
 
 def test_api_run_writes_the_same_tf_bytes_as_the_file_run(converter_module, fetch_module, tmp_path, monkeypatch):
     """The wrapper decision and the cache do not change the model: the same content
     writes the same .tf bytes from either source."""
-    monkeypatch.setenv(fetch_module.API_KEY_ENV, 'test-key')
-    monkeypatch.setattr(fetch_module, 'network_producer',
-                        lambda req, key, insecure=False: _bytes())
-    out_api = tmp_path / 'api_out'
-    assert run_main(converter_module, ['--source', 'api', '--host', 'panorama.test',
-                                       '--cache-dir', tmp_path / 'cache',
-                                       '--output-dir', out_api]) == 0
+    monkeypatch.setenv(fetch_module.API_KEY_ENV, "test-key")
+    monkeypatch.setattr(fetch_module, "network_producer", lambda req, key, insecure=False: _bytes())
+    out_api = tmp_path / "api_out"
+    assert (
+        run_main(
+            converter_module,
+            ["--source", "api", "--host", "panorama.test", "--cache-dir", tmp_path / "cache", "--output-dir", out_api],
+        )
+        == 0
+    )
 
-    out_file = tmp_path / 'file_out'
+    out_file = tmp_path / "file_out"
     run_pipeline(converter_module, FETCH_FIXTURE, out_file)
 
     # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the `.tf` set is read as the paths the write path wrote,
     # so the two runs are compared on the same layout.
     def layout(out) -> dict:
-        return {str(p.relative_to(out)): p.read_bytes() for p in sorted(out.rglob('*.tf')) if p.is_file()}
+        return {str(p.relative_to(out)): p.read_bytes() for p in sorted(out.rglob("*.tf")) if p.is_file()}
 
     api_tf = layout(out_api)
     file_tf = layout(out_file)
-    assert api_tf == file_tf, 'the model and the naming are unchanged by the source'
-    assert api_tf, 'the fixture emits a .tf file, so the comparison is not empty'
+    assert api_tf == file_tf, "the model and the naming are unchanged by the source"
+    assert api_tf, "the fixture emits a .tf file, so the comparison is not empty"
 
 
 def test_two_runs_on_the_same_cache_bytes_write_identical_bytes(converter_module, fetch_module, tmp_path, monkeypatch):
     """Report determinism for a fetched source: the second run is offline and the
     whole output repeats byte for byte, including the report and the gate files."""
-    monkeypatch.setenv(fetch_module.API_KEY_ENV, 'test-key')
-    monkeypatch.setattr(fetch_module, 'network_producer',
-                        lambda req, key, insecure=False: _bytes())
-    cache = tmp_path / 'cache'
-    out1 = tmp_path / 'run1'
-    out2 = tmp_path / 'run2'
+    monkeypatch.setenv(fetch_module.API_KEY_ENV, "test-key")
+    monkeypatch.setattr(fetch_module, "network_producer", lambda req, key, insecure=False: _bytes())
+    cache = tmp_path / "cache"
+    out1 = tmp_path / "run1"
+    out2 = tmp_path / "run2"
     cache_name = _request(fetch_module).cache_name()
 
-    assert run_main(converter_module, ['--source', 'api', '--host', 'panorama.test',
-                                       '--cache-dir', cache, '--output-dir', out1]) == 0
+    assert (
+        run_main(
+            converter_module, ["--source", "api", "--host", "panorama.test", "--cache-dir", cache, "--output-dir", out1]
+        )
+        == 0
+    )
 
     # The second run has no producer: the stand-in is replaced by one that fails the
     # test if called, so the run proves it read the cache.
-    monkeypatch.setattr(fetch_module, 'network_producer',
-                        lambda req, key, insecure=False: (_ for _ in ()).throw(
-                            AssertionError('offline run called the producer')))
-    assert run_main(converter_module, ['--source', 'api', '--host', 'panorama.test',
-                                       '--cache-dir', cache, '--offline',
-                                       '--output-dir', out2]) == 0
+    monkeypatch.setattr(
+        fetch_module,
+        "network_producer",
+        lambda req, key, insecure=False: (_ for _ in ()).throw(AssertionError("offline run called the producer")),
+    )
+    assert (
+        run_main(
+            converter_module,
+            ["--source", "api", "--host", "panorama.test", "--cache-dir", cache, "--offline", "--output-dir", out2],
+        )
+        == 0
+    )
 
-    files1 = {p.name: p.read_bytes() for p in sorted(out1.rglob('*')) if p.is_file()}
-    files2 = {p.name: p.read_bytes() for p in sorted(out2.rglob('*')) if p.is_file()}
-    assert files1 == files2, 'the same cache bytes produce the same bytes'
-    assert 'SOURCE.txt' in files1, 'the provenance record is part of the run output'
-    report = files2['CONVERSION_REPORT.txt'].decode('utf-8')
-    assert f'Source: {cache_name}' in report, 'the report names the cache entry'
+    files1 = {p.name: p.read_bytes() for p in sorted(out1.rglob("*")) if p.is_file()}
+    files2 = {p.name: p.read_bytes() for p in sorted(out2.rglob("*")) if p.is_file()}
+    assert files1 == files2, "the same cache bytes produce the same bytes"
+    assert "SOURCE.txt" in files1, "the provenance record is part of the run output"
+    report = files2["CONVERSION_REPORT.txt"].decode("utf-8")
+    assert f"Source: {cache_name}" in report, "the report names the cache entry"
     # The report row keeps the line the response bytes carry, so the report can
     # point back into the cache entry.
-    assert re.search(rf'{ENTRY_LINE}\s+device-group/entry/address/web-server', report), report
+    assert re.search(rf"{ENTRY_LINE}\s+device-group/entry/address/web-server", report), report
 
 
 def test_fetch_refusal_exits_1_and_writes_no_output(fetch_module, tmp_path):
     """A fetch refusal is an input refusal: it names the entry, exits 1, and writes
     no output file."""
     request = _request(fetch_module)
-    cache = tmp_path / 'cache'
-    out_dir = tmp_path / 'out'
-    result = run_script('panorama_to_terraform.py', '--source', 'api', '--host', 'panorama.test',
-                        '--cache-dir', str(cache), '--offline', '--output-dir', str(out_dir))
+    cache = tmp_path / "cache"
+    out_dir = tmp_path / "out"
+    result = run_script(
+        "panorama_to_terraform.py",
+        "--source",
+        "api",
+        "--host",
+        "panorama.test",
+        "--cache-dir",
+        str(cache),
+        "--offline",
+        "--output-dir",
+        str(out_dir),
+    )
     assert result.returncode == 1
     assert request.cache_name() in result.stdout
-    assert '--offline reads the cache only' in result.stdout
-    assert not out_dir.exists() or not [p for p in out_dir.rglob('*') if p.is_file()], \
-        'a refusal writes no output'
+    assert "--offline reads the cache only" in result.stdout
+    assert not out_dir.exists() or not [p for p in out_dir.rglob("*") if p.is_file()], "a refusal writes no output"
 
 
 def test_cli_source_validation_errors(fetch_module):
     """--source api needs --host, --insecure never pairs with --offline, the api
     source takes no input file, and the network arguments do not apply to a file
     source. These are argument errors (exit 2), not conversion runs."""
-    result = run_script('panorama_to_terraform.py', '--source', 'api',
-                        '--output-dir', '/tmp/not-run')
-    assert result.returncode == 2 and '--host' in result.stderr
+    result = run_script("panorama_to_terraform.py", "--source", "api", "--output-dir", "/tmp/not-run")
+    assert result.returncode == 2 and "--host" in result.stderr
 
-    result = run_script('panorama_to_terraform.py', '--source', 'api', '--host', 'panorama.test',
-                        '--insecure', '--offline', '--output-dir', '/tmp/not-run')
-    assert result.returncode == 2 and '--insecure' in result.stderr
+    result = run_script(
+        "panorama_to_terraform.py",
+        "--source",
+        "api",
+        "--host",
+        "panorama.test",
+        "--insecure",
+        "--offline",
+        "--output-dir",
+        "/tmp/not-run",
+    )
+    assert result.returncode == 2 and "--insecure" in result.stderr
 
-    result = run_script('panorama_to_terraform.py', '--source', 'api', '--host', 'panorama.test',
-                        str(FIXTURES_DIR / FETCH_FIXTURE), '--output-dir', '/tmp/not-run')
-    assert result.returncode == 2 and 'does not take an input file' in result.stderr
+    result = run_script(
+        "panorama_to_terraform.py",
+        "--source",
+        "api",
+        "--host",
+        "panorama.test",
+        str(FIXTURES_DIR / FETCH_FIXTURE),
+        "--output-dir",
+        "/tmp/not-run",
+    )
+    assert result.returncode == 2 and "does not take an input file" in result.stderr
 
-    result = run_script('panorama_to_terraform.py', '--output-dir', '/tmp/not-run')
-    assert result.returncode == 2 and 'input file' in result.stderr
+    result = run_script("panorama_to_terraform.py", "--output-dir", "/tmp/not-run")
+    assert result.returncode == 2 and "input file" in result.stderr
 
     # A file source reads no network, so the network arguments cannot be given to it.
-    result = run_script('panorama_to_terraform.py', str(FIXTURES_DIR / FETCH_FIXTURE),
-                        '--offline', '--output-dir', '/tmp/not-run')
-    assert result.returncode == 2 and '--source api' in result.stderr
+    result = run_script(
+        "panorama_to_terraform.py", str(FIXTURES_DIR / FETCH_FIXTURE), "--offline", "--output-dir", "/tmp/not-run"
+    )
+    assert result.returncode == 2 and "--source api" in result.stderr
 
 
 def test_source_fetch_imports_are_standard_library(fetch_module):
@@ -823,22 +909,22 @@ def test_source_fetch_imports_are_standard_library(fetch_module):
     planned pan-os-python producer was dropped because the SDK cannot enforce the
     redirect rule (see backlog.md), so nothing in the project imports a third-party
     module."""
-    tree = ast.parse((SRC_DIR / 'source_fetch.py').read_text(encoding='utf-8'))
+    tree = ast.parse((SRC_DIR / "source_fetch.py").read_text(encoding="utf-8"))
     # The shared door (`xml_input`) and the one writer (`write_path`) are local modules, not dependencies.
-    local = {'xml_input', 'write_path'}
+    local = {"xml_input", "write_path"}
     top_level = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
             if node.module in local:
                 continue
-            top_level.add(node.module.split('.')[0])
+            top_level.add(node.module.split(".")[0])
         elif isinstance(node, ast.Import):
-            name = node.names[0].name.split('.')[0]
+            name = node.names[0].name.split(".")[0]
             if name in local:
                 continue
             top_level.add(name)
-    allowed = {'hashlib', 'os', 'ssl', 'urllib', 'dataclasses', 'pathlib', 'typing'}
+    allowed = {"hashlib", "os", "ssl", "urllib", "dataclasses", "pathlib", "typing"}
     assert top_level <= allowed, top_level - allowed
-    source = (SRC_DIR / 'source_fetch.py').read_text(encoding='utf-8')
-    assert 'import panos' not in source and 'requests' not in source
-    assert fetch_module.SOURCE_KIND == 'api'
+    source = (SRC_DIR / "source_fetch.py").read_text(encoding="utf-8")
+    assert "import panos" not in source and "requests" not in source
+    assert fetch_module.SOURCE_KIND == "api"

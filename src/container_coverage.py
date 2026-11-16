@@ -49,28 +49,27 @@ from xml_input import ENTRY_SEGMENT, ParsedSource
 # parse method visited and did not model, and `unaccounted` is an entry no parse
 # method read.
 DESTINATION_KINDS = (
-    'emitted',      # a resource block
-    'report',       # MANUAL_SETUP_REPORT.txt
-    'inventory',    # the inventory comment
-    'count-only',   # counted, nothing written (a gap)
-    'bookkeeping',  # a table or a scope fact, no object
-    'nested-block',  # lines inside a parent resource block, not a resource
-    'skipped',       # F4.3: an entry a parse method visited and did not model
-    'unaccounted',   # F4.3: an entry no parse method read
+    "emitted",  # a resource block
+    "report",  # MANUAL_SETUP_REPORT.txt
+    "inventory",  # the inventory comment
+    "count-only",  # counted, nothing written (a gap)
+    "bookkeeping",  # a table or a scope fact, no object
+    "nested-block",  # lines inside a parent resource block, not a resource
+    "skipped",  # F4.3: an entry a parse method visited and did not model
+    "unaccounted",  # F4.3: an entry no parse method read
 )
 
 # How a method reaches the container: a findall/find pattern, or the parent
 # walk that answers the five scope facts (F3.5, F6.10.5).
-READ_VIAS = ('pattern', 'scope walk')
+READ_VIAS = ("pattern", "scope walk")
 
 # Containers whose entry defines a scope. This is the set the five scope facts
 # walk, so the section rule and the identity keys agree.
-SCOPE_CONTAINERS = frozenset({'device-group', 'templates', 'template-stack',
-                              'devices', 'vsys'})
+SCOPE_CONTAINERS = frozenset({"device-group", "templates", "template-stack", "devices", "vsys"})
 
 # The envelope of an API response (F4.2, F5.4). Never a container name: the wrapper
 # decision reads `result` as the place a per-scope path names, not as a scanned container.
-ENVELOPE = frozenset({'response', 'result'})
+ENVELOPE = frozenset({"response", "result"})
 
 # The first path segment a scope path may name (F5.4 AC-1), and the one definition that validates a
 # scope path (F8.1). The set names the places a path may read: the five scope containers, the shared
@@ -80,22 +79,22 @@ ENVELOPE = frozenset({'response', 'result'})
 # and nowhere else, so the CLI, the request set, and the scan read one definition. A predefined path
 # names the place or an entry inside it, the shape `is_scope_path` already states; a path that names a
 # container inside `predefined` is outside the shape rule and is recorded in `backlog.md`.
-SCOPE_PATH_ROOTS = SCOPE_CONTAINERS | frozenset({'shared', 'predefined'})
+SCOPE_PATH_ROOTS = SCOPE_CONTAINERS | frozenset({"shared", "predefined"})
 
 # The five scope facts (F3.1, F3.2, F6.10.5) in report order. F4.3 uses these keys for
 # the captured-field rule, so the facts are named in one place. `template_stack` is the scope a
 # stack names, so the set covers every container in SCOPE_CONTAINERS. A new fact is appended,
 # because this order is the unit identity join (`docs/ARCHITECTURE.md` §5).
-SCOPE_FACT_KEYS = ('device_group', 'vsys', 'template', 'vsys_device', 'template_stack')
+SCOPE_FACT_KEYS = ("device_group", "vsys", "template", "vsys_device", "template_stack")
 
 # The PAN-OS "this device" placeholder (F3.5). It names no firewall, so it is never a
 # `vsys_device` fact, never an `ngfw_device`, and never joins two scopes. One definition,
 # read by the generator and by the state scan (F5.6).
-PLACEHOLDER_DEVICE = 'localhost.localdomain'
+PLACEHOLDER_DEVICE = "localhost.localdomain"
 
 # Segments dropped from a section path: the config root and the two Panorama
 # scope markers are places, not part of a container name.
-PATH_ROOTS = frozenset({'config', 'shared', 'panorama'})
+PATH_ROOTS = frozenset({"config", "shared", "panorama"})
 
 
 @dataclass(frozen=True)
@@ -105,9 +104,9 @@ class ContainerRow:
     method: str
     path: str
     destination: str
-    note: str = ''
-    level: str = 'section'      # 'section' or 'sub-shape'
-    read_via: str = 'pattern'   # one of READ_VIAS
+    note: str = ""
+    level: str = "section"  # 'section' or 'sub-shape'
+    read_via: str = "pattern"  # one of READ_VIAS
 
 
 # One row per parse method. A new parse method needs a row here, and
@@ -116,173 +115,221 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
     # F6.5: the scope entries are objects now, so their rows read `emitted` and name the
     # resource the scope block writes. The row that reads the entries comes first, so the
     # destination for a scope entry comes from it and not from the association rows below.
-    ContainerRow('parse_device_groups', 'device-group', 'emitted', 'panos_device_group'),
-    ContainerRow('parse_templates', 'templates', 'emitted', 'panos_template'),
-    ContainerRow('parse_template_stacks', 'template-stack', 'emitted', 'panos_template_stack'),
-    ContainerRow('parse_template_variables', 'variable', 'emitted', 'panos_template_variable'),
-    ContainerRow('parse_vsys', 'vsys', 'emitted', 'panos_vsys'),
+    ContainerRow("parse_device_groups", "device-group", "emitted", "panos_device_group"),
+    ContainerRow("parse_templates", "templates", "emitted", "panos_template"),
+    ContainerRow("parse_template_stacks", "template-stack", "emitted", "panos_template_stack"),
+    ContainerRow("parse_template_variables", "variable", "emitted", "panos_template_variable"),
+    ContainerRow("parse_vsys", "vsys", "emitted", "panos_vsys"),
     # The association rows describe the membership containers inside a scope entry: the entries
     # there name a device, and no provider resource exists for a device.
-    ContainerRow('parse_associations', 'device-group/entry/devices', 'bookkeeping',
-                  'association table'),
-    ContainerRow('parse_associations', 'templates/entry/devices', 'bookkeeping',
-                  'association table'),
-    ContainerRow('parse_associations', 'template-stack/entry/devices', 'bookkeeping',
-                  'association table'),
-    ContainerRow('parse_associations', 'template-stack/entry/templates', 'bookkeeping',
-                  'association table'),
-    ContainerRow('device_group_of', 'device-group', 'bookkeeping',
-                 'device_group scope fact', level='section', read_via='scope walk'),
-    ContainerRow('vsys_of', 'vsys', 'bookkeeping', 'vsys scope fact',
-                 level='section', read_via='scope walk'),
-    ContainerRow('template_of', 'templates', 'bookkeeping', 'template scope fact',
-                 level='section', read_via='scope walk'),
-    ContainerRow('device_of', 'devices', 'bookkeeping', 'vsys_device scope fact',
-                 level='section', read_via='scope walk'),
-    ContainerRow('template_stack_of', 'template-stack', 'bookkeeping', 'template_stack scope fact',
-                 level='section', read_via='scope walk'),
-    ContainerRow('parse_tags', 'tag', 'emitted', 'panos_administrative_tag'),
-    ContainerRow('parse_regions', 'region', 'count-only', 'no v2 resource (gap)'),
-    ContainerRow('parse_custom_url_categories', 'custom-url-category', 'emitted',
-                 'panos_custom_url_category'),
-    ContainerRow('parse_application_groups', 'application-group', 'emitted',
-                 'panos_application_group'),
-    ContainerRow('parse_application_filters', 'application-filter', 'report',
-                 'no v2 resource'),
-    ContainerRow('parse_external_lists', 'external-list', 'emitted',
-                 'panos_external_dynamic_list'),
-    ContainerRow('parse_schedules', 'schedule', 'report', 'no v2 resource'),
-    ContainerRow('parse_address_objects', 'address', 'emitted',
-                 'panos_address, or report when the entry has no v2 attribute'),
-    ContainerRow('parse_address_groups', 'address-group', 'emitted',
-                 'panos_address_group'),
-    ContainerRow('parse_service_objects', 'service', 'emitted',
-                 'panos_service; the dropped protocol leg is reported'),
-    ContainerRow('parse_service_groups', 'service-group', 'emitted',
-                 'panos_service_group'),
-    ContainerRow('parse_security_rules', 'security/rules', 'emitted',
-                 'panos_security_policy_rules'),
-    ContainerRow('parse_nat_rules', 'nat/rules', 'emitted',
-                 'panos_nat_policy_rules'),
-    ContainerRow('parse_decryption_rules', 'decryption/rules', 'emitted',
-                 'panos_decryption_policy_rules'),
-    ContainerRow('parse_pbf_rules', 'pbf/rules', 'emitted',
-                 'panos_pbf_policy_rules'),
-    ContainerRow('parse_application_override_rules', 'application-override/rules',
-                 'report', 'no v2 resource'),
-    ContainerRow('parse_zones', 'zone', 'emitted', 'panos_zone'),
-    ContainerRow('parse_interfaces', 'network/interface/ethernet', 'emitted',
-                 'panos_ethernet_interface'),
-    ContainerRow('parse_interfaces', 'network/interface/virtual-wire/units',
-                 'nested-block', 'nested block; parent type from INTERFACE_RESOURCE_TYPES'),
-    ContainerRow('parse_interfaces', 'network/interface/vlan/units', 'emitted',
-                 'panos_vlan_interface'),
-    ContainerRow('parse_interfaces', 'network/interface/loopback/units', 'emitted',
-                 'panos_loopback_interface'),
-    ContainerRow('parse_interfaces', 'network/interface/tunnel/units', 'emitted',
-                 'panos_tunnel_interface; TAP emits as a nested block'),
-    ContainerRow('parse_interfaces', 'network/interface/aggregate-ethernet',
-                 'emitted', 'panos_aggregate_interface'),
-    ContainerRow('parse_interfaces', 'ipv6/address', 'nested-block',
-                 'nested address block; parent type from INTERFACE_RESOURCE_TYPES'),
+    ContainerRow("parse_associations", "device-group/entry/devices", "bookkeeping", "association table"),
+    ContainerRow("parse_associations", "templates/entry/devices", "bookkeeping", "association table"),
+    ContainerRow("parse_associations", "template-stack/entry/devices", "bookkeeping", "association table"),
+    ContainerRow("parse_associations", "template-stack/entry/templates", "bookkeeping", "association table"),
+    ContainerRow(
+        "device_group_of",
+        "device-group",
+        "bookkeeping",
+        "device_group scope fact",
+        level="section",
+        read_via="scope walk",
+    ),
+    ContainerRow("vsys_of", "vsys", "bookkeeping", "vsys scope fact", level="section", read_via="scope walk"),
+    ContainerRow(
+        "template_of", "templates", "bookkeeping", "template scope fact", level="section", read_via="scope walk"
+    ),
+    ContainerRow(
+        "device_of", "devices", "bookkeeping", "vsys_device scope fact", level="section", read_via="scope walk"
+    ),
+    ContainerRow(
+        "template_stack_of",
+        "template-stack",
+        "bookkeeping",
+        "template_stack scope fact",
+        level="section",
+        read_via="scope walk",
+    ),
+    ContainerRow("parse_tags", "tag", "emitted", "panos_administrative_tag"),
+    ContainerRow("parse_regions", "region", "count-only", "no v2 resource (gap)"),
+    ContainerRow("parse_custom_url_categories", "custom-url-category", "emitted", "panos_custom_url_category"),
+    ContainerRow("parse_application_groups", "application-group", "emitted", "panos_application_group"),
+    ContainerRow("parse_application_filters", "application-filter", "report", "no v2 resource"),
+    ContainerRow("parse_external_lists", "external-list", "emitted", "panos_external_dynamic_list"),
+    ContainerRow("parse_schedules", "schedule", "report", "no v2 resource"),
+    ContainerRow(
+        "parse_address_objects", "address", "emitted", "panos_address, or report when the entry has no v2 attribute"
+    ),
+    ContainerRow("parse_address_groups", "address-group", "emitted", "panos_address_group"),
+    ContainerRow("parse_service_objects", "service", "emitted", "panos_service; the dropped protocol leg is reported"),
+    ContainerRow("parse_service_groups", "service-group", "emitted", "panos_service_group"),
+    ContainerRow("parse_security_rules", "security/rules", "emitted", "panos_security_policy_rules"),
+    ContainerRow("parse_nat_rules", "nat/rules", "emitted", "panos_nat_policy_rules"),
+    ContainerRow("parse_decryption_rules", "decryption/rules", "emitted", "panos_decryption_policy_rules"),
+    ContainerRow("parse_pbf_rules", "pbf/rules", "emitted", "panos_pbf_policy_rules"),
+    ContainerRow("parse_application_override_rules", "application-override/rules", "report", "no v2 resource"),
+    ContainerRow("parse_zones", "zone", "emitted", "panos_zone"),
+    ContainerRow("parse_interfaces", "network/interface/ethernet", "emitted", "panos_ethernet_interface"),
+    ContainerRow(
+        "parse_interfaces",
+        "network/interface/virtual-wire/units",
+        "nested-block",
+        "nested block; parent type from INTERFACE_RESOURCE_TYPES",
+    ),
+    ContainerRow("parse_interfaces", "network/interface/vlan/units", "emitted", "panos_vlan_interface"),
+    ContainerRow("parse_interfaces", "network/interface/loopback/units", "emitted", "panos_loopback_interface"),
+    ContainerRow(
+        "parse_interfaces",
+        "network/interface/tunnel/units",
+        "emitted",
+        "panos_tunnel_interface; TAP emits as a nested block",
+    ),
+    ContainerRow("parse_interfaces", "network/interface/aggregate-ethernet", "emitted", "panos_aggregate_interface"),
+    ContainerRow(
+        "parse_interfaces",
+        "ipv6/address",
+        "nested-block",
+        "nested address block; parent type from INTERFACE_RESOURCE_TYPES",
+    ),
     # F7.8: the six filter containers. Each entry is one resource block, and the type is the provider
     # resource the pinned schema declares for that container (`resource_mapping.FILTER_SHAPE`).
-    ContainerRow('parse_filter_containers', 'network/routing-profile/filters/access-list', 'emitted',
-                 'panos_filters_access_list_routing_profile'),
-    ContainerRow('parse_filter_containers', 'network/routing-profile/filters/as-path-access-list', 'emitted',
-                 'panos_filters_as_path_access_list_routing_profile'),
-    ContainerRow('parse_filter_containers', 'network/routing-profile/filters/prefix-list', 'emitted',
-                 'panos_filters_prefix_list_routing_profile'),
-    ContainerRow('parse_filter_containers', 'network/routing-profile/filters/community-list', 'emitted',
-                 'panos_filters_community_list_routing_profile'),
-    ContainerRow('parse_filter_containers', 'network/routing-profile/filters/route-maps/bgp/bgp-entry',
-                 'emitted', 'panos_filters_bgp_route_map_routing_profile'),
-    ContainerRow('parse_filter_containers',
-                 'network/routing-profile/filters/route-maps/redistribution/redist-entry', 'emitted',
-                 'panos_filters_route_maps_redistribution_routing_profile'),
-    ContainerRow('parse_virtual_routers', 'network/virtual-router', 'emitted',
-                 'panos_virtual_router plus static routes'),
-    ContainerRow('parse_logical_routers', 'network/logical-router', 'emitted',
-                 'panos_virtual_router, labelled router_type = logical'),
-    ContainerRow('parse_security_profiles', 'profiles/virus', 'inventory',
-                 'profile inventory comment'),
-    ContainerRow('parse_security_profiles', 'profiles/spyware', 'inventory',
-                 'profile inventory comment'),
-    ContainerRow('parse_security_profiles', 'profiles/vulnerability', 'inventory',
-                 'profile inventory comment'),
-    ContainerRow('parse_security_profiles', 'profiles/url-filtering', 'inventory',
-                 'profile inventory comment'),
-    ContainerRow('parse_security_profiles', 'profiles/file-blocking', 'inventory',
-                 'profile inventory comment'),
-    ContainerRow('parse_security_profiles', 'profiles/wildfire-analysis', 'inventory',
-                 'profile inventory comment'),
-    ContainerRow('parse_security_profile_groups', 'profile-group', 'emitted',
-                 'panos_security_profile_group'),
-    ContainerRow('parse_zone_protection_profiles', 'zone-protection-profile',
-                 'report', 'name and description only'),
-    ContainerRow('parse_log_settings', 'log-settings/profiles', 'report',
-                 'name and description only'),
-    ContainerRow('parse_qos_profiles', 'qos/profile', 'report', 'no v2 resource'),
-    ContainerRow('parse_tunnel_monitor_profiles',
-                 'network/tunnel/global-protect-gateway/Default/tunnel-monitor/monitor-profile',
-                 'report', 'no v2 resource'),
-    ContainerRow('parse_tunnel_monitor_profiles',
-                 'network/tunnel-monitor/monitor-profile', 'report',
-                 'no v2 resource'),
-    ContainerRow('parse_pbf_monitor_profiles', 'network/profiles/monitor-profile',
-                 'emitted', 'panos_monitor_profile'),
+    ContainerRow(
+        "parse_filter_containers",
+        "network/routing-profile/filters/access-list",
+        "emitted",
+        "panos_filters_access_list_routing_profile",
+    ),
+    ContainerRow(
+        "parse_filter_containers",
+        "network/routing-profile/filters/as-path-access-list",
+        "emitted",
+        "panos_filters_as_path_access_list_routing_profile",
+    ),
+    ContainerRow(
+        "parse_filter_containers",
+        "network/routing-profile/filters/prefix-list",
+        "emitted",
+        "panos_filters_prefix_list_routing_profile",
+    ),
+    ContainerRow(
+        "parse_filter_containers",
+        "network/routing-profile/filters/community-list",
+        "emitted",
+        "panos_filters_community_list_routing_profile",
+    ),
+    ContainerRow(
+        "parse_filter_containers",
+        "network/routing-profile/filters/route-maps/bgp/bgp-entry",
+        "emitted",
+        "panos_filters_bgp_route_map_routing_profile",
+    ),
+    ContainerRow(
+        "parse_filter_containers",
+        "network/routing-profile/filters/route-maps/redistribution/redist-entry",
+        "emitted",
+        "panos_filters_route_maps_redistribution_routing_profile",
+    ),
+    ContainerRow(
+        "parse_virtual_routers", "network/virtual-router", "emitted", "panos_virtual_router plus static routes"
+    ),
+    ContainerRow(
+        "parse_logical_routers",
+        "network/logical-router",
+        "emitted",
+        "panos_virtual_router, labelled router_type = logical",
+    ),
+    ContainerRow("parse_security_profiles", "profiles/virus", "inventory", "profile inventory comment"),
+    ContainerRow("parse_security_profiles", "profiles/spyware", "inventory", "profile inventory comment"),
+    ContainerRow("parse_security_profiles", "profiles/vulnerability", "inventory", "profile inventory comment"),
+    ContainerRow("parse_security_profiles", "profiles/url-filtering", "inventory", "profile inventory comment"),
+    ContainerRow("parse_security_profiles", "profiles/file-blocking", "inventory", "profile inventory comment"),
+    ContainerRow("parse_security_profiles", "profiles/wildfire-analysis", "inventory", "profile inventory comment"),
+    ContainerRow("parse_security_profile_groups", "profile-group", "emitted", "panos_security_profile_group"),
+    ContainerRow("parse_zone_protection_profiles", "zone-protection-profile", "report", "name and description only"),
+    ContainerRow("parse_log_settings", "log-settings/profiles", "report", "name and description only"),
+    ContainerRow("parse_qos_profiles", "qos/profile", "report", "no v2 resource"),
+    ContainerRow(
+        "parse_tunnel_monitor_profiles",
+        "network/tunnel/global-protect-gateway/Default/tunnel-monitor/monitor-profile",
+        "report",
+        "no v2 resource",
+    ),
+    ContainerRow("parse_tunnel_monitor_profiles", "network/tunnel-monitor/monitor-profile", "report", "no v2 resource"),
+    ContainerRow("parse_pbf_monitor_profiles", "network/profiles/monitor-profile", "emitted", "panos_monitor_profile"),
     # F7.14: the two certificate containers. `certificate` is a section, and `certificate_profile` is a
     # section of its own, because the export spells it as `certificate/profile/entry`: no config-object entry
     # lies between it and a config root, so the entry is the object one resource block prints. The row path is
     # the input's spelling of the level the method states as a table path (F7.6).
-    ContainerRow('parse_certificates', 'certificate', 'emitted', 'panos_certificate_import'),
-    ContainerRow('parse_certificate_profiles', 'certificate-profile', 'emitted',
-                 'panos_certificate_profile'),
+    ContainerRow("parse_certificates", "certificate", "emitted", "panos_certificate_import"),
+    ContainerRow("parse_certificate_profiles", "certificate-profile", "emitted", "panos_certificate_profile"),
     # F7.14: the profile's `certificate` level holds one entry per object the provider declares, and each
     # object prints inside the profile block as a list element, so it is a nested block: the parent row records
     # it, and the object prints the name plus the four fields the provider declares for it. The row path holds
     # the `entry` segment the profile entry is, so the scan measures the object against this row and not against
     # the `certificate` section row, whose single segment would otherwise match the last segment of the path.
-    ContainerRow('parse_certificate_profiles', 'certificate-profile/entry/certificate', 'nested-block',
-                  'nested block inside panos_certificate_profile', level='sub-shape'),
+    ContainerRow(
+        "parse_certificate_profiles",
+        "certificate-profile/entry/certificate",
+        "nested-block",
+        "nested block inside panos_certificate_profile",
+        level="sub-shape",
+    ),
     # F7.1: the routing levels are printed as the `protocol` object attribute on `panos_virtual_router`, so
     # every row that holds an entry the emitter prints is an emitted row naming that type. A row must be
     # emitted for the property scan to read it, because `matrix_row_for` returns a matrix row only for an
     # emitted row.
-    ContainerRow('parse_bgp', 'protocol/bgp', 'emitted', 'panos_virtual_router'),
-    ContainerRow('parse_ospf', 'protocol/ospf', 'emitted', 'panos_virtual_router'),
-    ContainerRow('parse_ospfv3', 'protocol/ospfv3', 'emitted', 'panos_virtual_router'),
-    ContainerRow('parse_rip', 'protocol/rip', 'emitted', 'panos_virtual_router'),
-    ContainerRow('parse_ipsec_tunnels', 'network/tunnel/ipsec', 'emitted',
-                 'panos_ipsec_tunnel; a manual-key tunnel is reported'),
-    ContainerRow('parse_ike_gateways', 'network/ike/gateway', 'emitted',
-                 'panos_ike_gateway'),
-    ContainerRow('parse_ike_crypto_profiles',
-                 'network/ike/crypto-profiles/ike-crypto-profiles', 'emitted',
-                 'panos_ike_crypto_profile'),
-    ContainerRow('parse_ipsec_crypto_profiles',
-                 'network/ike/crypto-profiles/ipsec-crypto-profiles', 'emitted',
-                 'panos_ipsec_crypto_profile'),
+    ContainerRow("parse_bgp", "protocol/bgp", "emitted", "panos_virtual_router"),
+    ContainerRow("parse_ospf", "protocol/ospf", "emitted", "panos_virtual_router"),
+    ContainerRow("parse_ospfv3", "protocol/ospfv3", "emitted", "panos_virtual_router"),
+    ContainerRow("parse_rip", "protocol/rip", "emitted", "panos_virtual_router"),
+    ContainerRow(
+        "parse_ipsec_tunnels", "network/tunnel/ipsec", "emitted", "panos_ipsec_tunnel; a manual-key tunnel is reported"
+    ),
+    ContainerRow("parse_ike_gateways", "network/ike/gateway", "emitted", "panos_ike_gateway"),
+    ContainerRow(
+        "parse_ike_crypto_profiles",
+        "network/ike/crypto-profiles/ike-crypto-profiles",
+        "emitted",
+        "panos_ike_crypto_profile",
+    ),
+    ContainerRow(
+        "parse_ipsec_crypto_profiles",
+        "network/ike/crypto-profiles/ipsec-crypto-profiles",
+        "emitted",
+        "panos_ipsec_crypto_profile",
+    ),
     # Sub-shape entries: read by a parse method, but inside a config-object
     # entry, so they are property levels. The property-level scan (F4.4) reports
     # the ones a matrix row covers.
-    ContainerRow('parse_interfaces', 'units', 'emitted', 'panos_ethernet_layer3_subinterface',
-                 level='sub-shape'),
-    ContainerRow('parse_interfaces', 'ip', 'nested-block',
-                 'nested block; parent type from INTERFACE_RESOURCE_TYPES',
-                 level='sub-shape'),
-    ContainerRow('parse_interfaces', 'layer3/units', 'emitted',
-                 'panos_ethernet_layer3_subinterface', level='sub-shape'),
+    ContainerRow("parse_interfaces", "units", "emitted", "panos_ethernet_layer3_subinterface", level="sub-shape"),
+    ContainerRow(
+        "parse_interfaces",
+        "ip",
+        "nested-block",
+        "nested block; parent type from INTERFACE_RESOURCE_TYPES",
+        level="sub-shape",
+    ),
+    ContainerRow(
+        "parse_interfaces", "layer3/units", "emitted", "panos_ethernet_layer3_subinterface", level="sub-shape"
+    ),
     # An aggregate subinterface is a `units` entry inside an aggregate entry, so the two general sub-shape
     # rows above cannot name it: the same method reads that shape under `aggregate-ethernet` and emits it as
     # the aggregate subinterface type. `entry_coverage.covering_row` takes the longest match, so this row
     # covers an aggregate entry and `layer3/units` still covers the ethernet shape.
-    ContainerRow('parse_interfaces', 'network/interface/aggregate-ethernet/entry/layer3/units', 'emitted',
-                 'panos_aggregate_layer3_subinterface', level='sub-shape'),
-    ContainerRow('parse_interfaces', 'layer3/ip', 'nested-block',
-                 'nested block; parent type from INTERFACE_RESOURCE_TYPES', level='sub-shape'),
-    ContainerRow('parse_qos_profiles', 'class', 'report', 'no v2 resource',
-                 level='sub-shape'),
+    ContainerRow(
+        "parse_interfaces",
+        "network/interface/aggregate-ethernet/entry/layer3/units",
+        "emitted",
+        "panos_aggregate_layer3_subinterface",
+        level="sub-shape",
+    ),
+    ContainerRow(
+        "parse_interfaces",
+        "layer3/ip",
+        "nested-block",
+        "nested block; parent type from INTERFACE_RESOURCE_TYPES",
+        level="sub-shape",
+    ),
+    ContainerRow("parse_qos_profiles", "class", "report", "no v2 resource", level="sub-shape"),
     # F7.1: the routing sub-shape rows name the same type as the level that holds them, because the entries
     # inside them are printed inside the router's `protocol` object. `PROTOCOL_SHAPE` states these levels
     # with the provider field spelling (`peer_group`), which is the spelling the `.tf` file states; this
@@ -290,76 +337,92 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
     # A range entry prints inside the area, so it is a nested block: the parent row records it, and the
     # entry itself states the name plus the `advertise` or `suppress` block the provider requires (F7.1).
     # An interface the export places outside an area has no provider field, so it stays a report row.
-    ContainerRow('parse_bgp', 'protocol/bgp/peer-group', 'emitted', 'panos_virtual_router',
-                 level='sub-shape'),
-    ContainerRow('parse_bgp', 'protocol/bgp/peer', 'emitted', 'panos_virtual_router',
-                 level='sub-shape'),
-    ContainerRow('parse_bgp', 'protocol/bgp/redist-rules', 'emitted', 'panos_virtual_router',
-                 level='sub-shape'),
-    ContainerRow('parse_ospf', 'protocol/ospf/area', 'emitted', 'panos_virtual_router',
-                 level='sub-shape'),
-    ContainerRow('parse_ospf', 'protocol/ospf/range', 'nested-block',
-                 'nested block inside panos_virtual_router; name plus the required choice block',
-                 level='sub-shape'),
-    ContainerRow('parse_ospf', 'protocol/ospf/area/interface', 'emitted', 'panos_virtual_router',
-                 level='sub-shape'),
-    ContainerRow('parse_ospf', 'protocol/ospf/interface', 'report',
-                 'no provider field for an interface outside an area', level='sub-shape'),
+    ContainerRow("parse_bgp", "protocol/bgp/peer-group", "emitted", "panos_virtual_router", level="sub-shape"),
+    ContainerRow("parse_bgp", "protocol/bgp/peer", "emitted", "panos_virtual_router", level="sub-shape"),
+    ContainerRow("parse_bgp", "protocol/bgp/redist-rules", "emitted", "panos_virtual_router", level="sub-shape"),
+    ContainerRow("parse_ospf", "protocol/ospf/area", "emitted", "panos_virtual_router", level="sub-shape"),
+    ContainerRow(
+        "parse_ospf",
+        "protocol/ospf/range",
+        "nested-block",
+        "nested block inside panos_virtual_router; name plus the required choice block",
+        level="sub-shape",
+    ),
+    ContainerRow("parse_ospf", "protocol/ospf/area/interface", "emitted", "panos_virtual_router", level="sub-shape"),
+    ContainerRow(
+        "parse_ospf",
+        "protocol/ospf/interface",
+        "report",
+        "no provider field for an interface outside an area",
+        level="sub-shape",
+    ),
     # F7.4: the area sub-levels that hold entries. An entry inside a config-object entry is a property
     # level, so the scan never measures it, and `PROTOCOL_SHAPE` grounds these levels instead. No row names
     # `nssa-ext-range`, because the parse reaches that level through the `nssa` body row: the code states no
     # path for it, so the table cannot state one.
-    ContainerRow('parse_ospf', 'protocol/ospf/area/interface/neighbor', 'emitted',
-                 'panos_virtual_router', level='sub-shape'),
-    ContainerRow('parse_ospf', 'protocol/ospf/area/virtual-link', 'emitted',
-                 'panos_virtual_router', level='sub-shape'),
+    ContainerRow(
+        "parse_ospf", "protocol/ospf/area/interface/neighbor", "emitted", "panos_virtual_router", level="sub-shape"
+    ),
+    ContainerRow("parse_ospf", "protocol/ospf/area/virtual-link", "emitted", "panos_virtual_router", level="sub-shape"),
     # F7.9: an export rule is an entry, so the scan reads it as a property level of the router. The three
     # single-object levels `parse_ospf` reads hold no entry, so they need no row: `PROTOCOL_SHAPE` states
     # their fields and the parse reads them through `_protocol_level`.
-    ContainerRow('parse_ospf', 'protocol/ospf/export-rules', 'emitted', 'panos_virtual_router',
-                 level='sub-shape'),
+    ContainerRow("parse_ospf", "protocol/ospf/export-rules", "emitted", "panos_virtual_router", level="sub-shape"),
     # F7.2: the `ospfv3` rows are the same shapes read by `parse_ospfv3`, which uses the area rule
     # `_protocol_areas`. A range entry prints inside the area, so it is a nested block, and an interface the
     # export places at the level has no provider field, so it stays a report row with the same note.
-    ContainerRow('parse_ospfv3', 'protocol/ospfv3/area', 'emitted', 'panos_virtual_router', level='sub-shape'),
-    ContainerRow('parse_ospfv3', 'protocol/ospfv3/range', 'nested-block',
-                  'nested block inside panos_virtual_router; name plus the required choice block',
-                  level='sub-shape'),
-    ContainerRow('parse_ospfv3', 'protocol/ospfv3/area/interface', 'emitted', 'panos_virtual_router',
-                  level='sub-shape'),
+    ContainerRow("parse_ospfv3", "protocol/ospfv3/area", "emitted", "panos_virtual_router", level="sub-shape"),
+    ContainerRow(
+        "parse_ospfv3",
+        "protocol/ospfv3/range",
+        "nested-block",
+        "nested block inside panos_virtual_router; name plus the required choice block",
+        level="sub-shape",
+    ),
+    ContainerRow(
+        "parse_ospfv3", "protocol/ospfv3/area/interface", "emitted", "panos_virtual_router", level="sub-shape"
+    ),
     # F7.3: an export rule is an entry, so the scan reads it as a property level of the router. The three
     # single-object levels hold no entries, so they need no row: `PROTOCOL_SHAPE` states their fields and the
     # parse reads them through `_protocol_level`.
-    ContainerRow('parse_ospfv3', 'protocol/ospfv3/export-rules', 'emitted', 'panos_virtual_router',
-                 level='sub-shape'),
-    ContainerRow('parse_ospfv3', 'protocol/ospfv3/interface', 'report',
-                  'no provider field for an interface outside an area', level='sub-shape'),
+    ContainerRow("parse_ospfv3", "protocol/ospfv3/export-rules", "emitted", "panos_virtual_router", level="sub-shape"),
+    ContainerRow(
+        "parse_ospfv3",
+        "protocol/ospfv3/interface",
+        "report",
+        "no provider field for an interface outside an area",
+        level="sub-shape",
+    ),
     # F7.4: the same two entry levels as the `ospf` rows, read by the same area rule.
-    ContainerRow('parse_ospfv3', 'protocol/ospfv3/area/interface/neighbor', 'emitted',
-                 'panos_virtual_router', level='sub-shape'),
-    ContainerRow('parse_ospfv3', 'protocol/ospfv3/area/virtual-link', 'emitted',
-                 'panos_virtual_router', level='sub-shape'),
+    ContainerRow(
+        "parse_ospfv3", "protocol/ospfv3/area/interface/neighbor", "emitted", "panos_virtual_router", level="sub-shape"
+    ),
+    ContainerRow(
+        "parse_ospfv3", "protocol/ospfv3/area/virtual-link", "emitted", "panos_virtual_router", level="sub-shape"
+    ),
     # F7.5: the two entry levels `rip` declares. `rip` has no area, so the interface entries are read at the
     # level itself. The single-object levels (`timers`, `global_bfd`, `bfd`) hold no entry, so they need no
     # row, and no row names `protocol/rip/interfaces/bfd`, because the parse reaches it through the field the
     # interfaces row states.
-    ContainerRow('parse_rip', 'protocol/rip/interfaces', 'emitted', 'panos_virtual_router',
-                 level='sub-shape'),
-    ContainerRow('parse_rip', 'protocol/rip/export-rules', 'emitted', 'panos_virtual_router',
-                 level='sub-shape'),
+    ContainerRow("parse_rip", "protocol/rip/interfaces", "emitted", "panos_virtual_router", level="sub-shape"),
+    ContainerRow("parse_rip", "protocol/rip/export-rules", "emitted", "panos_virtual_router", level="sub-shape"),
     # F7.6: the four entry levels `policy` declares. A policy level inside a policy entry is a property level
     # inside a property level, so the scan never measures it and `PROTOCOL_SHAPE` grounds it. `policy` itself
     # and its four object levels hold no entry, so they need no row. The row path is the input's spelling, so
     # `conditional-advertisement` is the path the scan reads, and the pin reads it through the same spelling
     # rule the parse uses.
-    ContainerRow('parse_bgp', 'protocol/bgp/policy/aggregation/address', 'emitted',
-                  'panos_virtual_router', level='sub-shape'),
-    ContainerRow('parse_bgp', 'protocol/bgp/policy/conditional-advertisement/policy', 'emitted',
-                  'panos_virtual_router', level='sub-shape'),
-    ContainerRow('parse_bgp', 'protocol/bgp/policy/export/rules', 'emitted',
-                  'panos_virtual_router', level='sub-shape'),
-    ContainerRow('parse_bgp', 'protocol/bgp/policy/import/rules', 'emitted',
-                  'panos_virtual_router', level='sub-shape'),
+    ContainerRow(
+        "parse_bgp", "protocol/bgp/policy/aggregation/address", "emitted", "panos_virtual_router", level="sub-shape"
+    ),
+    ContainerRow(
+        "parse_bgp",
+        "protocol/bgp/policy/conditional-advertisement/policy",
+        "emitted",
+        "panos_virtual_router",
+        level="sub-shape",
+    ),
+    ContainerRow("parse_bgp", "protocol/bgp/policy/export/rules", "emitted", "panos_virtual_router", level="sub-shape"),
+    ContainerRow("parse_bgp", "protocol/bgp/policy/import/rules", "emitted", "panos_virtual_router", level="sub-shape"),
     # F7.7: the four auth profile levels, one per routing level. An auth profile entry is a property level of
     # the router, so the scan measures the fields its row states against the router row. The row path is the
     # input's spelling of the level the parse states as a table path, the same rule as `protocol/rip/interfaces`,
@@ -367,33 +430,46 @@ CONTAINER_TABLE: tuple[ContainerRow, ...] = (
     # `protocol/ospf/auth-profile/md5` or `protocol/rip/auth-profile/md5`, because the parse reaches that level
     # through the field the profile row states, and no row names a choice level inside an entry for the same
     # reason.
-    ContainerRow('parse_bgp', 'protocol/bgp/auth-profile', 'emitted', 'panos_virtual_router',
-                  level='sub-shape'),
-    ContainerRow('parse_ospf', 'protocol/ospf/auth-profile', 'emitted', 'panos_virtual_router',
-                  level='sub-shape'),
-    ContainerRow('parse_ospfv3', 'protocol/ospfv3/auth-profile', 'emitted', 'panos_virtual_router',
-                  level='sub-shape'),
-    ContainerRow('parse_rip', 'protocol/rip/auth-profile', 'emitted', 'panos_virtual_router',
-                  level='sub-shape'),
+    ContainerRow("parse_bgp", "protocol/bgp/auth-profile", "emitted", "panos_virtual_router", level="sub-shape"),
+    ContainerRow("parse_ospf", "protocol/ospf/auth-profile", "emitted", "panos_virtual_router", level="sub-shape"),
+    ContainerRow("parse_ospfv3", "protocol/ospfv3/auth-profile", "emitted", "panos_virtual_router", level="sub-shape"),
+    ContainerRow("parse_rip", "protocol/rip/auth-profile", "emitted", "panos_virtual_router", level="sub-shape"),
     # F7.10: the three entry levels the shape table states for the redistribution profile lists and for the
     # dampening profile. Each is inside the router entry, so the scan measures its entries against the router
     # row. The levels inside an entry (`action`, `filter`, `filter/bgp`, `filter/ospf`) hold no entry, so no row
     # names them, and the row path is the input's spelling of the path the parse states, the same rule as
     # `protocol/rip/interfaces`.
-    ContainerRow('parse_redist_profile', 'protocol/redist-profile', 'emitted', 'panos_virtual_router',
-                  level='sub-shape'),
-    ContainerRow('parse_redist_profile_ipv6', 'protocol/redist-profile-ipv6', 'emitted',
-                  'panos_virtual_router', level='sub-shape'),
-    ContainerRow('parse_bgp', 'protocol/bgp/dampening-profile', 'emitted', 'panos_virtual_router',
-                  level='sub-shape'),
-    ContainerRow('parse_virtual_routers', 'routing-table/ip/static-route', 'emitted',
-                 'panos_virtual_router_static_route_ipv4', level='sub-shape'),
-    ContainerRow('parse_ipsec_tunnels', 'auto-key/proxy-id', 'nested-block',
-                 'nested proxy_id block inside panos_ipsec_tunnel', level='sub-shape'),
-    ContainerRow('parse_ipsec_tunnels', 'auto-key/gateway', 'bookkeeping',
-                 'reference to an ike gateway entry', level='sub-shape'),
-    ContainerRow('parse_external_lists', 'type', 'bookkeeping',
-                 'sub-shape selector for the entry type', level='sub-shape'),
+    ContainerRow(
+        "parse_redist_profile", "protocol/redist-profile", "emitted", "panos_virtual_router", level="sub-shape"
+    ),
+    ContainerRow(
+        "parse_redist_profile_ipv6",
+        "protocol/redist-profile-ipv6",
+        "emitted",
+        "panos_virtual_router",
+        level="sub-shape",
+    ),
+    ContainerRow("parse_bgp", "protocol/bgp/dampening-profile", "emitted", "panos_virtual_router", level="sub-shape"),
+    ContainerRow(
+        "parse_virtual_routers",
+        "routing-table/ip/static-route",
+        "emitted",
+        "panos_virtual_router_static_route_ipv4",
+        level="sub-shape",
+    ),
+    ContainerRow(
+        "parse_ipsec_tunnels",
+        "auto-key/proxy-id",
+        "nested-block",
+        "nested proxy_id block inside panos_ipsec_tunnel",
+        level="sub-shape",
+    ),
+    ContainerRow(
+        "parse_ipsec_tunnels", "auto-key/gateway", "bookkeeping", "reference to an ike gateway entry", level="sub-shape"
+    ),
+    ContainerRow(
+        "parse_external_lists", "type", "bookkeeping", "sub-shape selector for the entry type", level="sub-shape"
+    ),
 )
 
 
@@ -416,8 +492,7 @@ def parent_map(root: ET.Element) -> dict:
     return {child: parent for parent in root.iter() for child in parent}
 
 
-def container_tag(node: ET.Element, parents: dict,
-                  source: Optional[ParsedSource] = None) -> Optional[str]:
+def container_tag(node: ET.Element, parents: dict, source: Optional[ParsedSource] = None) -> Optional[str]:
     """The container name the scan reads node's parent as (F5.4).
 
     Normally the parent's tag. For a per-scope source, `result` is the place the path
@@ -437,27 +512,24 @@ def container_tag(node: ET.Element, parents: dict,
     return parent.tag
 
 
-def is_scope_entry(elem: ET.Element, parents: dict,
-                   source: Optional[ParsedSource] = None) -> bool:
+def is_scope_entry(elem: ET.Element, parents: dict, source: Optional[ParsedSource] = None) -> bool:
     """True when elem is an entry whose container defines a scope (F3.5, F5.4)."""
-    return elem.tag == 'entry' and container_tag(elem, parents, source) in SCOPE_CONTAINERS
+    return elem.tag == "entry" and container_tag(elem, parents, source) in SCOPE_CONTAINERS
 
 
-def is_section(container: ET.Element, parents: dict,
-              source: Optional[ParsedSource] = None) -> bool:
+def is_section(container: ET.Element, parents: dict, source: Optional[ParsedSource] = None) -> bool:
     """True when no config-object entry lies between container and a config root."""
     node = container
     while node is not None:
         node = parents.get(node)
         if node is None:
             return True  # reached the config root, or the per-scope place (F5.4)
-        if node.tag == 'entry' and not is_scope_entry(node, parents, source):
+        if node.tag == "entry" and not is_scope_entry(node, parents, source):
             return False
     return True
 
 
-def section_path(container: ET.Element, parents: dict,
-                 source: Optional[ParsedSource] = None) -> str:
+def section_path(container: ET.Element, parents: dict, source: Optional[ParsedSource] = None) -> str:
     """Tag chain from the config root to the container.
 
     The config element and the Panorama scope markers (``shared``, ``panorama``)
@@ -482,9 +554,9 @@ def section_path(container: ET.Element, parents: dict,
     chain = list(reversed(parts))
     if source is not None and source.is_per_scope:
         place = source.scope_container
-        names_an_entry = ENTRY_SEGMENT in source.scope.split('/')
-        if chain and chain[0] == 'result':
-            chain[0] = place      # the root itself is the place
+        names_an_entry = ENTRY_SEGMENT in source.scope.split("/")
+        if chain and chain[0] == "result":
+            chain[0] = place  # the root itself is the place
             # The element under `result` is the element the request names, so for a place read it is the
             # place and it is read once. For an entry read `entry` is a segment the operator sees in the
             # file, so the chain keeps it (`docs/API_CONVERSION_PATH.md` §2.4).
@@ -494,7 +566,7 @@ def section_path(container: ET.Element, parents: dict,
             chain.insert(0, place)
     while chain and chain[0] in PATH_ROOTS:
         chain.pop(0)
-    return '/'.join(chain)
+    return "/".join(chain)
 
 
 def covers(row_path: str, section: str) -> bool:
@@ -503,7 +575,7 @@ def covers(row_path: str, section: str) -> bool:
     A row path is relative to the scope that holds the container, so the section
     path matches when it is equal to the row path or ends with it.
     """
-    return section == row_path or section.endswith('/' + row_path)
+    return section == row_path or section.endswith("/" + row_path)
 
 
 def is_known(section: str) -> bool:
@@ -518,7 +590,8 @@ def record_path(path: str) -> str:
     the scan read it without one, so the same path is the same string in all three. A run
     that declares no path has no path to state, so this answers ''.
     """
-    return path.strip('/') if path else ''
+    return path.strip("/") if path else ""
+
 
 def is_scope_path(path: str) -> bool:
     """True when a declared path names a scope place (F5.4 AC-6.2, F8.1).
@@ -527,7 +600,7 @@ def is_scope_path(path: str) -> bool:
     must name a place the one definition validates (SCOPE_PATH_ROOTS). The CLI validates
     through this function, so the set of readable scopes is stated once.
     """
-    segments = [segment for segment in path.strip('/').split('/') if segment]
+    segments = [segment for segment in path.strip("/").split("/") if segment]
     if not segments or segments[0] not in SCOPE_PATH_ROOTS:
         return False
     return len(segments) == 1 or (len(segments) == 3 and segments[1] == ENTRY_SEGMENT and segments[2])
@@ -537,22 +610,24 @@ def is_predefined(container: ET.Element, parents: dict) -> bool:
     """True when the container sits under a `predefined` section."""
     node = container
     while node is not None:
-        if node.tag == 'predefined':
+        if node.tag == "predefined":
             return True
         node = parents.get(node)
     return False
 
 
-def entry_containers(root: ET.Element, parents: dict,
-                     source: Optional[ParsedSource] = None) -> list[ET.Element]:
+def entry_containers(root: ET.Element, parents: dict, source: Optional[ParsedSource] = None) -> list[ET.Element]:
     """Every element that holds entries, in document order.
 
     The envelope is never a scanned container (F4.2, F5.4). A per-scope source reads its
     root `result` as the container the path names, so the root is not skipped; the name
     comes from `section_path`.
     """
-    return [el for el in root.iter() if any(child.tag == 'entry' for child in el)
-            and not (el.tag in ENVELOPE and el is not root)]
+    return [
+        el
+        for el in root.iter()
+        if any(child.tag == "entry" for child in el) and not (el.tag in ENVELOPE and el is not root)
+    ]
 
 
 @dataclass(frozen=True)
@@ -573,30 +648,32 @@ def scan(source: ParsedSource, parents: dict) -> list[Finding]:
         path = section_path(container, parents, source)
         if is_known(path):
             continue
-        findings.append(Finding(path=path,
-                                line=source.line_of(container),
-                                entries=sum(1 for child in container if child.tag == 'entry')))
+        findings.append(
+            Finding(
+                path=path, line=source.line_of(container), entries=sum(1 for child in container if child.tag == "entry")
+            )
+        )
     return sorted(findings, key=lambda f: (f.path, f.line or 0))
 
 
-SECTION_TITLE = 'Entry Coverage: Containers The Parser Does Not Read'
+SECTION_TITLE = "Entry Coverage: Containers The Parser Does Not Read"
 
 # The label a report body uses for the source it read (F5.3). One label, stated here, so
 # the per-entry report and this section cannot disagree. It names the source name only:
 # the path belongs to the provenance record, because a report body must stay byte-identical
 # between runs that read the same bytes from different paths.
-SOURCE_LABEL = 'Source:'
+SOURCE_LABEL = "Source:"
 
 # The console line shape, and the marker the run prints before a block that has findings.
 # One place states them, so a finding line cannot take a second shape.
-CONSOLE_PREFIX = '  - '
-CONSOLE_WARNING = '⚠️'
-NO_PARSER_READS = 'no parse method reads this container'
+CONSOLE_PREFIX = "  - "
+CONSOLE_WARNING = "⚠️"
+NO_PARSER_READS = "no parse method reads this container"
 
 
 def entry_phrase(count: int) -> str:
     """'1 entry' or 'N entries'. One wording for the report and the console."""
-    return f'{count} entry' if count == 1 else f'{count} entries'
+    return f"{count} entry" if count == 1 else f"{count} entries"
 
 
 def position_part(line) -> str:
@@ -604,7 +681,7 @@ def position_part(line) -> str:
 
     The console names one position, so this is the only way a console line states where a finding is.
     """
-    return f'line {line}' if line else 'position unknown'
+    return f"line {line}" if line else "position unknown"
 
 
 def position_phrase(finding: Finding) -> str:
@@ -614,7 +691,7 @@ def position_phrase(finding: Finding) -> str:
 
 def finding_phrase(finding: Finding) -> str:
     """Path, position and entry count: the line a finding is described by."""
-    return f'{finding.path} ({position_phrase(finding)}): {entry_phrase(finding.entries)}'
+    return f"{finding.path} ({position_phrase(finding)}): {entry_phrase(finding.entries)}"
 
 
 def scope_part(row: dict, scope_path) -> str:
@@ -623,8 +700,7 @@ def scope_part(row: dict, scope_path) -> str:
     The same rule the report section header uses, so a console line names the scope the report groups
     the entry under. A finding the report does not group prints no scope part, so this answers ''.
     """
-    return ' / '.join(label if not value else f'{label}: {value}'
-                      for _level, label, value in scope_path(row))
+    return " / ".join(label if not value else f"{label}: {value}" for _level, label, value in scope_path(row))
 
 
 def console_line(scope: str, position: str, identity: str, fact: str) -> str:
@@ -642,17 +718,17 @@ def console_line(scope: str, position: str, identity: str, fact: str) -> str:
     A module states its own fact phrase and its block header and calls this function, so no module
     defines a second shape. A part that is empty is left out.
     """
-    return CONSOLE_PREFIX + '  '.join(part for part in (scope, position, identity, fact) if part)
+    return CONSOLE_PREFIX + "  ".join(part for part in (scope, position, identity, fact) if part)
 
 
 def finding_fact(finding: Finding) -> str:
     """The fact part for a container finding: the fact, and the entries the fact covers."""
-    return f'{NO_PARSER_READS} ({entry_phrase(finding.entries)})'
+    return f"{NO_PARSER_READS} ({entry_phrase(finding.entries)})"
 
 
 def report_line(finding: Finding) -> str:
     """One report line for one finding."""
-    return f'  {finding_phrase(finding)} - {NO_PARSER_READS}'
+    return f"  {finding_phrase(finding)} - {NO_PARSER_READS}"
 
 
 def console_lines(findings: list[Finding]) -> list:
@@ -663,20 +739,22 @@ def console_lines(findings: list[Finding]) -> list:
     """
     if not findings:
         return []
-    lines = [f'{CONSOLE_WARNING}  Entry Coverage: {len(findings)} '
-             'container(s) the parser does not read']
-    lines.extend(console_line('', position_part(finding.line), finding.path, finding_fact(finding))
-                 for finding in findings)
+    lines = [f"{CONSOLE_WARNING}  Entry Coverage: {len(findings)} container(s) the parser does not read"]
+    lines.extend(
+        console_line("", position_part(finding.line), finding.path, finding_fact(finding)) for finding in findings
+    )
     return lines
 
 
 def render_section(findings: list[Finding], source_name: str) -> str:
     """The report section for the findings. Empty when there is nothing to say."""
     if not findings:
-        return ''
-    lines = [f'--- {SECTION_TITLE} ---', f'{SOURCE_LABEL} {source_name}']
+        return ""
+    lines = [f"--- {SECTION_TITLE} ---", f"{SOURCE_LABEL} {source_name}"]
     lines.extend(report_line(finding) for finding in findings)
-    lines.append('  No parse method reads these containers, so their entries are '
-                 'not in the model and cannot be emitted. Property-level coverage '
-                 'is F4.4, in the property section of CONVERSION_REPORT.txt.')
-    return '\n'.join(lines)
+    lines.append(
+        "  No parse method reads these containers, so their entries are "
+        "not in the model and cannot be emitted. Property-level coverage "
+        "is F4.4, in the property section of CONVERSION_REPORT.txt."
+    )
+    return "\n".join(lines)

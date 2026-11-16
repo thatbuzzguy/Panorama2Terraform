@@ -44,6 +44,7 @@ def _assemble_two(tmp_path, first: str, second: str) -> ET.Element:
 
 # --- 1. The read rule ----------------------------------------------------------
 
+
 def test_the_read_rule_is_the_input_rule_read_on_committed_files():
     """For every committed fixture the tool's read decision agrees with the door, so the tool states the same
     rule the tool's entry points use (`docs/ARCHITECTURE.md` §3) and not a name list."""
@@ -60,8 +61,11 @@ def test_the_tool_names_no_fixture_in_its_source():
     """The only fixture name the tool states is its own record, so the hostile skip cannot be a list of names.
     The corpus pattern (`*.xml`) is the directory the tool reads, not a fixture name.
     """
-    literals = {node.value for node in ast.walk(ast.parse(TOOL_PATH.read_text(encoding="utf-8")))
-                if isinstance(node, ast.Constant) and isinstance(node.value, str)}
+    literals = {
+        node.value
+        for node in ast.walk(ast.parse(TOOL_PATH.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
     named = sorted(name for name in literals if name.endswith(".xml") and "*" not in name)
     assert named == [tool.RECORD], named
 
@@ -69,16 +73,23 @@ def test_the_tool_names_no_fixture_in_its_source():
 def test_the_read_rule_answers_for_a_fixture_the_tool_has_never_seen(tmp_path):
     """A fixture a test writes is refused by the same rule: a DTD, or a parse the parser cannot read."""
     dtd = tmp_path / "new_dtd.xml"
-    dtd.write_text('<?xml version="1.0"?>\n<!DOCTYPE config [<!ENTITY x SYSTEM "file:///tmp/none">]>\n'
-                   '<config><shared><tag><entry name="a"/></tag></shared></config>\n', encoding="utf-8")
+    dtd.write_text(
+        '<?xml version="1.0"?>\n<!DOCTYPE config [<!ENTITY x SYSTEM "file:///tmp/none">]>\n'
+        '<config><shared><tag><entry name="a"/></tag></shared></config>\n',
+        encoding="utf-8",
+    )
     bad = tmp_path / "new_bad.xml"
     bad.write_bytes(b'<?xml version="1.0"?>\n<config><shared><tag>\x01</tag></shared></config>')
     good = tmp_path / "new_good.xml"
-    good.write_text('<?xml version="1.0"?>\n<config><shared><tag><entry name="a"/></tag></shared></config>\n',
-                    encoding="utf-8")
+    good.write_text(
+        '<?xml version="1.0"?>\n<config><shared><tag><entry name="a"/></tag></shared></config>\n', encoding="utf-8"
+    )
     comment = tmp_path / "comment_doctype.xml"
-    comment.write_text('<?xml version="1.0"?>\n<!-- <!DOCTYPE config > -->\n'
-                       '<config><shared><tag><entry name="a"/></tag></shared></config>\n', encoding="utf-8")
+    comment.write_text(
+        '<?xml version="1.0"?>\n<!-- <!DOCTYPE config > -->\n'
+        '<config><shared><tag><entry name="a"/></tag></shared></config>\n',
+        encoding="utf-8",
+    )
 
     assert "DTD" in tool.refusal_reason(dtd), tool.refusal_reason(dtd)
     assert "cannot read" in tool.refusal_reason(bad), tool.refusal_reason(bad)
@@ -106,31 +117,41 @@ def test_the_assembler_reads_the_corpus_and_not_the_response_set():
     assert tool.FIXDIR == FIXTURES_DIR, "the tool reads the corpus the pins state"
     assert tool.FIXDIR != RESPONSES_DIR, "the response set is not part of the corpus"
 
-    read = [path.name for path in sorted(FIXTURES_DIR.glob("*.xml"))
-            if tool.refusal_reason(path) is None and path.name != tool.RECORD]
+    read = [
+        path.name
+        for path in sorted(FIXTURES_DIR.glob("*.xml"))
+        if tool.refusal_reason(path) is None and path.name != tool.RECORD
+    ]
     responses = sorted(path.name for path in RESPONSES_DIR.glob("*.xml"))
     assert len(read) == 67, read  # the set the pin above states, unchanged by this piece
     assert not (set(responses) & set(read)), "a committed response is not in the set the tool reads"
-    assert all(tool.refusal_reason(RESPONSES_DIR / name) is None for name in responses), \
+    assert all(tool.refusal_reason(RESPONSES_DIR / name) is None for name in responses), (
         "the response files are not hostile, so the pin reads the path and not the rule"
+    )
 
     # The tool reads the directory its caller gives it, and it states no path to the response set, so the
     # harness cannot put a response in the merge set by name.
-    literals = {node.value for node in ast.walk(ast.parse(TOOL_PATH.read_text(encoding="utf-8")))
-                if isinstance(node, ast.Constant) and isinstance(node.value, str)}
+    literals = {
+        node.value
+        for node in ast.walk(ast.parse(TOOL_PATH.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
     assert not any("responses" in value for value in literals), "the tool states no path to the response set"
     _root, skipped = tool.assemble(FIXTURES_DIR)
-    assert [name for name, _reason in skipped] == [path.name for path in sorted(FIXTURES_DIR.glob("*.xml"))
-                                                    if tool.refusal_reason(path) is not None], skipped
+    assert [name for name, _reason in skipped] == [
+        path.name for path in sorted(FIXTURES_DIR.glob("*.xml")) if tool.refusal_reason(path) is not None
+    ], skipped
 
 
 # --- 2. The generator, not a pin ----------------------------------------------
 
+
 def test_the_tool_writes_no_file_so_the_record_stays_the_record():
     """The tool prints the tree it assembles, so a run cannot change the record the goldens read."""
     source = TOOL_PATH.read_text(encoding="utf-8")
-    assert not [line for line in source.splitlines()
-                if "write_text" in line or "write_bytes" in line or "open(" in line], source
+    assert not [
+        line for line in source.splitlines() if "write_text" in line or "write_bytes" in line or "open(" in line
+    ], source
 
     before = (FIXTURES_DIR / tool.RECORD).read_bytes()
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
@@ -160,6 +181,7 @@ def test_the_tool_is_not_a_pin_on_the_record():
 
 
 # --- 3. The merge rule ---------------------------------------------------------
+
 
 def test_an_entry_merges_with_the_entry_of_the_same_name(tmp_path):
     root = _assemble_two(
@@ -193,7 +215,7 @@ def test_another_element_merges_with_the_element_of_the_same_tag_or_appends(tmp_
         "<ip-netmask>10.0.0.1/32</ip-netmask></entry></address></shared></config>\n",
         '<?xml version="1.0"?>\n<config><shared><address><entry name="B">'
         "<ip-netmask>10.0.0.2/32</ip-netmask></entry></address>"
-        "<tag><entry name=\"prod\"/></tag></shared></config>\n",
+        '<tag><entry name="prod"/></tag></shared></config>\n',
     )
     shared = root.find("shared")
     assert [child.tag for child in shared] == ["address", "tag"], [child.tag for child in shared]
@@ -201,6 +223,7 @@ def test_another_element_merges_with_the_element_of_the_same_tag_or_appends(tmp_
 
 
 # --- 4. The run ---------------------------------------------------------------
+
 
 def test_two_runs_on_the_committed_set_answer_the_same_bytes():
     first = tool.render(tool.assemble(FIXTURES_DIR)[0])
@@ -213,6 +236,5 @@ def test_the_run_prints_one_line_per_fixture_it_skipped():
     with contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()) as err:
         tool.main()
     _root, skipped = tool.assemble(FIXTURES_DIR)
-    assert err.getvalue().splitlines() == [f"skipped {name}: {reason}" for name, reason in skipped], \
-        err.getvalue()
-    assert out.getvalue().startswith("<?xml version=\"1.0\"?>\n<config"), out.getvalue()[:60]
+    assert err.getvalue().splitlines() == [f"skipped {name}: {reason}" for name, reason in skipped], err.getvalue()
+    assert out.getvalue().startswith('<?xml version="1.0"?>\n<config'), out.getvalue()[:60]

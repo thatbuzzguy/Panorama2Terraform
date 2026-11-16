@@ -97,9 +97,7 @@ def test_parse_ethernet_subinterface_units(make_parser):
     assert by_name["ethernet1/1"]["ip_addresses"] == ["192.168.1.1/24"]
     # F3.3 criterion 3, read against the row for each kind.
     assert "parent" not in by_name["ethernet1/1"], sorted(by_name["ethernet1/1"])
-    assert all(i.get("parent") is not None or i["type"] in ("ethernet", "vlan",
-                                                             "loopback", "tunnel")
-               for i in ifaces)
+    assert all(i.get("parent") is not None or i["type"] in ("ethernet", "vlan", "loopback", "tunnel") for i in ifaces)
 
 
 def test_parse_virtual_wire_units(make_parser):
@@ -200,17 +198,18 @@ def test_parse_redist_profile_entries_read_the_levels_the_table_states(make_pars
     # state reads as no value. The provider declares both alternatives as optional, so `action` states no choice.
     assert str(entry["action"]["redist"]) == "{}" and entry["action"]["no_redist"] == "", entry["action"]
     assert entry["filter"]["bgp"] == {"community": ["100:1"], "extended_community": ["192.168.1.1:2"]}, entry
-    assert (entry["filter"]["destination"], entry["filter"]["interface"],
-            entry["filter"]["nexthop"], entry["filter"]["type"]) == (
-        ["10.20.0.0/16"], ["ethernet1/1"], ["192.168.1.254"], ["internal"]), entry["filter"]
-    assert entry["filter"]["ospf"] == {"area": ["0.0.0.0"], "path_type": ["internal"],
-                                       "tag": ["1"]}, entry["filter"]
+    assert (
+        entry["filter"]["destination"],
+        entry["filter"]["interface"],
+        entry["filter"]["nexthop"],
+        entry["filter"]["type"],
+    ) == (["10.20.0.0/16"], ["ethernet1/1"], ["192.168.1.254"], ["internal"]), entry["filter"]
+    assert entry["filter"]["ospf"] == {"area": ["0.0.0.0"], "path_type": ["internal"], "tag": ["1"]}, entry["filter"]
     inner = protocol["redist_profile_ipv6"][0]
     # The same shape for the IPv6 list, with the routing level inside `filter` named as the provider names it.
     assert str(inner["action"]["no_redist"]) == "{}" and inner["action"]["redist"] == "", inner["action"]
     assert inner["filter"]["bgp"] == {"community": ["100:2"], "extended_community": ["192.168.1.1:3"]}, inner
-    assert inner["filter"]["ospfv3"] == {"area": ["0.0.1.0"], "path_type": ["external"],
-                                         "tag": ["2"]}, inner["filter"]
+    assert inner["filter"]["ospfv3"] == {"area": ["0.0.1.0"], "path_type": ["external"], "tag": ["2"]}, inner["filter"]
     # The entry is the object the ledger records, so it carries the five scope facts of the router that holds it.
     assert entry["template"] == "FW-Template" and entry["device_group"] == "Shared", entry
     for name in ("RP-Internal", "RP6-Internal"):
@@ -259,8 +258,7 @@ def test_parse_bgp_enabled(make_parser):
     assert group["name"] == "PG-Branch"
     # A `one_of` level holds the value the export states as the key, so the report prints what the
     # operator types in the GUI and the emitter maps it to the provider key.
-    assert group["type"] == {"external": {"export_nexthop": "self", "import_nexthop": "self",
-                                          "remove_private_as": ""}}
+    assert group["type"] == {"external": {"export_nexthop": "self", "import_nexthop": "self", "remove_private_as": ""}}
     # The five facts belong to the entry the ledger marks, so the choice body holds none of them.
     assert not set(group["type"]["external"]) & entry_coverage.NON_FIELD_KEYS, group["type"]
 
@@ -295,24 +293,38 @@ def test_parse_bgp_reads_the_fields_the_table_added(make_parser):
     """
     p = _parser(make_parser, "bgp.xml")
     bgp = {r["name"]: r for r in p.parse_virtual_routers()}["default"]["protocol"]["bgp"]
-    assert (bgp["allow_redist_default_route"], bgp["ecmp_multi_as"], bgp["enforce_first_as"],
-            bgp["install_route"], bgp["reject_default_route"]) == (
-        True, True, False, True, False), bgp
+    assert (
+        bgp["allow_redist_default_route"],
+        bgp["ecmp_multi_as"],
+        bgp["enforce_first_as"],
+        bgp["install_route"],
+        bgp["reject_default_route"],
+    ) == (True, True, False, True, False), bgp
     assert bgp["global_bfd"] == {"profile": "BFD-BGP"}, bgp["global_bfd"]
     assert bgp["routing_options"] == {
         "aggregate": {"aggregate_med": True},
         "as_format": "2-byte",
         "confederation_member_as": "65010",
         "default_local_preference": 200,
-        "graceful_restart": {"enable": True, "local_restart_time": 180,
-                             "max_peer_restart_time": 240, "stale_route_time": 300},
+        "graceful_restart": {
+            "enable": True,
+            "local_restart_time": 180,
+            "max_peer_restart_time": 240,
+            "stale_route_time": 300,
+        },
         "med": {"always_compare_med": True, "deterministic_med_comparison": False},
-        "reflector_cluster_id": "10.0.0.1"}, bgp["routing_options"]
+        "reflector_cluster_id": "10.0.0.1",
+    }, bgp["routing_options"]
     damp = bgp["dampening_profile"][0]
     assert damp["name"] == "DAMP-Branch", damp
-    assert (damp["cutoff"], damp["decay_half_life_reachable"], damp["decay_half_life_unreachable"],
-            damp["enable"], damp["max_hold_time"], damp["reuse"]) == (
-        1500, 60, 120, True, 3000, 750), damp
+    assert (
+        damp["cutoff"],
+        damp["decay_half_life_reachable"],
+        damp["decay_half_life_unreachable"],
+        damp["enable"],
+        damp["max_hold_time"],
+        damp["reuse"],
+    ) == (1500, 60, 120, True, 3000, 750), damp
     element = next(e for e in p.ledger.entries() if e.get("name") == "DAMP-Branch")
     assert p.ledger.mark_for(element) is not None, "a dampening profile is a marked entry"
 
@@ -326,8 +338,7 @@ def test_parse_bgp_keeps_a_peer_no_group_names_for_the_report(make_parser):
     p = _parser(make_parser, "bgp.xml")
     p.parse_virtual_routers()
     rows = entry_coverage.protocol_report_rows(p.ledger)
-    assert [(row["router"], row["level"], row["name"]) for row in rows] == [
-        ("default", "peer", "10.55.0.9")], rows
+    assert [(row["router"], row["level"], row["name"]) for row in rows] == [("default", "peer", "10.55.0.9")], rows
     # The captured object is the same object the parse marked, so the report and the scan read one record.
     assert rows[0]["captured"]["peer_as"] == "65003"
     # F7.11: this entry states only three of the fields its row declares, so a field the export does not state
@@ -349,16 +360,25 @@ def test_parse_bgp_reads_the_fields_the_six_rows_added(make_parser):
     group = bgp["peer_group"][0]
     assert group["aggregated_confed_as_path"] is True and group["soft_reset_with_stored_info"] is False, group
     peer = group["peer"][0]
-    assert (peer["address_family_identifier"], peer["max_prefixes"], peer["peering_type"],
-            peer["reflector_client"]) == ("ipv4-unicast", "65536", "non-default", "non-default"), peer
+    assert (
+        peer["address_family_identifier"],
+        peer["max_prefixes"],
+        peer["peering_type"],
+        peer["reflector_client"],
+    ) == ("ipv4-unicast", "65536", "non-default", "non-default"), peer
     assert (peer["enable_mp_bgp"], peer["enable_sender_side_loop_detection"]) == (True, True), peer
     assert peer["bfd"] == {"profile": "BFD-BGP"}, peer["bfd"]
     assert peer["connection_options"] == {
-        "authentication": "simple", "hold_time": "180", "idle_hold_time": 30,
+        "authentication": "simple",
+        "hold_time": "180",
+        "idle_hold_time": 30,
         "incoming_bgp_connection": {"allow": True, "remote_port": 179},
-        "keep_alive_interval": "60", "min_route_adv_interval": 30, "multihop": 1,
-        "open_delay_time": 5, "outgoing_bgp_connection": {"allow": True, "local_port": 1024}}, \
-        peer["connection_options"]
+        "keep_alive_interval": "60",
+        "min_route_adv_interval": 30,
+        "multihop": 1,
+        "open_delay_time": 5,
+        "outgoing_bgp_connection": {"allow": True, "local_port": 1024},
+    }, peer["connection_options"]
     assert peer["subsequent_address_family_identifier"] == {"multicast": True, "unicast": True}, peer
     rule = bgp["redist_rules"][0]
     assert (rule["route_table"], rule["set_origin"]) == ("1", "igp"), rule
@@ -400,8 +420,7 @@ def test_parse_ospf(make_parser):
     # fields of the body live inside the chosen element, so the parse reads them there (F7.2).
     # F7.4: `default_route` is the one choice the provider requires inside the body, so the export states
     # it by presence and the value read is the child element's tag.
-    assert area["type"] == {"stub": {"accept_summary": True,
-                                     "default_route": {"advertise": {"metric": 10}}}}
+    assert area["type"] == {"stub": {"accept_summary": True, "default_route": {"advertise": {"metric": 10}}}}
     # A range entry prints inside the area, with the choice block the provider requires. The entry that
     # states neither has no `.tf` shape, so it is not in the printed list (F7.1).
     assert len(area["range"]) == 1, area["range"]
@@ -428,8 +447,7 @@ def test_parse_ospf(make_parser):
     # states as `no`. `str()` is the print, which is the empty object a `block` level states.
     nssa = ospf["area"][1]["type"]["nssa"]
     assert str(nssa["default_route"]["no"]) == "{}"
-    assert [(entry["name"], str(entry["suppress"])) for entry in nssa["nssa_ext_range"]] == [
-        ("10.20.0.0/16", "{}")]
+    assert [(entry["name"], str(entry["suppress"])) for entry in nssa["nssa_ext_range"]] == [("10.20.0.0/16", "{}")]
 
     # The four entries the `.tf` cannot express: the range entry with no choice, the interface whose
     # link-type value the mapping cannot state, the `nssa_ext_range` entry with no choice, and the
@@ -439,10 +457,11 @@ def test_parse_ospf(make_parser):
         ("default", "range", "10.60.0.0/16"),
         ("default", "interface", "ethernet1/3"),
         ("default", "nssa-ext-range", "10.30.0.0/16"),
-        ("default", "interface", "ethernet1/1")], rows
-    assert rows[1]["detail"] == ('link_type multicast is not a value PROTOCOL_SHAPE states')
+        ("default", "interface", "ethernet1/1"),
+    ], rows
+    assert rows[1]["detail"] == ("link_type multicast is not a value PROTOCOL_SHAPE states")
     # The same reason as a `range` entry, because the row states the choice as `block` fields.
-    assert rows[2]["detail"] == 'no advertise or suppress', rows[2]
+    assert rows[2]["detail"] == "no advertise or suppress", rows[2]
     assert rows[3]["captured"]["link_type"] == {"point-to-point": {}}
 
 
@@ -456,20 +475,32 @@ def test_parse_ospf_reads_the_levels_the_table_states(make_parser):
     """
     p = _parser(make_parser, "ospf.xml")
     ospf = p.parse_virtual_routers()[0]["protocol"]["ospf"]
-    assert (ospf["enable"], ospf["allow_redist_default_route"], ospf["reject_default_route"],
-            ospf["rfc1583"]) == (True, True, False, True), ospf
+    assert (ospf["enable"], ospf["allow_redist_default_route"], ospf["reject_default_route"], ospf["rfc1583"]) == (
+        True,
+        True,
+        False,
+        True,
+    ), ospf
     assert ospf["timers"] == {"lsa_interval": 120, "spf_calculation_delay": 20}, ospf["timers"]
     assert ospf["global_bfd"] == {"profile": "BFD-OSPF"}, ospf["global_bfd"]
     # `strict_l_s_a_checking` is the provider spelling, and `XML_NAME_EXCEPTIONS` is the one place that states
     # the element name the export holds for it, so the same rule reads it for both OSPF levels.
     assert ospf["graceful_restart"] == {
-        "enable": True, "grace_period": 120, "helper_enable": True,
-        "max_neighbor_restart_time": 200, "strict_l_s_a_checking": True}, ospf["graceful_restart"]
+        "enable": True,
+        "grace_period": 120,
+        "helper_enable": True,
+        "max_neighbor_restart_time": 200,
+        "strict_l_s_a_checking": True,
+    }, ospf["graceful_restart"]
     rule = ospf["export_rules"][0]
     assert (rule["name"], rule["metric"], rule["new_path_type"], rule["new_tag"]) == (
-        "export-static", 10, "internal", "0"), rule
+        "export-static",
+        10,
+        "internal",
+        "0",
+    ), rule
     element = next(e for e in p.ledger.entries() if e.get("name") == "export-static")
-    assert p.ledger.mark_for(element) is not None, 'an export rule is a marked entry'
+    assert p.ledger.mark_for(element) is not None, "an export rule is a marked entry"
 
 
 def test_parse_ospfv3(make_parser):
@@ -494,8 +525,7 @@ def test_parse_ospfv3(make_parser):
     nssa = area["type"]["nssa"]
     assert nssa["accept_summary"] is True
     assert str(nssa["default_route"]["no"]) == "{}"
-    assert [(entry["name"], str(entry["advertise"])) for entry in nssa["nssa_ext_range"]] == [
-        ("10.20.0.0/16", "{}")]
+    assert [(entry["name"], str(entry["advertise"])) for entry in nssa["nssa_ext_range"]] == [("10.20.0.0/16", "{}")]
     assert len(area["range"]) == 1, area["range"]
     assert area["range"][0]["name"] == "10.0.0.0/8"
     assert str(area["range"][0]["suppress"]) == "{}"
@@ -519,10 +549,10 @@ def test_parse_ospfv3(make_parser):
     rows = entry_coverage.protocol_report_rows(p.ledger)
     assert [(row["router"], row["level"], row["name"]) for row in rows] == [
         ("default", "area", "0.0.1.0"),
-        ("default", "interface", "ethernet1/1")], rows
-    assert rows[0]["detail"] == (
-        'panos_virtual_router - default_route states no key PROTOCOL_SHAPE selects'), rows[0]
-    assert rows[1]["detail"] == 'no provider field for an interface outside an area', rows[1]
+        ("default", "interface", "ethernet1/1"),
+    ], rows
+    assert rows[0]["detail"] == ("panos_virtual_router - default_route states no key PROTOCOL_SHAPE selects"), rows[0]
+    assert rows[1]["detail"] == "no provider field for an interface outside an area", rows[1]
 
 
 def test_parse_ospfv3_reads_the_levels_the_table_states(make_parser):
@@ -537,19 +567,26 @@ def test_parse_ospfv3_reads_the_levels_the_table_states(make_parser):
     assert ospfv3["timers"] == {"lsa_interval": 120, "spf_calculation_delay": 20}, ospfv3["timers"]
     assert ospfv3["global_bfd"] == {"profile": "BFD-OSP"}, ospfv3["global_bfd"]
     assert ospfv3["graceful_restart"] == {
-        "enable": True, "grace_period": 120, "helper_enable": True,
-        "max_neighbor_restart_time": 200, "strict_l_s_a_checking": True}, ospfv3["graceful_restart"]
+        "enable": True,
+        "grace_period": 120,
+        "helper_enable": True,
+        "max_neighbor_restart_time": 200,
+        "strict_l_s_a_checking": True,
+    }, ospfv3["graceful_restart"]
     # The element name for `strict_l_s_a_checking` is the one case the `-` rule cannot produce, so the export
     # states `strict-lsa-checking` and the table reads it through `XML_NAME_EXCEPTIONS`.
     rule = ospfv3["export_rules"][0]
     element = next(e for e in p.ledger.entries() if e.get("name") == "static-af")
-    assert p.ledger.mark_for(element) is not None, 'an export rule is a marked entry'
+    assert p.ledger.mark_for(element) is not None, "an export rule is a marked entry"
     assert rule["name"] == "static-af"
     assert (rule["metric"], rule["new_path_type"], rule["new_tag"]) == (10, "internal", "0"), rule
     # F7.10: the three `bool` fields the row gained are read through the row, and a field the export states as
     # `no` reads as false.
-    assert (ospfv3["allow_redist_default_route"], ospfv3["disable_transit_traffic"],
-            ospfv3["reject_default_route"]) == (True, True, False), ospfv3
+    assert (
+        ospfv3["allow_redist_default_route"],
+        ospfv3["disable_transit_traffic"],
+        ospfv3["reject_default_route"],
+    ) == (True, True, False), ospfv3
 
 
 def test_parse_rip_reads_the_levels_the_table_states(make_parser):
@@ -562,10 +599,13 @@ def test_parse_rip_reads_the_levels_the_table_states(make_parser):
     """
     p = _parser(make_parser, "rip.xml")
     rip = p.parse_virtual_routers()[0]["protocol"]["rip"]
-    assert (rip["enable"], rip["allow_redist_default_route"], rip["reject_default_route"]) == (
-        True, True, False), rip
-    assert rip["timers"] == {"interval_seconds": 30, "update_intervals": 180,
-                             "expire_intervals": 210, "delete_intervals": 120}, rip["timers"]
+    assert (rip["enable"], rip["allow_redist_default_route"], rip["reject_default_route"]) == (True, True, False), rip
+    assert rip["timers"] == {
+        "interval_seconds": 30,
+        "update_intervals": 180,
+        "expire_intervals": 210,
+        "delete_intervals": 120,
+    }, rip["timers"]
     assert rip["global_bfd"] == {"profile": "BFD-RIP"}, rip["global_bfd"]
     # The two entries the print holds. The third states a choice with no alternative, so the report names it.
     assert [entry["name"] for entry in rip["interfaces"]] == ["ethernet1/2", "ethernet1/3"], rip["interfaces"]
@@ -586,13 +626,13 @@ def test_parse_rip_reads_the_levels_the_table_states(make_parser):
         assert p.ledger.mark_for(element) is not None, name
 
     rows = entry_coverage.protocol_report_rows(p.ledger)
-    assert [(row["router"], row["level"], row["name"]) for row in rows] == [
-        ("default", "interfaces", "ethernet1/4")], rows
-    assert rows[0]["detail"] == (
-        'panos_virtual_router - default_route states no key PROTOCOL_SHAPE selects'), rows[0]
+    assert [(row["router"], row["level"], row["name"]) for row in rows] == [("default", "interfaces", "ethernet1/4")], (
+        rows
+    )
+    assert rows[0]["detail"] == ("panos_virtual_router - default_route states no key PROTOCOL_SHAPE selects"), rows[0]
     # The entry is a property level of the router, so the row names the router that holds it and the level the
     # row path names.
-    assert rows[0]["container"].endswith('protocol/rip/interfaces'), rows[0]["container"]
+    assert rows[0]["container"].endswith("protocol/rip/interfaces"), rows[0]["container"]
 
 
 def test_parse_bgp_reads_the_policy_levels_the_table_states(make_parser):
@@ -609,19 +649,31 @@ def test_parse_bgp_reads_the_policy_levels_the_table_states(make_parser):
     policy = p.parse_virtual_routers()[0]["protocol"]["bgp"]["policy"]
     address = policy["aggregation"]["address"][0]
     assert (address["name"], address["prefix"], address["summary"], address["as_set"]) == (
-        "agg-10.0.0.0-8", "10.0.0.0/8", True, True), address
+        "agg-10.0.0.0-8",
+        "10.0.0.0/8",
+        True,
+        True,
+    ), address
     # A choice level is the one key the export states, and the value is what the field reader reads for the
     # alternative: a value alternative is the value, so the read holds no dict for it (F7.6). The key is the
     # spelling the export states, so the print applies the row's mapping to it.
     choice = address["aggregate_route_attributes"]
     assert tuple(list(choice[name]) for name in ("as_path", "community", "extended_community")) == (
-        ["prepend"], ["append"], ["remove-regex"]), choice
-    assert (choice["as_path"]["prepend"], choice["community"]["append"],
-            choice["extended_community"]["remove-regex"]) == (5, ["1:10"], "2:.*"), choice
+        ["prepend"],
+        ["append"],
+        ["remove-regex"],
+    ), choice
+    assert (
+        choice["as_path"]["prepend"],
+        choice["community"]["append"],
+        choice["extended_community"]["remove-regex"],
+    ) == (5, ["1:10"], "2:.*"), choice
     filter_entry = address["advertise_filters"][0]
     # The members are values, so a member list is the list `_protocol_field` read, with no entry inside it.
     assert (filter_entry["match"]["from_peer"], filter_entry["match"]["nexthop"]) == (
-        ["192.0.2.1", "192.0.2.2"], ["198.51.100.7"]), filter_entry
+        ["192.0.2.1", "192.0.2.2"],
+        ["198.51.100.7"],
+    ), filter_entry
     # An entry inside an entry belongs to the level the field names, not to the level above it.
     assert [entry["name"] for entry in filter_entry["match"]["address_prefix"]] == ["agg-prefix"], filter_entry
     assert [entry["name"] for entry in address["suppress_filters"]] == ["agg-suppresses"], address
@@ -642,13 +694,13 @@ def test_parse_bgp_reads_the_policy_levels_the_table_states(make_parser):
 
     rows = entry_coverage.protocol_report_rows(p.ledger)
     assert [(row["router"], row["level"], row["name"]) for row in rows] == [
-        ("policy-vr", "rules", "export-no-action")], rows
-    assert rows[0]["detail"] == (
-        'panos_virtual_router - action states no key PROTOCOL_SHAPE selects'), rows[0]
+        ("policy-vr", "rules", "export-no-action")
+    ], rows
+    assert rows[0]["detail"] == ("panos_virtual_router - action states no key PROTOCOL_SHAPE selects"), rows[0]
     # The entry the file cannot hold is a property entry, so the report reads its captured fields.
-    assert rows[0]["fields"] == ('action', 'enable', 'match'), rows[0]
+    assert rows[0]["fields"] == ("action", "enable", "match"), rows[0]
     # The container table states no row for a level inside an entry, so the scan scope is the entry level.
-    assert rows[0]["container"].endswith('protocol/bgp/policy/export/rules'), rows[0]["container"]
+    assert rows[0]["container"].endswith("protocol/bgp/policy/export/rules"), rows[0]["container"]
 
 
 def test_parse_rip_absent(make_parser):

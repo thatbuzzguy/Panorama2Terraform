@@ -47,7 +47,7 @@ _OUTPUTS: dict[str, dict[str, str]] = {}
 
 # pytest calls the ids function once per parameter value.
 def _row_id(row: dict) -> str:
-    return row['resource']
+    return row["resource"]
 
 
 ROWS = list(COVERAGE_MATRIX)
@@ -56,12 +56,9 @@ ROWS = list(COVERAGE_MATRIX)
 def _generate(fixture_name: str) -> dict[str, str]:
     """Run the converter CLI on one fixture. Cache the .tf output per session."""
     if fixture_name not in _OUTPUTS:
-        out_dir = Path(tempfile.mkdtemp(prefix='coverage_matrix_'))
-        result = run_script(
-            'panorama_to_terraform.py', str(FIXTURES_DIR / fixture_name),
-            '--output-dir', str(out_dir))
-        assert result.returncode == 0, (
-            f'converter failed on {fixture_name}: {result.stderr}\n{result.stdout}')
+        out_dir = Path(tempfile.mkdtemp(prefix="coverage_matrix_"))
+        result = run_script("panorama_to_terraform.py", str(FIXTURES_DIR / fixture_name), "--output-dir", str(out_dir))
+        assert result.returncode == 0, f"converter failed on {fixture_name}: {result.stderr}\n{result.stdout}"
         _OUTPUTS[fixture_name] = tf_files(out_dir)
     return _OUTPUTS[fixture_name]
 
@@ -77,9 +74,9 @@ def _resource_blocks(text: str, rtype: str) -> list[str]:
     for m in RESOURCE_RE.finditer(text):
         if m.group(1) != rtype:
             continue
-        end = text.find('\n}', m.end())
-        assert end != -1, f'unclosed resource block for {rtype}'
-        blocks.append(text[m.start():end + 2])
+        end = text.find("\n}", m.end())
+        assert end != -1, f"unclosed resource block for {rtype}"
+        blocks.append(text[m.start() : end + 2])
     return blocks
 
 
@@ -89,38 +86,43 @@ def test_matrix_covers_exactly_the_emitted_types():
     This is the drift guard: an emitter that adds or drops a resource
     type must update the matrix in the same change.
     """
-    row_types = [row['resource'] for row in ROWS]
+    row_types = [row["resource"] for row in ROWS]
     assert sorted(row_types) == sorted(EMITTED_TYPES), (
-        f'matrix rows and EMITTED_TYPES disagree: '
-        f'missing={sorted(EMITTED_TYPES - set(row_types))} '
-        f'extra={sorted(set(row_types) - EMITTED_TYPES)}')
+        f"matrix rows and EMITTED_TYPES disagree: "
+        f"missing={sorted(EMITTED_TYPES - set(row_types))} "
+        f"extra={sorted(set(row_types) - EMITTED_TYPES)}"
+    )
     assert len(row_types) == len(set(row_types)), (
-        f'duplicate rows: {sorted(t for t in row_types if row_types.count(t) > 1)}')
+        f"duplicate rows: {sorted(t for t in row_types if row_types.count(t) > 1)}"
+    )
 
 
-@pytest.mark.parametrize('row', ROWS, ids=_row_id)
+@pytest.mark.parametrize("row", ROWS, ids=_row_id)
 def test_row_fixture_exists(row):
-    assert (FIXTURES_DIR / row['fixture']).is_file(), (
-        f"row for {row['resource']}: fixture {row['fixture']!r} not found in tests/fixtures/")
+    assert (FIXTURES_DIR / row["fixture"]).is_file(), (
+        f"row for {row['resource']}: fixture {row['fixture']!r} not found in tests/fixtures/"
+    )
 
 
-@pytest.mark.parametrize('row', ROWS, ids=_row_id)
+@pytest.mark.parametrize("row", ROWS, ids=_row_id)
 def test_fixture_contains_the_row_element(row):
     """The element column must name a real Panorama element in the fixture.
 
     The row's fixture must contain the row's XML element (tag path, any
     scope prefix) with an entry named xml_name.
     """
-    root = ET.parse(FIXTURES_DIR / row['fixture']).getroot()
-    entries = root.findall('.//' + row['xml_element'])
+    root = ET.parse(FIXTURES_DIR / row["fixture"]).getroot()
+    entries = root.findall(".//" + row["xml_element"])
     assert entries, (
         f"row for {row['resource']}: fixture {row['fixture']!r} contains no "
-        f"<{row['xml_element'].split('/')[0]}...> element")
-    names = [e.get('name') for e in entries]
-    assert row['xml_name'] in names, (
+        f"<{row['xml_element'].split('/')[0]}...> element"
+    )
+    names = [e.get("name") for e in entries]
+    assert row["xml_name"] in names, (
         f"row for {row['resource']}: fixture {row['fixture']!r} has element "
         f"<{row['xml_element']}> but no entry named {row['xml_name']!r} "
-        f'(found: {names})')
+        f"(found: {names})"
+    )
 
 
 def _name_field(row: dict) -> str:
@@ -131,31 +133,27 @@ def _name_field(row: dict) -> str:
     the import agreement gate reads. `panos_device_group_parent` is the row in the shape that names
     the scope instead of a name: `device_group`.
     """
-    return entry_coverage.name_field(row['resource'])
+    return entry_coverage.name_field(row["resource"])
 
 
-@pytest.mark.parametrize('row', ROWS, ids=_row_id)
+@pytest.mark.parametrize("row", ROWS, ids=_row_id)
 def test_row_emits_the_provider_resource(row):
     """The full pipeline maps the row's element to the provider resource.
 
     Converting the row's fixture must emit a `resource "<type>"` block in
     the row's output file whose body carries the name field with the emitted name.
     """
-    outputs = _generate(row['fixture'])
+    outputs = _generate(row["fixture"])
     # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): `output_file` is the kind the per-type table names, so
     # the file is the unit's file and the reader keys it by the path from the output directory.
-    text = file_text(outputs, row['output_file'])
-    assert text, (
-        f"row for {row['resource']}: converter wrote no {row['output_file']!r} "
-        f'(files: {sorted(outputs)})')
-    blocks = _resource_blocks(text, row['resource'])
-    assert blocks, (
-        f"row for {row['resource']}: no resource block of this type in "
-        f"{row['output_file']!r}")
+    text = file_text(outputs, row["output_file"])
+    assert text, f"row for {row['resource']}: converter wrote no {row['output_file']!r} (files: {sorted(outputs)})"
+    blocks = _resource_blocks(text, row["resource"])
+    assert blocks, f"row for {row['resource']}: no resource block of this type in {row['output_file']!r}"
     expected = f'{_name_field(row)} = "{row["emitted_name"]}"'
     assert any(expected in block for block in blocks), (
-        f"row for {row['resource']}: no block in {row['output_file']!r} carries "
-        f'{expected!r}')
+        f"row for {row['resource']}: no block in {row['output_file']!r} carries {expected!r}"
+    )
 
 
 # --- F4.4 row shape --------------------------------------------------------
@@ -164,12 +162,20 @@ def test_row_emits_the_provider_resource(row):
 # `output_file`; `properties` is what that method reads from the entry.
 # Named MATRIX_ROW_FIELDS, because the flat `src/` namespace holds a row shape per record, and
 # each one is named for the record it reads (`docs/ARCHITECTURE.md` §1).
-MATRIX_ROW_FIELDS = ('resource', 'xml_element', 'xml_name', 'emitted_name', 'fixture',
-             'output_file', 'emitter', 'properties')
+MATRIX_ROW_FIELDS = (
+    "resource",
+    "xml_element",
+    "xml_name",
+    "emitted_name",
+    "fixture",
+    "output_file",
+    "emitter",
+    "properties",
+)
 
 # F6.5 decision 4: the row whose block carries the entry name and the location only, so it declares
 # no property and the property scan has nothing to measure for it.
-NAME_ONLY_ROWS = {'panos_vsys'}
+NAME_ONLY_ROWS = {"panos_vsys"}
 
 
 def _literal_keys(generator, method_name: str) -> set[str]:
@@ -192,13 +198,17 @@ def _literal_keys(generator, method_name: str) -> set[str]:
         for node in ast.walk(tree):
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 literals.add(node.value)
-            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
-                    and isinstance(node.func.value, ast.Name) and node.func.value.id == 'self':
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "self"
+            ):
                 pending.append(node.func.attr)
     return literals
 
 
-@pytest.mark.parametrize('row', ROWS, ids=_row_id)
+@pytest.mark.parametrize("row", ROWS, ids=_row_id)
 def test_row_names_its_emitter_and_properties(row, converter_module):
     """Eight fields, a real generator method, and the properties that emitter reads.
 
@@ -206,15 +216,15 @@ def test_row_names_its_emitter_and_properties(row, converter_module):
     name is the row identity, not a property, and the emitter reads nothing else from the entry
     (F6.5 decision 4). That is the one exception.
     """
-    assert sorted(row) == sorted(MATRIX_ROW_FIELDS), row['resource']
-    assert row['emitter'], f"row for {row['resource']} names no emitter"
+    assert sorted(row) == sorted(MATRIX_ROW_FIELDS), row["resource"]
+    assert row["emitter"], f"row for {row['resource']} names no emitter"
     generator = converter_module.TerraformGenerator
-    for method in row['emitter']:
+    for method in row["emitter"]:
         assert hasattr(generator, method), f"{row['resource']}: {method} is not a generator method"
-    if row['resource'] in NAME_ONLY_ROWS:
-        assert row['properties'] == (), row['resource']
+    if row["resource"] in NAME_ONLY_ROWS:
+        assert row["properties"] == (), row["resource"]
     else:
-        assert row['properties'], f"row for {row['resource']} declares no properties"
+        assert row["properties"], f"row for {row['resource']} declares no properties"
 
 
 def _shape_table_grounding(row: dict) -> set:
@@ -226,23 +236,23 @@ def _shape_table_grounding(row: dict) -> set:
     `tests/test_protocol_object.py`, `tests/test_filter_containers.py` and `tests/test_data_source_schema.py`
     are what keep the three tables against the live provider schema.
     """
-    if 'generate_virtual_routers' in row['emitter']:
-        return {field for shape_row in resource_mapping.PROTOCOL_SHAPE.values() for field in shape_row['fields']}
-    if 'generate_filter_containers' in row['emitter']:
-        return {field for shape_row in resource_mapping.FILTER_SHAPE.values() for field in shape_row['fields']}
+    if "generate_virtual_routers" in row["emitter"]:
+        return {field for shape_row in resource_mapping.PROTOCOL_SHAPE.values() for field in shape_row["fields"]}
+    if "generate_filter_containers" in row["emitter"]:
+        return {field for shape_row in resource_mapping.FILTER_SHAPE.values() for field in shape_row["fields"]}
     # F7.14: the two certificate emitters print the fields `CERTIFICATE_SHAPE` states, so the table grounds
     # them. `tests/test_data_source_schema.py` is what keeps that table against the live provider schema.
-    if 'generate_certificates' in row['emitter'] or 'generate_certificate_profiles' in row['emitter']:
-        return {field for shape_row in resource_mapping.CERTIFICATE_SHAPE.values() for field in shape_row['fields']}
+    if "generate_certificates" in row["emitter"] or "generate_certificate_profiles" in row["emitter"]:
+        return {field for shape_row in resource_mapping.CERTIFICATE_SHAPE.values() for field in shape_row["fields"]}
     return set()
 
 
-@pytest.mark.parametrize('row', ROWS, ids=_row_id)
+@pytest.mark.parametrize("row", ROWS, ids=_row_id)
 def test_declared_property_is_a_key_the_emitter_reads(row, converter_module):
     """Each declared property appears as a key read inside the row's emitter."""
     literals = set()
-    for method in row['emitter']:
+    for method in row["emitter"]:
         literals |= _literal_keys(converter_module.TerraformGenerator, method)
     literals |= _shape_table_grounding(row)
-    missing = [prop for prop in row['properties'] if prop not in literals]
-    assert missing == [], (row['resource'], missing)
+    missing = [prop for prop in row["properties"] if prop not in literals]
+    assert missing == [], (row["resource"], missing)

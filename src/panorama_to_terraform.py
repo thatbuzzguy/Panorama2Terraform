@@ -78,47 +78,46 @@ class PanoramaParser:
     # value attribute (XML element -> parser type). Verified against the live
     # schema. The provider stores IPv6 values in ip_netmask.
     ADDRESS_VALUE_ELEMENTS = {
-        'ip-netmask': 'ip-netmask',
-        'ip-range': 'ip-range',
-        'ip-wildcard': 'ip-wildcard',
-        'fqdn': 'fqdn',
-        'ipv6': 'ipv6',
-        'ipv6-range': 'ipv6-range',
+        "ip-netmask": "ip-netmask",
+        "ip-range": "ip-range",
+        "ip-wildcard": "ip-wildcard",
+        "fqdn": "fqdn",
+        "ipv6": "ipv6",
+        "ipv6-range": "ipv6-range",
     }
 
     # External dynamic list type sub-shapes (XML element -> v2 attribute).
     # Verified against the v2.0.14 schema for panos_external_dynamic_list.
     EDL_TYPE_ELEMENTS = {
-        'domain': 'domain',
-        'imei': 'imei',
-        'imsi': 'imsi',
-        'ip': 'ip',
-        'predefined-ip': 'predefined_ip',
-        'predefined-url': 'predefined_url',
-        'url': 'url',
+        "domain": "domain",
+        "imei": "imei",
+        "imsi": "imsi",
+        "ip": "ip",
+        "predefined-ip": "predefined_ip",
+        "predefined-url": "predefined_url",
+        "url": "url",
     }
 
     # Recurring schedule keys inside an EDL sub-shape (XML element -> v2 name).
     EDL_RECURRING_ELEMENTS = {
-        'daily': 'daily',
-        'five-minute': 'five_minute',
-        'hourly': 'hourly',
-        'monthly': 'monthly',
-        'weekly': 'weekly',
+        "daily": "daily",
+        "five-minute": "five_minute",
+        "hourly": "hourly",
+        "monthly": "monthly",
+        "weekly": "weekly",
     }
 
     # Fields inside an EDL sub-shape that the v2 schema models. The auth block
     # is deliberately absent: it carries credential material and the converter
     # does not write secrets into generated HCL.
     EDL_FIELD_ELEMENTS = {
-        'url': 'url',
-        'description': 'description',
-        'expand-domain': 'expand_domain',
-        'certificate-profile': 'certificate_profile',
+        "url": "url",
+        "description": "description",
+        "expand-domain": "expand_domain",
+        "certificate-profile": "certificate_profile",
     }
 
-    def __init__(self, source: ParsedSource,
-                 ledger: Optional[entry_coverage.EntryLedger] = None):
+    def __init__(self, source: ParsedSource, ledger: Optional[entry_coverage.EntryLedger] = None):
         # F5.2: the parser takes the ParsedSource the producer boundary returns,
         # the same contract for every source. The parser keeps no read of its
         # own: the size cap and the DTD refusal (F3.8) and the line map (F4.2)
@@ -133,15 +132,13 @@ class PanoramaParser:
         self.parent_map = container_coverage.parent_map(self.root)
         # F4.3: the per-entry record. A parse method marks the entries it reads,
         # and the report is built from the ledger after the parse.
-        self.ledger = ledger if ledger is not None else entry_coverage.EntryLedger(
-            self.source, self.parent_map)
+        self.ledger = ledger if ledger is not None else entry_coverage.EntryLedger(self.source, self.parent_map)
 
     def line_of(self, elem: ET.Element) -> Optional[int]:
         """Source line of an element's opening tag (F4.2)."""
         return self.source.line_of(elem)
 
-    def mark(self, entry: ET.Element, captured: dict, detail: str = '',
-             destination: Optional[str] = None) -> dict:
+    def mark(self, entry: ET.Element, captured: dict, detail: str = "", destination: Optional[str] = None) -> dict:
         """Record what this method took from an entry, and return the object.
 
         F4.3 AC-1: a parse method that reads entries marks them. The ledger stores the
@@ -169,18 +166,23 @@ class PanoramaParser:
         """
         device_groups = []
         for dg in self.root.findall(".//device-group/entry"):
-            name = dg.get('name')
+            name = dg.get("name")
             if not name:
-                self.mark_skipped(dg, 'entry has no name attribute')
+                self.mark_skipped(dg, "entry has no name attribute")
                 continue
-            device_groups.append(self.mark(dg, {
-                'name': name,
-                'description': self._get_text(dg, 'description'),
-                'parent': self._get_text(dg, 'parent'),
-                'devices': self._list_names(dg, 'devices'),
-                'templates': self._list_names(dg, 'templates'),
-                **self.identity_of(dg),
-            }))
+            device_groups.append(
+                self.mark(
+                    dg,
+                    {
+                        "name": name,
+                        "description": self._get_text(dg, "description"),
+                        "parent": self._get_text(dg, "parent"),
+                        "devices": self._list_names(dg, "devices"),
+                        "templates": self._list_names(dg, "templates"),
+                        **self.identity_of(dg),
+                    },
+                )
+            )
 
         return device_groups
 
@@ -192,17 +194,22 @@ class PanoramaParser:
         association table and are not captured here.
         """
         templates = []
-        for entry in self.root.findall('.//templates/entry'):
-            name = entry.get('name')
+        for entry in self.root.findall(".//templates/entry"):
+            name = entry.get("name")
             if not name:
-                self.mark_skipped(entry, 'entry has no name attribute')
+                self.mark_skipped(entry, "entry has no name attribute")
                 continue
-            templates.append(self.mark(entry, {
-                'name': name,
-                'description': self._get_text(entry, 'description'),
-                'default_vsys': self._get_text(entry, 'default_vsys'),
-                **self.identity_of(entry),
-            }))
+            templates.append(
+                self.mark(
+                    entry,
+                    {
+                        "name": name,
+                        "description": self._get_text(entry, "description"),
+                        "default_vsys": self._get_text(entry, "default_vsys"),
+                        **self.identity_of(entry),
+                    },
+                )
+            )
 
         return templates
 
@@ -213,19 +220,24 @@ class PanoramaParser:
         and template lists are fields the block prints.
         """
         stacks = []
-        for entry in self.root.findall('.//template-stack/entry'):
-            name = entry.get('name')
+        for entry in self.root.findall(".//template-stack/entry"):
+            name = entry.get("name")
             if not name:
-                self.mark_skipped(entry, 'entry has no name attribute')
+                self.mark_skipped(entry, "entry has no name attribute")
                 continue
-            stacks.append(self.mark(entry, {
-                'name': name,
-                'description': self._get_text(entry, 'description'),
-                'default_vsys': self._get_text(entry, 'default_vsys'),
-                'devices': self._list_names(entry, 'devices'),
-                'templates': self._list_names(entry, 'templates'),
-                **self.identity_of(entry),
-            }))
+            stacks.append(
+                self.mark(
+                    entry,
+                    {
+                        "name": name,
+                        "description": self._get_text(entry, "description"),
+                        "default_vsys": self._get_text(entry, "default_vsys"),
+                        "devices": self._list_names(entry, "devices"),
+                        "templates": self._list_names(entry, "templates"),
+                        **self.identity_of(entry),
+                    },
+                )
+            )
 
         return stacks
 
@@ -240,24 +252,28 @@ class PanoramaParser:
         block for it.
         """
         variables = []
-        for entry in self.root.findall('.//variable/entry'):
-            name = entry.get('name')
+        for entry in self.root.findall(".//variable/entry"):
+            name = entry.get("name")
             if not name:
-                self.mark_skipped(entry, 'entry has no name attribute')
+                self.mark_skipped(entry, "entry has no name attribute")
                 continue
-            container = self._scope_container_of(entry, ('templates', 'template-stack'))
+            container = self._scope_container_of(entry, ("templates", "template-stack"))
             if not container:
                 self.mark_skipped(
-                    entry,
-                    'no template or template stack holds this variable, so the provider has no '
-                    'location for it')
+                    entry, "no template or template stack holds this variable, so the provider has no location for it"
+                )
                 continue
-            variables.append(self.mark(entry, {
-                'name': name,
-                'description': self._get_text(entry, 'description'),
-                'type': self._variable_type(entry),
-                **self.identity_of(entry),
-            }))
+            variables.append(
+                self.mark(
+                    entry,
+                    {
+                        "name": name,
+                        "description": self._get_text(entry, "description"),
+                        "type": self._variable_type(entry),
+                        **self.identity_of(entry),
+                    },
+                )
+            )
 
         return variables
 
@@ -272,18 +288,19 @@ class PanoramaParser:
         entry name and the location only.
         """
         systems = []
-        for entry in self.root.findall('.//vsys/entry'):
-            name = entry.get('name')
+        for entry in self.root.findall(".//vsys/entry"):
+            name = entry.get("name")
             if not name:
-                self.mark_skipped(entry, 'entry has no name attribute')
+                self.mark_skipped(entry, "entry has no name attribute")
                 continue
-            if not self._scope_container_of(entry, ('templates',)):
+            if not self._scope_container_of(entry, ("templates",)):
                 self.mark_skipped(
                     entry,
-                    'no template holds this virtual system, so the provider has no location for '
-                    'it: a template stack lists templates and devices and holds no virtual system')
+                    "no template holds this virtual system, so the provider has no location for "
+                    "it: a template stack lists templates and devices and holds no virtual system",
+                )
                 continue
-            systems.append(self.mark(entry, {'name': name, **self.identity_of(entry)}))
+            systems.append(self.mark(entry, {"name": name, **self.identity_of(entry)}))
 
         return systems
 
@@ -296,11 +313,13 @@ class PanoramaParser:
         """
         node = elem
         while node is not None:
-            if node.tag == 'entry' and \
-                    container_coverage.container_tag(node, self.parent_map, self.source) in containers:
-                return node.get('name') or ''
+            if (
+                node.tag == "entry"
+                and container_coverage.container_tag(node, self.parent_map, self.source) in containers
+            ):
+                return node.get("name") or ""
             node = self.parent_map.get(node)
-        return ''
+        return ""
 
     def _variable_type(self, entry: ET.Element) -> dict:
         """The variable's `type` shape as one dict: the kind the entry states and its value.
@@ -309,11 +328,11 @@ class PanoramaParser:
         kind (`ip-netmask`, `fqdn`, ...), and the provider takes the same shape as a nested
         block. A field name is the provider spelling, so the underscore is the provider's.
         """
-        shape = entry.find('type')
+        shape = entry.find("type")
         if shape is None:
             return {}
         for node in list(shape):
-            return {node.tag.replace('-', '_'): (node.text or '').strip()}
+            return {node.tag.replace("-", "_"): (node.text or "").strip()}
         return {}
 
     def device_group_of(self, elem: ET.Element) -> str:
@@ -330,12 +349,12 @@ class PanoramaParser:
         node = elem
         while node is not None:
             container = container_coverage.container_tag(node, self.parent_map, self.source)
-            if container == 'device-group' and node.tag == 'entry':
-                return node.get('name') or 'Shared'
-            if node.tag == 'shared':
-                return 'Shared'
+            if container == "device-group" and node.tag == "entry":
+                return node.get("name") or "Shared"
+            if node.tag == "shared":
+                return "Shared"
             node = self.parent_map.get(node)
-        return 'Shared'
+        return "Shared"
 
     def vsys_of(self, elem: ET.Element) -> str:
         """Return the vsys that owns elem, or '' when the export declares none.
@@ -354,10 +373,10 @@ class PanoramaParser:
         node = elem
         while node is not None:
             container = container_coverage.container_tag(node, self.parent_map, self.source)
-            if node.tag == 'entry' and container == 'vsys':
-                return node.get('name') or 'vsys1'
+            if node.tag == "entry" and container == "vsys":
+                return node.get("name") or "vsys1"
             node = self.parent_map.get(node)
-        return ''
+        return ""
 
     def template_of(self, elem: ET.Element) -> str:
         """Return the template that owns elem, or '' when the export names none.
@@ -374,10 +393,10 @@ class PanoramaParser:
         node = elem
         while node is not None:
             container = container_coverage.container_tag(node, self.parent_map, self.source)
-            if node.tag == 'entry' and container == 'templates':
-                return node.get('name') or ''
+            if node.tag == "entry" and container == "templates":
+                return node.get("name") or ""
             node = self.parent_map.get(node)
-        return ''
+        return ""
 
     def device_of(self, elem: ET.Element) -> str:
         """Return the device that owns elem, or '' when the export names none.
@@ -396,10 +415,10 @@ class PanoramaParser:
         node = elem
         while node is not None:
             container = container_coverage.container_tag(node, self.parent_map, self.source)
-            if node.tag == 'entry' and container == 'devices':
-                return node.get('name') or ''
+            if node.tag == "entry" and container == "devices":
+                return node.get("name") or ""
             node = self.parent_map.get(node)
-        return ''
+        return ""
 
     def template_stack_of(self, elem: ET.Element) -> str:
         """Return the template stack that owns elem, or '' when the export names none.
@@ -415,10 +434,10 @@ class PanoramaParser:
         node = elem
         while node is not None:
             container = container_coverage.container_tag(node, self.parent_map, self.source)
-            if node.tag == 'entry' and container == 'template-stack':
-                return node.get('name') or ''
+            if node.tag == "entry" and container == "template-stack":
+                return node.get("name") or ""
             node = self.parent_map.get(node)
-        return ''
+        return ""
 
     def identity_of(self, elem: ET.Element) -> dict:
         """Return the five source scope facts of an entry (F3.5, F6.10.5).
@@ -438,11 +457,11 @@ class PanoramaParser:
                               declares none (F6.10.5)
         """
         return {
-            'device_group': self.device_group_of(elem),
-            'vsys': self.vsys_of(elem),
-            'template': self.template_of(elem),
-            'vsys_device': self.device_of(elem),
-            'template_stack': self.template_stack_of(elem),
+            "device_group": self.device_group_of(elem),
+            "vsys": self.vsys_of(elem),
+            "template": self.template_of(elem),
+            "vsys_device": self.device_of(elem),
+            "template_stack": self.template_stack_of(elem),
         }
 
     def _list_names(self, container: ET.Element, child_tag: str) -> list:
@@ -462,11 +481,11 @@ class PanoramaParser:
         if listing is None:
             return names
         for node in list(listing):
-            if node.tag == 'entry':
+            if node.tag == "entry":
                 # Both shapes read the name through the one text rule (`xml_input.read_text`).
-                name = read_text(node.get('name'))
+                name = read_text(node.get("name"))
                 self.mark(node, {})
-            elif node.tag == 'member':
+            elif node.tag == "member":
                 name = read_text(node.text)
             else:
                 continue
@@ -501,41 +520,40 @@ class PanoramaParser:
         entry prints it through the row that covers it. The location rule reads these tables to place an entry, so
         the membership entry reaches the output only as the row identity.
         """
-        cached = getattr(self, '_associations', None)
+        cached = getattr(self, "_associations", None)
         if cached is not None:
             return cached
 
-        tables = {'device_groups': {}, 'templates': {}, 'template_stacks': {},
-                  'stack_templates': {}}
+        tables = {"device_groups": {}, "templates": {}, "template_stacks": {}, "stack_templates": {}}
         # F6.5: the scope entry is marked by the parse method that reads it as an object, so
         # this method marks only the membership entries inside it (`_list_names`). One entry,
         # one mark.
-        for entry in self.root.findall('.//device-group/entry'):
-            name = entry.get('name')
+        for entry in self.root.findall(".//device-group/entry"):
+            name = entry.get("name")
             if not name:
                 # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                self.mark_skipped(entry, 'entry has no name attribute')
+                self.mark_skipped(entry, "entry has no name attribute")
                 continue
-            for device in self._list_names(entry, 'devices'):
-                tables['device_groups'].setdefault(device, []).append(name)
-        for entry in self.root.findall('.//templates/entry'):
-            name = entry.get('name')
+            for device in self._list_names(entry, "devices"):
+                tables["device_groups"].setdefault(device, []).append(name)
+        for entry in self.root.findall(".//templates/entry"):
+            name = entry.get("name")
             if not name:
-                self.mark_skipped(entry, 'entry has no name attribute')
+                self.mark_skipped(entry, "entry has no name attribute")
                 continue
-            for device in self._list_names(entry, 'devices'):
-                tables['templates'].setdefault(device, []).append(name)
-        for entry in self.root.findall('.//template-stack/entry'):
-            name = entry.get('name')
+            for device in self._list_names(entry, "devices"):
+                tables["templates"].setdefault(device, []).append(name)
+        for entry in self.root.findall(".//template-stack/entry"):
+            name = entry.get("name")
             if not name:
-                self.mark_skipped(entry, 'entry has no name attribute')
+                self.mark_skipped(entry, "entry has no name attribute")
                 continue
-            devices = self._list_names(entry, 'devices')
-            templates = self._list_names(entry, 'templates')
+            devices = self._list_names(entry, "devices")
+            templates = self._list_names(entry, "templates")
             for device in devices:
-                tables['template_stacks'].setdefault(device, []).append(name)
+                tables["template_stacks"].setdefault(device, []).append(name)
             for template in templates:
-                tables['stack_templates'].setdefault(name, []).append(template)
+                tables["stack_templates"].setdefault(name, []).append(template)
         for table in tables.values():
             for names in table.values():
                 names.sort()
@@ -553,9 +571,9 @@ class PanoramaParser:
         if not device:
             return []
         tables = self.parse_associations()
-        names = list(tables['templates'].get(device, []))
-        for stack in tables['template_stacks'].get(device, []):
-            names.extend(tables['stack_templates'].get(stack, []))
+        names = list(tables["templates"].get(device, []))
+        for stack in tables["template_stacks"].get(device, []):
+            names.extend(tables["stack_templates"].get(stack, []))
         return sorted(set(names))
 
     def parse_tags(self) -> list[dict]:
@@ -568,20 +586,25 @@ class PanoramaParser:
         tags = []
 
         for tag in self.root.findall(".//tag/entry"):
-            name = tag.get('name')
+            name = tag.get("name")
             if not name:
                 self.mark_skipped(tag, "entry has no name attribute")
                 continue
 
-            tags.append(self.mark(tag, {
-                'name': name,
-                **self.identity_of(tag),
-                'color': self._get_text(tag, 'color'),
-                'comments': self._get_text(tag, 'comments'),
-                # F4.4: the `panos_administrative_tag` row names the property, so the parse reads the
-                # entry field here and the emitter reads the key
-                'disable_override': self._get_text(tag, 'disable-override')
-            }))
+            tags.append(
+                self.mark(
+                    tag,
+                    {
+                        "name": name,
+                        **self.identity_of(tag),
+                        "color": self._get_text(tag, "color"),
+                        "comments": self._get_text(tag, "comments"),
+                        # F4.4: the `panos_administrative_tag` row names the property, so the parse reads the
+                        # entry field here and the emitter reads the key
+                        "disable_override": self._get_text(tag, "disable-override"),
+                    },
+                )
+            )
 
         return tags
 
@@ -594,21 +617,17 @@ class PanoramaParser:
         regions = []
 
         for region in self.root.findall(".//region/entry"):
-            name = region.get('name')
+            name = region.get("name")
             if not name:
                 self.mark_skipped(region, "entry has no name attribute")
                 continue
 
             addresses = []
-            for addr in region.findall('.//address/member'):
+            for addr in region.findall(".//address/member"):
                 if addr.text:
                     addresses.append(addr.text)
 
-            regions.append(self.mark(region, {
-                'name': name,
-                **self.identity_of(region),
-                'addresses': addresses
-            }))
+            regions.append(self.mark(region, {"name": name, **self.identity_of(region), "addresses": addresses}))
 
         return regions
 
@@ -621,26 +640,31 @@ class PanoramaParser:
         categories = []
 
         for cat in self.root.findall(".//custom-url-category/entry"):
-            name = cat.get('name')
+            name = cat.get("name")
             if not name:
                 self.mark_skipped(cat, "entry has no name attribute")
                 continue
 
             url_list = []
-            for url in cat.findall('.//list/member'):
+            for url in cat.findall(".//list/member"):
                 if url.text:
                     url_list.append(url.text)
 
-            categories.append(self.mark(cat, {
-                'name': name,
-                **self.identity_of(cat),
-                'type': self._get_text(cat, 'type'),
-                'list': url_list,
-                'description': self._get_text(cat, 'description'),
-                # F4.4: the row names the property, so the flag is read through the same helper as
-                # the other fields of this entry
-                'disable_override': self._get_text(cat, 'disable-override')
-            }))
+            categories.append(
+                self.mark(
+                    cat,
+                    {
+                        "name": name,
+                        **self.identity_of(cat),
+                        "type": self._get_text(cat, "type"),
+                        "list": url_list,
+                        "description": self._get_text(cat, "description"),
+                        # F4.4: the row names the property, so the flag is read through the same helper as
+                        # the other fields of this entry
+                        "disable_override": self._get_text(cat, "disable-override"),
+                    },
+                )
+            )
 
         return categories
 
@@ -653,24 +677,29 @@ class PanoramaParser:
         app_groups = []
 
         for ag in self.root.findall(".//application-group/entry"):
-            name = ag.get('name')
+            name = ag.get("name")
             if not name:
                 self.mark_skipped(ag, "entry has no name attribute")
                 continue
 
             members = []
-            for member in ag.findall('.//members/member'):
+            for member in ag.findall(".//members/member"):
                 if member.text:
                     members.append(member.text)
 
-            app_groups.append(self.mark(ag, {
-                'name': name,
-                **self.identity_of(ag),
-                'members': members,
-                # F4.4: the row names the property, so the flag is read through the same helper as
-                # the other fields of this entry
-                'disable_override': self._get_text(ag, 'disable-override')
-            }))
+            app_groups.append(
+                self.mark(
+                    ag,
+                    {
+                        "name": name,
+                        **self.identity_of(ag),
+                        "members": members,
+                        # F4.4: the row names the property, so the flag is read through the same helper as
+                        # the other fields of this entry
+                        "disable_override": self._get_text(ag, "disable-override"),
+                    },
+                )
+            )
 
         return app_groups
 
@@ -683,29 +712,34 @@ class PanoramaParser:
         app_filters = []
 
         for af in self.root.findall(".//application-filter/entry"):
-            name = af.get('name')
+            name = af.get("name")
             if not name:
                 self.mark_skipped(af, "entry has no name attribute")
                 continue
 
-            app_filters.append(self.mark(af, {
-                'name': name,
-                **self.identity_of(af),
-                'category': self._get_members(af, 'category'),
-                'subcategory': self._get_members(af, 'subcategory'),
-                'technology': self._get_members(af, 'technology'),
-                'risk': self._get_members(af, 'risk'),
-                'evasive': self._get_text(af, 'evasive'),
-                # F4.4: the field is printed by the manual report, which is the output for a `report`
-                # container, so the report line reads it through the captured object
-                'description': self._get_text(af, 'description'),
-                'excessive_bandwidth_use': self._get_text(af, 'excessive-bandwidth-use'),
-                'prone_to_misuse': self._get_text(af, 'prone-to-misuse'),
-                'is_saas': self._get_text(af, 'is-saas'),
-                'transfers_files': self._get_text(af, 'transfers-files'),
-                'tunnels_other_apps': self._get_text(af, 'tunnels-other-apps'),
-                'used_by_malware': self._get_text(af, 'used-by-malware'),
-            }))
+            app_filters.append(
+                self.mark(
+                    af,
+                    {
+                        "name": name,
+                        **self.identity_of(af),
+                        "category": self._get_members(af, "category"),
+                        "subcategory": self._get_members(af, "subcategory"),
+                        "technology": self._get_members(af, "technology"),
+                        "risk": self._get_members(af, "risk"),
+                        "evasive": self._get_text(af, "evasive"),
+                        # F4.4: the field is printed by the manual report, which is the output for a `report`
+                        # container, so the report line reads it through the captured object
+                        "description": self._get_text(af, "description"),
+                        "excessive_bandwidth_use": self._get_text(af, "excessive-bandwidth-use"),
+                        "prone_to_misuse": self._get_text(af, "prone-to-misuse"),
+                        "is_saas": self._get_text(af, "is-saas"),
+                        "transfers_files": self._get_text(af, "transfers-files"),
+                        "tunnels_other_apps": self._get_text(af, "tunnels-other-apps"),
+                        "used_by_malware": self._get_text(af, "used-by-malware"),
+                    },
+                )
+            )
 
         return app_filters
 
@@ -724,37 +758,39 @@ class PanoramaParser:
         ext_lists = []
 
         for ext_list in self.root.findall(".//external-list/entry"):
-            name = ext_list.get('name')
+            name = ext_list.get("name")
             if not name:
                 self.mark_skipped(ext_list, "entry has no name attribute")
                 continue
 
-            entry = self.mark(ext_list, {
-                'name': name,
-                **self.identity_of(ext_list),
-                'type': '',
-                # Fields captured inside the type sub-shape, keyed by the v2
-                # attribute name (url, description, exception_list, recurring,
-                # expand_domain, certificate_profile)
-                'fields': {},
-                # F4.4: the flag is a field of the entry, not of the sub-shape, so the
-                # provider takes it at the block's own level
-                'disable_override': self._get_text(ext_list, 'disable-override'),
-            })
+            entry = self.mark(
+                ext_list,
+                {
+                    "name": name,
+                    **self.identity_of(ext_list),
+                    "type": "",
+                    # Fields captured inside the type sub-shape, keyed by the v2
+                    # attribute name (url, description, exception_list, recurring,
+                    # expand_domain, certificate_profile)
+                    "fields": {},
+                    # F4.4: the flag is a field of the entry, not of the sub-shape, so the
+                    # provider takes it at the block's own level
+                    "disable_override": self._get_text(ext_list, "disable-override"),
+                },
+            )
 
-            type_elem = ext_list.find('type')
+            type_elem = ext_list.find("type")
             if type_elem is not None:
                 for sub in type_elem:
                     if sub.tag not in self.EDL_TYPE_ELEMENTS:
                         continue
-                    entry['type'] = self.EDL_TYPE_ELEMENTS[sub.tag]
+                    entry["type"] = self.EDL_TYPE_ELEMENTS[sub.tag]
                     for field in sub:
-                        if field.tag == 'exception-list':
-                            values = [m.text.strip() for m in field.findall('member')
-                                      if m.text and m.text.strip()]
+                        if field.tag == "exception-list":
+                            values = [m.text.strip() for m in field.findall("member") if m.text and m.text.strip()]
                             if values:
-                                entry['fields']['exception_list'] = values
-                        elif field.tag == 'recurring':
+                                entry["fields"]["exception_list"] = values
+                        elif field.tag == "recurring":
                             for sched in field:
                                 if sched.tag not in self.EDL_RECURRING_ELEMENTS:
                                     continue
@@ -763,26 +799,24 @@ class PanoramaParser:
                                 block = {}
                                 for value in sched:
                                     if value.text and value.text.strip():
-                                        block[value.tag.replace('-', '_')] = value.text.strip()
-                                entry['fields']['recurring'] = {
-                                    self.EDL_RECURRING_ELEMENTS[sched.tag]: block
-                                }
+                                        block[value.tag.replace("-", "_")] = value.text.strip()
+                                entry["fields"]["recurring"] = {self.EDL_RECURRING_ELEMENTS[sched.tag]: block}
                         elif field.tag in self.EDL_FIELD_ELEMENTS:
-                            text = (field.text or '').strip()
+                            text = (field.text or "").strip()
                             if text:
                                 key = self.EDL_FIELD_ELEMENTS[field.tag]
-                                if key == 'expand_domain':
+                                if key == "expand_domain":
                                     # v2 models expand_domain as a bool
-                                    entry['fields'][key] = text.lower() == 'yes'
+                                    entry["fields"][key] = text.lower() == "yes"
                                 else:
-                                    entry['fields'][key] = text
+                                    entry["fields"][key] = text
 
             # The entry-level description is the fallback for the sub-shape
             # description attribute (the schema exposes only the sub-shape one).
-            if 'description' not in entry['fields']:
-                desc = self._get_text(ext_list, 'description')
+            if "description" not in entry["fields"]:
+                desc = self._get_text(ext_list, "description")
                 if desc:
-                    entry['fields']['description'] = desc.strip()
+                    entry["fields"]["description"] = desc.strip()
 
             ext_lists.append(entry)
 
@@ -807,7 +841,7 @@ class PanoramaParser:
         addresses = []
 
         for addr in self.root.findall(".//address/entry"):
-            name = addr.get('name')
+            name = addr.get("name")
             if not name:
                 self.mark_skipped(addr, "entry has no name attribute")
                 continue
@@ -816,50 +850,53 @@ class PanoramaParser:
             # reads a level, so the address rule reads only the level its own row states, and a policy address
             # entry is read by `parse_bgp`.
             row = entry_coverage.covering_row(
-                container_coverage.section_path(self.parent_map.get(addr), self.parent_map, self.source))
-            if row is not None and row.method != 'parse_address_objects':
+                container_coverage.section_path(self.parent_map.get(addr), self.parent_map, self.source)
+            )
+            if row is not None and row.method != "parse_address_objects":
                 continue
 
             # A reference pointer has no content: skip it.
             if self._is_reference_pointer(addr):
                 # F4.3: the entry is visited and skipped, so the report says why.
-                self.mark_skipped(addr, 'reference pointer (id only)')
+                self.mark_skipped(addr, "reference pointer (id only)")
                 continue
 
-            addr_obj = self.mark(addr, {
-                'name': name,
-                **self.identity_of(addr),
-                # PAN-OS records the object type as an entry attribute
-                'declared_type': addr.get('type') or '',
-                'other': {},
-            })
+            addr_obj = self.mark(
+                addr,
+                {
+                    "name": name,
+                    **self.identity_of(addr),
+                    # PAN-OS records the object type as an entry attribute
+                    "declared_type": addr.get("type") or "",
+                    "other": {},
+                },
+            )
 
             for child in addr:
                 tag = child.tag
                 if tag in self.ADDRESS_VALUE_ELEMENTS:
                     # PAN-OS stores exactly one value element per entry; the
                     # first one wins so the result is order-stable.
-                    if 'type' not in addr_obj:
-                        addr_obj['type'] = self.ADDRESS_VALUE_ELEMENTS[tag]
-                        addr_obj['value'] = (child.text or '').strip()
-                elif tag == 'description':
-                    addr_obj['description'] = (child.text or '').strip()
-                elif tag == 'disable-override':
-                    addr_obj['disable_override'] = (child.text or '').strip()
-                elif tag == 'tag':
-                    addr_obj['tags'] = [m.text.strip() for m in child.findall('member')
-                                        if m.text and m.text.strip()]
+                    if "type" not in addr_obj:
+                        addr_obj["type"] = self.ADDRESS_VALUE_ELEMENTS[tag]
+                        addr_obj["value"] = (child.text or "").strip()
+                elif tag == "description":
+                    addr_obj["description"] = (child.text or "").strip()
+                elif tag == "disable-override":
+                    addr_obj["disable_override"] = (child.text or "").strip()
+                elif tag == "tag":
+                    addr_obj["tags"] = [m.text.strip() for m in child.findall("member") if m.text and m.text.strip()]
                 else:
                     # Not modeled by panos_address (location-type fields).
                     # Keep the value so the report can show it.
                     if child.text and child.text.strip():
-                        addr_obj['other'][tag] = child.text.strip()
+                        addr_obj["other"][tag] = child.text.strip()
 
-            addr_obj.setdefault('tags', [])
+            addr_obj.setdefault("tags", [])
             # No v2 attribute exists for this entry's content: it cannot be
             # emitted as a valid resource, so it is reported instead.
-            if 'type' not in addr_obj and addr_obj['other']:
-                addr_obj['report_only'] = True
+            if "type" not in addr_obj and addr_obj["other"]:
+                addr_obj["report_only"] = True
 
             addresses.append(addr_obj)
 
@@ -871,9 +908,9 @@ class PanoramaParser:
         Panorama emits such entries to reference a shared definition; they
         have no content of their own (F3.1 keeps them out of the model).
         """
-        if elem.find('id') is None:
+        if elem.find("id") is None:
             return False
-        return all(child.tag == 'id' for child in elem)
+        return all(child.tag == "id" for child in elem)
 
     def parse_address_groups(self) -> list[dict]:
         """Parse address groups.
@@ -886,37 +923,42 @@ class PanoramaParser:
         groups = []
 
         for grp in self.root.findall(".//address-group/entry"):
-            name = grp.get('name')
+            name = grp.get("name")
             if not name:
                 self.mark_skipped(grp, "entry has no name attribute")
                 continue
 
             if self._is_reference_pointer(grp):
                 # F4.3: the entry is visited and skipped, so the report says why.
-                self.mark_skipped(grp, 'reference pointer (id only)')
+                self.mark_skipped(grp, "reference pointer (id only)")
                 continue
 
             # Parse members
             members = []
-            static_members = grp.findall('.//static/member')
+            static_members = grp.findall(".//static/member")
             for member in static_members:
                 if member.text:
                     members.append(member.text)
 
             # v2 models the tag-based filter as a single expression string
-            dynamic_filter = grp.find('.//dynamic/filter')
+            dynamic_filter = grp.find(".//dynamic/filter")
             filter_expr = self._dynamic_filter_expr(dynamic_filter) if dynamic_filter is not None else None
 
-            groups.append(self.mark(grp, {
-                'name': name,
-                **self.identity_of(grp),
-                'static_members': members,
-                'dynamic_filter': filter_expr,
-                'description': self._get_text(grp, 'description'),
-                # F4.4: the row names the property, so the flag is read through the same helper as
-                # the other fields of this entry
-                'disable_override': self._get_text(grp, 'disable-override')
-            }))
+            groups.append(
+                self.mark(
+                    grp,
+                    {
+                        "name": name,
+                        **self.identity_of(grp),
+                        "static_members": members,
+                        "dynamic_filter": filter_expr,
+                        "description": self._get_text(grp, "description"),
+                        # F4.4: the row names the property, so the flag is read through the same helper as
+                        # the other fields of this entry
+                        "disable_override": self._get_text(grp, "disable-override"),
+                    },
+                )
+            )
 
         return groups
 
@@ -931,10 +973,10 @@ class PanoramaParser:
         parts = []
         for attr in filter_elem:
             for value_elem in attr:
-                val = (value_elem.text or '').strip()
+                val = (value_elem.text or "").strip()
                 if val:
                     parts.append(f'{value_elem.tag} == "{val}"')
-        return ' and '.join(parts)
+        return " and ".join(parts)
 
     def parse_service_objects(self) -> list[dict]:
         """Parse service objects.
@@ -955,64 +997,65 @@ class PanoramaParser:
         services = []
 
         for svc in self.root.findall(".//service/entry"):
-            name = svc.get('name')
+            name = svc.get("name")
             if not name:
                 self.mark_skipped(svc, "entry has no name attribute")
                 continue
 
             if self._is_reference_pointer(svc):
                 # F4.3: the entry is visited and skipped, so the report says why.
-                self.mark_skipped(svc, 'reference pointer (id only)')
+                self.mark_skipped(svc, "reference pointer (id only)")
                 continue
 
-            service_obj = self.mark(svc, {
-                'name': name,
-                **self.identity_of(svc),
-                # Protocol sub-blocks, keyed by 'tcp' / 'udp'. The parse model
-                # keeps both legs; the emitter can only write one (v2 limit).
-                # Each leg holds destination_port, source_port, and override.
-                'protocols': {},
-                'tags': [],
-            })
+            service_obj = self.mark(
+                svc,
+                {
+                    "name": name,
+                    **self.identity_of(svc),
+                    # Protocol sub-blocks, keyed by 'tcp' / 'udp'. The parse model
+                    # keeps both legs; the emitter can only write one (v2 limit).
+                    # Each leg holds destination_port, source_port, and override.
+                    "protocols": {},
+                    "tags": [],
+                },
+            )
 
-            protocol = svc.find('protocol')
+            protocol = svc.find("protocol")
             if protocol is not None:
                 for sub in protocol:
-                    if sub.tag not in ('tcp', 'udp'):
+                    if sub.tag not in ("tcp", "udp"):
                         # v2 models only tcp and udp; keep the rest visible
-                        service_obj.setdefault('other_protocol', {})[sub.tag] = \
-                            (sub.text or '').strip()
+                        service_obj.setdefault("other_protocol", {})[sub.tag] = (sub.text or "").strip()
                         continue
                     block = {}
                     for field in sub:
-                        text = (field.text or '').strip()
-                        if field.tag in ('port', 'source-port'):
+                        text = (field.text or "").strip()
+                        if field.tag in ("port", "source-port"):
                             if text:
-                                block['destination_port' if field.tag == 'port'
-                                       else 'source_port'] = text
-                        elif field.tag == 'override':
+                                block["destination_port" if field.tag == "port" else "source_port"] = text
+                        elif field.tag == "override":
                             # Export shape: override/yes/<timeout>. The bare
                             # override/<timeout> shape is accepted as well.
-                            body = field.find('yes')
+                            body = field.find("yes")
                             nums = {}
-                            for t in (body if body is not None else field):
-                                value = (t.text or '').strip()
+                            for t in body if body is not None else field:
+                                value = (t.text or "").strip()
                                 if value:
-                                    nums[t.tag.replace('-', '_')] = int(value) if value.isdigit() else value
+                                    nums[t.tag.replace("-", "_")] = int(value) if value.isdigit() else value
                             if nums:
-                                block['override'] = nums
+                                block["override"] = nums
                     if block:
-                        service_obj['protocols'][sub.tag] = block
+                        service_obj["protocols"][sub.tag] = block
 
-            for tag_elem in svc.findall('.//tag/member'):
+            for tag_elem in svc.findall(".//tag/member"):
                 if tag_elem.text and tag_elem.text.strip():
-                    service_obj['tags'].append(tag_elem.text.strip())
+                    service_obj["tags"].append(tag_elem.text.strip())
 
-            service_obj['description'] = (self._get_text(svc, 'description') or '').strip()
+            service_obj["description"] = (self._get_text(svc, "description") or "").strip()
             # F6.2: the parse keeps the flag here, as the address parser does (F3.4), because the
             # ownership rule reads it (`ownership.py` rule 4). An entry with no value keeps the
             # cleared default, so no property finding appears for it.
-            service_obj['disable_override'] = (self._get_text(svc, 'disable-override') or '').strip()
+            service_obj["disable_override"] = (self._get_text(svc, "disable-override") or "").strip()
             services.append(service_obj)
 
         return services
@@ -1027,30 +1070,35 @@ class PanoramaParser:
         groups = []
 
         for grp in self.root.findall(".//service-group/entry"):
-            name = grp.get('name')
+            name = grp.get("name")
             if not name:
                 self.mark_skipped(grp, "entry has no name attribute")
                 continue
 
             if self._is_reference_pointer(grp):
                 # F4.3: the entry is visited and skipped, so the report says why.
-                self.mark_skipped(grp, 'reference pointer (id only)')
+                self.mark_skipped(grp, "reference pointer (id only)")
                 continue
 
             members = []
-            for member in grp.findall('.//members/member'):
+            for member in grp.findall(".//members/member"):
                 if member.text:
                     members.append(member.text)
 
-            groups.append(self.mark(grp, {
-                'name': name,
-                **self.identity_of(grp),
-                'members': members,
-                'description': self._get_text(grp, 'description'),
-                # F4.4: the row names the property, so the flag is read through the same helper as
-                # the other fields of this entry
-                'disable_override': self._get_text(grp, 'disable-override')
-            }))
+            groups.append(
+                self.mark(
+                    grp,
+                    {
+                        "name": name,
+                        **self.identity_of(grp),
+                        "members": members,
+                        "description": self._get_text(grp, "description"),
+                        # F4.4: the row names the property, so the flag is read through the same helper as
+                        # the other fields of this entry
+                        "disable_override": self._get_text(grp, "disable-override"),
+                    },
+                )
+            )
 
         return groups
 
@@ -1064,38 +1112,41 @@ class PanoramaParser:
         rules = []
 
         for rule in self.root.findall(".//security/rules/entry"):
-            name = rule.get('name')
+            name = rule.get("name")
             if not name:
                 self.mark_skipped(rule, "entry has no name attribute")
                 continue
 
-            rule_obj = self.mark(rule, {
-                'name': name,
-                **self.identity_of(rule),
-                'source_zones': self._get_members(rule, 'from'),
-                'source_addresses': self._get_members(rule, 'source'),
-                'destination_zones': self._get_members(rule, 'to'),
-                'destination_addresses': self._get_members(rule, 'destination'),
-                'applications': self._get_members(rule, 'application'),
-                'services': self._get_members(rule, 'service'),
-                # F4.4: the profile group reference reaches the provider as
-                # `profile_setting.group`, so the parse keeps the members under the parsed-object
-                # key the row names. No reference scope names a profile group, so the names stay
-                # brown-field strings.
-                'profile_group': self._get_members(rule, 'profile/group'),
-                'action': self._get_text(rule, 'action'),
-                'description': self._get_text(rule, 'description')
-            })
+            rule_obj = self.mark(
+                rule,
+                {
+                    "name": name,
+                    **self.identity_of(rule),
+                    "source_zones": self._get_members(rule, "from"),
+                    "source_addresses": self._get_members(rule, "source"),
+                    "destination_zones": self._get_members(rule, "to"),
+                    "destination_addresses": self._get_members(rule, "destination"),
+                    "applications": self._get_members(rule, "application"),
+                    "services": self._get_members(rule, "service"),
+                    # F4.4: the profile group reference reaches the provider as
+                    # `profile_setting.group`, so the parse keeps the members under the parsed-object
+                    # key the row names. No reference scope names a profile group, so the names stay
+                    # brown-field strings.
+                    "profile_group": self._get_members(rule, "profile/group"),
+                    "action": self._get_text(rule, "action"),
+                    "description": self._get_text(rule, "description"),
+                },
+            )
 
             # Log settings
-            log_start = rule.find('log-start')
-            log_end = rule.find('log-end')
-            rule_obj['log_start'] = log_start.text == 'yes' if log_start is not None else False
-            rule_obj['log_end'] = log_end.text == 'yes' if log_end is not None else False
+            log_start = rule.find("log-start")
+            log_end = rule.find("log-end")
+            rule_obj["log_start"] = log_start.text == "yes" if log_start is not None else False
+            rule_obj["log_end"] = log_end.text == "yes" if log_end is not None else False
 
             # Disabled status
-            disabled = rule.find('disabled')
-            rule_obj['disabled'] = disabled.text == 'yes' if disabled is not None else False
+            disabled = rule.find("disabled")
+            rule_obj["disabled"] = disabled.text == "yes" if disabled is not None else False
 
             rules.append(rule_obj)
 
@@ -1110,52 +1161,55 @@ class PanoramaParser:
         rules = []
 
         for rule in self.root.findall(".//nat/rules/entry"):
-            name = rule.get('name')
+            name = rule.get("name")
             if not name:
                 self.mark_skipped(rule, "entry has no name attribute")
                 continue
 
-            rule_obj = self.mark(rule, {
-                'name': name,
-                **self.identity_of(rule),
-                'source_zones': self._get_members(rule, 'from'),
-                'destination_zone': self._get_text(rule, 'to-interface'),
-                'source_addresses': self._get_members(rule, 'source'),
-                'destination_addresses': self._get_members(rule, 'destination'),
-                # F4.4: `panos_nat_policy_rules.rules.service` is a string, so the member form
-                # reaches the field as one name; the helper is what reads both export forms
-                'service': self._get_single_value(rule, 'service'),
-                'description': self._get_text(rule, 'description')
-            })
+            rule_obj = self.mark(
+                rule,
+                {
+                    "name": name,
+                    **self.identity_of(rule),
+                    "source_zones": self._get_members(rule, "from"),
+                    "destination_zone": self._get_text(rule, "to-interface"),
+                    "source_addresses": self._get_members(rule, "source"),
+                    "destination_addresses": self._get_members(rule, "destination"),
+                    # F4.4: `panos_nat_policy_rules.rules.service` is a string, so the member form
+                    # reaches the field as one name; the helper is what reads both export forms
+                    "service": self._get_single_value(rule, "service"),
+                    "description": self._get_text(rule, "description"),
+                },
+            )
 
             # Source translation
-            source_translation = rule.find('.//source-translation')
+            source_translation = rule.find(".//source-translation")
             if source_translation is not None:
-                dynamic_ip_and_port = source_translation.find('dynamic-ip-and-port')
+                dynamic_ip_and_port = source_translation.find("dynamic-ip-and-port")
                 if dynamic_ip_and_port is not None:
-                    translated_address = dynamic_ip_and_port.find('.//translated-address')
+                    translated_address = dynamic_ip_and_port.find(".//translated-address")
                     if translated_address is not None:
                         members = []
-                        for member in translated_address.findall('member'):
+                        for member in translated_address.findall("member"):
                             if member.text:
                                 members.append(member.text)
-                        rule_obj['source_translation_type'] = 'dynamic-ip-and-port'
-                        rule_obj['source_translation_address'] = members
+                        rule_obj["source_translation_type"] = "dynamic-ip-and-port"
+                        rule_obj["source_translation_address"] = members
 
             # Destination translation
-            destination_translation = rule.find('.//destination-translation')
+            destination_translation = rule.find(".//destination-translation")
             if destination_translation is not None:
-                translated_address = destination_translation.find('translated-address')
-                translated_port = destination_translation.find('translated-port')
+                translated_address = destination_translation.find("translated-address")
+                translated_port = destination_translation.find("translated-port")
 
                 if translated_address is not None:
-                    rule_obj['destination_translation_address'] = translated_address.text
+                    rule_obj["destination_translation_address"] = translated_address.text
                 if translated_port is not None:
-                    rule_obj['destination_translation_port'] = translated_port.text
+                    rule_obj["destination_translation_port"] = translated_port.text
 
             # Disabled status
-            disabled = rule.find('disabled')
-            rule_obj['disabled'] = disabled.text == 'yes' if disabled is not None else False
+            disabled = rule.find("disabled")
+            rule_obj["disabled"] = disabled.text == "yes" if disabled is not None else False
 
             rules.append(rule_obj)
 
@@ -1170,40 +1224,43 @@ class PanoramaParser:
         schedules = []
 
         for sched in self.root.findall(".//schedule/entry"):
-            name = sched.get('name')
+            name = sched.get("name")
             if not name:
                 self.mark_skipped(sched, "entry has no name attribute")
                 continue
 
-            sched_obj = self.mark(sched, {
-                'name': name,
-                **self.identity_of(sched),
-                'schedule_type': None,
-                'recurring': [],
-                # F4.4: `panos_schedule` declares no description, so the manual report is the
-                # output that reads this field
-                'description': self._get_text(sched, 'description')
-            })
+            sched_obj = self.mark(
+                sched,
+                {
+                    "name": name,
+                    **self.identity_of(sched),
+                    "schedule_type": None,
+                    "recurring": [],
+                    # F4.4: `panos_schedule` declares no description, so the manual report is the
+                    # output that reads this field
+                    "description": self._get_text(sched, "description"),
+                },
+            )
 
             # Check for recurring schedule
-            recurring = sched.find('schedule-type/recurring')
+            recurring = sched.find("schedule-type/recurring")
             if recurring is not None:
-                sched_obj['schedule_type'] = 'recurring'
-                for entry in recurring.findall('entry'):
-                    rec_name = entry.get('name')
+                sched_obj["schedule_type"] = "recurring"
+                for entry in recurring.findall("entry"):
+                    rec_name = entry.get("name")
                     if not rec_name:
                         # F4.3: the entry was read, so the record must hold it. A nameless child is a
                         # property level inside the schedule entry, so the report counts it on the parent
                         # row instead of printing a line of its own.
-                        self.mark_skipped(entry, 'entry has no name attribute')
+                        self.mark_skipped(entry, "entry has no name attribute")
                         continue
-                    rec_obj = self.mark(entry, {'name': rec_name})
-                    sched_obj['recurring'].append(rec_obj)
+                    rec_obj = self.mark(entry, {"name": rec_name})
+                    sched_obj["recurring"].append(rec_obj)
 
             # Check for non-recurring schedule
-            non_recurring = sched.find('schedule-type/non-recurring')
+            non_recurring = sched.find("schedule-type/non-recurring")
             if non_recurring is not None:
-                sched_obj['schedule_type'] = 'non-recurring'
+                sched_obj["schedule_type"] = "non-recurring"
 
             schedules.append(sched_obj)
 
@@ -1218,45 +1275,48 @@ class PanoramaParser:
         rules = []
 
         for rule in self.root.findall(".//decryption/rules/entry"):
-            name = rule.get('name')
+            name = rule.get("name")
             if not name:
                 self.mark_skipped(rule, "entry has no name attribute")
                 continue
 
-            rule_obj = self.mark(rule, {
-                'name': name,
-                'uuid': rule.get('uuid'),
-                # F2.9: the device group scopes the v2 resource and its
-                # rule chain (location + position pivot semantics, F2.5)
-                **self.identity_of(rule),
-                'source_zones': self._get_members(rule, 'from'),
-                'destination_zones': self._get_members(rule, 'to'),
-                'source_addresses': self._get_members(rule, 'source'),
-                'destination_addresses': self._get_members(rule, 'destination'),
-                'source_users': self._get_members(rule, 'source-user'),
-                'categories': self._get_members(rule, 'category'),
-                'services': self._get_members(rule, 'service'),
-                'action': self._get_text(rule, 'action'),
-                'type': None,
-                'profile': self._get_text(rule, 'profile'),
-                'description': self._get_text(rule, 'description'),
-                'disabled': self._get_text(rule, 'disabled') == 'yes',
-                'log_setting': self._get_text(rule, 'log-setting'),
-                # F2.9: log-start/log-end map to the v2 log_success and
-                # log_fail attributes
-                'log_start': self._get_text(rule, 'log-start') == 'yes',
-                'log_end': self._get_text(rule, 'log-end') == 'yes',
-            })
+            rule_obj = self.mark(
+                rule,
+                {
+                    "name": name,
+                    "uuid": rule.get("uuid"),
+                    # F2.9: the device group scopes the v2 resource and its
+                    # rule chain (location + position pivot semantics, F2.5)
+                    **self.identity_of(rule),
+                    "source_zones": self._get_members(rule, "from"),
+                    "destination_zones": self._get_members(rule, "to"),
+                    "source_addresses": self._get_members(rule, "source"),
+                    "destination_addresses": self._get_members(rule, "destination"),
+                    "source_users": self._get_members(rule, "source-user"),
+                    "categories": self._get_members(rule, "category"),
+                    "services": self._get_members(rule, "service"),
+                    "action": self._get_text(rule, "action"),
+                    "type": None,
+                    "profile": self._get_text(rule, "profile"),
+                    "description": self._get_text(rule, "description"),
+                    "disabled": self._get_text(rule, "disabled") == "yes",
+                    "log_setting": self._get_text(rule, "log-setting"),
+                    # F2.9: log-start/log-end map to the v2 log_success and
+                    # log_fail attributes
+                    "log_start": self._get_text(rule, "log-start") == "yes",
+                    "log_end": self._get_text(rule, "log-end") == "yes",
+                },
+            )
 
             # Determine type
-            type_elem = rule.find('type')
+            type_elem = rule.find("type")
             if type_elem is not None:
-                if type_elem.find('ssl-forward-proxy') is not None:
-                    rule_obj['type'] = 'ssl-forward-proxy'
-                elif type_elem.find('ssl-inbound-inspection') is not None:
-                    rule_obj['type'] = 'ssl-inbound-inspection'
-                elif type_elem.find('ssh-proxy') is not None:
-                    rule_obj['type'] = 'ssh-proxy'
+                if type_elem.find("ssl-forward-proxy") is not None:
+                    rule_obj["type"] = "ssl-forward-proxy"
+                elif type_elem.find("ssl-inbound-inspection") is not None:
+                    rule_obj["type"] = "ssl-inbound-inspection"
+                elif type_elem.find("ssh-proxy") is not None:
+                    rule_obj["type"] = "ssh-proxy"
 
             rules.append(rule_obj)
 
@@ -1271,88 +1331,79 @@ class PanoramaParser:
         rules = []
 
         for rule in self.root.findall(".//pbf/rules/entry"):
-            name = rule.get('name')
+            name = rule.get("name")
             if not name:
                 self.mark_skipped(rule, "entry has no name attribute")
                 continue
 
-            rule_obj = self.mark(rule, {
-                'name': name,
-                'uuid': rule.get('uuid'),
-                # F2.9: the device group scopes the v2 resource and its
-                # rule chain (location + position pivot semantics, F2.5)
-                **self.identity_of(rule),
-                'description': self._get_text(rule, 'description'),
-                'disabled': self._get_text(rule, 'disabled') == 'yes',
-                'source_zones': [],
-                'source_addresses': self._get_members(rule, 'source'),
-                'source_users': self._get_members(rule, 'source-user'),
-                'destination_addresses': self._get_members(rule, 'destination'),
-                'applications': self._get_members(rule, 'application'),
-                'services': self._get_members(rule, 'service'),
-                # F2.9: optional rule schedule name
-                'schedule': self._get_text(rule, 'schedule'),
-                'action': None
-            })
+            rule_obj = self.mark(
+                rule,
+                {
+                    "name": name,
+                    "uuid": rule.get("uuid"),
+                    # F2.9: the device group scopes the v2 resource and its
+                    # rule chain (location + position pivot semantics, F2.5)
+                    **self.identity_of(rule),
+                    "description": self._get_text(rule, "description"),
+                    "disabled": self._get_text(rule, "disabled") == "yes",
+                    "source_zones": [],
+                    "source_addresses": self._get_members(rule, "source"),
+                    "source_users": self._get_members(rule, "source-user"),
+                    "destination_addresses": self._get_members(rule, "destination"),
+                    "applications": self._get_members(rule, "application"),
+                    "services": self._get_members(rule, "service"),
+                    # F2.9: optional rule schedule name
+                    "schedule": self._get_text(rule, "schedule"),
+                    "action": None,
+                },
+            )
 
             # Get source zones
-            from_elem = rule.find('from')
+            from_elem = rule.find("from")
             if from_elem is not None:
-                for zone in from_elem.findall('.//zone/member'):
+                for zone in from_elem.findall(".//zone/member"):
                     if zone.text:
-                        rule_obj['source_zones'].append(zone.text)
+                        rule_obj["source_zones"].append(zone.text)
 
             # Get action
-            action_elem = rule.find('action')
+            action_elem = rule.find("action")
             if action_elem is not None:
-                forward = action_elem.find('forward')
+                forward = action_elem.find("forward")
                 if forward is not None:
-                    nexthop_ip = self._get_text(forward, 'nexthop/ip-address')
-                    egress_iface = self._get_text(forward, 'egress-interface')
-                    action_obj = {
-                        'type': 'forward',
-                        'nexthop_ip': nexthop_ip,
-                        'egress_interface': egress_iface
-                    }
+                    nexthop_ip = self._get_text(forward, "nexthop/ip-address")
+                    egress_iface = self._get_text(forward, "egress-interface")
+                    action_obj = {"type": "forward", "nexthop_ip": nexthop_ip, "egress_interface": egress_iface}
                     # F2.9: optional path monitoring on the forward action.
                     # The profile name references a panos_monitor_profile
                     # (network/profiles/monitor-profile), a different
                     # object from the IPsec tunnel monitor profile.
-                    monitor = forward.find('monitor')
+                    monitor = forward.find("monitor")
                     if monitor is not None:
-                        action_obj['monitor'] = {
-                            'ip_address': self._get_text(monitor, 'ip-address'),
-                            'profile': self._get_text(monitor, 'profile'),
-                            'disable_if_unreachable':
-                                self._get_text(monitor, 'disable-if-unreachable') == 'yes'
+                        action_obj["monitor"] = {
+                            "ip_address": self._get_text(monitor, "ip-address"),
+                            "profile": self._get_text(monitor, "profile"),
+                            "disable_if_unreachable": self._get_text(monitor, "disable-if-unreachable") == "yes",
                         }
-                    rule_obj['action'] = action_obj
+                    rule_obj["action"] = action_obj
 
-                discard = action_elem.find('discard')
+                discard = action_elem.find("discard")
                 if discard is not None:
-                    rule_obj['action'] = {
-                        'type': 'discard'
-                    }
+                    rule_obj["action"] = {"type": "discard"}
 
-                no_pbf = action_elem.find('no-pbf')
+                no_pbf = action_elem.find("no-pbf")
                 if no_pbf is not None:
-                    rule_obj['action'] = {
-                        'type': 'no-pbf'
-                    }
+                    rule_obj["action"] = {"type": "no-pbf"}
 
                 # F2.9: forward-to-vsys is a plain vsys name in both the
                 # export and the v2 schema
-                fwd_vsys = action_elem.find('forward-to-vsys')
+                fwd_vsys = action_elem.find("forward-to-vsys")
                 if fwd_vsys is not None and fwd_vsys.text:
-                    rule_obj['action'] = {
-                        'type': 'forward_to_vsys',
-                        'vsys': fwd_vsys.text
-                    }
+                    rule_obj["action"] = {"type": "forward_to_vsys", "vsys": fwd_vsys.text}
 
             # Enforce symmetric return
-            enforce_sym = rule.find('.//enforce-symmetric-return/enabled')
+            enforce_sym = rule.find(".//enforce-symmetric-return/enabled")
             if enforce_sym is not None:
-                rule_obj['enforce_symmetric_return'] = enforce_sym.text == 'yes'
+                rule_obj["enforce_symmetric_return"] = enforce_sym.text == "yes"
 
             rules.append(rule_obj)
 
@@ -1367,24 +1418,27 @@ class PanoramaParser:
         rules = []
 
         for rule in self.root.findall(".//application-override/rules/entry"):
-            name = rule.get('name')
+            name = rule.get("name")
             if not name:
                 self.mark_skipped(rule, "entry has no name attribute")
                 continue
 
-            rule_obj = self.mark(rule, {
-                'name': name,
-                **self.identity_of(rule),
-                'description': self._get_text(rule, 'description'),
-                'disabled': self._get_text(rule, 'disabled') == 'yes',
-                'source_zones': self._get_members(rule, 'from'),
-                'destination_zones': self._get_members(rule, 'to'),
-                'source_addresses': self._get_members(rule, 'source'),
-                'destination_addresses': self._get_members(rule, 'destination'),
-                'port': self._get_text(rule, 'port'),
-                'protocol': self._get_text(rule, 'protocol'),
-                'application': self._get_text(rule, 'application')
-            })
+            rule_obj = self.mark(
+                rule,
+                {
+                    "name": name,
+                    **self.identity_of(rule),
+                    "description": self._get_text(rule, "description"),
+                    "disabled": self._get_text(rule, "disabled") == "yes",
+                    "source_zones": self._get_members(rule, "from"),
+                    "destination_zones": self._get_members(rule, "to"),
+                    "source_addresses": self._get_members(rule, "source"),
+                    "destination_addresses": self._get_members(rule, "destination"),
+                    "port": self._get_text(rule, "port"),
+                    "protocol": self._get_text(rule, "protocol"),
+                    "application": self._get_text(rule, "application"),
+                },
+            )
 
             rules.append(rule_obj)
 
@@ -1401,38 +1455,43 @@ class PanoramaParser:
         zones = []
 
         for zone in self.root.findall(".//zone/entry"):
-            name = zone.get('name')
+            name = zone.get("name")
             if not name:
                 self.mark_skipped(zone, "entry has no name attribute")
                 continue
 
             # Determine zone type
-            zone_type = 'layer3'
-            if zone.find('network/layer2') is not None:
-                zone_type = 'layer2'
-            elif zone.find('network/tap') is not None:
-                zone_type = 'tap'
-            elif zone.find('network/virtual-wire') is not None:
-                zone_type = 'virtual-wire'
-            elif zone.find('network/tunnel') is not None:
-                zone_type = 'tunnel'
+            zone_type = "layer3"
+            if zone.find("network/layer2") is not None:
+                zone_type = "layer2"
+            elif zone.find("network/tap") is not None:
+                zone_type = "tap"
+            elif zone.find("network/virtual-wire") is not None:
+                zone_type = "virtual-wire"
+            elif zone.find("network/tunnel") is not None:
+                zone_type = "tunnel"
 
             # Get interfaces
             interfaces = []
-            for iface in zone.findall('.//network/*/member'):
+            for iface in zone.findall(".//network/*/member"):
                 if iface.text:
                     interfaces.append(iface.text)
 
             # Get zone protection profile
-            zone_profile = zone.find('.//zone-protection-profile')
+            zone_profile = zone.find(".//zone-protection-profile")
 
-            zones.append(self.mark(zone, {
-                'name': name,
-                **self.identity_of(zone),
-                'type': zone_type,
-                'interfaces': interfaces,
-                'zone_protection_profile': zone_profile.text if zone_profile is not None else None
-            }))
+            zones.append(
+                self.mark(
+                    zone,
+                    {
+                        "name": name,
+                        **self.identity_of(zone),
+                        "type": zone_type,
+                        "interfaces": interfaces,
+                        "zone_protection_profile": zone_profile.text if zone_profile is not None else None,
+                    },
+                )
+            )
 
         return zones
 
@@ -1441,7 +1500,7 @@ class PanoramaParser:
         interfaces = []
         # Ethernet interfaces
         for iface in self.root.findall(".//network/interface/ethernet/entry"):
-            name = iface.get('name')
+            name = iface.get("name")
             if not name:
                 self.mark_skipped(iface, "entry has no name attribute")
                 continue
@@ -1451,250 +1510,274 @@ class PanoramaParser:
             # provider declares no parent attribute on `panos_ethernet_interface`, and the name states the
             # parent part. The zone and the virtual router are read from the other side (`panos_zone` and
             # `panos_virtual_router` hold the membership), so this object carries no key for either.
-            iface_obj = self.mark(iface, {
-                'name': name,
-                'type': 'ethernet',
-                **self.identity_of(iface),
-                'mode': None,
-                'ip_addresses': [],
-                'ipv6_addresses': [],
-                'management_profile': None,
-                'comment': self._get_text(iface, 'comment'),
-                'tag': self._interface_tag(iface, name)
-            })
+            iface_obj = self.mark(
+                iface,
+                {
+                    "name": name,
+                    "type": "ethernet",
+                    **self.identity_of(iface),
+                    "mode": None,
+                    "ip_addresses": [],
+                    "ipv6_addresses": [],
+                    "management_profile": None,
+                    "comment": self._get_text(iface, "comment"),
+                    "tag": self._interface_tag(iface, name),
+                },
+            )
 
             # Determine mode (layer3, layer2, virtual-wire, tap, ha, aggregate-group)
-            if iface.find('layer3') is not None:
-                iface_obj['mode'] = 'layer3'
-                l3 = iface.find('layer3')
+            if iface.find("layer3") is not None:
+                iface_obj["mode"] = "layer3"
+                l3 = iface.find("layer3")
 
                 # Get IP addresses, in either export form
-                iface_obj['ip_addresses'] = self._list_values(l3, 'ip')
+                iface_obj["ip_addresses"] = self._list_values(l3, "ip")
 
                 # Get IPv6 addresses, in either export form
-                iface_obj['ipv6_addresses'] = self._list_values(l3, 'ipv6/address')
+                iface_obj["ipv6_addresses"] = self._list_values(l3, "ipv6/address")
 
                 # Management profile
-                mgmt_profile = l3.find('interface-management-profile')
+                mgmt_profile = l3.find("interface-management-profile")
                 if mgmt_profile is not None:
-                    iface_obj['management_profile'] = mgmt_profile.text
+                    iface_obj["management_profile"] = mgmt_profile.text
 
-            elif iface.find('layer2') is not None:
-                iface_obj['mode'] = 'layer2'
-            elif iface.find('virtual-wire') is not None:
-                iface_obj['mode'] = 'virtual-wire'
-            elif iface.find('tap') is not None:
-                iface_obj['mode'] = 'tap'
-            elif iface.find('ha') is not None:
-                iface_obj['mode'] = 'ha'
-            elif iface.find('aggregate-group') is not None:
-                iface_obj['mode'] = 'aggregate-group'
+            elif iface.find("layer2") is not None:
+                iface_obj["mode"] = "layer2"
+            elif iface.find("virtual-wire") is not None:
+                iface_obj["mode"] = "virtual-wire"
+            elif iface.find("tap") is not None:
+                iface_obj["mode"] = "tap"
+            elif iface.find("ha") is not None:
+                iface_obj["mode"] = "ha"
+            elif iface.find("aggregate-group") is not None:
+                iface_obj["mode"] = "aggregate-group"
 
             interfaces.append(iface_obj)
 
             # F3.3: subinterface units are individual entries. The parent is
             # the physical entry name; the unit name is the tag.
-            for unit in iface.findall('units/entry'):
-                unit_name = unit.get('name')
+            for unit in iface.findall("units/entry"):
+                unit_name = unit.get("name")
                 if not unit_name:
-                    self.mark_skipped(unit, 'unit entry has no name')
+                    self.mark_skipped(unit, "unit entry has no name")
                     continue
-                sub = self.mark(unit, {
-                    'name': f'{name}.{unit_name}',
-                    'type': 'ethernet-subinterface',
-                    **self.identity_of(unit),
-                    'mode': 'layer3',
-                    'ip_addresses': self._list_values(unit, 'ip'),
-                    'ipv6_addresses': self._list_values(unit, 'ipv6/address'),
-                    'management_profile': None,
-                    'comment': self._get_text(unit, 'comment'),
-                    'tag': self._interface_tag(unit, f'{name}.{unit_name}'),
-                    'parent': name,
-                })
+                sub = self.mark(
+                    unit,
+                    {
+                        "name": f"{name}.{unit_name}",
+                        "type": "ethernet-subinterface",
+                        **self.identity_of(unit),
+                        "mode": "layer3",
+                        "ip_addresses": self._list_values(unit, "ip"),
+                        "ipv6_addresses": self._list_values(unit, "ipv6/address"),
+                        "management_profile": None,
+                        "comment": self._get_text(unit, "comment"),
+                        "tag": self._interface_tag(unit, f"{name}.{unit_name}"),
+                        "parent": name,
+                    },
+                )
                 interfaces.append(sub)
 
         # Virtual-wire interface units. PAN-OS keeps them in a separate
         # container; the provider models them as panos_ethernet_interface
         # with a virtual_wire block (there is no virtual-wire resource type).
         for iface in self.root.findall(".//network/interface/virtual-wire/units/entry"):
-            name = iface.get('name')
+            name = iface.get("name")
             if not name:
                 self.mark_skipped(iface, "entry has no name attribute")
                 continue
-            iface_obj = self.mark(iface, {
-                'name': name,
-                'type': 'ethernet',
-                **self.identity_of(iface),
-                'mode': 'virtual-wire',
-                'ip_addresses': [],
-                'ipv6_addresses': [],
-                'management_profile': None,
-                'comment': self._get_text(iface, 'comment'),
-                'tag': self._interface_tag(iface, name),
-                # F4.4: `parent` is not a field for a nested-block entry, so this object carries no key
-                # for it: the pinned provider declares no `parent` attribute on `panos_ethernet_interface`,
-                # and for a unit name the child's own name states the parent part (`ethernet1/4.1` is unit 1
-                # of `ethernet1/4`). The entry line therefore names only the fields the print reads: `mode`
-                # for the block key, `type` for the parent type, `tag` for the unit, and `comment` when the
-                # entry carries one (`docs/COVERAGE_MATRIX.md` §1).
-            })
+            iface_obj = self.mark(
+                iface,
+                {
+                    "name": name,
+                    "type": "ethernet",
+                    **self.identity_of(iface),
+                    "mode": "virtual-wire",
+                    "ip_addresses": [],
+                    "ipv6_addresses": [],
+                    "management_profile": None,
+                    "comment": self._get_text(iface, "comment"),
+                    "tag": self._interface_tag(iface, name),
+                    # F4.4: `parent` is not a field for a nested-block entry, so this object carries no key
+                    # for it: the pinned provider declares no `parent` attribute on `panos_ethernet_interface`,
+                    # and for a unit name the child's own name states the parent part (`ethernet1/4.1` is unit 1
+                    # of `ethernet1/4`). The entry line therefore names only the fields the print reads: `mode`
+                    # for the block key, `type` for the parent type, `tag` for the unit, and `comment` when the
+                    # entry carries one (`docs/COVERAGE_MATRIX.md` §1).
+                },
+            )
             interfaces.append(iface_obj)
 
         # VLAN interfaces
         for iface in self.root.findall(".//network/interface/vlan/units/entry"):
-            name = iface.get('name')
+            name = iface.get("name")
             # Dedupe on the namespaced name so a vlan unit number does
             # not collide with a loopback/tunnel unit of the same number.
-            full_name = f'vlan.{name}'
+            full_name = f"vlan.{name}"
             if not name:
                 self.mark_skipped(iface, "entry has no name attribute")
                 continue
 
-            iface_obj = self.mark(iface, {
-                'name': full_name,
-                'type': 'vlan',
-                **self.identity_of(iface),
-                'mode': 'layer3',
-                'ip_addresses': self._list_values(iface, 'ip'),
-                'ipv6_addresses': self._list_values(iface, 'ipv6/address'),
-                'management_profile': None,
-                'comment': self._get_text(iface, 'comment'),
-                'tag': self._interface_tag(iface, full_name),
-                'parent': None
-            })
+            iface_obj = self.mark(
+                iface,
+                {
+                    "name": full_name,
+                    "type": "vlan",
+                    **self.identity_of(iface),
+                    "mode": "layer3",
+                    "ip_addresses": self._list_values(iface, "ip"),
+                    "ipv6_addresses": self._list_values(iface, "ipv6/address"),
+                    "management_profile": None,
+                    "comment": self._get_text(iface, "comment"),
+                    "tag": self._interface_tag(iface, full_name),
+                    "parent": None,
+                },
+            )
 
             # Management profile
-            mgmt_profile = iface.find('interface-management-profile')
+            mgmt_profile = iface.find("interface-management-profile")
             if mgmt_profile is not None:
-                iface_obj['management_profile'] = mgmt_profile.text
+                iface_obj["management_profile"] = mgmt_profile.text
 
             interfaces.append(iface_obj)
 
         # Loopback interfaces
         for iface in self.root.findall(".//network/interface/loopback/units/entry"):
-            name = iface.get('name')
+            name = iface.get("name")
             # Dedupe on the namespaced name so a loopback unit number
             # does not collide with a vlan/tunnel unit of the same number.
             if not name:
                 self.mark_skipped(iface, "entry has no name attribute")
                 continue
-            full_name = f'loopback.{name}'
+            full_name = f"loopback.{name}"
 
-            iface_obj = self.mark(iface, {
-                'name': full_name,
-                'type': 'loopback',
-                **self.identity_of(iface),
-                'mode': 'layer3',
-                'ip_addresses': self._list_values(iface, 'ip'),
-                'ipv6_addresses': self._list_values(iface, 'ipv6/address'),
-                'management_profile': None,
-                'comment': self._get_text(iface, 'comment'),
-                'tag': self._interface_tag(iface, full_name),
-                'parent': None
-            })
+            iface_obj = self.mark(
+                iface,
+                {
+                    "name": full_name,
+                    "type": "loopback",
+                    **self.identity_of(iface),
+                    "mode": "layer3",
+                    "ip_addresses": self._list_values(iface, "ip"),
+                    "ipv6_addresses": self._list_values(iface, "ipv6/address"),
+                    "management_profile": None,
+                    "comment": self._get_text(iface, "comment"),
+                    "tag": self._interface_tag(iface, full_name),
+                    "parent": None,
+                },
+            )
 
             interfaces.append(iface_obj)
 
         # Tunnel interfaces
         for iface in self.root.findall(".//network/interface/tunnel/units/entry"):
-            name = iface.get('name')
+            name = iface.get("name")
             # Dedupe on the namespaced name so a tunnel unit number
             # does not collide with a vlan/loopback unit of the same number.
             if not name:
                 self.mark_skipped(iface, "entry has no name attribute")
                 continue
-            full_name = f'tunnel.{name}'
+            full_name = f"tunnel.{name}"
 
-            iface_obj = self.mark(iface, {
-                'name': full_name,
-                'type': 'tunnel',
-                **self.identity_of(iface),
-                'mode': 'layer3',
-                'ip_addresses': self._list_values(iface, 'ip'),
-                'ipv6_addresses': self._list_values(iface, 'ipv6/address'),
-                'management_profile': None,
-                'comment': self._get_text(iface, 'comment'),
-                'tag': self._interface_tag(iface, full_name),
-                'parent': None
-            })
+            iface_obj = self.mark(
+                iface,
+                {
+                    "name": full_name,
+                    "type": "tunnel",
+                    **self.identity_of(iface),
+                    "mode": "layer3",
+                    "ip_addresses": self._list_values(iface, "ip"),
+                    "ipv6_addresses": self._list_values(iface, "ipv6/address"),
+                    "management_profile": None,
+                    "comment": self._get_text(iface, "comment"),
+                    "tag": self._interface_tag(iface, full_name),
+                    "parent": None,
+                },
+            )
 
             # Management profile
-            mgmt_profile = iface.find('interface-management-profile')
+            mgmt_profile = iface.find("interface-management-profile")
             if mgmt_profile is not None:
-                iface_obj['management_profile'] = mgmt_profile.text
+                iface_obj["management_profile"] = mgmt_profile.text
 
             interfaces.append(iface_obj)
 
         # Aggregate interfaces (ae)
         for iface in self.root.findall(".//network/interface/aggregate-ethernet/entry"):
-            name = iface.get('name')
+            name = iface.get("name")
             if not name:
                 self.mark_skipped(iface, "entry has no name attribute")
                 continue
 
-            iface_obj = self.mark(iface, {
-                'name': name,
-                'type': 'aggregate',
-                **self.identity_of(iface),
-                'mode': None,
-                'ip_addresses': [],
-                'ipv6_addresses': [],
-                'management_profile': None,
-                'comment': self._get_text(iface, 'comment'),
-                # An aggregate entry name can already be a subinterface
-                # (ae1.101); the parent is the aggregate group name and the
-                # unit number is the tag (F3.3).
-                'parent': name.split('.')[0] if '.' in name else None,
-                'tag': self._interface_tag(iface, name)
-            })
+            iface_obj = self.mark(
+                iface,
+                {
+                    "name": name,
+                    "type": "aggregate",
+                    **self.identity_of(iface),
+                    "mode": None,
+                    "ip_addresses": [],
+                    "ipv6_addresses": [],
+                    "management_profile": None,
+                    "comment": self._get_text(iface, "comment"),
+                    # An aggregate entry name can already be a subinterface
+                    # (ae1.101); the parent is the aggregate group name and the
+                    # unit number is the tag (F3.3).
+                    "parent": name.split(".")[0] if "." in name else None,
+                    "tag": self._interface_tag(iface, name),
+                },
+            )
             units = []
 
             # Determine mode
-            if iface.find('layer3') is not None:
-                iface_obj['mode'] = 'layer3'
-                l3 = iface.find('layer3')
+            if iface.find("layer3") is not None:
+                iface_obj["mode"] = "layer3"
+                l3 = iface.find("layer3")
 
                 # `_list_values` reads direct children only, so subinterface
                 # addresses (nested under <units>) cannot leak into the parent's
                 # address list.
-                iface_obj['ip_addresses'] = self._list_values(l3, 'ip')
-                iface_obj['ipv6_addresses'] = self._list_values(l3, 'ipv6/address')
+                iface_obj["ip_addresses"] = self._list_values(l3, "ip")
+                iface_obj["ipv6_addresses"] = self._list_values(l3, "ipv6/address")
 
                 # Management profile
-                mgmt_profile = l3.find('interface-management-profile')
+                mgmt_profile = l3.find("interface-management-profile")
                 if mgmt_profile is not None:
-                    iface_obj['management_profile'] = mgmt_profile.text
+                    iface_obj["management_profile"] = mgmt_profile.text
 
                 # Get subinterfaces (units)
-                for unit in l3.findall('.//units/entry'):
-                    unit_name = unit.get('name')
+                for unit in l3.findall(".//units/entry"):
+                    unit_name = unit.get("name")
                     if not unit_name:
                         # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                        self.mark_skipped(unit, 'entry has no name attribute')
+                        self.mark_skipped(unit, "entry has no name attribute")
                         continue
 
-                    unit_obj = self.mark(unit, {
-                        'name': unit_name,
-                        'type': 'aggregate-subinterface',
-                        **self.identity_of(unit),
-                        'mode': 'layer3',
-                        'ip_addresses': self._list_values(unit, 'ip'),
-                        'ipv6_addresses': self._list_values(unit, 'ipv6/address'),
-                        'management_profile': None,
-                        'comment': self._get_text(unit, 'comment'),
-                        'tag': self._interface_tag(unit, unit_name),
-                        'parent': name
-                    })
+                    unit_obj = self.mark(
+                        unit,
+                        {
+                            "name": unit_name,
+                            "type": "aggregate-subinterface",
+                            **self.identity_of(unit),
+                            "mode": "layer3",
+                            "ip_addresses": self._list_values(unit, "ip"),
+                            "ipv6_addresses": self._list_values(unit, "ipv6/address"),
+                            "management_profile": None,
+                            "comment": self._get_text(unit, "comment"),
+                            "tag": self._interface_tag(unit, unit_name),
+                            "parent": name,
+                        },
+                    )
 
                     # Management profile
-                    unit_mgmt = unit.find('interface-management-profile')
+                    unit_mgmt = unit.find("interface-management-profile")
                     if unit_mgmt is not None:
-                        unit_obj['management_profile'] = unit_mgmt.text
+                        unit_obj["management_profile"] = unit_mgmt.text
 
                     units.append(unit_obj)
 
-            elif iface.find('layer2') is not None:
-                iface_obj['mode'] = 'layer2'
+            elif iface.find("layer2") is not None:
+                iface_obj["mode"] = "layer2"
 
             # Append the parent entry before its units so the unit's parent
             # reference resolves to a declared resource (F2.6 rule).
@@ -1710,41 +1793,47 @@ class PanoramaParser:
         differs by router kind: next-vr for a virtual router, next-lr for
         a logical router.
         """
-        interfaces = [m.text for m in router.findall('./interface/member') if m.text]
+        interfaces = [m.text for m in router.findall("./interface/member") if m.text]
         static_routes = []
-        for route in router.findall('.//routing-table/ip/static-route/entry'):
-            route_name = route.get('name')
+        for route in router.findall(".//routing-table/ip/static-route/entry"):
+            route_name = route.get("name")
             if not route_name:
                 # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                self.mark_skipped(route, 'entry has no name attribute')
+                self.mark_skipped(route, "entry has no name attribute")
                 continue
-            static_routes.append(self.mark(route, {
-                'name': route_name,
-                'destination': self._get_text(route, 'destination'),
-                'nexthop_ip': self._get_text(route, 'nexthop/ip-address'),
-                'nexthop_interface': self._get_text(route, f'nexthop/{next_hop_tag}'),
-                'metric': self._get_text(route, 'metric'),
-            }))
+            static_routes.append(
+                self.mark(
+                    route,
+                    {
+                        "name": route_name,
+                        "destination": self._get_text(route, "destination"),
+                        "nexthop_ip": self._get_text(route, "nexthop/ip-address"),
+                        "nexthop_interface": self._get_text(route, f"nexthop/{next_hop_tag}"),
+                        "metric": self._get_text(route, "metric"),
+                    },
+                )
+            )
         # F4.3, `docs/ARCHITECTURE.md` §4.9: the static routes this parse models are the entries under
         # `routing-table/ip/static-route`, the shape the row states. A `protocol/static-routes` entry is a
         # level `PROTOCOL_SHAPE` states no row for, so it cannot be modeled; the parse records each entry it
         # reads as skipped, and the record names the level.
-        for entry in router.findall('.//protocol/static-routes/entry'):
-            self.mark_skipped(entry, 'no row states the protocol/static-routes level')
+        for entry in router.findall(".//protocol/static-routes/entry"):
+            self.mark_skipped(entry, "no row states the protocol/static-routes level")
         # F7.1, F7.2: `protocol` is a captured field of the router entry, so the entry keeps one mark and the
         # protocol levels are the properties of that one entry. Each level is built by the parse method the
         # `protocol` row names, in the table order, so this method states no field name of its own (F7.5).
         return {
-            'name': router.get('name'),
+            "name": router.get("name"),
             **self.identity_of(router),
-            'interfaces': interfaces,
-            'static_routes': static_routes,
-            'protocol': {field: getattr(self, f'parse_{field}')(router)
-                          for field in resource_mapping.protocol_row(resource_mapping.PROTOCOL_FIELD)['fields']},
+            "interfaces": interfaces,
+            "static_routes": static_routes,
+            "protocol": {
+                field: getattr(self, f"parse_{field}")(router)
+                for field in resource_mapping.protocol_row(resource_mapping.PROTOCOL_FIELD)["fields"]
+            },
         }
 
-    def _parse_routers(self, container_tag: str, next_hop_tag: str,
-                       router_type: Optional[str] = None) -> list[dict]:
+    def _parse_routers(self, container_tag: str, next_hop_tag: str, router_type: Optional[str] = None) -> list[dict]:
         """Parse every router of one kind, whatever scope it lives in.
 
         F3.5: one path, `.//network/<kind>/entry`, covers every place a
@@ -1764,20 +1853,20 @@ class PanoramaParser:
         scopes all survive (F3.1).
         """
         routers = []
-        for elem in self.root.findall(f'.//network/{container_tag}/entry'):
-            if not elem.get('name'):
+        for elem in self.root.findall(f".//network/{container_tag}/entry"):
+            if not elem.get("name"):
                 # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                self.mark_skipped(elem, 'entry has no name attribute')
+                self.mark_skipped(elem, "entry has no name attribute")
                 continue
             obj = self.mark(elem, self._parse_router(elem, next_hop_tag))
             if router_type:
-                obj['router_type'] = router_type
+                obj["router_type"] = router_type
             routers.append(obj)
         return routers
 
     def parse_virtual_routers(self) -> list[dict]:
         """Parse virtual router configurations (see _parse_routers for paths)."""
-        return self._parse_routers('virtual-router', 'next-vr')
+        return self._parse_routers("virtual-router", "next-vr")
 
     def parse_logical_routers(self) -> list[dict]:
         """Parse logical routers (PAN-OS 10.2+ Advanced Routing Engine).
@@ -1787,97 +1876,96 @@ class PanoramaParser:
         marked router_type 'logical' so the emitter can label the resource
         (see _parse_routers for the source paths).
         """
-        return self._parse_routers('logical-router', 'next-lr', router_type='logical')
-
+        return self._parse_routers("logical-router", "next-lr", router_type="logical")
 
     def parse_security_profiles(self) -> dict[str, list[dict]]:
         """Parse security profiles (antivirus, vulnerability, spyware, url-filtering, file-blocking, wildfire)"""
         profiles = {
-            'antivirus': [],
-            'vulnerability': [],
-            'anti_spyware': [],
-            'url_filtering': [],
-            'file_blocking': [],
-            'wildfire_analysis': []
+            "antivirus": [],
+            "vulnerability": [],
+            "anti_spyware": [],
+            "url_filtering": [],
+            "file_blocking": [],
+            "wildfire_analysis": [],
         }
 
         # Antivirus profiles
         for prof in self.root.findall(".//profiles/virus/entry"):
-            name = prof.get('name')
+            name = prof.get("name")
             if not name:
                 self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles['antivirus'].append(self.mark(prof, {
-                'name': name,
-                **self.identity_of(prof),
-                'description': self._get_text(prof, 'description')
-            }))
+            profiles["antivirus"].append(
+                self.mark(
+                    prof, {"name": name, **self.identity_of(prof), "description": self._get_text(prof, "description")}
+                )
+            )
 
         # Vulnerability profiles
         for prof in self.root.findall(".//profiles/vulnerability/entry"):
-            name = prof.get('name')
+            name = prof.get("name")
             if not name:
                 self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles['vulnerability'].append(self.mark(prof, {
-                'name': name,
-                **self.identity_of(prof),
-                'description': self._get_text(prof, 'description')
-            }))
+            profiles["vulnerability"].append(
+                self.mark(
+                    prof, {"name": name, **self.identity_of(prof), "description": self._get_text(prof, "description")}
+                )
+            )
 
         # Anti-spyware profiles
         for prof in self.root.findall(".//profiles/spyware/entry"):
-            name = prof.get('name')
+            name = prof.get("name")
             if not name:
                 self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles['anti_spyware'].append(self.mark(prof, {
-                'name': name,
-                **self.identity_of(prof),
-                'description': self._get_text(prof, 'description')
-            }))
+            profiles["anti_spyware"].append(
+                self.mark(
+                    prof, {"name": name, **self.identity_of(prof), "description": self._get_text(prof, "description")}
+                )
+            )
 
         # URL filtering profiles
         for prof in self.root.findall(".//profiles/url-filtering/entry"):
-            name = prof.get('name')
+            name = prof.get("name")
             if not name:
                 self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles['url_filtering'].append(self.mark(prof, {
-                'name': name,
-                **self.identity_of(prof),
-                'description': self._get_text(prof, 'description')
-            }))
+            profiles["url_filtering"].append(
+                self.mark(
+                    prof, {"name": name, **self.identity_of(prof), "description": self._get_text(prof, "description")}
+                )
+            )
 
         # File blocking profiles
         for prof in self.root.findall(".//profiles/file-blocking/entry"):
-            name = prof.get('name')
+            name = prof.get("name")
             if not name:
                 self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles['file_blocking'].append(self.mark(prof, {
-                'name': name,
-                **self.identity_of(prof),
-                'description': self._get_text(prof, 'description')
-            }))
+            profiles["file_blocking"].append(
+                self.mark(
+                    prof, {"name": name, **self.identity_of(prof), "description": self._get_text(prof, "description")}
+                )
+            )
 
         # WildFire analysis profiles
         for prof in self.root.findall(".//profiles/wildfire-analysis/entry"):
-            name = prof.get('name')
+            name = prof.get("name")
             if not name:
                 self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles['wildfire_analysis'].append(self.mark(prof, {
-                'name': name,
-                **self.identity_of(prof),
-                'description': self._get_text(prof, 'description')
-            }))
+            profiles["wildfire_analysis"].append(
+                self.mark(
+                    prof, {"name": name, **self.identity_of(prof), "description": self._get_text(prof, "description")}
+                )
+            )
 
         return profiles
 
@@ -1890,24 +1978,29 @@ class PanoramaParser:
         groups = []
 
         for grp in self.root.findall(".//profile-group/entry"):
-            name = grp.get('name')
+            name = grp.get("name")
             if not name:
                 self.mark_skipped(grp, "entry has no name attribute")
                 continue
 
-            groups.append(self.mark(grp, {
-                'name': name,
-                **self.identity_of(grp),
-                'virus': self._get_members(grp, 'virus'),
-                'spyware': self._get_members(grp, 'spyware'),
-                'vulnerability': self._get_members(grp, 'vulnerability'),
-                'url_filtering': self._get_members(grp, 'url-filtering'),
-                'file_blocking': self._get_members(grp, 'file-blocking'),
-                'wildfire_analysis': self._get_members(grp, 'wildfire-analysis'),
-                # F4.4: the row names the property, so the flag is read through the same helper as
-                # the other fields of this entry
-                'disable_override': self._get_text(grp, 'disable-override')
-            }))
+            groups.append(
+                self.mark(
+                    grp,
+                    {
+                        "name": name,
+                        **self.identity_of(grp),
+                        "virus": self._get_members(grp, "virus"),
+                        "spyware": self._get_members(grp, "spyware"),
+                        "vulnerability": self._get_members(grp, "vulnerability"),
+                        "url_filtering": self._get_members(grp, "url-filtering"),
+                        "file_blocking": self._get_members(grp, "file-blocking"),
+                        "wildfire_analysis": self._get_members(grp, "wildfire-analysis"),
+                        # F4.4: the row names the property, so the flag is read through the same helper as
+                        # the other fields of this entry
+                        "disable_override": self._get_text(grp, "disable-override"),
+                    },
+                )
+            )
 
         return groups
 
@@ -1920,16 +2013,16 @@ class PanoramaParser:
         profiles = []
 
         for prof in self.root.findall(".//zone-protection-profile/entry"):
-            name = prof.get('name')
+            name = prof.get("name")
             if not name:
                 self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles.append(self.mark(prof, {
-                'name': name,
-                **self.identity_of(prof),
-                'description': self._get_text(prof, 'description')
-            }))
+            profiles.append(
+                self.mark(
+                    prof, {"name": name, **self.identity_of(prof), "description": self._get_text(prof, "description")}
+                )
+            )
 
         return profiles
 
@@ -1942,16 +2035,16 @@ class PanoramaParser:
         profiles = []
 
         for prof in self.root.findall(".//log-settings/profiles/entry"):
-            name = prof.get('name')
+            name = prof.get("name")
             if not name:
                 self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles.append(self.mark(prof, {
-                'name': name,
-                **self.identity_of(prof),
-                'description': self._get_text(prof, 'description')
-            }))
+            profiles.append(
+                self.mark(
+                    prof, {"name": name, **self.identity_of(prof), "description": self._get_text(prof, "description")}
+                )
+            )
 
         return profiles
 
@@ -1964,29 +2057,23 @@ class PanoramaParser:
         profiles = []
 
         for prof in self.root.findall(".//qos/profile/entry"):
-            name = prof.get('name')
+            name = prof.get("name")
             if not name:
                 self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            prof_obj = self.mark(prof, {
-                'name': name,
-                **self.identity_of(prof),
-                'class_bandwidth_type': {}
-            })
+            prof_obj = self.mark(prof, {"name": name, **self.identity_of(prof), "class_bandwidth_type": {}})
 
             # Parse class bandwidth settings
-            for cls in prof.findall('.//class/entry'):
-                cls_name = cls.get('name')
+            for cls in prof.findall(".//class/entry"):
+                cls_name = cls.get("name")
                 if not cls_name:
                     # F4.3: the entry was read, so the record holds it even when the name guard skips it.
                     # A class entry is inside the profile entry, so the report shows it as the count on the
                     # parent row instead of a line of its own.
-                    self.mark_skipped(cls, 'entry has no name attribute')
+                    self.mark_skipped(cls, "entry has no name attribute")
                     continue
-                prof_obj['class_bandwidth_type'][cls_name] = {
-                    'priority': self._get_text(cls, 'priority')
-                }
+                prof_obj["class_bandwidth_type"][cls_name] = {"priority": self._get_text(cls, "priority")}
 
             profiles.append(prof_obj)
 
@@ -2004,24 +2091,29 @@ class PanoramaParser:
 
         paths = [
             ".//network/tunnel/global-protect-gateway/Default/tunnel-monitor/monitor-profile/entry",
-            ".//network/tunnel-monitor/monitor-profile/entry"
+            ".//network/tunnel-monitor/monitor-profile/entry",
         ]
 
         for path in paths:
             for prof in self.root.findall(path):
-                name = prof.get('name')
+                name = prof.get("name")
                 if not name:
                     # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                    self.mark_skipped(prof, 'entry has no name attribute')
+                    self.mark_skipped(prof, "entry has no name attribute")
                     continue
 
-                profiles.append(self.mark(prof, {
-                    'name': name,
-                    **self.identity_of(prof),
-                    'interval': self._get_text(prof, 'interval'),
-                    'threshold': self._get_text(prof, 'threshold'),
-                    'action': self._get_text(prof, 'action')
-                }))
+                profiles.append(
+                    self.mark(
+                        prof,
+                        {
+                            "name": name,
+                            **self.identity_of(prof),
+                            "interval": self._get_text(prof, "interval"),
+                            "threshold": self._get_text(prof, "threshold"),
+                            "action": self._get_text(prof, "action"),
+                        },
+                    )
+                )
 
         return profiles
 
@@ -2043,19 +2135,24 @@ class PanoramaParser:
         profiles = []
 
         for prof in self.root.findall(".//network/profiles/monitor-profile/entry"):
-            name = prof.get('name')
+            name = prof.get("name")
             if not name:
                 self.mark_skipped(prof, "entry has no name attribute")
                 continue
 
-            profiles.append(self.mark(prof, {
-                'name': name,
-                **self.identity_of(prof),
-                # v2 action is an enum: wait-recover | fail-over
-                'action': self._get_text(prof, 'action'),
-                'interval': self._get_text(prof, 'interval'),
-                'threshold': self._get_text(prof, 'threshold')
-            }))
+            profiles.append(
+                self.mark(
+                    prof,
+                    {
+                        "name": name,
+                        **self.identity_of(prof),
+                        # v2 action is an enum: wait-recover | fail-over
+                        "action": self._get_text(prof, "action"),
+                        "interval": self._get_text(prof, "interval"),
+                        "threshold": self._get_text(prof, "threshold"),
+                    },
+                )
+            )
 
         return profiles
 
@@ -2073,17 +2170,17 @@ class PanoramaParser:
         """
         table = resource_mapping.CERTIFICATE_TABLE
         entries = []
-        for container in self.root.findall('.//certificate'):
+        for container in self.root.findall(".//certificate"):
             # `certificate` is also the name of a field inside `local`, and an entry inside a config-object
             # entry is a property level, so only the section container is read here (F4.2).
             if not container_coverage.is_section(container, self.parent_map, self.source):
                 continue
-            for entry in container.findall('./entry'):
-                if not entry.get('name'):
-                    self.mark_skipped(entry, 'entry has no name attribute')
+            for entry in container.findall("./entry"):
+                if not entry.get("name"):
+                    self.mark_skipped(entry, "entry has no name attribute")
                     continue
-                captured = self._protocol_level(entry, 'certificate', True, table)
-                self._protocol_body('certificate', entry, captured, table)
+                captured = self._protocol_level(entry, "certificate", True, table)
+                self._protocol_body("certificate", entry, captured, table)
                 entries.append(self.mark(entry, captured))
         return entries
 
@@ -2104,21 +2201,24 @@ class PanoramaParser:
         for it.
         """
         table = resource_mapping.CERTIFICATE_TABLE
-        path = 'certificate_profile'
-        entry_list_path = 'certificate_profile/certificate'
+        path = "certificate_profile"
+        entry_list_path = "certificate_profile/certificate"
         field = self._protocol_field_name(entry_list_path, table)
         entries = []
         # The path is the table's spelling, so the container is read through the one rule that turns a table
         # name into the tag the input spells (F7.3).
-        for container in self.root.findall(f'.//{self._protocol_xml_name(path, table=table)}'):
-            for entry in container.findall('./entry'):
-                if not entry.get('name'):
-                    self.mark_skipped(entry, 'entry has no name attribute')
+        for container in self.root.findall(f".//{self._protocol_xml_name(path, table=table)}"):
+            for entry in container.findall("./entry"):
+                if not entry.get("name"):
+                    self.mark_skipped(entry, "entry has no name attribute")
                     continue
                 captured = self._protocol_level(entry, path, True, table)
-                self._protocol_entries(entry_list_path, captured[field],
-                                       entry.findall(f'./{self._protocol_xml_name(field, path, table)}/entry'),
-                                       table)
+                self._protocol_entries(
+                    entry_list_path,
+                    captured[field],
+                    entry.findall(f"./{self._protocol_xml_name(field, path, table)}/entry"),
+                    table,
+                )
                 entries.append(self.mark(entry, captured))
         return entries
 
@@ -2142,7 +2242,7 @@ class PanoramaParser:
         `_protocol_level`, so this method states no path for them. `dampening_profile` is the entry level the
         row states, so this method states its path and `_protocol_branch` fills it.
         """
-        bgp_path = 'protocol/bgp'
+        bgp_path = "protocol/bgp"
         bgp = router.find(bgp_path)
         if bgp is None:
             return {}
@@ -2150,82 +2250,86 @@ class PanoramaParser:
         groups = {}
         # The key a level dict holds is the field the table path names, so the parse methods state a path and
         # never spell a field name: `PROTOCOL_SHAPE` stays the one owner of the names.
-        group_path, peer_path = 'protocol/bgp/peer_group', 'protocol/bgp/peer_group/peer'
-        for group in bgp.findall('.//peer-group/entry'):
-            name = group.get('name')
+        group_path, peer_path = "protocol/bgp/peer_group", "protocol/bgp/peer_group/peer"
+        for group in bgp.findall(".//peer-group/entry"):
+            name = group.get("name")
             if not name:
                 # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                self.mark_skipped(group, 'entry has no name attribute')
+                self.mark_skipped(group, "entry has no name attribute")
                 continue
             captured = self._protocol_level(group, group_path)
-            choice_path = 'protocol/bgp/peer_group/type'
+            choice_path = "protocol/bgp/peer_group/type"
             field = self._protocol_field_name(choice_path)
-            choice, detail = self._protocol_choice(choice_path,
-                                                   self._get_text(group, self._protocol_xml_name(field)),
-                                                   group, group)
+            choice, detail = self._protocol_choice(
+                choice_path, self._get_text(group, self._protocol_xml_name(field)), group, group
+            )
             captured[field] = choice
-            entry = self.mark(group, captured, detail, destination='report' if detail else None)
+            entry = self.mark(group, captured, detail, destination="report" if detail else None)
             if detail:
                 continue
             level[self._protocol_field_name(group_path)].append(entry)
             groups[name] = entry
             # A peer inside the peer-group element belongs to that entry, so the shape table states `peer`
             # as a field of the peer-group level.
-            for peer in group.findall('./peer/entry'):
-                peer_name = peer.get('name')
+            for peer in group.findall("./peer/entry"):
+                peer_name = peer.get("name")
                 if not peer_name:
                     # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                    self.mark_skipped(peer, 'entry has no name attribute')
+                    self.mark_skipped(peer, "entry has no name attribute")
                     continue
                 entry[self._protocol_field_name(peer_path)].append(
-                    self.mark(peer, self._protocol_level(peer, peer_path)))
+                    self.mark(peer, self._protocol_level(peer, peer_path))
+                )
 
-        for peer in bgp.findall('./peer/entry'):
-            name = peer.get('name')
+        for peer in bgp.findall("./peer/entry"):
+            name = peer.get("name")
             if not name:
                 # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                self.mark_skipped(peer, 'entry has no name attribute')
+                self.mark_skipped(peer, "entry has no name attribute")
                 continue
             captured = self._protocol_level(peer, peer_path)
-            group = self._get_text(peer, 'peer-group')
+            group = self._get_text(peer, "peer-group")
             if group in groups:
                 # The name reference is recorded on the parent entry, which is the peer group that
                 # holds it, so the entry keeps one mark (F4.3 rule 3).
                 groups[group][self._protocol_field_name(peer_path)].append(self.mark(peer, captured))
             else:
                 # The provider has no peer outside a peer group, so this one cannot be expressed.
-                self.mark(peer, captured, 'no peer group names it', destination='report')
-        redist_path = 'protocol/bgp/redist_rules'
-        for rule in bgp.findall('.//redist-rules/entry'):
-            rule_name = rule.get('name')
+                self.mark(peer, captured, "no peer group names it", destination="report")
+        redist_path = "protocol/bgp/redist_rules"
+        for rule in bgp.findall(".//redist-rules/entry"):
+            rule_name = rule.get("name")
             if not rule_name:
                 # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                self.mark_skipped(rule, 'entry has no name attribute')
+                self.mark_skipped(rule, "entry has no name attribute")
                 continue
             level[self._protocol_field_name(redist_path)].append(
-                self.mark(rule, self._protocol_level(rule, redist_path)))
+                self.mark(rule, self._protocol_level(rule, redist_path))
+            )
         # F7.6: the `policy` level and its subtree are read through the table. The four levels inside it that
         # hold entries are the levels the container table names, so this method states their paths; a level
         # inside an entry is filled by `_protocol_body`, which reaches it through the table and so states no
         # path, and the container table states no row for it.
-        policy_path = 'protocol/bgp/policy'
+        policy_path = "protocol/bgp/policy"
         policy = router.find(policy_path)
         if policy is not None:
             policy_level = self._protocol_level(policy, policy_path)
-            for path in ('protocol/bgp/policy/aggregation/address',
-                         'protocol/bgp/policy/conditional_advertisement/policy',
-                         'protocol/bgp/policy/export/rules',
-                         'protocol/bgp/policy/import/rules'):
+            for path in (
+                "protocol/bgp/policy/aggregation/address",
+                "protocol/bgp/policy/conditional_advertisement/policy",
+                "protocol/bgp/policy/export/rules",
+                "protocol/bgp/policy/import/rules",
+            ):
                 self._protocol_branch(policy_path, policy_level, policy, path)
             level[self._protocol_field_name(policy_path)] = policy_level
         # F7.7: `auth_profile` is an entry level the row states as a `string_list` field, so the same rule
         # fills it. The path is the only name this method states; `secret` is read as a field, and the print
         # site turns it into the variable reference.
-        self._protocol_branch(bgp_path, level, bgp, 'protocol/bgp/auth_profile')
+        self._protocol_branch(bgp_path, level, bgp, "protocol/bgp/auth_profile")
         # F7.10: `dampening_profile` is the other entry level this method fills through the table. The five
         # `bool` fields and the two single-object levels are row fields, so `_protocol_level` reads them with no
         # field name of its own, and the levels inside `routing_options` hold no entry.
-        self._protocol_branch(bgp_path, level, bgp, 'protocol/bgp/dampening_profile')
+        self._protocol_branch(bgp_path, level, bgp, "protocol/bgp/dampening_profile")
         return level
 
     def parse_ospf(self, router: ET.Element) -> dict:
@@ -2240,30 +2344,30 @@ class PanoramaParser:
         so this method states its path and `_protocol_branch` fills it with the entries the export holds, the
         same rule `parse_ospfv3` uses.
         """
-        ospf_path = 'protocol/ospf'
+        ospf_path = "protocol/ospf"
         ospf = router.find(ospf_path)
         if ospf is None:
             return {}
         level = self._protocol_areas(ospf, ospf_path)
-        for iface in ospf.findall('./interface/entry'):
-            iface_name = iface.get('name')
+        for iface in ospf.findall("./interface/entry"):
+            iface_name = iface.get("name")
             if not iface_name:
                 # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                self.mark_skipped(iface, 'entry has no name attribute')
+                self.mark_skipped(iface, "entry has no name attribute")
                 continue
             # The provider declares an interface only inside an area, so an interface at the OSPF level
             # cannot be expressed and the manual report prints it. The row note is the reason, so the mark
             # states no detail of its own.
             captured, _ = self._protocol_interface(iface, ospf_path)
-            self.mark(iface, captured, destination='report')
+            self.mark(iface, captured, destination="report")
         # F7.7: `auth_profile` is an entry level the row states as a `string_list` field, so the same rule
         # fills it, and `md5` is the entry level inside the profile entry that `_protocol_body` fills through
         # the table. The path is the only name this method states.
-        self._protocol_branch(ospf_path, level, ospf, 'protocol/ospf/auth_profile')
+        self._protocol_branch(ospf_path, level, ospf, "protocol/ospf/auth_profile")
         # F7.9: `export_rules` is the other entry level this method fills through the table. The three
         # single-object levels hold no entry, so they are read by `_protocol_level` through the row fields,
         # and this method states no path for them.
-        self._protocol_branch(ospf_path, level, ospf, 'protocol/ospf/export_rules')
+        self._protocol_branch(ospf_path, level, ospf, "protocol/ospf/export_rules")
         return level
 
     def parse_ospfv3(self, router: ET.Element) -> dict:
@@ -2278,34 +2382,35 @@ class PanoramaParser:
         fields of this level. `export_rules` is a `string_list`, so this method fills it with the entries the
         export holds, the same rule as `parse_bgp` for `redist_rules`.
         """
-        ospfv3_path = 'protocol/ospfv3'
+        ospfv3_path = "protocol/ospfv3"
         ospfv3 = router.find(ospfv3_path)
         if ospfv3 is None:
             return {}
         level = self._protocol_areas(ospfv3, ospfv3_path)
-        export_path = f'{ospfv3_path}/export_rules'
-        for rule in ospfv3.findall('.//export-rules/entry'):
-            rule_name = rule.get('name')
+        export_path = f"{ospfv3_path}/export_rules"
+        for rule in ospfv3.findall(".//export-rules/entry"):
+            rule_name = rule.get("name")
             if not rule_name:
                 # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                self.mark_skipped(rule, 'entry has no name attribute')
+                self.mark_skipped(rule, "entry has no name attribute")
                 continue
             level[self._protocol_field_name(export_path)].append(
-                self.mark(rule, self._protocol_level(rule, export_path)))
-        for iface in ospfv3.findall('./interface/entry'):
-            iface_name = iface.get('name')
+                self.mark(rule, self._protocol_level(rule, export_path))
+            )
+        for iface in ospfv3.findall("./interface/entry"):
+            iface_name = iface.get("name")
             if not iface_name:
                 # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                self.mark_skipped(iface, 'entry has no name attribute')
+                self.mark_skipped(iface, "entry has no name attribute")
                 continue
             # The provider declares an interface only inside an area, so an interface at the level cannot be
             # expressed and the manual report prints it, the same rule as `parse_ospf`.
             captured, _ = self._protocol_interface(iface, ospfv3_path)
-            self.mark(iface, captured, destination='report')
+            self.mark(iface, captured, destination="report")
         # F7.7: `auth_profile` is the entry level this method reads, and the choice levels inside the entry
         # (`ah`, `esp/authentication`) and the object level `esp/encryption` are filled by `_protocol_body`,
         # which reaches them through the table, so this method states no path for them.
-        self._protocol_branch(ospfv3_path, level, ospfv3, 'protocol/ospfv3/auth_profile')
+        self._protocol_branch(ospfv3_path, level, ospfv3, "protocol/ospfv3/auth_profile")
         return level
 
     def parse_rip(self, router: ET.Element) -> dict:
@@ -2324,18 +2429,20 @@ class PanoramaParser:
         the level this method reads through `_protocol_branch`, so the print site names the entry's variable
         for `key` and `password`.
         """
-        rip_path = 'protocol/rip'
+        rip_path = "protocol/rip"
         rip = router.find(rip_path)
         if rip is None:
             return {}
         level = self._protocol_level(rip, rip_path)
-        interface_path, rule_path = f'{rip_path}/interfaces', f'{rip_path}/export_rules'
-        for path, entries in ((interface_path, rip.findall('./interfaces/entry')),
-                              (rule_path, rip.findall('.//export-rules/entry'))):
+        interface_path, rule_path = f"{rip_path}/interfaces", f"{rip_path}/export_rules"
+        for path, entries in (
+            (interface_path, rip.findall("./interfaces/entry")),
+            (rule_path, rip.findall(".//export-rules/entry")),
+        ):
             self._protocol_entries(path, level[self._protocol_field_name(path)], entries)
         # F7.7: `auth_profile` is the entry level the row states as a `string_list` field, so the same rule
         # fills it, and `md5` inside the profile entry is filled by `_protocol_body` through the table.
-        self._protocol_branch(rip_path, level, rip, 'protocol/rip/auth_profile')
+        self._protocol_branch(rip_path, level, rip, "protocol/rip/auth_profile")
         return level
 
     def parse_redist_profile(self, router: ET.Element) -> list:
@@ -2346,7 +2453,7 @@ class PanoramaParser:
         through the row, so the key an entry holds is the field the path names, and each entry is marked, which is
         what puts its fields in the property scan.
         """
-        return self._protocol_entry_level(router, 'protocol/redist_profile')
+        return self._protocol_entry_level(router, "protocol/redist_profile")
 
     def parse_redist_profile_ipv6(self, router: ET.Element) -> list:
         """The same shape for the IPv6 list, read through the row the table states for it (F7.10).
@@ -2354,7 +2461,7 @@ class PanoramaParser:
         The two rows differ by one field: the provider names the routing level inside `filter` as `ospf` for the
         IPv4 list and `ospfv3` for the IPv6 list, so the reader states two paths and spells no field name.
         """
-        return self._protocol_entry_level(router, 'protocol/redist_profile_ipv6')
+        return self._protocol_entry_level(router, "protocol/redist_profile_ipv6")
 
     def _protocol_areas(self, container: ET.Element, base: str) -> dict:
         """One routing level and its area entries, read as `PROTOCOL_SHAPE` states them (F7.1, F7.2).
@@ -2375,44 +2482,49 @@ class PanoramaParser:
         it, which is the area entry.
         """
         level = self._protocol_level(container, base)
-        area_path, range_path = f'{base}/area', f'{base}/area/range'
-        type_path, interface_path = f'{area_path}/type', f'{area_path}/interface'
-        link_path, neighbor_path = f'{area_path}/virtual_link', f'{interface_path}/neighbor'
-        for area in container.findall('.//area/entry'):
-            name = area.get('name')
+        area_path, range_path = f"{base}/area", f"{base}/area/range"
+        type_path, interface_path = f"{area_path}/type", f"{area_path}/interface"
+        link_path, neighbor_path = f"{area_path}/virtual_link", f"{interface_path}/neighbor"
+        for area in container.findall(".//area/entry"):
+            name = area.get("name")
             if not name:
                 # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                self.mark_skipped(area, 'entry has no name attribute')
+                self.mark_skipped(area, "entry has no name attribute")
                 continue
             captured = self._protocol_level(area, area_path)
             field = self._protocol_field_name(type_path)
             type_element = area.find(self._protocol_xml_name(field))
             body = type_element[0] if type_element is not None and len(type_element) else None
-            value = body.tag if body is not None else ''
+            value = body.tag if body is not None else ""
             choice, detail = self._protocol_choice(type_path, value, type_element, body)
             captured[field] = choice
-            key = resource_mapping.protocol_row(type_path)['selects'].get(value, '')
+            key = resource_mapping.protocol_row(type_path)["selects"].get(value, "")
             if key:
-                detail = detail or self._protocol_body(f'{type_path}/{key}', body, choice[value])
-            entry = self.mark(area, captured, detail, destination='report' if detail else None)
+                detail = detail or self._protocol_body(f"{type_path}/{key}", body, choice[value])
+            entry = self.mark(area, captured, detail, destination="report" if detail else None)
             if detail:
                 continue
             level[self._protocol_field_name(area_path)].append(entry)
-            for path, entries in ((range_path, area.findall('.//range/entry')),
-                                  (link_path, area.findall('.//virtual-link/entry'))):
+            for path, entries in (
+                (range_path, area.findall(".//range/entry")),
+                (link_path, area.findall(".//virtual-link/entry")),
+            ):
                 self._protocol_entries(path, entry[self._protocol_field_name(path)], entries)
-            for iface in area.findall('./interface/entry'):
-                iface_name = iface.get('name')
+            for iface in area.findall("./interface/entry"):
+                iface_name = iface.get("name")
                 if not iface_name:
                     # F4.3: the entry was read, so the record holds it even when the name guard skips it.
-                    self.mark_skipped(iface, 'entry has no name attribute')
+                    self.mark_skipped(iface, "entry has no name attribute")
                     continue
                 captured_iface, reason = self._protocol_interface(iface, base)
-                marked = self.mark(iface, captured_iface, reason, destination='report' if reason else None)
+                marked = self.mark(iface, captured_iface, reason, destination="report" if reason else None)
                 if not reason:
                     entry[self._protocol_field_name(interface_path)].append(marked)
-                    self._protocol_entries(neighbor_path, marked[self._protocol_field_name(neighbor_path)],
-                                           iface.findall('./neighbor/entry'))
+                    self._protocol_entries(
+                        neighbor_path,
+                        marked[self._protocol_field_name(neighbor_path)],
+                        iface.findall("./neighbor/entry"),
+                    )
         return level
 
     def _protocol_branch(self, base: str, level: dict, element: ET.Element, path: str) -> None:
@@ -2425,14 +2537,14 @@ class PanoramaParser:
         segment names. A `member_list` field holds values and not entries, so it is read by `_protocol_level`
         and never reaches this rule.
         """
-        segments = path[len(base) + 1:].split('/')
+        segments = path[len(base) + 1 :].split("/")
         holder, source = level, element
         for segment in segments[:-1]:
             holder = holder[self._protocol_field_name(segment)]
             source = source.find(self._protocol_xml_name(segment))
             if source is None:
                 return
-        entries = source.findall(f'./{self._protocol_xml_name(segments[-1])}/entry')
+        entries = source.findall(f"./{self._protocol_xml_name(segments[-1])}/entry")
         self._protocol_entries(path, holder[self._protocol_field_name(path)], entries)
 
     def _protocol_entry_level(self, router: ET.Element, path: str) -> list:
@@ -2445,15 +2557,16 @@ class PanoramaParser:
         names.
         """
         field = self._protocol_field_name(path)
-        container = router.find(f'{resource_mapping.PROTOCOL_FIELD}/{self._protocol_xml_name(field)}')
+        container = router.find(f"{resource_mapping.PROTOCOL_FIELD}/{self._protocol_xml_name(field)}")
         if container is None:
             return []
         entries: list = []
-        self._protocol_entries(path, entries, container.findall('./entry'))
+        self._protocol_entries(path, entries, container.findall("./entry"))
         return entries
 
-    def _protocol_entries(self, path: str, holder: list, entries,
-                         table: Optional[resource_mapping.ShapeTable] = None) -> None:
+    def _protocol_entries(
+        self, path: str, holder: list, entries, table: Optional[resource_mapping.ShapeTable] = None
+    ) -> None:
         """The entries of a `string_list` level, marked and put in the list that holds them (F7.4, F7.5).
 
         `holder` is the list the field the path names holds in the object that owns it, so the caller states
@@ -2465,21 +2578,23 @@ class PanoramaParser:
         """
         table = table or resource_mapping.PROTOCOL_TABLE
         for entry in entries:
-            if not entry.get('name'):
+            if not entry.get("name"):
                 # F4.3: the entry was read, so the record holds it even when the name guard skips it.
                 # A nameless entry inside a config-object entry is a property level, so the report shows
                 # it as the count on the parent row instead of a line of its own.
-                self.mark_skipped(entry, 'entry has no name attribute')
+                self.mark_skipped(entry, "entry has no name attribute")
                 continue
             captured = self._protocol_level(entry, path, True, table)
-            reason = (self._protocol_body(path, entry, captured, table)
-                      or self._protocol_presence_fields(path, captured, table))
-            marked = self.mark(entry, captured, reason, destination='report' if reason else None)
+            reason = self._protocol_body(path, entry, captured, table) or self._protocol_presence_fields(
+                path, captured, table
+            )
+            marked = self.mark(entry, captured, reason, destination="report" if reason else None)
             if not reason:
                 holder.append(marked)
 
-    def _protocol_body(self, path: str, body: ET.Element, fields: dict,
-                         table: Optional[resource_mapping.ShapeTable] = None) -> str:
+    def _protocol_body(
+        self, path: str, body: ET.Element, fields: dict, table: Optional[resource_mapping.ShapeTable] = None
+    ) -> str:
         """The shapes inside a level that a level dict cannot hold (F7.4, F7.5, F7.6).
 
         `_protocol_level` read the level's fields, so a `one_of` field is the choice it read from the element
@@ -2493,27 +2608,28 @@ class PanoramaParser:
         entries, so `_protocol_level` reads them and this rule states nothing for them.
         """
         table = table or resource_mapping.PROTOCOL_TABLE
-        detail = ''
-        for field, shape in table.row(path)['fields'].items():
+        detail = ""
+        for field, shape in table.row(path)["fields"].items():
             element = body.find(self._protocol_xml_name(field, path, table))
             if element is None:
                 continue
-            entry_path = f'{path}/{field}'
-            if shape == 'one_of':
+            entry_path = f"{path}/{field}"
+            if shape == "one_of":
                 fields[field], reason = self._protocol_presence_choice(entry_path, element, table)
                 detail = detail or reason
-            elif shape == 'string_list':
+            elif shape == "string_list":
                 # The entries a level holds are its own children, so an entry inside an entry belongs to the
                 # level that names it and not to the one above it (F7.6).
-                self._protocol_entries(entry_path, fields[field], element.findall('./entry'), table)
-            elif shape == 'object':
+                self._protocol_entries(entry_path, fields[field], element.findall("./entry"), table)
+            elif shape == "object":
                 # F7.6: a level dict is not an entry, so the entries a `string_list` field holds live under the
                 # element this field names. The same rule fills them, through the path the field names.
                 self._protocol_body(entry_path, element, fields[field], table)
         return detail
 
-    def _protocol_presence_choice(self, path: str, element: ET.Element,
-                         table: Optional[resource_mapping.ShapeTable] = None) -> tuple:
+    def _protocol_presence_choice(
+        self, path: str, element: ET.Element, table: Optional[resource_mapping.ShapeTable] = None
+    ) -> tuple:
         """The one key a `one_of` level states when the export states the level by presence (F7.4, F7.5).
 
         The export holds the choice as the element under the level, so the value is that element's tag and
@@ -2526,10 +2642,11 @@ class PanoramaParser:
         child = element[0] if len(element) else None
         # The table is passed on, so a choice read for a shape table other than `protocol` cannot fall back to
         # the protocol table (`test_the_shape_tables_are_the_only_shape_owners`).
-        return self._protocol_choice(path, child.tag if child is not None else '', element, child, table)
+        return self._protocol_choice(path, child.tag if child is not None else "", element, child, table)
 
-    def _protocol_presence_fields(self, path: str, captured: dict,
-                         table: Optional[resource_mapping.ShapeTable] = None) -> str:
+    def _protocol_presence_fields(
+        self, path: str, captured: dict, table: Optional[resource_mapping.ShapeTable] = None
+    ) -> str:
         """The reason an entry that states a presence choice states none of its alternatives (F7.1, F7.4).
 
         The provider requires exactly one, so the alternatives are the `block` fields the row states: the
@@ -2537,14 +2654,14 @@ class PanoramaParser:
         the table states no `block` field for states no required choice, so it has no reason.
         """
         table = table or resource_mapping.PROTOCOL_TABLE
-        alternatives = [f for f, shape in table.row(path)['fields'].items()
-                        if shape == 'block']
+        alternatives = [f for f, shape in table.row(path)["fields"].items() if shape == "block"]
         if not alternatives:
-            return ''
-        return '' if any(captured[f] for f in alternatives) else 'no ' + ' or '.join(alternatives)
+            return ""
+        return "" if any(captured[f] for f in alternatives) else "no " + " or ".join(alternatives)
 
-    def _protocol_interface(self, iface: ET.Element, base: str,
-                         table: Optional[resource_mapping.ShapeTable] = None) -> tuple:
+    def _protocol_interface(
+        self, iface: ET.Element, base: str, table: Optional[resource_mapping.ShapeTable] = None
+    ) -> tuple:
         """One interface entry, read as the shape table names its fields (F7.1, F7.2).
 
         The provider declares an interface only inside an area, so the area-interface row is the only
@@ -2553,12 +2670,12 @@ class PanoramaParser:
         which is empty for a link type the mapping states.
         """
         table = table or resource_mapping.PROTOCOL_TABLE
-        path = f'{base}/area/interface'
-        field = self._protocol_field_name(f'{path}/link_type', table)
+        path = f"{base}/area/interface"
+        field = self._protocol_field_name(f"{path}/link_type", table)
         captured = self._protocol_level(iface, path)
-        choice, detail = self._protocol_choice(f'{path}/{field}',
-                                               self._get_text(iface, self._protocol_xml_name(field, table)),
-                                               iface, iface, table)
+        choice, detail = self._protocol_choice(
+            f"{path}/{field}", self._get_text(iface, self._protocol_xml_name(field, table)), iface, iface, table
+        )
         captured[field] = choice
         return captured, detail
 
@@ -2571,9 +2688,14 @@ class PanoramaParser:
         """
         return (table or resource_mapping.PROTOCOL_TABLE).field_name(path)
 
-    def _protocol_choice(self, path: str, report_value: str, level: Optional[ET.Element],
-                         holder: Optional[ET.Element],
-                         table: Optional[resource_mapping.ShapeTable] = None) -> tuple:
+    def _protocol_choice(
+        self,
+        path: str,
+        report_value: str,
+        level: Optional[ET.Element],
+        holder: Optional[ET.Element],
+        table: Optional[resource_mapping.ShapeTable] = None,
+    ) -> tuple:
         """The one key a `one_of` level states, as `({the report value: the alternative's value}, detail)` (F7.1).
 
         `level` is the element the choice lives under and `holder` is the element the alternative's fields live
@@ -2586,22 +2708,35 @@ class PanoramaParser:
         """
         table = table or resource_mapping.PROTOCOL_TABLE
         row = table.row(path)
-        chosen = row['selects'].get(report_value, '')
+        chosen = row["selects"].get(report_value, "")
         if not chosen:
             name = self._protocol_field_name(path, table)
             # The table is named through the object, so a choice read for a shape table other than
             # `protocol` says the table that states no key for it.
             return {report_value: {}}, (
-                f'{name} {report_value} is not a value {table.name} states' if report_value
-                else f'{name} states no key {table.name} selects')
-        if chosen in row['fields']:
-            field = self._protocol_field_name(f'{path}/{chosen}', table)
-            return ({report_value: self._protocol_field(level, field, self._protocol_xml_name(field, table),
-                                                        row['fields'][chosen])}, '')
-        return ({report_value: self._protocol_level(holder, f'{path}/{chosen}', False, table)}, '')
+                f"{name} {report_value} is not a value {table.name} states"
+                if report_value
+                else f"{name} states no key {table.name} selects"
+            )
+        if chosen in row["fields"]:
+            field = self._protocol_field_name(f"{path}/{chosen}", table)
+            return (
+                {
+                    report_value: self._protocol_field(
+                        level, field, self._protocol_xml_name(field, table), row["fields"][chosen]
+                    )
+                },
+                "",
+            )
+        return ({report_value: self._protocol_level(holder, f"{path}/{chosen}", False, table)}, "")
 
-    def _protocol_level(self, entry: Optional[ET.Element], path: str, facts: bool = True,
-                         table: Optional[resource_mapping.ShapeTable] = None) -> dict:
+    def _protocol_level(
+        self,
+        entry: Optional[ET.Element],
+        path: str,
+        facts: bool = True,
+        table: Optional[resource_mapping.ShapeTable] = None,
+    ) -> dict:
         """Read one protocol level as `PROTOCOL_SHAPE` names its fields (F7.1).
 
         The shape table is the only thing that states a level's fields and shapes, so the emitter, the gate
@@ -2615,31 +2750,34 @@ class PanoramaParser:
         """
         table = table or resource_mapping.PROTOCOL_TABLE
         row = table.row(path)
-        if row['shape'] == 'block':
+        if row["shape"] == "block":
             # A `block` level states no field, so the value is the empty object the export stated by
             # presence, the same rule as a `block` field (F7.1).
-            return HclRef('{}')
+            return HclRef("{}")
         level = {}
-        for field, shape in row['fields'].items():
-            if shape == 'string_list':
+        for field, shape in row["fields"].items():
+            if shape == "string_list":
                 level[field] = []
-            elif shape == 'one_of':
-                sub = table.row(f'{path}/{field}')
-                if sub['fields']:
+            elif shape == "one_of":
+                sub = table.row(f"{path}/{field}")
+                if sub["fields"]:
                     # F7.6: the row states its alternatives as its own fields, so the level reads the one the
                     # element holds. A row that states no field leaves the choice to the caller, because the
                     # alternative there is a level the export states by presence.
                     element = entry.find(self._protocol_xml_name(field, path, table)) if entry is not None else None
-                    level[field] = self._protocol_presence_choice(f'{path}/{field}', element, table)[0] \
-                        if element is not None else {}
+                    level[field] = (
+                        self._protocol_presence_choice(f"{path}/{field}", element, table)[0]
+                        if element is not None
+                        else {}
+                    )
                 else:
                     level[field] = {}
-            elif shape == 'object':
+            elif shape == "object":
                 child = entry.find(self._protocol_xml_name(field, path, table)) if entry is not None else None
-                level[field] = self._protocol_level(child, f'{path}/{field}', True, table)
+                level[field] = self._protocol_level(child, f"{path}/{field}", True, table)
             else:
                 level[field] = self._protocol_field(entry, field, self._protocol_xml_name(field, path, table), shape)
-        if facts and entry is not None and entry.tag == 'entry':
+        if facts and entry is not None and entry.tag == "entry":
             # F3.10: a protocol entry is an object the ledger records, so it carries the five scope facts
             # of the router that holds it. A container level (`bgp`, `ospf`) is not an entry, and the
             # emitter places only the router, so that level holds no facts.
@@ -2647,8 +2785,7 @@ class PanoramaParser:
         return level
 
     @staticmethod
-    def _protocol_xml_name(field: str, path: str = '',
-                         table: Optional[resource_mapping.ShapeTable] = None) -> str:
+    def _protocol_xml_name(field: str, path: str = "", table: Optional[resource_mapping.ShapeTable] = None) -> str:
         """The XML element name for a `PROTOCOL_SHAPE` field name (F7.1).
 
         A PAN-OS export spells a field with `-` where the provider schema spells it with `_`, so the shape
@@ -2661,34 +2798,34 @@ class PanoramaParser:
     def _protocol_field(self, entry: ET.Element, field: str, xml_name: str, shape: str):
         """One protocol field, read as the shape table states it (F7.1), through the one text rule."""
         if entry is None:
-            return ''
-        if field == 'name':
+            return ""
+        if field == "name":
             # The entry name inside a list element is the entry's own `name` (F7.1 rule 1).
-            return read_text(entry.get('name')) or ''
+            return read_text(entry.get("name")) or ""
         node = entry.find(xml_name)
-        text = (read_text(node.text) or '') if node is not None else ''
-        if shape == 'bool':
+        text = (read_text(node.text) or "") if node is not None else ""
+        if shape == "bool":
             if node is None:
                 # The export states a flag by its presence, so an element that is not there is no value:
                 # the field prints nothing, and the gate sees no field to check.
-                return ''
+                return ""
             # A presence element with no text is the flag being set, which is the shape a PAN-OS export
             # uses for `accept-summary`.
-            return text == 'yes' or not text
-        if shape == 'number':
+            return text == "yes" or not text
+        if shape == "number":
             # A signed integer is what the provider reads for a number field, so `set-med -1` is a value.
             # `isdigit` answers false for the sign, so the sign is read before the digits (F7.1 rule 8).
-            if text.isdigit() or (text.startswith('-') and text[1:].isdigit()):
+            if text.isdigit() or (text.startswith("-") and text[1:].isdigit()):
                 return int(text)
-            return ''
-        if shape == 'block':
+            return ""
+        if shape == "block":
             # Presence is the value: the provider reads an empty block as the export having stated it, so
             # the field prints `{}` when the element is there and prints nothing when it is not (F7.1).
-            return HclRef('{}') if node is not None else ''
-        if shape == 'member_list':
+            return HclRef("{}") if node is not None else ""
+        if shape == "member_list":
             # The provider declares this field as `['list', 'string']`, so the value is the members the element
             # holds: there is no entry and no level row for a member (F7.6).
-            return [(member.text or '').strip() for member in node.findall('member')] if node is not None else []
+            return [(member.text or "").strip() for member in node.findall("member")] if node is not None else []
         return text
 
     def parse_filter_containers(self) -> dict:
@@ -2707,10 +2844,10 @@ class PanoramaParser:
         # The paths are read through the table, so the method states no path of its own (F7.1).
         for path in resource_mapping.FILTER_PATHS:
             entries = []
-            for container in self.root.findall(f'.//{path}'):
-                for entry in container.findall('./entry'):
-                    if not entry.get('name'):
-                        self.mark_skipped(entry, 'entry has no name attribute')
+            for container in self.root.findall(f".//{path}"):
+                for entry in container.findall("./entry"):
+                    if not entry.get("name"):
+                        self.mark_skipped(entry, "entry has no name attribute")
                         continue
                     captured = self._protocol_level(entry, path, True, table)
                     self._protocol_body(path, entry, captured, table)
@@ -2723,66 +2860,72 @@ class PanoramaParser:
         tunnels = []
 
         for tunnel in self.root.findall(".//network/tunnel/ipsec/entry"):
-            name = tunnel.get('name')
+            name = tunnel.get("name")
             if not name:
                 self.mark_skipped(tunnel, "entry has no name attribute")
                 continue
 
-            tunnel_config = self.mark(tunnel, {
-                'name': name,
-                **self.identity_of(tunnel),
-                'tunnel_interface': self._get_text(tunnel, 'tunnel-interface'),
-                'type': 'auto-key',  # Default
-                'peer_address': None,
-                'local_address': None,
-                'auth_type': None,
-                'preshared_key': None,
-                'ike_gateway': None,
-                'ipsec_crypto_profile': None
-            })
+            tunnel_config = self.mark(
+                tunnel,
+                {
+                    "name": name,
+                    **self.identity_of(tunnel),
+                    "tunnel_interface": self._get_text(tunnel, "tunnel-interface"),
+                    "type": "auto-key",  # Default
+                    "peer_address": None,
+                    "local_address": None,
+                    "auth_type": None,
+                    "preshared_key": None,
+                    "ike_gateway": None,
+                    "ipsec_crypto_profile": None,
+                },
+            )
 
             # Check for auto-key (most common)
-            auto_key = tunnel.find('auto-key')
+            auto_key = tunnel.find("auto-key")
             if auto_key is not None:
-                tunnel_config['type'] = 'auto-key'
+                tunnel_config["type"] = "auto-key"
 
                 # IKE Gateway. Real Panorama exports use <gateway><entry
                 # name="..."/> under <auto-key>; accept the alternate
                 # <ike-gateway> tag some tools emit as well.
-                ike_gw = auto_key.find('gateway/entry')
+                ike_gw = auto_key.find("gateway/entry")
                 if ike_gw is None:
-                    ike_gw = auto_key.find('ike-gateway/entry')
+                    ike_gw = auto_key.find("ike-gateway/entry")
                 if ike_gw is not None:
-                    tunnel_config['ike_gateway'] = ike_gw.get('name')
+                    tunnel_config["ike_gateway"] = ike_gw.get("name")
 
                 # IPsec Crypto Profile
-                ipsec_profile = auto_key.find('ipsec-crypto-profile')
+                ipsec_profile = auto_key.find("ipsec-crypto-profile")
                 if ipsec_profile is not None:
-                    tunnel_config['ipsec_crypto_profile'] = ipsec_profile.text
+                    tunnel_config["ipsec_crypto_profile"] = ipsec_profile.text
 
                 # Proxy IDs
                 proxy_ids = []
-                for proxy in auto_key.findall('.//proxy-id/entry'):
-                    proxy_name = proxy.get('name')
+                for proxy in auto_key.findall(".//proxy-id/entry"):
+                    proxy_name = proxy.get("name")
                     if not proxy_name:
                         # F4.3: the entry was read, so the record holds it even when the name guard skips
                         # it. A proxy entry sits inside the tunnel entry, so the report counts it on the
                         # parent row instead of printing a line of its own.
-                        self.mark_skipped(proxy, 'entry has no name attribute')
+                        self.mark_skipped(proxy, "entry has no name attribute")
                         continue
-                    proxy_config = self.mark(proxy, {
-                        'name': proxy_name,
-                        'local': self._get_text(proxy, 'local'),
-                        'remote': self._get_text(proxy, 'remote'),
-                        'protocol': self._get_text(proxy, 'protocol/number')
-                    })
+                    proxy_config = self.mark(
+                        proxy,
+                        {
+                            "name": proxy_name,
+                            "local": self._get_text(proxy, "local"),
+                            "remote": self._get_text(proxy, "remote"),
+                            "protocol": self._get_text(proxy, "protocol/number"),
+                        },
+                    )
                     proxy_ids.append(proxy_config)
-                tunnel_config['proxy_ids'] = proxy_ids
+                tunnel_config["proxy_ids"] = proxy_ids
 
             # Check for manual key
-            manual_key = tunnel.find('manual-key')
+            manual_key = tunnel.find("manual-key")
             if manual_key is not None:
-                tunnel_config['type'] = 'manual-key'
+                tunnel_config["type"] = "manual-key"
 
             tunnels.append(tunnel_config)
 
@@ -2793,74 +2936,77 @@ class PanoramaParser:
         gateways = []
 
         for gw in self.root.findall(".//network/ike/gateway/entry"):
-            name = gw.get('name')
+            name = gw.get("name")
             if not name:
                 self.mark_skipped(gw, "entry has no name attribute")
                 continue
 
-            gateway_config = self.mark(gw, {
-                'name': name,
-                **self.identity_of(gw),
-                'version': 'ikev1',  # Default
-                'peer_address': None,
-                'local_address': None,
-                'auth_type': 'pre-shared-key',
-                'ike_crypto_profile': None,
-                'local_id': None,
-                'peer_id': None
-            })
+            gateway_config = self.mark(
+                gw,
+                {
+                    "name": name,
+                    **self.identity_of(gw),
+                    "version": "ikev1",  # Default
+                    "peer_address": None,
+                    "local_address": None,
+                    "auth_type": "pre-shared-key",
+                    "ike_crypto_profile": None,
+                    "local_id": None,
+                    "peer_id": None,
+                },
+            )
 
             # Version
-            protocol = gw.find('protocol')
+            protocol = gw.find("protocol")
             if protocol is not None:
-                if protocol.find('ikev1') is not None:
-                    gateway_config['version'] = 'ikev1'
-                elif protocol.find('ikev2') is not None:
-                    gateway_config['version'] = 'ikev2'
+                if protocol.find("ikev1") is not None:
+                    gateway_config["version"] = "ikev1"
+                elif protocol.find("ikev2") is not None:
+                    gateway_config["version"] = "ikev2"
 
                 # IKE Crypto Profile
-                version_node = protocol.find(gateway_config['version'])
+                version_node = protocol.find(gateway_config["version"])
                 if version_node is not None:
-                    ike_profile = version_node.find('ike-crypto-profile')
+                    ike_profile = version_node.find("ike-crypto-profile")
                     if ike_profile is not None:
-                        gateway_config['ike_crypto_profile'] = ike_profile.text
+                        gateway_config["ike_crypto_profile"] = ike_profile.text
 
             # Peer address
-            peer_addr = gw.find('.//peer-address/ip')
+            peer_addr = gw.find(".//peer-address/ip")
             if peer_addr is not None:
-                gateway_config['peer_address'] = peer_addr.text
+                gateway_config["peer_address"] = peer_addr.text
 
-            peer_fqdn = gw.find('.//peer-address/fqdn')
+            peer_fqdn = gw.find(".//peer-address/fqdn")
             if peer_fqdn is not None:
-                gateway_config['peer_address'] = peer_fqdn.text
-                gateway_config['peer_address_type'] = 'fqdn'
+                gateway_config["peer_address"] = peer_fqdn.text
+                gateway_config["peer_address_type"] = "fqdn"
 
             # Local address
-            local_addr = gw.find('.//local-address/ip')
+            local_addr = gw.find(".//local-address/ip")
             if local_addr is not None:
-                gateway_config['local_address'] = local_addr.text
+                gateway_config["local_address"] = local_addr.text
 
-            local_iface = gw.find('.//local-address/interface')
+            local_iface = gw.find(".//local-address/interface")
             if local_iface is not None:
-                gateway_config['local_address_interface'] = local_iface.text
+                gateway_config["local_address_interface"] = local_iface.text
 
             # Authentication
-            auth = gw.find('authentication')
+            auth = gw.find("authentication")
             if auth is not None:
                 # Check for pre-shared key (won't have actual value in export for security)
-                if auth.find('pre-shared-key') is not None:
+                if auth.find("pre-shared-key") is not None:
                     # The export states the authentication method, not the key, so the entry records the fact
                     # and no value: the block prints `PLACEHOLDER_TEXT` for it (F7.7).
-                    gateway_config['auth_type'] = 'pre-shared-key'
-                elif auth.find('certificate') is not None:
-                    gateway_config['auth_type'] = 'certificate'
-                    cert = auth.find('certificate')
+                    gateway_config["auth_type"] = "pre-shared-key"
+                elif auth.find("certificate") is not None:
+                    gateway_config["auth_type"] = "certificate"
+                    cert = auth.find("certificate")
                     if cert is not None:
-                        gateway_config['certificate_profile'] = self._get_text(cert, 'profile')
+                        gateway_config["certificate_profile"] = self._get_text(cert, "profile")
 
             # Local/Peer IDs
-            gateway_config['local_id'] = self._get_text(gw, 'local-id/id')
-            gateway_config['peer_id'] = self._get_text(gw, 'peer-id/id')
+            gateway_config["local_id"] = self._get_text(gw, "local-id/id")
+            gateway_config["peer_id"] = self._get_text(gw, "peer-id/id")
 
             gateways.append(gateway_config)
 
@@ -2871,19 +3017,22 @@ class PanoramaParser:
         profiles = []
 
         for profile in self.root.findall(".//network/ike/crypto-profiles/ike-crypto-profiles/entry"):
-            name = profile.get('name')
+            name = profile.get("name")
             if not name:
                 self.mark_skipped(profile, "entry has no name attribute")
                 continue
 
-            profile_config = self.mark(profile, {
-                'name': name,
-                **self.identity_of(profile),
-                'dh_groups': self._get_members(profile, 'dh-group'),
-                'authentications': self._get_members(profile, 'authentication'),
-                'encryptions': self._get_members(profile, 'encryption'),
-                'lifetime_hours': self._get_text(profile, 'lifetime/hours')
-            })
+            profile_config = self.mark(
+                profile,
+                {
+                    "name": name,
+                    **self.identity_of(profile),
+                    "dh_groups": self._get_members(profile, "dh-group"),
+                    "authentications": self._get_members(profile, "authentication"),
+                    "encryptions": self._get_members(profile, "encryption"),
+                    "lifetime_hours": self._get_text(profile, "lifetime/hours"),
+                },
+            )
 
             profiles.append(profile_config)
 
@@ -2894,26 +3043,29 @@ class PanoramaParser:
         profiles = []
 
         for profile in self.root.findall(".//network/ike/crypto-profiles/ipsec-crypto-profiles/entry"):
-            name = profile.get('name')
+            name = profile.get("name")
             if not name:
                 self.mark_skipped(profile, "entry has no name attribute")
                 continue
 
-            profile_config = self.mark(profile, {
-                'name': name,
-                **self.identity_of(profile),
-                'protocol': 'esp',  # Default
-                'encryptions': self._get_members(profile, 'esp/encryption'),
-                'authentications': self._get_members(profile, 'esp/authentication'),
-                'dh_group': self._get_text(profile, 'dh-group'),
-                'lifetime_hours': self._get_text(profile, 'lifetime/hours'),
-                'lifetime_kb': self._get_text(profile, 'lifetime/kilobytes')
-            })
+            profile_config = self.mark(
+                profile,
+                {
+                    "name": name,
+                    **self.identity_of(profile),
+                    "protocol": "esp",  # Default
+                    "encryptions": self._get_members(profile, "esp/encryption"),
+                    "authentications": self._get_members(profile, "esp/authentication"),
+                    "dh_group": self._get_text(profile, "dh-group"),
+                    "lifetime_hours": self._get_text(profile, "lifetime/hours"),
+                    "lifetime_kb": self._get_text(profile, "lifetime/kilobytes"),
+                },
+            )
 
             # Check if AH is used instead of ESP
-            if profile.find('ah') is not None:
-                profile_config['protocol'] = 'ah'
-                profile_config['authentications'] = self._get_members(profile, 'ah/authentication')
+            if profile.find("ah") is not None:
+                profile_config["protocol"] = "ah"
+                profile_config["authentications"] = self._get_members(profile, "ah/authentication")
 
             profiles.append(profile_config)
 
@@ -2927,7 +3079,7 @@ class PanoramaParser:
     def _get_members(self, element: ET.Element, path: str) -> list[str]:
         """Get list of members from an XML element, through the same text rule."""
         members = []
-        for member in element.findall(f'.//{path}/member'):
+        for member in element.findall(f".//{path}/member"):
             text = read_text(member.text)
             if text:
                 members.append(text)
@@ -2951,7 +3103,7 @@ class PanoramaParser:
         elem = element.find(path)
         if elem is None:
             return None
-        members = [read_text(member.text) for member in elem.findall('member') if read_text(member.text)]
+        members = [read_text(member.text) for member in elem.findall("member") if read_text(member.text)]
         if not members:
             return read_text(elem.text)
         return members[0] if len(members) == 1 else members
@@ -2971,15 +3123,15 @@ class PanoramaParser:
         if elem is None:
             return []
         names = []
-        for child in elem.findall('entry'):
-            child_name = child.get('name')
+        for child in elem.findall("entry"):
+            child_name = child.get("name")
             if not child_name:
                 # F4.3: the entry was read, so the record holds it even when the name guard skips it.
                 # It sits inside the entry that owns the field, so the report counts it on that row.
-                self.mark_skipped(child, 'entry has no name attribute')
+                self.mark_skipped(child, "entry has no name attribute")
                 continue
             names.append(child_name)
-        return names or [child.text for child in elem.findall('member') if child.text]
+        return names or [child.text for child in elem.findall("member") if child.text]
 
     def _interface_tag(self, entry: ET.Element, name: str) -> Optional[str]:
         """Read the `tag` field every interface row declares, from either place the export states it.
@@ -2989,16 +3141,16 @@ class PanoramaParser:
         When the export states no tag element, the name carries the unit (F3.3), so the unit part of the
         name is the value the row states.
         """
-        tag = entry.find('tag')
+        tag = entry.find("tag")
         if tag is None:
-            for mode in ('virtual-wire', 'tap'):
+            for mode in ("virtual-wire", "tap"):
                 block = entry.find(mode)
-                if block is not None and block.find('tag') is not None:
-                    tag = block.find('tag')
+                if block is not None and block.find("tag") is not None:
+                    tag = block.find("tag")
                     break
         if tag is not None and tag.text:
             return tag.text
-        return name.rsplit('.', 1)[1] if '.' in name else None
+        return name.rsplit(".", 1)[1] if "." in name else None
 
 
 class HclRef:
@@ -3007,7 +3159,8 @@ class HclRef:
     Terraform resource references such as panos_virtual_router.x.name must
     not be quoted, so they are wrapped in HclRef when passed to hcl_value().
     """
-    __slots__ = ('expr',)
+
+    __slots__ = ("expr",)
 
     def __init__(self, expr: str):
         self.expr = expr
@@ -3020,33 +3173,44 @@ class HclRef:
 # F2.6: resource types a .name reference may target, in lookup order.
 # Object scopes come before group scopes so a name shared by both
 # resolves to the object (PAN-OS policy-reference semantics).
-ADDR_SCOPES = ('panos_address', 'panos_address_group')
-SERVICE_SCOPES = ('panos_service', 'panos_service_group')
-ZONE_SCOPES = ('panos_zone',)
-INTERFACE_SCOPES = ('panos_ethernet_interface', 'panos_ethernet_layer3_subinterface')
+ADDR_SCOPES = ("panos_address", "panos_address_group")
+SERVICE_SCOPES = ("panos_service", "panos_service_group")
+ZONE_SCOPES = ("panos_zone",)
+INTERFACE_SCOPES = ("panos_ethernet_interface", "panos_ethernet_layer3_subinterface")
 # F3.3: a subinterface parent can be a physical interface, an aggregate
 # group, or an aggregate layer-3 subinterface (ae1.101.20 has parent
 # ae1.101), so parent resolution covers every interface scope.
 IFACE_SCOPES = (
-    'panos_ethernet_interface',
-    'panos_ethernet_layer3_subinterface',
-    'panos_aggregate_interface',
-    'panos_aggregate_layer3_subinterface',
+    "panos_ethernet_interface",
+    "panos_ethernet_layer3_subinterface",
+    "panos_aggregate_interface",
+    "panos_aggregate_layer3_subinterface",
 )
-TAG_SCOPES = ('panos_administrative_tag',)
-IKE_CRYPTO_SCOPES = ('panos_ike_crypto_profile',)
-IPSEC_CRYPTO_SCOPES = ('panos_ipsec_crypto_profile',)
-IKE_GATEWAY_SCOPES = ('panos_ike_gateway',)
+TAG_SCOPES = ("panos_administrative_tag",)
+IKE_CRYPTO_SCOPES = ("panos_ike_crypto_profile",)
+IPSEC_CRYPTO_SCOPES = ("panos_ipsec_crypto_profile",)
+IKE_GATEWAY_SCOPES = ("panos_ike_gateway",)
 
 # F5.5: every scope a reference site resolves a name against. A read-through
 # `data` block exists to answer a name a reference needs, so `--data-blocks`
 # accepts a scope from this set only, and only a scope whose `DATA_SOURCE_SCHEMA`
 # row declares `name`: a data source with no `name` attribute cannot hold the
 # entry name a reference needs. tests/test_data_blocks.py pins both rules.
-REFERENCE_SCOPES = tuple(sorted({
-    *ADDR_SCOPES, *SERVICE_SCOPES, *ZONE_SCOPES, *INTERFACE_SCOPES, *IFACE_SCOPES,
-    *TAG_SCOPES, *IKE_CRYPTO_SCOPES, *IPSEC_CRYPTO_SCOPES, *IKE_GATEWAY_SCOPES,
-}))
+REFERENCE_SCOPES = tuple(
+    sorted(
+        {
+            *ADDR_SCOPES,
+            *SERVICE_SCOPES,
+            *ZONE_SCOPES,
+            *INTERFACE_SCOPES,
+            *IFACE_SCOPES,
+            *TAG_SCOPES,
+            *IKE_CRYPTO_SCOPES,
+            *IPSEC_CRYPTO_SCOPES,
+            *IKE_GATEWAY_SCOPES,
+        }
+    )
+)
 
 # F4.4: the field order the manual report line states for an application override rule, which is the
 # order the report already used for the fields it printed. The report is the only output for this
@@ -3055,15 +3219,15 @@ REFERENCE_SCOPES = tuple(sorted({
 # fields whose empty value the report prints as `any`, because an export that states no value for them
 # means any port or any protocol.
 OVERRIDE_REPORT_FIELDS = (
-    ('from', 'source_zones'),
-    ('to', 'destination_zones'),
-    ('source', 'source_addresses'),
-    ('destination', 'destination_addresses'),
-    ('port', 'port'),
-    ('protocol', 'protocol'),
-    ('application', 'application'),
-    ('disabled', 'disabled'),
-    ('description', 'description'),
+    ("from", "source_zones"),
+    ("to", "destination_zones"),
+    ("source", "source_addresses"),
+    ("destination", "destination_addresses"),
+    ("port", "port"),
+    ("protocol", "protocol"),
+    ("application", "application"),
+    ("disabled", "disabled"),
+    ("description", "description"),
 )
 
 
@@ -3077,7 +3241,7 @@ class UnitText:
     write path, in the order the run read that unit's blocks.
     """
 
-    def __init__(self, generator: 'TerraformGenerator', name: str, header: str = ''):
+    def __init__(self, generator: "TerraformGenerator", name: str, header: str = ""):
         self.generator = generator
         self.name = name
         self.header = header
@@ -3122,15 +3286,16 @@ class TerraformGenerator:
     # inspection mode is a separate type block. Legacy PAN-OS 9 exports put
     # the mode in <action> instead of <type>; both shapes map to the same
     # v2 output.
-    _V2_DECRYPTION_ACTIONS = ('no-decrypt', 'decrypt', 'decrypt-and-forward')
+    _V2_DECRYPTION_ACTIONS = ("no-decrypt", "decrypt", "decrypt-and-forward")
     _DECRYPTION_TYPE_KEYS = {
-        'ssl-forward-proxy': 'ssl_forward_proxy',
-        'ssl-inbound-inspection': 'ssl_inbound_inspection',
-        'ssh-proxy': 'ssh_proxy',
+        "ssl-forward-proxy": "ssl_forward_proxy",
+        "ssl-inbound-inspection": "ssl_inbound_inspection",
+        "ssh-proxy": "ssh_proxy",
     }
 
-    def __init__(self, output_dir: str, associations: Optional[dict] = None,
-                 data_scopes: Optional[frozenset] = None, ledger=None):
+    def __init__(
+        self, output_dir: str, associations: Optional[dict] = None, data_scopes: Optional[frozenset] = None, ledger=None
+    ):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the run's unit set is the ledger's rows, read
@@ -3228,14 +3393,13 @@ class TerraformGenerator:
             return
         write_path.write_file(write_path.root_path(self.output_dir, name), content)
 
-    def declare_resource_name(self, name: str, scope: str, obj: dict,
-                              context: str = '', vsys: str = '') -> str:
+    def declare_resource_name(self, name: str, scope: str, obj: dict, context: str = "", vsys: str = "") -> str:
         """Assign a collision-free name for a `resource` declaration (F2.7)."""
         return self.declare_block_name(name, scope, obj, context, vsys)
 
-    def declare_block_name(self, name: str, scope: str, obj: dict,
-                           context: str = '', vsys: str = '',
-                           kind: str = 'resource') -> str:
+    def declare_block_name(
+        self, name: str, scope: str, obj: dict, context: str = "", vsys: str = "", kind: str = "resource"
+    ) -> str:
         """Assign a collision-free Terraform name for a new block declaration.
 
         One name rule for both block kinds (F5.5): a read-through `data` block
@@ -3279,16 +3443,16 @@ class TerraformGenerator:
         # The §5 fallback is `naming.UNNAMED`, the one definition of the word (F6.6).
         base = self.sanitize_name(name) or naming.UNNAMED
         unit = unit_manifest.facts_of(obj)
-        identity = f'{context}|{vsys}' if kind == 'resource' else unit_manifest.identity_digest(unit)
-        digest = hashlib.sha256(f'{scope}|{identity}|{name}'.encode()).hexdigest()[:8]
-        candidate = f'{base}_{digest}'
+        identity = f"{context}|{vsys}" if kind == "resource" else unit_manifest.identity_digest(unit)
+        digest = hashlib.sha256(f"{scope}|{identity}|{name}".encode()).hexdigest()[:8]
+        candidate = f"{base}_{digest}"
         taken = self._taken_names.setdefault(scope, set())
         n = 2
         while candidate in taken:
-            candidate = f'{base}_{digest}_{n}'
+            candidate = f"{base}_{digest}_{n}"
             n += 1
         taken.add(candidate)
-        if kind == 'data':
+        if kind == "data":
             # A `data` block is created by a reference site, not by a parsed
             # entry, so it enters no declaration index: a plain reference must
             # not resolve to it, and a `data.` reference resolves only to the
@@ -3325,7 +3489,7 @@ class TerraformGenerator:
         """
         if isinstance(resolved, str):
             return True
-        return isinstance(resolved, HclRef) and resolved.expr.startswith('data.')
+        return isinstance(resolved, HclRef) and resolved.expr.startswith("data.")
 
     def unit_references(self) -> dict:
         """The recorded reference names, keyed by the referrer's five scope facts, in sorted order."""
@@ -3341,9 +3505,14 @@ class TerraformGenerator:
         (F7.1, F6.10.4), and a row is a value the run read (§9 rule 2).
         """
         shapes = self._value_shapes
-        return {facts: {name: store[name] for name in sorted(store)
-                        if shapes.get(facts, {}).get(name) == resource_mapping.VARIABLE}
-                for facts, store in self._value_variables.items()}
+        return {
+            facts: {
+                name: store[name]
+                for name in sorted(store)
+                if shapes.get(facts, {}).get(name) == resource_mapping.VARIABLE
+            }
+            for facts, store in self._value_variables.items()
+        }
 
     def value_shapes(self) -> dict:
         """The recorded shapes, keyed by the unit's five scope facts, in name order (F6.10.4).
@@ -3351,8 +3520,7 @@ class TerraformGenerator:
         A name the run holds with no value is read through this record, so the declaration file and a test can
         tell a `reference_only` name from an `operator_supplied` one without naming the fields again.
         """
-        return {facts: {name: shapes[name] for name in sorted(shapes)}
-                for facts, shapes in self._value_shapes.items()}
+        return {facts: {name: shapes[name] for name in sorted(shapes)} for facts, shapes in self._value_shapes.items()}
 
     def record_import_row(self, resource_type: str, obj: dict, local_name: str, location: dict) -> None:
         """Record the import row for one entry, at the site that applied the naming rule (F6.4).
@@ -3362,11 +3530,9 @@ class TerraformGenerator:
         `unit_manifest` identity, read through `facts_of`, so no second identity key appears.
         """
         unit = unit_manifest.directory_name(unit_manifest.facts_of(obj), self.sanitize_name)
-        self.import_rows.append(import_blocks.row(
-            unit, resource_type, local_name, obj.get('name') or '', location))
+        self.import_rows.append(import_blocks.row(unit, resource_type, local_name, obj.get("name") or "", location))
 
-    def _resolve_reference(self, name: str, scopes, referrer: dict,
-                           key: Optional[str] = None):
+    def _resolve_reference(self, name: str, scopes, referrer: dict, key: Optional[str] = None):
         """Resolve a PAN-OS name inside one unit (F2.6, F6.10.2).
 
         Returns an HclRef of '<scope>.<local>.name' when the referrer's own unit declares the name, else
@@ -3400,7 +3566,7 @@ class TerraformGenerator:
         for scope in scopes:
             local = self._declaration_index.get((scope, lookup), {}).get(unit)
             if local is not None:
-                return HclRef(f'{scope}.{local}.name')
+                return HclRef(f"{scope}.{local}.name")
         # 2. The name is declared, but by another unit, so it is not reachable from this one.
         if any(self._declaration_index.get((scope, lookup)) for scope in scopes):
             return name
@@ -3410,18 +3576,18 @@ class TerraformGenerator:
                 continue
             block = self._data_blocks.get((scope, unit, lookup))
             if block is None:
-                local = self.declare_block_name(name, scope, referrer, kind='data')
+                local = self.declare_block_name(name, scope, referrer, kind="data")
                 block = self._data_blocks[(scope, unit, lookup)] = {
-                    'type': scope,
-                    'local': local,
-                    'name': name,
+                    "type": scope,
+                    "local": local,
+                    "name": name,
                     # F6.10.3: the block is written in the unit it names, so the writer needs the facts.
-                    'unit': unit,
+                    "unit": unit,
                     # The location the referrer's unit names: one location rule (`location_block`), and the
                     # tool does not guess which scope holds a name outside the run (F5.5).
-                    'location': self.location_block(scope, {**referrer, 'name': name}),
+                    "location": self.location_block(scope, {**referrer, "name": name}),
                 }
-            return HclRef(f'data.{scope}.{block["local"]}.name')
+            return HclRef(f"data.{scope}.{block['local']}.name")
         # 4.
         return name
 
@@ -3435,11 +3601,11 @@ class TerraformGenerator:
         # (`xml_input`), so a value that holds a control character is refused at the door and cannot reach
         # here; `sanity_checks.check_control_chars` reads the same set on the printed text, so a missed
         # escape is a gate finding rather than a silent strip.
-        value = value.replace('\\', '\\\\')
+        value = value.replace("\\", "\\\\")
         value = value.replace('"', '\\"')
-        value = value.replace('\t', '\\t')
-        value = value.replace('\r', '\\r')
-        value = value.replace('\n', '\\n')
+        value = value.replace("\t", "\\t")
+        value = value.replace("\r", "\\r")
+        value = value.replace("\n", "\\n")
         return f'"{value}"'
 
     # Provider v2 requires a location block on every resource. A type is template-scoped when its
@@ -3447,14 +3613,14 @@ class TerraformGenerator:
     # hand-kept list). The six scope types are not scoped objects: they are the scopes, so they are
     # not template-scoped, and the `panorama` sub-block is their own place (F6.5).
     _TEMPLATE_SCOPED_TYPES = frozenset(
-        t for t, scopes in LOCATION_SCHEMA.items()
-        if 'device_group' not in scopes and t not in SCOPE_TYPES)
+        t for t, scopes in LOCATION_SCHEMA.items() if "device_group" not in scopes and t not in SCOPE_TYPES
+    )
 
     # Template-scoped resource the export places in no template and on no
     # named device (F3.6). The name is a guess, so location_block reports
     # every resource that uses it, with the templates the entry's device
     # does take.
-    _TEMPLATE_PLACEHOLDER = 'Shared'
+    _TEMPLATE_PLACEHOLDER = "Shared"
 
     # PAN-OS writes this device entry name for "this device" (Panorama
     # itself, or a firewall's own config export). It names no firewall, so
@@ -3478,13 +3644,13 @@ class TerraformGenerator:
     def _location_source_text(obj: dict) -> str:
         """Describe where the export defined an object, for the report."""
         parts = [f"dg: {obj.get('device_group') or 'Shared'}"]
-        if obj.get('vsys'):
+        if obj.get("vsys"):
             parts.append(f"vsys: {obj['vsys']}")
-        if obj.get('template'):
+        if obj.get("template"):
             parts.append(f"template: {obj['template']}")
-        if obj.get('vsys_device'):
+        if obj.get("vsys_device"):
             parts.append(f"device: {obj['vsys_device']}")
-        return ', '.join(parts)
+        return ", ".join(parts)
 
     @staticmethod
     def scope_context(obj: dict) -> str:
@@ -3497,7 +3663,7 @@ class TerraformGenerator:
         firewalls that both declare ethernet1/1 collapse to one digest and
         the second resource only differs by the taken-name counter.
         """
-        return (obj.get('template') or obj.get('vsys_device') or '').strip()
+        return (obj.get("template") or obj.get("vsys_device") or "").strip()
 
     # --- Report grouping (F3.9) ------------------------------------------
     # Both operator-facing reports group by the same rule: device group first,
@@ -3519,21 +3685,20 @@ class TerraformGenerator:
         not by the label text.
         """
         path = []
-        device_group = (obj.get('device_group') or '').strip()
-        template = (obj.get('template') or '').strip()
-        device = (obj.get('vsys_device') or '').strip()
-        if device_group and device_group != 'Shared':
-            path.append((0, 'DEVICE GROUP', device_group))
+        device_group = (obj.get("device_group") or "").strip()
+        template = (obj.get("template") or "").strip()
+        device = (obj.get("vsys_device") or "").strip()
+        if device_group and device_group != "Shared":
+            path.append((0, "DEVICE GROUP", device_group))
         if template:
-            path.append((1, 'TEMPLATE', template))
+            path.append((1, "TEMPLATE", template))
         if device:
             # localhost.localdomain is the PAN-OS placeholder for "this device"
             # (F3.5), so it names no firewall; the report says what it is.
-            label = ('DEVICE (this device placeholder)'
-                     if device == self._LOCAL_DEVICE_PLACEHOLDER else 'DEVICE')
+            label = "DEVICE (this device placeholder)" if device == self._LOCAL_DEVICE_PLACEHOLDER else "DEVICE"
             path.append((2, label, device))
         if not path:
-            path.append((3, 'SHARED SECTION', ''))
+            path.append((3, "SHARED SECTION", ""))
         return tuple(path)
 
     def _group_by_scope(self, entries: list[dict]) -> list[tuple[tuple, list[dict]]]:
@@ -3546,8 +3711,7 @@ class TerraformGenerator:
     @staticmethod
     def _report_section_header(path: tuple[tuple[int, str, str], ...]) -> str:
         """Return the section title for a scope path (F3.9)."""
-        return ' / '.join(label if not value else f'{label}: {value}'
-                          for _level, label, value in path)
+        return " / ".join(label if not value else f"{label}: {value}" for _level, label, value in path)
 
     @staticmethod
     def _report_vsys_line(obj: dict) -> str:
@@ -3556,7 +3720,7 @@ class TerraformGenerator:
         The parser records '' for an undeclared vsys (F3.5), so the report
         never prints an invented vsys1.
         """
-        return f'  Vsys: {obj["vsys"]}\n' if obj.get('vsys') else ''
+        return f"  Vsys: {obj['vsys']}\n" if obj.get("vsys") else ""
 
     def _device_template_text(self, device: str) -> str:
         """Describe the templates the export associates with a device (F3.6).
@@ -3567,17 +3731,19 @@ class TerraformGenerator:
         uses it, so the operator learns which template name to write.
         """
         if not device:
-            return 'the export names no device for this entry'
+            return "the export names no device for this entry"
         if device == self._LOCAL_DEVICE_PLACEHOLDER:
-            return ('the entry sits on the PAN-OS "this device" placeholder, '
-                    'so the export names no firewall that takes a template')
-        names = list(self._associations.get('templates', {}).get(device, []))
-        for stack in self._associations.get('template_stacks', {}).get(device, []):
-            names.extend(self._associations.get('stack_templates', {}).get(stack, []))
+            return (
+                'the entry sits on the PAN-OS "this device" placeholder, '
+                "so the export names no firewall that takes a template"
+            )
+        names = list(self._associations.get("templates", {}).get(device, []))
+        for stack in self._associations.get("template_stacks", {}).get(device, []):
+            names.extend(self._associations.get("stack_templates", {}).get(stack, []))
         names = sorted(set(names))
         if names:
-            return f'device {device} takes template(s): {", ".join(names)}'
-        return f'the export associates no template with device {device}'
+            return f"device {device} takes template(s): {', '.join(names)}"
+        return f"the export associates no template with device {device}"
 
     def location_data(self, resource_type: str, obj: dict) -> dict:
         """The location as data: {sub-block: {field: value}}, in the order the block prints it (F6.4).
@@ -3587,10 +3753,10 @@ class TerraformGenerator:
         block prints, so the goldens keep their bytes.
         """
         scopes = LOCATION_SCHEMA[resource_type]
-        vsys = (obj.get('vsys') or '').strip()
-        template = (obj.get('template') or '').strip()
-        device = (obj.get('vsys_device') or '').strip()
-        group = (obj.get('device_group') or '').strip()
+        vsys = (obj.get("vsys") or "").strip()
+        template = (obj.get("template") or "").strip()
+        device = (obj.get("vsys_device") or "").strip()
+        group = (obj.get("device_group") or "").strip()
         where = self._location_source_text(obj)
 
         def keep(scope: str, fields: dict) -> dict:
@@ -3605,42 +3771,44 @@ class TerraformGenerator:
         #    as skipped, so it reaches no block here. Branch 4 would report a device group as
         #    "device group dropped", which is wrong for the object that defines the group.
         if resource_type in SCOPE_TYPES:
-            key = next((k for k in SCOPE_PLACEMENT[resource_type] if obj.get(k)), '')
+            key = next((k for k in SCOPE_PLACEMENT[resource_type] if obj.get(k)), "")
             if not key:
-                return {'panorama': {}}
-            return {key: keep(key, {'name': obj.get(key)})}
+                return {"panorama": {}}
+            return {key: keep(key, {"name": obj.get(key)})}
 
         # 1. Virtual-system placement (F3.5).
-        if vsys and not template and 'vsys' in scopes:
-            fields = {'name': vsys}
+        if vsys and not template and "vsys" in scopes:
+            fields = {"name": vsys}
             if device and device != self._LOCAL_DEVICE_PLACEHOLDER:
-                fields['ngfw_device'] = device
+                fields["ngfw_device"] = device
             else:
                 self._report_location(
-                    'device',
+                    "device",
                     f'  {resource_type} "{obj.get("name")}" ({where}): '
-                    f'location.vsys.ngfw_device is empty because the export '
-                    f'names no target device')
-            return {'vsys': keep('vsys', fields)}
+                    f"location.vsys.ngfw_device is empty because the export "
+                    f"names no target device",
+                )
+            return {"vsys": keep("vsys", fields)}
 
         # 2. Template placement. An entry the export nests under
         #    templates/entry/<T>/devices/entry/<D> is that device's own
         #    config inside the template; the schema carries it as
         #    template.ngfw_device (F3.6).
-        if template and 'template' in scopes:
-            fields = {'name': template}
+        if template and "template" in scopes:
+            fields = {"name": template}
             if device and device != self._LOCAL_DEVICE_PLACEHOLDER:
-                fields['ngfw_device'] = device
+                fields["ngfw_device"] = device
             if vsys:
-                if 'vsys' in scopes['template']:
-                    fields['vsys'] = vsys
+                if "vsys" in scopes["template"]:
+                    fields["vsys"] = vsys
                 else:
                     self._report_location(
-                        'scope',
+                        "scope",
                         f'  {resource_type} "{obj.get("name")}" ({where}): vsys '
-                        f'dropped because {resource_type} location.template '
-                        f'declares no vsys field')
-            return {'template': keep('template', fields)}
+                        f"dropped because {resource_type} location.template "
+                        f"declares no vsys field",
+                    )
+            return {"template": keep("template", fields)}
 
         # 3. Device-specific placement (F3.6). The export put the entry under
         #    devices/entry/<device>/network, so it is that firewall's own
@@ -3648,61 +3816,66 @@ class TerraformGenerator:
         #    location.ngfw ("Located in a specific NGFW device"). Only the
         #    template-scoped types declare it: objects live in a virtual
         #    system and take branch 1.
-        if device and device != self._LOCAL_DEVICE_PLACEHOLDER and 'ngfw' in scopes:
-            return {'ngfw': keep('ngfw', {'ngfw_device': device})}
+        if device and device != self._LOCAL_DEVICE_PLACEHOLDER and "ngfw" in scopes:
+            return {"ngfw": keep("ngfw", {"ngfw_device": device})}
 
         # 4. Report every declared scope the type cannot carry, then fall
         #    back to the location the type does accept.
-        if vsys and 'vsys' not in scopes:
+        if vsys and "vsys" not in scopes:
             self._report_location(
-                'scope',
+                "scope",
                 f'  {resource_type} "{obj.get("name")}" ({where}): vsys dropped '
-                f'because {resource_type} has no location.vsys sub-block; place '
-                f'the object in the virtual system by hand')
-        if template and 'template' not in scopes:
+                f"because {resource_type} has no location.vsys sub-block; place "
+                f"the object in the virtual system by hand",
+            )
+        if template and "template" not in scopes:
             self._report_location(
-                'scope',
+                "scope",
                 f'  {resource_type} "{obj.get("name")}" ({where}): template '
-                f'dropped because {resource_type} has no location.template '
-                f'sub-block; place the object in the template by hand')
-        if group and group != 'Shared' and 'device_group' not in scopes:
+                f"dropped because {resource_type} has no location.template "
+                f"sub-block; place the object in the template by hand",
+            )
+        if group and group != "Shared" and "device_group" not in scopes:
             self._report_location(
-                'scope',
+                "scope",
                 f'  {resource_type} "{obj.get("name")}" ({where}): device group '
-                f'dropped because {resource_type} has no location.device_group '
-                f'sub-block; place the object in the device group by hand')
+                f"dropped because {resource_type} has no location.device_group "
+                f"sub-block; place the object in the device group by hand",
+            )
 
-        if 'device_group' in scopes:
-            if group and group != 'Shared':
-                return {'device_group': {'name': group}}
-            if 'shared' in scopes:
+        if "device_group" in scopes:
+            if group and group != "Shared":
+                return {"device_group": {"name": group}}
+            if "shared" in scopes:
                 # The export defines the entry under <shared>. The schema
                 # calls that location `shared`; a device group named
                 # "Shared" is a different object that does not exist
                 # (F3.5).
-                return {'shared': {}}
-        if 'template' not in scopes:
+                return {"shared": {}}
+        if "template" not in scopes:
             # Defensive: every emitted type declares `device_group`,
             # `shared`, or `template`, so no branch above returned. Emit no
             # location (the resource then fails `terraform validate` loudly)
             # and say why, rather than emitting a sub-block the type lacks.
             self._report_location(
-                'scope',
+                "scope",
                 f'  {resource_type} "{obj.get("name")}" ({where}): no location '
-                f'emitted because {resource_type} declares no sub-block this '
-                f'entry can use; place the object by hand')
+                f"emitted because {resource_type} declares no sub-block this "
+                f"entry can use; place the object by hand",
+            )
             return {}
         # Nothing in the export places this entry and the type only lives in
         # a template. Emit the placeholder and report it with the templates
         # the entry's device does take, so the operator replaces the guess
         # rather than applying it (F3.6).
         self._report_location(
-            'placeholder',
+            "placeholder",
             f'  {resource_type} "{obj.get("name")}" ({where}): '
             f'location.template.name is the "{self._TEMPLATE_PLACEHOLDER}" '
-            f'placeholder because the export places this entry in no '
-            f'template; {self._device_template_text(device)}')
-        return {'template': {'name': self._TEMPLATE_PLACEHOLDER}}
+            f"placeholder because the export places this entry in no "
+            f"template; {self._device_template_text(device)}",
+        )
+        return {"template": {"name": self._TEMPLATE_PLACEHOLDER}}
 
     def printed_value(self, key: str, value: str, facts: tuple) -> str:
         """Print one field as `VALUE_VARIABLES` says, and record the pair (F6.6, F7.1, F6.10.4).
@@ -3728,8 +3901,11 @@ class TerraformGenerator:
         because there is no value to name it from.
         """
         shape = resource_mapping.VALUE_VARIABLES.get(key)
-        if shape not in (resource_mapping.VARIABLE, resource_mapping.REFERENCE_ONLY,
-                         resource_mapping.OPERATOR_SUPPLIED):
+        if shape not in (
+            resource_mapping.VARIABLE,
+            resource_mapping.REFERENCE_ONLY,
+            resource_mapping.OPERATOR_SUPPLIED,
+        ):
             return self.escape_string(value)
         # A name the run holds no value for is named by the entry (F7.1) or by the field (F6.10.4), because a
         # value cannot name itself and an unread fact has no value.
@@ -3756,7 +3932,7 @@ class TerraformGenerator:
         """
         return self.printed_value(key, value, unit_manifest.facts_of(obj))
 
-    def location_block(self, resource_type: str, obj: dict, local_name: str = '') -> str:
+    def location_block(self, resource_type: str, obj: dict, local_name: str = "") -> str:
         """Required location object for a generated resource (F2.3, F3.5).
 
         Provider v2 requires `location` on every resource, and the sub-blocks
@@ -3795,15 +3971,15 @@ class TerraformGenerator:
         if local_name:
             self.record_import_row(resource_type, obj, local_name, data)
         if not data:
-            return ''
+            return ""
         scope, fields = next(iter(data.items()))
         if not fields:
             # An empty sub-block is the `shared = {}` shape.
-            return f'  location = {{\n    {scope} = {{}}\n  }}\n'
-        body = ''.join(f'      {k} = {self.location_field(k, v, obj)}\n' for k, v in fields.items())
-        return f'  location = {{\n    {scope} = {{\n{body}    }}\n  }}\n'
+            return f"  location = {{\n    {scope} = {{}}\n  }}\n"
+        body = "".join(f"      {k} = {self.location_field(k, v, obj)}\n" for k, v in fields.items())
+        return f"  location = {{\n    {scope} = {{\n{body}    }}\n  }}\n"
 
-    def hcl_value(self, value: Any, indent: str = '  ') -> str:
+    def hcl_value(self, value: Any, indent: str = "  ") -> str:
         """Render a Python value as an HCL expression.
 
         Provider v2 models nested structures as object/list arguments rather
@@ -3821,32 +3997,37 @@ class TerraformGenerator:
         if isinstance(value, HclRef):
             return value.expr
         if value is True:
-            return 'true'
+            return "true"
         if value is False:
-            return 'false'
+            return "false"
         if isinstance(value, int):
             return str(value)
         if isinstance(value, str):
             return self.escape_string(value)
         if isinstance(value, dict):
             if not value:
-                return '{}'
-            parts = [f'{indent}  {k} = ' + self.hcl_value(v, indent + '  ')
-                     for k, v in value.items()]
-            return '{\n' + '\n'.join(parts) + f'\n{indent}}}'
+                return "{}"
+            parts = [f"{indent}  {k} = " + self.hcl_value(v, indent + "  ") for k, v in value.items()]
+            return "{\n" + "\n".join(parts) + f"\n{indent}}}"
         if isinstance(value, (list, tuple)):
             if not value:
-                return '[]'
+                return "[]"
             if all(not isinstance(item, (dict, list)) for item in value):
                 # Primitive lists stay inline
-                return '[ ' + ', '.join(self.hcl_value(item, '') for item in value) + ' ]'
+                return "[ " + ", ".join(self.hcl_value(item, "") for item in value) + " ]"
             # Nested lists put each element on its own line at indent + 2.
-            parts = [f'{indent}  {self.hcl_value(item, indent + "  ")}' for item in value]
-            return '[\n' + ',\n'.join(parts) + f'\n{indent}]'
-        raise TypeError(f'Cannot render {type(value)} as HCL')
+            parts = [f"{indent}  {self.hcl_value(item, indent + '  ')}" for item in value]
+            return "[\n" + ",\n".join(parts) + f"\n{indent}]"
+        raise TypeError(f"Cannot render {type(value)} as HCL")
 
-    def _protocol_fields(self, path: str, level: dict, router: dict, entry_name: str = '',
-                         table: Optional[resource_mapping.ShapeTable] = None) -> dict:
+    def _protocol_fields(
+        self,
+        path: str,
+        level: dict,
+        router: dict,
+        entry_name: str = "",
+        table: Optional[resource_mapping.ShapeTable] = None,
+    ) -> dict:
         """One level of the protocol object, printed in the shape table's order (F7.1).
 
         `PROTOCOL_SHAPE` is the only thing that states a level's fields and shapes, so the emitter prints
@@ -3861,37 +4042,37 @@ class TerraformGenerator:
         """
         table = table or resource_mapping.PROTOCOL_TABLE
         row = table.row(path)
-        if row['shape'] == 'block':
+        if row["shape"] == "block":
             # A `block` level states no field, so the value the parse read for it is the whole print (F7.1).
             return level
-        name = level.get('name') or entry_name or ''
+        name = level.get("name") or entry_name or ""
         printed = {}
-        for field, shape in row['fields'].items():
+        for field, shape in row["fields"].items():
             value = level.get(field)
             if value in entry_coverage.EMPTY_FIELD_VALUES:
                 continue
-            if shape == 'member_list':
+            if shape == "member_list":
                 # The value is the members themselves, so there is no element to print as an object and no
                 # level row to walk (F7.6).
                 out = value
-            elif shape == 'string_list':
-                out = [self._protocol_fields(f'{path}/{field}', element, router, name, table)
-                        for element in value]
-            elif shape == 'one_of':
+            elif shape == "string_list":
+                out = [self._protocol_fields(f"{path}/{field}", element, router, name, table) for element in value]
+            elif shape == "one_of":
                 # The mapping lives on the one_of row for this field, not on the level that holds it.
-                sub = table.row(f'{path}/{field}')
-                report_value = next(iter(value), '')
-                key = sub['selects'].get(report_value, '')
+                sub = table.row(f"{path}/{field}")
+                report_value = next(iter(value), "")
+                key = sub["selects"].get(report_value, "")
                 if not key:
                     out = {}
-                elif key in sub['fields']:
+                elif key in sub["fields"]:
                     # F7.6: the alternative is a value the row states, so the reader's value is the print.
                     out = {key: value[report_value]}
                 else:
-                    out = ({key: self._protocol_fields(f'{path}/{field}/{key}', value[report_value], router,
-                                                       name, table)})
-            elif shape == 'object':
-                out = self._protocol_fields(f'{path}/{field}', value, router, name, table)
+                    out = {
+                        key: self._protocol_fields(f"{path}/{field}/{key}", value[report_value], router, name, table)
+                    }
+            elif shape == "object":
+                out = self._protocol_fields(f"{path}/{field}", value, router, name, table)
             elif resource_mapping.VALUE_VARIABLES.get(field) == resource_mapping.REFERENCE_ONLY:
                 out = HclRef(self.printed_value(field, name, unit_manifest.facts_of(router)))
             else:
@@ -3909,23 +4090,22 @@ class TerraformGenerator:
         declares, in the table's order, and the gate rule `filter_blocks` checks the same names. The resource
         type is the one `CONTAINER_TABLE` names in the row note, reached through `FILTER_TYPES`.
         """
-        out = UnitText(self, 'filters.tf', '# Routing-profile filter containers (F7.8)\n\n')
+        out = UnitText(self, "filters.tf", "# Routing-profile filter containers (F7.8)\n\n")
         wrote = False
         for path in resource_mapping.FILTER_PATHS:
             for entry in containers.get(path) or []:
                 resource = resource_mapping.FILTER_TYPES[path]
-                name = entry['name']
-                block_name = self.declare_resource_name(name, resource, entry,
-                                                        context=self.scope_context(entry),
-                                                        vsys=entry.get('vsys') or '')
+                name = entry["name"]
+                block_name = self.declare_resource_name(
+                    name, resource, entry, context=self.scope_context(entry), vsys=entry.get("vsys") or ""
+                )
                 out.add(entry, f'resource "{resource}" "{block_name}" {{\n')
                 out.add(entry, self.location_block(resource, entry, block_name))
-                printed = self._protocol_fields(path, entry, entry, entry['name'],
-                                          resource_mapping.FILTER_TABLE)
+                printed = self._protocol_fields(path, entry, entry, entry["name"], resource_mapping.FILTER_TABLE)
                 # The row order is the print order (F7.1, §4.9), so no field is sorted here.
                 for field in printed:
-                    out.add(entry, f'  {field} = {self.hcl_value(printed[field])}\n')
-                out.add(entry, '}\n\n')
+                    out.add(entry, f"  {field} = {self.hcl_value(printed[field])}\n")
+                out.add(entry, "}\n\n")
                 wrote = True
         if wrote:
             out.write()
@@ -3938,8 +4118,9 @@ class TerraformGenerator:
         prints as the one sub-shape the export states, and the two fields the provider marks `sensitive` print
         as the variable reference the entry names (F7.7), so no generated file states the value.
         """
-        self._generate_certificate_blocks(entries, 'certificates.tf', 'certificate',
-                                         '# Certificate entries (F7.14)\n\n')
+        self._generate_certificate_blocks(
+            entries, "certificates.tf", "certificate", "# Certificate entries (F7.14)\n\n"
+        )
 
     def generate_certificate_profiles(self, entries: list[dict]) -> None:
         """Generate the certificate profile entries (F7.14): one `certificate_profiles.tf` block per entry.
@@ -3948,11 +4129,11 @@ class TerraformGenerator:
         name of its own. The file name is the kind the `COVERAGE_MATRIX` row names, so the two blocks are in two
         files: the profile block prints a list, the certificate block prints the one sub-shape the export states.
         """
-        self._generate_certificate_blocks(entries, 'certificate_profiles.tf', 'certificate_profile',
-                                         '# Certificate profiles (F7.14)\n\n')
+        self._generate_certificate_blocks(
+            entries, "certificate_profiles.tf", "certificate_profile", "# Certificate profiles (F7.14)\n\n"
+        )
 
-    def _generate_certificate_blocks(self, entries: list[dict], file_name: str, path: str,
-                                     header: str) -> None:
+    def _generate_certificate_blocks(self, entries: list[dict], file_name: str, path: str, header: str) -> None:
         """One resource block per certificate entry, printed from the shape table (F7.14).
 
         `path` is the entry row of `CERTIFICATE_SHAPE`, so the printed fields are the row's fields in the row's
@@ -3965,18 +4146,18 @@ class TerraformGenerator:
         resource = resource_mapping.CERTIFICATE_TYPES[path]
         out = UnitText(self, file_name, header)
         for entry in entries:
-            name = entry['name']
-            block_name = self.declare_resource_name(name, resource, entry,
-                                                    context=self.scope_context(entry),
-                                                    vsys=entry.get('vsys') or '')
+            name = entry["name"]
+            block_name = self.declare_resource_name(
+                name, resource, entry, context=self.scope_context(entry), vsys=entry.get("vsys") or ""
+            )
             out.add(entry, f'resource "{resource}" "{block_name}" {{\n')
             out.add(entry, self.location_block(resource, entry, block_name))
             printed = self._protocol_fields(path, entry, entry, name, table)
             # The row order is the print order (F7.1, §4.9), so no field is sorted here and `name`
             # prints where the row states it.
             for field in printed:
-                out.add(entry, f'  {field} = {self.hcl_value(printed[field])}\n')
-            out.add(entry, '}\n\n')
+                out.add(entry, f"  {field} = {self.hcl_value(printed[field])}\n")
+            out.add(entry, "}\n\n")
         out.write()
 
     def generate_provider_config(self):
@@ -3999,7 +4180,7 @@ class TerraformGenerator:
         that names no device prints no `target`, because a declaration with no consumer is a finding, and the
         placeholder device names no device (F3.5).
         """
-        head = '''# Palo Alto Networks PAN-OS Provider Configuration
+        head = """# Palo Alto Networks PAN-OS Provider Configuration
 # Supported provider range: v2 series, baseline 2.0.14 (the latest 2.x
 # release and the version the conformance and validate gates verify).
 # Terraform 1.14 minimum: an `action` block is 1.14 syntax (F6.7).
@@ -4014,22 +4195,26 @@ terraform {
 }
 
 provider "panos" {
-'''
+"""
         for facts in self.unit_set():
             body = head
             # The host is the fact the run names and cannot read, so the block prints the reference to the name
             # the table's `operator_supplied` row gives it (F6.6, §11).
-            body += ('  # The Panorama host this unit plans against. The run names the variable and holds no\n'
-                     '  # value for it, so the operator supplies it in terraform.tfvars (do not commit that\n'
-                     '  # file). The provider reads ' + source_fetch.API_KEY_ENV + ' from the environment, so the\n'
-                     '  # block states no key.\n'
-                     f'  hostname = {self.printed_value("hostname", "", facts)}\n')
-            device = unit_manifest.fact(facts, 'vsys_device')
+            body += (
+                "  # The Panorama host this unit plans against. The run names the variable and holds no\n"
+                "  # value for it, so the operator supplies it in terraform.tfvars (do not commit that\n"
+                "  # file). The provider reads " + source_fetch.API_KEY_ENV + " from the environment, so the\n"
+                "  # block states no key.\n"
+                f"  hostname = {self.printed_value('hostname', '', facts)}\n"
+            )
+            device = unit_manifest.fact(facts, "vsys_device")
             if device and device != container_coverage.PLACEHOLDER_DEVICE:
-                body += ('  # The NGFW serial for the device this unit plans against. The run names the\n'
-                         '  # variable and holds no value for it, so the operator supplies the serial.\n'
-                         f'  target = {self.printed_value("target", "", facts)}\n')
-            self.write_unit_file(self.directory_of(facts), 'provider.tf', body + '}\n')
+                body += (
+                    "  # The NGFW serial for the device this unit plans against. The run names the\n"
+                    "  # variable and holds no value for it, so the operator supplies the serial.\n"
+                    f"  target = {self.printed_value('target', '', facts)}\n"
+                )
+            self.write_unit_file(self.directory_of(facts), "provider.tf", body + "}\n")
 
     def generate_variables(self):
         """Generate `variables.tf` for every unit the run's unit set names (F6.10.3, §14).
@@ -4047,55 +4232,71 @@ provider "panos" {
         consumed. The type is the kind the site data row declares, so a declaration agrees with the value the
         `.tfvars` prints.
         """
-        header = (f'# Variables for Palo Alto Configuration\n'
-                  '# The run declares the names it names: the site values `site_data.py` maps, the reference-only\n'
-                  '# names, and the facts the tool cannot read. Set the values in terraform.tfvars (do not commit\n'
-                  '# it) or via the TF_VAR_* environment variables. The run declares no key, because the provider\n'
-                  f'# reads {source_fetch.API_KEY_ENV} from the environment (docs/CODEBASE_ASSEMBLY.md §11).\n')
+        header = (
+            f"# Variables for Palo Alto Configuration\n"
+            "# The run declares the names it names: the site values `site_data.py` maps, the reference-only\n"
+            "# names, and the facts the tool cannot read. Set the values in terraform.tfvars (do not commit\n"
+            "# it) or via the TF_VAR_* environment variables. The run declares no key, because the provider\n"
+            f"# reads {source_fetch.API_KEY_ENV} from the environment (docs/CODEBASE_ASSEMBLY.md §11).\n"
+        )
         for facts in self.unit_set():
             recorded = self._value_variables.get(facts) or {}
             shapes = self._value_shapes.get(facts) or {}
             # F7.1: a pair whose source is not a value is a declaration with no value held for it, so the shape
             # record is what separates the two halves of the file.
-            values = {name: source for name, source in recorded.items()
-                      if shapes.get(name) == resource_mapping.VARIABLE}
+            values = {
+                name: source for name, source in recorded.items() if shapes.get(name) == resource_mapping.VARIABLE
+            }
             content = header
             if values:
-                content += (f'# Site values (F6.6): one variable per value `resource_mapping.VALUE_VARIABLES` maps.\n'
-                            f'# The values are in {site_data.TFVARS_FILE}, which Terraform loads automatically.\n\n')
+                content += (
+                    f"# Site values (F6.6): one variable per value `resource_mapping.VALUE_VARIABLES` maps.\n"
+                    f"# The values are in {site_data.TFVARS_FILE}, which Terraform loads automatically.\n\n"
+                )
                 for name in sorted(values):
-                    kind = 'list(string)' if isinstance(values[name], list) else 'string'
-                    content += (f'variable "{name}" {{\n'
-                                f'  description = "Site value (F6.6), read from {site_data.TFVARS_FILE}"\n'
-                                f'  type        = {kind}\n'
-                                '}\n\n')
+                    kind = "list(string)" if isinstance(values[name], list) else "string"
+                    content += (
+                        f'variable "{name}" {{\n'
+                        f'  description = "Site value (F6.6), read from {site_data.TFVARS_FILE}"\n'
+                        f"  type        = {kind}\n"
+                        "}\n\n"
+                    )
             held = {name for name, shape in shapes.items() if shape != resource_mapping.VARIABLE}
             for name in sorted(held):
                 # F7.1 marks a held name `sensitive` when its table row is `reference_only`; F6.10.4 names a
                 # fact the tool cannot read, and neither is a secret, so the marking follows the row. The
                 # description states the shape word, so no name list appears in a generated file.
                 if shapes.get(name) == resource_mapping.REFERENCE_ONLY:
-                    content += (f'variable "{name}" {{\n'
-                                f'  description = "Sensitive protocol value (F7.1, F7.7): the reference prints, so no '
-                                f'file states the value, and the operator supplies it"\n'
-                                f'  type        = string\n'
-                                f'  sensitive   = true\n'
-                                '}\n\n')
+                    content += (
+                        f'variable "{name}" {{\n'
+                        f'  description = "Sensitive protocol value (F7.1, F7.7): the reference prints, so no '
+                        f'file states the value, and the operator supplies it"\n'
+                        f"  type        = string\n"
+                        f"  sensitive   = true\n"
+                        "}\n\n"
+                    )
                 else:
-                    content += (f'variable "{name}" {{\n'
-                                f'  description = "A fact the tool cannot read (F6.10.4, docs/CODEBASE_ASSEMBLY.md '
-                                f'§11): the run names the variable and the operator supplies the value"\n'
-                                f'  type        = string\n'
-                                '}\n\n')
-            self.write_unit_file(self.directory_of(facts), 'variables.tf', content)
+                    content += (
+                        f'variable "{name}" {{\n'
+                        f'  description = "A fact the tool cannot read (F6.10.4, docs/CODEBASE_ASSEMBLY.md '
+                        f'§11): the run names the variable and the operator supplies the value"\n'
+                        f"  type        = string\n"
+                        "}\n\n"
+                    )
+            self.write_unit_file(self.directory_of(facts), "variables.tf", content)
 
     # F6.5: the scope objects are the unit's file, the way `imports.tf` (F6.4) and
     # `read_through.tf` (F5.5) are unit-set files. Written only when the run has a block.
-    SCOPE_FILE = 'scope.tf'
+    SCOPE_FILE = "scope.tf"
 
-    def generate_scope_objects(self, device_groups: list[dict], templates: list[dict],
-                               stacks: list[dict], variables: list[dict],
-                               systems: list[dict]) -> None:
+    def generate_scope_objects(
+        self,
+        device_groups: list[dict],
+        templates: list[dict],
+        stacks: list[dict],
+        variables: list[dict],
+        systems: list[dict],
+    ) -> None:
         """Write the scope objects, one `resource` block per scope entry (F6.5).
 
         The file is written before the config inside the scopes it names, which is the order rule
@@ -4125,14 +4326,12 @@ provider "panos" {
         # covers its container and this method reads it there.
         # The entry name is the row identity, so it is not a property.
         levels = (
-            ('panos_device_group', device_groups, ('description', 'devices', 'templates'), ''),
-            ('panos_device_group_parent', device_groups, ('parent',), 'parent'),
-            ('panos_template', templates, ('default_vsys', 'description'), ''),
-            ('panos_template_stack', stacks,
-             ('default_vsys', 'description', 'devices', 'templates'), ''),
-            ('panos_template_variable', variables,
-             ('description', 'template_stack', 'type'), ''),
-            ('panos_vsys', systems, (), ''),
+            ("panos_device_group", device_groups, ("description", "devices", "templates"), ""),
+            ("panos_device_group_parent", device_groups, ("parent",), "parent"),
+            ("panos_template", templates, ("default_vsys", "description"), ""),
+            ("panos_template_stack", stacks, ("default_vsys", "description", "devices", "templates"), ""),
+            ("panos_template_variable", variables, ("description", "template_stack", "type"), ""),
+            ("panos_vsys", systems, (), ""),
         )
         out = UnitText(self, self.SCOPE_FILE)
         # The print order is `SCOPE_LEVEL_ORDER`, the F3.9 level order the file states, and not the
@@ -4145,8 +4344,8 @@ provider "panos" {
                 # The naming context is the placement key the emitter uses, so the name and the
                 # location state the same scope. An entry that defines its own scope has no context
                 # above it.
-                placement = next((key for key in SCOPE_PLACEMENT[resource_type] if entry.get(key)), '')
-                local = self.declare_resource_name(entry['name'], resource_type, entry, context=placement)
+                placement = next((key for key in SCOPE_PLACEMENT[resource_type] if entry.get(key)), "")
+                local = self.declare_resource_name(entry["name"], resource_type, entry, context=placement)
                 out.add(entry, f'resource "{resource_type}" "{local}" {{\n')
                 out.add(entry, self.location_block(resource_type, entry, local))
                 out.add(entry, self._scope_name_field(resource_type, entry))
@@ -4159,7 +4358,7 @@ provider "panos" {
                     if key in SCOPE_PLACEMENT[resource_type]:
                         continue
                     out.add(entry, self._scope_property(resource_type, key, value))
-                out.add(entry, '}\n\n')
+                out.add(entry, "}\n\n")
         out.write()
 
     def _scope_name_field(self, resource_type: str, entry: dict) -> str:
@@ -4168,7 +4367,7 @@ provider "panos" {
         `entry_coverage.name_field` is the one rule for that field, so the emitter, the import
         agreement gate, and the coverage matrix test state the same thing.
         """
-        return f'  {entry_coverage.name_field(resource_type)} = {self.escape_string(entry.get("name"))}\n'
+        return f"  {entry_coverage.name_field(resource_type)} = {self.escape_string(entry.get('name'))}\n"
 
     def _scope_property(self, resource_type: str, key: str, value) -> str:
         """One property line, in the shape the provider declares it as (F6.5).
@@ -4189,15 +4388,15 @@ provider "panos" {
         """
         shape = SCOPE_SHAPE[resource_type][key]
         if value in entry_coverage.EMPTY_FIELD_VALUES:
-            return ''
+            return ""
         if isinstance(value, (list, tuple)):
             members = [item for item in value if item != container_coverage.PLACEHOLDER_DEVICE]
             if not members:
-                return ''
-            if shape == 'object_list':
-                return f'  {key} = {self.hcl_value([{"name": item} for item in members])}\n'
-            return f'  {key} = {self.hcl_value(members)}\n'
-        return f'  {key} = {self.hcl_value(value)}\n'
+                return ""
+            if shape == "object_list":
+                return f"  {key} = {self.hcl_value([{'name': item} for item in members])}\n"
+            return f"  {key} = {self.hcl_value(members)}\n"
+        return f"  {key} = {self.hcl_value(value)}\n"
 
     def generate_address_objects(self, addresses: list[dict]):
         """Generate address object Terraform configuration (v2: panos_address)
@@ -4208,49 +4407,47 @@ provider "panos" {
         if not addresses:
             return
 
-        out = UnitText(self, 'address_objects.tf', '# Address Objects\n\n')
+        out = UnitText(self, "address_objects.tf", "# Address Objects\n\n")
 
         for addr in addresses:
-            if addr.get('report_only'):
+            if addr.get("report_only"):
                 # No v2 attribute exists for this entry type; the entry is
                 # reported instead of emitted as an empty resource (F3.4).
                 continue
 
             resource_name = self.declare_resource_name(
-                addr['name'], 'panos_address', addr,
-                context=addr.get('device_group') or '', vsys=addr.get('vsys') or ''
+                addr["name"], "panos_address", addr, context=addr.get("device_group") or "", vsys=addr.get("vsys") or ""
             )
 
             out.add(addr, f'resource "panos_address" "{resource_name}" {{\n')
-            out.add(addr, self.location_block('panos_address', addr, resource_name))
-            out.add(addr, f'  name = {self.escape_string(addr["name"])}\n')
+            out.add(addr, self.location_block("panos_address", addr, resource_name))
+            out.add(addr, f"  name = {self.escape_string(addr['name'])}\n")
 
-            if addr.get('description'):
-                out.add(addr, f'  description = {self.escape_string(addr["description"])}\n')
+            if addr.get("description"):
+                out.add(addr, f"  description = {self.escape_string(addr['description'])}\n")
 
             self.emit_disable_override(out, addr)
 
-            value = (addr.get('value') or '').strip()
+            value = (addr.get("value") or "").strip()
             if value:
-                attr = self._address_type_attribute(addr.get('type', 'ip-netmask'))
-                out.add(addr, f'  {attr} = {self.escape_string(value)}\n')
+                attr = self._address_type_attribute(addr.get("type", "ip-netmask"))
+                out.add(addr, f"  {attr} = {self.escape_string(value)}\n")
 
-            if addr.get('tags'):
+            if addr.get("tags"):
                 # F2.6: tags declared in this run become references;
                 # F3.2, F6.10.2: resolve inside the referrer's own unit
-                addr.get('device_group')
-                addr.get('vsys') or ''
-                tags_str = ', '.join([
-                    self.hcl_value(self.name_ref(t, TAG_SCOPES, referrer=addr), '')
-                    for t in addr['tags']
-                ])
-                out.add(addr, f'  tags = [{tags_str}]\n')
+                addr.get("device_group")
+                addr.get("vsys") or ""
+                tags_str = ", ".join(
+                    [self.hcl_value(self.name_ref(t, TAG_SCOPES, referrer=addr), "") for t in addr["tags"]]
+                )
+                out.add(addr, f"  tags = [{tags_str}]\n")
 
-            out.add(addr, '}\n\n')
+            out.add(addr, "}\n\n")
 
         out.write()
 
-    def emit_disable_override(self, out: 'UnitText', obj: dict) -> None:
+    def emit_disable_override(self, out: "UnitText", obj: dict) -> None:
         """Print the `disable_override` line for one entry: the one shape every row uses (F3.4, F6.2).
 
         The provider takes the string, not a bool (verified against 2.0.14). The line prints after the
@@ -4259,69 +4456,71 @@ provider "panos" {
         row that names the property reads the key through this one helper, which is what the property
         scan measures (F4.4).
         """
-        disable = (obj.get('disable_override') or '').strip().lower()
-        if disable in ('yes', 'no'):
+        disable = (obj.get("disable_override") or "").strip().lower()
+        if disable in ("yes", "no"):
             out.add(obj, f'  disable_override = "{disable}"\n')
 
     @staticmethod
     def _address_type_attribute(addr_type: str) -> str:
         """Map the parser address type to the v2 panos_address attribute."""
         mapping = {
-            'ip-netmask': 'ip_netmask',
-            'ip-range': 'ip_range',
-            'ip-wildcard': 'ip_wildcard',
-            'fqdn': 'fqdn',
+            "ip-netmask": "ip_netmask",
+            "ip-range": "ip_range",
+            "ip-wildcard": "ip_wildcard",
+            "fqdn": "fqdn",
         }
-        return mapping.get(addr_type, 'ip_netmask')
+        return mapping.get(addr_type, "ip_netmask")
 
     def generate_address_groups(self, groups: list[dict]):
         """Generate address group Terraform configuration (v2: panos_address_group)"""
         if not groups:
             return
 
-        out = UnitText(self, 'address_groups.tf', '# Address Groups\n\n')
+        out = UnitText(self, "address_groups.tf", "# Address Groups\n\n")
 
         for grp in groups:
-            static_members = grp.get('static_members') or []
-            dynamic_filter = (grp.get('dynamic_filter') or '').strip()
+            static_members = grp.get("static_members") or []
+            dynamic_filter = (grp.get("dynamic_filter") or "").strip()
 
             # The v2 provider requires exactly one of the static member list
             # or the dynamic filter; an empty group would be invalid, so it is
             # kept visible as a comment instead of a resource.
             if not static_members and not dynamic_filter:
-                out.add(grp, f'# NOTE: address group {grp["name"]} has no members or filter; configure manually\n\n')
+                out.add(grp, f"# NOTE: address group {grp['name']} has no members or filter; configure manually\n\n")
                 continue
 
             resource_name = self.declare_resource_name(
-                grp['name'], 'panos_address_group', grp,
-                context=grp.get('device_group') or '', vsys=grp.get('vsys') or ''
+                grp["name"],
+                "panos_address_group",
+                grp,
+                context=grp.get("device_group") or "",
+                vsys=grp.get("vsys") or "",
             )
 
             out.add(grp, f'resource "panos_address_group" "{resource_name}" {{\n')
-            out.add(grp, self.location_block('panos_address_group', grp, resource_name))
-            out.add(grp, f'  name = {self.escape_string(grp["name"])}\n')
+            out.add(grp, self.location_block("panos_address_group", grp, resource_name))
+            out.add(grp, f"  name = {self.escape_string(grp['name'])}\n")
 
-            if grp.get('description'):
-                out.add(grp, f'  description = {self.escape_string(grp["description"])}\n')
+            if grp.get("description"):
+                out.add(grp, f"  description = {self.escape_string(grp['description'])}\n")
 
             self.emit_disable_override(out, grp)
 
             if static_members:
                 # F2.6: members declared in this run become references;
                 # F3.2, F6.10.2: resolve inside the referrer's own unit
-                grp.get('device_group')
-                grp.get('vsys') or ''
-                members_str = ', '.join([
-                    self.hcl_value(self.name_ref(m, ADDR_SCOPES, referrer=grp), '')
-                    for m in static_members
-                ])
-                out.add(grp, f'  static = [{members_str}]\n')
+                grp.get("device_group")
+                grp.get("vsys") or ""
+                members_str = ", ".join(
+                    [self.hcl_value(self.name_ref(m, ADDR_SCOPES, referrer=grp), "") for m in static_members]
+                )
+                out.add(grp, f"  static = [{members_str}]\n")
 
             # v2 dynamic groups: the filter expression lives in dynamic.dynamic
             if dynamic_filter:
-                out.add(grp, f'  dynamic = {self.hcl_value({"dynamic": {"filter": dynamic_filter}})}\n')
+                out.add(grp, f"  dynamic = {self.hcl_value({'dynamic': {'filter': dynamic_filter}})}\n")
 
-            out.add(grp, '}\n\n')
+            out.add(grp, "}\n\n")
 
         out.write()
 
@@ -4341,58 +4540,56 @@ provider "panos" {
         if not services:
             return
 
-        out = UnitText(self, 'service_objects.tf', '# Service Objects\n\n')
+        out = UnitText(self, "service_objects.tf", "# Service Objects\n\n")
 
         for svc in services:
             resource_name = self.declare_resource_name(
-                svc['name'], 'panos_service', svc,
-                context=svc.get('device_group') or '', vsys=svc.get('vsys') or ''
+                svc["name"], "panos_service", svc, context=svc.get("device_group") or "", vsys=svc.get("vsys") or ""
             )
 
             out.add(svc, f'resource "panos_service" "{resource_name}" {{\n')
-            out.add(svc, self.location_block('panos_service', svc, resource_name))
-            out.add(svc, f'  name = {self.escape_string(svc["name"])}\n')
+            out.add(svc, self.location_block("panos_service", svc, resource_name))
+            out.add(svc, f"  name = {self.escape_string(svc['name'])}\n")
 
-            if svc.get('description'):
-                out.add(svc, f'  description = {self.escape_string(svc["description"])}\n')
+            if svc.get("description"):
+                out.add(svc, f"  description = {self.escape_string(svc['description'])}\n")
 
             self.emit_disable_override(out, svc)
 
             # v2 protocol is a nested object: protocol = { tcp = { ... } }
-            protocols = svc.get('protocols') or {}
+            protocols = svc.get("protocols") or {}
             emitted = self.primary_service_protocol(protocols)
             if emitted:
-                out.add(svc, f'  protocol = {self.hcl_value({emitted: protocols[emitted]})}\n')
+                out.add(svc, f"  protocol = {self.hcl_value({emitted: protocols[emitted]})}\n")
 
             for proto in self.dropped_service_protocols(protocols):
                 summary = self.protocol_summary(protocols[proto])
-                out.add(svc, f'  # NOTE: {proto} leg not emitted, v2 takes one protocol only: ')
-                out.add(svc, f'{summary}\n')
+                out.add(svc, f"  # NOTE: {proto} leg not emitted, v2 takes one protocol only: ")
+                out.add(svc, f"{summary}\n")
 
-            other = svc.get('other_protocol') or {}
+            other = svc.get("other_protocol") or {}
             if other:
                 # v2 models only tcp and udp; keep the rest visible for review
-                names = ', '.join(sorted(other))
-                out.add(svc, f'  # NOTE: protocol {names} is not modeled by the v2 schema; review manually\n')
+                names = ", ".join(sorted(other))
+                out.add(svc, f"  # NOTE: protocol {names} is not modeled by the v2 schema; review manually\n")
 
-            if svc.get('tags'):
+            if svc.get("tags"):
                 # F2.6: tags declared in this run become references;
                 # F3.2, F6.10.2: resolve inside the referrer's own unit
-                svc.get('device_group')
-                svc.get('vsys') or ''
-                tags_str = ', '.join([
-                    self.hcl_value(self.name_ref(t, TAG_SCOPES, referrer=svc), '')
-                    for t in svc['tags']
-                ])
-                out.add(svc, f'  tags = [{tags_str}]\n')
+                svc.get("device_group")
+                svc.get("vsys") or ""
+                tags_str = ", ".join(
+                    [self.hcl_value(self.name_ref(t, TAG_SCOPES, referrer=svc), "") for t in svc["tags"]]
+                )
+                out.add(svc, f"  tags = [{tags_str}]\n")
 
-            out.add(svc, '}\n\n')
+            out.add(svc, "}\n\n")
 
         out.write()
 
     # v2.0.14 panos_service accepts exactly one protocol leg (verified with
     # terraform validate). tcp is emitted first so the choice is stable.
-    SERVICE_PROTOCOL_ORDER = ('tcp', 'udp')
+    SERVICE_PROTOCOL_ORDER = ("tcp", "udp")
 
     @classmethod
     def primary_service_protocol(cls, protocols: dict) -> Optional[str]:
@@ -4412,10 +4609,9 @@ provider "panos" {
     @staticmethod
     def protocol_summary(block: dict) -> str:
         """One-line description of a protocol leg for reports and comments."""
-        parts = [f'{key}={block[key]}' for key in ('destination_port', 'source_port')
-                 if block.get(key)]
-        parts += [f'{key}={value}' for key, value in sorted((block.get('override') or {}).items())]
-        return ', '.join(parts) or 'no ports captured'
+        parts = [f"{key}={block[key]}" for key in ("destination_port", "source_port") if block.get(key)]
+        parts += [f"{key}={value}" for key, value in sorted((block.get("override") or {}).items())]
+        return ", ".join(parts) or "no ports captured"
 
     def generate_service_groups(self, groups: list[dict]):
         """Generate service group Terraform configuration (v2: panos_service_group)
@@ -4425,34 +4621,36 @@ provider "panos" {
         if not groups:
             return
 
-        out = UnitText(self, 'service_groups.tf', '# Service Groups\n\n')
+        out = UnitText(self, "service_groups.tf", "# Service Groups\n\n")
 
         for grp in groups:
             resource_name = self.declare_resource_name(
-                grp['name'], 'panos_service_group', grp,
-                context=grp.get('device_group') or '', vsys=grp.get('vsys') or ''
+                grp["name"],
+                "panos_service_group",
+                grp,
+                context=grp.get("device_group") or "",
+                vsys=grp.get("vsys") or "",
             )
 
             out.add(grp, f'resource "panos_service_group" "{resource_name}" {{\n')
-            out.add(grp, self.location_block('panos_service_group', grp, resource_name))
-            out.add(grp, f'  name = {self.escape_string(grp["name"])}\n')
+            out.add(grp, self.location_block("panos_service_group", grp, resource_name))
+            out.add(grp, f"  name = {self.escape_string(grp['name'])}\n")
 
             # F4.4: the row names the property, and the block prints no descriptive field, so the
             # flag prints after the name
             self.emit_disable_override(out, grp)
 
-            if grp.get('members'):
+            if grp.get("members"):
                 # F2.6: members declared in this run become references;
                 # F3.2, F6.10.2: resolve inside the referrer's own unit
-                grp.get('device_group')
-                grp.get('vsys') or ''
-                members_str = ', '.join([
-                    self.hcl_value(self.name_ref(m, SERVICE_SCOPES, referrer=grp), '')
-                    for m in grp['members']
-                ])
-                out.add(grp, f'  members = [{members_str}]\n')
+                grp.get("device_group")
+                grp.get("vsys") or ""
+                members_str = ", ".join(
+                    [self.hcl_value(self.name_ref(m, SERVICE_SCOPES, referrer=grp), "") for m in grp["members"]]
+                )
+                out.add(grp, f"  members = [{members_str}]\n")
 
-            out.add(grp, '}\n\n')
+            out.add(grp, "}\n\n")
 
         out.write()
 
@@ -4464,39 +4662,46 @@ provider "panos" {
         if not tags:
             return
 
-        out = UnitText(self, 'tags.tf', '# Tags\n\n')
+        out = UnitText(self, "tags.tf", "# Tags\n\n")
 
         for tag in tags:
             resource_name = self.declare_resource_name(
-                tag['name'], 'panos_administrative_tag', tag,
-                context=tag.get('device_group') or '', vsys=tag.get('vsys') or ''
+                tag["name"],
+                "panos_administrative_tag",
+                tag,
+                context=tag.get("device_group") or "",
+                vsys=tag.get("vsys") or "",
             )
 
             out.add(tag, f'resource "panos_administrative_tag" "{resource_name}" {{\n')
-            out.add(tag, self.location_block('panos_administrative_tag', tag, resource_name))
-            out.add(tag, f'  name = {self.escape_string(tag["name"])}\n')
+            out.add(tag, self.location_block("panos_administrative_tag", tag, resource_name))
+            out.add(tag, f"  name = {self.escape_string(tag['name'])}\n")
 
             # v2 uses numeric color names (color1..colorN); PAN-OS exports use
             # the color words in the GUI order (red, orange, yellow, green, ...)
             color_map = {
-                'red': 'color1', 'orange': 'color2', 'yellow': 'color3',
-                'green': 'color4', 'blue': 'color5', 'purple': 'color6',
-                'gray': 'color7',
+                "red": "color1",
+                "orange": "color2",
+                "yellow": "color3",
+                "green": "color4",
+                "blue": "color5",
+                "purple": "color6",
+                "gray": "color7",
             }
-            tag_color = (tag.get('color') or '').lower()
+            tag_color = (tag.get("color") or "").lower()
             if tag_color in color_map:
-                out.add(tag, f'  color = {self.escape_string(color_map[tag_color])}\n')
+                out.add(tag, f"  color = {self.escape_string(color_map[tag_color])}\n")
 
             # Parser stores the tag text in comments (or description)
-            tag_text = tag.get('comments') or tag.get('description')
+            tag_text = tag.get("comments") or tag.get("description")
             if tag_text:
-                out.add(tag, f'  comments = {self.escape_string(tag_text)}\n')
+                out.add(tag, f"  comments = {self.escape_string(tag_text)}\n")
 
             # F4.4: the row names the property, and the tag text is the entry's descriptive field,
             # so the flag prints after it
             self.emit_disable_override(out, tag)
 
-            out.add(tag, '}\n\n')
+            out.add(tag, "}\n\n")
 
         out.write()
 
@@ -4505,31 +4710,34 @@ provider "panos" {
         if not categories:
             return
 
-        out = UnitText(self, 'custom_url_categories.tf', '# Custom URL Categories\n\n')
+        out = UnitText(self, "custom_url_categories.tf", "# Custom URL Categories\n\n")
 
         for cat in categories:
             resource_name = self.declare_resource_name(
-                cat['name'], 'panos_custom_url_category', cat,
-                context=cat.get('device_group') or '', vsys=cat.get('vsys') or ''
+                cat["name"],
+                "panos_custom_url_category",
+                cat,
+                context=cat.get("device_group") or "",
+                vsys=cat.get("vsys") or "",
             )
 
             out.add(cat, f'resource "panos_custom_url_category" "{resource_name}" {{\n')
-            out.add(cat, self.location_block('panos_custom_url_category', cat, resource_name))
-            out.add(cat, f'  name = {self.escape_string(cat["name"])}\n')
+            out.add(cat, self.location_block("panos_custom_url_category", cat, resource_name))
+            out.add(cat, f"  name = {self.escape_string(cat['name'])}\n")
 
-            if cat.get('type'):
-                out.add(cat, f'  type = {self.escape_string(cat["type"])}\n')
+            if cat.get("type"):
+                out.add(cat, f"  type = {self.escape_string(cat['type'])}\n")
 
-            if cat.get('description'):
-                out.add(cat, f'  description = {self.escape_string(cat["description"])}\n')
+            if cat.get("description"):
+                out.add(cat, f"  description = {self.escape_string(cat['description'])}\n")
 
             self.emit_disable_override(out, cat)
 
-            if cat.get('list'):
-                sites_str = ', '.join([self.escape_string(url) for url in cat['list']])
-                out.add(cat, f'  list = [{sites_str}]\n')
+            if cat.get("list"):
+                sites_str = ", ".join([self.escape_string(url) for url in cat["list"]])
+                out.add(cat, f"  list = [{sites_str}]\n")
 
-            out.add(cat, '}\n\n')
+            out.add(cat, "}\n\n")
 
         out.write()
 
@@ -4538,27 +4746,30 @@ provider "panos" {
         if not app_groups:
             return
 
-        out = UnitText(self, 'application_groups.tf', '# Application Groups\n\n')
+        out = UnitText(self, "application_groups.tf", "# Application Groups\n\n")
 
         for ag in app_groups:
             resource_name = self.declare_resource_name(
-                ag['name'], 'panos_application_group', ag,
-                context=ag.get('device_group') or '', vsys=ag.get('vsys') or ''
+                ag["name"],
+                "panos_application_group",
+                ag,
+                context=ag.get("device_group") or "",
+                vsys=ag.get("vsys") or "",
             )
 
             out.add(ag, f'resource "panos_application_group" "{resource_name}" {{\n')
-            out.add(ag, self.location_block('panos_application_group', ag, resource_name))
-            out.add(ag, f'  name = {self.escape_string(ag["name"])}\n')
+            out.add(ag, self.location_block("panos_application_group", ag, resource_name))
+            out.add(ag, f"  name = {self.escape_string(ag['name'])}\n")
 
             # F4.4: the row names the property, and the block prints no descriptive field, so the
             # flag prints after the name
             self.emit_disable_override(out, ag)
 
-            if ag.get('members'):
-                members_str = ', '.join([self.escape_string(m) for m in ag['members']])
-                out.add(ag, f'  members = [{members_str}]\n')
+            if ag.get("members"):
+                members_str = ", ".join([self.escape_string(m) for m in ag["members"]])
+                out.add(ag, f"  members = [{members_str}]\n")
 
-            out.add(ag, '}\n\n')
+            out.add(ag, "}\n\n")
 
         out.write()
 
@@ -4570,17 +4781,15 @@ provider "panos" {
     # mirror vendor-supplied lists and model fewer fields; expand_domain is a
     # domain-only field. auth is never listed: it carries credentials, and the
     # converter does not write secrets into generated HCL.
-    EDL_EXTENDED_FIELDS = ('url', 'description', 'exception_list',
-                           'certificate_profile', 'recurring')
+    EDL_EXTENDED_FIELDS = ("url", "description", "exception_list", "certificate_profile", "recurring")
     EDL_SUBSHAPE_FIELDS = {
-        'domain': ('url', 'description', 'exception_list', 'expand_domain',
-                   'certificate_profile', 'recurring'),
-        'imei': EDL_EXTENDED_FIELDS,
-        'imsi': EDL_EXTENDED_FIELDS,
-        'ip': EDL_EXTENDED_FIELDS,
-        'url': EDL_EXTENDED_FIELDS,
-        'predefined_ip': ('url', 'description', 'exception_list'),
-        'predefined_url': ('url', 'description', 'exception_list'),
+        "domain": ("url", "description", "exception_list", "expand_domain", "certificate_profile", "recurring"),
+        "imei": EDL_EXTENDED_FIELDS,
+        "imsi": EDL_EXTENDED_FIELDS,
+        "ip": EDL_EXTENDED_FIELDS,
+        "url": EDL_EXTENDED_FIELDS,
+        "predefined_ip": ("url", "description", "exception_list"),
+        "predefined_url": ("url", "description", "exception_list"),
     }
 
     def generate_external_lists(self, ext_lists: list[dict]):
@@ -4594,42 +4803,45 @@ provider "panos" {
         if not ext_lists:
             return
 
-        out = UnitText(self, 'external_lists.tf', '# External Dynamic Lists\n\n')
+        out = UnitText(self, "external_lists.tf", "# External Dynamic Lists\n\n")
 
         # List types the v2 schema models inside the type block
-        v2_types = ('domain', 'imei', 'imsi', 'ip', 'predefined_ip', 'predefined_url', 'url')
+        v2_types = ("domain", "imei", "imsi", "ip", "predefined_ip", "predefined_url", "url")
 
         for ext_list in ext_lists:
             resource_name = self.declare_resource_name(
-                ext_list['name'], 'panos_external_dynamic_list', ext_list,
-                context=ext_list.get('device_group') or '', vsys=ext_list.get('vsys') or ''
+                ext_list["name"],
+                "panos_external_dynamic_list",
+                ext_list,
+                context=ext_list.get("device_group") or "",
+                vsys=ext_list.get("vsys") or "",
             )
 
             out.add(ext_list, f'resource "panos_external_dynamic_list" "{resource_name}" {{\n')
-            out.add(ext_list, self.location_block('panos_external_dynamic_list', ext_list, resource_name))
-            out.add(ext_list, f'  name = {self.escape_string(ext_list["name"])}\n')
+            out.add(ext_list, self.location_block("panos_external_dynamic_list", ext_list, resource_name))
+            out.add(ext_list, f"  name = {self.escape_string(ext_list['name'])}\n")
 
             # F4.4: the row names the property, and the fields the sub-shape holds print inside the
             # type object, so the flag prints after the name, at the block's own level
             self.emit_disable_override(out, ext_list)
 
             # v2 type is a nested object keyed by list type
-            lt = ext_list.get('type') or 'ip'
-            fields = ext_list.get('fields') or {}
+            lt = ext_list.get("type") or "ip"
+            fields = ext_list.get("fields") or {}
             if lt in v2_types:
                 allowed = self.EDL_SUBSHAPE_FIELDS[lt]
                 emit = {k: v for k, v in fields.items() if k in allowed}
-                out.add(ext_list, f'  type = {self.hcl_value({lt: emit})}\n')
+                out.add(ext_list, f"  type = {self.hcl_value({lt: emit})}\n")
                 for key in (k for k in fields if k not in allowed):
-                    out.add(ext_list, f'  # NOTE: {key} is not modeled by the v2 {lt} ')
-                    out.add(ext_list, 'sub-shape; review manually\n')
+                    out.add(ext_list, f"  # NOTE: {key} is not modeled by the v2 {lt} ")
+                    out.add(ext_list, "sub-shape; review manually\n")
             else:
                 # Unknown list type: keep the data visible for manual review
-                out.add(ext_list, f'  # NOTE: list type {lt} is not modeled by the v2 schema; review manually\n')
-                if fields.get('url'):
-                    out.add(ext_list, f'  # url = {fields["url"]}\n')
+                out.add(ext_list, f"  # NOTE: list type {lt} is not modeled by the v2 schema; review manually\n")
+                if fields.get("url"):
+                    out.add(ext_list, f"  # url = {fields['url']}\n")
 
-            out.add(ext_list, '}\n\n')
+            out.add(ext_list, "}\n\n")
 
         out.write()
 
@@ -4644,13 +4856,13 @@ provider "panos" {
         """
         chains: dict[tuple[str, str], list[dict]] = {}
         for rule in rules:
-            key = (rule.get('device_group') or 'Shared', rule.get('vsys') or 'vsys1')
+            key = (rule.get("device_group") or "Shared", rule.get("vsys") or "vsys1")
             chains.setdefault(key, []).append(rule)
         return list(chains.values())
 
-    def _policy_position_block(self, resource_type: str,
-                              prev_rule_name: Optional[str],
-                              prev_resource_name: Optional[str]) -> str:
+    def _policy_position_block(
+        self, resource_type: str, prev_rule_name: Optional[str], prev_resource_name: Optional[str]
+    ) -> str:
         """Render position (and depends_on) for one rule in a chain (F2.5).
 
         The first rule of a chain anchors the managed block at the end of
@@ -4662,12 +4874,9 @@ provider "panos" {
         resource to fix the apply order to the XML order.
         """
         if prev_rule_name is None:
-            return f'  position = {self.hcl_value({"where": "last"})}\n\n'
-        position = {'where': 'after', 'directly': True, 'pivot': prev_rule_name}
-        return (
-            f'  position = {self.hcl_value(position)}\n'
-            f'  depends_on = [ {resource_type}.{prev_resource_name} ]\n\n'
-        )
+            return f"  position = {self.hcl_value({'where': 'last'})}\n\n"
+        position = {"where": "after", "directly": True, "pivot": prev_rule_name}
+        return f"  position = {self.hcl_value(position)}\n  depends_on = [ {resource_type}.{prev_resource_name} ]\n\n"
 
     def generate_security_rules(self, rules: list[dict]):
         """Generate security policy rules Terraform configuration (F2.5).
@@ -4680,71 +4889,73 @@ provider "panos" {
         if not rules:
             return
 
-        out = UnitText(self, 'security_rules.tf', '# Security Policy Rules\n\n')
+        out = UnitText(self, "security_rules.tf", "# Security Policy Rules\n\n")
 
         for chain in self._policy_rule_chains(rules):
             prev_rule_name: Optional[str] = None
             prev_resource_name: Optional[str] = None
             for rule in chain:
                 resource_name = self.declare_resource_name(
-                    rule['name'], 'panos_security_policy_rules', rule,
-                    context=rule.get('device_group') or '', vsys=rule.get('vsys') or ''
+                    rule["name"],
+                    "panos_security_policy_rules",
+                    rule,
+                    context=rule.get("device_group") or "",
+                    vsys=rule.get("vsys") or "",
                 )
 
                 out.add(rule, f'resource "panos_security_policy_rules" "{resource_name}" {{\n')
-                out.add(rule, self.location_block('panos_security_policy_rules', rule, resource_name))
-                out.add(rule, self._policy_position_block(
-                    'panos_security_policy_rules', prev_rule_name, prev_resource_name
-                ))
+                out.add(rule, self.location_block("panos_security_policy_rules", rule, resource_name))
+                out.add(
+                    rule, self._policy_position_block("panos_security_policy_rules", prev_rule_name, prev_resource_name)
+                )
 
                 # v2 rules is a list of objects
-                rule_obj: dict = {'name': rule['name']}
-                if rule.get('description'):
-                    rule_obj['description'] = rule['description']
+                rule_obj: dict = {"name": rule["name"]}
+                if rule.get("description"):
+                    rule_obj["description"] = rule["description"]
                 # F2.6: zones, addresses and services declared in this run
                 # become references; the rest stay brown-field strings
                 # F3.2, F6.10.2: resolve inside the referrer's own unit
-                rule.get('device_group')
-                rule.get('vsys') or ''
-                if rule.get('source_zones'):
-                    rule_obj['source_zones'] = [
-                        self.name_ref(z, ZONE_SCOPES, referrer=rule)
-                        for z in rule['source_zones']]
-                if rule.get('source_addresses'):
-                    rule_obj['source_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
-                        for a in rule['source_addresses']]
-                if rule.get('destination_zones'):
-                    rule_obj['destination_zones'] = [
-                        self.name_ref(z, ZONE_SCOPES, referrer=rule)
-                        for z in rule['destination_zones']]
-                if rule.get('destination_addresses'):
-                    rule_obj['destination_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
-                        for a in rule['destination_addresses']]
-                if rule.get('applications'):
+                rule.get("device_group")
+                rule.get("vsys") or ""
+                if rule.get("source_zones"):
+                    rule_obj["source_zones"] = [
+                        self.name_ref(z, ZONE_SCOPES, referrer=rule) for z in rule["source_zones"]
+                    ]
+                if rule.get("source_addresses"):
+                    rule_obj["source_addresses"] = [
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["source_addresses"]
+                    ]
+                if rule.get("destination_zones"):
+                    rule_obj["destination_zones"] = [
+                        self.name_ref(z, ZONE_SCOPES, referrer=rule) for z in rule["destination_zones"]
+                    ]
+                if rule.get("destination_addresses"):
+                    rule_obj["destination_addresses"] = [
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["destination_addresses"]
+                    ]
+                if rule.get("applications"):
                     # Built-in PAN-OS app names: no managed scope, never wired
-                    rule_obj['applications'] = list(rule['applications'])
-                if rule.get('services'):
-                    rule_obj['services'] = [
-                        self.name_ref(s, SERVICE_SCOPES, referrer=rule) for s in rule['services']]
-                if rule.get('profile_group'):
+                    rule_obj["applications"] = list(rule["applications"])
+                if rule.get("services"):
+                    rule_obj["services"] = [self.name_ref(s, SERVICE_SCOPES, referrer=rule) for s in rule["services"]]
+                if rule.get("profile_group"):
                     # The provider holds the profile group reference inside the `profile_setting`
                     # object (v2.0.14 declares `profile_setting.group` as a list of strings). No
                     # reference scope names a profile group, so the names stay brown-field strings.
-                    rule_obj['profile_setting'] = {'group': list(rule['profile_group'])}
-                rule_obj['action'] = rule.get('action', 'allow')
-                if rule.get('log_start'):
-                    rule_obj['log_start'] = True
-                if rule.get('log_end'):
-                    rule_obj['log_end'] = True
-                if rule.get('disabled'):
-                    rule_obj['disabled'] = True
+                    rule_obj["profile_setting"] = {"group": list(rule["profile_group"])}
+                rule_obj["action"] = rule.get("action", "allow")
+                if rule.get("log_start"):
+                    rule_obj["log_start"] = True
+                if rule.get("log_end"):
+                    rule_obj["log_end"] = True
+                if rule.get("disabled"):
+                    rule_obj["disabled"] = True
 
-                out.add(rule, f'  rules = {self.hcl_value([rule_obj])}\n')
-                out.add(rule, '}\n\n')
+                out.add(rule, f"  rules = {self.hcl_value([rule_obj])}\n")
+                out.add(rule, "}\n\n")
 
-                prev_rule_name = rule['name']
+                prev_rule_name = rule["name"]
                 prev_resource_name = resource_name
 
         out.write()
@@ -4761,98 +4972,102 @@ provider "panos" {
         if not rules:
             return
 
-        out = UnitText(self, 'nat_rules.tf', '# NAT Policy Rules\n\n')
+        out = UnitText(self, "nat_rules.tf", "# NAT Policy Rules\n\n")
 
         for chain in self._policy_rule_chains(rules):
             prev_rule_name: Optional[str] = None
             prev_resource_name: Optional[str] = None
             for rule in chain:
                 resource_name = self.declare_resource_name(
-                    rule['name'], 'panos_nat_policy_rules', rule,
-                    context=rule.get('device_group') or '', vsys=rule.get('vsys') or ''
+                    rule["name"],
+                    "panos_nat_policy_rules",
+                    rule,
+                    context=rule.get("device_group") or "",
+                    vsys=rule.get("vsys") or "",
                 )
 
                 out.add(rule, f'resource "panos_nat_policy_rules" "{resource_name}" {{\n')
-                out.add(rule, self.location_block('panos_nat_policy_rules', rule, resource_name))
-                out.add(rule, self._policy_position_block(
-                    'panos_nat_policy_rules', prev_rule_name, prev_resource_name
-                ))
+                out.add(rule, self.location_block("panos_nat_policy_rules", rule, resource_name))
+                out.add(rule, self._policy_position_block("panos_nat_policy_rules", prev_rule_name, prev_resource_name))
 
                 # v2 rules is a list of objects
-                rule_obj: dict = {'name': rule['name']}
-                if rule.get('description'):
-                    rule_obj['description'] = rule['description']
+                rule_obj: dict = {"name": rule["name"]}
+                if rule.get("description"):
+                    rule_obj["description"] = rule["description"]
                 # F2.6: zones, addresses and services declared in this run
                 # become references; the rest stay brown-field strings
                 # F3.2, F6.10.2: resolve inside the referrer's own unit
-                rule.get('device_group')
-                rule.get('vsys') or ''
-                if rule.get('source_zones'):
-                    rule_obj['source_zones'] = [
-                        self.name_ref(z, ZONE_SCOPES, referrer=rule)
-                        for z in rule['source_zones']]
+                rule.get("device_group")
+                rule.get("vsys") or ""
+                if rule.get("source_zones"):
+                    rule_obj["source_zones"] = [
+                        self.name_ref(z, ZONE_SCOPES, referrer=rule) for z in rule["source_zones"]
+                    ]
                 # v2 destination_zone is a list
-                if rule.get('destination_zone'):
-                    rule_obj['destination_zone'] = [
-                        self.name_ref(rule['destination_zone'], ZONE_SCOPES, referrer=rule)]
-                if rule.get('source_addresses'):
-                    rule_obj['source_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
-                        for a in rule['source_addresses']]
-                if rule.get('destination_addresses'):
-                    rule_obj['destination_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
-                        for a in rule['destination_addresses']]
-                service = rule.get('service')
+                if rule.get("destination_zone"):
+                    rule_obj["destination_zone"] = [self.name_ref(rule["destination_zone"], ZONE_SCOPES, referrer=rule)]
+                if rule.get("source_addresses"):
+                    rule_obj["source_addresses"] = [
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["source_addresses"]
+                    ]
+                if rule.get("destination_addresses"):
+                    rule_obj["destination_addresses"] = [
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["destination_addresses"]
+                    ]
+                service = rule.get("service")
                 if service:
                     if isinstance(service, list):
                         # The provider field takes one string, so a member list cannot be
                         # printed as the field (v2.0.14 schema). The set is named in the block
                         # instead of being dropped (F2.9).
-                        out.add(rule, '  # NOTE: service ' + ', '.join(service) +
-                                 ' is a member list; the v2 field takes one name, '
-                                 'so review manually\n')
+                        out.add(
+                            rule,
+                            "  # NOTE: service "
+                            + ", ".join(service)
+                            + " is a member list; the v2 field takes one name, "
+                            "so review manually\n",
+                        )
                     else:
-                        rule_obj['service'] = self.name_ref(service, SERVICE_SCOPES, referrer=rule)
-                if rule.get('disabled'):
-                    rule_obj['disabled'] = True
+                        rule_obj["service"] = self.name_ref(service, SERVICE_SCOPES, referrer=rule)
+                if rule.get("disabled"):
+                    rule_obj["disabled"] = True
 
                 # Source translation (v2 sub-object names use underscores)
-                st_type = (rule.get('source_translation_type') or '').replace('-', '_')
-                st_addr = rule.get('source_translation_address') or []
-                if st_type in ('dynamic_ip_and_port', 'dynamic_ip', 'static_ip'):
+                st_type = (rule.get("source_translation_type") or "").replace("-", "_")
+                st_addr = rule.get("source_translation_address") or []
+                if st_type in ("dynamic_ip_and_port", "dynamic_ip", "static_ip"):
                     # v2 nat_type is the NAT family (ipv4/nat64/nptv6), not the
                     # translation direction; IPv4 is the Panorama default family
-                    rule_obj['nat_type'] = 'ipv4'
-                    if st_type == 'dynamic_ip_and_port' and st_addr:
+                    rule_obj["nat_type"] = "ipv4"
+                    if st_type == "dynamic_ip_and_port" and st_addr:
                         # The translation address is the egress interface
                         # (F2.6: reference when declared in this run;
                         # F3.2, F6.10.2: resolve inside the rule's unit)
-                        rule_obj['source_translation'] = {
-                            st_type: {'interface_address': {
-                                'interface': self.name_ref(
-                                    st_addr[0], INTERFACE_SCOPES,
-                                    referrer=rule)}}}
-                    elif st_type == 'dynamic_ip' and st_addr:
-                        rule_obj['source_translation'] = {
-                            st_type: {'translated_address': list(st_addr)}}
-                    elif st_type == 'static_ip' and st_addr:
+                        rule_obj["source_translation"] = {
+                            st_type: {
+                                "interface_address": {
+                                    "interface": self.name_ref(st_addr[0], INTERFACE_SCOPES, referrer=rule)
+                                }
+                            }
+                        }
+                    elif st_type == "dynamic_ip" and st_addr:
+                        rule_obj["source_translation"] = {st_type: {"translated_address": list(st_addr)}}
+                    elif st_type == "static_ip" and st_addr:
                         # static_ip takes a single translated address
-                        rule_obj['source_translation'] = {
-                            st_type: {'translated_address': st_addr[0]}}
+                        rule_obj["source_translation"] = {st_type: {"translated_address": st_addr[0]}}
 
                 # Destination translation (the direction is implied by which
                 # translation object is present, not by nat_type)
-                if rule.get('destination_translation_address'):
-                    dst: dict = {'translated_address': rule['destination_translation_address']}
-                    if rule.get('destination_translation_port'):
-                        dst['translated_port'] = int(rule['destination_translation_port'])
-                    rule_obj['destination_translation'] = dst
+                if rule.get("destination_translation_address"):
+                    dst: dict = {"translated_address": rule["destination_translation_address"]}
+                    if rule.get("destination_translation_port"):
+                        dst["translated_port"] = int(rule["destination_translation_port"])
+                    rule_obj["destination_translation"] = dst
 
-                out.add(rule, f'  rules = {self.hcl_value([rule_obj])}\n')
-                out.add(rule, '}\n\n')
+                out.add(rule, f"  rules = {self.hcl_value([rule_obj])}\n")
+                out.add(rule, "}\n\n")
 
-                prev_rule_name = rule['name']
+                prev_rule_name = rule["name"]
                 prev_resource_name = resource_name
 
         out.write()
@@ -4871,89 +5086,92 @@ provider "panos" {
         if not rules:
             return
 
-        out = UnitText(self, 'decryption_rules.tf', '# Decryption Policy Rules (F2.9: real v2 resources)\n')
-        out.header += '# One panos_decryption_policy_rules resource per rule; per-device-group\n'
-        out.header += '# chains preserve XML order (F2.5).\n\n'
+        out = UnitText(self, "decryption_rules.tf", "# Decryption Policy Rules (F2.9: real v2 resources)\n")
+        out.header += "# One panos_decryption_policy_rules resource per rule; per-device-group\n"
+        out.header += "# chains preserve XML order (F2.5).\n\n"
 
         for chain in self._policy_rule_chains(rules):
             prev_rule_name: Optional[str] = None
             prev_resource_name: Optional[str] = None
             for rule in chain:
-                device_group = rule.get('device_group') or 'Shared'
+                device_group = rule.get("device_group") or "Shared"
                 resource_name = self.declare_resource_name(
-                    rule['name'], 'panos_decryption_policy_rules', rule,
-                    context=device_group, vsys=rule.get('vsys') or ''
+                    rule["name"],
+                    "panos_decryption_policy_rules",
+                    rule,
+                    context=device_group,
+                    vsys=rule.get("vsys") or "",
                 )
 
                 out.add(rule, f'resource "panos_decryption_policy_rules" "{resource_name}" {{\n')
-                out.add(rule, self.location_block('panos_decryption_policy_rules', rule, resource_name))
-                out.add(rule, self._policy_position_block(
-                    'panos_decryption_policy_rules', prev_rule_name, prev_resource_name
-                ))
+                out.add(rule, self.location_block("panos_decryption_policy_rules", rule, resource_name))
+                out.add(
+                    rule,
+                    self._policy_position_block("panos_decryption_policy_rules", prev_rule_name, prev_resource_name),
+                )
 
-                rule_obj: dict = {'name': rule['name']}
-                if rule.get('description'):
-                    rule_obj['description'] = rule['description']
+                rule_obj: dict = {"name": rule["name"]}
+                if rule.get("description"):
+                    rule_obj["description"] = rule["description"]
                 # F2.6: zones, addresses and services declared in this run
                 # become references; the rest stay brown-field strings
                 # F3.2, F6.10.2: resolve inside the referrer's own unit
-                rule.get('device_group')
-                rule.get('vsys') or ''
-                if rule.get('source_zones'):
-                    rule_obj['source_zones'] = [
-                        self.name_ref(z, ZONE_SCOPES, referrer=rule)
-                        for z in rule['source_zones']]
-                if rule.get('destination_zones'):
-                    rule_obj['destination_zones'] = [
-                        self.name_ref(z, ZONE_SCOPES, referrer=rule)
-                        for z in rule['destination_zones']]
-                if rule.get('source_addresses'):
-                    rule_obj['source_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
-                        for a in rule['source_addresses']]
-                if rule.get('destination_addresses'):
-                    rule_obj['destination_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
-                        for a in rule['destination_addresses']]
-                if rule.get('source_users'):
-                    rule_obj['source_user'] = list(rule['source_users'])
-                if rule.get('categories'):
-                    rule_obj['category'] = list(rule['categories'])
-                if rule.get('services'):
-                    rule_obj['services'] = [
-                        self.name_ref(s, SERVICE_SCOPES, referrer=rule) for s in rule['services']]
+                rule.get("device_group")
+                rule.get("vsys") or ""
+                if rule.get("source_zones"):
+                    rule_obj["source_zones"] = [
+                        self.name_ref(z, ZONE_SCOPES, referrer=rule) for z in rule["source_zones"]
+                    ]
+                if rule.get("destination_zones"):
+                    rule_obj["destination_zones"] = [
+                        self.name_ref(z, ZONE_SCOPES, referrer=rule) for z in rule["destination_zones"]
+                    ]
+                if rule.get("source_addresses"):
+                    rule_obj["source_addresses"] = [
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["source_addresses"]
+                    ]
+                if rule.get("destination_addresses"):
+                    rule_obj["destination_addresses"] = [
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["destination_addresses"]
+                    ]
+                if rule.get("source_users"):
+                    rule_obj["source_user"] = list(rule["source_users"])
+                if rule.get("categories"):
+                    rule_obj["category"] = list(rule["categories"])
+                if rule.get("services"):
+                    rule_obj["services"] = [self.name_ref(s, SERVICE_SCOPES, referrer=rule) for s in rule["services"]]
                 # F2.9: the v2 action is an enum (no-decrypt | decrypt |
                 # decrypt-and-forward) and the inspection mode is a separate
                 # type block. Modern PAN-OS exports carry both; legacy PAN-OS
                 # 9 exports put the mode in <action> instead, so map it.
                 # Unknown actions pass through and fail terraform validate
                 # explicitly rather than being silently reinterpreted.
-                action = rule.get('action')
-                type_key = self._DECRYPTION_TYPE_KEYS.get(rule.get('type'))
+                action = rule.get("action")
+                type_key = self._DECRYPTION_TYPE_KEYS.get(rule.get("type"))
                 if action in self._V2_DECRYPTION_ACTIONS:
-                    rule_obj['action'] = action
+                    rule_obj["action"] = action
                 elif action in self._DECRYPTION_TYPE_KEYS:
-                    rule_obj['action'] = 'decrypt'
+                    rule_obj["action"] = "decrypt"
                     type_key = type_key or self._DECRYPTION_TYPE_KEYS[action]
                 elif action:
-                    rule_obj['action'] = action
+                    rule_obj["action"] = action
                 if type_key:
-                    rule_obj['type'] = {type_key: {}}
-                if rule.get('profile'):
-                    rule_obj['profile'] = rule['profile']
-                if rule.get('log_setting'):
-                    rule_obj['log_setting'] = rule['log_setting']
-                if rule.get('log_start'):
-                    rule_obj['log_success'] = True
-                if rule.get('log_end'):
-                    rule_obj['log_fail'] = True
-                if rule.get('disabled'):
-                    rule_obj['disabled'] = True
+                    rule_obj["type"] = {type_key: {}}
+                if rule.get("profile"):
+                    rule_obj["profile"] = rule["profile"]
+                if rule.get("log_setting"):
+                    rule_obj["log_setting"] = rule["log_setting"]
+                if rule.get("log_start"):
+                    rule_obj["log_success"] = True
+                if rule.get("log_end"):
+                    rule_obj["log_fail"] = True
+                if rule.get("disabled"):
+                    rule_obj["disabled"] = True
 
-                out.add(rule, f'  rules = {self.hcl_value([rule_obj])}\n')
-                out.add(rule, '}\n\n')
+                out.add(rule, f"  rules = {self.hcl_value([rule_obj])}\n")
+                out.add(rule, "}\n\n")
 
-                prev_rule_name = rule['name']
+                prev_rule_name = rule["name"]
                 prev_resource_name = resource_name
 
         out.write()
@@ -4969,94 +5187,89 @@ provider "panos" {
         if not rules:
             return
 
-        out = UnitText(self, 'pbf_rules.tf', '# Policy-Based Forwarding Rules (F2.9: real v2 resources)\n')
-        out.header += '# One panos_pbf_policy_rules resource per rule; per-device-group\n'
-        out.header += '# chains preserve XML order (F2.5).\n\n'
+        out = UnitText(self, "pbf_rules.tf", "# Policy-Based Forwarding Rules (F2.9: real v2 resources)\n")
+        out.header += "# One panos_pbf_policy_rules resource per rule; per-device-group\n"
+        out.header += "# chains preserve XML order (F2.5).\n\n"
 
         for chain in self._policy_rule_chains(rules):
             prev_rule_name: Optional[str] = None
             prev_resource_name: Optional[str] = None
             for rule in chain:
-                device_group = rule.get('device_group') or 'Shared'
+                device_group = rule.get("device_group") or "Shared"
                 resource_name = self.declare_resource_name(
-                    rule['name'], 'panos_pbf_policy_rules', rule,
-                    context=device_group, vsys=rule.get('vsys') or ''
+                    rule["name"], "panos_pbf_policy_rules", rule, context=device_group, vsys=rule.get("vsys") or ""
                 )
 
                 out.add(rule, f'resource "panos_pbf_policy_rules" "{resource_name}" {{\n')
-                out.add(rule, self.location_block('panos_pbf_policy_rules', rule, resource_name))
-                out.add(rule, self._policy_position_block(
-                    'panos_pbf_policy_rules', prev_rule_name, prev_resource_name
-                ))
+                out.add(rule, self.location_block("panos_pbf_policy_rules", rule, resource_name))
+                out.add(rule, self._policy_position_block("panos_pbf_policy_rules", prev_rule_name, prev_resource_name))
 
-                rule_obj: dict = {'name': rule['name']}
-                if rule.get('description'):
-                    rule_obj['description'] = rule['description']
+                rule_obj: dict = {"name": rule["name"]}
+                if rule.get("description"):
+                    rule_obj["description"] = rule["description"]
                 # v2 models the PBF source as from { zone = [...] }
                 # F3.2, F6.10.2: resolve inside the referrer's own unit
-                rule.get('device_group')
-                rule.get('vsys') or ''
-                if rule.get('source_zones'):
-                    rule_obj['from'] = {
-                        'zone': [
-                            self.name_ref(z, ZONE_SCOPES, referrer=rule)
-                            for z in rule['source_zones']]}
-                if rule.get('source_addresses'):
-                    rule_obj['source_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
-                        for a in rule['source_addresses']]
-                if rule.get('source_users'):
-                    rule_obj['source_users'] = list(rule['source_users'])
-                if rule.get('destination_addresses'):
-                    rule_obj['destination_addresses'] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule)
-                        for a in rule['destination_addresses']]
-                if rule.get('applications'):
-                    rule_obj['applications'] = list(rule['applications'])
-                if rule.get('services'):
-                    rule_obj['services'] = [
-                        self.name_ref(s, SERVICE_SCOPES, referrer=rule) for s in rule['services']]
+                rule.get("device_group")
+                rule.get("vsys") or ""
+                if rule.get("source_zones"):
+                    rule_obj["from"] = {
+                        "zone": [self.name_ref(z, ZONE_SCOPES, referrer=rule) for z in rule["source_zones"]]
+                    }
+                if rule.get("source_addresses"):
+                    rule_obj["source_addresses"] = [
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["source_addresses"]
+                    ]
+                if rule.get("source_users"):
+                    rule_obj["source_users"] = list(rule["source_users"])
+                if rule.get("destination_addresses"):
+                    rule_obj["destination_addresses"] = [
+                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["destination_addresses"]
+                    ]
+                if rule.get("applications"):
+                    rule_obj["applications"] = list(rule["applications"])
+                if rule.get("services"):
+                    rule_obj["services"] = [self.name_ref(s, SERVICE_SCOPES, referrer=rule) for s in rule["services"]]
                 # Single-choice action object (v2 names use underscores)
-                action = rule.get('action')
+                action = rule.get("action")
                 if action:
-                    kind = action.get('type')
-                    if kind == 'forward':
+                    kind = action.get("type")
+                    if kind == "forward":
                         forward: dict = {}
-                        if action.get('nexthop_ip'):
-                            forward['nexthop'] = {'ip_address': action['nexthop_ip']}
-                        if action.get('egress_interface'):
-                            forward['egress_interface'] = action['egress_interface']
+                        if action.get("nexthop_ip"):
+                            forward["nexthop"] = {"ip_address": action["nexthop_ip"]}
+                        if action.get("egress_interface"):
+                            forward["egress_interface"] = action["egress_interface"]
                         # F2.9: optional path monitoring; the profile name
                         # references a panos_monitor_profile resource
-                        monitor = action.get('monitor')
+                        monitor = action.get("monitor")
                         if monitor:
                             monitor_out: dict = {}
-                            if monitor.get('ip_address'):
-                                monitor_out['ip_address'] = monitor['ip_address']
-                            if monitor.get('profile'):
-                                monitor_out['profile'] = monitor['profile']
-                            if monitor.get('disable_if_unreachable'):
-                                monitor_out['disable_if_unreachable'] = True
+                            if monitor.get("ip_address"):
+                                monitor_out["ip_address"] = monitor["ip_address"]
+                            if monitor.get("profile"):
+                                monitor_out["profile"] = monitor["profile"]
+                            if monitor.get("disable_if_unreachable"):
+                                monitor_out["disable_if_unreachable"] = True
                             if monitor_out:
-                                forward['monitor'] = monitor_out
-                        rule_obj['action'] = {'forward': forward}
-                    elif kind == 'discard':
-                        rule_obj['action'] = {'discard': {}}
-                    elif kind == 'no-pbf':
-                        rule_obj['action'] = {'no_pbf': {}}
-                    elif kind == 'forward_to_vsys' and action.get('vsys'):
-                        rule_obj['action'] = {'forward_to_vsys': action['vsys']}
-                if rule.get('enforce_symmetric_return'):
-                    rule_obj['enforce_symmetric_return'] = {'enabled': True}
-                if rule.get('schedule'):
-                    rule_obj['schedule'] = rule['schedule']
-                if rule.get('disabled'):
-                    rule_obj['disabled'] = True
+                                forward["monitor"] = monitor_out
+                        rule_obj["action"] = {"forward": forward}
+                    elif kind == "discard":
+                        rule_obj["action"] = {"discard": {}}
+                    elif kind == "no-pbf":
+                        rule_obj["action"] = {"no_pbf": {}}
+                    elif kind == "forward_to_vsys" and action.get("vsys"):
+                        rule_obj["action"] = {"forward_to_vsys": action["vsys"]}
+                if rule.get("enforce_symmetric_return"):
+                    rule_obj["enforce_symmetric_return"] = {"enabled": True}
+                if rule.get("schedule"):
+                    rule_obj["schedule"] = rule["schedule"]
+                if rule.get("disabled"):
+                    rule_obj["disabled"] = True
 
-                out.add(rule, f'  rules = {self.hcl_value([rule_obj])}\n')
-                out.add(rule, '}\n\n')
+                out.add(rule, f"  rules = {self.hcl_value([rule_obj])}\n")
+                out.add(rule, "}\n\n")
 
-                prev_rule_name = rule['name']
+                prev_rule_name = rule["name"]
                 prev_resource_name = resource_name
 
         out.write()
@@ -5075,31 +5288,33 @@ provider "panos" {
         if not profiles:
             return
 
-        out = UnitText(self, 'monitor_profiles.tf', '# PBF Path Monitoring Profiles (F2.9: real v2 resources)\n\n')
+        out = UnitText(self, "monitor_profiles.tf", "# PBF Path Monitoring Profiles (F2.9: real v2 resources)\n\n")
 
         for prof in profiles:
             # F3.6: a monitor profile lives in a template or in one device's
             # own config, so the naming context is the declared template, else
             # the declared device (scope_context).
             resource_name = self.declare_resource_name(
-                prof['name'], 'panos_monitor_profile', prof,
-                context=self.scope_context(prof), vsys=prof.get('vsys') or ''
+                prof["name"],
+                "panos_monitor_profile",
+                prof,
+                context=self.scope_context(prof),
+                vsys=prof.get("vsys") or "",
             )
             out.add(prof, f'resource "panos_monitor_profile" "{resource_name}" {{\n')
-            out.add(prof, self.location_block('panos_monitor_profile', prof, resource_name))
-            out.add(prof, f'  name = {self.escape_string(prof["name"])}\n')
-            for attr in ('interval', 'threshold'):
+            out.add(prof, self.location_block("panos_monitor_profile", prof, resource_name))
+            out.add(prof, f"  name = {self.escape_string(prof['name'])}\n")
+            for attr in ("interval", "threshold"):
                 raw = prof.get(attr)
                 # The v2 schema takes numbers; skip values that are not
                 # plain integers so the output always validates
                 if raw is not None and str(raw).isdigit():
-                    out.add(prof, f'  {attr} = {int(raw)}\n')
-            if prof.get('action'):
-                out.add(prof, f'  action = {self.escape_string(prof["action"])}\n')
-            out.add(prof, '}\n\n')
+                    out.add(prof, f"  {attr} = {int(raw)}\n")
+            if prof.get("action"):
+                out.add(prof, f"  action = {self.escape_string(prof['action'])}\n")
+            out.add(prof, "}\n\n")
 
         out.write()
-
 
     def generate_zones(self, zones: list[dict]):
         """Generate zone Terraform configuration (v2: panos_zone)
@@ -5110,35 +5325,31 @@ provider "panos" {
         if not zones:
             return
 
-        out = UnitText(self, 'zones.tf', '# Zone Configurations\n\n')
+        out = UnitText(self, "zones.tf", "# Zone Configurations\n\n")
 
         for zone in zones:
             resource_name = self.declare_resource_name(
-                zone['name'], 'panos_zone', zone,
-                context=self.scope_context(zone), vsys=zone.get('vsys') or ''
+                zone["name"], "panos_zone", zone, context=self.scope_context(zone), vsys=zone.get("vsys") or ""
             )
 
             out.add(zone, f'resource "panos_zone" "{resource_name}" {{\n')
-            out.add(zone, self.location_block('panos_zone', zone, resource_name))
-            out.add(zone, f'  name = {self.escape_string(zone["name"])}\n')
+            out.add(zone, self.location_block("panos_zone", zone, resource_name))
+            out.add(zone, f"  name = {self.escape_string(zone['name'])}\n")
 
             # v2 network object: membership list is keyed by layer type
-            ztype = zone.get('type') or 'layer3'
-            key = 'layer2' if ztype == 'layer2' else 'layer3'
+            ztype = zone.get("type") or "layer3"
+            key = "layer2" if ztype == "layer2" else "layer3"
             network: dict = {}
-            if zone.get('interfaces'):
+            if zone.get("interfaces"):
                 # F2.6: interfaces declared in this run become references;
                 # F3.2, F6.10.2: resolve inside the zone's unit
-                network[key] = [
-                    self.name_ref(i, INTERFACE_SCOPES,
-                                  referrer=zone)
-                    for i in zone['interfaces']]
-            if zone.get('zone_protection_profile'):
-                network['zone_protection_profile'] = zone['zone_protection_profile']
+                network[key] = [self.name_ref(i, INTERFACE_SCOPES, referrer=zone) for i in zone["interfaces"]]
+            if zone.get("zone_protection_profile"):
+                network["zone_protection_profile"] = zone["zone_protection_profile"]
             if network:
-                out.add(zone, f'  network = {self.hcl_value(network)}\n')
+                out.add(zone, f"  network = {self.hcl_value(network)}\n")
 
-            out.add(zone, '}\n\n')
+            out.add(zone, "}\n\n")
 
         out.write()
 
@@ -5152,96 +5363,104 @@ provider "panos" {
         if not vrouters:
             return
 
-        out = UnitText(self, 'virtual_routers.tf', '# Router Configurations\n')
-        out.header += '# Supports both Virtual Routers (legacy) and Logical Routers (Advanced Routing Engine)\n\n'
+        out = UnitText(self, "virtual_routers.tf", "# Router Configurations\n")
+        out.header += "# Supports both Virtual Routers (legacy) and Logical Routers (Advanced Routing Engine)\n\n"
 
         for router in vrouters:
             resource_name = self.declare_resource_name(
-                router['name'], 'panos_virtual_router', router,
-                context=self.scope_context(router), vsys=router.get('vsys') or ''
+                router["name"],
+                "panos_virtual_router",
+                router,
+                context=self.scope_context(router),
+                vsys=router.get("vsys") or "",
             )
 
             # Add comment showing source and type. A router the export does
             # not place in a template is device-specific (F3.5 records the
             # template as '' there).
-            template = router.get('template') or 'device-specific'
-            out.add(router, f'# Source: {template}\n')
-            router_type = router.get('router_type', 'virtual')
-            if router_type == 'logical':
-                rtype = 'Logical Router (Advanced Routing Engine)'
+            template = router.get("template") or "device-specific"
+            out.add(router, f"# Source: {template}\n")
+            router_type = router.get("router_type", "virtual")
+            if router_type == "logical":
+                rtype = "Logical Router (Advanced Routing Engine)"
             else:
-                rtype = 'Virtual Router (Legacy)'
-            out.add(router, f'# Type: {rtype}\n')
+                rtype = "Virtual Router (Legacy)"
+            out.add(router, f"# Type: {rtype}\n")
 
             out.add(router, f'resource "panos_virtual_router" "{resource_name}" {{\n')
-            out.add(router, self.location_block('panos_virtual_router', router, resource_name))
-            out.add(router, f'  name = {self.escape_string(router["name"])}\n')
+            out.add(router, self.location_block("panos_virtual_router", router, resource_name))
+            out.add(router, f"  name = {self.escape_string(router['name'])}\n")
 
             # v2 interfaces is a flat string list
-            if router.get('interfaces'):
+            if router.get("interfaces"):
                 # F2.6: interfaces declared in this run become references;
                 # F3.2, F6.10.2: resolve inside the router's unit
-                ifaces_str = ', '.join([
-                    self.hcl_value(self.name_ref(
-                        i, INTERFACE_SCOPES,
-                        referrer=router), '')
-                    for i in router['interfaces']
-                ])
-                out.add(router, f'  interfaces = [{ifaces_str}]\n')
+                ifaces_str = ", ".join(
+                    [
+                        self.hcl_value(self.name_ref(i, INTERFACE_SCOPES, referrer=router), "")
+                        for i in router["interfaces"]
+                    ]
+                )
+                out.add(router, f"  interfaces = [{ifaces_str}]\n")
 
             # F7.1: the protocol object is one field of the block, printed from `PROTOCOL_SHAPE`. A block
             # shape (`protocol { ... }`) is refused by the provider, so the object value is the only shape
             # the gate rule accepts.
-            protocol = self._protocol_fields(resource_mapping.PROTOCOL_FIELD, router.get('protocol') or {},
-                                             router)
+            protocol = self._protocol_fields(resource_mapping.PROTOCOL_FIELD, router.get("protocol") or {}, router)
             if protocol:
-                out.add(router, f'  protocol = {self.hcl_value(protocol, "  ")}\n')
+                out.add(router, f"  protocol = {self.hcl_value(protocol, '  ')}\n")
 
-            out.add(router, '}\n\n')
+            out.add(router, "}\n\n")
 
             # Generate static routes (v2: panos_virtual_router_static_route_ipv4)
-            if router.get('static_routes'):
-                for route in router['static_routes']:
+            if router.get("static_routes"):
+                for route in router["static_routes"]:
                     # §5 digests the route's own name once, so the declaration index holds the key a
                     # reference by that name reads. The router is not part of the route's identity.
                     route_resource = self.declare_resource_name(
-                        route['name'], 'panos_virtual_router_static_route_ipv4', router,
-                        context=self.scope_context(router), vsys=router.get('vsys') or ''
+                        route["name"],
+                        "panos_virtual_router_static_route_ipv4",
+                        router,
+                        context=self.scope_context(router),
+                        vsys=router.get("vsys") or "",
                     )
 
                     out.add(router, f'resource "panos_virtual_router_static_route_ipv4" "{route_resource}" {{\n')
                     # The route carries the owning router's source
                     # identity; only the report name is the route's own
-                    out.add(router, self.location_block(
-                        'panos_virtual_router_static_route_ipv4',
-                        {**router, 'name': route['name']}, route_resource))
-                    out.add(router, f'  name = {self.escape_string(route["name"])}\n')
+                    out.add(
+                        router,
+                        self.location_block(
+                            "panos_virtual_router_static_route_ipv4", {**router, "name": route["name"]}, route_resource
+                        ),
+                    )
+                    out.add(router, f"  name = {self.escape_string(route['name'])}\n")
                     # Reference the owning virtual router resource
-                    out.add(router, f'  virtual_router = panos_virtual_router.{resource_name}.name\n')
+                    out.add(router, f"  virtual_router = panos_virtual_router.{resource_name}.name\n")
 
-                    if route.get('destination'):
+                    if route.get("destination"):
                         # PAN-OS exports the default route destination as "default"
-                        destination = route['destination']
-                        if destination == 'default':
-                            destination = '0.0.0.0/0'
-                        out.add(router, f'  destination = {self.escape_string(destination)}\n')
+                        destination = route["destination"]
+                        if destination == "default":
+                            destination = "0.0.0.0/0"
+                        out.add(router, f"  destination = {self.escape_string(destination)}\n")
 
-                    if route.get('nexthop_ip'):
+                    if route.get("nexthop_ip"):
                         # v2 nexthop is a nested object
-                        out.add(router, f'  nexthop = {self.hcl_value({"ip_address": route["nexthop_ip"]})}\n')
-                    elif route.get('nexthop_interface'):
-                        out.add(router, f'  interface = {self.escape_string(route["nexthop_interface"])}\n')
+                        out.add(router, f"  nexthop = {self.hcl_value({'ip_address': route['nexthop_ip']})}\n")
+                    elif route.get("nexthop_interface"):
+                        out.add(router, f"  interface = {self.escape_string(route['nexthop_interface'])}\n")
 
-                    metric = route.get('metric')
+                    metric = route.get("metric")
                     if metric is not None:
                         try:
                             metric = int(metric)
                         except (TypeError, ValueError):
                             metric = None
                     if metric is not None:
-                        out.add(router, f'  metric = {metric}\n')
+                        out.add(router, f"  metric = {metric}\n")
 
-                    out.add(router, '}\n\n')
+                    out.add(router, "}\n\n")
 
         out.write()
 
@@ -5255,12 +5474,12 @@ provider "panos" {
         if not interfaces:
             return
 
-        out = UnitText(self, 'interfaces.tf', '# Interface Configurations\n')
-        out.header += '# Note: These are reference configurations. Adjust for your hardware platform.\n\n'
+        out = UnitText(self, "interfaces.tf", "# Interface Configurations\n")
+        out.header += "# Note: These are reference configurations. Adjust for your hardware platform.\n\n"
 
         for iface in interfaces:
-            kind = iface['type']
-            if kind == 'ethernet':
+            kind = iface["type"]
+            if kind == "ethernet":
                 out.add(iface, self._emit_ethernet_interface(iface))
                 continue
             scope = INTERFACE_RESOURCE_TYPES.get(kind)
@@ -5271,137 +5490,130 @@ provider "panos" {
 
     def _emit_ethernet_interface(self, iface: dict) -> str:
         """Emit one ethernet entry: the physical interface, or a tagged subinterface."""
-        name = iface['name']
-        mode = iface.get('mode')
+        name = iface["name"]
+        mode = iface.get("mode")
         context = self.scope_context(iface)
-        vsys = iface.get('vsys') or ''
-        scope_sub = 'panos_ethernet_layer3_subinterface'
-        parent, dot, tag_str = name.partition('.')
+        vsys = iface.get("vsys") or ""
+        scope_sub = "panos_ethernet_layer3_subinterface"
+        parent, dot, tag_str = name.partition(".")
 
         # Tagged L3 subinterface (ethernet1/2.10): v2 subinterface resource
-        if dot and mode == 'layer3':
+        if dot and mode == "layer3":
             scope = scope_sub
-            resource_name = self.declare_resource_name(
-                name, scope, iface, context=context, vsys=vsys)
+            resource_name = self.declare_resource_name(name, scope, iface, context=context, vsys=vsys)
             out = f'resource "{scope}" "{resource_name}" {{\n'
             out += self.location_block(scope, iface, resource_name)
-            out += f'  name = {self.escape_string(name)}\n'
+            out += f"  name = {self.escape_string(name)}\n"
             # F2.6: the parent is an interface declared in this run
             # (or a brown-field interface outside the export);
             # F3.2, F6.10.2: resolve inside the subinterface's unit
-            parent_ref = self.name_ref(parent, IFACE_SCOPES,
-                                       referrer=iface)
+            parent_ref = self.name_ref(parent, IFACE_SCOPES, referrer=iface)
             out += f"  parent = {self.hcl_value(parent_ref, '')}\n"
             if tag_str.isdigit():
-                out += f'  tag = {int(tag_str)}\n'
-            if iface.get('management_profile'):
-                out += f'  interface_management_profile = {self.escape_string(iface["management_profile"])}\n'
+                out += f"  tag = {int(tag_str)}\n"
+            if iface.get("management_profile"):
+                out += f"  interface_management_profile = {self.escape_string(iface['management_profile'])}\n"
             out += self._ip_list_line(iface)
-            out += '}\n\n'
+            out += "}\n\n"
             return out
 
         # Physical interface
-        scope = 'panos_ethernet_interface'
-        resource_name = self.declare_resource_name(
-            name, scope, iface, context=context, vsys=vsys)
+        scope = "panos_ethernet_interface"
+        resource_name = self.declare_resource_name(name, scope, iface, context=context, vsys=vsys)
         out = f'resource "{scope}" "{resource_name}" {{\n'
         out += self.location_block(scope, iface, resource_name)
-        out += f'  name = {self.escape_string(name)}\n'
+        out += f"  name = {self.escape_string(name)}\n"
 
-        if iface.get('comment'):
-            out += f'  comment = {self.escape_string(iface["comment"])}\n'
+        if iface.get("comment"):
+            out += f"  comment = {self.escape_string(iface['comment'])}\n"
 
         # The v2 mode object signals the interface mode. F3.3: virtual-wire
         # and tap are nested blocks on panos_ethernet_interface; the provider
         # has no separate resource type for them.
-        if mode == 'layer3':
+        if mode == "layer3":
             l3: dict = {}
-            if iface.get('management_profile'):
-                l3['interface_management_profile'] = iface['management_profile']
-            out += f'  layer3 = {self.hcl_value(l3)}\n'
-        elif mode == 'layer2':
-            out += '  layer2 = {}\n'
-        elif mode in ('virtual-wire', 'tap'):
-            out += f'  {mode.replace("-", "_")} = {{}}\n'
+            if iface.get("management_profile"):
+                l3["interface_management_profile"] = iface["management_profile"]
+            out += f"  layer3 = {self.hcl_value(l3)}\n"
+        elif mode == "layer2":
+            out += "  layer2 = {}\n"
+        elif mode in ("virtual-wire", "tap"):
+            out += f"  {mode.replace('-', '_')} = {{}}\n"
         elif mode:
             # ha, aggregate-group: note for manual review
-            out += f'  # NOTE: mode {mode} requires manual review (v2 block shape not modeled)\n'
+            out += f"  # NOTE: mode {mode} requires manual review (v2 block shape not modeled)\n"
 
-        if iface.get('ipv6_addresses'):
-            v6_str = ', '.join(iface['ipv6_addresses'])
-            out += f'  # NOTE: IPv6 addresses ({v6_str}) require manual configuration on the .0 subinterface\n'
+        if iface.get("ipv6_addresses"):
+            v6_str = ", ".join(iface["ipv6_addresses"])
+            out += f"  # NOTE: IPv6 addresses ({v6_str}) require manual configuration on the .0 subinterface\n"
 
-        out += '}\n\n'
+        out += "}\n\n"
 
         # v2 has no ipv4 attribute on the interface: IPv4 lives on the .0 subinterface
-        if mode == 'layer3' and iface.get('ip_addresses'):
-            sub_name = f'{name}.0'
-            sub_resource = self.declare_resource_name(
-                sub_name, scope_sub, iface, context=context, vsys=vsys)
+        if mode == "layer3" and iface.get("ip_addresses"):
+            sub_name = f"{name}.0"
+            sub_resource = self.declare_resource_name(sub_name, scope_sub, iface, context=context, vsys=vsys)
             out += f'resource "{scope_sub}" "{sub_resource}" {{\n'
             # The subinterface is its own object, so reports name it by its
             # own name (the location itself comes from the same source entry).
-            out += self.location_block(scope_sub, {**iface, 'name': sub_name}, sub_resource)
-            out += f'  name = {self.escape_string(sub_name)}\n'
+            out += self.location_block(scope_sub, {**iface, "name": sub_name}, sub_resource)
+            out += f"  name = {self.escape_string(sub_name)}\n"
             # F2.6: the parent is the physical interface declared above;
             # F3.2, F6.10.2: resolve inside the subinterface's unit
-            parent_ref = self.name_ref(name, IFACE_SCOPES,
-                                       referrer=iface)
+            parent_ref = self.name_ref(name, IFACE_SCOPES, referrer=iface)
             out += f"  parent = {self.hcl_value(parent_ref, '')}\n"
-            out += '  tag = 0\n'
+            out += "  tag = 0\n"
             out += self._ip_list_line(iface)
-            out += '}\n\n'
+            out += "}\n\n"
 
         return out
 
     def _emit_interface_resource(self, iface: dict, scope: str) -> str:
         """Emit one interface resource for a non-ethernet kind (v2 nested shapes)."""
-        name = iface['name']
+        name = iface["name"]
         context = self.scope_context(iface)
-        vsys = iface.get('vsys') or ''
+        vsys = iface.get("vsys") or ""
         # An aggregate entry whose name already carries a unit (ae1.101) is a
         # layer-3 subinterface of the aggregate group; the group entry itself
         # has no ip, parent, or tag in the schema.
-        if iface['type'] == 'aggregate' and '.' in name:
-            scope = 'panos_aggregate_layer3_subinterface'
-        resource_name = self.declare_resource_name(
-            name, scope, iface, context=context, vsys=vsys)
+        if iface["type"] == "aggregate" and "." in name:
+            scope = "panos_aggregate_layer3_subinterface"
+        resource_name = self.declare_resource_name(name, scope, iface, context=context, vsys=vsys)
         out = f'resource "{scope}" "{resource_name}" {{\n'
         out += self.location_block(scope, iface, resource_name)
-        out += f'  name = {self.escape_string(name)}\n'
-        if iface.get('comment'):
-            out += f'  comment = {self.escape_string(iface["comment"])}\n'
-        if scope == 'panos_aggregate_interface':
-            mode = iface.get('mode')
+        out += f"  name = {self.escape_string(name)}\n"
+        if iface.get("comment"):
+            out += f"  comment = {self.escape_string(iface['comment'])}\n"
+        if scope == "panos_aggregate_interface":
+            mode = iface.get("mode")
             if mode:
-                out += f'  {mode} = {{}}\n'
-            out += '}\n\n'
+                out += f"  {mode} = {{}}\n"
+            out += "}\n\n"
             return out
-        parent = iface.get('parent')
+        parent = iface.get("parent")
         if parent:
-            parent_ref = self.name_ref(parent, IFACE_SCOPES,
-                                       referrer=iface)
+            parent_ref = self.name_ref(parent, IFACE_SCOPES, referrer=iface)
             out += f"  parent = {self.hcl_value(parent_ref, '')}\n"
         # Only the layer-3 subinterface types carry a tag in the schema.
-        tag = iface.get('tag')
-        if tag and str(tag).isdigit() and scope.endswith('subinterface'):
-            out += f'  tag = {int(tag)}\n'
+        tag = iface.get("tag")
+        if tag and str(tag).isdigit() and scope.endswith("subinterface"):
+            out += f"  tag = {int(tag)}\n"
         out += self._ip_list_line(iface)
         # The schema shape for these kinds: ip is a list of objects, ipv6 is
         # a single nested block with an address list.
-        if iface.get('ipv6_addresses'):
-            out += f'  ipv6 = {{ address = {self.hcl_value(iface["ipv6_addresses"])} }}\n'
-        if iface.get('management_profile'):
-            out += f'  interface_management_profile = {self.escape_string(iface["management_profile"])}\n'
-        out += '}\n\n'
+        if iface.get("ipv6_addresses"):
+            out += f"  ipv6 = {{ address = {self.hcl_value(iface['ipv6_addresses'])} }}\n"
+        if iface.get("management_profile"):
+            out += f"  interface_management_profile = {self.escape_string(iface['management_profile'])}\n"
+        out += "}\n\n"
         return out
 
     def _ip_list_line(self, iface: dict) -> str:
         """The ip attribute line for an interface resource (v2: list of objects)."""
-        ips = iface.get('ip_addresses') or []
+        ips = iface.get("ip_addresses") or []
         if not ips:
-            return ''
-        return f'  ip = {self.hcl_value([{"name": ip} for ip in ips])}\n'
+            return ""
+        return f"  ip = {self.hcl_value([{'name': ip} for ip in ips])}\n"
 
     def generate_interface_report(self, interfaces: list[dict]):
         """Generate a text report of interfaces and their IP addresses.
@@ -5414,197 +5626,224 @@ provider "panos" {
         if not interfaces:
             return
 
-        content = '=' * 80 + '\n'
-        content += 'INTERFACE AND IP ADDRESS MIGRATION REPORT\n'
-        content += 'Generated for Firewall Migration Planning\n'
-        content += '=' * 80 + '\n\n'
+        content = "=" * 80 + "\n"
+        content += "INTERFACE AND IP ADDRESS MIGRATION REPORT\n"
+        content += "Generated for Firewall Migration Planning\n"
+        content += "=" * 80 + "\n\n"
 
-        content += 'This report lists all interfaces and their assigned IP addresses from the\n'
-        content += 'source configuration. Use this to plan interface mapping for the new platform.\n\n'
+        content += "This report lists all interfaces and their assigned IP addresses from the\n"
+        content += "source configuration. Use this to plan interface mapping for the new platform.\n\n"
 
-        content += 'Interfaces are grouped by the scope the export declares: device group first,\n'
-        content += 'then the template or the device the entry sits in, then the interface type.\n'
-        content += 'A section names only the scope the export states, so the same interface name\n'
-        content += 'on two device groups appears once under each.\n'
+        content += "Interfaces are grouped by the scope the export declares: device group first,\n"
+        content += "then the template or the device the entry sits in, then the interface type.\n"
+        content += "A section names only the scope the export states, so the same interface name\n"
+        content += "on two device groups appears once under each.\n"
 
         for path, iface_list in self._group_by_scope(interfaces):
-            content += '\n' + '=' * 80 + '\n'
-            content += self._report_section_header(path) + '\n'
-            content += '=' * 80 + '\n'
+            content += "\n" + "=" * 80 + "\n"
+            content += self._report_section_header(path) + "\n"
+            content += "=" * 80 + "\n"
 
             # Kind grouping inside a section, as before F3.9.
             by_type: dict[str, list[dict]] = {}
             for iface in iface_list:
-                by_type.setdefault(iface['type'], []).append(iface)
+                by_type.setdefault(iface["type"], []).append(iface)
 
             for iface_type, type_list in sorted(by_type.items()):
-                content += f'\n{iface_type.upper()} INTERFACES ({len(type_list)})\n'
-                content += '-' * 80 + '\n'
+                content += f"\n{iface_type.upper()} INTERFACES ({len(type_list)})\n"
+                content += "-" * 80 + "\n"
 
-                for iface in sorted(type_list, key=lambda x: x['name']):
-                    content += f'\nInterface: {iface["name"]}\n'
-                    content += f'  Type: {iface["type"]}\n'
-                    content += f'  Mode: {iface["mode"]}\n'
+                for iface in sorted(type_list, key=lambda x: x["name"]):
+                    content += f"\nInterface: {iface['name']}\n"
+                    content += f"  Type: {iface['type']}\n"
+                    content += f"  Mode: {iface['mode']}\n"
                     content += self._report_vsys_line(iface)
 
-                    if iface.get('comment'):
-                        content += f'  Comment: {iface["comment"]}\n'
+                    if iface.get("comment"):
+                        content += f"  Comment: {iface['comment']}\n"
 
-                    if iface.get('ip_addresses'):
-                        content += '  IPv4 Addresses:\n'
-                        for ip in iface['ip_addresses']:
-                            content += f'    - {ip}\n'
+                    if iface.get("ip_addresses"):
+                        content += "  IPv4 Addresses:\n"
+                        for ip in iface["ip_addresses"]:
+                            content += f"    - {ip}\n"
 
-                    if iface.get('ipv6_addresses'):
-                        content += '  IPv6 Addresses:\n'
-                        for ip in iface['ipv6_addresses']:
-                            content += f'    - {ip}\n'
+                    if iface.get("ipv6_addresses"):
+                        content += "  IPv6 Addresses:\n"
+                        for ip in iface["ipv6_addresses"]:
+                            content += f"    - {ip}\n"
 
-                    if iface.get('management_profile'):
-                        content += f'  Management Profile: {iface["management_profile"]}\n'
+                    if iface.get("management_profile"):
+                        content += f"  Management Profile: {iface['management_profile']}\n"
 
-                    if iface.get('tag'):
-                        content += f'  VLAN Tag: {iface["tag"]}\n'
+                    if iface.get("tag"):
+                        content += f"  VLAN Tag: {iface['tag']}\n"
 
-        content += '\n' + '=' * 80 + '\n'
-        content += 'MIGRATION CHECKLIST\n'
-        content += '=' * 80 + '\n\n'
+        content += "\n" + "=" * 80 + "\n"
+        content += "MIGRATION CHECKLIST\n"
+        content += "=" * 80 + "\n\n"
 
-        content += '1. Review interface naming differences between platforms\n'
-        content += '2. Map source interfaces to target platform interfaces\n'
-        content += '3. Verify IP addressing scheme is compatible\n'
-        content += '4. Check for interface-specific features that may not translate\n'
-        content += '5. Update zone and virtual router configurations accordingly\n'
-        content += '6. Test connectivity after migration\n\n'
+        content += "1. Review interface naming differences between platforms\n"
+        content += "2. Map source interfaces to target platform interfaces\n"
+        content += "3. Verify IP addressing scheme is compatible\n"
+        content += "4. Check for interface-specific features that may not translate\n"
+        content += "5. Update zone and virtual router configurations accordingly\n"
+        content += "6. Test connectivity after migration\n\n"
 
-        content += '=' * 80 + '\n'
-        content += 'PLATFORM MIGRATION NOTES\n'
-        content += '=' * 80 + '\n\n'
+        content += "=" * 80 + "\n"
+        content += "PLATFORM MIGRATION NOTES\n"
+        content += "=" * 80 + "\n\n"
 
-        content += 'Common Interface Naming Patterns:\n\n'
-        content += '  PA-200/500 Series:    ethernet1/1 - ethernet1/8\n'
-        content += '  PA-800 Series:        ethernet1/1 - ethernet1/8\n'
-        content += '  PA-3000 Series:       ethernet1/1 - ethernet1/20+\n'
-        content += '  PA-5000 Series:       ethernet1/1 - ethernet1/24+\n'
-        content += '  PA-7000 Series:       ethernet1/1 - ethernet1/48+ (per slot)\n'
-        content += '  VM-Series:            ethernet1/1 - ethernet1/X (configurable)\n\n'
+        content += "Common Interface Naming Patterns:\n\n"
+        content += "  PA-200/500 Series:    ethernet1/1 - ethernet1/8\n"
+        content += "  PA-800 Series:        ethernet1/1 - ethernet1/8\n"
+        content += "  PA-3000 Series:       ethernet1/1 - ethernet1/20+\n"
+        content += "  PA-5000 Series:       ethernet1/1 - ethernet1/24+\n"
+        content += "  PA-7000 Series:       ethernet1/1 - ethernet1/48+ (per slot)\n"
+        content += "  VM-Series:            ethernet1/1 - ethernet1/X (configurable)\n\n"
 
-        content += 'Remember:\n'
-        content += '  - Management interface naming varies by platform\n'
-        content += '  - Some platforms support additional interface types (QSFP, SFP+, etc.)\n'
-        content += '  - Aggregate interfaces may have different limitations\n'
-        content += '  - Verify transceiver compatibility for the new platform\n\n'
+        content += "Remember:\n"
+        content += "  - Management interface naming varies by platform\n"
+        content += "  - Some platforms support additional interface types (QSFP, SFP+, etc.)\n"
+        content += "  - Aggregate interfaces may have different limitations\n"
+        content += "  - Verify transceiver compatibility for the new platform\n\n"
 
-        self.write_root_file('INTERFACE_MIGRATION_REPORT.txt', content)
+        self.write_root_file("INTERFACE_MIGRATION_REPORT.txt", content)
 
     def generate_security_profiles(self, profiles: dict[str, list[dict]]):
         """Generate security profile Terraform configuration"""
         if not any(profiles.values()):
             return
 
-        out = UnitText(self, 'security_profiles.tf',
-                       '# Security Profiles\n'
-                       '# Note: These are simplified profile references.\n'
-                       '# Detailed profile rules must be configured manually or imported.\n\n')
+        out = UnitText(
+            self,
+            "security_profiles.tf",
+            "# Security Profiles\n"
+            "# Note: These are simplified profile references.\n"
+            "# Detailed profile rules must be configured manually or imported.\n\n",
+        )
 
         # Note: Full profile configuration with all rules is complex
         # This generates basic profile declarations that can be enhanced
 
         # Antivirus profiles
-        if profiles.get('antivirus'):
-            for facts in self.units_of(profiles['antivirus']):
-                out.add_once(facts, '# Antivirus Profiles\n')
-            for prof in profiles['antivirus']:
+        if profiles.get("antivirus"):
+            for facts in self.units_of(profiles["antivirus"]):
+                out.add_once(facts, "# Antivirus Profiles\n")
+            for prof in profiles["antivirus"]:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_antivirus_security_profile', prof,
+                    prof["name"],
+                    "panos_antivirus_security_profile",
+                    prof,
                     # F3.1: contextless. This stub emits no location, so
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
-                    context='', vsys=prof.get('vsys') or '')
-                out.add(prof, f'# Profile: {prof["name"]}\n')
-                if prof.get('description'):
-                    out.add(prof, f'# Description: {prof["description"]}\n')
-                out.add(prof, f'# Resource: panos_antivirus_security_profile.{resource_name}\n\n')
+                    context="",
+                    vsys=prof.get("vsys") or "",
+                )
+                out.add(prof, f"# Profile: {prof['name']}\n")
+                if prof.get("description"):
+                    out.add(prof, f"# Description: {prof['description']}\n")
+                out.add(prof, f"# Resource: panos_antivirus_security_profile.{resource_name}\n\n")
 
         # Vulnerability profiles
-        if profiles.get('vulnerability'):
-            for facts in self.units_of(profiles['vulnerability']):
-                out.add_once(facts, '# Vulnerability Protection Profiles\n')
-            for prof in profiles['vulnerability']:
+        if profiles.get("vulnerability"):
+            for facts in self.units_of(profiles["vulnerability"]):
+                out.add_once(facts, "# Vulnerability Protection Profiles\n")
+            for prof in profiles["vulnerability"]:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_vulnerability_security_profile', prof,
+                    prof["name"],
+                    "panos_vulnerability_security_profile",
+                    prof,
                     # F3.1: contextless. This stub emits no location, so
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
-                    context='', vsys=prof.get('vsys') or '')
-                out.add(prof, f'# Profile: {prof["name"]}\n')
-                if prof.get('description'):
-                    out.add(prof, f'# Description: {prof["description"]}\n')
-                out.add(prof, f'# Resource: panos_vulnerability_security_profile.{resource_name}\n\n')
+                    context="",
+                    vsys=prof.get("vsys") or "",
+                )
+                out.add(prof, f"# Profile: {prof['name']}\n")
+                if prof.get("description"):
+                    out.add(prof, f"# Description: {prof['description']}\n")
+                out.add(prof, f"# Resource: panos_vulnerability_security_profile.{resource_name}\n\n")
 
         # Anti-spyware profiles
-        if profiles.get('anti_spyware'):
-            for facts in self.units_of(profiles['anti_spyware']):
-                out.add_once(facts, '# Anti-Spyware Profiles\n')
-            for prof in profiles['anti_spyware']:
+        if profiles.get("anti_spyware"):
+            for facts in self.units_of(profiles["anti_spyware"]):
+                out.add_once(facts, "# Anti-Spyware Profiles\n")
+            for prof in profiles["anti_spyware"]:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_anti_spyware_security_profile', prof,
+                    prof["name"],
+                    "panos_anti_spyware_security_profile",
+                    prof,
                     # F3.1: contextless. This stub emits no location, so
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
-                    context='', vsys=prof.get('vsys') or '')
-                out.add(prof, f'# Profile: {prof["name"]}\n')
-                if prof.get('description'):
-                    out.add(prof, f'# Description: {prof["description"]}\n')
-                out.add(prof, f'# Resource: panos_anti_spyware_security_profile.{resource_name}\n\n')
+                    context="",
+                    vsys=prof.get("vsys") or "",
+                )
+                out.add(prof, f"# Profile: {prof['name']}\n")
+                if prof.get("description"):
+                    out.add(prof, f"# Description: {prof['description']}\n")
+                out.add(prof, f"# Resource: panos_anti_spyware_security_profile.{resource_name}\n\n")
 
         # URL filtering profiles
-        if profiles.get('url_filtering'):
-            for facts in self.units_of(profiles['url_filtering']):
-                out.add_once(facts, '# URL Filtering Profiles\n')
-            for prof in profiles['url_filtering']:
+        if profiles.get("url_filtering"):
+            for facts in self.units_of(profiles["url_filtering"]):
+                out.add_once(facts, "# URL Filtering Profiles\n")
+            for prof in profiles["url_filtering"]:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_url_filtering_security_profile', prof,
+                    prof["name"],
+                    "panos_url_filtering_security_profile",
+                    prof,
                     # F3.1: contextless. This stub emits no location, so
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
-                    context='', vsys=prof.get('vsys') or '')
-                out.add(prof, f'# Profile: {prof["name"]}\n')
-                if prof.get('description'):
-                    out.add(prof, f'# Description: {prof["description"]}\n')
-                out.add(prof, f'# Resource: panos_url_filtering_security_profile.{resource_name}\n\n')
+                    context="",
+                    vsys=prof.get("vsys") or "",
+                )
+                out.add(prof, f"# Profile: {prof['name']}\n")
+                if prof.get("description"):
+                    out.add(prof, f"# Description: {prof['description']}\n")
+                out.add(prof, f"# Resource: panos_url_filtering_security_profile.{resource_name}\n\n")
 
         # File blocking profiles
-        if profiles.get('file_blocking'):
-            for facts in self.units_of(profiles['file_blocking']):
-                out.add_once(facts, '# File Blocking Profiles\n')
-            for prof in profiles['file_blocking']:
+        if profiles.get("file_blocking"):
+            for facts in self.units_of(profiles["file_blocking"]):
+                out.add_once(facts, "# File Blocking Profiles\n")
+            for prof in profiles["file_blocking"]:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_file_blocking_security_profile', prof,
+                    prof["name"],
+                    "panos_file_blocking_security_profile",
+                    prof,
                     # F3.1: contextless. This stub emits no location, so
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
-                    context='', vsys=prof.get('vsys') or '')
-                out.add(prof, f'# Profile: {prof["name"]}\n')
-                if prof.get('description'):
-                    out.add(prof, f'# Description: {prof["description"]}\n')
-                out.add(prof, f'# Resource: panos_file_blocking_security_profile.{resource_name}\n\n')
+                    context="",
+                    vsys=prof.get("vsys") or "",
+                )
+                out.add(prof, f"# Profile: {prof['name']}\n")
+                if prof.get("description"):
+                    out.add(prof, f"# Description: {prof['description']}\n")
+                out.add(prof, f"# Resource: panos_file_blocking_security_profile.{resource_name}\n\n")
 
         # WildFire profiles
-        if profiles.get('wildfire_analysis'):
-            for facts in self.units_of(profiles['wildfire_analysis']):
-                out.add_once(facts, '# WildFire Analysis Profiles\n')
-            for prof in profiles['wildfire_analysis']:
+        if profiles.get("wildfire_analysis"):
+            for facts in self.units_of(profiles["wildfire_analysis"]):
+                out.add_once(facts, "# WildFire Analysis Profiles\n")
+            for prof in profiles["wildfire_analysis"]:
                 resource_name = self.declare_resource_name(
-                    prof['name'], 'panos_wildfire_analysis_security_profile', prof,
+                    prof["name"],
+                    "panos_wildfire_analysis_security_profile",
+                    prof,
                     # F3.1: contextless. This stub emits no location, so
                     # the device group and template stay out of its name;
                     # F3.2: vsys is part of the identity key
-                    context='', vsys=prof.get('vsys') or '')
-                out.add(prof, f'# Profile: {prof["name"]}\n')
-                if prof.get('description'):
-                    out.add(prof, f'# Description: {prof["description"]}\n')
-                out.add(prof, f'# Resource: panos_wildfire_analysis_security_profile.{resource_name}\n\n')
+                    context="",
+                    vsys=prof.get("vsys") or "",
+                )
+                out.add(prof, f"# Profile: {prof['name']}\n")
+                if prof.get("description"):
+                    out.add(prof, f"# Description: {prof['description']}\n")
+                out.add(prof, f"# Resource: panos_wildfire_analysis_security_profile.{resource_name}\n\n")
 
         out.write()
 
@@ -5616,21 +5855,33 @@ provider "panos" {
         if not groups:
             return
 
-        out = UnitText(self, 'security_profile_groups.tf', '# Security Profile Groups\n\n')
+        out = UnitText(self, "security_profile_groups.tf", "# Security Profile Groups\n\n")
 
         # Profile categories the v2 schema models as lists
-        categories = ('virus', 'spyware', 'vulnerability', 'url_filtering',
-                      'file_blocking', 'wildfire_analysis', 'gtp', 'sctp', 'data_filtering')
+        categories = (
+            "virus",
+            "spyware",
+            "vulnerability",
+            "url_filtering",
+            "file_blocking",
+            "wildfire_analysis",
+            "gtp",
+            "sctp",
+            "data_filtering",
+        )
 
         for grp in groups:
             resource_name = self.declare_resource_name(
-                grp['name'], 'panos_security_profile_group', grp,
-                context=grp.get('device_group') or '', vsys=grp.get('vsys') or ''
+                grp["name"],
+                "panos_security_profile_group",
+                grp,
+                context=grp.get("device_group") or "",
+                vsys=grp.get("vsys") or "",
             )
 
             out.add(grp, f'resource "panos_security_profile_group" "{resource_name}" {{\n')
-            out.add(grp, self.location_block('panos_security_profile_group', grp, resource_name))
-            out.add(grp, f'  name = {self.escape_string(grp["name"])}\n')
+            out.add(grp, self.location_block("panos_security_profile_group", grp, resource_name))
+            out.add(grp, f"  name = {self.escape_string(grp['name'])}\n")
 
             # F4.4: the row names the property, and the block prints no descriptive field, so the
             # flag prints after the name
@@ -5639,13 +5890,12 @@ provider "panos" {
             for category in categories:
                 members = grp.get(category)
                 if members:
-                    members_str = ', '.join([self.escape_string(m) for m in members])
-                    out.add(grp, f'  {category} = [{members_str}]\n')
+                    members_str = ", ".join([self.escape_string(m) for m in members])
+                    out.add(grp, f"  {category} = [{members_str}]\n")
 
-            out.add(grp, '}\n\n')
+            out.add(grp, "}\n\n")
 
         out.write()
-
 
     @staticmethod
     def _protocol_report_value(value) -> str:
@@ -5661,26 +5911,34 @@ provider "panos" {
                 # The one key a `one_of` level states is the value itself when the choice has no field
                 # with a value, which is what the operator types in the GUI.
                 return next(iter(value))
-            return ', '.join(f'{key}={TerraformGenerator._protocol_report_value(item)}'
-                             for key, item in value.items()
-                             if item not in entry_coverage.EMPTY_FIELD_VALUES)
+            return ", ".join(
+                f"{key}={TerraformGenerator._protocol_report_value(item)}"
+                for key, item in value.items()
+                if item not in entry_coverage.EMPTY_FIELD_VALUES
+            )
         if isinstance(value, list):
-            return ', '.join(TerraformGenerator._protocol_report_value(item) for item in value
-                             if item not in entry_coverage.EMPTY_FIELD_VALUES)
-        return '' if value in entry_coverage.EMPTY_FIELD_VALUES else str(value)
+            return ", ".join(
+                TerraformGenerator._protocol_report_value(item)
+                for item in value
+                if item not in entry_coverage.EMPTY_FIELD_VALUES
+            )
+        return "" if value in entry_coverage.EMPTY_FIELD_VALUES else str(value)
 
-    def generate_manual_setup_report(self, protocol_report: list[dict],
-                                     application_filters: list[dict],
-                                     manual_key_tunnels: list[dict],
-                                     application_override_rules: Optional[list[dict]] = None,
-                                     qos_profiles: Optional[list[dict]] = None,
-                                     tunnel_monitor_profiles: Optional[list[dict]] = None,
-                                     schedules: Optional[list[dict]] = None,
-                                     log_settings: Optional[list[dict]] = None,
-                                     zone_protection_profiles: Optional[list[dict]] = None,
-                                     report_only_addresses: Optional[list[dict]] = None,
-                                     dual_protocol_services: Optional[list[dict]] = None,
-                                     entry_report: str = ''):
+    def generate_manual_setup_report(
+        self,
+        protocol_report: list[dict],
+        application_filters: list[dict],
+        manual_key_tunnels: list[dict],
+        application_override_rules: Optional[list[dict]] = None,
+        qos_profiles: Optional[list[dict]] = None,
+        tunnel_monitor_profiles: Optional[list[dict]] = None,
+        schedules: Optional[list[dict]] = None,
+        log_settings: Optional[list[dict]] = None,
+        zone_protection_profiles: Optional[list[dict]] = None,
+        report_only_addresses: Optional[list[dict]] = None,
+        dual_protocol_services: Optional[list[dict]] = None,
+        entry_report: str = "",
+    ):
         """Write MANUAL_SETUP_REPORT.txt for items that are not emitted (F2.9)
 
         Two buckets, one report:
@@ -5698,19 +5956,29 @@ provider "panos" {
         `entry_report` is the section text the caller built, not the module, so the module name
         `entry_coverage` stays readable inside the method.
         """
-        if not (protocol_report or application_filters or manual_key_tunnels
-                or application_override_rules or qos_profiles
-                or tunnel_monitor_profiles or schedules or log_settings
-                or zone_protection_profiles or report_only_addresses
-                or dual_protocol_services or entry_report or self._location_reports):
+        if not (
+            protocol_report
+            or application_filters
+            or manual_key_tunnels
+            or application_override_rules
+            or qos_profiles
+            or tunnel_monitor_profiles
+            or schedules
+            or log_settings
+            or zone_protection_profiles
+            or report_only_addresses
+            or dual_protocol_services
+            or entry_report
+            or self._location_reports
+        ):
             return
 
-        lines = ['MANUAL SETUP REPORT', '=' * 60, '']
-        lines.append('The items below have no panos provider v2 resource, or the')
-        lines.append('converter intentionally does not emit them (the reason is stated')
-        lines.append('per section). Configure them manually (GUI or CLI) and verify')
-        lines.append('against this report.')
-        lines.append('')
+        lines = ["MANUAL SETUP REPORT", "=" * 60, ""]
+        lines.append("The items below have no panos provider v2 resource, or the")
+        lines.append("converter intentionally does not emit them (the reason is stated")
+        lines.append("per section). Configure them manually (GUI or CLI) and verify")
+        lines.append("against this report.")
+        lines.append("")
 
         # F7.1: the emitter prints the protocol object, so this section names only what no provider field
         # can express: a peer no peer group names, and an interface the export places outside an area. The
@@ -5719,45 +5987,48 @@ provider "panos" {
         # coverage rows count it on the router row (F4.2 AC-3.2); the reason it is named here is the mark
         # detail, which is the same record the gate reads.
         if protocol_report:
-            lines.append('--- Routing protocol entries the generated file cannot express (F7.1) ---')
+            lines.append("--- Routing protocol entries the generated file cannot express (F7.1) ---")
             for path, rows in self._group_by_scope(protocol_report):
                 lines.append(self._report_section_header(path))
                 for row in rows:
-                    lines.append(f"  router {row['router']}: {row['level']} {row['name']} "
-                                 f"({row['detail']})")
+                    lines.append(f"  router {row['router']}: {row['level']} {row['name']} ({row['detail']})")
                     # `row['fields']` is the field list the ledger states for the entry, so the report reads
                     # every field through the captured object: the read is the property the scan counts.
-                    for field in row['fields']:
-                        text = self._protocol_report_value(row['captured'].get(field))
+                    for field in row["fields"]:
+                        text = self._protocol_report_value(row["captured"].get(field))
                         if text:
-                            lines.append(f'    {field}: {text}')
+                            lines.append(f"    {field}: {text}")
                     vsys_line = self._report_vsys_line(row).rstrip()
                     if vsys_line:
                         lines.append(vsys_line)
-            lines.append('')
+            lines.append("")
 
         if application_filters:
-            lines.append('--- Application Filters (no v2 resource: panos_application_filter) ---')
+            lines.append("--- Application Filters (no v2 resource: panos_application_filter) ---")
             for af in application_filters:
                 # The report is the output for this container, so it reads the field it prints
                 # through the captured object (F4.4).
-                lines.append(f"  {af.get('name')} (dg: {af.get('device_group')}): "
-                             f"category={af.get('category')}, risk={af.get('risk')}, "
-                             f"evasive={af.get('evasive')}"
-                             + (f", description={af['description']}" if af.get('description') else ''))
-            lines.append('')
+                lines.append(
+                    f"  {af.get('name')} (dg: {af.get('device_group')}): "
+                    f"category={af.get('category')}, risk={af.get('risk')}, "
+                    f"evasive={af.get('evasive')}"
+                    + (f", description={af['description']}" if af.get("description") else "")
+                )
+            lines.append("")
 
         if manual_key_tunnels:
-            lines.append('--- Manual-key IPsec tunnels (manual_key block requires key material) ---')
+            lines.append("--- Manual-key IPsec tunnels (manual_key block requires key material) ---")
             for tunnel in manual_key_tunnels:
-                lines.append(f"  {tunnel.get('name')}: peer={tunnel.get('peer_address')}, "
-                             f"local={tunnel.get('local_address')}, "
-                             f"interface={tunnel.get('tunnel_interface')}")
-            lines.append('  See VPN_MIGRATION_REPORT.txt for key management instructions.')
-            lines.append('')
+                lines.append(
+                    f"  {tunnel.get('name')}: peer={tunnel.get('peer_address')}, "
+                    f"local={tunnel.get('local_address')}, "
+                    f"interface={tunnel.get('tunnel_interface')}"
+                )
+            lines.append("  See VPN_MIGRATION_REPORT.txt for key management instructions.")
+            lines.append("")
 
         if application_override_rules:
-            lines.append('--- Application Override Rules (no v2 resource) ---')
+            lines.append("--- Application Override Rules (no v2 resource) ---")
             for rule in application_override_rules:
                 # The report is the only output for this container, so the line prints the fields it reads
                 # through the captured object (F4.4, `docs/COVERAGE_MATRIX.md` §1). One rule states the
@@ -5768,174 +6039,179 @@ provider "panos" {
                 for label, key in OVERRIDE_REPORT_FIELDS:
                     value = rule.get(key)
                     if value not in entry_coverage.EMPTY_FIELD_VALUES:
-                        parts.append(f'{label}={value}')
-                    elif key in ('port', 'protocol'):
-                        parts.append(f'{label}=any')
-                lines.append(' '.join(parts))
-            lines.append('  Configure via the Panorama GUI or CLI.')
-            lines.append('')
+                        parts.append(f"{label}={value}")
+                    elif key in ("port", "protocol"):
+                        parts.append(f"{label}=any")
+                lines.append(" ".join(parts))
+            lines.append("  Configure via the Panorama GUI or CLI.")
+            lines.append("")
 
         if qos_profiles:
-            lines.append('--- QoS Profiles (no v2 resource) ---')
+            lines.append("--- QoS Profiles (no v2 resource) ---")
             for prof in qos_profiles:
-                classes = prof.get('class_bandwidth_type') or {}
-                class_list = ', '.join(
-                    f"{name}({cfg.get('priority')})" if cfg.get('priority') else name
-                    for name, cfg in classes.items()) or 'none'
+                classes = prof.get("class_bandwidth_type") or {}
+                class_list = (
+                    ", ".join(
+                        f"{name}({cfg.get('priority')})" if cfg.get("priority") else name
+                        for name, cfg in classes.items()
+                    )
+                    or "none"
+                )
                 lines.append(
                     f"  {prof.get('name')}: classes=[{class_list}]"
-                    + (f" ({prof['description']})" if prof.get('description') else ''))
-            lines.append('  Configure via the Panorama GUI or CLI.')
-            lines.append('')
+                    + (f" ({prof['description']})" if prof.get("description") else "")
+                )
+            lines.append("  Configure via the Panorama GUI or CLI.")
+            lines.append("")
 
         if tunnel_monitor_profiles:
-            lines.append('--- IPsec Tunnel Monitor Profiles (no v2 resource) ---')
+            lines.append("--- IPsec Tunnel Monitor Profiles (no v2 resource) ---")
             for prof in tunnel_monitor_profiles:
                 lines.append(
                     f"  {prof.get('name')}: interval={prof.get('interval')}, "
-                    f"threshold={prof.get('threshold')}, action={prof.get('action')}")
-            lines.append('  No v2 resource exists for IPsec tunnel monitor profiles.')
-            lines.append('  panos_monitor_profile manages PBF path monitoring')
-            lines.append('  profiles, a different PAN-OS object')
-            lines.append('  (network/profiles/monitor-profile). Configure via the')
-            lines.append('  Panorama GUI or CLI.')
-            lines.append('')
+                    f"threshold={prof.get('threshold')}, action={prof.get('action')}"
+                )
+            lines.append("  No v2 resource exists for IPsec tunnel monitor profiles.")
+            lines.append("  panos_monitor_profile manages PBF path monitoring")
+            lines.append("  profiles, a different PAN-OS object")
+            lines.append("  (network/profiles/monitor-profile). Configure via the")
+            lines.append("  Panorama GUI or CLI.")
+            lines.append("")
 
         if schedules:
-            lines.append('--- Schedules (v2 resource exists, not emitted) ---')
+            lines.append("--- Schedules (v2 resource exists, not emitted) ---")
             for sched in schedules:
-                entries = ','.join(e['name'] for e in sched.get('recurring', [])) or '-'
+                entries = ",".join(e["name"] for e in sched.get("recurring", [])) or "-"
                 # The report is the output for this container, so it reads the field it prints
                 # through the captured object (F4.4). `panos_schedule` declares no description.
                 lines.append(
                     f"  {sched['name']}"
-                    + (f" ({sched['description']})" if sched.get('description') else '')
-                    + f": type={sched.get('schedule_type')}, entries={entries}")
-            lines.append('  The v2 resource panos_schedule exists, but the parse')
-            lines.append('  reads the entry name, the description and the schedule')
-            lines.append('  type only (day and time ranges are not captured), and')
-            lines.append('  v2.0.14 does not model monthly schedules. Configure via')
-            lines.append('  the Panorama GUI or CLI.')
-            lines.append('')
+                    + (f" ({sched['description']})" if sched.get("description") else "")
+                    + f": type={sched.get('schedule_type')}, entries={entries}"
+                )
+            lines.append("  The v2 resource panos_schedule exists, but the parse")
+            lines.append("  reads the entry name, the description and the schedule")
+            lines.append("  type only (day and time ranges are not captured), and")
+            lines.append("  v2.0.14 does not model monthly schedules. Configure via")
+            lines.append("  the Panorama GUI or CLI.")
+            lines.append("")
 
         if log_settings:
-            lines.append('--- Log Forwarding Profiles (v2 resource exists, not emitted) ---')
+            lines.append("--- Log Forwarding Profiles (v2 resource exists, not emitted) ---")
             for prof in log_settings:
-                lines.append(
-                    f"  {prof.get('name')}"
-                    + (f" ({prof['description']})" if prof.get('description') else ''))
-            lines.append('  v2 resource: panos_log_forwarding_profile')
-            lines.append('  Reason: only the name and description are parsed. The')
-            lines.append('  match_list body is not captured, and an empty profile')
-            lines.append('  would be a misconfigured object. Configure the profile')
-            lines.append('  manually (GUI or CLI).')
-            lines.append('')
+                lines.append(f"  {prof.get('name')}" + (f" ({prof['description']})" if prof.get("description") else ""))
+            lines.append("  v2 resource: panos_log_forwarding_profile")
+            lines.append("  Reason: only the name and description are parsed. The")
+            lines.append("  match_list body is not captured, and an empty profile")
+            lines.append("  would be a misconfigured object. Configure the profile")
+            lines.append("  manually (GUI or CLI).")
+            lines.append("")
 
         if zone_protection_profiles:
-            lines.append('--- Zone Protection Profiles (v2 resource exists, not emitted) ---')
+            lines.append("--- Zone Protection Profiles (v2 resource exists, not emitted) ---")
             for prof in zone_protection_profiles:
-                lines.append(
-                    f"  {prof.get('name')}"
-                    + (f" ({prof['description']})" if prof.get('description') else ''))
-            lines.append('  v2 resource: panos_zone_protection_profile')
-            lines.append('  Reason: only the name and description are parsed. The')
-            lines.append('  SIP/UDP/TCP/ICMP/DNS options body is not captured, and an')
-            lines.append('  empty profile would be a misconfigured object. Real')
-            lines.append('  emission needs profile parsing (Epic 3). Configure the')
-            lines.append('  profile manually (GUI or CLI).')
-            lines.append('')
+                lines.append(f"  {prof.get('name')}" + (f" ({prof['description']})" if prof.get("description") else ""))
+            lines.append("  v2 resource: panos_zone_protection_profile")
+            lines.append("  Reason: only the name and description are parsed. The")
+            lines.append("  SIP/UDP/TCP/ICMP/DNS options body is not captured, and an")
+            lines.append("  empty profile would be a misconfigured object. Real")
+            lines.append("  emission needs profile parsing (Epic 3). Configure the")
+            lines.append("  profile manually (GUI or CLI).")
+            lines.append("")
 
         if report_only_addresses:
-            lines.append('--- Address Objects With No v2 Attribute (v2 resource exists, not emitted) ---')
+            lines.append("--- Address Objects With No v2 Attribute (v2 resource exists, not emitted) ---")
             for addr in report_only_addresses:
-                fields = ', '.join(
-                    f"{key}={value}"
-                    for key, value in sorted((addr.get('other') or {}).items())) or 'no fields captured'
+                fields = (
+                    ", ".join(f"{key}={value}" for key, value in sorted((addr.get("other") or {}).items()))
+                    or "no fields captured"
+                )
                 lines.append(
                     f"  {addr.get('name')} (dg: {addr.get('device_group')}, "
                     f"vsys: {addr.get('vsys')}, type: {addr.get('declared_type') or 'unknown'}): "
-                    f"{fields}")
-            lines.append('  v2 resource: panos_address')
-            lines.append('  Reason: panos_address models one attribute per address')
-            lines.append('  type (ip_netmask, ip_range, ip_wildcard, fqdn). A')
-            lines.append('  location-type entry (country/region/continent/container)')
-            lines.append('  has no attribute, so it cannot be emitted. Configure the')
-            lines.append('  object manually (GUI or CLI).')
-            lines.append('')
+                    f"{fields}"
+                )
+            lines.append("  v2 resource: panos_address")
+            lines.append("  Reason: panos_address models one attribute per address")
+            lines.append("  type (ip_netmask, ip_range, ip_wildcard, fqdn). A")
+            lines.append("  location-type entry (country/region/continent/container)")
+            lines.append("  has no attribute, so it cannot be emitted. Configure the")
+            lines.append("  object manually (GUI or CLI).")
+            lines.append("")
 
         if dual_protocol_services:
-            lines.append('--- Dual-Protocol Service Objects (v2 resource exists, one leg emitted) ---')
+            lines.append("--- Dual-Protocol Service Objects (v2 resource exists, one leg emitted) ---")
             for svc in dual_protocol_services:
-                protocols = svc.get('protocols') or {}
+                protocols = svc.get("protocols") or {}
                 primary = TerraformGenerator.primary_service_protocol(protocols)
                 for proto in TerraformGenerator.dropped_service_protocols(protocols):
                     lines.append(
                         f"  {svc.get('name')} (dg: {svc.get('device_group')}, "
                         f"vsys: {svc.get('vsys')}): {proto} leg dropped, "
                         f"{primary} emitted -> "
-                        f"{TerraformGenerator.protocol_summary(protocols[proto])}")
-            lines.append('  v2 resource: panos_service')
-            lines.append('  Reason: panos_service accepts one protocol leg only; a')
-            lines.append('  config with both tcp and udp fails terraform validate')
-            lines.append('  (verified against 2.0.14). Add the dropped leg manually')
-            lines.append('  (GUI or CLI), or define a second service object.')
-            lines.append('')
+                        f"{TerraformGenerator.protocol_summary(protocols[proto])}"
+                    )
+            lines.append("  v2 resource: panos_service")
+            lines.append("  Reason: panos_service accepts one protocol leg only; a")
+            lines.append("  config with both tcp and udp fails terraform validate")
+            lines.append("  (verified against 2.0.14). Add the dropped leg manually")
+            lines.append("  (GUI or CLI), or define a second service object.")
+            lines.append("")
 
-        scope_reports = [line for kind, line in self._location_reports if kind == 'scope']
+        scope_reports = [line for kind, line in self._location_reports if kind == "scope"]
         if scope_reports:
-            lines.append('--- Locations The Provider Cannot Carry (location emitted without the source scope) ---')
+            lines.append("--- Locations The Provider Cannot Carry (location emitted without the source scope) ---")
             lines.extend(scope_reports)
-            lines.append('  v2 resource: as listed per line')
-            lines.append('  Reason: the export defines the entry in a virtual')
-            lines.append('  system, template, or device group that this resource')
-            lines.append('  type has no location sub-block for, so the emitted')
-            lines.append('  location cannot name it. terraform validate accepts an')
-            lines.append('  unknown location sub-block and drops it silently, so')
-            lines.append('  the converter omits it instead. Place the object in the')
-            lines.append('  source scope manually (GUI or CLI) and verify against')
-            lines.append('  this report.')
-            lines.append('')
+            lines.append("  v2 resource: as listed per line")
+            lines.append("  Reason: the export defines the entry in a virtual")
+            lines.append("  system, template, or device group that this resource")
+            lines.append("  type has no location sub-block for, so the emitted")
+            lines.append("  location cannot name it. terraform validate accepts an")
+            lines.append("  unknown location sub-block and drops it silently, so")
+            lines.append("  the converter omits it instead. Place the object in the")
+            lines.append("  source scope manually (GUI or CLI) and verify against")
+            lines.append("  this report.")
+            lines.append("")
 
-        device_reports = [line for kind, line in self._location_reports if kind == 'device']
+        device_reports = [line for kind, line in self._location_reports if kind == "device"]
         if device_reports:
-            lines.append('--- Virtual System Locations Without A Target Device ---')
+            lines.append("--- Virtual System Locations Without A Target Device ---")
             lines.extend(device_reports)
-            lines.append('  v2 resource: as listed per line')
-            lines.append('  Reason: the export names the owning device')
+            lines.append("  v2 resource: as listed per line")
+            lines.append("  Reason: the export names the owning device")
             lines.append('  "localhost.localdomain", the PAN-OS placeholder for')
             lines.append('  "this device", so location.vsys.ngfw_device stays')
-            lines.append('  empty. Set ngfw_device to the firewall that owns the')
-            lines.append('  virtual system, or point the provider at that firewall.')
-            lines.append('')
+            lines.append("  empty. Set ngfw_device to the firewall that owns the")
+            lines.append("  virtual system, or point the provider at that firewall.")
+            lines.append("")
 
-        placeholder_reports = [
-            line for kind, line in self._location_reports if kind == 'placeholder']
+        placeholder_reports = [line for kind, line in self._location_reports if kind == "placeholder"]
         if placeholder_reports:
-            lines.append('--- Template Locations The Export Does Not Name '
-                         '(placeholder template emitted) ---')
+            lines.append("--- Template Locations The Export Does Not Name (placeholder template emitted) ---")
             lines.extend(placeholder_reports)
-            lines.append('  v2 resource: as listed per line')
-            lines.append('  Reason: this resource type only lives in a template,')
-            lines.append('  and the export places the entry in no template and on')
-            lines.append('  no named device, so the converter cannot name the')
+            lines.append("  v2 resource: as listed per line")
+            lines.append("  Reason: this resource type only lives in a template,")
+            lines.append("  and the export places the entry in no template and on")
+            lines.append("  no named device, so the converter cannot name the")
             lines.append('  template. It emits the placeholder name "Shared",')
-            lines.append('  which is not a real template. Replace it with the')
-            lines.append('  template that targets the firewall, or import the')
-            lines.append('  entry from that firewall with location.ngfw.')
-            lines.append('')
+            lines.append("  which is not a real template. Replace it with the")
+            lines.append("  template that targets the firewall, or import the")
+            lines.append("  entry from that firewall with location.ngfw.")
+            lines.append("")
 
         # F4.2: entry coverage. A section the parse side does not read is
         # stated here so the operator sees what the conversion cannot cover.
         if entry_report:
             lines.append(entry_report)
-            lines.append('')
+            lines.append("")
 
-        lines.append('End of report.')
+        lines.append("End of report.")
 
-        self.write_root_file('MANUAL_SETUP_REPORT.txt', '\n'.join(lines) + '\n')
+        self.write_root_file("MANUAL_SETUP_REPORT.txt", "\n".join(lines) + "\n")
 
-    def generate_conversion_report(self, ledger, shadows=None, state=None,
-                                   ownership_findings=None, cycle_findings=None) -> str:
+    def generate_conversion_report(
+        self, ledger, shadows=None, state=None, ownership_findings=None, cycle_findings=None
+    ) -> str:
         """Generate CONVERSION_REPORT.txt for the entries the parse read (F4.3).
 
         One line per report row, grouped by the F3.9 scope rule so a reader can
@@ -5955,20 +6231,20 @@ provider "panos" {
         """
         rows = ledger.rows()
         if not rows:
-            return ''
+            return ""
 
-        lines = ['=' * 80, entry_coverage.REPORT_HEADING, '=' * 80, '']
+        lines = ["=" * 80, entry_coverage.REPORT_HEADING, "=" * 80, ""]
         # F8.9: the run may have read more than one response, so the label names each source in run order.
         # One source is answered by the ledger itself, so a run that read one response writes the same line as
         # before. The report names the source name only, never the path (F4.2 rule 6).
         for source in ledger.sources():
-            lines.append(f'{container_coverage.SOURCE_LABEL} {source.name}')
-        lines.extend(['', entry_coverage.RULE_PARAGRAPH, ''])
+            lines.append(f"{container_coverage.SOURCE_LABEL} {source.name}")
+        lines.extend(["", entry_coverage.RULE_PARAGRAPH, ""])
         lines.extend(entry_coverage.summary_lines(ledger))
 
         gaps = ledger.gaps()
         if gaps:
-            lines.extend(['', f'--- {entry_coverage.GAP_HEADING} ---', entry_coverage.GAP_RULE])
+            lines.extend(["", f"--- {entry_coverage.GAP_HEADING} ---", entry_coverage.GAP_RULE])
             for path, group in self._group_by_scope(gaps):
                 lines.append(self._report_section_header(path))
                 for row in group:
@@ -5979,7 +6255,7 @@ provider "panos" {
         # exit code (the F4.1 gate does).
         findings = ledger.property_findings()
         if findings:
-            lines.extend(['', f'--- {entry_coverage.PROPERTY_HEADING} ---', entry_coverage.PROPERTY_RULE])
+            lines.extend(["", f"--- {entry_coverage.PROPERTY_HEADING} ---", entry_coverage.PROPERTY_RULE])
             for path, group in self._group_by_scope(findings):
                 lines.append(self._report_section_header(path))
                 for row in group:
@@ -5991,7 +6267,7 @@ provider "panos" {
         # finding, and the console prints one line per finding in the shape
         # `container_coverage.console_line` states.
         if shadows:
-            lines.extend(['', f'--- {shadow_coverage.SHADOW_HEADING} ---', shadow_coverage.SHADOW_RULE])
+            lines.extend(["", f"--- {shadow_coverage.SHADOW_HEADING} ---", shadow_coverage.SHADOW_RULE])
             for path, group in self._group_by_scope(shadows):
                 lines.append(self._report_section_header(path))
                 for row in group:
@@ -6001,7 +6277,7 @@ provider "panos" {
         # a broken output, so it does not change the exit code (the F4.1 gate does). The section prints
         # only when it has a finding, and the console prints no ownership line.
         if ownership_findings:
-            lines.extend(['', f'--- {ownership.FINDING_HEADING} ---', ownership.FINDING_RULE])
+            lines.extend(["", f"--- {ownership.FINDING_HEADING} ---", ownership.FINDING_RULE])
             for path, group in self._group_by_scope(ownership_findings):
                 lines.append(self._report_section_header(path))
                 for row in group:
@@ -6011,7 +6287,7 @@ provider "panos" {
         # cycle is an operator action, not a broken output, and it does not change the exit code (the F4.1
         # gate does). The section prints only when it has a finding, and the console prints no cycle line.
         if cycle_findings:
-            lines.extend(['', f'--- {reference_edges.CYCLE_HEADING} ---', reference_edges.CYCLE_RULE])
+            lines.extend(["", f"--- {reference_edges.CYCLE_HEADING} ---", reference_edges.CYCLE_RULE])
             for path, group in self._group_by_scope(cycle_findings):
                 lines.append(self._report_section_header(path))
                 for row in group:
@@ -6021,38 +6297,43 @@ provider "panos" {
         # they do not change the exit code (the F4.1 gate does). Each section prints only when it
         # has a finding, and the console prints no state line.
         if state:
-            lines.extend(['', f'--- {state_coverage.OWNERSHIP_HEADING} ---', state_coverage.OWNERSHIP_RULE])
+            lines.extend(["", f"--- {state_coverage.OWNERSHIP_HEADING} ---", state_coverage.OWNERSHIP_RULE])
             for path, group in self._group_by_scope(state):
                 lines.append(self._report_section_header(path))
                 for row in group:
                     lines.append(state_coverage.ownership_line(row))
 
             # A drift fact needs an ownership fact, so this section is a subset of the one above.
-            drifting = [row for row in state if row['drift']]
+            drifting = [row for row in state if row["drift"]]
             if drifting:
-                lines.extend(['', f'--- {state_coverage.DRIFT_HEADING} ---', state_coverage.DRIFT_RULE])
+                lines.extend(["", f"--- {state_coverage.DRIFT_HEADING} ---", state_coverage.DRIFT_RULE])
                 for path, group in self._group_by_scope(drifting):
                     lines.append(self._report_section_header(path))
                     for row in group:
                         lines.append(state_coverage.drift_line(row))
 
-
-        lines.extend(['', 'Entry lines are grouped by the scope the export declares (F3.9).',
-                      '  line <source line>  <object type>/<entry name>  <destination>  '
-                      '<detail>  captured: <fields>', ''])
+        lines.extend(
+            [
+                "",
+                "Entry lines are grouped by the scope the export declares (F3.9).",
+                "  line <source line>  <object type>/<entry name>  <destination>  <detail>  captured: <fields>",
+                "",
+            ]
+        )
         for path, group in self._group_by_scope(rows):
-            lines.append('=' * 80)
+            lines.append("=" * 80)
             lines.append(self._report_section_header(path))
-            lines.append('=' * 80)
+            lines.append("=" * 80)
             for row in group:
                 lines.append(entry_coverage.entry_line(row))
 
-        content = '\n'.join(lines) + '\n'
+        content = "\n".join(lines) + "\n"
         self.write_root_file(entry_coverage.REPORT_FILE, content)
         return content
 
-    def generate_vpn_config(self, ike_gateways: list[dict], ipsec_tunnels: list[dict],
-                           ike_profiles: list[dict], ipsec_profiles: list[dict]):
+    def generate_vpn_config(
+        self, ike_gateways: list[dict], ipsec_tunnels: list[dict], ike_profiles: list[dict], ipsec_profiles: list[dict]
+    ):
         """Generate VPN Terraform configuration (v2 resource shapes)
 
         v2 changes applied here:
@@ -6070,233 +6351,251 @@ provider "panos" {
         if not (ike_gateways or ipsec_tunnels or ike_profiles or ipsec_profiles):
             return
 
-        out = UnitText(self, 'vpn.tf',
-                       '# IPsec VPN Configuration\n'
-                       '# IMPORTANT: Pre-shared keys are set to generic placeholders.\n'
-                       '# You MUST update all pre-shared keys before applying!\n'
-                       f'# Search for "{resource_mapping.PLACEHOLDER_TEXT}" and replace with actual keys.\n\n')
+        out = UnitText(
+            self,
+            "vpn.tf",
+            "# IPsec VPN Configuration\n"
+            "# IMPORTANT: Pre-shared keys are set to generic placeholders.\n"
+            "# You MUST update all pre-shared keys before applying!\n"
+            f'# Search for "{resource_mapping.PLACEHOLDER_TEXT}" and replace with actual keys.\n\n',
+        )
 
         # IKE Crypto Profiles (v2: encryption/hash/dh_group lists + lifetime block)
         if ike_profiles:
             for facts in self.units_of(ike_profiles):
-                out.add_once(facts, '# IKE Crypto Profiles\n\n')
+                out.add_once(facts, "# IKE Crypto Profiles\n\n")
             for profile in ike_profiles:
                 resource_name = self.declare_resource_name(
-                    f"ike_profile_{profile['name']}", 'panos_ike_crypto_profile', profile,
-                    context=self.scope_context(profile), vsys=profile.get('vsys') or ''
+                    f"ike_profile_{profile['name']}",
+                    "panos_ike_crypto_profile",
+                    profile,
+                    context=self.scope_context(profile),
+                    vsys=profile.get("vsys") or "",
                 )
                 out.add(profile, f'resource "panos_ike_crypto_profile" "{resource_name}" {{\n')
-                out.add(profile, self.location_block('panos_ike_crypto_profile', profile, resource_name))
-                out.add(profile, f'  name = {self.escape_string(profile["name"])}\n')
+                out.add(profile, self.location_block("panos_ike_crypto_profile", profile, resource_name))
+                out.add(profile, f"  name = {self.escape_string(profile['name'])}\n")
 
-                if profile.get('encryptions'):
-                    enc_str = ', '.join([self.escape_string(e) for e in profile['encryptions']])
-                    out.add(profile, f'  encryption = [{enc_str}]\n')
+                if profile.get("encryptions"):
+                    enc_str = ", ".join([self.escape_string(e) for e in profile["encryptions"]])
+                    out.add(profile, f"  encryption = [{enc_str}]\n")
 
                 # v2 calls the hash algorithms hash (not authentication)
-                if profile.get('authentications'):
-                    auth_str = ', '.join([self.escape_string(a) for a in profile['authentications']])
-                    out.add(profile, f'  hash = [{auth_str}]\n')
+                if profile.get("authentications"):
+                    auth_str = ", ".join([self.escape_string(a) for a in profile["authentications"]])
+                    out.add(profile, f"  hash = [{auth_str}]\n")
 
-                if profile.get('dh_groups'):
-                    dh_str = ', '.join([self.escape_string(dh) for dh in profile['dh_groups']])
-                    out.add(profile, f'  dh_group = [{dh_str}]\n')
+                if profile.get("dh_groups"):
+                    dh_str = ", ".join([self.escape_string(dh) for dh in profile["dh_groups"]])
+                    out.add(profile, f"  dh_group = [{dh_str}]\n")
 
-                if profile.get('lifetime_hours'):
+                if profile.get("lifetime_hours"):
                     try:
-                        hours = int(profile['lifetime_hours'])
+                        hours = int(profile["lifetime_hours"])
                     except (TypeError, ValueError):
                         hours = None
                     if hours is not None:
-                        out.add(profile, f'  lifetime = {self.hcl_value({"hours": hours})}\n')
+                        out.add(profile, f"  lifetime = {self.hcl_value({'hours': hours})}\n")
 
-                out.add(profile, '}\n\n')
+                out.add(profile, "}\n\n")
 
         # IPsec Crypto Profiles (v2: esp object + dh_group string + lifetime/lifesize)
         if ipsec_profiles:
             for facts in self.units_of(ipsec_profiles):
-                out.add_once(facts, '# IPsec Crypto Profiles\n\n')
+                out.add_once(facts, "# IPsec Crypto Profiles\n\n")
             for profile in ipsec_profiles:
                 profile_key = f"ipsec_profile_{profile['name']}"
                 resource_name = self.declare_resource_name(
-                    profile_key, 'panos_ipsec_crypto_profile', profile,
-                    context=self.scope_context(profile), vsys=profile.get('vsys') or ''
+                    profile_key,
+                    "panos_ipsec_crypto_profile",
+                    profile,
+                    context=self.scope_context(profile),
+                    vsys=profile.get("vsys") or "",
                 )
                 out.add(profile, f'resource "panos_ipsec_crypto_profile" "{resource_name}" {{\n')
-                out.add(profile, self.location_block('panos_ipsec_crypto_profile', profile, resource_name))
-                out.add(profile, f'  name = {self.escape_string(profile["name"])}\n')
+                out.add(profile, self.location_block("panos_ipsec_crypto_profile", profile, resource_name))
+                out.add(profile, f"  name = {self.escape_string(profile['name'])}\n")
 
                 # v2 dh_group is a single string (not a list)
-                if profile.get('dh_group'):
-                    out.add(profile, f'  dh_group = {self.escape_string(profile["dh_group"])}\n')
+                if profile.get("dh_group"):
+                    out.add(profile, f"  dh_group = {self.escape_string(profile['dh_group'])}\n")
 
                 # v2 esp object holds the encryption/authentication algorithms
                 esp: dict = {}
-                if profile.get('encryptions'):
-                    esp['encryption'] = list(profile['encryptions'])
-                if profile.get('authentications'):
-                    esp['authentication'] = list(profile['authentications'])
+                if profile.get("encryptions"):
+                    esp["encryption"] = list(profile["encryptions"])
+                if profile.get("authentications"):
+                    esp["authentication"] = list(profile["authentications"])
                 if esp:
-                    out.add(profile, f'  esp = {self.hcl_value(esp)}\n')
+                    out.add(profile, f"  esp = {self.hcl_value(esp)}\n")
 
-                if profile.get('lifetime_hours'):
+                if profile.get("lifetime_hours"):
                     try:
-                        hours = int(profile['lifetime_hours'])
+                        hours = int(profile["lifetime_hours"])
                     except (TypeError, ValueError):
                         hours = None
                     if hours is not None:
-                        out.add(profile, f'  lifetime = {self.hcl_value({"hours": hours})}\n')
+                        out.add(profile, f"  lifetime = {self.hcl_value({'hours': hours})}\n")
 
-                if profile.get('lifetime_kb'):
+                if profile.get("lifetime_kb"):
                     try:
-                        kb = int(profile['lifetime_kb'])
+                        kb = int(profile["lifetime_kb"])
                     except (TypeError, ValueError):
                         kb = None
                     if kb is not None:
-                        out.add(profile, f'  lifesize = {self.hcl_value({"kb": kb})}\n')
+                        out.add(profile, f"  lifesize = {self.hcl_value({'kb': kb})}\n")
 
-                out.add(profile, '}\n\n')
+                out.add(profile, "}\n\n")
 
         # IKE Gateways (v2: protocol/peer_address/authentication blocks)
         if ike_gateways:
             for facts in self.units_of(ike_gateways):
-                out.add_once(facts, '# IKE Gateways\n')
-                out.add_once(facts,
-                             f'# WARNING: Pre-shared keys use placeholder "{resource_mapping.PLACEHOLDER_TEXT}"\n')
-                out.add_once(facts, '# Update these with actual keys from your key management system!\n\n')
+                out.add_once(facts, "# IKE Gateways\n")
+                out.add_once(
+                    facts, f'# WARNING: Pre-shared keys use placeholder "{resource_mapping.PLACEHOLDER_TEXT}"\n'
+                )
+                out.add_once(facts, "# Update these with actual keys from your key management system!\n\n")
 
             for gw in ike_gateways:
                 resource_name = self.declare_resource_name(
-                    f"ike_gw_{gw['name']}", 'panos_ike_gateway', gw,
-                    context=self.scope_context(gw), vsys=gw.get('vsys') or ''
+                    f"ike_gw_{gw['name']}",
+                    "panos_ike_gateway",
+                    gw,
+                    context=self.scope_context(gw),
+                    vsys=gw.get("vsys") or "",
                 )
                 out.add(gw, f'resource "panos_ike_gateway" "{resource_name}" {{\n')
-                out.add(gw, self.location_block('panos_ike_gateway', gw, resource_name))
-                out.add(gw, f'  name = {self.escape_string(gw["name"])}\n')
+                out.add(gw, self.location_block("panos_ike_gateway", gw, resource_name))
+                out.add(gw, f"  name = {self.escape_string(gw['name'])}\n")
 
                 # v2 protocol object: version + ikev1/ikev2 sub-object
-                version = gw.get('version', 'ikev1')
-                if version in ('ikev1', 'ikev2'):
-                    proto_obj: dict = {'version': version}
+                version = gw.get("version", "ikev1")
+                if version in ("ikev1", "ikev2"):
+                    proto_obj: dict = {"version": version}
                     ver_obj: dict = {}
-                    if gw.get('ike_crypto_profile'):
+                    if gw.get("ike_crypto_profile"):
                         ike_key = f"ike_profile_{gw['ike_crypto_profile']}"
                         # F2.6: reference when declared in this run, else
                         # plain name; F3.2, F6.10.2: resolve inside the gateway's unit
-                        ver_obj['ike_crypto_profile'] = self.name_ref(
-                            gw['ike_crypto_profile'], IKE_CRYPTO_SCOPES,
-                            key=ike_key, referrer=gw)
+                        ver_obj["ike_crypto_profile"] = self.name_ref(
+                            gw["ike_crypto_profile"], IKE_CRYPTO_SCOPES, key=ike_key, referrer=gw
+                        )
                     if ver_obj:
                         proto_obj[version] = ver_obj
-                    out.add(gw, f'  protocol = {self.hcl_value(proto_obj)}\n')
+                    out.add(gw, f"  protocol = {self.hcl_value(proto_obj)}\n")
 
-                if gw.get('peer_address'):
+                if gw.get("peer_address"):
                     # v2 peer_address object keyed by fqdn or ip
-                    key = 'fqdn' if gw.get('peer_address_type') == 'fqdn' else 'ip'
-                    out.add(gw, f'  peer_address = {self.hcl_value({key: gw["peer_address"]})}\n')
+                    key = "fqdn" if gw.get("peer_address_type") == "fqdn" else "ip"
+                    out.add(gw, f"  peer_address = {self.hcl_value({key: gw['peer_address']})}\n")
 
-                if gw.get('local_address_interface'):
+                if gw.get("local_address_interface"):
                     # F2.6: reference when the interface is in this run;
                     # F3.2, F6.10.2: resolve inside the gateway's unit
-                    iface_ref = self.name_ref(
-                        gw['local_address_interface'], INTERFACE_SCOPES,
-                        referrer=gw)
-                    out.add(gw, f'  local_address = {self.hcl_value({"interface": iface_ref})}\n')
-                elif gw.get('local_address'):
+                    iface_ref = self.name_ref(gw["local_address_interface"], INTERFACE_SCOPES, referrer=gw)
+                    out.add(gw, f"  local_address = {self.hcl_value({'interface': iface_ref})}\n")
+                elif gw.get("local_address"):
                     # Heuristic: dotted-quad values are IPs, otherwise
                     # interfaces; F3.2, F6.10.2: resolve inside the gateway's unit
-                    local = gw['local_address']
-                    key = 'ip' if self._looks_like_ip(local) else 'interface'
-                    value = (self.name_ref(local, INTERFACE_SCOPES,
-                                           referrer=gw)
-                             if key == 'interface' else local)
-                    out.add(gw, f'  local_address = {self.hcl_value({key: value})}\n')
+                    local = gw["local_address"]
+                    key = "ip" if self._looks_like_ip(local) else "interface"
+                    value = self.name_ref(local, INTERFACE_SCOPES, referrer=gw) if key == "interface" else local
+                    out.add(gw, f"  local_address = {self.hcl_value({key: value})}\n")
 
                 # v2 authentication object; pre-shared key only (cert auth is manual)
-                auth_type = gw.get('auth_type', 'pre-shared-key')
-                if auth_type == 'pre-shared-key':
+                auth_type = gw.get("auth_type", "pre-shared-key")
+                if auth_type == "pre-shared-key":
                     # The key prints through `printed_value`, so `VALUE_VARIABLES` is the only place that decides
                     # its shape (F7.1): the run read no value for it, so the block prints the table's marker.
-                    key_ref = HclRef(self.printed_value('key', '', unit_manifest.facts_of(gw)))
-                    key_obj = self.hcl_value({'pre_shared_key': {'key': key_ref}})
-                    out.add(gw, f'  authentication = {key_obj}  # *** CHANGE THIS KEY ***\n')
+                    key_ref = HclRef(self.printed_value("key", "", unit_manifest.facts_of(gw)))
+                    key_obj = self.hcl_value({"pre_shared_key": {"key": key_ref}})
+                    out.add(gw, f"  authentication = {key_obj}  # *** CHANGE THIS KEY ***\n")
 
-                if gw.get('local_id'):
-                    out.add(gw, f'  local_id = {self.hcl_value({"id": gw["local_id"]})}\n')
+                if gw.get("local_id"):
+                    out.add(gw, f"  local_id = {self.hcl_value({'id': gw['local_id']})}\n")
 
-                if gw.get('peer_id'):
-                    out.add(gw, f'  peer_id = {self.hcl_value({"id": gw["peer_id"]})}\n')
+                if gw.get("peer_id"):
+                    out.add(gw, f"  peer_id = {self.hcl_value({'id': gw['peer_id']})}\n")
 
-                out.add(gw, '}\n\n')
+                out.add(gw, "}\n\n")
 
         # IPsec Tunnels (v2: auto_key block with nested proxy_id entries)
         if ipsec_tunnels:
             for facts in self.units_of(ipsec_tunnels):
-                out.add_once(facts, '# IPsec Tunnels\n\n')
+                out.add_once(facts, "# IPsec Tunnels\n\n")
             for tunnel in ipsec_tunnels:
-                if tunnel.get('type') != 'auto-key':
+                if tunnel.get("type") != "auto-key":
                     # Manual-key tunnels need key material: manual-setup report only
                     continue
 
                 resource_name = self.declare_resource_name(
-                    f"tunnel_{tunnel['name']}", 'panos_ipsec_tunnel', tunnel,
-                    context=self.scope_context(tunnel), vsys=tunnel.get('vsys') or ''
+                    f"tunnel_{tunnel['name']}",
+                    "panos_ipsec_tunnel",
+                    tunnel,
+                    context=self.scope_context(tunnel),
+                    vsys=tunnel.get("vsys") or "",
                 )
                 out.add(tunnel, f'resource "panos_ipsec_tunnel" "{resource_name}" {{\n')
-                out.add(tunnel, self.location_block('panos_ipsec_tunnel', tunnel, resource_name))
-                out.add(tunnel, f'  name = {self.escape_string(tunnel["name"])}\n')
+                out.add(tunnel, self.location_block("panos_ipsec_tunnel", tunnel, resource_name))
+                out.add(tunnel, f"  name = {self.escape_string(tunnel['name'])}\n")
 
-                if tunnel.get('tunnel_interface'):
-                    out.add(tunnel, f'  tunnel_interface = {self.escape_string(tunnel["tunnel_interface"])}\n')
+                if tunnel.get("tunnel_interface"):
+                    out.add(tunnel, f"  tunnel_interface = {self.escape_string(tunnel['tunnel_interface'])}\n")
 
                 # v2 auto_key object; ike_gateway and proxy_id are lists of objects
                 auto_key: dict = {}
-                if tunnel.get('ike_gateway'):
+                if tunnel.get("ike_gateway"):
                     # F2.6: reference when the gateway is in this run,
                     # else a plain brown-field name (never a phantom
                     # resource); F3.2, F6.10.2: resolve inside the tunnel's unit
-                    auto_key['ike_gateway'] = [{'name': self.name_ref(
-                        tunnel['ike_gateway'], IKE_GATEWAY_SCOPES,
-                        key=f"ike_gw_{tunnel['ike_gateway']}",
-                        referrer=tunnel)}]
-                if tunnel.get('ipsec_crypto_profile'):
+                    auto_key["ike_gateway"] = [
+                        {
+                            "name": self.name_ref(
+                                tunnel["ike_gateway"],
+                                IKE_GATEWAY_SCOPES,
+                                key=f"ike_gw_{tunnel['ike_gateway']}",
+                                referrer=tunnel,
+                            )
+                        }
+                    ]
+                if tunnel.get("ipsec_crypto_profile"):
                     ipsec_key = f"ipsec_profile_{tunnel['ipsec_crypto_profile']}"
                     # F2.6: reference when declared in this run, else
                     # plain name; F3.2, F6.10.2: resolve inside the tunnel's unit
-                    auto_key['ipsec_crypto_profile'] = self.name_ref(
-                        tunnel['ipsec_crypto_profile'], IPSEC_CRYPTO_SCOPES,
-                        key=ipsec_key, referrer=tunnel)
+                    auto_key["ipsec_crypto_profile"] = self.name_ref(
+                        tunnel["ipsec_crypto_profile"], IPSEC_CRYPTO_SCOPES, key=ipsec_key, referrer=tunnel
+                    )
 
                 # v2 merges proxy IDs into the tunnel as auto_key proxy_id entries
                 proxy_list = []
-                for proxy in tunnel.get('proxy_ids', []):
-                    proxy_obj: dict = {'name': proxy['name']}
-                    if proxy.get('local'):
-                        proxy_obj['local'] = proxy['local']
-                    if proxy.get('remote'):
-                        proxy_obj['remote'] = proxy['remote']
-                    if proxy.get('protocol') is not None:
+                for proxy in tunnel.get("proxy_ids", []):
+                    proxy_obj: dict = {"name": proxy["name"]}
+                    if proxy.get("local"):
+                        proxy_obj["local"] = proxy["local"]
+                    if proxy.get("remote"):
+                        proxy_obj["remote"] = proxy["remote"]
+                    if proxy.get("protocol") is not None:
                         try:
-                            protocol_number = int(proxy['protocol'])
+                            protocol_number = int(proxy["protocol"])
                         except (TypeError, ValueError):
                             protocol_number = None
                         if protocol_number is not None:
-                            proxy_obj['protocol'] = {'number': protocol_number}
+                            proxy_obj["protocol"] = {"number": protocol_number}
                     proxy_list.append(proxy_obj)
                 if proxy_list:
-                    auto_key['proxy_id'] = proxy_list
+                    auto_key["proxy_id"] = proxy_list
 
                 if auto_key:
-                    out.add(tunnel, f'  auto_key = {self.hcl_value(auto_key)}\n')
+                    out.add(tunnel, f"  auto_key = {self.hcl_value(auto_key)}\n")
 
-                out.add(tunnel, '}\n\n')
+                out.add(tunnel, "}\n\n")
 
         out.write()
 
     @staticmethod
     def _looks_like_ip(value: str) -> bool:
         """Return True if the value looks like an IPv4 address (best effort)."""
-        parts = (value or '').split('.')
+        parts = (value or "").split(".")
         return len(parts) == 4 and all(p.isdigit() for p in parts)
 
     def generate_vpn_report(self, ike_gateways: list[dict], ipsec_tunnels: list[dict]):
@@ -6310,139 +6609,144 @@ provider "panos" {
         if not (ike_gateways or ipsec_tunnels):
             return
 
-        content = '=' * 80 + '\n'
-        content += 'VPN CONFIGURATION MIGRATION REPORT\n'
-        content += '=' * 80 + '\n\n'
+        content = "=" * 80 + "\n"
+        content += "VPN CONFIGURATION MIGRATION REPORT\n"
+        content += "=" * 80 + "\n\n"
 
-        content += '⚠️  CRITICAL: PRE-SHARED KEY MANAGEMENT\n\n'
-        content += 'Pre-shared keys are NOT included in Panorama exports for security reasons.\n'
-        content += f'All VPN configurations use placeholder keys: {resource_mapping.PLACEHOLDER_TEXT}\n\n'
-        content += 'REQUIRED ACTIONS:\n'
-        content += '1. Retrieve actual pre-shared keys from your secure key management system\n'
-        content += '2. Update vpn.tf file with real keys before applying\n'
-        content += '3. Consider using Terraform variables or secrets management\n'
-        content += '4. Never commit actual keys to version control\n\n'
+        content += "⚠️  CRITICAL: PRE-SHARED KEY MANAGEMENT\n\n"
+        content += "Pre-shared keys are NOT included in Panorama exports for security reasons.\n"
+        content += f"All VPN configurations use placeholder keys: {resource_mapping.PLACEHOLDER_TEXT}\n\n"
+        content += "REQUIRED ACTIONS:\n"
+        content += "1. Retrieve actual pre-shared keys from your secure key management system\n"
+        content += "2. Update vpn.tf file with real keys before applying\n"
+        content += "3. Consider using Terraform variables or secrets management\n"
+        content += "4. Never commit actual keys to version control\n\n"
 
-        content += 'Gateways and tunnels are grouped by the scope the export declares: device\n'
-        content += 'group first, then the template or the device the entry sits in. A section\n'
-        content += 'names only the scope the export states, so the same object name on two\n'
-        content += 'device groups appears once under each.\n'
+        content += "Gateways and tunnels are grouped by the scope the export declares: device\n"
+        content += "group first, then the template or the device the entry sits in. A section\n"
+        content += "names only the scope the export states, so the same object name on two\n"
+        content += "device groups appears once under each.\n"
 
         # One section per scope, then the object kind inside it (F3.9).
         sections: dict[tuple, dict[str, list[dict]]] = {}
         for entry in ike_gateways:
-            sections.setdefault(self._report_scope_path(entry), {'gateways': [], 'tunnels': []})[
-                'gateways'].append(entry)
+            sections.setdefault(self._report_scope_path(entry), {"gateways": [], "tunnels": []})["gateways"].append(
+                entry
+            )
         for entry in ipsec_tunnels:
-            sections.setdefault(self._report_scope_path(entry), {'gateways': [], 'tunnels': []})[
-                'tunnels'].append(entry)
+            sections.setdefault(self._report_scope_path(entry), {"gateways": [], "tunnels": []})["tunnels"].append(
+                entry
+            )
 
         for path, kinds in sorted(sections.items()):
-            content += '\n' + '=' * 80 + '\n'
-            content += self._report_section_header(path) + '\n'
-            content += '=' * 80 + '\n'
+            content += "\n" + "=" * 80 + "\n"
+            content += self._report_section_header(path) + "\n"
+            content += "=" * 80 + "\n"
 
-            for kind_title, entries in (('IKE GATEWAYS', kinds['gateways']),
-                                        ('IPSEC TUNNELS', kinds['tunnels'])):
+            for kind_title, entries in (("IKE GATEWAYS", kinds["gateways"]), ("IPSEC TUNNELS", kinds["tunnels"])):
                 if not entries:
                     continue
-                content += f'\n{kind_title} ({len(entries)})\n'
-                content += '-' * 80 + '\n'
+                content += f"\n{kind_title} ({len(entries)})\n"
+                content += "-" * 80 + "\n"
 
-                for entry in sorted(entries, key=lambda x: x['name']):
-                    if kind_title == 'IKE GATEWAYS':
-                        content += f'\nGateway: {entry["name"]}\n'
+                for entry in sorted(entries, key=lambda x: x["name"]):
+                    if kind_title == "IKE GATEWAYS":
+                        content += f"\nGateway: {entry['name']}\n"
                         content += self._report_vsys_line(entry)
-                        content += f'  Version: {entry.get("version", "ikev1")}\n'
-                        content += f'  Peer Address: {entry.get("peer_address", "N/A")}\n'
-                        content += (f'  Local Address: '
-                                    f'{entry.get("local_address") or entry.get("local_address_interface", "N/A")}\n')
-                        content += f'  Auth Type: {entry.get("auth_type", "pre-shared-key")}\n'
+                        content += f"  Version: {entry.get('version', 'ikev1')}\n"
+                        content += f"  Peer Address: {entry.get('peer_address', 'N/A')}\n"
+                        content += (
+                            f"  Local Address: "
+                            f"{entry.get('local_address') or entry.get('local_address_interface', 'N/A')}\n"
+                        )
+                        content += f"  Auth Type: {entry.get('auth_type', 'pre-shared-key')}\n"
 
-                        if entry.get('auth_type') == 'pre-shared-key':
-                            content += '  ⚠️  Pre-Shared Key: ***MUST BE UPDATED***\n'
-                            content += f'     Current placeholder: {resource_mapping.PLACEHOLDER_TEXT}\n'
-                            content += '     Action: Replace with actual key in vpn.tf\n'
+                        if entry.get("auth_type") == "pre-shared-key":
+                            content += "  ⚠️  Pre-Shared Key: ***MUST BE UPDATED***\n"
+                            content += f"     Current placeholder: {resource_mapping.PLACEHOLDER_TEXT}\n"
+                            content += "     Action: Replace with actual key in vpn.tf\n"
 
-                        content += f'  IKE Crypto Profile: {entry.get("ike_crypto_profile", "N/A")}\n'
+                        content += f"  IKE Crypto Profile: {entry.get('ike_crypto_profile', 'N/A')}\n"
                     else:
-                        content += f'\nTunnel: {entry["name"]}\n'
+                        content += f"\nTunnel: {entry['name']}\n"
                         content += self._report_vsys_line(entry)
-                        content += f'  Type: {entry.get("type", "auto-key")}\n'
-                        content += f'  Tunnel Interface: {entry.get("tunnel_interface", "N/A")}\n'
-                        content += f'  IKE Gateway: {entry.get("ike_gateway", "N/A")}\n'
-                        content += f'  IPsec Crypto Profile: {entry.get("ipsec_crypto_profile", "N/A")}\n'
+                        content += f"  Type: {entry.get('type', 'auto-key')}\n"
+                        content += f"  Tunnel Interface: {entry.get('tunnel_interface', 'N/A')}\n"
+                        content += f"  IKE Gateway: {entry.get('ike_gateway', 'N/A')}\n"
+                        content += f"  IPsec Crypto Profile: {entry.get('ipsec_crypto_profile', 'N/A')}\n"
 
-                        if entry.get('proxy_ids'):
-                            content += '  Proxy IDs:\n'
-                            for proxy in entry['proxy_ids']:
-                                content += (f'    - {proxy["name"]}: '
-                                            f'{proxy.get("local", "any")} <-> {proxy.get("remote", "any")}\n')
+                        if entry.get("proxy_ids"):
+                            content += "  Proxy IDs:\n"
+                            for proxy in entry["proxy_ids"]:
+                                content += (
+                                    f"    - {proxy['name']}: "
+                                    f"{proxy.get('local', 'any')} <-> {proxy.get('remote', 'any')}\n"
+                                )
 
-                    content += '\n'
+                    content += "\n"
 
-        content += '=' * 80 + '\n'
-        content += 'KEY MANAGEMENT BEST PRACTICES\n'
-        content += '=' * 80 + '\n\n'
+        content += "=" * 80 + "\n"
+        content += "KEY MANAGEMENT BEST PRACTICES\n"
+        content += "=" * 80 + "\n\n"
 
-        content += 'Option 1: Terraform Variables (Recommended)\n'
-        content += '-' * 40 + '\n'
-        content += 'Create terraform.tfvars (DO NOT COMMIT):\n'
+        content += "Option 1: Terraform Variables (Recommended)\n"
+        content += "-" * 40 + "\n"
+        content += "Create terraform.tfvars (DO NOT COMMIT):\n"
         content += '  vpn_psk_gateway1 = "actual-pre-shared-key-here"\n'
         content += '  vpn_psk_gateway2 = "actual-pre-shared-key-here"\n\n'
 
-        content += 'Update vpn.tf:\n'
-        content += '  pre_shared_key = var.vpn_psk_gateway1\n\n'
+        content += "Update vpn.tf:\n"
+        content += "  pre_shared_key = var.vpn_psk_gateway1\n\n"
 
-        content += 'Option 2: Environment Variables\n'
-        content += '-' * 40 + '\n'
-        content += 'Set environment variables:\n'
+        content += "Option 2: Environment Variables\n"
+        content += "-" * 40 + "\n"
+        content += "Set environment variables:\n"
         content += '  export TF_VAR_vpn_psk_gateway1="actual-key"\n\n'
 
-        content += 'Option 3: Secrets Management\n'
-        content += '-' * 40 + '\n'
-        content += 'Use HashiCorp Vault, AWS Secrets Manager, or similar:\n'
+        content += "Option 3: Secrets Management\n"
+        content += "-" * 40 + "\n"
+        content += "Use HashiCorp Vault, AWS Secrets Manager, or similar:\n"
         content += '  data "vault_generic_secret" "vpn_keys" {\n'
         content += '    path = "secret/vpn-keys"\n'
-        content += '  }\n\n'
+        content += "  }\n\n"
 
-        content += 'Option 4: Manual Entry (Least Secure)\n'
-        content += '-' * 40 + '\n'
-        content += 'Directly in vpn.tf (NOT RECOMMENDED):\n'
+        content += "Option 4: Manual Entry (Least Secure)\n"
+        content += "-" * 40 + "\n"
+        content += "Directly in vpn.tf (NOT RECOMMENDED):\n"
         content += '  pre_shared_key = "actual-key"  # DO NOT COMMIT TO GIT\n\n'
 
-        content += '=' * 80 + '\n'
-        content += 'MIGRATION CHECKLIST\n'
-        content += '=' * 80 + '\n\n'
+        content += "=" * 80 + "\n"
+        content += "MIGRATION CHECKLIST\n"
+        content += "=" * 80 + "\n\n"
 
-        content += '[ ] Retrieve all VPN pre-shared keys from secure storage\n'
-        content += '[ ] Update vpn.tf with actual keys (use variables/secrets)\n'
-        content += '[ ] Verify IKE gateway peer addresses\n'
-        content += '[ ] Confirm tunnel interface assignments\n'
-        content += '[ ] Check proxy ID configurations\n'
-        content += '[ ] Validate crypto profile settings\n'
-        content += '[ ] Test VPN connectivity in lab\n'
-        content += '[ ] Verify routing through tunnels\n'
-        content += '[ ] Monitor Phase 1 and Phase 2 negotiations\n'
-        content += '[ ] Ensure .gitignore includes terraform.tfvars\n\n'
+        content += "[ ] Retrieve all VPN pre-shared keys from secure storage\n"
+        content += "[ ] Update vpn.tf with actual keys (use variables/secrets)\n"
+        content += "[ ] Verify IKE gateway peer addresses\n"
+        content += "[ ] Confirm tunnel interface assignments\n"
+        content += "[ ] Check proxy ID configurations\n"
+        content += "[ ] Validate crypto profile settings\n"
+        content += "[ ] Test VPN connectivity in lab\n"
+        content += "[ ] Verify routing through tunnels\n"
+        content += "[ ] Monitor Phase 1 and Phase 2 negotiations\n"
+        content += "[ ] Ensure .gitignore includes terraform.tfvars\n\n"
 
-        content += '=' * 80 + '\n'
-        content += 'IMPORTANT SECURITY NOTES\n'
-        content += '=' * 80 + '\n\n'
+        content += "=" * 80 + "\n"
+        content += "IMPORTANT SECURITY NOTES\n"
+        content += "=" * 80 + "\n\n"
 
-        content += '1. Never commit pre-shared keys to version control\n'
-        content += '2. Use .gitignore to exclude terraform.tfvars and *.auto.tfvars\n'
-        content += '3. Rotate keys regularly according to security policy\n'
-        content += '4. Use strong, unique keys for each VPN tunnel\n'
-        content += '5. Consider using certificate-based authentication\n'
-        content += '6. Implement proper key escrow and recovery procedures\n'
-        content += '7. Audit key access and usage\n\n'
+        content += "1. Never commit pre-shared keys to version control\n"
+        content += "2. Use .gitignore to exclude terraform.tfvars and *.auto.tfvars\n"
+        content += "3. Rotate keys regularly according to security policy\n"
+        content += "4. Use strong, unique keys for each VPN tunnel\n"
+        content += "5. Consider using certificate-based authentication\n"
+        content += "6. Implement proper key escrow and recovery procedures\n"
+        content += "7. Audit key access and usage\n\n"
 
-        self.write_root_file('VPN_MIGRATION_REPORT.txt', content)
+        self.write_root_file("VPN_MIGRATION_REPORT.txt", content)
 
     # F5.5: the read-through blocks go in the unit's file, so a reader can
     # separate what the run read from what the plan will read.
-    READ_THROUGH_FILE = 'read_through.tf'
+    READ_THROUGH_FILE = "read_through.tf"
 
     def generate_read_through(self):
         """Write the read-through data blocks (F5.5).
@@ -6459,17 +6763,18 @@ provider "panos" {
         if not self._data_blocks:
             return
 
-        header = ('# Read-through data blocks\n\n'
-                  '# Each block names an entry this run did not read. A `data` block resolves\n'
-                  '# at plan time, so the plan reads the device and fails when the entry is\n'
-                  '# not present in the location the block names.\n\n')
+        header = (
+            "# Read-through data blocks\n\n"
+            "# Each block names an entry this run did not read. A `data` block resolves\n"
+            "# at plan time, so the plan reads the device and fails when the entry is\n"
+            "# not present in the location the block names.\n\n"
+        )
         out = UnitText(self, self.READ_THROUGH_FILE, header)
-        for block in sorted(self._data_blocks.values(),
-                            key=lambda block: (block['type'], block['local'])):
-            out.add(block['unit'], f'data "{block["type"]}" "{block["local"]}" {{\n')
-            out.add(block['unit'], f'  name = {self.escape_string(block["name"])}\n\n')
-            out.add(block['unit'], block['location'])
-            out.add(block['unit'], '}\n\n')
+        for block in sorted(self._data_blocks.values(), key=lambda block: (block["type"], block["local"])):
+            out.add(block["unit"], f'data "{block["type"]}" "{block["local"]}" {{\n')
+            out.add(block["unit"], f"  name = {self.escape_string(block['name'])}\n\n")
+            out.add(block["unit"], block["location"])
+            out.add(block["unit"], "}\n\n")
 
         out.write()
 
@@ -6491,8 +6796,8 @@ provider "panos" {
         # The environment name is stated once, in `source_fetch.API_KEY_ENV`, so the README cannot name a
         # second one (docs/CODEBASE_ASSEMBLY.md §11). The host name is read through the naming rule, so the
         # instruction names the name the table's `operator_supplied` row gives it.
-        host = naming.variable_name('hostname')
-        head = f'''# Palo Alto Terraform Configuration
+        host = naming.variable_name("hostname")
+        head = f"""# Palo Alto Terraform Configuration
 
 This directory contains Terraform configuration files generated from Palo Alto Panorama export.
 
@@ -6587,25 +6892,25 @@ Reports, at the codebase root:
 - `INTERFACE_MIGRATION_REPORT.txt` - interfaces and IP addresses to set on the target
 - `VPN_MIGRATION_REPORT.txt` - VPN objects and pre-shared key actions
 - `SANITY_REPORT.txt` - the post-run gate result
-'''
+"""
 
         # F5.5 label. Deterministic: the sorted scopes, then the block count. The
         # tool cannot know which scope holds a name outside the run, so the label
         # states what a reader must check.
-        label = ''
+        label = ""
         if self.data_scopes:
             label = (
-                '\n## Read-through data blocks\n\n'
-                f'This run declares read-through scopes '
-                f'({", ".join(sorted(self.data_scopes))}) and writes '
-                f'`{self.READ_THROUGH_FILE}` with {len(self._data_blocks)} data blocks for '
-                'names this run did not read.\n\n'
-                'A `data` block resolves at plan time, so `terraform plan` reads the device '
-                'and fails when a name is not present in the location the block names. '
-                '`terraform validate` cannot check it. Each block carries the location of '
-                'the reference that needed the name, because no rule here names the scope '
-                'that holds an entry outside the run, so check each block against the '
-                'device before applying.\n'
+                "\n## Read-through data blocks\n\n"
+                f"This run declares read-through scopes "
+                f"({', '.join(sorted(self.data_scopes))}) and writes "
+                f"`{self.READ_THROUGH_FILE}` with {len(self._data_blocks)} data blocks for "
+                "names this run did not read.\n\n"
+                "A `data` block resolves at plan time, so `terraform plan` reads the device "
+                "and fails when a name is not present in the location the block names. "
+                "`terraform validate` cannot check it. Each block carries the location of "
+                "the reference that needed the name, because no rule here names the scope "
+                "that holds an entry outside the run, so check each block against the "
+                "device before applying.\n"
             )
 
         # F6.10.4 label: the site half names files a reader cannot see from a `.tf` file alone, so the README
@@ -6613,18 +6918,18 @@ Reports, at the codebase root:
         # a field the site data states still holds for the site record. Deterministic: fixed text, no count, no
         # path, no timestamp.
         site_label = (
-            '\n## Site values\n\n'
-            f'The run writes `{site_data.SITE_DATA_FILE}` at the codebase root, one row per unit it recorded a '
-            f'site value for, and writes the printed form of that row as `{site_data.TFVARS_FILE}` inside the '
-            'unit directory. Set the values there, or with `TF_VAR_<name>`.\n\n'
-            'The tool names a variable for a site fact it cannot read, so it writes no row and no line for it: '
-            '`target` for a unit that plans against a device, and '
-            f'`{naming.variable_name("hostname")}` for every unit. The operator supplies both in '
-            '`terraform.tfvars`. A value the provider marks `sensitive` follows the same rule: the run holds it '
-            'to decide the name and never writes it.\n'
+            "\n## Site values\n\n"
+            f"The run writes `{site_data.SITE_DATA_FILE}` at the codebase root, one row per unit it recorded a "
+            f"site value for, and writes the printed form of that row as `{site_data.TFVARS_FILE}` inside the "
+            "unit directory. Set the values there, or with `TF_VAR_<name>`.\n\n"
+            "The tool names a variable for a site fact it cannot read, so it writes no row and no line for it: "
+            "`target` for a unit that plans against a device, and "
+            f"`{naming.variable_name('hostname')}` for every unit. The operator supplies both in "
+            "`terraform.tfvars`. A value the provider marks `sensitive` follows the same rule: the run holds it "
+            "to decide the name and never writes it.\n"
         )
 
-        tail = '''
+        tail = """
 ## Important Notes
 
 - Review all configurations before applying
@@ -6639,17 +6944,16 @@ Reports, at the codebase root:
 
 For more information on the PAN-OS Terraform provider:
 https://registry.terraform.io/providers/PaloAltoNetworks/panos/latest/docs
-'''
+"""
 
-        self.write_root_file('README.md', head + site_label + label + tail)
-
+        self.write_root_file("README.md", head + site_label + label + tail)
 
 
 # --- F8.9: the one run sequence (`docs/API_CONVERSION_PATH.md` §6) ---------------
 
 # The name the README label prints. It is data, not a rule: the entry point states its own name, and
 # `generate_readme` takes it as an argument, so the sequence states no path rule of its own.
-ENTRY_POINT = 'panorama_to_terraform.py'
+ENTRY_POINT = "panorama_to_terraform.py"
 
 # The parse order, stated once (criterion 3). `container_coverage.CONTAINER_TABLE` is not this order: it
 # holds no `service_object` row, and the emission order is not the parse order, so the order is a decision
@@ -6657,93 +6961,93 @@ ENTRY_POINT = 'panorama_to_terraform.py'
 # runs them. `associations` is last, because the run builds the generator after the parse and reads the
 # tables through it.
 PARSE_ORDER = (
-    ('device_groups', 'parse_device_groups'),
-    ('templates', 'parse_templates'),
-    ('template_stacks', 'parse_template_stacks'),
-    ('template_variables', 'parse_template_variables'),
-    ('virtual_systems', 'parse_vsys'),
-    ('tags', 'parse_tags'),
-    ('regions', 'parse_regions'),
-    ('custom_url_categories', 'parse_custom_url_categories'),
-    ('application_groups', 'parse_application_groups'),
-    ('application_filters', 'parse_application_filters'),
-    ('external_lists', 'parse_external_lists'),
-    ('schedules', 'parse_schedules'),
-    ('addresses', 'parse_address_objects'),
-    ('address_groups', 'parse_address_groups'),
-    ('services', 'parse_service_objects'),
-    ('service_groups', 'parse_service_groups'),
-    ('security_rules', 'parse_security_rules'),
-    ('nat_rules', 'parse_nat_rules'),
-    ('decryption_rules', 'parse_decryption_rules'),
-    ('pbf_rules', 'parse_pbf_rules'),
-    ('app_override_rules', 'parse_application_override_rules'),
-    ('zones', 'parse_zones'),
-    ('interfaces', 'parse_interfaces'),
-    ('filter_containers', 'parse_filter_containers'),
-    ('virtual_routers', 'parse_virtual_routers'),
-    ('logical_routers', 'parse_logical_routers'),
-    ('security_profiles', 'parse_security_profiles'),
-    ('security_profile_groups', 'parse_security_profile_groups'),
-    ('zone_protection_profiles', 'parse_zone_protection_profiles'),
-    ('log_settings', 'parse_log_settings'),
-    ('qos_profiles', 'parse_qos_profiles'),
-    ('tunnel_monitor_profiles', 'parse_tunnel_monitor_profiles'),
-    ('pbf_monitor_profiles', 'parse_pbf_monitor_profiles'),
-    ('certificates', 'parse_certificates'),
-    ('certificate_profiles', 'parse_certificate_profiles'),
-    ('ike_gateways', 'parse_ike_gateways'),
-    ('ipsec_tunnels', 'parse_ipsec_tunnels'),
-    ('ike_crypto_profiles', 'parse_ike_crypto_profiles'),
-    ('ipsec_crypto_profiles', 'parse_ipsec_crypto_profiles'),
-    ('associations', 'parse_associations'),
+    ("device_groups", "parse_device_groups"),
+    ("templates", "parse_templates"),
+    ("template_stacks", "parse_template_stacks"),
+    ("template_variables", "parse_template_variables"),
+    ("virtual_systems", "parse_vsys"),
+    ("tags", "parse_tags"),
+    ("regions", "parse_regions"),
+    ("custom_url_categories", "parse_custom_url_categories"),
+    ("application_groups", "parse_application_groups"),
+    ("application_filters", "parse_application_filters"),
+    ("external_lists", "parse_external_lists"),
+    ("schedules", "parse_schedules"),
+    ("addresses", "parse_address_objects"),
+    ("address_groups", "parse_address_groups"),
+    ("services", "parse_service_objects"),
+    ("service_groups", "parse_service_groups"),
+    ("security_rules", "parse_security_rules"),
+    ("nat_rules", "parse_nat_rules"),
+    ("decryption_rules", "parse_decryption_rules"),
+    ("pbf_rules", "parse_pbf_rules"),
+    ("app_override_rules", "parse_application_override_rules"),
+    ("zones", "parse_zones"),
+    ("interfaces", "parse_interfaces"),
+    ("filter_containers", "parse_filter_containers"),
+    ("virtual_routers", "parse_virtual_routers"),
+    ("logical_routers", "parse_logical_routers"),
+    ("security_profiles", "parse_security_profiles"),
+    ("security_profile_groups", "parse_security_profile_groups"),
+    ("zone_protection_profiles", "parse_zone_protection_profiles"),
+    ("log_settings", "parse_log_settings"),
+    ("qos_profiles", "parse_qos_profiles"),
+    ("tunnel_monitor_profiles", "parse_tunnel_monitor_profiles"),
+    ("pbf_monitor_profiles", "parse_pbf_monitor_profiles"),
+    ("certificates", "parse_certificates"),
+    ("certificate_profiles", "parse_certificate_profiles"),
+    ("ike_gateways", "parse_ike_gateways"),
+    ("ipsec_tunnels", "parse_ipsec_tunnels"),
+    ("ike_crypto_profiles", "parse_ike_crypto_profiles"),
+    ("ipsec_crypto_profiles", "parse_ipsec_crypto_profiles"),
+    ("associations", "parse_associations"),
 )
 
 # The summary block, in the order the run prints it. This is not the parse order: `filter_containers` prints
 # no count, the router block prints at the interfaces position, the security profile line sums the dict
 # values, and the two certificate lines print only when they have entries. The two block markers are the
 # places the run prints a block instead of one count line.
-ROUTERS_BLOCK = 'routers block'
-PROTOCOL_ROUTERS_BLOCK = 'protocol routers block'
-SUMMED_KEYS = {'security_profiles'}
-CONDITIONAL_KEYS = {'certificates', 'certificate_profiles'}
+ROUTERS_BLOCK = "routers block"
+PROTOCOL_ROUTERS_BLOCK = "protocol routers block"
+SUMMED_KEYS = {"security_profiles"}
+CONDITIONAL_KEYS = {"certificates", "certificate_profiles"}
 COUNT_LINES = (
-    ('device_groups', 'device groups'),
-    ('templates', 'templates'),
-    ('template_stacks', 'template stacks'),
-    ('template_variables', 'template variables'),
-    ('virtual_systems', 'virtual systems'),
-    ('tags', 'tags'),
-    ('regions', 'regions'),
-    ('custom_url_categories', 'custom URL categories'),
-    ('application_groups', 'application groups'),
-    ('application_filters', 'application filters'),
-    ('external_lists', 'external lists'),
-    ('schedules', 'schedules'),
-    ('addresses', 'address objects'),
-    ('address_groups', 'address groups'),
-    ('services', 'service objects'),
-    ('service_groups', 'service groups'),
-    ('security_rules', 'security rules'),
-    ('nat_rules', 'NAT rules'),
-    ('decryption_rules', 'decryption rules'),
-    ('pbf_rules', 'policy-based forwarding rules'),
-    ('app_override_rules', 'application override rules'),
-    ('zones', 'zones'),
-    ('interfaces', 'interfaces'),
-    (ROUTERS_BLOCK, ''),
-    ('security_profiles', 'security profiles'),
-    ('security_profile_groups', 'security profile groups'),
-    ('zone_protection_profiles', 'zone protection profiles'),
-    ('log_settings', 'log forwarding profiles'),
-    ('qos_profiles', 'QoS profiles'),
-    ('tunnel_monitor_profiles', 'IPsec tunnel monitor profiles'),
-    ('pbf_monitor_profiles', 'PBF path monitoring profiles'),
-    ('certificates', 'certificate entries'),
-    ('certificate_profiles', 'certificate profiles'),
-    (PROTOCOL_ROUTERS_BLOCK, ''),
-    ('ike_gateways', 'IKE gateways'),
-    ('ipsec_tunnels', 'IPsec tunnels'),
+    ("device_groups", "device groups"),
+    ("templates", "templates"),
+    ("template_stacks", "template stacks"),
+    ("template_variables", "template variables"),
+    ("virtual_systems", "virtual systems"),
+    ("tags", "tags"),
+    ("regions", "regions"),
+    ("custom_url_categories", "custom URL categories"),
+    ("application_groups", "application groups"),
+    ("application_filters", "application filters"),
+    ("external_lists", "external lists"),
+    ("schedules", "schedules"),
+    ("addresses", "address objects"),
+    ("address_groups", "address groups"),
+    ("services", "service objects"),
+    ("service_groups", "service groups"),
+    ("security_rules", "security rules"),
+    ("nat_rules", "NAT rules"),
+    ("decryption_rules", "decryption rules"),
+    ("pbf_rules", "policy-based forwarding rules"),
+    ("app_override_rules", "application override rules"),
+    ("zones", "zones"),
+    ("interfaces", "interfaces"),
+    (ROUTERS_BLOCK, ""),
+    ("security_profiles", "security profiles"),
+    ("security_profile_groups", "security profile groups"),
+    ("zone_protection_profiles", "zone protection profiles"),
+    ("log_settings", "log forwarding profiles"),
+    ("qos_profiles", "QoS profiles"),
+    ("tunnel_monitor_profiles", "IPsec tunnel monitor profiles"),
+    ("pbf_monitor_profiles", "PBF path monitoring profiles"),
+    ("certificates", "certificate entries"),
+    ("certificate_profiles", "certificate profiles"),
+    (PROTOCOL_ROUTERS_BLOCK, ""),
+    ("ike_gateways", "IKE gateways"),
+    ("ipsec_tunnels", "IPsec tunnels"),
 )
 
 
@@ -6785,8 +7089,10 @@ def read_line(request) -> str:
     """The line that names what the run read (criterion 5). Both entry points print it, so the shape is
     stated once here and not in either entry point.
     """
-    return (f"Reading Panorama configuration from the API export of {request.https_host()} "
-            f"(cache entry {request.cache_name()})...")
+    return (
+        f"Reading Panorama configuration from the API export of {request.https_host()} "
+        f"(cache entry {request.cache_name()})..."
+    )
 
 
 def state_line(path, workspace) -> str:
@@ -6794,8 +7100,7 @@ def state_line(path, workspace) -> str:
     so the shape is stated once here. The workspace is read through `DEFAULT_SCOPE`, the one definition, so the
     line states no scope of its own.
     """
-    return (f"Reading the state document {path} as a reference source "
-            f"(workspace {workspace or DEFAULT_SCOPE})...")
+    return f"Reading the state document {path} as a reference source (workspace {workspace or DEFAULT_SCOPE})..."
 
 
 def is_refusal(error) -> bool:
@@ -6817,6 +7122,7 @@ def failed(error) -> int:
     """
     print(f"Error: {error}")
     import traceback
+
     traceback.print_exc()
     return 1
 
@@ -6845,34 +7151,55 @@ def shared_arguments(parser: argparse.ArgumentParser) -> None:
     response (F8.5): no input file, no `--source`, no `--path`, no `--parent`. Path 1 adds the source
     arguments of its own. The input limit is the door's rule, read through `source_fetch`.
     """
-    parser.add_argument('--host', help='Panorama host. https only, a bare host is read as https')
+    parser.add_argument("--host", help="Panorama host. https only, a bare host is read as https")
     parser.add_argument(
-        '--cache-dir',
+        "--cache-dir",
         default=source_fetch.DEFAULT_CACHE_DIR,
-        help=f'cache directory for API responses (default: {source_fetch.DEFAULT_CACHE_DIR})',
+        help=f"cache directory for API responses (default: {source_fetch.DEFAULT_CACHE_DIR})",
     )
-    parser.add_argument('--offline', action='store_true',
-                        help='read the cache entry only; never call the network')
-    parser.add_argument('--insecure', action='store_true',
-                        help='skip certificate verification for the API request. Verification is on by default')
-    parser.add_argument('--output-dir', default='terraform_output',
-                        help='Output directory for Terraform files (default: terraform_output)')
-    parser.add_argument('--validate', action='store_true',
-                        help='Run terraform init and terraform validate on the output')
-    parser.add_argument('--data-blocks', action='append', metavar='SCOPE',
-                        help=f'a reference scope this run may read through, as a provider data source type. '
-                             f'Repeatable, or a comma-separated list. A name that no scope in this run declares '
-                             f'becomes a data block in {TerraformGenerator.READ_THROUGH_FILE} (F5.5)')
-    parser.add_argument('--import-blocks', action='store_true',
-                        help=f'write one import block per entry the run declares, in {import_blocks.IMPORT_FILE}. '
-                             'The id is base64 of the location object and the entry name (F6.4)')
-    parser.add_argument('--state', help='Terraform state document to read as a reference source (F5.6). The '
-                                        'ownership and drift sections report the entries it already owns')
-    parser.add_argument('--workspace', help='the workspace the state document belongs to, so the record can '
-                                            'name it. Needs --state (F5.6)')
-    parser.add_argument('--prune-cache', action='store_true',
-                        help='remove the cache entries no record this run wrote references. Off by default, '
-                             'because a run that declares nothing keeps its cache (F5.3 rule 4)')
+    parser.add_argument("--offline", action="store_true", help="read the cache entry only; never call the network")
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        help="skip certificate verification for the API request. Verification is on by default",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="terraform_output",
+        help="Output directory for Terraform files (default: terraform_output)",
+    )
+    parser.add_argument(
+        "--validate", action="store_true", help="Run terraform init and terraform validate on the output"
+    )
+    parser.add_argument(
+        "--data-blocks",
+        action="append",
+        metavar="SCOPE",
+        help=f"a reference scope this run may read through, as a provider data source type. "
+        f"Repeatable, or a comma-separated list. A name that no scope in this run declares "
+        f"becomes a data block in {TerraformGenerator.READ_THROUGH_FILE} (F5.5)",
+    )
+    parser.add_argument(
+        "--import-blocks",
+        action="store_true",
+        help=f"write one import block per entry the run declares, in {import_blocks.IMPORT_FILE}. "
+        "The id is base64 of the location object and the entry name (F6.4)",
+    )
+    parser.add_argument(
+        "--state",
+        help="Terraform state document to read as a reference source (F5.6). The "
+        "ownership and drift sections report the entries it already owns",
+    )
+    parser.add_argument(
+        "--workspace",
+        help="the workspace the state document belongs to, so the record can name it. Needs --state (F5.6)",
+    )
+    parser.add_argument(
+        "--prune-cache",
+        action="store_true",
+        help="remove the cache entries no record this run wrote references. Off by default, "
+        "because a run that declares nothing keeps its cache (F5.3 rule 4)",
+    )
     # F3.8: the same input limit on both entry points, through the door's own argument rule.
     source_fetch.add_max_input_argument(parser)
 
@@ -6883,12 +7210,14 @@ def shared_checks(parser: argparse.ArgumentParser, args) -> None:
     and writes no file.
     """
     if args.insecure and args.offline:
-        parser.error('--insecure applies to the network producer, and --offline never calls one')
+        parser.error("--insecure applies to the network producer, and --offline never calls one")
     # F5.6: the state source is a reference source, so it applies to both entry points. The workspace names
     # the state document, so it needs a state document to name.
     if args.workspace and not args.state:
-        parser.error('--workspace needs --state: the workspace names the state document, and a '
-                     'run that declares no --state reads no state document')
+        parser.error(
+            "--workspace needs --state: the workspace names the state document, and a "
+            "run that declares no --state reads no state document"
+        )
 
 
 def data_scopes(parser: argparse.ArgumentParser, args) -> list:
@@ -6896,20 +7225,19 @@ def data_scopes(parser: argparse.ArgumentParser, args) -> list:
     no reference, and a data source that declares no `name` cannot hold the entry name a reference needs, so
     both are argument errors. The rule is stated once, for both entry points.
     """
-    scopes = sorted({part.strip() for scope in (args.data_blocks or [])
-                     for part in scope.split(',') if part.strip()})
+    scopes = sorted({part.strip() for scope in (args.data_blocks or []) for part in scope.split(",") if part.strip()})
     if args.data_blocks and not scopes:
-        parser.error('--data-blocks needs at least one scope')
+        parser.error("--data-blocks needs at least one scope")
     for scope in scopes:
         if scope not in REFERENCE_SCOPES:
             parser.error(
-                f'--data-blocks must name a scope a reference resolves against '
-                f'({", ".join(REFERENCE_SCOPES)}); {scope} answers no reference'
+                f"--data-blocks must name a scope a reference resolves against "
+                f"({', '.join(REFERENCE_SCOPES)}); {scope} answers no reference"
             )
         if not DATA_SOURCE_SCHEMA[scope][0]:
             parser.error(
-                f'--data-blocks scope {scope} declares no name in the provider schema, so a '
-                f'data block for it cannot hold the entry name a reference needs'
+                f"--data-blocks scope {scope} declares no name in the provider schema, so a "
+                f"data block for it cannot hold the entry name a reference needs"
             )
     return scopes
 
@@ -6924,8 +7252,7 @@ def part_for(source, request, parser=None) -> entry_coverage.RunPart:
     return entry_coverage.RunPart(source, request, parser or PanoramaParser(source))
 
 
-def generate_run(run, view, scopes: list, index=None, parent=None, state_source=None,
-                 entry_point: str = '') -> int:
+def generate_run(run, view, scopes: list, index=None, parent=None, state_source=None, entry_point: str = "") -> int:
     """The run sequence (criterion 3), stated once and called by both entry points: the parse order, the
     run-order join, the writes, the gate call, the console prints, and the exit code.
 
@@ -6942,8 +7269,8 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
     # fills once, so the response the entry point already parsed is not parsed a second time.
     results = {name: view.parse(method) for name, method in PARSE_ORDER}
 
-    all_routers = results['virtual_routers'] + results['logical_routers']
-    protocol_routers = [r for r in all_routers if any((r.get('protocol') or {}).values())]
+    all_routers = results["virtual_routers"] + results["logical_routers"]
+    protocol_routers = [r for r in all_routers if any((r.get("protocol") or {}).values())]
 
     print("Extracting configuration elements...")
 
@@ -6951,7 +7278,7 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
     for key, label in COUNT_LINES:
         if key == ROUTERS_BLOCK:
             # The markers name a block, not a parse answer, so they read the answers the block needs.
-            virtual, logical = results['virtual_routers'], results['logical_routers']
+            virtual, logical = results["virtual_routers"], results["logical_routers"]
             if logical:
                 print(f"  - {len(virtual)} virtual routers (legacy)")
                 print(f"  - {len(logical)} logical routers (advanced routing)")
@@ -6966,17 +7293,18 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
                 print(f"  - {len(protocol_routers)} router(s) with a routing protocol")
                 for router in protocol_routers:
                     pieces = []
-                    bgp = (router.get('protocol') or {}).get('bgp') or {}
+                    bgp = (router.get("protocol") or {}).get("bgp") or {}
                     if bgp:
-                        groups = bgp.get('peer_group') or []
+                        groups = bgp.get("peer_group") or []
                         pieces.append(
                             f"bgp: AS {bgp.get('local_as')}, {len(groups)} peer groups, "
                             f"{sum(len(group.get('peer') or []) for group in groups)} peers, "
-                            f"{len(bgp.get('redist_rules') or [])} redistribution rules")
-                    ospf = (router.get('protocol') or {}).get('ospf') or {}
+                            f"{len(bgp.get('redist_rules') or [])} redistribution rules"
+                        )
+                    ospf = (router.get("protocol") or {}).get("ospf") or {}
                     if ospf:
                         pieces.append(f"ospf: {len(ospf.get('area') or [])} areas")
-                    print(f"    {router['name']}: " + ', '.join(pieces))
+                    print(f"    {router['name']}: " + ", ".join(pieces))
             continue
         count = results[key]
         if key in CONDITIONAL_KEYS and not count:
@@ -6987,8 +7315,7 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
             print(f"  - {len(count)} {label}")
 
     print(f"\nGenerating Terraform configuration in {run.output_dir}...")
-    tf_gen = TerraformGenerator(run.output_dir, results['associations'],
-                                data_scopes=scopes, ledger=view)
+    tf_gen = TerraformGenerator(run.output_dir, results["associations"], data_scopes=scopes, ledger=view)
 
     # F4.4: the property scan measures which keys an output reads from a captured object, so the record
     # starts here and not during the parse, and the run view turns it on for every response it holds.
@@ -6999,81 +7326,93 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
 
     # F6.5: the scope objects come before the config inside them (`docs/CODEBASE_ASSEMBLY.md` §6), so
     # `scope.tf` is the first object file the run writes.
-    tf_gen.generate_scope_objects(results['device_groups'], results['templates'],
-                                  results['template_stacks'], results['template_variables'],
-                                  results['virtual_systems'])
+    tf_gen.generate_scope_objects(
+        results["device_groups"],
+        results["templates"],
+        results["template_stacks"],
+        results["template_variables"],
+        results["virtual_systems"],
+    )
 
     # New: Tags and URL/App objects
-    tf_gen.generate_tags(results['tags'])
-    tf_gen.generate_custom_url_categories(results['custom_url_categories'])
-    tf_gen.generate_application_groups(results['application_groups'])
+    tf_gen.generate_tags(results["tags"])
+    tf_gen.generate_custom_url_categories(results["custom_url_categories"])
+    tf_gen.generate_application_groups(results["application_groups"])
     # Application filters have no v2 resource: they go to the manual setup report
-    tf_gen.generate_external_lists(results['external_lists'])
+    tf_gen.generate_external_lists(results["external_lists"])
     # F2.9: schedules go to the manual setup report (v2 resource exists, but the parse reads the name,
     # the description and the type only, and v2.0.14 has no monthly schedule support)
 
     # Address and Service objects
-    tf_gen.generate_address_objects(results['addresses'])
-    tf_gen.generate_address_groups(results['address_groups'])
-    tf_gen.generate_service_objects(results['services'])
-    tf_gen.generate_service_groups(results['service_groups'])
+    tf_gen.generate_address_objects(results["addresses"])
+    tf_gen.generate_address_groups(results["address_groups"])
+    tf_gen.generate_service_objects(results["services"])
+    tf_gen.generate_service_groups(results["service_groups"])
 
     # Network
     # F2.6: interfaces emit first so zone/VR/interface .name lookups resolve to declared resources
-    tf_gen.generate_interfaces(results['interfaces'])
-    tf_gen.generate_zones(results['zones'])
+    tf_gen.generate_interfaces(results["interfaces"])
+    tf_gen.generate_zones(results["zones"])
     tf_gen.generate_virtual_routers(all_routers)  # Handles both virtual & logical routers
-    tf_gen.generate_filter_containers(results['filter_containers'])  # F7.8
+    tf_gen.generate_filter_containers(results["filter_containers"])  # F7.8
     # F7.14: the two certificate containers, one block per entry, printed from `CERTIFICATE_SHAPE`.
-    tf_gen.generate_certificates(results['certificates'])
-    tf_gen.generate_certificate_profiles(results['certificate_profiles'])
+    tf_gen.generate_certificates(results["certificates"])
+    tf_gen.generate_certificate_profiles(results["certificate_profiles"])
 
     # Security Profiles
     # F2.9: zone protection, log forwarding, and IPsec tunnel monitor profiles go to the manual setup
     # report (no v2 resource, or the v2 resource exists but the profile body is not parsed)
-    tf_gen.generate_security_profiles(results['security_profiles'])
-    tf_gen.generate_security_profile_groups(results['security_profile_groups'])
+    tf_gen.generate_security_profiles(results["security_profiles"])
+    tf_gen.generate_security_profile_groups(results["security_profile_groups"])
     # F2.9: PBF path monitoring profiles emit as real v2 resources
-    tf_gen.generate_pbf_monitor_profiles(results['pbf_monitor_profiles'])
+    tf_gen.generate_pbf_monitor_profiles(results["pbf_monitor_profiles"])
 
     # Rules
     # F2.9: application override rules go to the manual setup report (no v2 resource)
-    tf_gen.generate_security_rules(results['security_rules'])
-    tf_gen.generate_nat_rules(results['nat_rules'])
-    tf_gen.generate_decryption_rules(results['decryption_rules'])
-    tf_gen.generate_pbf_rules(results['pbf_rules'])
+    tf_gen.generate_security_rules(results["security_rules"])
+    tf_gen.generate_nat_rules(results["nat_rules"])
+    tf_gen.generate_decryption_rules(results["decryption_rules"])
+    tf_gen.generate_pbf_rules(results["pbf_rules"])
 
     # VPN: any non-empty section emits vpn.tf (F2.8); the key management report still needs a gateway or
     # tunnel to mention.
-    tf_gen.generate_vpn_config(results['ike_gateways'], results['ipsec_tunnels'],
-                                results['ike_crypto_profiles'], results['ipsec_crypto_profiles'])
-    if results['ike_gateways'] or results['ipsec_tunnels']:
-        tf_gen.generate_vpn_report(results['ike_gateways'], results['ipsec_tunnels'])
+    tf_gen.generate_vpn_config(
+        results["ike_gateways"],
+        results["ipsec_tunnels"],
+        results["ike_crypto_profiles"],
+        results["ipsec_crypto_profiles"],
+    )
+    if results["ike_gateways"] or results["ipsec_tunnels"]:
+        tf_gen.generate_vpn_report(results["ike_gateways"], results["ipsec_tunnels"])
 
     # Items that are not emitted (F2.9): the routing protocol entries no provider field reaches (F7.1),
     # app filters, manual-key tunnels, app override, QoS, IPsec tunnel monitor, and log forwarding + zone
     # protection + schedules (v2 resource exists, profile body not parsed). See resource_mapping.py.
-    manual_key_tunnels = [t for t in results['ipsec_tunnels'] if t.get('type') != 'auto-key']
+    manual_key_tunnels = [t for t in results["ipsec_tunnels"] if t.get("type") != "auto-key"]
     # F4.2: scan the parsed input for a section container the container table does not cover. The scan reads
     # one response, so it names one position, and the sections print in run order. A finding is an operator
     # action, not a broken output, so it does not change the exit code (the F4.1 gate does).
     scanned = [(part, container_coverage.scan(part.source, part.parser.parent_map)) for part in parts]
     coverage_findings = [finding for _, findings in scanned for finding in findings]
     tf_gen.generate_manual_setup_report(
-        entry_coverage.protocol_report_rows(view), results['application_filters'], manual_key_tunnels,
-        application_override_rules=results['app_override_rules'],
-        qos_profiles=results['qos_profiles'],
-        tunnel_monitor_profiles=results['tunnel_monitor_profiles'],
-        schedules=results['schedules'],
-        log_settings=results['log_settings'],
-        zone_protection_profiles=results['zone_protection_profiles'],
-        report_only_addresses=[a for a in results['addresses'] if a.get('report_only')],
+        entry_coverage.protocol_report_rows(view),
+        results["application_filters"],
+        manual_key_tunnels,
+        application_override_rules=results["app_override_rules"],
+        qos_profiles=results["qos_profiles"],
+        tunnel_monitor_profiles=results["tunnel_monitor_profiles"],
+        schedules=results["schedules"],
+        log_settings=results["log_settings"],
+        zone_protection_profiles=results["zone_protection_profiles"],
+        report_only_addresses=[a for a in results["addresses"] if a.get("report_only")],
         dual_protocol_services=[
-            s for s in results['services']
-            if len(TerraformGenerator.dropped_service_protocols(s.get('protocols') or {})) > 0
+            s
+            for s in results["services"]
+            if len(TerraformGenerator.dropped_service_protocols(s.get("protocols") or {})) > 0
         ],
-        entry_report='\n\n'.join(
-            container_coverage.render_section(findings, part.source.name) for part, findings in scanned),
+        entry_report="\n\n".join(
+            container_coverage.render_section(findings, part.source.name) for part, findings in scanned
+        ),
     )
 
     # F5.5: the read-through blocks, the unit's file, written before the reports so the label can state
@@ -7086,7 +7425,7 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
     tf_gen.generate_variables()
 
     # Reports
-    tf_gen.generate_interface_report(results['interfaces'])
+    tf_gen.generate_interface_report(results["interfaces"])
     tf_gen.generate_readme(entry_point)
 
     # F4.3: one line per entry the parse pipeline read. A gap is an operator action, not a broken output,
@@ -7108,15 +7447,19 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
     # names `name_ref` recorded at the sites that applied the rule. The rows are built before the report,
     # because a cycle finding reads its grouping facts through the manifest row.
     manifest_rows = reference_edges.order(
-        unit_manifest.build_rows(view, tf_gen.unit_references(), tf_gen.sanitize_name),
-        ownership_rows, edge_rows)
+        unit_manifest.build_rows(view, tf_gen.unit_references(), tf_gen.sanitize_name), ownership_rows, edge_rows
+    )
     # F5.6: the state scan reads the same row rule, so the matrix row that covers a run entry is the row
     # that covers the state resource. A run with no declared state source reads no state, so it reports
     # neither fact.
     state_findings = state_coverage.state_findings(view, state_source)
-    tf_gen.generate_conversion_report(view, shadows, state_findings,
-                                      ownership.findings(ownership_rows),
-                                      reference_edges.findings(edge_rows, manifest_rows))
+    tf_gen.generate_conversion_report(
+        view,
+        shadows,
+        state_findings,
+        ownership.findings(ownership_rows),
+        reference_edges.findings(edge_rows, manifest_rows),
+    )
 
     # F5.3: the provenance record, in the order the run read the sources. Written outside the report bodies,
     # so the report byte rule still holds: a report body names the source name, and the record is the file
@@ -7137,14 +7480,17 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
     # F6.1: the manifest, the ownership record, and the edge record, written as data and only when they
     # have content, following the rule for the report files.
     if manifest_rows:
-        write_path.write_file(write_path.root_path(run.output_dir, unit_manifest.MANIFEST_FILE),
-                              unit_manifest.render(manifest_rows))
+        write_path.write_file(
+            write_path.root_path(run.output_dir, unit_manifest.MANIFEST_FILE), unit_manifest.render(manifest_rows)
+        )
     if ownership_rows:
-        write_path.write_file(write_path.root_path(run.output_dir, ownership.OWNERSHIP_FILE),
-                              ownership.render(ownership_rows))
+        write_path.write_file(
+            write_path.root_path(run.output_dir, ownership.OWNERSHIP_FILE), ownership.render(ownership_rows)
+        )
     if edge_rows:
-        write_path.write_file(write_path.root_path(run.output_dir, reference_edges.EDGE_FILE),
-                              reference_edges.render(edge_rows))
+        write_path.write_file(
+            write_path.root_path(run.output_dir, reference_edges.EDGE_FILE), reference_edges.render(edge_rows)
+        )
 
     # F6.6: the site data. One row per site that names a value, written as data, and only when it has
     # content. A reader joins `directory` to the manifest row. The `.tfvars` is written from the rows, not
@@ -7152,28 +7498,33 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
     # and compares the printed form with `render_tfvars` (`ARCHITECTURE.md` §4.5).
     site_rows = site_data.build_rows(view, tf_gen.value_variables(), tf_gen.sanitize_name)
     if site_rows:
-        write_path.write_file(write_path.root_path(run.output_dir, site_data.SITE_DATA_FILE),
-                              site_data.render(site_rows))
+        write_path.write_file(
+            write_path.root_path(run.output_dir, site_data.SITE_DATA_FILE), site_data.render(site_rows)
+        )
         # F6.10.3: the printed form is the unit's file, so the run writes one per unit that names a value,
         # each holding the printed form of that unit's row.
         for row in site_rows:
-            write_path.write_file(write_path.unit_path(run.output_dir, row['directory'], site_data.TFVARS_FILE),
-                                  site_data.render_tfvars([row]))
+            write_path.write_file(
+                write_path.unit_path(run.output_dir, row["directory"], site_data.TFVARS_FILE),
+                site_data.render_tfvars([row]),
+            )
 
     # F6.4: the import blocks. A `.tf` file, because the gate rule that checks an import block reads the
     # files the operator receives, and written only when the run declares them and has rows that state an
     # id. A row that states a rule instead of an id writes no block.
-    import_rows = [row for row in tf_gen.import_rows if row['import_id']]
+    import_rows = [row for row in tf_gen.import_rows if row["import_id"]]
     if run.import_blocks and import_rows:
         # F6.10.3: `imports.tf` is a `.tf` file, so it is the unit's file and the run writes one per unit
         # that has a block. `render` prints rows in unit order, so a unit's blocks print in the same order
         # the run read them.
         for facts in tf_gen.unit_set():
             directory = tf_gen.directory_of(facts)
-            unit_rows = [row for row in import_rows if row['unit'] == directory]
+            unit_rows = [row for row in import_rows if row["unit"] == directory]
             if unit_rows:
-                write_path.write_file(write_path.unit_path(run.output_dir, directory, import_blocks.IMPORT_FILE),
-                                      import_blocks.render(unit_rows))
+                write_path.write_file(
+                    write_path.unit_path(run.output_dir, directory, import_blocks.IMPORT_FILE),
+                    import_blocks.render(unit_rows),
+                )
 
     # F6.7: the commit actions. One block per unit the manifest names, written as the last `.tf` file so
     # the gate rule reads the action against the completed unit, and only when it has content.
@@ -7183,17 +7534,19 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
         # manifest names, and each file holds that unit's block.
         for facts in tf_gen.unit_set():
             directory = tf_gen.directory_of(facts)
-            unit_rows = [row for row in action_rows if row['directory'] == directory]
+            unit_rows = [row for row in action_rows if row["directory"] == directory]
             if unit_rows:
-                write_path.write_file(write_path.unit_path(run.output_dir, directory, commit_actions.ACTIONS_FILE),
-                                      commit_actions.render(unit_rows))
+                write_path.write_file(
+                    write_path.unit_path(run.output_dir, directory, commit_actions.ACTIONS_FILE),
+                    commit_actions.render(unit_rows),
+                )
 
     print("\n✓ Successfully generated Terraform configuration!")
     print("\n📄 Generated Migration Reports:")
     print("  - INTERFACE_MIGRATION_REPORT.txt (Interface and IP inventory)")
     if view.rows():
         print("  - CONVERSION_REPORT.txt (one line per entry the parser read)")
-    if results['ike_gateways'] or results['ipsec_tunnels']:
+    if results["ike_gateways"] or results["ipsec_tunnels"]:
         print("  - VPN_MIGRATION_REPORT.txt ⚠️  (VPN config with key management instructions)")
     print(f"Provenance record: {record_file}")
 
@@ -7224,7 +7577,7 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
     # ledger is the second input (`docs/ARCHITECTURE.md` §4.6), and the join gets the index the entry point
     # built (criterion 6): a run that read no request passes no index, so the join reports as NOT RUN.
     report = sanity_checks.run_checks(run.output_dir, run_terraform=run.validate, ledger=view, index=index)
-    report_path = write_path.root_path(run.output_dir, 'SANITY_REPORT.txt')
+    report_path = write_path.root_path(run.output_dir, "SANITY_REPORT.txt")
     write_path.write_file(report_path, report.render())
     print()
     print(report.console_summary())
@@ -7233,12 +7586,14 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
     print("\nNext steps:")
     print(f"  1. cd {run.output_dir}")
     print("  2. Review INTERFACE_MIGRATION_REPORT.txt for interface mapping")
-    if results['ike_gateways'] or results['ipsec_tunnels']:
+    if results["ike_gateways"] or results["ipsec_tunnels"]:
         print("  3. ⚠️  Review VPN_MIGRATION_REPORT.txt and update pre-shared keys!")
     print("  4. Review the generated .tf files")
-    print("  5. Set the host in terraform.tfvars (do not commit the file), and set the key in the "
-          f"environment ({source_fetch.API_KEY_ENV})")
-    if results['ike_gateways'] or results['ipsec_tunnels']:
+    print(
+        "  5. Set the host in terraform.tfvars (do not commit the file), and set the key in the "
+        f"environment ({source_fetch.API_KEY_ENV})"
+    )
+    if results["ike_gateways"] or results["ipsec_tunnels"]:
         print("  6. ⚠️  Add VPN pre-shared keys to terraform.tfvars (DO NOT COMMIT)")
     # F6.10.3: a unit is one plan against one state, so the plan runs inside the unit directory the
     # manifest names.
@@ -7272,71 +7627,70 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
 
 def main():
     """Path 1's entry point: the arguments, the source the run read, and the run sequence (F8.9)."""
-    parser = argparse.ArgumentParser(
-        description='Convert Palo Alto Panorama XML output to Terraform configuration'
-    )
+    parser = argparse.ArgumentParser(description="Convert Palo Alto Panorama XML output to Terraform configuration")
     # F5.2: the input is a declared source. The file source is the default and behaves as before; the api
     # source reads the cached API export. Path 1 is the entry point that can name one source, so these are
     # its own arguments; the arguments one run reads are in `shared_arguments`.
     parser.add_argument(
-        'input_file',
-        nargs='?',
-        help='Input XML file from Panorama (the source when --source file, the default)',
+        "input_file",
+        nargs="?",
+        help="Input XML file from Panorama (the source when --source file, the default)",
     )
     parser.add_argument(
-        '--source',
-        choices=('file', 'api'),
-        default='file',
-        help='where the input comes from: a file (default) or the Panorama API export (F5.2)',
+        "--source",
+        choices=("file", "api"),
+        default="file",
+        help="where the input comes from: a file (default) or the Panorama API export (F5.2)",
     )
     # F5.4: a per-scope run reads one scope instead of the whole config, and the declared parent scope is
     # the second source the shadow scan reads.
     parser.add_argument(
-        '--path',
-        help='scope path for --source api, as /<container> or /<container>/entry/<name>. '
-             'The request reads that scope, not the whole config (F5.4)',
+        "--path",
+        help="scope path for --source api, as /<container> or /<container>/entry/<name>. "
+        "The request reads that scope, not the whole config (F5.4)",
     )
     parser.add_argument(
-        '--parent',
-        help='parent scope path for --source api, read as the second source for the '
-             'shadow scan (F5.4). Needs --path',
+        "--parent",
+        help="parent scope path for --source api, read as the second source for the shadow scan (F5.4). Needs --path",
     )
     shared_arguments(parser)
 
     args = parser.parse_args()
 
-    if args.source == 'file':
+    if args.source == "file":
         if not args.input_file:
-            parser.error('--source file needs an input file')
+            parser.error("--source file needs an input file")
         if args.offline or args.insecure:
-            parser.error('--offline and --insecure apply to --source api, and a file source reads no network')
+            parser.error("--offline and --insecure apply to --source api, and a file source reads no network")
         # F5.3 rule 4: the prune acts on a cache entry a record references, and a file record states `-`
         # for the cache field, so a file run has nothing to prune.
         if args.prune_cache:
-            parser.error('--prune-cache applies to --source api, and a file record references no cache entry')
+            parser.error("--prune-cache applies to --source api, and a file record references no cache entry")
         # F5.4: a file is one source and holds its own scopes, so a declared scope path has nothing to name.
         if args.path or args.parent:
-            parser.error('--path and --parent apply to --source api, and a file source reads one scope: the file')
+            parser.error("--path and --parent apply to --source api, and a file source reads one scope: the file")
         # Check if input file exists
         if not os.path.exists(args.input_file):
             print(f"Error: Input file '{args.input_file}' not found")
             return 1
     else:
         if not args.host:
-            parser.error('--source api needs --host')
+            parser.error("--source api needs --host")
         if args.input_file:
-            parser.error('--source api does not take an input file; it reads the cached API export')
+            parser.error("--source api does not take an input file; it reads the cached API export")
         # F5.4: the parent is the second source, so it needs a child scope to compare with. A whole-config
         # source holds its own parent, and the tool does not guess which scope a run reads.
         if args.parent and not args.path:
-            parser.error('--parent needs --path: a whole-config source holds its own parent, '
-                         'and the converter does not guess which scope a run reads')
-        for flag, declared in (('--path', args.path), ('--parent', args.parent)):
+            parser.error(
+                "--parent needs --path: a whole-config source holds its own parent, "
+                "and the converter does not guess which scope a run reads"
+            )
+        for flag, declared in (("--path", args.path), ("--parent", args.parent)):
             if declared and not container_coverage.is_scope_path(declared):
                 parser.error(
-                    f'{flag} must name a scope path: /<container> or /<container>/entry/<name>, '
-                    f'where <container> is a place the one scope path definition validates '
-                    f'({", ".join(sorted(container_coverage.SCOPE_PATH_ROOTS))})'
+                    f"{flag} must name a scope path: /<container> or /<container>/entry/<name>, "
+                    f"where <container> is a place the one scope path definition validates "
+                    f"({', '.join(sorted(container_coverage.SCOPE_PATH_ROOTS))})"
                 )
 
     # F5.6: the state source is a reference source, so it applies to both source kinds.
@@ -7352,7 +7706,7 @@ def main():
     state_source = None
 
     try:
-        if args.source == 'file':
+        if args.source == "file":
             print(f"Parsing Panorama configuration from {args.input_file}...")
             parts = [part_for(parse_xml(args.input_file, args.max_input_bytes), None)]
         else:
@@ -7360,8 +7714,13 @@ def main():
             # run names the entry it read.
             request = source_fetch.ApiRequest(host=args.host, path=container_coverage.record_path(args.path))
             print(read_line(request))
-            source = source_fetch.fetch(request, args.cache_dir, offline=args.offline,
-                                        insecure=args.insecure, max_input_bytes=args.max_input_bytes)
+            source = source_fetch.fetch(
+                request,
+                args.cache_dir,
+                offline=args.offline,
+                insecure=args.insecure,
+                max_input_bytes=args.max_input_bytes,
+            )
             # A producer that has no bytes for a request answers None, so this run read no response and has
             # nothing to write. That is an input refusal, so it takes the refusal shape and exit 1.
             if source is None:
@@ -7373,13 +7732,20 @@ def main():
             # reference source, not a part: the parent walk stays inside one response (F8.5), so the run
             # order holds no parent. It is read as data for the shadow scan, and its record is last.
             if args.parent:
-                parent_request = source_fetch.ApiRequest(host=args.host,
-                                                         path=container_coverage.record_path(args.parent))
-                print(f"Reading the parent scope '{parent_request.path}' from the same host "
-                      f"(cache entry {parent_request.cache_name()})...")
-                parent_source = source_fetch.fetch(parent_request, args.cache_dir, offline=args.offline,
-                                                    insecure=args.insecure,
-                                                    max_input_bytes=args.max_input_bytes)
+                parent_request = source_fetch.ApiRequest(
+                    host=args.host, path=container_coverage.record_path(args.parent)
+                )
+                print(
+                    f"Reading the parent scope '{parent_request.path}' from the same host "
+                    f"(cache entry {parent_request.cache_name()})..."
+                )
+                parent_source = source_fetch.fetch(
+                    parent_request,
+                    args.cache_dir,
+                    offline=args.offline,
+                    insecure=args.insecure,
+                    max_input_bytes=args.max_input_bytes,
+                )
                 if parent_source is None:
                     raise ValueError(f"the producer answered no response for '{parent_request.canonical()}'")
                 parent = entry_coverage.RunPart(parent_source, parent_request, None)
@@ -7389,13 +7755,20 @@ def main():
         # source, so the run writes no output from it.
         if args.state:
             print(state_line(args.state, args.workspace))
-            state_source = state_input.read_state(args.state, workspace=args.workspace,
-                                                   max_input_bytes=args.max_input_bytes)
+            state_source = state_input.read_state(
+                args.state, workspace=args.workspace, max_input_bytes=args.max_input_bytes
+            )
 
         # The run order for path 1 is the one source it read, and the join is the entry point's decision
         # (criterion 2), so the view is built here with the join, in the order this entry point read.
-        return generate_run(args, entry_coverage.RunView(parts, join_results), scopes,
-                            entry_point=ENTRY_POINT, parent=parent, state_source=state_source)
+        return generate_run(
+            args,
+            entry_coverage.RunView(parts, join_results),
+            scopes,
+            entry_point=ENTRY_POINT,
+            parent=parent,
+            state_source=state_source,
+        )
 
     except Exception as e:
         if is_refusal(e):
@@ -7403,5 +7776,5 @@ def main():
         return failed(e)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     exit(main())

@@ -52,21 +52,23 @@ import json
 import naming
 import unit_manifest
 
-SITE_DATA_FILE = 'SITE_DATA.json'
+SITE_DATA_FILE = "SITE_DATA.json"
 
 # Terraform loads a `*.auto.tfvars` file automatically, so the generated values do not sit in the
 # file the operator owns.
-TFVARS_FILE = 'site.auto.tfvars'
+TFVARS_FILE = "site.auto.tfvars"
 
 # The row shape for the site record. Fixed, so two runs write the same bytes and a reader does not
 # guess. The name states the record it belongs to, because `src/` is one flat namespace (§1).
 # `directory` is the join to the manifest row; `variables` is the mapping result.
-SITE_ROW_FIELDS = ('directory', 'variables')
+SITE_ROW_FIELDS = ("directory", "variables")
 
-TFVARS_HEADER = ('# Site values (F6.6), written from ' + SITE_DATA_FILE + '. Terraform loads a\n'
-                 '# *.auto.tfvars file automatically, so this file holds the site values and\n'
-                 '# terraform.tfvars stays the operator\'s file for the credentials. Set the values\n'
-                 '# here, or with TF_VAR_<name>.\n\n')
+TFVARS_HEADER = (
+    "# Site values (F6.6), written from " + SITE_DATA_FILE + ". Terraform loads a\n"
+    "# *.auto.tfvars file automatically, so this file holds the site values and\n"
+    "# terraform.tfvars stays the operator's file for the credentials. Set the values\n"
+    "# here, or with TF_VAR_<name>.\n\n"
+)
 
 
 def build_rows(ledger, recorded: dict, sanitize) -> list:
@@ -85,16 +87,16 @@ def build_rows(ledger, recorded: dict, sanitize) -> list:
         if not variables:
             # A site that names no value writes no row.
             continue
-        row = dict.fromkeys(SITE_ROW_FIELDS, '')
-        row['directory'] = unit_manifest.directory_name(facts, sanitize)
-        row['variables'] = {name: variables[name] for name in sorted(variables)}
+        row = dict.fromkeys(SITE_ROW_FIELDS, "")
+        row["directory"] = unit_manifest.directory_name(facts, sanitize)
+        row["variables"] = {name: variables[name] for name in sorted(variables)}
         rows.append(row)
     return rows
 
 
 def render(rows: list) -> str:
     """The site data as text: the rows in field order, with one trailing newline."""
-    return json.dumps([{key: row[key] for key in SITE_ROW_FIELDS} for row in rows], indent=2) + '\n'
+    return json.dumps([{key: row[key] for key in SITE_ROW_FIELDS} for row in rows], indent=2) + "\n"
 
 
 def parse_rows(text: str) -> list:
@@ -106,30 +108,30 @@ def parse_rows(text: str) -> list:
     """
     document = json.loads(text)
     if not isinstance(document, list):
-        raise ValueError('the site data is not a list of rows')
+        raise ValueError("the site data is not a list of rows")
     rows = []
     for row in document:
         if not isinstance(row, dict):
-            raise ValueError(f'not a site row: {row!r}')
+            raise ValueError(f"not a site row: {row!r}")
         extra = [key for key in row if key not in SITE_ROW_FIELDS]
         if extra:
-            raise ValueError(f'not a declared site field: {extra}')
+            raise ValueError(f"not a declared site field: {extra}")
         missing = [key for key in SITE_ROW_FIELDS if key not in row]
         if missing:
-            raise ValueError(f'the row does not state its fields: {missing}')
-        if not isinstance(row['directory'], str) or not row['directory']:
-            raise ValueError(f'directory is not a unit name: {row}')
-        if not isinstance(row['variables'], dict):
-            raise ValueError(f'variables is not a mapping of names to values: {row}')
-        for name, value in row['variables'].items():
+            raise ValueError(f"the row does not state its fields: {missing}")
+        if not isinstance(row["directory"], str) or not row["directory"]:
+            raise ValueError(f"directory is not a unit name: {row}")
+        if not isinstance(row["variables"], dict):
+            raise ValueError(f"variables is not a mapping of names to values: {row}")
+        for name, value in row["variables"].items():
             if not isinstance(name, str) or not name:
-                raise ValueError(f'a variable name is not a name: {row}')
+                raise ValueError(f"a variable name is not a name: {row}")
             if not isinstance(value, (str, list)):
-                raise ValueError(f'a site value is not a string or a list: {row}')
+                raise ValueError(f"a site value is not a string or a list: {row}")
             if isinstance(value, list) and not all(isinstance(item, str) for item in value):
-                raise ValueError(f'a site list holds a value that is not a string: {row}')
+                raise ValueError(f"a site list holds a value that is not a string: {row}")
             if isinstance(value, str) and name != naming.variable_name(value):
-                raise ValueError(f'the variable name is not the §5 shape of its value: {row}')
+                raise ValueError(f"the variable name is not the §5 shape of its value: {row}")
         rows.append({key: row[key] for key in SITE_ROW_FIELDS})
     return rows
 
@@ -140,11 +142,11 @@ def value_text(value) -> str:
         return json.dumps(value, ensure_ascii=True)
     if isinstance(value, list):
         if not all(isinstance(item, str) for item in value):
-            raise ValueError(f'a site list holds a value that is not a string: {value!r}')
+            raise ValueError(f"a site list holds a value that is not a string: {value!r}")
         if not value:
-            return '[]'
-        return '[ ' + ', '.join(json.dumps(item, ensure_ascii=True) for item in value) + ' ]'
-    raise ValueError(f'not a declared site value kind: {value!r}')
+            return "[]"
+        return "[ " + ", ".join(json.dumps(item, ensure_ascii=True) for item in value) + " ]"
+    raise ValueError(f"not a declared site value kind: {value!r}")
 
 
 def record_pair(store: dict, name: str, source: str) -> None:
@@ -159,7 +161,7 @@ def record_pair(store: dict, name: str, source: str) -> None:
     entries.
     """
     if name in store and store[name] != source:
-        raise ValueError(f'name {name} states two values: {store[name]!r} and {source!r}')
+        raise ValueError(f"name {name} states two values: {store[name]!r} and {source!r}")
     store[name] = source
 
 
@@ -172,9 +174,9 @@ def render_tfvars(rows: list) -> str:
     """
     values: dict[str, object] = {}
     for row in rows:
-        for name, value in row['variables'].items():
+        for name, value in row["variables"].items():
             record_pair(values, name, value)
     lines = [TFVARS_HEADER]
     for name in sorted(values):
-        lines.append(f'{name} = {value_text(values[name])}\n')
-    return ''.join(lines)
+        lines.append(f"{name} = {value_text(values[name])}\n")
+    return "".join(lines)

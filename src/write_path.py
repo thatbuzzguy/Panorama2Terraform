@@ -24,7 +24,7 @@ Usage:
 from pathlib import Path
 
 # The only line ending a run writes (rule 1). `os.linesep` is not used anywhere in the write path.
-LF = '\n'
+LF = "\n"
 
 
 def unit_path(output_dir: Path, directory: str, name: str) -> Path:
@@ -49,4 +49,4 @@ def write_file(path: Path, contents) -> None:
     if isinstance(contents, bytes):
         path.write_bytes(contents)
     else:
-        path.write_text(contents, encoding='utf-8', newline=LF)
+        path.write_text(contents, encoding="utf-8", newline=LF)

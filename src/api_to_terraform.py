@@ -47,7 +47,7 @@ import state_input
 
 # The name the README label prints for this entry point (criterion 9). It is data: `generate_readme` takes the
 # name as an argument and states no path rule, so each entry point states only its own name.
-ENTRY_POINT = 'api_to_terraform.py'
+ENTRY_POINT = "api_to_terraform.py"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -55,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     source, so this entry point adds no argument of its own.
     """
     parser = argparse.ArgumentParser(
-        description='Convert the Panorama API response set to Terraform configuration (path 2)'
+        description="Convert the Panorama API response set to Terraform configuration (path 2)"
     )
     panorama_to_terraform.shared_arguments(parser)
     return parser
@@ -67,9 +67,11 @@ def lists_read(parts) -> tuple:
     The read set is the entry point's decision, so no list is stated here: a list counts when the run read the
     response for the container that holds it, read through `api_requests` for the path each list names.
     """
-    return tuple(list_path for list_path in api_requests.membership_lists()
-                 if any(part.request.path == api_requests.scope_path(api_requests.list_container(list_path))
-                        for part in parts))
+    return tuple(
+        list_path
+        for list_path in api_requests.membership_lists()
+        if any(part.request.path == api_requests.scope_path(api_requests.list_container(list_path)) for part in parts)
+    )
 
 
 def read_part(args, path: str, producer=None):
@@ -77,8 +79,14 @@ def read_part(args, path: str, producer=None):
     parser built on that source (F8.5, so the line map and the parent walk are this response's only).
     """
     request = source_fetch.ApiRequest(host=args.host, path=path)
-    source = source_fetch.fetch(request, args.cache_dir, producer=producer, offline=args.offline,
-                                insecure=args.insecure, max_input_bytes=args.max_input_bytes)
+    source = source_fetch.fetch(
+        request,
+        args.cache_dir,
+        producer=producer,
+        offline=args.offline,
+        insecure=args.insecure,
+        max_input_bytes=args.max_input_bytes,
+    )
     if source is None:
         # A producer that has no bytes for a request answers None, so the run order holds no part for it and
         # the join reports the index entry as a finding. No cache entry is written for bytes that never arrived.
@@ -96,7 +104,7 @@ def run_order(args, producer=None) -> tuple:
     for list_path in api_requests.membership_lists():
         path = api_requests.scope_path(api_requests.list_container(list_path))
         if any(part.request.path == path for part in parts):
-            continue    # two lists can name one container, and one response is read once
+            continue  # two lists can name one container, and one response is read once
         part = read_part(args, path, producer)
         if part is not None:
             parts.append(part)
@@ -114,8 +122,8 @@ def run_order(args, producer=None) -> tuple:
     index = api_requests.scope_index(args.host, tables, lists_read(parts))
     for entry in index:
         if any(part.request.path == entry.path for part in parts):
-            continue    # one response is read once, so a container already read as its membership response
-                        # is not read again for its index entry
+            continue  # one response is read once, so a container already read as its membership response
+            # is not read again for its index entry
         part = read_part(args, entry.path, producer)
         if part is not None:
             parts.append(part)
@@ -131,8 +139,7 @@ def run(argv, producer=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if not args.host:
-        parser.error('--host is needed: the request set is the scope set, and a request names no host '
-                     'without one')
+        parser.error("--host is needed: the request set is the scope set, and a request names no host without one")
     panorama_to_terraform.shared_checks(parser, args)
     scopes = panorama_to_terraform.data_scopes(parser, args)
 
@@ -144,12 +151,14 @@ def run(argv, producer=None) -> int:
         state_source = None
         if args.state:
             print(panorama_to_terraform.state_line(args.state, args.workspace))
-            state_source = state_input.read_state(args.state, workspace=args.workspace,
-                                                   max_input_bytes=args.max_input_bytes)
+            state_source = state_input.read_state(
+                args.state, workspace=args.workspace, max_input_bytes=args.max_input_bytes
+            )
 
         view = entry_coverage.RunView(parts, panorama_to_terraform.join_results)
-        return panorama_to_terraform.generate_run(args, view, scopes, index=index,
-                                                   state_source=state_source, entry_point=ENTRY_POINT)
+        return panorama_to_terraform.generate_run(
+            args, view, scopes, index=index, state_source=state_source, entry_point=ENTRY_POINT
+        )
 
     except Exception as e:
         # Both shapes are stated in the module that owns the exit codes, so this entry point prints no line of
@@ -165,5 +174,5 @@ def main():
     sys.exit(run(sys.argv[1:]))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

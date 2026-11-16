@@ -69,7 +69,7 @@ import entry_coverage
 import state_coverage
 import unit_manifest
 
-OWNERSHIP_FILE = 'OWNERSHIP.json'
+OWNERSHIP_FILE = "OWNERSHIP.json"
 
 # The five scope facts, read through `unit_manifest`, so the row joins to the manifest row and no
 # second fact order appears.
@@ -79,39 +79,39 @@ FACT_KEYS = unit_manifest.FACT_KEYS
 # (F4.2 rule 6), which for a path 2 row is the response name the request identity produced. The unit join
 # (`api_requests.py`, `docs/API_CONVERSION_PATH.md` §3) reads the field through this module, so the join
 # states no field name of its own.
-SOURCE_FIELD = 'source'
+SOURCE_FIELD = "source"
 
 # Field order. Fixed, so two runs write the same bytes and a reader does not guess.
 # The field names are the printed keys, so `parse_rows` reads a row back as itself. The fact
 # segment is `FACT_KEYS` order, so the record prints the identity in the one fact order.
-FIELD_ORDER = ('type', 'entry', SOURCE_FIELD) + FACT_KEYS + ('directory', 'owner', 'kind', 'override')
+FIELD_ORDER = ("type", "entry", SOURCE_FIELD) + FACT_KEYS + ("directory", "owner", "kind", "override")
 
 # What the rule can say about an entry (rule 5), and the flag values it can state.
-KINDS = ('declared', 'definition', 'override', 'ambiguous')
-OVERRIDE_VALUES = ('yes', 'no', 'unknown')
+KINDS = ("declared", "definition", "override", "ambiguous")
+OVERRIDE_VALUES = ("yes", "no", "unknown")
 
 # The flag, as the parse key. A matrix row that names it is a row whose parse method reads the entry field
 # and whose emitter prints it. A row that does not name it states `unknown` (rule 5). The nine rows that name
 # it, the print shape, and the pin against the provider are in `docs/COVERAGE_MATRIX.md`.
-FLAG_KEY = 'disable_override'
+FLAG_KEY = "disable_override"
 
-FINDING_HEADING = 'Repeated Names That Need an Operator Decision'
+FINDING_HEADING = "Repeated Names That Need an Operator Decision"
 
 FINDING_RULE = (
-    'A name two units declare inside one inheritance chain is listed here. Panorama resolves a '
-    'repeated name through inheritance at commit time, so one object on the device is two entries '
-    'in the export, and the codebase needs the entry that defines it. The ancestor entry owns the '
-    'name. The export names the ancestor for the shared section and for the parent source the run '
-    'declares, so a repeated name in two device groups is an operator decision. `disable_override` '
-    'names the entry that no descendant may override, so a second entry with the same name is an '
-    'operator decision as well. A finding is an operator action, not a broken output: it does not '
-    'change the exit code, which the F4.1 gate still decides.'
+    "A name two units declare inside one inheritance chain is listed here. Panorama resolves a "
+    "repeated name through inheritance at commit time, so one object on the device is two entries "
+    "in the export, and the codebase needs the entry that defines it. The ancestor entry owns the "
+    "name. The export names the ancestor for the shared section and for the parent source the run "
+    "declares, so a repeated name in two device groups is an operator decision. `disable_override` "
+    "names the entry that no descendant may override, so a second entry with the same name is an "
+    "operator decision as well. A finding is an operator action, not a broken output: it does not "
+    "change the exit code, which the F4.1 gate still decides."
 )
 
 # One reason per case the rule cannot decide on its own (rule 4).
-NO_RELATION = 'no inheritance relation stated between the units'
-FLAG_NOT_ANCESTOR = 'disable_override names an entry that is not the ancestor'
-FLAG_FORBIDS_OVERRIDE = 'the definition names disable_override, so this entry cannot be an override'
+NO_RELATION = "no inheritance relation stated between the units"
+FLAG_NOT_ANCESTOR = "disable_override names an entry that is not the ancestor"
+FLAG_FORBIDS_OVERRIDE = "the definition names disable_override, so this entry cannot be an override"
 
 
 def row_facts(row: dict) -> tuple:
@@ -122,26 +122,27 @@ def row_facts(row: dict) -> tuple:
 def row_key(row: dict) -> tuple:
     """The order a row sorts by: the identity key, then the source, because two sources can state
     the same identity."""
-    return state_coverage.ownership_key(row['type'], row['entry'], dict(zip(FACT_KEYS, row_facts(row)))) \
-        + (row[SOURCE_FIELD],)
+    return state_coverage.ownership_key(row["type"], row["entry"], dict(zip(FACT_KEYS, row_facts(row)))) + (
+        row[SOURCE_FIELD],
+    )
 
 
 def in_chain(facts: tuple) -> bool:
     """True when a unit can sit in one inheritance chain: the shared unit, or a unit whose declared
     fact is a device group (rule 3)."""
-    return all(value == '' for value in facts) or unit_manifest.fact(facts, 'device_group') != ''
+    return all(value == "" for value in facts) or unit_manifest.fact(facts, "device_group") != ""
 
 
 def override_value(matrix_row: dict, captured) -> str:
     """The flag as the parse read it (rule 5). `unknown` when the matrix row does not declare the
     property, or when no object was captured for the entry."""
-    if FLAG_KEY not in matrix_row['properties']:
-        return 'unknown'
+    if FLAG_KEY not in matrix_row["properties"]:
+        return "unknown"
     if not isinstance(captured, entry_coverage.RecordingDict):
-        return 'unknown'
+        return "unknown"
     # The scan is not an output, so the read must not count as a property an output used.
-    value = (captured.value(FLAG_KEY) or '').strip().lower()
-    return value if value in ('yes', 'no') else 'no'
+    value = (captured.value(FLAG_KEY) or "").strip().lower()
+    return value if value in ("yes", "no") else "no"
 
 
 def parent_map(ledger) -> dict:
@@ -154,14 +155,14 @@ def parent_map(ledger) -> dict:
     """
     groups = {}
     for entry in ledger.entries():
-        if entry.tag != 'entry':
+        if entry.tag != "entry":
             continue
-        if container_coverage.container_tag(entry, ledger.parents, ledger.source_of(entry)) != 'device-group':
+        if container_coverage.container_tag(entry, ledger.parents, ledger.source_of(entry)) != "device-group":
             continue
         mark = ledger.mark_for(entry)
-        captured = mark['captured'] if mark else None
+        captured = mark["captured"] if mark else None
         if isinstance(captured, entry_coverage.RecordingDict):
-            groups[entry.get('name') or ''] = (captured.value('parent') or '').strip()
+            groups[entry.get("name") or ""] = (captured.value("parent") or "").strip()
     return groups
 
 
@@ -191,27 +192,27 @@ def scan_row(ledger, entry, matrix_row: dict, groups: dict) -> dict:
     if not ledger.is_report_entry(entry):
         return None
     row = ledger.row_for(entry)
-    if row['destination'] != 'emitted':
+    if row["destination"] != "emitted":
         return None
     mark = ledger.mark_for(entry)
     facts = unit_manifest.facts_of(row)
     unit = dict(zip(FACT_KEYS, facts))
     return {
-        'type': matrix_row['resource'],
-        'entry': row['name'],
+        "type": matrix_row["resource"],
+        "entry": row["name"],
         SOURCE_FIELD: row[SOURCE_FIELD],
         **dict(zip(FACT_KEYS, facts)),
-        'directory': '',      # filled by build_rows, which holds the sanitizing rule
-        'owner': '',
-        'kind': '',
-        'override': override_value(matrix_row, mark['captured'] if mark else None),
+        "directory": "",  # filled by build_rows, which holds the sanitizing rule
+        "owner": "",
+        "kind": "",
+        "override": override_value(matrix_row, mark["captured"] if mark else None),
         # Run facts the report line reads. `render` writes only the declared fields.
-        'line': row['line'],
-        'container': row['container'],
-        'reason': '',
+        "line": row["line"],
+        "container": row["container"],
+        "reason": "",
         # The device group chain the export states for this row's unit (rule 4, F6.5). A fact the
         # owner rule reads, not a data field, so it is not written.
-        'chain': chain_of(groups, unit['device_group']),
+        "chain": chain_of(groups, unit["device_group"]),
     }
 
 
@@ -225,19 +226,19 @@ def decide(rows: list) -> list:
     """
     single = [row for row in rows if not in_chain(row_facts(row))]
     for row in single:
-        row['kind'] = 'declared'
-        row['owner'] = row['directory']
+        row["kind"] = "declared"
+        row["owner"] = row["directory"]
 
     group = [row for row in rows if in_chain(row_facts(row))]
     if not group:
         return single
     if len(group) == 1:
         row = group[0]
-        row['kind'] = 'declared'
-        row['owner'] = row['directory']
+        row["kind"] = "declared"
+        row["owner"] = row["directory"]
         return single + group
 
-    flagged = [row for row in group if row['override'] == 'yes']
+    flagged = [row for row in group if row["override"] == "yes"]
     if flagged:
         # The flag names the entry that no descendant may override. It can only own the name when it
         # can be the ancestor, so a flag on a descendant names no owner for the name.
@@ -248,18 +249,18 @@ def decide(rows: list) -> list:
 
     for row in group:
         if definition is None:
-            row['kind'] = 'ambiguous'
-            row['owner'] = ''
-            row['reason'] = FLAG_NOT_ANCESTOR if flagged else NO_RELATION
+            row["kind"] = "ambiguous"
+            row["owner"] = ""
+            row["reason"] = FLAG_NOT_ANCESTOR if flagged else NO_RELATION
             continue
         if row is definition:
-            row['kind'] = 'definition'
-            row['owner'] = row['directory']
+            row["kind"] = "definition"
+            row["owner"] = row["directory"]
             continue
-        row['kind'] = 'override'
-        row['owner'] = definition['directory']
-        if definition['override'] == 'yes':
-            row['reason'] = FLAG_FORBIDS_OVERRIDE
+        row["kind"] = "override"
+        row["owner"] = definition["directory"]
+        if definition["override"] == "yes":
+            row["reason"] = FLAG_FORBIDS_OVERRIDE
     return single + group
 
 
@@ -271,12 +272,12 @@ def is_ancestor(row: dict, group: list) -> bool:
     top-level group, so it is not the ancestor of another top-level group: two top-level groups that
     repeat a name are peers, and the rule names no owner for them.
     """
-    if all(value == '' for value in row_facts(row)) or row.get('from_parent', False):
+    if all(value == "" for value in row_facts(row)) or row.get("from_parent", False):
         return True
-    unit = unit_manifest.fact(row_facts(row), 'device_group')
+    unit = unit_manifest.fact(row_facts(row), "device_group")
     if not unit:
         return False
-    return any(unit in other.get('chain', ()) for other in group if other is not row)
+    return any(unit in other.get("chain", ()) for other in group if other is not row)
 
 
 def build_rows(ledger, parent_ledger, sanitize: Callable[[str], str]) -> list:
@@ -287,7 +288,7 @@ def build_rows(ledger, parent_ledger, sanitize: Callable[[str], str]) -> list:
     declared parent source has no parent to read, so no row comes from it.
     """
     rows = []
-    for current, is_parent in ([(ledger, False)] + ([(parent_ledger, True)] if parent_ledger else [])):
+    for current, is_parent in [(ledger, False)] + ([(parent_ledger, True)] if parent_ledger else []):
         stated = parent_map(current)
         for entry in current.entries():
             container = current.parents.get(entry)
@@ -296,17 +297,18 @@ def build_rows(ledger, parent_ledger, sanitize: Callable[[str], str]) -> list:
             # The source is read through the entry, so the shape decision is the one rule: a run view answers
             # the response that holds the entry (F8.9), and a single-response ledger answers its own source.
             matrix_row = entry_coverage.matrix_row_for(
-                container_coverage.section_path(container, current.parents, current.source_of(entry)))
+                container_coverage.section_path(container, current.parents, current.source_of(entry))
+            )
             row = scan_row(current, entry, matrix_row, stated) if matrix_row else None
             if row is None:
                 continue
-            row['from_parent'] = is_parent
-            row['directory'] = unit_manifest.directory_name(row_facts(row), sanitize)
+            row["from_parent"] = is_parent
+            row["directory"] = unit_manifest.directory_name(row_facts(row), sanitize)
             rows.append(row)
     # The group is the key `shadow_coverage.py` uses: the matrix row and the entry name.
     groups: dict = {}
     for row in rows:
-        groups.setdefault((row['type'], row['entry']), []).append(row)
+        groups.setdefault((row["type"], row["entry"]), []).append(row)
     for group in groups.values():
         decide(sorted(group, key=row_key))
     return sorted(rows, key=row_key)
@@ -319,7 +321,7 @@ def render(rows: list) -> str:
     path, so two runs on the same bytes write the same bytes. The report facts (`line`, `container`,
     `reason`) are not data fields, so they are not written.
     """
-    return json.dumps([{key: row[key] for key in FIELD_ORDER} for row in rows], indent=2) + '\n'
+    return json.dumps([{key: row[key] for key in FIELD_ORDER} for row in rows], indent=2) + "\n"
 
 
 def parse_rows(text: str) -> list:
@@ -330,31 +332,32 @@ def parse_rows(text: str) -> list:
     """
     document = json.loads(text)
     if not isinstance(document, list):
-        raise ValueError('the ownership record is not a list of rows')
+        raise ValueError("the ownership record is not a list of rows")
     rows = []
     for row in document:
         if not isinstance(row, dict):
-            raise ValueError(f'not an ownership row: {row!r}')
+            raise ValueError(f"not an ownership row: {row!r}")
         extra = [key for key in row if key not in FIELD_ORDER]
         if extra:
-            raise ValueError(f'not a declared ownership field: {extra}')
+            raise ValueError(f"not a declared ownership field: {extra}")
         missing = [key for key in FIELD_ORDER if key not in row]
         if missing:
-            raise ValueError(f'the row does not state its fields: {missing}')
+            raise ValueError(f"the row does not state its fields: {missing}")
         if any(not isinstance(row[key], str) for key in FIELD_ORDER):
-            raise ValueError(f'the fields of an ownership row are not names: {row}')
-        if row['kind'] not in KINDS:
-            raise ValueError(f'not a declared kind: {row["kind"]}')
-        if row['override'] not in OVERRIDE_VALUES:
-            raise ValueError(f'not a declared flag value: {row["override"]}')
+            raise ValueError(f"the fields of an ownership row are not names: {row}")
+        if row["kind"] not in KINDS:
+            raise ValueError(f"not a declared kind: {row['kind']}")
+        if row["override"] not in OVERRIDE_VALUES:
+            raise ValueError(f"not a declared flag value: {row['override']}")
         rows.append({key: row[key] for key in FIELD_ORDER})
     return sorted(rows, key=row_key)
 
 
 def findings(rows: list) -> list:
     """The rows that need an operator decision, in report order (rule 6)."""
-    return sorted([row for row in rows if row['reason']],
-                  key=lambda row: (row['line'] or 0, row['container'], row['entry']))
+    return sorted(
+        [row for row in rows if row["reason"]], key=lambda row: (row["line"] or 0, row["container"], row["entry"])
+    )
 
 
 def finding_line(row: dict) -> str:
@@ -363,7 +366,7 @@ def finding_line(row: dict) -> str:
     The shape is the shape the other finding sections use, and the line names a source by its report
     value, never by its path (F4.2 rule 6), because the reason names the units, not a file.
     """
-    name = f'{row["container"]}/{row["entry"]}'
-    line = f'{row["line"] if row["line"] is not None else 0}'
-    parts = [f'  line {line:>4}  ', f'{name:<38} ', f'{row["type"]:<32} ', row['reason']]
-    return ''.join(parts).rstrip()
+    name = f"{row['container']}/{row['entry']}"
+    line = f"{row['line'] if row['line'] is not None else 0}"
+    parts = [f"  line {line:>4}  ", f"{name:<38} ", f"{row['type']:<32} ", row["reason"]]
+    return "".join(parts).rstrip()

@@ -34,9 +34,7 @@ def test_emitted_types_match_goldens():
 @pytest.mark.parametrize("rtype", sorted(EMITTED_TYPES))
 def test_emitted_type_exists_in_provider(rtype, provider_schema):
     """Every emitted type must be a real provider v2 resource."""
-    assert rtype in provider_schema, (
-        f"{rtype!r} is emitted but does not exist in the panos provider schema"
-    )
+    assert rtype in provider_schema, f"{rtype!r} is emitted but does not exist in the panos provider schema"
 
 
 @pytest.mark.parametrize("rtype", sorted(REPORT_ONLY_TYPES))
@@ -46,9 +44,7 @@ def test_report_only_is_genuinely_absent(rtype, provider_schema):
     Guards against a report-only decision masking a resource that exists
     in v2 (which should have been emitted instead).
     """
-    assert rtype not in provider_schema, (
-        f"{rtype!r} is marked report-only but exists in the provider schema; emit it"
-    )
+    assert rtype not in provider_schema, f"{rtype!r} is marked report-only but exists in the provider schema; emit it"
 
 
 @pytest.mark.parametrize("rtype", sorted(NOT_EMITTED_TYPES))
@@ -61,8 +57,7 @@ def test_not_emitted_is_genuinely_present(rtype, provider_schema):
     decision should move to report-only.
     """
     assert rtype in provider_schema, (
-        f"{rtype!r} is marked not-emitted but does not exist in the provider "
-        f"schema; it belongs in REPORT_ONLY_TYPES"
+        f"{rtype!r} is marked not-emitted but does not exist in the provider schema; it belongs in REPORT_ONLY_TYPES"
     )
 
 
@@ -70,9 +65,15 @@ def test_not_emitted_is_genuinely_present(rtype, provider_schema):
 # 2026-11-04 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14`, terraform v1.16.2):
 # 128 resources, 25 of them declare the flag, and the nine below are the emitted ones among them.
 FLAG_ROWS = {
-    "panos_address", "panos_address_group", "panos_administrative_tag", "panos_application_group",
-    "panos_custom_url_category", "panos_external_dynamic_list", "panos_security_profile_group",
-    "panos_service", "panos_service_group",
+    "panos_address",
+    "panos_address_group",
+    "panos_administrative_tag",
+    "panos_application_group",
+    "panos_custom_url_category",
+    "panos_external_dynamic_list",
+    "panos_security_profile_group",
+    "panos_service",
+    "panos_service_group",
 }
 
 
@@ -85,8 +86,11 @@ def test_the_flag_rows_are_the_types_the_provider_declares_it_for(provider_schem
     stays `unknown`: it is an emitted type, and the provider does not declare the flag for it.
     """
     named = {row["resource"] for row in COVERAGE_MATRIX if "disable_override" in row["properties"]}
-    declared = {rtype for rtype, schema in provider_schema.items()
-                if "disable_override" in (schema.get("block") or {}).get("attributes", {})}
+    declared = {
+        rtype
+        for rtype, schema in provider_schema.items()
+        if "disable_override" in (schema.get("block") or {}).get("attributes", {})
+    }
     provider_types = {rtype for rtype in EMITTED_TYPES if rtype in declared}
     assert named == FLAG_ROWS, sorted(named)
     assert named == provider_types, (sorted(named), sorted(provider_types))

@@ -72,11 +72,11 @@ from typing import Callable
 
 import unit_manifest
 
-EDGE_FILE = 'REFERENCE_EDGES.json'
+EDGE_FILE = "REFERENCE_EDGES.json"
 
 # Field order. Fixed, so two runs write the same bytes and a reader does not guess.
 # The field names are the printed keys, so `parse_rows` reads a row back as itself.
-FIELD_ORDER = ('referrer', 'target', 'type', 'entry')
+FIELD_ORDER = ("referrer", "target", "type", "entry")
 
 # The five scope facts, read through `unit_manifest`, so the row joins to the manifest row and no
 # second fact order appears.
@@ -85,18 +85,18 @@ FACT_KEYS = unit_manifest.FACT_KEYS
 # The level order, read from the outermost scope in: `unit_manifest.NAME_LEVELS` reversed, with the
 # virtual system left out because a fact that is not a report level adds no level to the order chain.
 # A unit inside a stack depends on the stack, so the stack is a level (F6.10.5).
-LEVEL_KEYS = ('device_group', 'template_stack', 'template', 'vsys_device')
+LEVEL_KEYS = ("device_group", "template_stack", "template", "vsys_device")
 
-CYCLE_HEADING = 'Reference Cycles Between Units That Need an Operator Decision'
+CYCLE_HEADING = "Reference Cycles Between Units That Need an Operator Decision"
 
 CYCLE_RULE = (
-    'Two units that reference each other cannot be put in a plan order, so the edge graph must be acyclic. '
-    'A cycle is listed here, one line per cycle, read from its smallest unit, which is the unit the line '
-    'is grouped by. A finding is an operator action, not a broken output: it does not change the exit '
-    'code, which the F4.1 gate still decides.'
+    "Two units that reference each other cannot be put in a plan order, so the edge graph must be acyclic. "
+    "A cycle is listed here, one line per cycle, read from its smallest unit, which is the unit the line "
+    "is grouped by. A finding is an operator action, not a broken output: it does not change the exit "
+    "code, which the F4.1 gate still decides."
 )
 
-CYCLE_REASON = 'no plan order can put one of these units before the other'
+CYCLE_REASON = "no plan order can put one of these units before the other"
 
 # `rank` states no position for a unit in a cycle, because such a unit cannot be ordered.
 NO_RANK = 0
@@ -111,7 +111,7 @@ def build_rows(ownership_rows: list, references: dict, sanitize: Callable[[str],
     """
     owners: dict = defaultdict(set)
     for row in ownership_rows:
-        owners[row['entry']].add((row['type'], row['owner']))
+        owners[row["entry"]].add((row["type"], row["owner"]))
 
     rows = []
     for facts, names in references.items():
@@ -119,7 +119,7 @@ def build_rows(ownership_rows: list, references: dict, sanitize: Callable[[str],
         for name in sorted(names):
             for type_, owner in sorted(owners.get(name, ())):
                 if not owner or owner == referrer:
-                    continue    # rule 1 and rule 3: no target unit, or the same unit twice
+                    continue  # rule 1 and rule 3: no target unit, or the same unit twice
                 rows.append(dict(zip(FIELD_ORDER, (referrer, owner, type_, name))))
     return sorted(rows, key=lambda row: tuple(row[key] for key in FIELD_ORDER))
 
@@ -130,7 +130,7 @@ def render(rows: list) -> str:
     Fields print in the declared order, not alphabetically, and no field states a timestamp or a path, so
     two runs on the same bytes write the same bytes.
     """
-    return json.dumps([{key: row[key] for key in FIELD_ORDER} for row in rows], indent=2) + '\n'
+    return json.dumps([{key: row[key] for key in FIELD_ORDER} for row in rows], indent=2) + "\n"
 
 
 def parse_rows(text: str) -> list:
@@ -141,21 +141,21 @@ def parse_rows(text: str) -> list:
     """
     document = json.loads(text)
     if not isinstance(document, list):
-        raise ValueError('the edge record is not a list of rows')
+        raise ValueError("the edge record is not a list of rows")
     rows = []
     for row in document:
         if not isinstance(row, dict):
-            raise ValueError(f'not an edge row: {row!r}')
+            raise ValueError(f"not an edge row: {row!r}")
         extra = [key for key in row if key not in FIELD_ORDER]
         if extra:
-            raise ValueError(f'not a declared edge field: {extra}')
+            raise ValueError(f"not a declared edge field: {extra}")
         missing = [key for key in FIELD_ORDER if key not in row]
         if missing:
-            raise ValueError(f'the row does not state its fields: {missing}')
+            raise ValueError(f"the row does not state its fields: {missing}")
         if any(not isinstance(row[key], str) for key in FIELD_ORDER):
-            raise ValueError(f'the fields of an edge row are not names: {row}')
-        if not row['referrer'] or not row['target']:
-            raise ValueError(f'an edge row must name two units: {row}')
+            raise ValueError(f"the fields of an edge row are not names: {row}")
+        if not row["referrer"] or not row["target"]:
+            raise ValueError(f"an edge row must name two units: {row}")
         rows.append({key: row[key] for key in FIELD_ORDER})
     return sorted(rows, key=lambda row: tuple(row[key] for key in FIELD_ORDER))
 
@@ -167,8 +167,8 @@ def graph(rows: list) -> dict:
     """
     adjacency: dict = defaultdict(set)
     for row in rows:
-        if row['referrer'] != row['target']:
-            adjacency[row['referrer']].add(row['target'])
+        if row["referrer"] != row["target"]:
+            adjacency[row["referrer"]].add(row["target"])
     return {node: sorted(adjacency[node]) for node in sorted(adjacency)}
 
 
@@ -209,24 +209,24 @@ def findings(rows: list, manifest_rows: list) -> list:
     A finding holds the five facts of the unit the cycle is read from, read through that unit's manifest
     row, so the report groups it with the F3.9 rule, plus the walk and the names on each hop.
     """
-    facts_of = {row['directory']: tuple(row[key] for key in FACT_KEYS) for row in manifest_rows}
+    facts_of = {row["directory"]: tuple(row[key] for key in FACT_KEYS) for row in manifest_rows}
     hop_names: dict = defaultdict(set)
     for row in rows:
-        hop_names[(row['referrer'], row['target'])].add(row['entry'])
+        hop_names[(row["referrer"], row["target"])].add(row["entry"])
 
     findings = []
     for cycle in cycles(rows):
         facts = facts_of.get(cycle[0])
         if facts is None:
-            continue    # rule 2: a cycle is read from a unit the manifest names
+            continue  # rule 2: a cycle is read from a unit the manifest names
         finding = {key: unit_manifest.fact(facts, key) for key in FACT_KEYS}
-        finding['cycle'] = cycle
-        finding['names'] = tuple(tuple(sorted(hop_names[(cycle[hop], cycle[(hop + 1) % len(cycle)])]))
-                                 for hop in range(len(cycle)))
-        finding['reason'] = CYCLE_REASON
+        finding["cycle"] = cycle
+        finding["names"] = tuple(
+            tuple(sorted(hop_names[(cycle[hop], cycle[(hop + 1) % len(cycle)])])) for hop in range(len(cycle))
+        )
+        finding["reason"] = CYCLE_REASON
         findings.append(finding)
-    return sorted(findings, key=lambda finding: (tuple(finding[key] for key in FACT_KEYS),
-                                                 finding['cycle']))
+    return sorted(findings, key=lambda finding: (tuple(finding[key] for key in FACT_KEYS), finding["cycle"]))
 
 
 def cycle_line(finding: dict) -> str:
@@ -236,10 +236,10 @@ def cycle_line(finding: dict) -> str:
     in hop order, and the line names no path, the same rule the other finding sections follow (F4.2 rule
     6).
     """
-    walk = ' -> '.join(finding['cycle'])
-    names = '; '.join(', '.join(group) for group in finding['names'])
-    parts = [f'  cycle  {walk}  ', f'names: {names}  ', finding['reason']]
-    return ''.join(parts).rstrip()
+    walk = " -> ".join(finding["cycle"])
+    names = "; ".join(", ".join(group) for group in finding["names"])
+    parts = [f"  cycle  {walk}  ", f"names: {names}  ", finding["reason"]]
+    return "".join(parts).rstrip()
 
 
 def dependencies(manifest_rows: list, ownership_rows: list, edge_rows: list) -> dict:
@@ -248,7 +248,7 @@ def dependencies(manifest_rows: list, ownership_rows: list, edge_rows: list) -> 
     Only units the manifest names are nodes, so a declared parent source adds no dependency: a unit exists
     when the run's ledger has a row in it, and the parent source names no such row.
     """
-    units = {tuple(row[key] for key in FACT_KEYS): row['directory'] for row in manifest_rows}
+    units = {tuple(row[key] for key in FACT_KEYS): row["directory"] for row in manifest_rows}
     nodes = set(units.values())
     deps: dict = defaultdict(set)
 
@@ -257,11 +257,10 @@ def dependencies(manifest_rows: list, ownership_rows: list, edge_rows: list) -> 
     for row in manifest_rows:
         facts = tuple(row[key] for key in FACT_KEYS)
         for level in range(1, len(LEVEL_KEYS) + 1):
-            prefix = tuple(unit_manifest.fact(facts, key) if key in LEVEL_KEYS[:level] else ''
-                           for key in FACT_KEYS)
+            prefix = tuple(unit_manifest.fact(facts, key) if key in LEVEL_KEYS[:level] else "" for key in FACT_KEYS)
             container = units.get(prefix)
-            if container and container != row['directory']:
-                deps[row['directory']].add(container)
+            if container and container != row["directory"]:
+                deps[row["directory"]].add(container)
 
     # The inheritance rule: the ancestor unit before the unit that carries an override of a name it owns.
     # The graph reads only manifest units (the rule 7 sentence), so an override whose owner is a
@@ -269,14 +268,13 @@ def dependencies(manifest_rows: list, ownership_rows: list, edge_rows: list) -> 
     # `after` would name a directory the manifest does not state, and the gate rule `data_files` (F6.8)
     # could not read the order back.
     for row in ownership_rows:
-        if row['owner'] and row['owner'] != row['directory'] \
-                and row['directory'] in nodes and row['owner'] in nodes:
-            deps[row['directory']].add(row['owner'])
+        if row["owner"] and row["owner"] != row["directory"] and row["directory"] in nodes and row["owner"] in nodes:
+            deps[row["directory"]].add(row["owner"])
 
     # The edge rule: the target unit before the referrer unit.
     for row in edge_rows:
-        if row['target'] in nodes:
-            deps[row['referrer']].add(row['target'])
+        if row["target"] in nodes:
+            deps[row["referrer"]].add(row["target"])
 
     return {node: sorted(deps[node]) for node in sorted(nodes)}
 
@@ -295,12 +293,13 @@ def order(manifest_rows: list, ownership_rows: list, edge_rows: list) -> list:
         for unit in after:
             dependents[unit].add(directory)
 
-    identity = {row['directory']: tuple(row[key] for key in FACT_KEYS) for row in manifest_rows}
+    identity = {row["directory"]: tuple(row[key] for key in FACT_KEYS) for row in manifest_rows}
 
     ranks: dict = {}
     remaining = {directory: set(after) for directory, after in deps.items()}
-    ready = sorted([directory for directory, after in remaining.items() if not after],
-                   key=lambda directory: identity[directory])
+    ready = sorted(
+        [directory for directory, after in remaining.items() if not after], key=lambda directory: identity[directory]
+    )
     while ready:
         directory = ready.pop(0)
         ranks[directory] = len(ranks) + 1
@@ -313,7 +312,7 @@ def order(manifest_rows: list, ownership_rows: list, edge_rows: list) -> list:
     rows = []
     for row in manifest_rows:
         filled = dict(row)
-        filled['rank'] = ranks.get(row['directory'], NO_RANK)
-        filled['after'] = sorted(deps[row['directory']])
+        filled["rank"] = ranks.get(row["directory"], NO_RANK)
+        filled["after"] = sorted(deps[row["directory"]])
         rows.append(filled)
     return rows

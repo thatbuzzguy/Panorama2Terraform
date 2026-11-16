@@ -47,29 +47,35 @@ import re
 
 import resource_mapping
 
-IMPORT_FILE = 'imports.tf'
+IMPORT_FILE = "imports.tf"
 
 # The row shape for an import block, as the gate rule `import_blocks` reads it. Fixed, so two runs write
 # the same bytes and a reader does not guess. The name states the record it belongs to, because `src/` is
 # one flat namespace (§1).
-IMPORT_ROW_FIELDS = ('unit', 'resource_type', 'local_name', 'entry_name', 'import_id', 'rule')
+IMPORT_ROW_FIELDS = ("unit", "resource_type", "local_name", "entry_name", "import_id", "rule")
 
 # The rule decision for a type this module cannot write a block for, as the gate line states it.
-RULE_DECISION = ('the import object names the rulebase, the position, and a list of names, '
-                 'so no per-entry import object exists (F3.5)')
+RULE_DECISION = (
+    "the import object names the rulebase, the position, and a list of names, "
+    "so no per-entry import object exists (F3.5)"
+)
 
 
 def rule_types() -> set[str]:
     """The types whose `LOCATION_SCHEMA` row declares `rulebase`: the four `*_policy_rules` types."""
-    return {resource_type for resource_type, scopes in resource_mapping.LOCATION_SCHEMA.items()
-            if any('rulebase' in fields for fields in scopes.values())}
+    return {
+        resource_type
+        for resource_type, scopes in resource_mapping.LOCATION_SCHEMA.items()
+        if any("rulebase" in fields for fields in scopes.values())
+    }
 
 
 def build_id(location: dict, entry_name: str) -> str:
     """base64 of the JSON object for one entry: the location object and the entry name (§12)."""
-    document = json.dumps({'location': location, 'name': entry_name},
-                          sort_keys=True, ensure_ascii=True, separators=(',', ':'))
-    return base64.b64encode(document.encode('utf-8')).decode('ascii')
+    document = json.dumps(
+        {"location": location, "name": entry_name}, sort_keys=True, ensure_ascii=True, separators=(",", ":")
+    )
+    return base64.b64encode(document.encode("utf-8")).decode("ascii")
 
 
 def decode_id(value: str) -> dict:
@@ -81,57 +87,63 @@ def decode_id(value: str) -> dict:
     try:
         raw = base64.b64decode(value, validate=True)
     except (ValueError, base64.binascii.Error) as exc:
-        raise ValueError(f'the id is not base64: {value!r}') from exc
+        raise ValueError(f"the id is not base64: {value!r}") from exc
     try:
-        document = json.loads(raw.decode('utf-8'))
+        document = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError(f'the decoded id is not JSON: {value!r}') from exc
+        raise ValueError(f"the decoded id is not JSON: {value!r}") from exc
     if not isinstance(document, dict):
-        raise ValueError(f'the id is not an object: {value!r}')
-    extra = [key for key in document if key not in ('location', 'name')]
+        raise ValueError(f"the id is not an object: {value!r}")
+    extra = [key for key in document if key not in ("location", "name")]
     if extra:
-        raise ValueError(f'the id states a field it does not declare: {extra}')
-    if not isinstance(document.get('location'), dict):
-        raise ValueError(f'the id location is not a sub-block object: {document}')
-    if not isinstance(document.get('name'), str) or not document['name']:
-        raise ValueError(f'the id name is not a name: {document}')
-    for sub_block, fields in document['location'].items():
+        raise ValueError(f"the id states a field it does not declare: {extra}")
+    if not isinstance(document.get("location"), dict):
+        raise ValueError(f"the id location is not a sub-block object: {document}")
+    if not isinstance(document.get("name"), str) or not document["name"]:
+        raise ValueError(f"the id name is not a name: {document}")
+    for sub_block, fields in document["location"].items():
         if not isinstance(fields, dict):
-            raise ValueError(f'location.{sub_block} is not an object of fields: {document}')
+            raise ValueError(f"location.{sub_block} is not an object of fields: {document}")
         if any(not isinstance(value, str) for value in fields.values()):
-            raise ValueError(f'location.{sub_block} states a field that is not a name: {document}')
-    return {'location': {sub_block: dict(sorted(fields.items()))
-                         for sub_block, fields in sorted(document['location'].items())},
-            'name': document['name']}
+            raise ValueError(f"location.{sub_block} states a field that is not a name: {document}")
+    return {
+        "location": {
+            sub_block: dict(sorted(fields.items())) for sub_block, fields in sorted(document["location"].items())
+        },
+        "name": document["name"],
+    }
 
 
 def row(unit: str, resource_type: str, local_name: str, entry_name: str, location: dict) -> dict:
     """One import row from the same data the resource block uses: the type, the names, the location."""
-    shape = dict.fromkeys(IMPORT_ROW_FIELDS, '')
-    shape['unit'] = unit
-    shape['resource_type'] = resource_type
-    shape['local_name'] = local_name
-    shape['entry_name'] = entry_name
+    shape = dict.fromkeys(IMPORT_ROW_FIELDS, "")
+    shape["unit"] = unit
+    shape["resource_type"] = resource_type
+    shape["local_name"] = local_name
+    shape["entry_name"] = entry_name
     if resource_type in rule_types():
         # No id: the import object for this type names a rulebase, a position, and a list (rule 5).
-        shape['rule'] = RULE_DECISION
+        shape["rule"] = RULE_DECISION
     else:
-        shape['import_id'] = build_id(location, entry_name)
+        shape["import_id"] = build_id(location, entry_name)
     return shape
 
 
 def render(rows: list) -> str:
     """The import file as text: one block per row, in the order a reader can reproduce."""
-    lines = ['# Import blocks (F6.4): one block per entry, built from the same identity data the '
-            'resource block uses.\n'
-            '# The id is base64 of the location object and the entry name, the provider shape (§12).\n\n']
-    for shape in sorted(rows, key=lambda row: (row['unit'], row['local_name'])):
-        if not shape['import_id']:
+    lines = [
+        "# Import blocks (F6.4): one block per entry, built from the same identity data the "
+        "resource block uses.\n"
+        "# The id is base64 of the location object and the entry name, the provider shape (§12).\n\n"
+    ]
+    for shape in sorted(rows, key=lambda row: (row["unit"], row["local_name"])):
+        if not shape["import_id"]:
             # A row that states a rule instead of an id names no block.
             continue
-        lines.append(f'import {{\n  to = {shape["resource_type"]}.{shape["local_name"]}\n'
-                     f'  id = "{shape["import_id"]}"\n}}\n\n')
-    return ''.join(lines)
+        lines.append(
+            f'import {{\n  to = {shape["resource_type"]}.{shape["local_name"]}\n  id = "{shape["import_id"]}"\n}}\n\n'
+        )
+    return "".join(lines)
 
 
 def read_block(block) -> dict:
@@ -141,13 +153,13 @@ def read_block(block) -> dict:
     `unit_manifest.parse_rows` refuses a row that is not the declared shape. `unit` is empty here: the unit
     is the manifest fact, not a block field.
     """
-    shape = dict.fromkeys(IMPORT_ROW_FIELDS, '')
-    shape['resource_type'] = block.rtype
-    shape['local_name'] = block.local
-    decoded = decode_id(block_value(block, 'id'))
-    shape['entry_name'] = decoded['name']
-    shape['import_id'] = build_id(decoded['location'], decoded['name'])
-    shape['rule'] = RULE_DECISION if block.rtype in rule_types() else ''
+    shape = dict.fromkeys(IMPORT_ROW_FIELDS, "")
+    shape["resource_type"] = block.rtype
+    shape["local_name"] = block.local
+    decoded = decode_id(block_value(block, "id"))
+    shape["entry_name"] = decoded["name"]
+    shape["import_id"] = build_id(decoded["location"], decoded["name"])
+    shape["rule"] = RULE_DECISION if block.rtype in rule_types() else ""
     return shape
 
 
@@ -177,7 +189,7 @@ def level_path(name: str) -> tuple:
     use, or by `.`, which is the form the reader's callers have used. One rule reads both, so a rule that
     walks a level and a rule that names one sub-block read the same text.
     """
-    return tuple(part for part in re.split(r'[./]', name) if part)
+    return tuple(part for part in re.split(r"[./]", name) if part)
 
 
 def field_at(text: str, key: str) -> str:
@@ -191,8 +203,8 @@ def field_at(text: str, key: str) -> str:
     follow the name directly, which is the shape the Terraform 1.14 action grammar requires for `config`.
     A name is read as a name, so a key that is a prefix of a longer key on the same line is not a match.
     """
-    match = re.search(rf'(?m)^ {{{level_of(text)}}}{re.escape(key)}(?=[^\w])\s*(?:=\s*)?(\S)', text)
-    return read_value(text, match.end() - 1) if match else ''
+    match = re.search(rf"(?m)^ {{{level_of(text)}}}{re.escape(key)}(?=[^\w])\s*(?:=\s*)?(\S)", text)
+    return read_value(text, match.end() - 1) if match else ""
 
 
 def container_body(raw: str) -> str:
@@ -201,7 +213,7 @@ def container_body(raw: str) -> str:
     A leaf value is not a container, so it is returned as it was read. This is the one place the
     reader steps down one level, so a path walk and a single sub-block name read the same text.
     """
-    if raw[:1] in ('{', '[') and raw[-1:] in ('}', ']'):
+    if raw[:1] in ("{", "[") and raw[-1:] in ("}", "]"):
         return raw[1:-1]
     return raw
 
@@ -214,8 +226,8 @@ def container_elements(block, name: str) -> tuple:
     a level that is not there as `''`.
     """
     levels = level_path(name)
-    parent = '/'.join(levels[:-1])
-    value = field_value(block, levels[-1], parent) if levels else ''
+    parent = "/".join(levels[:-1])
+    value = field_value(block, levels[-1], parent) if levels else ""
     return elements_of(value)
 
 
@@ -226,25 +238,25 @@ def elements_of(value: str) -> tuple:
     that reads a list field count the same elements. The walk reads an element inside a list from the text
     the reader was given, because a path cannot name the second element of a list.
     """
-    if not value.startswith('['):
+    if not value.startswith("["):
         return ()
     found = []
     inner = container_body(value)
     index = 0
     while index < len(inner):
-        if inner[index] in ' \n\t,':
+        if inner[index] in " \n\t,":
             index += 1
             continue
         element = read_value(inner, index)
         if not element:
             break
         # A plain element inside a list ends at its comma, so the separator stays out of the value.
-        found.append(element.rstrip(',').rstrip())
+        found.append(element.rstrip(",").rstrip())
         index += len(element)
     return tuple(found)
 
 
-def block_value(block, key: str, sub_block: str = '') -> str:
+def block_value(block, key: str, sub_block: str = "") -> str:
     """One quoted field of a block, as the gate reads it (the one field reader).
 
     A field inside a sub-block is not the block's field: `location = { name = "DG-A" }` states the
@@ -253,10 +265,10 @@ def block_value(block, key: str, sub_block: str = '') -> str:
     may carry an escaped quote, so the reader stops only at the closing quote.
     """
     value = field_value(block, key, sub_block)
-    return unescape(value[1:-1]) if value.startswith('"') else ''
+    return unescape(value[1:-1]) if value.startswith('"') else ""
 
 
-def block_list(block, key: str, sub_block: str = '') -> tuple:
+def block_list(block, key: str, sub_block: str = "") -> tuple:
     """One list field of a block, element by element, through the same field reader (F6.7).
 
     The reader keeps the rule: read at the level `sub_block` names, stop at the closing quote. An
@@ -264,13 +276,12 @@ def block_list(block, key: str, sub_block: str = '') -> tuple:
     `sanity_checks.check_actions` reports it.
     """
     value = field_value(block, key, sub_block)
-    if not value.startswith('['):
+    if not value.startswith("["):
         return ()
-    return tuple(unescape(element)
-                 for element in re.findall(r'"((?:[^"\\]|\\.)*)"', value))
+    return tuple(unescape(element) for element in re.findall(r'"((?:[^"\\]|\\.)*)"', value))
 
 
-def fields(block, sub_block: str = '') -> dict:
+def fields(block, sub_block: str = "") -> dict:
     """Every field of a block, as the raw value text, in the block's order (F6.7).
 
     `sub_block` names the level the fields are read at: the action rule reads the fields inside
@@ -291,12 +302,12 @@ def fields_at(text: str) -> dict:
     not read here: the reader reads what the file states as a level.
     """
     found = {}
-    for match in re.finditer(rf'(?m)^ {{{level_of(text)}}}([A-Za-z0-9_]+)\s*=\s*', text):
+    for match in re.finditer(rf"(?m)^ {{{level_of(text)}}}([A-Za-z0-9_]+)\s*=\s*", text):
         found[match.group(1)] = read_value(text, match.end())
     return found
 
 
-def field_value(block, key: str, sub_block: str = '') -> str:
+def field_value(block, key: str, sub_block: str = "") -> str:
     """The one match the field readers share: the value of `key` at the level `sub_block` names."""
     return field_at(sub_block_body(block, sub_block) if sub_block else block.body, key)
 
@@ -308,12 +319,12 @@ def read_value(text: str, start: int) -> str:
     a sub-block field or an escaped quote never answers for the block's field.
     """
     if start >= len(text):
-        return ''
+        return ""
     open_char = text[start]
-    if open_char not in '[{':
-        end = text.find('\n', start)
-        return text[start:end if end != -1 else len(text)].strip()
-    close_char = ']' if open_char == '[' else '}'
+    if open_char not in "[{":
+        end = text.find("\n", start)
+        return text[start : end if end != -1 else len(text)].strip()
+    close_char = "]" if open_char == "[" else "}"
     depth = 0
     index = start
     while index < len(text):
@@ -321,7 +332,7 @@ def read_value(text: str, start: int) -> str:
         if char == '"':
             index += 1
             while index < len(text) and text[index] != '"':
-                index += 2 if text[index] == '\\' else 1
+                index += 2 if text[index] == "\\" else 1
             index += 1
             continue
         if char == open_char:
@@ -329,14 +340,14 @@ def read_value(text: str, start: int) -> str:
         elif char == close_char:
             depth -= 1
             if depth == 0:
-                return text[start:index + 1]
+                return text[start : index + 1]
         index += 1
     return text[start:]
 
 
 def level_of(body: str) -> int:
     """The level the field readers read at: the smallest indent in the body (the one rule)."""
-    indents = [len(line) - len(line.lstrip()) for line in body.split('\n') if line.strip()]
+    indents = [len(line) - len(line.lstrip()) for line in body.split("\n") if line.strip()]
     return min(indents) if indents else 0
 
 
@@ -347,6 +358,6 @@ def unescape(value: str) -> str:
     writes the same ones, so the value in the block and the value in the id are the same string only after both
     are read back.
     """
-    for escape, char in (('\\\\', '\\'), ('\\"', '"'), ('\\t', '\t'), ('\\r', '\r'), ('\\n', '\n')):
+    for escape, char in (("\\\\", "\\"), ('\\"', '"'), ("\\t", "\t"), ("\\r", "\r"), ("\\n", "\n")):
         value = value.replace(escape, char)
     return value

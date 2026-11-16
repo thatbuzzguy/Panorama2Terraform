@@ -43,71 +43,70 @@ from resource_mapping import (
 
 def _fields(value: dict) -> tuple:
     """The attributes a nested block declares, in sorted order."""
-    return tuple(sorted(value.get('nested_type', {}).get('attributes', {})))
+    return tuple(sorted(value.get("nested_type", {}).get("attributes", {})))
 
 
 def _live_shape(schema: dict) -> dict:
     """The live `location` shape for one data source, as {sub-block: fields}."""
-    location = schema['block']['attributes'].get('location')
-    if not location or 'nested_type' not in location:
+    location = schema["block"]["attributes"].get("location")
+    if not location or "nested_type" not in location:
         return {}
     return {
         sub_block: _fields(attributes)
-        for sub_block, attributes in location['nested_type'].get('attributes', {}).items()
+        for sub_block, attributes in location["nested_type"].get("attributes", {}).items()
     }
 
 
 # --- the table against the live schema ---------------------------------------
 
+
 def test_the_table_covers_every_data_source(provider_data_schemas):
     """No data source is missing from the table, and the table names none that does
     not exist."""
     live = set(provider_data_schemas)
-    assert sorted(DATA_SOURCE_SCHEMA) == sorted(live), sorted(
-        set(DATA_SOURCE_SCHEMA) ^ live)
+    assert sorted(DATA_SOURCE_SCHEMA) == sorted(live), sorted(set(DATA_SOURCE_SCHEMA) ^ live)
 
 
-@pytest.mark.parametrize('rtype', sorted(DATA_SOURCE_SCHEMA))
+@pytest.mark.parametrize("rtype", sorted(DATA_SOURCE_SCHEMA))
 def test_a_row_equals_the_live_shape(rtype, provider_data_schemas):
     """The two facts of a row are the live facts: the `name` flag and the shape."""
     declares_name, shape = DATA_SOURCE_SCHEMA[rtype]
-    attributes = provider_data_schemas[rtype]['block']['attributes']
-    assert declares_name == ('name' in attributes), rtype
+    attributes = provider_data_schemas[rtype]["block"]["attributes"]
+    assert declares_name == ("name" in attributes), rtype
     assert shape == _live_shape(provider_data_schemas[rtype]), rtype
 
 
 def test_location_is_required_for_every_data_source(provider_data_schemas):
     """The gate rule can require `location` because the provider requires it."""
     for rtype, schema in provider_data_schemas.items():
-        attributes = schema['block']['attributes']
-        assert attributes.get('location', {}).get('required'), f'{rtype} location'
+        attributes = schema["block"]["attributes"]
+        assert attributes.get("location", {}).get("required"), f"{rtype} location"
 
 
 def test_name_is_required_when_the_row_declares_one(provider_data_schemas):
     """A row that declares `name` means a required name, so a block without one is a
     finding."""
     for rtype, schema in provider_data_schemas.items():
-        attributes = schema['block']['attributes']
-        if 'name' in attributes:
-            assert attributes['name'].get('required'), f'{rtype} name'
+        attributes = schema["block"]["attributes"]
+        if "name" in attributes:
+            assert attributes["name"].get("required"), f"{rtype} name"
 
 
 def test_the_name_counts_and_the_two_sets(provider_data_schemas):
     """128 data sources: 106 declare `name`, 22 do not (the settings, policy, and
     collection shapes). The gate rule must not require a name for the 22."""
-    name_rows = sorted(t for t, (declares_name, _shape) in DATA_SOURCE_SCHEMA.items()
-                       if declares_name)
-    no_name_rows = sorted(t for t, (declares_name, _shape) in DATA_SOURCE_SCHEMA.items()
-                          if not declares_name)
+    name_rows = sorted(t for t, (declares_name, _shape) in DATA_SOURCE_SCHEMA.items() if declares_name)
+    no_name_rows = sorted(t for t, (declares_name, _shape) in DATA_SOURCE_SCHEMA.items() if not declares_name)
     assert len(name_rows) == 106, len(name_rows)
     assert len(no_name_rows) == 22, len(no_name_rows)
     live_no_name = sorted(
-        t for t, schema in provider_data_schemas.items()
-        if 'name' not in schema['block']['attributes'])
+        t for t, schema in provider_data_schemas.items() if "name" not in schema["block"]["attributes"]
+    )
     assert no_name_rows == live_no_name
 
 
 # --- the table against the generator's location rule -------------------------
+
 
 def test_location_schema_stays_inside_the_data_shape(provider_data_schemas):
     """A sub-block and field the generator can write must be one the data shape
@@ -117,12 +116,11 @@ def test_location_schema_stays_inside_the_data_shape(provider_data_schemas):
             continue
         shape = DATA_SOURCE_SCHEMA[rtype][1]
         for sub_block, fields in scopes.items():
-            assert sub_block in shape, f'{rtype}.{sub_block}'
-            assert tuple(sorted(fields)) == shape[sub_block], f'{rtype}.{sub_block}'
+            assert sub_block in shape, f"{rtype}.{sub_block}"
+            assert tuple(sorted(fields)) == shape[sub_block], f"{rtype}.{sub_block}"
 
 
-def test_the_shared_types_mirror_the_resource_shape(provider_schema,
-                                                    provider_data_schemas):
+def test_the_shared_types_mirror_the_resource_shape(provider_schema, provider_data_schemas):
     """126 types exist in both sets, and for those the data row equals the resource
     shape on both facts. That is why the data table can be the complete shape while
     `LOCATION_SCHEMA` stays a generator subset.
@@ -131,26 +129,25 @@ def test_the_shared_types_mirror_the_resource_shape(provider_schema,
     assert len(shared) == 126, len(shared)
     for rtype in shared:
         declares_name, shape = DATA_SOURCE_SCHEMA[rtype]
-        attributes = provider_schema[rtype]['block']['attributes']
-        assert ('name' in attributes) == declares_name, rtype
+        attributes = provider_schema[rtype]["block"]["attributes"]
+        assert ("name" in attributes) == declares_name, rtype
         assert shape == _live_shape(provider_data_schemas[rtype]), rtype
         live_resource = {
             sub_block: _fields(value)
-            for sub_block, value in attributes['location']['nested_type']['attributes'].items()
+            for sub_block, value in attributes["location"]["nested_type"]["attributes"].items()
         }
         assert shape == live_resource, rtype
 
 
-def test_the_name_level_asymmetries_stay_asymmetries(provider_schema,
-                                                      provider_data_schemas):
+def test_the_name_level_asymmetries_stay_asymmetries(provider_schema, provider_data_schemas):
     """Four types are named by one set only, so the gate cannot assume the two tables
     mirror each other: two resources have no data source, and two data sources have no
     resource. A `data` block for a resource-only type is a gate finding, and a resource
     name fact cannot be read from the data table for a data-source-only type."""
     resource_only = sorted(set(provider_schema) - set(provider_data_schemas))
     data_only = sorted(set(provider_data_schemas) - set(provider_schema))
-    assert resource_only == ['panos_certificate_import', 'panos_virtual_router_interface']
-    assert data_only == ['panos_certificate', 'panos_predefined_dlp_file_type']
+    assert resource_only == ["panos_certificate_import", "panos_virtual_router_interface"]
+    assert data_only == ["panos_certificate", "panos_predefined_dlp_file_type"]
     for rtype in resource_only:
         assert rtype not in DATA_SOURCE_SCHEMA, rtype
     for rtype in data_only:
@@ -168,8 +165,8 @@ def test_the_name_fact_for_a_resource_only_type(provider_schema):
     """
     assert sorted(RESOURCE_NAME_FIELDS) == sorted(set(provider_schema) - set(DATA_SOURCE_SCHEMA)), RESOURCE_NAME_FIELDS
     for rtype, field in RESOURCE_NAME_FIELDS.items():
-        attributes = provider_schema[rtype]['block']['attributes']
-        assert (field == 'name') == ('name' in attributes), (rtype, field)
+        attributes = provider_schema[rtype]["block"]["attributes"]
+        assert (field == "name") == ("name" in attributes), (rtype, field)
         assert field in attributes, (rtype, field)
 
 
@@ -184,17 +181,19 @@ def test_the_certificate_table_is_the_live_shape(provider_schema):
     the provider reads a level, not what it declares.
     """
     for path, row in sorted(CERTIFICATE_SHAPE.items()):
-        segments = path.split('/')
-        attributes = provider_schema[CERTIFICATE_TYPES[segments[0]]]['block']['attributes']
+        segments = path.split("/")
+        attributes = provider_schema[CERTIFICATE_TYPES[segments[0]]]["block"]["attributes"]
         for segment in segments[1:]:
-            attributes = attributes[segment]['nested_type']['attributes']
-        declared = {name for name in attributes if name != 'location'}
-        if row['shape'] == 'one_of':
+            attributes = attributes[segment]["nested_type"]["attributes"]
+        declared = {name for name in attributes if name != "location"}
+        if row["shape"] == "one_of":
             # A `one_of` level states no field: the row states the alternatives, and the key the print uses for
             # each is the name the live nested block declares, because the export states the level by presence.
-            assert sorted(row['selects']) == sorted(declared), (path, sorted(declared))
-            assert all(key == value for key, value in row['selects'].items()), path
+            assert sorted(row["selects"]) == sorted(declared), (path, sorted(declared))
+            assert all(key == value for key, value in row["selects"].items()), path
         else:
-            assert sorted(row['fields']) == sorted(declared), (path, sorted(declared))
-        assert row['sensitive'] == frozenset(f for f, value in attributes.items()
-                                            if value.get('sensitive')), (path, row['sensitive'])
+            assert sorted(row["fields"]) == sorted(declared), (path, sorted(declared))
+        assert row["sensitive"] == frozenset(f for f, value in attributes.items() if value.get("sensitive")), (
+            path,
+            row["sensitive"],
+        )

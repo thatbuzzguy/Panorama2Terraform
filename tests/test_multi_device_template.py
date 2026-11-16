@@ -36,16 +36,14 @@ from panorama_to_terraform import TerraformGenerator
 # tests/fixtures/multi_device_templates.xml, written out so an emitter test
 # can name a scope without re-reading the XML.
 ASSOCIATIONS = {
-    'device_groups': {'fw-1.example.com': ['Office-FW'],
-                      'fw-2.example.com': ['Datacenter-FW']},
-    'templates': {'fw-1.example.com': ['HQ-Networks'],
-                  'fw-2.example.com': ['DC-Networks']},
-    'template_stacks': {'fw-3.example.com': ['Branch-Stack']},
-    'stack_templates': {'Branch-Stack': ['HQ-Networks']},
+    "device_groups": {"fw-1.example.com": ["Office-FW"], "fw-2.example.com": ["Datacenter-FW"]},
+    "templates": {"fw-1.example.com": ["HQ-Networks"], "fw-2.example.com": ["DC-Networks"]},
+    "template_stacks": {"fw-3.example.com": ["Branch-Stack"]},
+    "stack_templates": {"Branch-Stack": ["HQ-Networks"]},
 }
 
-FW1 = 'fw-1.example.com'
-FW2 = 'fw-2.example.com'
+FW1 = "fw-1.example.com"
+FW2 = "fw-2.example.com"
 
 
 def _fixture_source(name: str):
@@ -55,48 +53,46 @@ def _fixture_source(name: str):
 
 def _table_row(splitter_module, source, name: str) -> dict:
     """The device-group row the table answers for a name, so the extraction is handed the row it reads."""
-    return next(row for row in splitter_module.parse_device_groups(source) if row['name'] == name)
+    return next(row for row in splitter_module.parse_device_groups(source) if row["name"] == name)
 
 
 def _splitter_tree(splitter_module, source, row: dict):
     """The tree the extraction builds for one row. The join is an argument, so the pin hands the tables the same
     source answers and the extraction states no lookup of its own."""
-    return splitter_module.extract_device_group_config(
-        source, row, splitter_module.device_associations(source))
+    return splitter_module.extract_device_group_config(source, row, splitter_module.device_associations(source))
 
 
 def _resources(text: str) -> dict:
     """Return {resource header: full block} for every resource in a file."""
     blocks, current = {}, None
-    for line in text.split('\n'):
+    for line in text.split("\n"):
         if line.startswith('resource "'):
             current = line
-            blocks[current] = line + '\n'
+            blocks[current] = line + "\n"
         elif current is not None:
-            blocks[current] += line + '\n'
+            blocks[current] += line + "\n"
     return blocks
 
 
 def _location(text: str) -> dict:
     """Return the emitted location as {scope: {field: value}}."""
-    lines = text.split('\n')
-    start = next(i for i, line in enumerate(lines)
-                 if line.startswith('  location = {'))
+    lines = text.split("\n")
+    start = next(i for i, line in enumerate(lines) if line.startswith("  location = {"))
     scopes, current = {}, None
-    for line in lines[start + 1:]:
+    for line in lines[start + 1 :]:
         stripped = line.strip()
-        if stripped.endswith('= {}'):
-            scopes[stripped.split(' = ')[0]] = {}
+        if stripped.endswith("= {}"):
+            scopes[stripped.split(" = ")[0]] = {}
             current = None
-        elif stripped.endswith('= {'):
-            current = stripped.split(' = ')[0]
+        elif stripped.endswith("= {"):
+            current = stripped.split(" = ")[0]
             scopes[current] = {}
-        elif stripped == '}':
+        elif stripped == "}":
             if current is None:
                 break
             current = None
-        elif ' = ' in stripped and current is not None:
-            key, value = stripped.split(' = ', 1)
+        elif " = " in stripped and current is not None:
+            key, value = stripped.split(" = ", 1)
             scopes[current][key] = value.strip('"')
     return scopes
 
@@ -115,24 +111,25 @@ def bare_gen(tmp_path):
 
 # --- parser: the association the export declares ---------------------------
 
+
 def test_parser_reads_the_declared_membership(make_parser):
     """Device groups, templates and stacks are joined to devices by name."""
-    tables = make_parser('multi_device_templates.xml').parse_associations()
-    assert tables['device_groups'] == {FW1: ['Office-FW'], FW2: ['Datacenter-FW']}
-    assert tables['templates'] == {FW1: ['HQ-Networks'], FW2: ['DC-Networks']}
-    assert tables['template_stacks'] == {'fw-3.example.com': ['Branch-Stack']}
-    assert tables['stack_templates'] == {'Branch-Stack': ['HQ-Networks']}
+    tables = make_parser("multi_device_templates.xml").parse_associations()
+    assert tables["device_groups"] == {FW1: ["Office-FW"], FW2: ["Datacenter-FW"]}
+    assert tables["templates"] == {FW1: ["HQ-Networks"], FW2: ["DC-Networks"]}
+    assert tables["template_stacks"] == {"fw-3.example.com": ["Branch-Stack"]}
+    assert tables["stack_templates"] == {"Branch-Stack": ["HQ-Networks"]}
 
 
 def test_templates_for_device_follows_the_stack(make_parser):
     """A device takes a template directly or through a template stack."""
-    parser = make_parser('multi_device_templates.xml')
-    assert parser.templates_for_device(FW1) == ['HQ-Networks']
-    assert parser.templates_for_device(FW2) == ['DC-Networks']
+    parser = make_parser("multi_device_templates.xml")
+    assert parser.templates_for_device(FW1) == ["HQ-Networks"]
+    assert parser.templates_for_device(FW2) == ["DC-Networks"]
     # fw-3 is named only by the stack, and the stack names the template.
-    assert parser.templates_for_device('fw-3.example.com') == ['HQ-Networks']
-    assert parser.templates_for_device('fw-9.example.com') == []
-    assert parser.templates_for_device('') == []
+    assert parser.templates_for_device("fw-3.example.com") == ["HQ-Networks"]
+    assert parser.templates_for_device("fw-9.example.com") == []
+    assert parser.templates_for_device("") == []
 
 
 def test_association_is_empty_when_the_export_lists_no_devices(make_parser):
@@ -142,22 +139,22 @@ def test_association_is_empty_when_the_export_lists_no_devices(make_parser):
     all; inventing one would place resources in a template that does not
     exist.
     """
-    parser = make_parser('virtual_routers.xml')
+    parser = make_parser("virtual_routers.xml")
     tables = parser.parse_associations()
-    assert tables == {'device_groups': {}, 'templates': {},
-                      'template_stacks': {}, 'stack_templates': {}}
+    assert tables == {"device_groups": {}, "templates": {}, "template_stacks": {}, "stack_templates": {}}
     assert parser.templates_for_device(FW1) == []
 
 
 def test_association_names_are_sorted(make_parser):
     """The tables do not depend on document order."""
-    tables = make_parser('multi_device_templates.xml').parse_associations()
+    tables = make_parser("multi_device_templates.xml").parse_associations()
     for table in tables.values():
         for names in table.values():
             assert names == sorted(names)
 
 
 # --- emitter: device-specific placement ------------------------------------
+
 
 def test_device_specific_config_uses_ngfw(bare_gen):
     """An entry under devices/entry/<device> is that device's own config.
@@ -166,9 +163,8 @@ def test_device_specific_config_uses_ngfw(bare_gen):
     placeholder, which names a template no Panorama has. The device name prints
     as `VALUE_VARIABLES` says, so the block states the variable name (F6.6).
     """
-    text = bare_gen.location_block('panos_virtual_router',
-                                   {'name': 'vr', 'vsys_device': FW1})
-    assert _location(text) == {'ngfw': {'ngfw_device': naming.variable_text(FW1)}}
+    text = bare_gen.location_block("panos_virtual_router", {"name": "vr", "vsys_device": FW1})
+    assert _location(text) == {"ngfw": {"ngfw_device": naming.variable_text(FW1)}}
 
 
 def test_object_types_never_emit_ngfw(bare_gen):
@@ -178,11 +174,9 @@ def test_object_types_never_emit_ngfw(bare_gen):
     export places on a device with no vsys falls back to its real location
     instead of a sub-block the provider would reject at apply.
     """
-    text = bare_gen.location_block('panos_address',
-                                   {'name': 'a', 'device_group': 'Shared',
-                                    'vsys_device': FW1})
-    assert 'ngfw' not in text
-    assert _location(text) == {'shared': {}}
+    text = bare_gen.location_block("panos_address", {"name": "a", "device_group": "Shared", "vsys_device": FW1})
+    assert "ngfw" not in text
+    assert _location(text) == {"shared": {}}
 
 
 def test_placeholder_device_never_becomes_ngfw(bare_gen):
@@ -191,12 +185,12 @@ def test_placeholder_device_never_becomes_ngfw(bare_gen):
     F6.6: a value that reaches no location names no variable, so the placeholder cannot enter the
     value-to-variable mapping.
     """
-    text = bare_gen.location_block('panos_ethernet_interface',
-                                   {'name': 'ethernet1/1',
-                                    'vsys_device': 'localhost.localdomain'})
-    assert 'localhost' not in text
-    assert 'var.' not in text, 'the placeholder names no device, so it names no variable'
-    assert _location(text) == {'template': {'name': 'Shared'}}
+    text = bare_gen.location_block(
+        "panos_ethernet_interface", {"name": "ethernet1/1", "vsys_device": "localhost.localdomain"}
+    )
+    assert "localhost" not in text
+    assert "var." not in text, "the placeholder names no device, so it names no variable"
+    assert _location(text) == {"template": {"name": "Shared"}}
 
 
 def test_template_override_inside_a_template_names_the_device(bare_gen):
@@ -205,11 +199,8 @@ def test_template_override_inside_a_template_names_the_device(bare_gen):
     location.template declares ngfw_device next to name, which is how the
     provider spells a per-device override of a template.
     """
-    text = bare_gen.location_block('panos_zone',
-                                   {'name': 'trust', 'template': 'HQ-Networks',
-                                    'vsys_device': FW1})
-    assert _location(text) == {'template': {'name': 'HQ-Networks',
-                                            'ngfw_device': naming.variable_text(FW1)}}
+    text = bare_gen.location_block("panos_zone", {"name": "trust", "template": "HQ-Networks", "vsys_device": FW1})
+    assert _location(text) == {"template": {"name": "HQ-Networks", "ngfw_device": naming.variable_text(FW1)}}
 
 
 def test_zone_with_a_device_and_no_vsys_is_reported(gen):
@@ -219,24 +210,22 @@ def test_zone_with_a_device_and_no_vsys_is_reported(gen):
     system), so the converter cannot place it and says which template the
     device takes instead of staying silent.
     """
-    text = gen.location_block('panos_zone', {'name': 'trust',
-                                             'vsys_device': FW2})
-    assert _location(text) == {'template': {'name': 'Shared'}}
+    text = gen.location_block("panos_zone", {"name": "trust", "vsys_device": FW2})
+    assert _location(text) == {"template": {"name": "Shared"}}
     gen.generate_manual_setup_report({}, [], [], [])
-    report = (gen.output_dir / 'MANUAL_SETUP_REPORT.txt').read_text()
-    assert 'Template Locations The Export Does Not Name' in report
-    line = next(line for line in report.split('\n') if 'panos_zone "trust"' in line)
-    assert 'DC-Networks' in line
+    report = (gen.output_dir / "MANUAL_SETUP_REPORT.txt").read_text()
+    assert "Template Locations The Export Does Not Name" in report
+    line = next(line for line in report.split("\n") if 'panos_zone "trust"' in line)
+    assert "DC-Networks" in line
 
 
 def test_placeholder_report_without_a_device(bare_gen):
     """The report still explains a placeholder with no device to name."""
-    bare_gen.location_block('panos_monitor_profile', {'name': 'PM'})
+    bare_gen.location_block("panos_monitor_profile", {"name": "PM"})
     bare_gen.generate_manual_setup_report({}, [], [], [])
-    report = (bare_gen.output_dir / 'MANUAL_SETUP_REPORT.txt').read_text()
-    line = next(line for line in report.split('\n')
-                if 'panos_monitor_profile "PM"' in line)
-    assert 'the export names no device for this entry' in line
+    report = (bare_gen.output_dir / "MANUAL_SETUP_REPORT.txt").read_text()
+    line = next(line for line in report.split("\n") if 'panos_monitor_profile "PM"' in line)
+    assert "the export names no device for this entry" in line
 
 
 def test_placeholder_report_names_the_localhost_placeholder(bare_gen):
@@ -246,16 +235,15 @@ def test_placeholder_report_names_the_localhost_placeholder(bare_gen):
     which names no device (F3.5), so the report must not read as if a device
     existed and took no template.
     """
-    bare_gen.location_block('panos_monitor_profile',
-                            {'name': 'PM', 'vsys_device': 'localhost.localdomain'})
+    bare_gen.location_block("panos_monitor_profile", {"name": "PM", "vsys_device": "localhost.localdomain"})
     bare_gen.generate_manual_setup_report({}, [], [], [])
-    report = (bare_gen.output_dir / 'MANUAL_SETUP_REPORT.txt').read_text()
-    line = next(line for line in report.split('\n')
-                if 'panos_monitor_profile "PM"' in line)
+    report = (bare_gen.output_dir / "MANUAL_SETUP_REPORT.txt").read_text()
+    line = next(line for line in report.split("\n") if 'panos_monitor_profile "PM"' in line)
     assert 'the PAN-OS "this device" placeholder' in line
 
 
 # --- emitter: two devices, two resources -----------------------------------
+
 
 def test_same_interface_name_on_two_devices(tmp_path):
     """Two firewalls declaring ethernet1/1 get two digests and two locations.
@@ -265,21 +253,35 @@ def test_same_interface_name_on_two_devices(tmp_path):
     counter and both carried the same location.
     """
     gen = TerraformGenerator(str(tmp_path), ASSOCIATIONS)
-    gen.generate_interfaces([
-        {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
-         'device_group': 'Shared', 'vsys': '', 'template': '',
-         'vsys_device': FW1},
-        {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
-         'device_group': 'Shared', 'vsys': '', 'template': '',
-         'vsys_device': FW2},
-    ])
-    blocks = _resources(file_text(tf_files(tmp_path), 'interfaces.tf'))
+    gen.generate_interfaces(
+        [
+            {
+                "name": "ethernet1/1",
+                "type": "ethernet",
+                "mode": "layer3",
+                "device_group": "Shared",
+                "vsys": "",
+                "template": "",
+                "vsys_device": FW1,
+            },
+            {
+                "name": "ethernet1/1",
+                "type": "ethernet",
+                "mode": "layer3",
+                "device_group": "Shared",
+                "vsys": "",
+                "template": "",
+                "vsys_device": FW2,
+            },
+        ]
+    )
+    blocks = _resources(file_text(tf_files(tmp_path), "interfaces.tf"))
     assert len(blocks) == 2
     locals_ = [header.split('"')[3] for header in blocks]
     assert len(set(locals_)) == 2, locals_
     locations = [_location(block) for block in blocks.values()]
-    assert {'ngfw': {'ngfw_device': naming.variable_text(FW1)}} in locations
-    assert {'ngfw': {'ngfw_device': naming.variable_text(FW2)}} in locations
+    assert {"ngfw": {"ngfw_device": naming.variable_text(FW1)}} in locations
+    assert {"ngfw": {"ngfw_device": naming.variable_text(FW2)}} in locations
 
 
 def test_a_template_referrer_keeps_the_plain_name_for_an_interface_another_unit_declares(tmp_path):
@@ -291,20 +293,31 @@ def test_a_template_referrer_keeps_the_plain_name_for_an_interface_another_unit_
     (`tests/test_reference_edges.py`).
     """
     gen = TerraformGenerator(str(tmp_path), ASSOCIATIONS)
-    interface = {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
-                 'device_group': 'Shared', 'vsys': '', 'template': '',
-                 'vsys_device': FW2}
-    router = {'name': 'vr-hq', 'type': 'virtual-router', 'vsys': '',
-              'template': 'DC-Networks', 'vsys_device': '',
-              'interfaces': ['ethernet1/1']}
+    interface = {
+        "name": "ethernet1/1",
+        "type": "ethernet",
+        "mode": "layer3",
+        "device_group": "Shared",
+        "vsys": "",
+        "template": "",
+        "vsys_device": FW2,
+    }
+    router = {
+        "name": "vr-hq",
+        "type": "virtual-router",
+        "vsys": "",
+        "template": "DC-Networks",
+        "vsys_device": "",
+        "interfaces": ["ethernet1/1"],
+    }
     gen.generate_interfaces([interface])
     gen.generate_virtual_routers([router])
-    routers = file_text(tf_files(tmp_path), 'virtual_routers.tf')
+    routers = file_text(tf_files(tmp_path), "virtual_routers.tf")
     assert '"ethernet1/1"' in routers
     # The interface resource is still declared, by its own unit.
-    assert 'resource "panos_ethernet_interface" "ethernet1_1_' in file_text(tf_files(tmp_path), 'interfaces.tf')
+    assert 'resource "panos_ethernet_interface" "ethernet1_1_' in file_text(tf_files(tmp_path), "interfaces.tf")
     # The referrer recorded the name as one it resolved outside its own unit.
-    assert gen.unit_references()[unit_manifest.facts_of(router)] == ('ethernet1/1',)
+    assert gen.unit_references()[unit_manifest.facts_of(router)] == ("ethernet1/1",)
 
 
 def test_ambiguous_template_keeps_a_plain_interface_name(tmp_path):
@@ -314,20 +327,42 @@ def test_ambiguous_template_keeps_a_plain_interface_name(tmp_path):
     first declaration would point a resource at another firewall's interface.
     """
     gen = TerraformGenerator(str(tmp_path))
-    gen.generate_interfaces([
-        {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
-         'device_group': 'Shared', 'vsys': '', 'template': '',
-         'vsys_device': FW1},
-        {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
-         'device_group': 'Shared', 'vsys': '', 'template': '',
-         'vsys_device': FW2},
-    ])
-    gen.generate_virtual_routers([
-        {'name': 'vr-shared', 'type': 'virtual-router', 'vsys': '',
-         'template': '', 'vsys_device': '', 'interfaces': ['ethernet1/1']},
-    ])
-    routers = file_text(tf_files(tmp_path), 'virtual_routers.tf')
-    assert 'panos_ethernet_interface.' not in routers
+    gen.generate_interfaces(
+        [
+            {
+                "name": "ethernet1/1",
+                "type": "ethernet",
+                "mode": "layer3",
+                "device_group": "Shared",
+                "vsys": "",
+                "template": "",
+                "vsys_device": FW1,
+            },
+            {
+                "name": "ethernet1/1",
+                "type": "ethernet",
+                "mode": "layer3",
+                "device_group": "Shared",
+                "vsys": "",
+                "template": "",
+                "vsys_device": FW2,
+            },
+        ]
+    )
+    gen.generate_virtual_routers(
+        [
+            {
+                "name": "vr-shared",
+                "type": "virtual-router",
+                "vsys": "",
+                "template": "",
+                "vsys_device": "",
+                "interfaces": ["ethernet1/1"],
+            },
+        ]
+    )
+    routers = file_text(tf_files(tmp_path), "virtual_routers.tf")
+    assert "panos_ethernet_interface." not in routers
     assert '"ethernet1/1"' in routers
 
 
@@ -335,42 +370,56 @@ def test_a_referrer_that_names_no_unit_keeps_the_plain_name(tmp_path):
     """F3.6, F6.10.2: one device declaring a name is a fact about that unit, not a fact the
     deviceless referrer can use, so it keeps the plain name (F2.6 brown-field case)."""
     gen = TerraformGenerator(str(tmp_path))
-    interface = {'name': 'ethernet1/1', 'type': 'ethernet', 'mode': 'layer3',
-                 'device_group': 'Shared', 'vsys': '', 'template': '',
-                 'vsys_device': FW1}
-    router = {'name': 'vr-any', 'type': 'virtual-router', 'vsys': '',
-              'template': '', 'vsys_device': '', 'interfaces': ['ethernet1/1']}
+    interface = {
+        "name": "ethernet1/1",
+        "type": "ethernet",
+        "mode": "layer3",
+        "device_group": "Shared",
+        "vsys": "",
+        "template": "",
+        "vsys_device": FW1,
+    }
+    router = {
+        "name": "vr-any",
+        "type": "virtual-router",
+        "vsys": "",
+        "template": "",
+        "vsys_device": "",
+        "interfaces": ["ethernet1/1"],
+    }
     gen.generate_interfaces([interface])
     gen.generate_virtual_routers([router])
-    routers = file_text(tf_files(tmp_path), 'virtual_routers.tf')
+    routers = file_text(tf_files(tmp_path), "virtual_routers.tf")
     assert '"ethernet1/1"' in routers
     # A router inside the unit that declared the interface resolves it (F6.10.2).
-    inside = dict(router, name='vr-fw1', vsys_device=FW1)
+    inside = dict(router, name="vr-fw1", vsys_device=FW1)
     gen.generate_virtual_routers([inside])
-    text = file_text(tf_files(tmp_path), 'virtual_routers.tf')
+    text = file_text(tf_files(tmp_path), "virtual_routers.tf")
     assert f'name = "{inside["name"]}"' in text
-    assert 'panos_ethernet_interface.' in text
+    assert "panos_ethernet_interface." in text
 
 
 # --- the fixture as a whole ------------------------------------------------
 
+
 def test_multi_device_fixture_places_everything_it_can(tmp_path, make_parser):
     """The two-device fixture emits no placeholder and reports nothing."""
-    parser = make_parser('multi_device_templates.xml')
-    out = tmp_path / 'out'
+    parser = make_parser("multi_device_templates.xml")
+    out = tmp_path / "out"
     gen = TerraformGenerator(str(out), parser.parse_associations())
     gen.generate_interfaces(parser.parse_interfaces())
     gen.generate_virtual_routers(parser.parse_virtual_routers())
-    assert not (out / 'MANUAL_SETUP_REPORT.txt').exists()
-    routers = file_text(tf_files(out), 'virtual_routers.tf')
+    assert not (out / "MANUAL_SETUP_REPORT.txt").exists()
+    routers = file_text(tf_files(out), "virtual_routers.tf")
     assert 'name = "HQ-Networks"' in routers
     assert 'name = "DC-Networks"' in routers
-    interfaces = file_text(tf_files(out), 'interfaces.tf')
-    assert f'ngfw_device = {naming.variable_text(FW1)}' in interfaces
-    assert f'ngfw_device = {naming.variable_text(FW2)}' in interfaces
+    interfaces = file_text(tf_files(out), "interfaces.tf")
+    assert f"ngfw_device = {naming.variable_text(FW1)}" in interfaces
+    assert f"ngfw_device = {naming.variable_text(FW2)}" in interfaces
 
 
 # --- splitter: the association replaces the name convention ----------------
+
 
 def test_splitter_joins_template_and_device_group_by_device(splitter_module):
     """Unrelated names still associate, because the join is the device.
@@ -379,44 +428,43 @@ def test_splitter_joins_template_and_device_group_by_device(splitter_module):
     old code stripped a 'DG-' prefix and then tested whether the device group
     name appeared inside the template name, so it copied nothing here.
     """
-    source = _fixture_source('multi_device_templates.xml')
-    row = _table_row(splitter_module, source, 'Office-FW')
+    source = _fixture_source("multi_device_templates.xml")
+    row = _table_row(splitter_module, source, "Office-FW")
     extracted = _splitter_tree(splitter_module, source, row)
-    templates = extracted.findall('.//templates/entry')
-    assert [t.get('name') for t in templates] == ['HQ-Networks']
+    templates = extracted.findall(".//templates/entry")
+    assert [t.get("name") for t in templates] == ["HQ-Networks"]
 
 
 def test_splitter_copies_the_template_stack_by_device(splitter_module):
     """A stack belongs to the device group that holds one of its devices."""
-    source = _fixture_source('multi_device_templates.xml')
-    row = _table_row(splitter_module, source, 'Office-FW')
+    source = _fixture_source("multi_device_templates.xml")
+    row = _table_row(splitter_module, source, "Office-FW")
     extracted = _splitter_tree(splitter_module, source, row)
-    assert extracted.findall('.//template-stack/entry') == []
+    assert extracted.findall(".//template-stack/entry") == []
 
     tables = splitter_module.device_associations(source)
     # The table is keyed by the source line (§2.3), so the row is read through the key, not the name.
-    stack = next(row for row in tables['template_stacks'].values() if row['name'] == 'Branch-Stack')
-    assert set(stack['devices']) == {'fw-3.example.com'}
+    stack = next(row for row in tables["template_stacks"].values() if row["name"] == "Branch-Stack")
+    assert set(stack["devices"]) == {"fw-3.example.com"}
 
 
 def test_splitter_copies_no_template_without_a_shared_device(splitter_module):
     """A device group whose devices no template targets copies none."""
-    source = _fixture_source('multi_device_templates.xml')
-    row = _table_row(splitter_module, source, 'Datacenter-FW')
+    source = _fixture_source("multi_device_templates.xml")
+    row = _table_row(splitter_module, source, "Datacenter-FW")
     extracted = _splitter_tree(splitter_module, source, row)
     # DC-Networks does target fw-2, so it is copied; Unassigned-DG is not.
-    assert [t.get('name') for t in extracted.findall('.//templates/entry')] == \
-        ['DC-Networks']
+    assert [t.get("name") for t in extracted.findall(".//templates/entry")] == ["DC-Networks"]
 
-    row = _table_row(splitter_module, source, 'Unassigned-DG')
+    row = _table_row(splitter_module, source, "Unassigned-DG")
     extracted = _splitter_tree(splitter_module, source, row)
-    assert extracted.findall('.//templates/entry') == []
-    assert extracted.findall('.//template-stack/entry') == []
+    assert extracted.findall(".//templates/entry") == []
+    assert extracted.findall(".//template-stack/entry") == []
 
 
 def _entry_shapes(root: ET.Element) -> list:
     """Return a sorted (tag, name) list of every entry under `root`."""
-    return sorted((e.tag, e.get('name') or '') for e in root.iter('entry'))
+    return sorted((e.tag, e.get("name") or "") for e in root.iter("entry"))
 
 
 def test_splitter_leaves_the_source_tree_intact(splitter_module):
@@ -427,7 +475,7 @@ def test_splitter_leaves_the_source_tree_intact(splitter_module):
     Both mutate what the next extraction reads, so the splitter copies with
     `copy.deepcopy` and the export keeps its own entries.
     """
-    source = _fixture_source('multi_device_templates.xml')
+    source = _fixture_source("multi_device_templates.xml")
     before = _entry_shapes(source.root)
     for row in splitter_module.parse_device_groups(source):
         _splitter_tree(splitter_module, source, row)
@@ -441,18 +489,20 @@ def test_splitter_merges_shared_sections_without_touching_the_source(splitter_mo
     element. Without a copy that append lands in the source tree, so the
     export grows an entry per device group.
     """
-    source_file = tmp_path / 'two_shared_sections.xml'
+    source_file = tmp_path / "two_shared_sections.xml"
     source_file.write_text(
-        '<config>'
+        "<config>"
         '<devices><entry name="localhost.localdomain"><device-group>'
         '<entry name="DG-A"/><entry name="DG-B"/>'
-        '</device-group></entry></devices>'
+        "</device-group></entry></devices>"
         '<shared><address><entry name="a1"/></address></shared>'
         '<shared><address><entry name="a2"/></address></shared>'
-        '</config>', encoding='utf-8')
+        "</config>",
+        encoding="utf-8",
+    )
     source = xml_input.parse_xml(source_file)
     for row in splitter_module.parse_device_groups(source):
         extracted = _splitter_tree(splitter_module, source, row)
-        names = [e.get('name') for e in extracted.findall('.//shared//entry')]
-        assert names == ['a1', 'a2'], row['name']
-    assert [e.get('name') for e in source.root.findall('.//shared//entry')] == ['a1', 'a2']
+        names = [e.get("name") for e in extracted.findall(".//shared//entry")]
+        assert names == ["a1", "a2"], row["name"]
+    assert [e.get("name") for e in source.root.findall(".//shared//entry")] == ["a1", "a2"]

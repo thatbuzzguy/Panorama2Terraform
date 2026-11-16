@@ -18,6 +18,7 @@ that the extra job did not change the tree or the checks. F5.1 puts both checks
 behind one producer boundary, so a source that hands bytes is refused the same way a
 file is; the tests for that are at the end of this file.
 """
+
 import argparse
 import copy
 import subprocess
@@ -31,15 +32,15 @@ from conftest import FIXTURES_DIR, SAMPLE_CONFIG, SRC_DIR, file_text, parts, tf_
 
 # The layout rule (`docs/ARCHITECTURE.md` §1.1): the entry points are tool modules, so the test reads them
 # from the `src/` namespace, through the paths conftest builds once.
-CONVERTER = SRC_DIR / 'panorama_to_terraform.py'
-SPLITTER = SRC_DIR / 'split_device_groups.py'
+CONVERTER = SRC_DIR / "panorama_to_terraform.py"
+SPLITTER = SRC_DIR / "split_device_groups.py"
 SAMPLE = SAMPLE_CONFIG
 
 # A minimal Panorama body, reused to build inputs of an exact size.
 BODY = (
     '<config><shared><address><entry name="host-1">'
-    '<ip-netmask>10.0.0.1/32</ip-netmask>'
-    '</entry></address></shared></config>'
+    "<ip-netmask>10.0.0.1/32</ip-netmask>"
+    "</entry></address></shared></config>"
 )
 
 
@@ -56,74 +57,101 @@ def _run(script: Path, *args: str, workdir: Path) -> subprocess.CompletedProcess
 def _error_text(proc: subprocess.CompletedProcess) -> str:
     """The 'Error: ...' lines of a run, joined. Fails if the run printed none."""
     combined = proc.stdout + proc.stderr
-    lines = [line for line in combined.splitlines() if line.startswith('Error:')]
+    lines = [line for line in combined.splitlines() if line.startswith("Error:")]
     assert lines, f"no Error: line in:\n{combined}"
-    return '\n'.join(lines)
+    return "\n".join(lines)
 
 
 def _assert_clean_failure(proc: subprocess.CompletedProcess) -> None:
     assert proc.returncode != 0
     combined = proc.stdout + proc.stderr
-    assert 'Traceback' not in combined
+    assert "Traceback" not in combined
 
 
 # --- Size limit -------------------------------------------------------------
 
+
 def test_over_limit_input_is_refused(tmp_path):
     """A file over the limit exits non-zero with no traceback."""
-    proc = _run(CONVERTER, str(SAMPLE), '--output-dir', str(tmp_path / 'out'),
-                '--max-input-bytes', '1000', workdir=tmp_path)
+    proc = _run(
+        CONVERTER, str(SAMPLE), "--output-dir", str(tmp_path / "out"), "--max-input-bytes", "1000", workdir=tmp_path
+    )
     _assert_clean_failure(proc)
 
 
 def test_refusal_names_the_file_the_limit_and_the_measured_size(tmp_path):
     """The refusal is actionable: which file, how big, what the limit was."""
     limit = 1000
-    proc = _run(CONVERTER, str(SAMPLE), '--output-dir', str(tmp_path / 'out'),
-                '--max-input-bytes', str(limit), workdir=tmp_path)
+    proc = _run(
+        CONVERTER, str(SAMPLE), "--output-dir", str(tmp_path / "out"), "--max-input-bytes", str(limit), workdir=tmp_path
+    )
     message = _error_text(proc)
     assert SAMPLE.name in message
-    assert f'{SAMPLE.stat().st_size} bytes' in message
-    assert f'limit of {limit} bytes' in message
-    assert '--max-input-bytes' in message
+    assert f"{SAMPLE.stat().st_size} bytes" in message
+    assert f"limit of {limit} bytes" in message
+    assert "--max-input-bytes" in message
 
 
 def test_at_limit_input_is_accepted(tmp_path):
     """The limit is inclusive: a file of exactly the limit is parsed."""
-    out_dir = tmp_path / 'out'
-    proc = _run(CONVERTER, str(SAMPLE), '--output-dir', str(out_dir),
-                '--max-input-bytes', str(SAMPLE.stat().st_size), workdir=tmp_path)
+    out_dir = tmp_path / "out"
+    proc = _run(
+        CONVERTER,
+        str(SAMPLE),
+        "--output-dir",
+        str(out_dir),
+        "--max-input-bytes",
+        str(SAMPLE.stat().st_size),
+        workdir=tmp_path,
+    )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): `provider.tf` is a unit-set file, so an accepted run
     # writes one for every unit it names.
-    assert parts(tf_files(out_dir), 'provider.tf'), 'the run wrote the core files'
+    assert parts(tf_files(out_dir), "provider.tf"), "the run wrote the core files"
 
 
 def test_one_byte_over_the_limit_is_refused(tmp_path):
     """The boundary is exact: limit + 1 byte is refused."""
-    proc = _run(CONVERTER, str(SAMPLE), '--output-dir', str(tmp_path / 'out'),
-                '--max-input-bytes', str(SAMPLE.stat().st_size - 1), workdir=tmp_path)
+    proc = _run(
+        CONVERTER,
+        str(SAMPLE),
+        "--output-dir",
+        str(tmp_path / "out"),
+        "--max-input-bytes",
+        str(SAMPLE.stat().st_size - 1),
+        workdir=tmp_path,
+    )
     _assert_clean_failure(proc)
-    assert 'exceeds the input limit' in _error_text(proc)
+    assert "exceeds the input limit" in _error_text(proc)
 
 
 def test_splitter_applies_the_same_size_limit(tmp_path):
     """The splitter refuses an over-limit file and accepts an at-limit one."""
-    over = _run(SPLITTER, str(SAMPLE), '--output-dir', str(tmp_path / 'over'),
-                '--max-input-bytes', '1000', workdir=tmp_path)
+    over = _run(
+        SPLITTER, str(SAMPLE), "--output-dir", str(tmp_path / "over"), "--max-input-bytes", "1000", workdir=tmp_path
+    )
     _assert_clean_failure(over)
-    at_limit = _run(SPLITTER, str(SAMPLE), '--output-dir', str(tmp_path / 'ok'),
-                    '--max-input-bytes', str(SAMPLE.stat().st_size), workdir=tmp_path)
+    at_limit = _run(
+        SPLITTER,
+        str(SAMPLE),
+        "--output-dir",
+        str(tmp_path / "ok"),
+        "--max-input-bytes",
+        str(SAMPLE.stat().st_size),
+        workdir=tmp_path,
+    )
     assert at_limit.returncode == 0, at_limit.stdout + at_limit.stderr
-    assert list((tmp_path / 'ok').glob('*.xml'))
+    assert list((tmp_path / "ok").glob("*.xml"))
 
 
 def test_both_scripts_print_the_same_refusal(tmp_path):
     """One implementation, one message: the two refusals are identical."""
-    converter = _run(CONVERTER, str(SAMPLE), '--output-dir', str(tmp_path / 'a'),
-                     '--max-input-bytes', '1000', workdir=tmp_path)
-    splitter = _run(SPLITTER, str(SAMPLE), '--output-dir', str(tmp_path / 'b'),
-                    '--max-input-bytes', '1000', workdir=tmp_path)
+    converter = _run(
+        CONVERTER, str(SAMPLE), "--output-dir", str(tmp_path / "a"), "--max-input-bytes", "1000", workdir=tmp_path
+    )
+    splitter = _run(
+        SPLITTER, str(SAMPLE), "--output-dir", str(tmp_path / "b"), "--max-input-bytes", "1000", workdir=tmp_path
+    )
     assert _error_text(converter) == _error_text(splitter)
     assert converter.returncode == splitter.returncode
 
@@ -131,64 +159,66 @@ def test_both_scripts_print_the_same_refusal(tmp_path):
 def test_refusal_writes_no_output_files(tmp_path):
     """A refused input leaves no output directory behind."""
     for script, extra in ((CONVERTER, []), (SPLITTER, [])):
-        out_dir = tmp_path / f'out_{script.stem}'
-        proc = _run(script, str(SAMPLE), '--output-dir', str(out_dir),
-                    '--max-input-bytes', '1000', *extra, workdir=tmp_path)
+        out_dir = tmp_path / f"out_{script.stem}"
+        proc = _run(
+            script, str(SAMPLE), "--output-dir", str(out_dir), "--max-input-bytes", "1000", *extra, workdir=tmp_path
+        )
         _assert_clean_failure(proc)
-        assert not out_dir.exists(), f'{script.name} created {out_dir} for refused input'
+        assert not out_dir.exists(), f"{script.name} created {out_dir} for refused input"
 
 
 def test_refusal_leaves_an_existing_output_directory_untouched(tmp_path):
     """A refusal does not clear or add to a directory the operator reuses."""
-    out_dir = tmp_path / 'out'
+    out_dir = tmp_path / "out"
     out_dir.mkdir()
-    keep = out_dir / 'terraform.tfstate'
-    keep.write_text('{"keep": true}', encoding='utf-8')
+    keep = out_dir / "terraform.tfstate"
+    keep.write_text('{"keep": true}', encoding="utf-8")
     for script in (CONVERTER, SPLITTER):
-        proc = _run(script, str(SAMPLE), '--output-dir', str(out_dir),
-                    '--max-input-bytes', '1000', workdir=tmp_path)
+        proc = _run(script, str(SAMPLE), "--output-dir", str(out_dir), "--max-input-bytes", "1000", workdir=tmp_path)
         _assert_clean_failure(proc)
-        assert sorted(p.name for p in out_dir.iterdir()) == ['terraform.tfstate']
-        assert keep.read_text(encoding='utf-8') == '{"keep": true}'
+        assert sorted(p.name for p in out_dir.iterdir()) == ["terraform.tfstate"]
+        assert keep.read_text(encoding="utf-8") == '{"keep": true}'
 
 
-@pytest.mark.parametrize('script', [CONVERTER, SPLITTER])
+@pytest.mark.parametrize("script", [CONVERTER, SPLITTER])
 def test_nonpositive_limit_is_an_argparse_error(script, tmp_path):
     """A limit of 0 or less is a usage error (exit 2), not a traceback."""
-    for value in ('0', '-1', 'abc'):
-        proc = _run(script, str(SAMPLE), '--max-input-bytes', value, workdir=tmp_path)
-        assert proc.returncode == 2, f'{value!r}: {proc.stdout}\n{proc.stderr}'
-        assert 'Traceback' not in proc.stderr
-        assert 'max-input-bytes' in proc.stderr
+    for value in ("0", "-1", "abc"):
+        proc = _run(script, str(SAMPLE), "--max-input-bytes", value, workdir=tmp_path)
+        assert proc.returncode == 2, f"{value!r}: {proc.stdout}\n{proc.stderr}"
+        assert "Traceback" not in proc.stderr
+        assert "max-input-bytes" in proc.stderr
 
 
 def test_a_directory_is_a_clean_refusal(tmp_path):
     """An input path that is not a readable file is refused, not a traceback."""
-    not_a_file = tmp_path / 'export.xml'
+    not_a_file = tmp_path / "export.xml"
     not_a_file.mkdir()
     for script in (CONVERTER, SPLITTER):
-        proc = _run(script, str(not_a_file), '--output-dir', str(tmp_path / 'out'), workdir=tmp_path)
+        proc = _run(script, str(not_a_file), "--output-dir", str(tmp_path / "out"), workdir=tmp_path)
         _assert_clean_failure(proc)
-        assert 'cannot read' in _error_text(proc)
+        assert "cannot read" in _error_text(proc)
 
 
 def test_both_scripts_document_the_shared_default(tmp_path):
     """Both CLIs carry the flag with the same default."""
     for script in (CONVERTER, SPLITTER):
-        proc = _run(script, '--help', workdir=tmp_path)
+        proc = _run(script, "--help", workdir=tmp_path)
         assert proc.returncode == 0
-        assert '--max-input-bytes' in proc.stdout
+        assert "--max-input-bytes" in proc.stdout
 
 
 def test_default_limit_is_one_number_for_every_caller(xml_input_module):
     """The default the CLIs show, the parser applies and the tests read match."""
     assert xml_input_module.DEFAULT_MAX_INPUT_BYTES == 64 * 1024 * 1024
-    assert max(
-        p.stat().st_size for p in list(FIXTURES_DIR.glob('*.xml')) + [SAMPLE]
-    ) < xml_input_module.DEFAULT_MAX_INPUT_BYTES, 'the default limit must accept every committed fixture'
+    assert (
+        max(p.stat().st_size for p in list(FIXTURES_DIR.glob("*.xml")) + [SAMPLE])
+        < xml_input_module.DEFAULT_MAX_INPUT_BYTES
+    ), "the default limit must accept every committed fixture"
 
 
 # --- DTD rejection ----------------------------------------------------------
+
 
 def test_utf16_dtd_is_refused(tmp_path):
     """A DTD the old UTF-8 text search could not see is still refused.
@@ -197,70 +227,63 @@ def test_utf16_dtd_is_refused(tmp_path):
     UTF-16 export hides those bytes, so the DTD reached the parser and
     expanded. The check now asks the parser, which decodes first.
     """
-    dtd = (
-        '<!DOCTYPE config [\n'
-        '  <!ENTITY a2 "x">\n'
-        '  <!ENTITY a "&a2;&a2;">\n'
-        ']>\n'
-    )
-    source = tmp_path / 'utf16_dtd.xml'
-    source.write_bytes(f'<?xml version="1.0"?>\n{dtd}{BODY}'.encode('utf-16'))
+    dtd = '<!DOCTYPE config [\n  <!ENTITY a2 "x">\n  <!ENTITY a "&a2;&a2;">\n]>\n'
+    source = tmp_path / "utf16_dtd.xml"
+    source.write_bytes(f'<?xml version="1.0"?>\n{dtd}{BODY}'.encode("utf-16"))
     for script in (CONVERTER, SPLITTER):
-        proc = _run(script, str(source), '--output-dir', str(tmp_path / 'out'), workdir=tmp_path)
+        proc = _run(script, str(source), "--output-dir", str(tmp_path / "out"), workdir=tmp_path)
         _assert_clean_failure(proc)
         message = _error_text(proc)
-        assert 'DTD' in message
-        assert 'expanded' not in proc.stdout
+        assert "DTD" in message
+        assert "expanded" not in proc.stdout
 
 
 def test_clean_utf16_input_is_accepted(tmp_path):
     """Refusing a UTF-16 DTD must not refuse UTF-16 input in general."""
-    source = tmp_path / 'utf16_clean.xml'
-    source.write_bytes(f'<?xml version="1.0" encoding="UTF-16"?>\n{BODY}'.encode('utf-16'))
-    out_dir = tmp_path / 'out'
-    proc = _run(CONVERTER, str(source), '--output-dir', str(out_dir), workdir=tmp_path)
+    source = tmp_path / "utf16_clean.xml"
+    source.write_bytes(f'<?xml version="1.0" encoding="UTF-16"?>\n{BODY}'.encode("utf-16"))
+    out_dir = tmp_path / "out"
+    proc = _run(CONVERTER, str(source), "--output-dir", str(out_dir), workdir=tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert '10.0.0.1/32' in file_text(tf_files(out_dir), 'address_objects.tf')
+    assert "10.0.0.1/32" in file_text(tf_files(out_dir), "address_objects.tf")
 
 
 def test_dtd_in_a_prolog_comment_is_not_a_refusal(tmp_path):
     """A comment that mentions <!DOCTYPE is legal input, not a DTD."""
-    source = tmp_path / 'comment.xml'
+    source = tmp_path / "comment.xml"
     source.write_bytes(
-        f'<?xml version="1.0"?>\n<!-- This export never carried a <!DOCTYPE config> -->\n{BODY}'
-        .encode()
+        f'<?xml version="1.0"?>\n<!-- This export never carried a <!DOCTYPE config> -->\n{BODY}'.encode()
     )
-    out_dir = tmp_path / 'out'
-    proc = _run(CONVERTER, str(source), '--output-dir', str(out_dir), workdir=tmp_path)
+    out_dir = tmp_path / "out"
+    proc = _run(CONVERTER, str(source), "--output-dir", str(out_dir), workdir=tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): `provider.tf` is a unit-set file, so an accepted run
     # writes one for every unit it names.
-    assert parts(tf_files(out_dir), 'provider.tf'), 'the run wrote the core files'
+    assert parts(tf_files(out_dir), "provider.tf"), "the run wrote the core files"
 
 
 def test_external_id_dtd_is_refused(tmp_path):
     """An external DTD (the XXE shape) is refused and named as external."""
-    source = tmp_path / 'external_dtd.xml'
+    source = tmp_path / "external_dtd.xml"
     source.write_bytes(
-        f'<?xml version="1.0"?>\n'
-        f'<!DOCTYPE config PUBLIC "-//O//PUB//EN" "http://dtd.invalid/x.dtd">\n{BODY}'
-        .encode()
+        f'<?xml version="1.0"?>\n<!DOCTYPE config PUBLIC "-//O//PUB//EN" "http://dtd.invalid/x.dtd">\n{BODY}'.encode()
     )
-    proc = _run(CONVERTER, str(source), '--output-dir', str(tmp_path / 'out'), workdir=tmp_path)
+    proc = _run(CONVERTER, str(source), "--output-dir", str(tmp_path / "out"), workdir=tmp_path)
     _assert_clean_failure(proc)
     message = _error_text(proc)
-    assert 'DTD' in message
-    assert 'external id' in message
+    assert "DTD" in message
+    assert "external id" in message
 
 
-@pytest.mark.parametrize('fixture', ['hostile_billion_laughs.xml', 'hostile_xxe.xml'])
+@pytest.mark.parametrize("fixture", ["hostile_billion_laughs.xml", "hostile_xxe.xml"])
 def test_hostile_fixtures_are_still_refused(fixture, tmp_path):
     """The F1.7 hostile corpus still fails cleanly on both entry points."""
     for script in (CONVERTER, SPLITTER):
-        proc = _run(script, str(FIXTURES_DIR / fixture), '--output-dir',
-                    str(tmp_path / f'out_{script.stem}'), workdir=tmp_path)
+        proc = _run(
+            script, str(FIXTURES_DIR / fixture), "--output-dir", str(tmp_path / f"out_{script.stem}"), workdir=tmp_path
+        )
         _assert_clean_failure(proc)
-        assert 'DTD' in _error_text(proc)
+        assert "DTD" in _error_text(proc)
 
 
 def test_entity_reference_without_a_dtd_is_a_parse_error(tmp_path):
@@ -269,30 +292,31 @@ def test_entity_reference_without_a_dtd_is_a_parse_error(tmp_path):
     This is the fact that makes DTD rejection enough, so it is pinned here:
     expat reports 'undefined entity' instead of substituting anything.
     """
-    source = tmp_path / 'entity.xml'
+    source = tmp_path / "entity.xml"
     source.write_bytes(b'<?xml version="1.0"?>\n<config>&lol3;</config>')
-    proc = _run(CONVERTER, str(source), '--output-dir', str(tmp_path / 'out'), workdir=tmp_path)
+    proc = _run(CONVERTER, str(source), "--output-dir", str(tmp_path / "out"), workdir=tmp_path)
     _assert_clean_failure(proc)
-    assert 'undefined entity' in proc.stdout + proc.stderr
+    assert "undefined entity" in proc.stdout + proc.stderr
 
 
 # --- The shared module ------------------------------------------------------
 
+
 def test_read_input_refuses_before_allocating(xml_input_module, tmp_path):
     """read_input raises UnsafeInputError for an over-limit file."""
-    source = tmp_path / 'in.xml'
-    source.write_text(f'<?xml version="1.0"?>\n{BODY}', encoding='utf-8')
+    source = tmp_path / "in.xml"
+    source.write_text(f'<?xml version="1.0"?>\n{BODY}', encoding="utf-8")
     with pytest.raises(xml_input_module.UnsafeInputError) as excinfo:
         xml_input_module.read_input(source, 16)
     message = str(excinfo.value)
     assert source.name in message
-    assert f'{source.stat().st_size} bytes' in message
-    assert 'limit of 16 bytes' in message
+    assert f"{source.stat().st_size} bytes" in message
+    assert "limit of 16 bytes" in message
 
 
 def test_read_input_returns_the_whole_file_at_the_limit(xml_input_module, tmp_path):
     """At the limit the caller gets every byte, so the parse sees a full document."""
-    source = tmp_path / 'in.xml'
+    source = tmp_path / "in.xml"
     raw = f'<?xml version="1.0"?>\n{BODY}'.encode()
     source.write_bytes(raw)
     assert xml_input_module.read_input(source, len(raw)) == raw
@@ -310,7 +334,7 @@ def test_parse_reads_the_file_once(xml_input_module, tmp_path, monkeypatch):
     path in ET.parse, so the bytes that were checked and the bytes that were
     parsed could differ.
     """
-    source = tmp_path / 'in.xml'
+    source = tmp_path / "in.xml"
     source.write_bytes(f'<?xml version="1.0"?>\n{BODY}'.encode())
     real_open = Path.open
     opened = []
@@ -319,14 +343,15 @@ def test_parse_reads_the_file_once(xml_input_module, tmp_path, monkeypatch):
         opened.append(self)
         return real_open(self, *args, **kwargs)
 
-    monkeypatch.setattr(Path, 'open', counting_open)
+    monkeypatch.setattr(Path, "open", counting_open)
     parsed = xml_input_module.parse_xml(source)
-    assert parsed.root.tag == 'config'
-    assert len(opened) == 1, f'expected one read of the input, got {len(opened)}'
+    assert parsed.root.tag == "config"
+    assert len(opened) == 1, f"expected one read of the input, got {len(opened)}"
 
 
-def test_parser_and_splitter_use_the_shared_default(xml_input_module, converter_module, splitter_module,
-                                                     fetch_module, tmp_path):
+def test_parser_and_splitter_use_the_shared_default(
+    xml_input_module, converter_module, splitter_module, fetch_module, tmp_path
+):
     """Neither entry point keeps its own limit or its own DTD check.
 
     F5.2: the converter keeps no limit of its own any more, because the parser no
@@ -341,17 +366,17 @@ def test_parser_and_splitter_use_the_shared_default(xml_input_module, converter_
     assert fetch_module.DEFAULT_MAX_INPUT_BYTES == xml_input_module.DEFAULT_MAX_INPUT_BYTES
 
     # A DTD reaches both entry points through the one check.
-    source = tmp_path / 'dtd.xml'
+    source = tmp_path / "dtd.xml"
     source.write_bytes(f'<?xml version="1.0"?>\n<!DOCTYPE config>\n{BODY}'.encode())
     with pytest.raises(xml_input_module.UnsafeInputError):
         converter_module.PanoramaParser(xml_input_module.parse_xml(source))
-    assert splitter_module.split_panorama_config(str(source), str(tmp_path / 'split')) is False
+    assert splitter_module.split_panorama_config(str(source), str(tmp_path / "split")) is False
 
 
 # --- The refusal kinds (criterion 5) ----------------------------------------
 
-def test_the_refusal_kinds_name_only_the_input_layer_exceptions(converter_module, xml_input_module,
-                                                                fetch_module):
+
+def test_the_refusal_kinds_name_only_the_input_layer_exceptions(converter_module, xml_input_module, fetch_module):
     """Criterion 5: a refusal is the run's own decision to stop before it writes, so the kinds are the two the
     input layer states. A `ValueError` raised inside the tool is an unexpected error and keeps the shape
     `failed` states, so it is not a refusal kind.
@@ -361,14 +386,16 @@ def test_the_refusal_kinds_name_only_the_input_layer_exceptions(converter_module
     takes at the console. `SourceFetchError` is read here as a subclass of the input-layer kind, which is what
     the fetch pins already depend on.
     """
-    assert converter_module.is_refusal(xml_input_module.UnsafeInputError('the door refuses the input'))
-    assert converter_module.is_refusal(ET.ParseError('the parse cannot read the input'))
-    assert not converter_module.is_refusal(ValueError('a rule inside the tool'))
-    assert converter_module.is_refusal(fetch_module.SourceFetchError('a refused response')), \
-        'a subclass of the input-layer kind is the same kind'
+    assert converter_module.is_refusal(xml_input_module.UnsafeInputError("the door refuses the input"))
+    assert converter_module.is_refusal(ET.ParseError("the parse cannot read the input"))
+    assert not converter_module.is_refusal(ValueError("a rule inside the tool"))
+    assert converter_module.is_refusal(fetch_module.SourceFetchError("a refused response")), (
+        "a subclass of the input-layer kind is the same kind"
+    )
 
 
 # --- F4.2: the same read records the source line ---------------------------
+
 
 def _shape(elem):
     """Tag, attributes, text and child order, for a tree comparison."""
@@ -379,50 +406,50 @@ def test_parse_records_the_opening_line_of_every_element(xml_input_module, tmp_p
     """line_of names the line the parser was reading when it opened an element."""
     text = (
         '<?xml version="1.0"?>\n'
-        '<config>\n'
-        '  <shared>\n'
-        '    <address>\n'
+        "<config>\n"
+        "  <shared>\n"
+        "    <address>\n"
         '      <entry name="host-1">\n'
-        '        <ip-netmask>10.0.0.1/32</ip-netmask>\n'
-        '      </entry>\n'
-        '    </address>\n'
-        '  </shared>\n'
-        '</config>\n'
+        "        <ip-netmask>10.0.0.1/32</ip-netmask>\n"
+        "      </entry>\n"
+        "    </address>\n"
+        "  </shared>\n"
+        "</config>\n"
     )
-    source = tmp_path / 'lines.xml'
-    source.write_text(text, encoding='utf-8')
+    source = tmp_path / "lines.xml"
+    source.write_text(text, encoding="utf-8")
     parsed = xml_input_module.parse_xml(source)
 
-    assert parsed.name == 'lines.xml', 'a report names the file, not the path'
+    assert parsed.name == "lines.xml", "a report names the file, not the path"
     assert parsed.line_of(parsed.root) == 2
-    container = parsed.root.find('.//address')
-    entry = parsed.root.find('.//address/entry')
+    container = parsed.root.find(".//address")
+    entry = parsed.root.find(".//address/entry")
     assert parsed.line_of(container) == 4
     assert parsed.line_of(entry) == 5
-    assert parsed.line_of(entry.find('ip-netmask')) == 6
+    assert parsed.line_of(entry.find("ip-netmask")) == 6
 
 
 def test_line_of_a_multiline_element_is_the_opening_tag(xml_input_module, tmp_path):
     """An entry whose attributes wrap over two lines still reports its opening line."""
     text = (
         '<?xml version="1.0"?>\n'
-        '<config>\n'
-        '  <shared>\n'
-        '    <address>\n'
-        '      <entry\n'
+        "<config>\n"
+        "  <shared>\n"
+        "    <address>\n"
+        "      <entry\n"
         '        name="host-1">\n'
-        '        <ip-netmask>10.0.0.1/32</ip-netmask>\n'
-        '      </entry>\n'
-        '    </address>\n'
-        '  </shared>\n'
-        '</config>\n'
+        "        <ip-netmask>10.0.0.1/32</ip-netmask>\n"
+        "      </entry>\n"
+        "    </address>\n"
+        "  </shared>\n"
+        "</config>\n"
     )
-    source = tmp_path / 'wrapped.xml'
-    source.write_text(text, encoding='utf-8')
+    source = tmp_path / "wrapped.xml"
+    source.write_text(text, encoding="utf-8")
     parsed = xml_input_module.parse_xml(source)
-    entry = parsed.root.find('.//address/entry')
-    assert entry.get('name') == 'host-1'
-    assert parsed.line_of(entry) == 5, 'the opening tag starts on line 5'
+    entry = parsed.root.find(".//address/entry")
+    assert entry.get("name") == "host-1"
+    assert parsed.line_of(entry) == 5, "the opening tag starts on line 5"
 
 
 def test_byte_order_mark_is_not_a_line(xml_input_module, tmp_path):
@@ -430,20 +457,20 @@ def test_byte_order_mark_is_not_a_line(xml_input_module, tmp_path):
     text = (
         '<?xml version="1.0" encoding="UTF-16"?>\n'
         '<config><shared><address><entry name="host-1">'
-        '<ip-netmask>10.0.0.1/32</ip-netmask></entry></address></shared></config>\n'
+        "<ip-netmask>10.0.0.1/32</ip-netmask></entry></address></shared></config>\n"
     )
-    source = tmp_path / 'utf16.xml'
-    source.write_bytes(text.encode('utf-16'))
+    source = tmp_path / "utf16.xml"
+    source.write_bytes(text.encode("utf-16"))
     parsed = xml_input_module.parse_xml(source)
-    entry = parsed.root.find('.//address/entry')
-    assert entry is not None, 'the UTF-16 tree is the tree xml.etree builds'
-    assert parsed.line_of(parsed.root) == 2, 'the prolog is line 1, the root is line 2'
+    entry = parsed.root.find(".//address/entry")
+    assert entry is not None, "the UTF-16 tree is the tree xml.etree builds"
+    assert parsed.line_of(parsed.root) == 2, "the prolog is line 1, the root is line 2"
     assert parsed.line_of(entry) == 2
 
 
 def test_line_tracking_does_not_change_the_tree(xml_input_module, tmp_path):
     """For every committed input, the recorded lines did not alter the tree."""
-    for path in sorted(FIXTURES_DIR.glob('*.xml')) + [SAMPLE]:
+    for path in sorted(FIXTURES_DIR.glob("*.xml")) + [SAMPLE]:
         try:
             parsed = xml_input_module.parse_xml(path)
         except xml_input_module.UnsafeInputError:
@@ -457,19 +484,21 @@ def test_line_tracking_does_not_change_the_tree(xml_input_module, tmp_path):
         assert _shape(parsed.root) == _shape(ET.fromstring(path.read_bytes())), path.name
 
     # A comment and a namespace are part of that claim.
-    source = tmp_path / 'namespaces.xml'
+    source = tmp_path / "namespaces.xml"
     source.write_text(
         '<?xml version="1.0"?>\n'
         '<config xmlns:ns="urn:x" xmlns="urn:y">\n'
-        '  <!---->\n'
+        "  <!---->\n"
         '  <entry name="a" xml:lang="en">\n'
         '    <ns:child x="1"/>\n'
-        '  </entry>\n'
-        '</config>\n', encoding='utf-8')
+        "  </entry>\n"
+        "</config>\n",
+        encoding="utf-8",
+    )
     parsed = xml_input_module.parse_xml(source)
     assert _shape(parsed.root) == _shape(ET.fromstring(source.read_bytes()))
     # Both paths drop the comment and keep the namespace form ET uses.
-    assert [c.tag for c in parsed.root] == ['{urn:y}entry'], 'comment parity with ET'
+    assert [c.tag for c in parsed.root] == ["{urn:y}entry"], "comment parity with ET"
     assert parsed.line_of(parsed.root) == 2
 
 
@@ -480,20 +509,21 @@ def test_a_copied_element_has_no_line(xml_input_module, tmp_path):
     a line for those, and gets none for a copy: the split trees it builds are copies, and the entry a split file
     holds is not the entry the input stated.
     """
-    source = tmp_path / 'copy.xml'
-    source.write_text(f'<?xml version="1.0"?>\n{BODY}', encoding='utf-8')
+    source = tmp_path / "copy.xml"
+    source.write_text(f'<?xml version="1.0"?>\n{BODY}', encoding="utf-8")
     parsed = xml_input_module.parse_xml(source)
-    original = parsed.root.find('.//entry')
+    original = parsed.root.find(".//entry")
     duplicate = copy.deepcopy(original)
-    assert parsed.line_of(original), 'the parsed tree has a line'
+    assert parsed.line_of(original), "the parsed tree has a line"
     assert parsed.line_of(duplicate) is None
 
 
 # --- F5.1: the producer boundary --------------------------------------------
 
+
 def _api_origin(xml_input_module):
     """An origin with no file behind it, for a producer that hands bytes."""
-    return xml_input_module.SourceOrigin(kind='api', name='panorama:export')
+    return xml_input_module.SourceOrigin(kind="api", name="panorama:export")
 
 
 def test_boundary_refuses_producer_bytes_over_the_limit(xml_input_module):
@@ -507,9 +537,9 @@ def test_boundary_refuses_producer_bytes_over_the_limit(xml_input_module):
     with pytest.raises(xml_input_module.UnsafeInputError) as excinfo:
         xml_input_module.parse_bytes(data, _api_origin(xml_input_module), 16)
     message = str(excinfo.value)
-    assert 'panorama:export' in message, 'the refusal names the origin, not a path'
-    assert 'larger than the limit' in message
-    assert 'limit of 16 bytes' in message
+    assert "panorama:export" in message, "the refusal names the origin, not a path"
+    assert "larger than the limit" in message
+    assert "limit of 16 bytes" in message
 
 
 def test_boundary_refuses_a_dtd_in_producer_bytes(xml_input_module):
@@ -518,15 +548,15 @@ def test_boundary_refuses_a_dtd_in_producer_bytes(xml_input_module):
     with pytest.raises(xml_input_module.UnsafeInputError) as excinfo:
         xml_input_module.parse_bytes(data, _api_origin(xml_input_module))
     message = str(excinfo.value)
-    assert 'panorama:export' in message, 'the refusal names the origin, not a path'
-    assert 'declares a DTD' in message
+    assert "panorama:export" in message, "the refusal names the origin, not a path"
+    assert "declares a DTD" in message
 
 
 def test_boundary_refuses_a_nonpositive_limit(xml_input_module):
     """The limit guard uses the same words as the file producer's."""
     with pytest.raises(xml_input_module.UnsafeInputError) as excinfo:
-        xml_input_module.parse_bytes(b'<config/>', _api_origin(xml_input_module), 0)
-    assert 'must be greater than 0 bytes' in str(excinfo.value)
+        xml_input_module.parse_bytes(b"<config/>", _api_origin(xml_input_module), 0)
+    assert "must be greater than 0 bytes" in str(excinfo.value)
 
 
 def test_boundary_gives_the_same_tree_and_the_same_lines(xml_input_module):
@@ -535,11 +565,11 @@ def test_boundary_gives_the_same_tree_and_the_same_lines(xml_input_module):
     origin = _api_origin(xml_input_module)
     parsed = xml_input_module.parse_bytes(data, origin)
     assert parsed.origin is origin
-    assert parsed.origin.path is None, 'a network origin has no file to name'
-    assert parsed.name == 'panorama:export', 'the report value is the origin name'
-    assert _shape(parsed.root) == _shape(ET.fromstring(data)), 'the tree is the ET tree'
+    assert parsed.origin.path is None, "a network origin has no file to name"
+    assert parsed.name == "panorama:export", "the report value is the origin name"
+    assert _shape(parsed.root) == _shape(ET.fromstring(data)), "the tree is the ET tree"
     assert parsed.line_of(parsed.root) == 2
-    assert parsed.line_of(parsed.root.find('.//entry')) == 2
+    assert parsed.line_of(parsed.root.find(".//entry")) == 2
 
 
 def test_boundary_opened_no_file(xml_input_module, monkeypatch):
@@ -555,11 +585,10 @@ def test_boundary_opened_no_file(xml_input_module, monkeypatch):
         opened.append(self)
         return real_open(self, *args, **kwargs)
 
-    monkeypatch.setattr(Path, 'open', counting_open)
-    parsed = xml_input_module.parse_bytes(
-        f'<?xml version="1.0"?>\n{BODY}'.encode(), _api_origin(xml_input_module))
-    assert parsed.root.tag == 'config'
-    assert opened == [], 'the boundary opened nothing'
+    monkeypatch.setattr(Path, "open", counting_open)
+    parsed = xml_input_module.parse_bytes(f'<?xml version="1.0"?>\n{BODY}'.encode(), _api_origin(xml_input_module))
+    assert parsed.root.tag == "config"
+    assert opened == [], "the boundary opened nothing"
 
 
 def test_file_producer_runs_the_checks_through_the_boundary(xml_input_module, tmp_path, monkeypatch):
@@ -568,7 +597,7 @@ def test_file_producer_runs_the_checks_through_the_boundary(xml_input_module, tm
     F3.8 pinned that no entry point keeps its own check. F5.1 pins that no producer
     keeps its own check either: every producer hands its bytes to the boundary.
     """
-    source = tmp_path / 'in.xml'
+    source = tmp_path / "in.xml"
     data = f'<?xml version="1.0"?>\n{BODY}'.encode()
     source.write_bytes(data)
 
@@ -579,8 +608,8 @@ def test_file_producer_runs_the_checks_through_the_boundary(xml_input_module, tm
         calls.append((len(handed), origin.kind, origin.name))
         return real(handed, origin, limit)
 
-    monkeypatch.setattr(xml_input_module, 'parse_bytes', recording)
+    monkeypatch.setattr(xml_input_module, "parse_bytes", recording)
     parsed = xml_input_module.parse_xml(source)
-    assert calls == [(len(data), 'file', source.name)], calls
-    assert parsed.origin.kind == 'file'
+    assert calls == [(len(data), "file", source.name)], calls
+    assert parsed.origin.kind == "file"
     assert parsed.origin.path == source

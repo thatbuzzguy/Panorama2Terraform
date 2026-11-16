@@ -61,13 +61,24 @@ from typing import Callable
 import container_coverage
 from naming import UNNAMED
 
-MANIFEST_FILE = 'CODEBASE_MANIFEST.json'
+MANIFEST_FILE = "CODEBASE_MANIFEST.json"
 
 # Field order. Fixed, so two runs write the same bytes and a reader does not guess.
 # The field names are the printed keys, so `parse_rows` reads a row back as itself.
 # `rank` and `after` are the unit order (rule 5), so they print after the F6.1 fields.
-FIELD_ORDER = ('unit', 'device_group', 'vsys', 'template', 'vsys_device', 'template_stack',
-               'directory', 'entry_count', 'references', 'rank', 'after')
+FIELD_ORDER = (
+    "unit",
+    "device_group",
+    "vsys",
+    "template",
+    "vsys_device",
+    "template_stack",
+    "directory",
+    "entry_count",
+    "references",
+    "rank",
+    "after",
+)
 
 # The five scope facts (F3.1, F3.2, F6.10.5), read through `container_coverage`, so the identity
 # order is the order the state scan keys on (`state_coverage.ownership_key`).
@@ -77,14 +88,14 @@ FACT_KEYS = container_coverage.SCOPE_FACT_KEYS
 # device), read from the deepest level inward, so the deepest declared scope names the unit. The
 # virtual system is the innermost scope the export declares, so it is first here, and a template
 # inside a stack names its template because the template is deeper than the stack (F6.10.5).
-NAME_LEVELS = ('vsys', 'vsys_device', 'template', 'template_stack', 'device_group')
+NAME_LEVELS = ("vsys", "vsys_device", "template", "template_stack", "device_group")
 
 DIGEST_HEX = 8
 
 # The shared section, as the F3.9 rule names it. `Shared` in `device_group` is the parse fallback
 # for an entry the parse cannot place (§2.2), so it is the name of the shared unit and never a
 # fact value: the shared unit is the unit whose five facts are empty.
-SHARED_UNIT = 'Shared'
+SHARED_UNIT = "Shared"
 
 # A name that sanitizes to nothing is `naming.UNNAMED`, the one definition of the §5 fallback (rule 2),
 # read through the import above, so this module states no second copy of the word.
@@ -98,8 +109,10 @@ def facts_of(obj: dict) -> tuple:
     never states the fallback and a parsed object can, so reading both through this one function
     keeps the row and the reference record on the same unit.
     """
-    return tuple('' if key == 'device_group' and (obj.get(key) or '') == SHARED_UNIT
-                 else (obj.get(key) or '') for key in FACT_KEYS)
+    return tuple(
+        "" if key == "device_group" and (obj.get(key) or "") == SHARED_UNIT else (obj.get(key) or "")
+        for key in FACT_KEYS
+    )
 
 
 def fact(facts: tuple, key: str) -> str:
@@ -118,9 +131,9 @@ def named_fact(facts: tuple) -> tuple:
     """
     for key in NAME_LEVELS:
         value = fact(facts, key)
-        if value and not (key == 'vsys_device' and value == container_coverage.PLACEHOLDER_DEVICE):
+        if value and not (key == "vsys_device" and value == container_coverage.PLACEHOLDER_DEVICE):
             return (key, value)
-    return ('', '')
+    return ("", "")
 
 
 def unit_name(facts: tuple) -> str:
@@ -131,12 +144,12 @@ def unit_name(facts: tuple) -> str:
 
 def identity_digest(facts: tuple) -> str:
     """The 8-hex digest of the unit identity: the five facts, in field order, joined by `|`."""
-    return hashlib.sha256('|'.join(facts).encode()).hexdigest()[:DIGEST_HEX]
+    return hashlib.sha256("|".join(facts).encode()).hexdigest()[:DIGEST_HEX]
 
 
 def directory_name(facts: tuple, sanitize: Callable[[str], str]) -> str:
     """The directory name for one unit: the §5 shape, always with the digest."""
-    return f'{sanitize(unit_name(facts)) or UNNAMED}_{identity_digest(facts)}'
+    return f"{sanitize(unit_name(facts)) or UNNAMED}_{identity_digest(facts)}"
 
 
 def units(ledger) -> list:
@@ -163,17 +176,17 @@ def build_rows(ledger, references: dict, sanitize: Callable[[str], str]) -> list
         counts[facts_of(row)] = counts.get(facts_of(row), 0) + 1
 
     rows = []
-    for facts in units(ledger):          # rule 1: the unit set is read through this one rule
-        row = dict.fromkeys(FIELD_ORDER, '')
+    for facts in units(ledger):  # rule 1: the unit set is read through this one rule
+        row = dict.fromkeys(FIELD_ORDER, "")
         row.update(zip(FACT_KEYS, facts))
-        row['unit'] = unit_name(facts)
-        row['directory'] = directory_name(facts, sanitize)
-        row['entry_count'] = counts[facts]
-        row['references'] = sorted(references.get(facts, ()))
+        row["unit"] = unit_name(facts)
+        row["directory"] = directory_name(facts, sanitize)
+        row["entry_count"] = counts[facts]
+        row["references"] = sorted(references.get(facts, ()))
         # Rule 5: `reference_edges.order` fills these two fields. They start empty so a run that
         # applies no order rule still writes the declared shape.
-        row['rank'] = 0
-        row['after'] = []
+        row["rank"] = 0
+        row["after"] = []
         rows.append(row)
     return rows
 
@@ -184,7 +197,7 @@ def render(rows: list) -> str:
     Fields print in the declared order, not alphabetically, and no field states a timestamp or a
     path, so two runs on the same bytes write the same bytes.
     """
-    return json.dumps([{key: row[key] for key in FIELD_ORDER} for row in rows], indent=2) + '\n'
+    return json.dumps([{key: row[key] for key in FIELD_ORDER} for row in rows], indent=2) + "\n"
 
 
 def parse_rows(text: str) -> list:
@@ -195,29 +208,30 @@ def parse_rows(text: str) -> list:
     """
     document = json.loads(text)
     if not isinstance(document, list):
-        raise ValueError('the manifest is not a list of rows')
+        raise ValueError("the manifest is not a list of rows")
     rows = []
     for row in document:
         if not isinstance(row, dict):
-            raise ValueError(f'not a manifest row: {row!r}')
+            raise ValueError(f"not a manifest row: {row!r}")
         extra = [key for key in row if key not in FIELD_ORDER]
         if extra:
-            raise ValueError(f'not a declared manifest field: {extra}')
+            raise ValueError(f"not a declared manifest field: {extra}")
         missing = [key for key in FIELD_ORDER if key not in row]
         if missing:
-            raise ValueError(f'the row does not state its fields: {missing}')
-        if any(not isinstance(row[key], str) for key in FIELD_ORDER
-               if key not in ('entry_count', 'references', 'rank', 'after')):
-            raise ValueError(f'the name fields of a row are not names: {row}')
-        if not isinstance(row['entry_count'], int):
-            raise ValueError(f'entry_count is not a count: {row}')
-        if not isinstance(row['references'], list) \
-                or not all(isinstance(name, str) for name in row['references']):
-            raise ValueError(f'references is not a list of names: {row}')
-        if not isinstance(row['rank'], int):
-            raise ValueError(f'rank is not a position: {row}')
-        if not isinstance(row['after'], list) \
-                or not all(isinstance(unit, str) for unit in row['after']):
-            raise ValueError(f'after is not a list of directories: {row}')
+            raise ValueError(f"the row does not state its fields: {missing}")
+        if any(
+            not isinstance(row[key], str)
+            for key in FIELD_ORDER
+            if key not in ("entry_count", "references", "rank", "after")
+        ):
+            raise ValueError(f"the name fields of a row are not names: {row}")
+        if not isinstance(row["entry_count"], int):
+            raise ValueError(f"entry_count is not a count: {row}")
+        if not isinstance(row["references"], list) or not all(isinstance(name, str) for name in row["references"]):
+            raise ValueError(f"references is not a list of names: {row}")
+        if not isinstance(row["rank"], int):
+            raise ValueError(f"rank is not a position: {row}")
+        if not isinstance(row["after"], list) or not all(isinstance(unit, str) for unit in row["after"]):
+            raise ValueError(f"after is not a list of directories: {row}")
         rows.append({key: row[key] for key in FIELD_ORDER})
     return sorted(rows, key=lambda row: tuple(row[key] for key in FACT_KEYS))

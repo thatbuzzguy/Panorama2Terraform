@@ -37,11 +37,11 @@ import resource_mapping
 import sanity_checks
 from conftest import FIXTURES_DIR, RESOURCE_RE, file_text, run_pipeline, run_script, tf_files
 
-CONVERTER = 'panorama_to_terraform.py'
-SCOPE_FILE = 'scope.tf'
-FIXTURE = 'scope_objects.xml'
-NO_SCOPE_FIXTURE = 'address_objects.xml'
-PLACEMENT_FIXTURE = 'report_grouping.xml'
+CONVERTER = "panorama_to_terraform.py"
+SCOPE_FILE = "scope.tf"
+FIXTURE = "scope_objects.xml"
+NO_SCOPE_FIXTURE = "address_objects.xml"
+PLACEMENT_FIXTURE = "report_grouping.xml"
 PLACEHOLDER = container_coverage.PLACEHOLDER_DEVICE
 
 # The resource line is read through `tests/conftest.py` (§1.1), which states the pattern once for the test set.
@@ -49,9 +49,16 @@ PLACEHOLDER = container_coverage.PLACEHOLDER_DEVICE
 
 # The eight blocks the fixture writes: three device groups, one parent record, and one entry for
 # each of the four template shapes.
-BLOCK_ORDER = ['panos_device_group', 'panos_device_group', 'panos_device_group',
-               'panos_device_group_parent', 'panos_template', 'panos_template_stack',
-               'panos_template_variable', 'panos_vsys']
+BLOCK_ORDER = [
+    "panos_device_group",
+    "panos_device_group",
+    "panos_device_group",
+    "panos_device_group_parent",
+    "panos_template",
+    "panos_template_stack",
+    "panos_template_variable",
+    "panos_vsys",
+]
 
 
 def _generate(fixture: str, out_dir: Path) -> dict:
@@ -60,8 +67,8 @@ def _generate(fixture: str, out_dir: Path) -> dict:
     F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the run writes one directory per unit, so the key is the
     path from the output directory and a per-unit file names its unit only by its directory.
     """
-    result = run_script(CONVERTER, str(FIXTURES_DIR / fixture), '--output-dir', str(out_dir))
-    assert result.returncode == 0, f'converter failed on {fixture}: {result.stderr}\n{result.stdout}'
+    result = run_script(CONVERTER, str(FIXTURES_DIR / fixture), "--output-dir", str(out_dir))
+    assert result.returncode == 0, f"converter failed on {fixture}: {result.stderr}\n{result.stdout}"
     return tf_files(out_dir)
 
 
@@ -70,7 +77,7 @@ def _parts(files: dict, name: str) -> dict:
     return {key: text for key, text in files.items() if Path(key).name == name}
 
 
-def _blocks(text: str, rtype: str = '') -> list[str]:
+def _blocks(text: str, rtype: str = "") -> list[str]:
     """The resource blocks of one type, or every resource block when `rtype` is empty.
 
     A block closes at the first `}` in column 0.
@@ -79,9 +86,9 @@ def _blocks(text: str, rtype: str = '') -> list[str]:
     for match in RESOURCE_RE.finditer(text):
         if rtype and match.group(1) != rtype:
             continue
-        end = text.find('\n}', match.end())
-        assert end != -1, f'unclosed resource block for {rtype}'
-        found.append(text[match.start():end + 2])
+        end = text.find("\n}", match.end())
+        assert end != -1, f"unclosed resource block for {rtype}"
+        found.append(text[match.start() : end + 2])
     return found
 
 
@@ -90,22 +97,23 @@ def _block(text: str, rtype: str, name: str) -> str:
     for block in _blocks(text, rtype):
         if name in block:
             return block
-    raise AssertionError(f'no {rtype} block states {name!r}:\n{text}')
+    raise AssertionError(f"no {rtype} block states {name!r}:\n{text}")
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def scope_parts(tmp_path_factory) -> dict:
     """The scope file for each unit the fixture names, keyed by the path from the output directory."""
-    return _parts(_generate(FIXTURE, tmp_path_factory.mktemp('scope_objects')), SCOPE_FILE)
+    return _parts(_generate(FIXTURE, tmp_path_factory.mktemp("scope_objects")), SCOPE_FILE)
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def scope_text(scope_parts) -> str:
     """The scope blocks across the unit set, in path order, for the tests that read one block by name."""
-    return ''.join(scope_parts[key] for key in sorted(scope_parts))
+    return "".join(scope_parts[key] for key in sorted(scope_parts))
 
 
 # --- 1. Emission and order --------------------------------------------------
+
 
 def test_one_block_per_scope_entry(scope_parts):
     """Eight blocks: the fixture carries one entry of each of the six types, and one device-group
@@ -114,8 +122,7 @@ def test_one_block_per_scope_entry(scope_parts):
     F6.10.3 (section 14): the run writes the file per unit, so the set holds one file for each unit
     that has a scope entry, and the block count is the sum across the files.
     """
-    blocks = [match.group(1) for key in sorted(scope_parts)
-              for match in RESOURCE_RE.finditer(scope_parts[key])]
+    blocks = [match.group(1) for key in sorted(scope_parts) for match in RESOURCE_RE.finditer(scope_parts[key])]
     assert len(scope_parts) == 6, sorted(scope_parts)
     assert sorted(blocks) == sorted(BLOCK_ORDER), blocks
 
@@ -142,15 +149,17 @@ def test_entries_print_in_document_order_within_a_type(scope_parts):
     the file is stable. F6.10.3 (section 14): the fixture places the three device-group entries in
     three units, so each file holds one entry's block and the set holds one block per entry.
     """
-    entries = ET.parse(FIXTURES_DIR / FIXTURE).getroot().findall('.//device-group/entry')
-    order = {entry.get('name'): index for index, entry in enumerate(entries)}
+    entries = ET.parse(FIXTURES_DIR / FIXTURE).getroot().findall(".//device-group/entry")
+    order = {entry.get("name"): index for index, entry in enumerate(entries)}
     names = []
     for key in sorted(scope_parts):
-        found = [re.search(r'name = "([^"]+)"', block).group(1)
-                 for block in _blocks(scope_parts[key], 'panos_device_group')]
+        found = [
+            re.search(r'name = "([^"]+)"', block).group(1) for block in _blocks(scope_parts[key], "panos_device_group")
+        ]
         assert found == sorted(found, key=lambda name: order[name]), (key, found)
         names.extend(found)
     assert sorted(names) == sorted(order), names
+
 
 def test_the_scope_file_is_written_before_the_config_inside_it(converter_module):
     """The order rule (`docs/CODEBASE_ASSEMBLY.md` §6): the run sequence writes the scope file after
@@ -159,76 +168,76 @@ def test_the_scope_file_is_written_before_the_config_inside_it(converter_module)
     F6.6 moves `variables.tf` after the emitters, because the declaration set is the site values the
     emitters printed. The scope-file-before-the-config rule is unchanged.
     """
-    calls = re.findall(r'tf_gen\.(\w+)\(', inspect.getsource(converter_module.generate_run))
-    position = calls.index('generate_scope_objects')
-    assert calls[:position] == ['generate_provider_config'], calls[:position]
-    assert calls.index('generate_variables') > position, calls
-    assert calls[position + 1], 'the scope file must be written before the object files'
-    assert 'generate_address_objects' in calls[position + 1:], calls[position + 1:]
+    calls = re.findall(r"tf_gen\.(\w+)\(", inspect.getsource(converter_module.generate_run))
+    position = calls.index("generate_scope_objects")
+    assert calls[:position] == ["generate_provider_config"], calls[:position]
+    assert calls.index("generate_variables") > position, calls
+    assert calls[position + 1], "the scope file must be written before the object files"
+    assert "generate_address_objects" in calls[position + 1 :], calls[position + 1 :]
 
 
 def test_the_file_is_written_only_when_it_has_content(tmp_path):
     """A run on an input with no scope entry writes no file, the rule the report and data files use."""
-    assert file_text(_generate(NO_SCOPE_FIXTURE, tmp_path), SCOPE_FILE) == ''
+    assert file_text(_generate(NO_SCOPE_FIXTURE, tmp_path), SCOPE_FILE) == ""
 
 
 def test_emission_is_default_and_no_flag_names_it(tmp_path):
     """Decision 1: F6.5 is not a flag, so no argument turns it on and an unknown argument is still
     the argument error the exit code states.
     """
-    out = tmp_path / 'default'
+    out = tmp_path / "default"
     files = _generate(FIXTURE, out)
-    assert file_text(files, SCOPE_FILE) != '', 'a run must write the scope blocks by default'
+    assert file_text(files, SCOPE_FILE) != "", "a run must write the scope blocks by default"
     # F6.10.3 (section 14): the codebase root set holds no `.tf` file, so the reader names the unit
     # directory for every `.tf` file the run wrote.
     assert all(Path(key).parent.name for key in files), sorted(files)
-    refused = run_script(CONVERTER, str(FIXTURES_DIR / FIXTURE), '--output-dir', str(tmp_path),
-                         '--scope-blocks')
+    refused = run_script(CONVERTER, str(FIXTURES_DIR / FIXTURE), "--output-dir", str(tmp_path), "--scope-blocks")
     assert refused.returncode == 2, refused.stdout
 
 
 # --- 2. The name field -------------------------------------------------------
 
+
 def test_the_parent_record_carries_the_entry_name_through_the_field_the_rule_states(scope_text):
     """Decision 4: the provider declares no `name` for `panos_device_group_parent`, so the entry name
     reaches the block through `entry_coverage.name_field`, and one entry feeds two blocks.
     """
-    assert entry_coverage.name_field('panos_device_group_parent') == 'device_group'
-    record = _block(scope_text, 'panos_device_group_parent', 'Edge-FW')
+    assert entry_coverage.name_field("panos_device_group_parent") == "device_group"
+    record = _block(scope_text, "panos_device_group_parent", "Edge-FW")
     assert 'device_group = "Edge-FW"' in record
-    assert 'name = "Edge-FW"' in _block(scope_text, 'panos_device_group', 'Edge-FW')
+    assert 'name = "Edge-FW"' in _block(scope_text, "panos_device_group", "Edge-FW")
 
 
 def test_the_device_group_block_prints_no_parent(scope_text, provider_schema):
     """The device group row declares `parent` because the emitter reads it for the record, but the
     provider has no `parent` attribute for `panos_device_group`, so the scope block prints none.
     """
-    assert 'parent' not in provider_schema['panos_device_group']['block']['attributes']
-    group = _block(scope_text, 'panos_device_group', 'Edge-FW')
-    assert not _field_line(group, 'parent'), group
-    assert 'parent = "Shared-Parent"' in _block(scope_text, 'panos_device_group_parent', 'Edge-FW')
+    assert "parent" not in provider_schema["panos_device_group"]["block"]["attributes"]
+    group = _block(scope_text, "panos_device_group", "Edge-FW")
+    assert not _field_line(group, "parent"), group
+    assert 'parent = "Shared-Parent"' in _block(scope_text, "panos_device_group_parent", "Edge-FW")
 
 
 def _field_line(block: str, key: str) -> bool:
     """True when the block states one field at its own level."""
-    return any(line.lstrip().startswith(f'{key} =') for line in block.split('\n'))
+    return any(line.lstrip().startswith(f"{key} =") for line in block.split("\n"))
 
 
 def test_a_record_that_would_state_no_fact_is_not_written(scope_text):
     """A device group that states no parent writes no parent record, so the file holds one record."""
-    assert len(_blocks(scope_text, 'panos_device_group_parent')) == 1
-    top_level = _block(scope_text, 'panos_device_group', 'Shared-Parent')
-    assert not _field_line(top_level, 'parent'), top_level
+    assert len(_blocks(scope_text, "panos_device_group_parent")) == 1
+    top_level = _block(scope_text, "panos_device_group", "Shared-Parent")
+    assert not _field_line(top_level, "parent"), top_level
 
 
 # --- 3. The value shape ------------------------------------------------------
 
-PROVIDER_TYPES = {'string': 'string', 'string_list': ['list', 'string']}
+PROVIDER_TYPES = {"string": "string", "string_list": ["list", "string"]}
 
 # The property a row declares but another block prints: the device-group entry feeds the scope block
 # and the parent record, and the provider has no `parent` attribute for the scope type, so the record
 # prints it (`docs/CODEBASE_ASSEMBLY.md` §8 rule 3).
-PRINTED_BY_ANOTHER_BLOCK = {'panos_device_group': ('parent',)}
+PRINTED_BY_ANOTHER_BLOCK = {"panos_device_group": ("parent",)}
 
 
 def test_scope_shape_covers_the_properties_the_rows_declare():
@@ -237,12 +246,15 @@ def test_scope_shape_covers_the_properties_the_rows_declare():
     location's fields, not the block's own, so they are not shape entries.
     """
     for row in resource_mapping.COVERAGE_MATRIX:
-        if row['resource'] not in resource_mapping.SCOPE_TYPES:
+        if row["resource"] not in resource_mapping.SCOPE_TYPES:
             continue
-        own = [key for key in row['properties']
-               if key not in resource_mapping.SCOPE_PLACEMENT[row['resource']]
-               and key not in PRINTED_BY_ANOTHER_BLOCK.get(row['resource'], ())]
-        assert sorted(own) == sorted(resource_mapping.SCOPE_SHAPE[row['resource']]), row['resource']
+        own = [
+            key
+            for key in row["properties"]
+            if key not in resource_mapping.SCOPE_PLACEMENT[row["resource"]]
+            and key not in PRINTED_BY_ANOTHER_BLOCK.get(row["resource"], ())
+        ]
+        assert sorted(own) == sorted(resource_mapping.SCOPE_SHAPE[row["resource"]]), row["resource"]
 
 
 def test_scope_shape_is_the_provider_shape(scope_text, provider_schema):
@@ -251,82 +263,84 @@ def test_scope_shape_is_the_provider_shape(scope_text, provider_schema):
     takes an object, which is why the shape is a table and not a style choice.
     """
     for rtype, shapes in resource_mapping.SCOPE_SHAPE.items():
-        attributes = provider_schema[rtype]['block']['attributes']
+        attributes = provider_schema[rtype]["block"]["attributes"]
         for key, shape in shapes.items():
             attribute = attributes[key]
-            mode = attribute.get('nesting_mode') or attribute.get('nested_type', {}).get('nesting_mode')
+            mode = attribute.get("nesting_mode") or attribute.get("nested_type", {}).get("nesting_mode")
             if shape in PROVIDER_TYPES:
-                assert attribute.get('type') == PROVIDER_TYPES[shape], (rtype, key)
-            elif shape == 'object_list':
-                assert mode == 'list', (rtype, key)
-                fields = attribute.get('nested_type', attribute).get('attributes', {})
-                assert 'name' in fields, (rtype, key)
+                assert attribute.get("type") == PROVIDER_TYPES[shape], (rtype, key)
+            elif shape == "object_list":
+                assert mode == "list", (rtype, key)
+                fields = attribute.get("nested_type", attribute).get("attributes", {})
+                assert "name" in fields, (rtype, key)
             else:
-                assert mode == 'single', (rtype, key)
+                assert mode == "single", (rtype, key)
 
 
 def test_a_device_membership_prints_as_the_objects_the_provider_takes(scope_text):
     """`devices` is a list of objects for the two types that declare it that way, and a list of
     strings for `templates`, which the provider declares as a list of strings.
     """
-    group = _block(scope_text, 'panos_device_group', 'Edge-FW')
+    group = _block(scope_text, "panos_device_group", "Edge-FW")
     assert 'devices = [\n    {\n      name = "edge-firewall"\n    }\n  ]' in group
     assert 'templates = [ "Edge-Networks" ]' in group
-    stack = _blocks(scope_text, 'panos_template_stack')[0]
+    stack = _blocks(scope_text, "panos_template_stack")[0]
     assert 'devices = [\n    {\n      name = "edge-firewall"\n    }\n  ]' in stack
 
 
 def test_the_template_variable_value_prints_as_the_object_the_provider_takes(scope_text):
     """Decision 3: the value stays a literal, because the value-to-variable mapping is F6.6."""
-    variable = _block(scope_text, 'panos_template_variable', 'edge-tag')
+    variable = _block(scope_text, "panos_template_variable", "edge-tag")
     assert 'type = {\n    ip_netmask = "10.0.0.50/32"\n  }' in variable
-    assert 'var.' not in variable
+    assert "var." not in variable
 
 
 # --- 4. The device member rule -----------------------------------------------
 
+
 def test_the_placeholder_device_never_enters_a_printed_list(scope_text):
     """Decision 5: `localhost.localdomain` names no firewall, so it is never a printed member."""
     assert PLACEHOLDER not in scope_text
-    group = _block(scope_text, 'panos_device_group', 'Edge-FW')
-    assert 'edge-firewall' in group
-    only = _block(scope_text, 'panos_device_group', 'Placeholder-Only')
-    assert 'devices' not in only, 'a list that held only the placeholder writes no line'
+    group = _block(scope_text, "panos_device_group", "Edge-FW")
+    assert "edge-firewall" in group
+    only = _block(scope_text, "panos_device_group", "Placeholder-Only")
+    assert "devices" not in only, "a list that held only the placeholder writes no line"
     assert PLACEHOLDER not in group
 
 
 # --- 5. Placement ------------------------------------------------------------
 
+
 def test_the_four_panorama_scopes_print_the_empty_sub_block(scope_text):
     """Decision 6: the codebase states no device fact in a location, so `location` prints the empty
     sub-block, the shape `shared = {}` already uses, and `panorama_device` is never emitted.
     """
-    for rtype in ('panos_device_group', 'panos_device_group_parent', 'panos_template',
-                  'panos_template_stack'):
+    for rtype in ("panos_device_group", "panos_device_group_parent", "panos_template", "panos_template_stack"):
         for block in _blocks(scope_text, rtype):
-            assert 'panorama = {}' in block, block
-    assert 'panorama_device' not in scope_text
-    assert 'ngfw_device' not in scope_text
+            assert "panorama = {}" in block, block
+    assert "panorama_device" not in scope_text
+    assert "ngfw_device" not in scope_text
 
 
 def test_a_variable_and_a_vsys_place_in_the_scope_the_export_declares(scope_text):
     """The location names the scope entry the export holds the entry inside, never a guess."""
     assert 'template_stack = {\n      name = "Edge-Stack"\n    }' in _block(
-        scope_text, 'panos_template_variable', 'edge-tag')
-    assert 'template = {\n      name = "Edge-Networks"\n    }' in _block(scope_text, 'panos_vsys', 'edge-vsys')
+        scope_text, "panos_template_variable", "edge-tag"
+    )
+    assert 'template = {\n      name = "Edge-Networks"\n    }' in _block(scope_text, "panos_vsys", "edge-vsys")
 
 
 def test_a_scope_entry_the_export_places_nowhere_writes_no_block(converter_module, tmp_path):
     """Decision 6, pinned on the fixture that holds a virtual system inside a device group: the run
     reports the entry as `skipped` with the reason and writes no block for it.
     """
-    out = tmp_path / 'placement'
+    out = tmp_path / "placement"
     parser = run_pipeline(converter_module, PLACEMENT_FIXTURE, out)
     assert parser is not None
-    row = next(row for row in parser.ledger.rows() if row['name'] == 'vsys2')
-    assert row['destination'] == 'skipped', row
-    assert 'no template holds this virtual system' in row['detail'], row
-    assert 'panos_vsys' not in file_text(tf_files(out), SCOPE_FILE)
+    row = next(row for row in parser.ledger.rows() if row["name"] == "vsys2")
+    assert row["destination"] == "skipped", row
+    assert "no template holds this virtual system" in row["detail"], row
+    assert "panos_vsys" not in file_text(tf_files(out), SCOPE_FILE)
 
 
 # --- 6. The gate rule --------------------------------------------------------
@@ -338,7 +352,7 @@ ANSWERED = (
     '  location = {\n    template = {\n      name = "Edge-Networks"\n    }\n  }\n'
     '  name = "edge-tag"\n}\n\n'
 )
-VARIABLE_FILE = 'scope.tf'
+VARIABLE_FILE = "scope.tf"
 
 
 def test_a_name_a_block_declares_answers_the_location():
@@ -351,9 +365,9 @@ def test_a_location_name_no_block_declares_is_a_finding():
     files = {VARIABLE_FILE: ANSWERED.replace('      name = "Edge-Networks"', '      name = "Edge-Other"')}
     findings = sanity_checks.check_scope_blocks(files)
     assert len(findings) == 1, findings
-    assert findings[0].check == 'scope_blocks'
+    assert findings[0].check == "scope_blocks"
     assert findings[0].severity == sanity_checks.FAIL
-    assert 'names no panos_template block this run declares' in findings[0].detail
+    assert "names no panos_template block this run declares" in findings[0].detail
 
 
 def test_a_data_block_cannot_answer_a_scope_name():
@@ -365,44 +379,48 @@ def test_a_data_block_cannot_answer_a_scope_name():
         '  location = {\n    template = {\n      name = "Edge-Networks"\n    }\n  }\n'
         '  name = "edge-tag"\n}\n\n'
     )
-    findings = sanity_checks.check_scope_blocks({'scope.tf': data_only})
+    findings = sanity_checks.check_scope_blocks({"scope.tf": data_only})
     assert len(findings) == 1, findings
-    assert 'names no panos_template block' in findings[0].detail
+    assert "names no panos_template block" in findings[0].detail
 
 
 def test_a_field_that_names_a_device_states_no_scope_name():
     """`panorama_device` names a device, not a scope, so the rule reads no name there."""
     with_device = ANSWERED.replace(
         '    template = {\n      name = "Edge-Networks"\n    }',
-        '    template = {\n      name = "Edge-Networks"\n      panorama_device = "Panorama-1"\n    }')
+        '    template = {\n      name = "Edge-Networks"\n      panorama_device = "Panorama-1"\n    }',
+    )
     assert sanity_checks.check_scope_blocks({VARIABLE_FILE: with_device}) == []
 
 
 def test_an_empty_sub_block_names_nothing_to_resolve():
     """The `panorama = {}` shape states no name, so the rule has nothing to check."""
     assert sanity_checks.check_scope_blocks({VARIABLE_FILE: ANSWERED}) == []
-    empty = ('resource "panos_template_variable" "edge_tag_d3a43225" {\n'
-             '  location = {\n    template_stack = {}\n  }\n  name = "edge-tag"\n}\n\n')
-    assert sanity_checks.check_scope_blocks({'scope.tf': empty}) == []
+    empty = (
+        'resource "panos_template_variable" "edge_tag_d3a43225" {\n'
+        '  location = {\n    template_stack = {}\n  }\n  name = "edge-tag"\n}\n\n'
+    )
+    assert sanity_checks.check_scope_blocks({"scope.tf": empty}) == []
 
 
 def test_the_rule_reads_blocks_with_the_one_reader():
     """The finding names the file and the line the one block reader read."""
     files = {VARIABLE_FILE: ANSWERED.replace('      name = "Edge-Networks"', '      name = "Edge-Other"')}
     findings = sanity_checks.check_scope_blocks(files)
-    block = [block for block in sanity_checks.blocks(files, ('resource',))
-             if block.rtype == 'panos_template_variable'][0]
+    block = [block for block in sanity_checks.blocks(files, ("resource",)) if block.rtype == "panos_template_variable"][
+        0
+    ]
     assert (findings[0].file, findings[0].line) == (block.file, block.line)
-    assert block.address == 'panos_template_variable.edge_tag_d3a43225'
+    assert block.address == "panos_template_variable.edge_tag_d3a43225"
 
 
 def test_no_false_positive_across_the_corpus(tmp_path):
     """Every scope block the corpus writes names a scope this run declares."""
-    for path in sorted(FIXTURES_DIR.glob('*.xml')):
+    for path in sorted(FIXTURES_DIR.glob("*.xml")):
         out = tmp_path / path.stem
-        result = run_script(CONVERTER, str(path), '--output-dir', str(out))
+        result = run_script(CONVERTER, str(path), "--output-dir", str(out))
         if result.returncode != 0:
-            continue    # the hostile fixtures are refused before the parse
+            continue  # the hostile fixtures are refused before the parse
         files = sanity_checks.read_tf_files(out)
         if files:
             assert sanity_checks.check_scope_blocks(files) == [], path.name
@@ -410,15 +428,15 @@ def test_no_false_positive_across_the_corpus(tmp_path):
 
 def test_scope_blocks_is_in_the_check_order():
     """The gate table names the new rule after `import_blocks`, the order the report prints."""
-    assert 'scope_blocks' in sanity_checks.CHECK_ORDER
-    assert sanity_checks.CHECK_ORDER.index('scope_blocks') == \
-        sanity_checks.CHECK_ORDER.index('import_blocks') + 1
+    assert "scope_blocks" in sanity_checks.CHECK_ORDER
+    assert sanity_checks.CHECK_ORDER.index("scope_blocks") == sanity_checks.CHECK_ORDER.index("import_blocks") + 1
 
 
 # --- 7. Determinism -----------------------------------------------------------
 
+
 def test_two_runs_on_the_same_bytes_write_the_same_bytes(tmp_path):
     """The file is byte-identical between runs, so the goldens can pin it."""
-    first = _generate(FIXTURE, tmp_path / 'run1')
-    second = _generate(FIXTURE, tmp_path / 'run2')
+    first = _generate(FIXTURE, tmp_path / "run1")
+    second = _generate(FIXTURE, tmp_path / "run2")
     assert first == second

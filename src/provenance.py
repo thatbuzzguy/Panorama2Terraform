@@ -59,14 +59,14 @@ import source_fetch
 import state_input
 from xml_input import ParsedSource
 
-PROVENANCE_FILE = 'SOURCE.txt'
+PROVENANCE_FILE = "SOURCE.txt"
 
 # Field order. Fixed, so two runs write the same bytes and a reader does not guess.
 # The field names are the printed keys, so `parse_record` reads the record back as itself.
-FIELD_ORDER = ('kind', 'name', 'path', 'scope', 'request', 'cache_entry', 'size', 'sha256')
+FIELD_ORDER = ("kind", "name", "path", "scope", "request", "cache_entry", "size", "sha256")
 
 # The value for a field that does not apply to the source kind, so one shape reads.
-ABSENT = '-'
+ABSENT = "-"
 
 
 @dataclass(frozen=True)
@@ -83,8 +83,9 @@ class ProvenanceRecord:
     sha256: str
 
 
-def record_for(source: Union[ParsedSource, state_input.StateSource],
-               request: Optional[source_fetch.ApiRequest] = None) -> ProvenanceRecord:
+def record_for(
+    source: Union[ParsedSource, state_input.StateSource], request: Optional[source_fetch.ApiRequest] = None
+) -> ProvenanceRecord:
     """Build the record for one source the run read, from the source the door returned and
     the request it read.
 
@@ -110,7 +111,7 @@ def record_for(source: Union[ParsedSource, state_input.StateSource],
 
 def render(record: ProvenanceRecord) -> str:
     """The record as text: one `field: value` line per field, in the fixed order."""
-    return ''.join(f'{key}: {getattr(record, key)}\n' for key in FIELD_ORDER)
+    return "".join(f"{key}: {getattr(record, key)}\n" for key in FIELD_ORDER)
 
 
 def render_records(records: Iterable[ProvenanceRecord]) -> str:
@@ -118,7 +119,7 @@ def render_records(records: Iterable[ProvenanceRecord]) -> str:
 
     One record writes the same bytes as `render`, so a one-source run is unchanged.
     """
-    return '\n'.join(render(record) for record in records)
+    return "\n".join(render(record) for record in records)
 
 
 def parse_records(text: str) -> list:
@@ -127,7 +128,7 @@ def parse_records(text: str) -> list:
     A blank line separates records; a record that is not all declared fields is a refusal,
     through `parse_record`.
     """
-    return [parse_record(chunk) for chunk in text.split('\n\n') if chunk.strip()]
+    return [parse_record(chunk) for chunk in text.split("\n\n") if chunk.strip()]
 
 
 def parse_record(text: str) -> ProvenanceRecord:
@@ -140,14 +141,14 @@ def parse_record(text: str) -> ProvenanceRecord:
     for line in text.splitlines():
         if not line.strip():
             continue
-        key, _, value = line.partition(': ')
+        key, _, value = line.partition(": ")
         if key not in FIELD_ORDER or not value:
-            raise ValueError(f'not a record field: {line!r}')
+            raise ValueError(f"not a record field: {line!r}")
         values[key] = value
     missing = [key for key in FIELD_ORDER if key not in values]
     if missing:
-        raise ValueError(f'the record does not state its fields: {missing}')
-    values['size'] = int(values['size'])
+        raise ValueError(f"the record does not state its fields: {missing}")
+    values["size"] = int(values["size"])
     return ProvenanceRecord(**values)
 
 
@@ -182,18 +183,17 @@ def prune(record_file, cache_dir) -> list[Path]:
     """
     record_path = Path(record_file)
     if not record_path.is_file():
-        raise ValueError(f'cannot read the record: {record_path}')
+        raise ValueError(f"cannot read the record: {record_path}")
     cache = Path(cache_dir)
     if not cache.is_dir():
         return []
     try:
-        records = parse_records(record_path.read_text(encoding='utf-8'))
+        records = parse_records(record_path.read_text(encoding="utf-8"))
     except ValueError as e:
         # The refusal names the record file, because the action reads a file and not one record.
-        raise ValueError(f'cannot read the record {record_path}: {e}') from e
+        raise ValueError(f"cannot read the record {record_path}: {e}") from e
     removed = []
     for entry in prunable_entries(cache, records):
         entry.unlink()
         removed.append(entry)
     return removed
-

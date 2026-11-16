@@ -85,57 +85,57 @@ from xml_input import ParsedSource
 DESTINATION_KINDS = container_coverage.DESTINATION_KINDS
 
 # The kinds that write nothing for the entry. A row with one of these is a gap.
-GAP_KINDS = ('count-only', 'skipped', 'unaccounted')
+GAP_KINDS = ("count-only", "skipped", "unaccounted")
 
 # The gap kind whose report line must print a value, because the line is the only output its entry
 # reaches (`docs/COVERAGE_MATRIX.md` §1). A `count-only` row has no matrix row, so no property finding
 # can name it, and it has no report section, so the entry line is the only place its captured field can
 # be read. The other two gap kinds have no captured object to print: `mark_skipped` records an empty
 # object, and an `unaccounted` entry has no mark.
-PRINTS_VALUE_KINDS = ('count-only',)
+PRINTS_VALUE_KINDS = ("count-only",)
 
 # The kind whose report line names no field, because the fact its row records is a relation between the entry and
 # the container that lists it (`docs/COVERAGE_MATRIX.md` §1). The entry carries no value for a relation, so the
 # line states the row identity only. The relation itself is the `detail` column, and the value belongs to the entry
 # that owns the container. Stated as a data set, in the same shape as `PRINTS_VALUE_KINDS`, so no writer branch
 # decides the captured part per kind.
-NAMES_NO_FIELD_KINDS = ('bookkeeping',)
+NAMES_NO_FIELD_KINDS = ("bookkeeping",)
 
 # Keys a parsed object carries that are not entry fields: the entry name and the
 # five scope facts.
-NON_FIELD_KEYS = frozenset({'name'}) | frozenset(container_coverage.SCOPE_FACT_KEYS)
+NON_FIELD_KEYS = frozenset({"name"}) | frozenset(container_coverage.SCOPE_FACT_KEYS)
 
 # A field with no value is not a captured field (F4.3 rule 3), so the property scan and the
 # state scan (F5.6) both drop it through this one definition.
-EMPTY_FIELD_VALUES = (None, '', [], {}, ())
+EMPTY_FIELD_VALUES = (None, "", [], {}, ())
 
 # Which report key each scope container fills. The container set is
 # container_coverage.SCOPE_CONTAINERS, so this is the mapping, not a second rule.
 REPORT_SCOPE_KEYS = {
-    'device-group': 'device_group',
-    'vsys': 'vsys',
-    'templates': 'template',
-    'devices': 'vsys_device',
-    'template-stack': 'template_stack',
+    "device-group": "device_group",
+    "vsys": "vsys",
+    "templates": "template",
+    "devices": "vsys_device",
+    "template-stack": "template_stack",
 }
 
-REPORT_FILE = 'CONVERSION_REPORT.txt'
-REPORT_HEADING = 'PER-ENTRY CONVERSION REPORT'
-GAP_HEADING = 'Entries That Produced No Output'
-PROPERTY_HEADING = 'Captured Properties No Output Read'
+REPORT_FILE = "CONVERSION_REPORT.txt"
+REPORT_HEADING = "PER-ENTRY CONVERSION REPORT"
+GAP_HEADING = "Entries That Produced No Output"
+PROPERTY_HEADING = "Captured Properties No Output Read"
 
 # The two words a fact part starts with, stated once so the report line and the console line state the
 # same fact (`docs/ARCHITECTURE.md` §3.2).
-CAPTURED_LABEL = 'captured'
-NO_OUTPUT_READ = 'no output read'
+CAPTURED_LABEL = "captured"
+NO_OUTPUT_READ = "no output read"
 
 # One matrix row per emitted type, keyed by resource name, so the property scan can
 # find the row that covers an entry. `row_detail` gives the resource name for the
 # entry, so this is a lookup on the same name, not a second naming rule.
-MATRIX_BY_RESOURCE = {row['resource']: row for row in resource_mapping.COVERAGE_MATRIX}
+MATRIX_BY_RESOURCE = {row["resource"]: row for row in resource_mapping.COVERAGE_MATRIX}
 
 
-def protocol_report_rows(ledger: 'EntryLedger') -> list:
+def protocol_report_rows(ledger: "EntryLedger") -> list:
     """The protocol entries the emitter cannot express (F7.1), in report order.
 
     A peer no peer group names, and an interface at the OSPF level: `PROTOCOL_SHAPE` states no provider
@@ -147,10 +147,10 @@ def protocol_report_rows(ledger: 'EntryLedger') -> list:
     for entry in ledger.entries():
         mark = ledger.mark_for(entry)
         container = ledger.parents.get(entry)
-        if not mark or container is None or ledger.destination(entry) != 'report':
+        if not mark or container is None or ledger.destination(entry) != "report":
             continue
         path = container_coverage.section_path(container, ledger.parents, ledger.source_of(entry))
-        if '/protocol/' not in '/' + path:
+        if "/protocol/" not in "/" + path:
             continue
         # `row_for` carries the captured object, so the report can read through it.
         row = ledger.row_for(entry)
@@ -159,13 +159,13 @@ def protocol_report_rows(ledger: 'EntryLedger') -> list:
         node = entry
         while node is not None:
             parent = ledger.parents.get(node)
-            if parent is not None and parent.tag.endswith('router'):
+            if parent is not None and parent.tag.endswith("router"):
                 break
             node = parent
-        row['router'] = node.get('name') if node is not None else ''
-        row['level'] = path.rsplit('/', 1)[-1]
+        row["router"] = node.get("name") if node is not None else ""
+        row["level"] = path.rsplit("/", 1)[-1]
         rows.append(row)
-    return sorted(rows, key=lambda row: (row['line'] or 0, row['container'], row['name']))
+    return sorted(rows, key=lambda row: (row["line"] or 0, row["container"], row["name"]))
 
 
 def name_field(resource_type: str) -> str:
@@ -190,9 +190,8 @@ def name_field(resource_type: str) -> str:
         return resource_mapping.RESOURCE_NAME_FIELDS[resource_type]
     declares_name, _shape = row
     if declares_name:
-        return 'name'
-    return REPORT_SCOPE_KEYS.get(
-        MATRIX_BY_RESOURCE[resource_type]['xml_element'].split('/')[0], 'name')
+        return "name"
+    return REPORT_SCOPE_KEYS.get(MATRIX_BY_RESOURCE[resource_type]["xml_element"].split("/")[0], "name")
 
 
 class RecordingDict(dict):
@@ -204,7 +203,7 @@ class RecordingDict(dict):
     count as a property the output used.
     """
 
-    def __init__(self, ledger: 'EntryLedger', data: dict):
+    def __init__(self, ledger: "EntryLedger", data: dict):
         super().__init__(data)
         self._ledger = ledger
         self._used: set = set()
@@ -235,26 +234,26 @@ class RecordingDict(dict):
 
 
 RULE_PARAGRAPH = (
-    'Rule: one line per config entry the parse pipeline read. One entry is one '
-    '<entry name> element, not the lines it spans. An entry inside a '
-    'config-object entry is a property level, so the property scan (F4.4) names '
-    'its properties and the count shows on the parent row. Entries under '
-    '`predefined` are PAN-OS built-in definitions, not operator objects (F4.2), so '
-    'the report does not list them.'
+    "Rule: one line per config entry the parse pipeline read. One entry is one "
+    "<entry name> element, not the lines it spans. An entry inside a "
+    "config-object entry is a property level, so the property scan (F4.4) names "
+    "its properties and the count shows on the parent row. Entries under "
+    "`predefined` are PAN-OS built-in definitions, not operator objects (F4.2), so "
+    "the report does not list them."
 )
 
 GAP_RULE = (
-    'An entry whose destination writes nothing is listed here. Some are recorded '
-    'by design: an entry with no name is not an object, and a reference pointer '
-    'has no content of its own. The rest are coverage gaps the converter cannot '
-    'model.'
+    "An entry whose destination writes nothing is listed here. Some are recorded "
+    "by design: an entry with no name is not an object, and a reference pointer "
+    "has no content of its own. The rest are coverage gaps the converter cannot "
+    "model."
 )
 
 PROPERTY_RULE = (
-    'Each matrix row names the properties its emitter reads. A property the parse '
-    'captured that no output read for this entry is listed here. A finding is an '
-    'operator action, not a broken output: it does not change the exit code, which '
-    'the F4.1 gate still decides.'
+    "Each matrix row names the properties its emitter reads. A property the parse "
+    "captured that no output read for this entry is listed here. A finding is an "
+    "operator action, not a broken output: it does not change the exit code, which "
+    "the F4.1 gate still decides."
 )
 
 
@@ -265,8 +264,7 @@ def covering_row(section: str) -> Optional[ContainerRow]:
     pinned. The longest matching row wins, because a sub-shape row describes the
     entry more exactly than the general row for its container.
     """
-    matches = [row for row in container_coverage.CONTAINER_TABLE
-               if container_coverage.covers(row.path, section)]
+    matches = [row for row in container_coverage.CONTAINER_TABLE if container_coverage.covers(row.path, section)]
     if not matches:
         return None
     return max(matches, key=lambda row: len(row.path))
@@ -274,8 +272,8 @@ def covering_row(section: str) -> Optional[ContainerRow]:
 
 def row_detail(row: ContainerRow) -> str:
     """Detail for a row: the resource type for an emitted row, the note otherwise."""
-    types = re.findall(r'panos_[a-z0-9_]+', row.note)
-    if row.destination in ('emitted', 'nested-block') and types:
+    types = re.findall(r"panos_[a-z0-9_]+", row.note)
+    if row.destination in ("emitted", "nested-block") and types:
         return types[0]
     return row.note
 
@@ -288,7 +286,7 @@ def matrix_row_for(section: str) -> Optional[dict]:
     matrix row, so the property scan and the shadow scan do not read an entry there.
     """
     container_row = covering_row(section)
-    if container_row is None or container_row.destination != 'emitted':
+    if container_row is None or container_row.destination != "emitted":
         return None
     return MATRIX_BY_RESOURCE.get(row_detail(container_row))
 
@@ -331,8 +329,7 @@ class EntryLedger:
 
     # --- marks ---------------------------------------------------------------
 
-    def mark(self, entry: ET.Element, captured: dict, detail: str = '',
-             destination: Optional[str] = None) -> dict:
+    def mark(self, entry: ET.Element, captured: dict, detail: str = "", destination: Optional[str] = None) -> dict:
         """Record what a parse method took from an entry, and return the object.
 
         `captured` is stored as a `RecordingDict`, so a field a method adds after the
@@ -342,14 +339,12 @@ class EntryLedger:
         `EntryLedger.destination` at read time.
         """
         recorded = RecordingDict(self, captured)
-        self._marks[id(entry)] = {'entry': entry, 'captured': recorded,
-                                  'detail': detail, 'destination': destination}
+        self._marks[id(entry)] = {"entry": entry, "captured": recorded, "detail": detail, "destination": destination}
         return recorded
 
     def mark_skipped(self, entry: ET.Element, reason: str) -> None:
         """Record an entry a parse method visited and did not model."""
-        self._marks[id(entry)] = {'entry': entry, 'captured': {},
-                                  'detail': reason, 'destination': 'skipped'}
+        self._marks[id(entry)] = {"entry": entry, "captured": {}, "detail": reason, "destination": "skipped"}
 
     def mark_for(self, entry: ET.Element) -> Optional[dict]:
         return self._marks.get(id(entry))
@@ -361,7 +356,7 @@ class EntryLedger:
 
     def entries(self) -> list:
         """Every `<entry>` element in the parsed tree, in document order."""
-        return [element for element in self.source.root.iter() if element.tag == 'entry']
+        return [element for element in self.source.root.iter() if element.tag == "entry"]
 
     def is_report_entry(self, entry: ET.Element) -> bool:
         """True when this entry is a report row: section level, not predefined.
@@ -398,25 +393,28 @@ class EntryLedger:
         if mark:
             # `mark_skipped` records no object, so the fact answers only for a mark that holds the
             # recorded object, and the mark's destination answers for a skipped entry.
-            recorded = mark['captured']
-            if isinstance(recorded, RecordingDict) and recorded.value('report_only'):
-                return 'report'
-            if mark['destination']:
-                return mark['destination']
+            recorded = mark["captured"]
+            if isinstance(recorded, RecordingDict) and recorded.value("report_only"):
+                return "report"
+            if mark["destination"]:
+                return mark["destination"]
         container = self.parents.get(entry)
         row = covering_row(container_coverage.section_path(container, self.parents, self.source))
         if row:
             return row.destination
-        return 'unaccounted'
+        return "unaccounted"
 
     def captured_fields(self, mark: Optional[dict]) -> tuple:
         """Keys the parse method kept for an entry, in sorted order (F4.3 AC-3)."""
         if not mark:
             return ()
-        return tuple(sorted(
-            key for key, value in mark['captured'].items()
-            if key not in NON_FIELD_KEYS and value not in EMPTY_FIELD_VALUES
-        ))
+        return tuple(
+            sorted(
+                key
+                for key, value in mark["captured"].items()
+                if key not in NON_FIELD_KEYS and value not in EMPTY_FIELD_VALUES
+            )
+        )
 
     def property_entry_count(self, entry: ET.Element) -> int:
         """Entries inside this entry. The property scan (F4.4) reports the properties;
@@ -424,8 +422,7 @@ class EntryLedger:
 
         The entry itself is not a property entry of itself.
         """
-        return sum(1 for element in entry.iter()
-                   if element.tag == 'entry' and element is not entry)
+        return sum(1 for element in entry.iter() if element.tag == "entry" and element is not entry)
 
     def scope(self, entry: ET.Element) -> dict:
         """The scope facts the entry sits in, read from its scope ancestors.
@@ -440,14 +437,18 @@ class EntryLedger:
         The container name comes from `container_coverage.container_tag` (F5.4), so a
         per-scope entry takes the declared scope as its fact instead of the fallback.
         """
-        facts = dict.fromkeys(container_coverage.SCOPE_FACT_KEYS, '')
+        facts = dict.fromkeys(container_coverage.SCOPE_FACT_KEYS, "")
         node = entry
         while node is not None:
             container = self.parents.get(node)
             key = REPORT_SCOPE_KEYS.get(container_coverage.container_tag(node, self.parents, self.source))
-            if key and node.get('name') and not facts[key] \
-                    and container_coverage.is_scope_entry(node, self.parents, self.source):
-                facts[key] = node.get('name')
+            if (
+                key
+                and node.get("name")
+                and not facts[key]
+                and container_coverage.is_scope_entry(node, self.parents, self.source)
+            ):
+                facts[key] = node.get("name")
             node = container
         return facts
 
@@ -460,50 +461,57 @@ class EntryLedger:
         row = covering_row(path)
         mark = self.mark_for(entry)
         destination = self.destination(entry)
-        if destination == 'unaccounted':
-            detail = f'no parse method reads {path}'
+        if destination == "unaccounted":
+            detail = f"no parse method reads {path}"
         elif row:
             detail = row_detail(row)
         else:
-            detail = ''
-        if mark and mark['detail']:
-            detail = f'{detail} - {mark["detail"]}' if detail else mark['detail']
-        row_data = {'line': self.line_of(entry),
-                    'source': self.source_of(entry).name,
-                    'container': path,
-                    'name': entry.get('name') or '(no name)',
-                    'destination': destination,
-                    'detail': detail,
-                    'fields': self.captured_fields(mark),
-                    # The captured object itself, so a report line can read a value through the recorded
-                    # read (F4.4): `fields` is the names, and the row must carry the object to print a value.
-                    'captured': mark['captured'] if mark else {},
-                    'property_entries': self.property_entry_count(entry)}
+            detail = ""
+        if mark and mark["detail"]:
+            detail = f"{detail} - {mark['detail']}" if detail else mark["detail"]
+        row_data = {
+            "line": self.line_of(entry),
+            "source": self.source_of(entry).name,
+            "container": path,
+            "name": entry.get("name") or "(no name)",
+            "destination": destination,
+            "detail": detail,
+            "fields": self.captured_fields(mark),
+            # The captured object itself, so a report line can read a value through the recorded
+            # read (F4.4): `fields` is the names, and the row must carry the object to print a value.
+            "captured": mark["captured"] if mark else {},
+            "property_entries": self.property_entry_count(entry),
+        }
         row_data.update(self.scope(entry))
         return row_data
 
     def rows(self) -> list:
         """Report rows for the entries the parse pipeline read, in report order."""
-        return sorted([self.row_for(entry) for entry in self.entries() if self.is_report_entry(entry)],
-                      key=lambda row: (row['line'] or 0, row['container'], row['name']))
+        return sorted(
+            [self.row_for(entry) for entry in self.entries() if self.is_report_entry(entry)],
+            key=lambda row: (row["line"] or 0, row["container"], row["name"]),
+        )
 
     def gaps(self) -> list:
         """Rows whose destination writes nothing for the entry."""
-        return [row for row in self.rows() if row['destination'] in GAP_KINDS]
+        return [row for row in self.rows() if row["destination"] in GAP_KINDS]
 
     def counts(self) -> Counter:
-        counts = Counter(row['destination'] for row in self.rows())
+        counts = Counter(row["destination"] for row in self.rows())
         for kind in DESTINATION_KINDS:
             counts.setdefault(kind, 0)
         return counts
 
     def property_entry_total(self) -> int:
-        return sum(row['property_entries'] for row in self.rows())
+        return sum(row["property_entries"] for row in self.rows())
 
     def predefined_total(self) -> int:
-        return sum(1 for entry in self.entries()
-                   if self.parents.get(entry) is not None
-                   and container_coverage.is_predefined(self.parents[entry], self.parents))
+        return sum(
+            1
+            for entry in self.entries()
+            if self.parents.get(entry) is not None
+            and container_coverage.is_predefined(self.parents[entry], self.parents)
+        )
 
     def gap_count(self) -> int:
         return len(self.gaps())
@@ -521,23 +529,24 @@ class EntryLedger:
         for entry in self.entries():
             container = self.parents.get(entry)
             mark = self.mark_for(entry)
-            if container is None or not mark or not isinstance(mark['captured'], RecordingDict):
+            if container is None or not mark or not isinstance(mark["captured"], RecordingDict):
                 continue
             matrix_row = matrix_row_for(container_coverage.section_path(container, self.parents, self.source))
             if matrix_row is None:
                 continue
             captured = set(self.captured_fields(mark))
-            unused = tuple(sorted(captured - set(mark['captured'].used_keys())))
+            unused = tuple(sorted(captured - set(mark["captured"].used_keys())))
             if not unused:
                 continue
             finding = self.row_for(entry)
-            finding['resource'] = matrix_row['resource']
-            finding['unused_properties'] = unused
+            finding["resource"] = matrix_row["resource"]
+            finding["unused_properties"] = unused
             findings.append(finding)
-        return sorted(findings, key=lambda row: (row['line'] or 0, row['container'], row['name']))
+        return sorted(findings, key=lambda row: (row["line"] or 0, row["container"], row["name"]))
 
 
 # --- the run view (F8.9, `docs/API_CONVERSION_PATH.md` §6) ---------------------
+
 
 class RunPart:
     """One response the run read, and the tables its parse methods answered.
@@ -678,10 +687,11 @@ class RunView:
 # parts: the identity, the position, the scope, and the fact. A console line has no room for the
 # fixed-width matrix-row column, so the matrix row stays in the report.
 
+
 # The row identity the report names: object type, then entry name (F4.3 rule 2). The console line names
 # the same identity, so a console line and a report row name the same entry.
 def entry_identity(row: dict) -> str:
-    return f'{row["container"]}/{row["name"]}'
+    return f"{row['container']}/{row['name']}"
 
 
 def report_value(value) -> str:
@@ -691,7 +701,7 @@ def report_value(value) -> str:
     One shape, so the entry line prints a value the way the report sections print it.
     """
     if isinstance(value, (list, tuple)):
-        return '[' + ', '.join(str(item) for item in value) + ']'
+        return "[" + ", ".join(str(item) for item in value) + "]"
     return str(value)
 
 
@@ -706,39 +716,44 @@ def captured_part(row: dict) -> str:
     states the row identity only. A row with no captured field says `name only`, because a field the entry
     carries no value for is not a captured field (F4.3 rule 3).
     """
-    fields = row['fields']
-    if not fields or row['destination'] in NAMES_NO_FIELD_KINDS:
-        return f'{CAPTURED_LABEL}: name only'
-    captured = row.get('captured')
-    if row['destination'] not in PRINTS_VALUE_KINDS or not captured:
-        return f'{CAPTURED_LABEL}: ' + ', '.join(fields)
-    return f'{CAPTURED_LABEL}: ' + ', '.join(
-        f'{key}={report_value(captured.get(key))}' for key in fields)
+    fields = row["fields"]
+    if not fields or row["destination"] in NAMES_NO_FIELD_KINDS:
+        return f"{CAPTURED_LABEL}: name only"
+    captured = row.get("captured")
+    if row["destination"] not in PRINTS_VALUE_KINDS or not captured:
+        return f"{CAPTURED_LABEL}: " + ", ".join(fields)
+    return f"{CAPTURED_LABEL}: " + ", ".join(f"{key}={report_value(captured.get(key))}" for key in fields)
 
 
 def entry_line(row: dict) -> str:
     """One report line: line, object type, name, destination, detail, captured fields."""
-    line = f'{row["line"] if row["line"] is not None else 0}'
-    parts = [f'  line {line:>4}  ', f'{entry_identity(row):<38} ', f'{row["destination"]:<12} ',
-             f'{row["detail"]:<36} ']
+    line = f"{row['line'] if row['line'] is not None else 0}"
+    parts = [
+        f"  line {line:>4}  ",
+        f"{entry_identity(row):<38} ",
+        f"{row['destination']:<12} ",
+        f"{row['detail']:<36} ",
+    ]
     parts.append(captured_part(row))
-    if row['property_entries']:
-        parts.append(f'  property entries: {row["property_entries"]}')
-    if row.get('vsys'):
-        parts.append(f'  [{row["vsys"]}]')
-    return ''.join(parts).rstrip()
+    if row["property_entries"]:
+        parts.append(f"  property entries: {row['property_entries']}")
+    if row.get("vsys"):
+        parts.append(f"  [{row['vsys']}]")
+    return "".join(parts).rstrip()
 
 
 def summary_lines(ledger: EntryLedger) -> list:
     counts = ledger.counts()
-    lines = [f'Per-entry report: {len(ledger.rows())} entries read']
+    lines = [f"Per-entry report: {len(ledger.rows())} entries read"]
     for kind in DESTINATION_KINDS:
-        marker = '  (writes nothing: gap)' if kind in GAP_KINDS else ''
-        lines.append(f'  {kind:<14} {counts[kind]}{marker}')
-    lines.append(f'Property entries inside config-object entries: {ledger.property_entry_total()} '
-                 f'(property scan: {len(ledger.property_findings())} entries with a property '
-                 'no output read)')
-    lines.append(f'predefined entries not listed: {ledger.predefined_total()}')
+        marker = "  (writes nothing: gap)" if kind in GAP_KINDS else ""
+        lines.append(f"  {kind:<14} {counts[kind]}{marker}")
+    lines.append(
+        f"Property entries inside config-object entries: {ledger.property_entry_total()} "
+        f"(property scan: {len(ledger.property_findings())} entries with a property "
+        "no output read)"
+    )
+    lines.append(f"predefined entries not listed: {ledger.predefined_total()}")
     return lines
 
 
@@ -752,12 +767,11 @@ def property_line(row: dict) -> str:
     The matrix row is a fixed-width column, so it is on the report line and not on the console line
     (`docs/ARCHITECTURE.md` §3.2).
     """
-    line = f'{row["line"] if row["line"] is not None else 0}'
-    parts = [f'  line {line:>4}  ', f'{entry_identity(row):<38} ', f'{row["resource"]:<32} ',
-             property_fact(row)]
-    if row.get('vsys'):
-        parts.append(f'  [{row["vsys"]}]')
-    return ''.join(parts).rstrip()
+    line = f"{row['line'] if row['line'] is not None else 0}"
+    parts = [f"  line {line:>4}  ", f"{entry_identity(row):<38} ", f"{row['resource']:<32} ", property_fact(row)]
+    if row.get("vsys"):
+        parts.append(f"  [{row['vsys']}]")
+    return "".join(parts).rstrip()
 
 
 def property_fact(row: dict) -> str:
@@ -766,7 +780,7 @@ def property_fact(row: dict) -> str:
     The scan measures the keys of the object the parse method built (F4.3 rule 4), so the console line
     names them as parsed-object key names, never as an XML tag.
     """
-    return f'{NO_OUTPUT_READ}: ' + ', '.join(row['unused_properties'])
+    return f"{NO_OUTPUT_READ}: " + ", ".join(row["unused_properties"])
 
 
 def gap_fact(row: dict) -> str:
@@ -776,9 +790,9 @@ def gap_fact(row: dict) -> str:
     so the console and the report cannot disagree. Captured fields are the parsed-object key names
     (F4.3 rule 5), so a console line may name them, and a row whose kind prints a value prints the value.
     """
-    fact = f'{row["destination"]}  {row["detail"] or "no detail"}  {captured_part(row)}'
-    if row['property_entries']:
-        fact += f'  property entries: {row["property_entries"]}'
+    fact = f"{row['destination']}  {row['detail'] or 'no detail'}  {captured_part(row)}"
+    if row["property_entries"]:
+        fact += f"  property entries: {row['property_entries']}"
     return fact
 
 
@@ -791,11 +805,16 @@ def console_lines(ledger: EntryLedger, scope_path) -> list:
     gaps = ledger.gaps()
     if not gaps:
         return []
-    lines = [f'Per-entry report gaps ({len(gaps)}):']
-    lines.extend(container_coverage.console_line(container_coverage.scope_part(row, scope_path),
-                                                 container_coverage.position_part(row['line']),
-                                                 entry_identity(row), gap_fact(row))
-                 for row in gaps)
+    lines = [f"Per-entry report gaps ({len(gaps)}):"]
+    lines.extend(
+        container_coverage.console_line(
+            container_coverage.scope_part(row, scope_path),
+            container_coverage.position_part(row["line"]),
+            entry_identity(row),
+            gap_fact(row),
+        )
+        for row in gaps
+    )
     return lines
 
 
@@ -807,9 +826,14 @@ def property_console_lines(findings: list, scope_path) -> list:
     """
     if not findings:
         return []
-    lines = [f'Property findings ({len(findings)}):']
-    lines.extend(container_coverage.console_line(container_coverage.scope_part(row, scope_path),
-                                                 container_coverage.position_part(row['line']),
-                                                 entry_identity(row), property_fact(row))
-                 for row in findings)
+    lines = [f"Property findings ({len(findings)}):"]
+    lines.extend(
+        container_coverage.console_line(
+            container_coverage.scope_part(row, scope_path),
+            container_coverage.position_part(row["line"]),
+            entry_identity(row),
+            property_fact(row),
+        )
+        for row in findings
+    )
     return lines

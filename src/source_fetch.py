@@ -96,38 +96,38 @@ from xml_input import (
     SourceOrigin,
     UnsafeInputError,
     add_max_input_argument,  # noqa: F401 -- re-exported: the entry points read the input limit through
-                              # this module, the owner of the limit, so no entry point states its own.
+    # this module, the owner of the limit, so no entry point states its own.
     parse_bytes,
     read_input,
 )
 
 # The source kind the report names for a fetched input. F5.6 adds 'state'.
-SOURCE_KIND = 'api'
+SOURCE_KIND = "api"
 
 # The three accepted request shapes (F8.1, `docs/API_CONVERSION_PATH.md` §2.1), one response
 # element each. The wrapper decision reads a response against the shape its own request states, so
 # a shape is never guessed from what the response looks like.
-EXPORT_TYPE = 'export'
-EXPORT_CATEGORY = 'configuration'
-CONFIG_TYPE = 'config'
-CONFIG_ACTION = 'get'
-OP_TYPE = 'op'
+EXPORT_TYPE = "export"
+EXPORT_CATEGORY = "configuration"
+CONFIG_TYPE = "config"
+CONFIG_ACTION = "get"
+OP_TYPE = "op"
 
 # The params each shape states. `path` names the scope for the per-scope shape and `cmd` names the
 # command for the device fact shape, so the part a request declares is part of its identity and
 # each scope and each command gets its own cache entry. `ENTRY_SEGMENT` comes from the shared scope
 # vocabulary in `xml_input.py`, the only module the fetch layer may import.
 SHAPE_PARAMS = {
-    EXPORT_TYPE: (('type', EXPORT_TYPE), ('category', EXPORT_CATEGORY)),
-    CONFIG_TYPE: (('type', CONFIG_TYPE), ('action', CONFIG_ACTION)),
-    OP_TYPE: (('type', OP_TYPE),),
+    EXPORT_TYPE: (("type", EXPORT_TYPE), ("category", EXPORT_CATEGORY)),
+    CONFIG_TYPE: (("type", CONFIG_TYPE), ("action", CONFIG_ACTION)),
+    OP_TYPE: (("type", OP_TYPE),),
 }
-PATH_PARAM = 'path'
-CMD_PARAM = 'cmd'
+PATH_PARAM = "path"
+CMD_PARAM = "cmd"
 
-DEFAULT_CACHE_DIR = 'panorama_cache'
-API_KEY_ENV = 'PANOS_API_KEY'
-CACHE_SUFFIX = '.xml'
+DEFAULT_CACHE_DIR = "panorama_cache"
+API_KEY_ENV = "PANOS_API_KEY"
+CACHE_SUFFIX = ".xml"
 
 
 class SourceFetchError(UnsafeInputError):
@@ -153,8 +153,8 @@ class ApiRequest:
     """
 
     host: str
-    path: str = ''
-    command: str = ''
+    path: str = ""
+    command: str = ""
     params: tuple = ()
 
     def request_shape(self) -> str:
@@ -177,7 +177,7 @@ class ApiRequest:
 
     def segments(self) -> tuple:
         """The declared path as segments: ('device-group', 'entry', 'Edge')."""
-        return tuple(self.path.split('/')) if self.path else ()
+        return tuple(self.path.split("/")) if self.path else ()
 
     def request_params(self) -> tuple:
         """The params the identity hashes: the words its shape states, or the params the request
@@ -197,24 +197,24 @@ class ApiRequest:
         too: a declared source that breaks the rule is not a source this tool
         reads, even when its bytes are already cached.
         """
-        if '://' in self.host:
-            scheme, rest = self.host.split('://', 1)
-            if scheme.lower() != 'https':
+        if "://" in self.host:
+            scheme, rest = self.host.split("://", 1)
+            if scheme.lower() != "https":
                 raise SourceFetchError(
                     f"refusing the source host '{self.host}': the producer accepts https "
                     f"only, and this request names the scheme '{scheme}'."
                 )
-            return rest.split('/')[0]
+            return rest.split("/")[0]
         return self.host
 
     def canonical(self) -> str:
         """The request identity the cache key hashes: host and sorted params, no key."""
-        query = '&'.join(f'{key}={value}' for key, value in self.request_params())
-        return f'{self.https_host()}?{query}'
+        query = "&".join(f"{key}={value}" for key, value in self.request_params())
+        return f"{self.https_host()}?{query}"
 
     def cache_name(self) -> str:
         """The cache entry file name: the hex of the request identity."""
-        return hashlib.sha256(self.canonical().encode('utf-8')).hexdigest() + CACHE_SUFFIX
+        return hashlib.sha256(self.canonical().encode("utf-8")).hexdigest() + CACHE_SUFFIX
 
     def url(self, api_key: str) -> str:
         """The request URL. The key reaches this URL and nothing else.
@@ -224,7 +224,7 @@ class ApiRequest:
         as data.
         """
         query = urllib.parse.urlencode(self.request_params())
-        return f'https://{self.https_host()}/api/?{query}&key={api_key}'
+        return f"https://{self.https_host()}/api/?{query}&key={api_key}"
 
 
 class _SameSchemeRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -285,7 +285,7 @@ def names_element(element, request: ApiRequest) -> bool:
         # The device fact shape declares no path, so no element name follows from it.
         return False
     if len(segments) == 3 and segments[1] == ENTRY_SEGMENT:
-        return element.tag == 'entry' and element.get('name') == segments[2]
+        return element.tag == "entry" and element.get("name") == segments[2]
     return element.tag == segments[0]
 
 
@@ -305,20 +305,19 @@ def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = Non
     refused. The response success check runs here, before the cache entry is written.
     """
     root = source.root
-    if root.tag == 'response':
-        response_type = root.get('type') or ''
-        code = root.get('code') or ''
-        if response_type != 'success' or code != '0':
+    if root.tag == "response":
+        response_type = root.get("type") or ""
+        code = root.get("code") or ""
+        if response_type != "success" or code != "0":
             raise SourceFetchError(
                 f"refusing the API response from '{source.name}': "
                 f"type '{response_type}' code '{code}', which is not 'success' code '0'. "
                 "The cache entry is not written for a refused response."
             )
-        result = root.find('result')
+        result = root.find("result")
         if result is None:
             raise SourceFetchError(
-                f"refusing the API response from '{source.name}': "
-                "the response has no result element."
+                f"refusing the API response from '{source.name}': the response has no result element."
             )
         root = result
     if request is not None and request.request_shape() == OP_TYPE:
@@ -329,7 +328,7 @@ def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = Non
         # for a fact element. The join (F8.3) reads a response against the index entry its request names, and it
         # states no command-to-element table either, so a command's element name stays a fact the join cannot read
         # offline, and `backlog.md` records it.
-        if root.tag != 'result':
+        if root.tag != "result":
             raise SourceFetchError(
                 f"refusing the API response from '{source.name}': the device fact request for "
                 f"'{request.command}' needs the result element, and the root element "
@@ -342,7 +341,7 @@ def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = Non
                 f"or {len(held)} elements, not the one fact element the command "
                 f"'{request.command}' names."
             )
-        if held[0].tag == 'config':
+        if held[0].tag == "config":
             raise SourceFetchError(
                 f"refusing the API response from '{source.name}': the result holds the config "
                 f"element, which the whole-config shape names, not the fact element the command "
@@ -352,7 +351,7 @@ def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = Non
     if request is not None and request.is_per_scope():
         # The per-scope shape (F5.4): `result` holds the element the path names, and
         # `result` itself becomes the root, read as the place the path names.
-        if root.tag != 'result':
+        if root.tag != "result":
             raise SourceFetchError(
                 f"refusing the API response from '{source.name}': the per-scope request for "
                 f"'{request.path}' needs the result element, and the root element "
@@ -371,8 +370,8 @@ def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = Non
                 "shape the request states, not a shape that looks similar."
             )
         return replace(source, root=root, scope=request.path)
-    if root.tag == 'result':
-        config = root.find('config')
+    if root.tag == "result":
+        config = root.find("config")
         if config is None:
             raise SourceFetchError(
                 f"refusing the API response from '{source.name}': the result holds no config "
@@ -380,7 +379,7 @@ def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = Non
                 "response is read only by the request that declares its path (F5.4)."
             )
         return replace(source, root=config)
-    if root.tag == 'config':
+    if root.tag == "config":
         return source
     raise SourceFetchError(
         f"refusing the API response from '{source.name}': the root element '{root.tag}' is "
@@ -388,10 +387,15 @@ def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = Non
     )
 
 
-def fetch(request: ApiRequest, cache_dir, producer: Optional[Callable[[ApiRequest], bytes]] = None,
-          offline: bool = False, insecure: bool = False,
-          max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES,
-          api_key: Optional[str] = None) -> Optional[ParsedSource]:
+def fetch(
+    request: ApiRequest,
+    cache_dir,
+    producer: Optional[Callable[[ApiRequest], bytes]] = None,
+    offline: bool = False,
+    insecure: bool = False,
+    max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES,
+    api_key: Optional[str] = None,
+) -> Optional[ParsedSource]:
     """Read the cached API export and return the parsed source (F5.2 AC-3).
 
     The origin names the cache entry as its name and its path, so a report line

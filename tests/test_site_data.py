@@ -50,52 +50,52 @@ from conftest import (
     tf_files,
 )
 
-CONVERTER = 'panorama_to_terraform.py'
+CONVERTER = "panorama_to_terraform.py"
 MANIFEST = unit_manifest.MANIFEST_FILE
-DEVICE = 'fw-2.example.com'
-NO_DEVICE = 'localhost.localdomain'
-KITCHEN = 'kitchen_sink.xml'
+DEVICE = "fw-2.example.com"
+NO_DEVICE = "localhost.localdomain"
+KITCHEN = "kitchen_sink.xml"
 
 # The fixtures that name a site value, with the rows the run writes in identity order. A fixture
 # that starts naming a value must be added here in the same change, so no fixture can become a
 # silent false positive.
 CORPUS_ROWS = {
-    'dependency_wiring.xml': [('vsys1_d7045c06', {'device1': 'device1'})],
+    "dependency_wiring.xml": [("vsys1_d7045c06", {"device1": "device1"})],
     KITCHEN: [
-        ('fw_2_example_com_35aafbcf', {naming.variable_name(DEVICE): DEVICE}),
-        ('vsys1_78d8e4bc', {naming.variable_name(DEVICE): DEVICE}),
-        ('vsys2_30925639', {naming.variable_name(DEVICE): DEVICE}),
+        ("fw_2_example_com_35aafbcf", {naming.variable_name(DEVICE): DEVICE}),
+        ("vsys1_78d8e4bc", {naming.variable_name(DEVICE): DEVICE}),
+        ("vsys2_30925639", {naming.variable_name(DEVICE): DEVICE}),
     ],
-    'multi_device_templates.xml': [
-        ('fw_1_example_com_6a71771b', {'fw_1_example_com': 'fw-1.example.com'}),
-        ('fw_2_example_com_35aafbcf', {naming.variable_name(DEVICE): DEVICE}),
+    "multi_device_templates.xml": [
+        ("fw_1_example_com_6a71771b", {"fw_1_example_com": "fw-1.example.com"}),
+        ("fw_2_example_com_35aafbcf", {naming.variable_name(DEVICE): DEVICE}),
     ],
-    'reference_cycle.xml': [
-        ('fw_a_example_com_4febb524', {'fw_a_example_com': 'fw-a.example.com'}),
-        ('fw_b_example_com_85c521ca', {'fw_b_example_com': 'fw-b.example.com'}),
+    "reference_cycle.xml": [
+        ("fw_a_example_com_4febb524", {"fw_a_example_com": "fw-a.example.com"}),
+        ("fw_b_example_com_85c521ca", {"fw_b_example_com": "fw-b.example.com"}),
     ],
-    'report_grouping.xml': [('fw_2_example_com_35aafbcf', {naming.variable_name(DEVICE): DEVICE})],
-    'virtual_routers.xml': [
-        ('fw_1_example_com_6a71771b', {'fw_1_example_com': 'fw-1.example.com'}),
-        ('vsys2_27ce8e0a', {'fw_1_example_com': 'fw-1.example.com'}),
+    "report_grouping.xml": [("fw_2_example_com_35aafbcf", {naming.variable_name(DEVICE): DEVICE})],
+    "virtual_routers.xml": [
+        ("fw_1_example_com_6a71771b", {"fw_1_example_com": "fw-1.example.com"}),
+        ("vsys2_27ce8e0a", {"fw_1_example_com": "fw-1.example.com"}),
     ],
 }
 
 
 def _run(source: Path, out_dir: Path, extra: tuple = ()) -> subprocess.CompletedProcess:
     """Run the converter as a script and return the process result."""
-    return run_script(CONVERTER, str(source), '--output-dir', str(out_dir), *extra)
+    return run_script(CONVERTER, str(source), "--output-dir", str(out_dir), *extra)
 
 
 def _rows(out_dir: Path) -> list:
     """The site data the run wrote, read through the rule that declares the row shape."""
     path = out_dir / site_data.SITE_DATA_FILE
-    return site_data.parse_rows(path.read_text(encoding='utf-8'))
+    return site_data.parse_rows(path.read_text(encoding="utf-8"))
 
 
 def _pairs(rows: list) -> list:
     """The site rows as (`directory`, `variables`), the two declared fields."""
-    return [(row['directory'], row['variables']) for row in rows]
+    return [(row["directory"], row["variables"]) for row in rows]
 
 
 def _printed_forms(out_dir: Path) -> dict:
@@ -104,13 +104,14 @@ def _printed_forms(out_dir: Path) -> dict:
     F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the printed form is the unit's file, so the run writes one
     per unit that names a value, and each holds only the printed form of that unit's row.
     """
-    return {str(p.relative_to(out_dir)): p.read_text(encoding='utf-8')
-            for p in sorted(out_dir.rglob(site_data.TFVARS_FILE))}
+    return {
+        str(p.relative_to(out_dir)): p.read_text(encoding="utf-8") for p in sorted(out_dir.rglob(site_data.TFVARS_FILE))
+    }
 
 
 def _value_lines(text: str) -> list:
     """The `.tfvars` lines that state a value, without the header."""
-    return [line for line in text.split('\n') if line and not line.startswith('#')]
+    return [line for line in text.split("\n") if line and not line.startswith("#")]
 
 
 def _tfvars_lines(out_dir: Path) -> list:
@@ -127,7 +128,7 @@ def _tfvars_lines(out_dir: Path) -> list:
 
 # The names the provider schema marks `sensitive`: the three inside the protocol object (F7.1) and the two
 # inside `certificate/local` (F7.14), each pinned against the live schema by the test that owns its table.
-REFERENCE_ONLY_NAMES = {'secret', 'key', 'password', 'private_key', 'passphrase'}
+REFERENCE_ONLY_NAMES = {"secret", "key", "password", "private_key", "passphrase"}
 
 
 def test_the_table_covers_every_field_the_location_can_state():
@@ -136,9 +137,13 @@ def test_the_table_covers_every_field_the_location_can_state():
     state no value for (`target` and `hostname`, F6.10.4 and §11), so a field cannot gain a row without the test
     naming it.
     """
-    fields = {field for scopes in resource_mapping.LOCATION_SCHEMA.values()
-              for sub_block in scopes.values() for field in sub_block}
-    provider_arguments = {'target', 'hostname'}
+    fields = {
+        field
+        for scopes in resource_mapping.LOCATION_SCHEMA.values()
+        for sub_block in scopes.values()
+        for field in sub_block
+    }
+    provider_arguments = {"target", "hostname"}
     assert set(resource_mapping.VALUE_VARIABLES) == fields | REFERENCE_ONLY_NAMES | provider_arguments, fields
 
 
@@ -152,23 +157,26 @@ def test_only_the_device_field_maps_to_a_variable():
     supplies the value.
     """
     variable, literal, reference, named = (
-        resource_mapping.VARIABLE, resource_mapping.LITERAL, resource_mapping.REFERENCE_ONLY,
-        resource_mapping.OPERATOR_SUPPLIED)
+        resource_mapping.VARIABLE,
+        resource_mapping.LITERAL,
+        resource_mapping.REFERENCE_ONLY,
+        resource_mapping.OPERATOR_SUPPLIED,
+    )
     assert {
-        'ngfw_device': variable,
-        'name': literal,
-        'vsys': literal,
-        'panorama_device': literal,
-        'rulebase': literal,
-        'hostname': named,
-        'target': named,
-        'secret': reference,
-        'key': reference,
-        'password': reference,
-        'private_key': reference,
-        'passphrase': reference,
+        "ngfw_device": variable,
+        "name": literal,
+        "vsys": literal,
+        "panorama_device": literal,
+        "rulebase": literal,
+        "hostname": named,
+        "target": named,
+        "secret": reference,
+        "key": reference,
+        "password": reference,
+        "private_key": reference,
+        "passphrase": reference,
     } == resource_mapping.VALUE_VARIABLES
-    assert variable != named, 'the device field holds a value; the run names `target` and holds none'
+    assert variable != named, "the device field holds a value; the run names `target` and holds none"
 
 
 def test_the_generator_prints_a_value_through_the_table(converter_module):
@@ -179,11 +187,11 @@ def test_the_generator_prints_a_value_through_the_table(converter_module):
     argument is the §5 rule applied to its row and no name list decides it.
     """
     source = inspect.getsource(converter_module.TerraformGenerator.location_field)
-    assert 'self.printed_value(' in source, source
-    assert 'VALUE_VARIABLES' not in source, source
+    assert "self.printed_value(" in source, source
+    assert "VALUE_VARIABLES" not in source, source
     provider = inspect.getsource(converter_module.TerraformGenerator.generate_provider_config)
-    assert 'self.printed_value(' in provider, provider
-    assert 'VALUE_VARIABLES' not in provider, provider
+    assert "self.printed_value(" in provider, provider
+    assert "VALUE_VARIABLES" not in provider, provider
 
 
 def test_the_table_holds_no_property():
@@ -203,32 +211,46 @@ def test_the_table_holds_no_property():
     inside `local`, which is the property the certificate row states, so they are never measured, because the
     emitter prints the level and records nothing for the fields inside it.
     """
-    allowed = {'name', 'ngfw_device', 'panorama_device', 'rulebase', 'vsys',
-               'target', 'hostname'} | REFERENCE_ONLY_NAMES
+    allowed = {
+        "name",
+        "ngfw_device",
+        "panorama_device",
+        "rulebase",
+        "vsys",
+        "target",
+        "hostname",
+    } | REFERENCE_ONLY_NAMES
     assert all(field in allowed for field in resource_mapping.VALUE_VARIABLES), resource_mapping.VALUE_VARIABLES
-    assert all(resource_mapping.VALUE_VARIABLES[field] == resource_mapping.OPERATOR_SUPPLIED
-               for field in ('target', 'hostname')), resource_mapping.VALUE_VARIABLES
+    assert all(
+        resource_mapping.VALUE_VARIABLES[field] == resource_mapping.OPERATOR_SUPPLIED
+        for field in ("target", "hostname")
+    ), resource_mapping.VALUE_VARIABLES
     # §11: the table holds no credential row. `password` is the protocol field the provider marks sensitive, not
     # the credential, and the credential the provider reads from the environment has no row, so it cannot be a
     # declaration. `tests/test_variables.py` pins that.
-    measured = {prop for row in resource_mapping.COVERAGE_MATRIX for prop in row['properties']}
-    tables = {field for table in (resource_mapping.PROTOCOL_TABLE, resource_mapping.CERTIFICATE_TABLE)
-              for row in table.rows.values() for field in row['sensitive']}
-    inside_local = {field for row in resource_mapping.CERTIFICATE_TABLE.rows.values()
-                    for field in row['sensitive']}
-    assert measured & REFERENCE_ONLY_NAMES == tables - {'key'} - inside_local, measured
-    assert all(row['resource'] == 'panos_virtual_router'
-               for row in resource_mapping.COVERAGE_MATRIX
-               if set(row['properties']) & REFERENCE_ONLY_NAMES), measured
+    measured = {prop for row in resource_mapping.COVERAGE_MATRIX for prop in row["properties"]}
+    tables = {
+        field
+        for table in (resource_mapping.PROTOCOL_TABLE, resource_mapping.CERTIFICATE_TABLE)
+        for row in table.rows.values()
+        for field in row["sensitive"]
+    }
+    inside_local = {field for row in resource_mapping.CERTIFICATE_TABLE.rows.values() for field in row["sensitive"]}
+    assert measured & REFERENCE_ONLY_NAMES == tables - {"key"} - inside_local, measured
+    assert all(
+        row["resource"] == "panos_virtual_router"
+        for row in resource_mapping.COVERAGE_MATRIX
+        if set(row["properties"]) & REFERENCE_ONLY_NAMES
+    ), measured
     # F6.10.3: `scope.tf` is the unit's file, so the golden set holds one per unit that has a scope block.
-    scope = ''.join(p.read_text(encoding='utf-8')
-                    for p in sorted((GOLDEN_DIR / 'kitchen_sink').rglob('scope.tf')))
-    assert 'panos_template_variable' in scope, 'the kitchen-sink case declares a template variable'
-    assert 'var.' not in scope, scope
+    scope = "".join(p.read_text(encoding="utf-8") for p in sorted((GOLDEN_DIR / "kitchen_sink").rglob("scope.tf")))
+    assert "panos_template_variable" in scope, "the kitchen-sink case declares a template variable"
+    assert "var." not in scope, scope
     assert '"10.9.9.9/32"' in scope, scope
 
 
 # --- 2. the site row and the join ---------------------------------------------
+
 
 def test_the_corpus_rows_are_pinned(tmp_path):
     """One row per site that names a value, in identity order, read back as data. A fixture that
@@ -244,7 +266,7 @@ def test_the_sample_run_names_no_value_and_writes_no_file(tmp_path):
     """A run that names no site value writes no site data and no `.tfvars`, the rule the report
     files and the other data files use.
     """
-    out = tmp_path / 'sample'
+    out = tmp_path / "sample"
     assert _run(SAMPLE_CONFIG, out).returncode == 0
     assert not (out / site_data.SITE_DATA_FILE).is_file()
     assert not (out / site_data.TFVARS_FILE).is_file()
@@ -254,16 +276,16 @@ def test_the_row_joins_to_the_manifest_on_directory(tmp_path):
     """The join is the manifest row: `directory` is the name `unit_manifest.directory_name` decides
     for the unit the row names, so no second unit rule appears in this module.
     """
-    out = tmp_path / 'kitchen'
+    out = tmp_path / "kitchen"
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
-    manifest = unit_manifest.parse_rows((out / MANIFEST).read_text(encoding='utf-8'))
+    manifest = unit_manifest.parse_rows((out / MANIFEST).read_text(encoding="utf-8"))
     rows = _rows(out)
-    assert rows, 'the kitchen-sink run names a device, so it must write the site data'
+    assert rows, "the kitchen-sink run names a device, so it must write the site data"
     for row in rows:
-        named = [entry for entry in manifest if entry['directory'] == row['directory']]
-        assert len(named) == 1, f'{row["directory"]} names no manifest row'
+        named = [entry for entry in manifest if entry["directory"] == row["directory"]]
+        assert len(named) == 1, f"{row['directory']} names no manifest row"
         facts = tuple(named[0][key] for key in unit_manifest.FACT_KEYS)
-        assert row['directory'] == unit_manifest.directory_name(facts, naming.sanitize)
+        assert row["directory"] == unit_manifest.directory_name(facts, naming.sanitize)
 
 
 def test_parse_rows_refuses_a_row_that_is_not_the_declared_shape():
@@ -271,57 +293,57 @@ def test_parse_rows_refuses_a_row_that_is_not_the_declared_shape():
     value that is not a string or a list, and a name that is not the §5 shape of its value are
     refusals.
     """
-    good = {'directory': 'vsys1_d7045c06', 'variables': {'device1': 'device1'}}
+    good = {"directory": "vsys1_d7045c06", "variables": {"device1": "device1"}}
     assert site_data.parse_rows(site_data.render([good])) == [good]
     bad_rows = [
-        dict(good, source='tests/fixtures/dependency_wiring.xml'),
-        {'directory': 'vsys1_d7045c06'},
-        {'variables': {'device1': 'device1'}},
-        {'directory': '', 'variables': {'device1': 'device1'}},
-        {'directory': 'vsys1_d7045c06', 'variables': ['device1']},
-        {'directory': 'vsys1_d7045c06', 'variables': {'device1': 1}},
-        {'directory': 'vsys1_d7045c06', 'variables': {'device1': ['device1', 2]}},
+        dict(good, source="tests/fixtures/dependency_wiring.xml"),
+        {"directory": "vsys1_d7045c06"},
+        {"variables": {"device1": "device1"}},
+        {"directory": "", "variables": {"device1": "device1"}},
+        {"directory": "vsys1_d7045c06", "variables": ["device1"]},
+        {"directory": "vsys1_d7045c06", "variables": {"device1": 1}},
+        {"directory": "vsys1_d7045c06", "variables": {"device1": ["device1", 2]}},
         # A name that is not the §5 shape of its value: the name is the mapping result, not a choice.
-        {'directory': 'vsys1_d7045c06', 'variables': {'device1': 'device-1'}},
-        {'directory': 'vsys1_d7045c06', 'variables': {'': 'device1'}},
+        {"directory": "vsys1_d7045c06", "variables": {"device1": "device-1"}},
+        {"directory": "vsys1_d7045c06", "variables": {"": "device1"}},
     ]
     for row in bad_rows:
         with pytest.raises(ValueError):
             site_data.parse_rows(json.dumps([row]))
     with pytest.raises(ValueError):
-        site_data.parse_rows('not a list of rows')
+        site_data.parse_rows("not a list of rows")
 
 
 def test_the_fields_print_in_the_declared_order():
     """The row shape is fixed, so a reader does not guess, the rows keep the order the run wrote, and
     no field states a timestamp or a path.
     """
-    assert site_data.SITE_ROW_FIELDS == ('directory', 'variables')
+    assert site_data.SITE_ROW_FIELDS == ("directory", "variables")
     rows = [
-        {'directory': 'vsys2_30925639', 'variables': {naming.variable_name(DEVICE): DEVICE}},
-        {'directory': 'fw_2_example_com_35aafbcf', 'variables': {naming.variable_name(DEVICE): DEVICE}},
+        {"directory": "vsys2_30925639", "variables": {naming.variable_name(DEVICE): DEVICE}},
+        {"directory": "fw_2_example_com_35aafbcf", "variables": {naming.variable_name(DEVICE): DEVICE}},
     ]
     printed = site_data.render(rows)
     assert list(site_data.parse_rows(printed)[0]) == list(site_data.SITE_ROW_FIELDS)
-    assert [row['directory'] for row in site_data.parse_rows(printed)] == [
-        row['directory'] for row in rows], printed
-    assert not any(field in printed for field in ('timestamp', 'path', 'generated_at')), printed
+    assert [row["directory"] for row in site_data.parse_rows(printed)] == [row["directory"] for row in rows], printed
+    assert not any(field in printed for field in ("timestamp", "path", "generated_at")), printed
 
 
 # --- 3. the `.tfvars` writer ---------------------------------------------------
+
 
 def test_the_tfvars_bytes_for_a_string_value():
     """One line per variable, in name order, and the escape set is the one `import_blocks.unescape`
     reads back, so no second escape rule appears.
     """
-    rows = [{'directory': 'vsys1_d7045c06', 'variables': {'device1': 'device1'}}]
+    rows = [{"directory": "vsys1_d7045c06", "variables": {"device1": "device1"}}]
     text = site_data.render_tfvars(rows)
     line = f"device1 = {site_data.value_text('device1')}\n"
     assert line in text, text
     assert text.endswith(line), text
     # The writer's quoted form is the form the one escape rule reads back, so no second escape rule
     # appears: the block value and the `.tfvars` value state the same string.
-    for value in ('device1', 'a\tb', 'say "hi"', 'back\\slash'):
+    for value in ("device1", "a\tb", 'say "hi"', "back\\slash"):
         assert import_blocks.unescape(site_data.value_text(value)[1:-1]) == value, value
 
 
@@ -329,15 +351,15 @@ def test_a_list_prints_inline_and_an_empty_list_prints_empty():
     """The row shape declares a list, so the writer prints one; the table maps no field to a list
     today, so a corpus run writes only strings.
     """
-    assert site_data.value_text(['a', 'b']) == '[ "a", "b" ]'
-    assert site_data.value_text([]) == '[]'
-    rows = [{'directory': 'vsys1_d7045c06', 'variables': {'tags': ['a', 'b']}}]
+    assert site_data.value_text(["a", "b"]) == '[ "a", "b" ]'
+    assert site_data.value_text([]) == "[]"
+    rows = [{"directory": "vsys1_d7045c06", "variables": {"tags": ["a", "b"]}}]
     assert 'tags = [ "a", "b" ]' in site_data.render_tfvars(rows)
 
 
 def test_a_value_that_is_neither_a_string_nor_a_list_is_a_refusal():
     """The row shape declares no other kind, so the writer refuses it instead of guessing a shape."""
-    for value in (1, None, {'a': 'b'}, ['a', 2]):
+    for value in (1, None, {"a": "b"}, ["a", 2]):
         with pytest.raises(ValueError):
             site_data.value_text(value)
 
@@ -349,42 +371,49 @@ def test_a_name_two_rows_state_prints_one_line():
     """
     name = naming.variable_name(DEVICE)
     rows = [
-        {'directory': 'vsys1_d7045c06', 'variables': {name: DEVICE}},
-        {'directory': 'vsys2_30925639', 'variables': {name: DEVICE}},
+        {"directory": "vsys1_d7045c06", "variables": {name: DEVICE}},
+        {"directory": "vsys2_30925639", "variables": {name: DEVICE}},
     ]
     text = site_data.render_tfvars(rows)
-    assert text.count(f'{name} = {site_data.value_text(DEVICE)}') == 1, text
+    assert text.count(f"{name} = {site_data.value_text(DEVICE)}") == 1, text
 
-    lines = [line for line in site_data.render_tfvars([
-        {'directory': 'vsys2_30925639', 'variables': {'scope_b': 'scope-b'}},
-        {'directory': 'vsys1_d7045c06', 'variables': {'scope_a': 'scope-a'}},
-    ]).split('\n') if line and not line.startswith('#')]
+    lines = [
+        line
+        for line in site_data.render_tfvars(
+            [
+                {"directory": "vsys2_30925639", "variables": {"scope_b": "scope-b"}},
+                {"directory": "vsys1_d7045c06", "variables": {"scope_a": "scope-a"}},
+            ]
+        ).split("\n")
+        if line and not line.startswith("#")
+    ]
     assert lines == ['scope_a = "scope-a"', 'scope_b = "scope-b"'], lines
 
     with pytest.raises(ValueError):
-        site_data.render_tfvars([
-            {'directory': 'vsys1_d7045c06', 'variables': {'tags': ['a']}},
-            {'directory': 'vsys2_30925639', 'variables': {'tags': ['b']}},
-        ])
+        site_data.render_tfvars(
+            [
+                {"directory": "vsys1_d7045c06", "variables": {"tags": ["a"]}},
+                {"directory": "vsys2_30925639", "variables": {"tags": ["b"]}},
+            ]
+        )
 
 
 def test_the_tfvars_file_is_written_only_when_it_has_content(tmp_path):
     """The content rule, and the file name keeps the operator's own file: the tool never writes
     `terraform.tfvars`, and the generated file names no credential (§11).
     """
-    out = tmp_path / 'kitchen'
+    out = tmp_path / "kitchen"
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
-    assert site_data.TFVARS_FILE == 'site.auto.tfvars'
-    assert not (out / 'terraform.tfvars').is_file()
+    assert site_data.TFVARS_FILE == "site.auto.tfvars"
+    assert not (out / "terraform.tfvars").is_file()
     printed = _printed_forms(out)
-    assert len(printed) == len(_rows(out)), 'one printed form per site row, in the unit its row names'
-    line = f'{naming.variable_name(DEVICE)} = {site_data.value_text(DEVICE)}'
+    assert len(printed) == len(_rows(out)), "one printed form per site row, in the unit its row names"
+    line = f"{naming.variable_name(DEVICE)} = {site_data.value_text(DEVICE)}"
     for path, text in printed.items():
         assert _value_lines(text) == [line], (path, text)
         # §11: the print rule writes a line only for a value, so no name the run holds no value for reaches the
         # printed form, and the tool writes no credential file.
-        assert not any(line.split(' = ')[0] == naming.variable_name('hostname')
-                       for line in _value_lines(text)), path
+        assert not any(line.split(" = ")[0] == naming.variable_name("hostname") for line in _value_lines(text)), path
 
 
 def test_a_name_the_tool_cannot_fill_writes_no_row_and_no_line(tmp_path):
@@ -392,30 +421,34 @@ def test_a_name_the_tool_cannot_fill_writes_no_row_and_no_line(tmp_path):
     `operator_supplied` name (`target`, and the host name) and the printed form holds no line for it, even
     though the run declares the variable for it. The names are read through the table, not through a name list.
     """
-    out = tmp_path / 'kitchen'
+    out = tmp_path / "kitchen"
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
     rows = _rows(out)
-    assert rows, 'the kitchen sink names a device value'
-    held = {naming.variable_name(field) for field, shape in resource_mapping.VALUE_VARIABLES.items()
-            if shape == resource_mapping.OPERATOR_SUPPLIED}
-    assert held, 'the table states no fact the tool cannot read'
+    assert rows, "the kitchen sink names a device value"
+    held = {
+        naming.variable_name(field)
+        for field, shape in resource_mapping.VALUE_VARIABLES.items()
+        if shape == resource_mapping.OPERATOR_SUPPLIED
+    }
+    assert held, "the table states no fact the tool cannot read"
     for row in rows:
-        assert not set(row['variables']) & held, row
+        assert not set(row["variables"]) & held, row
     for path, text in _printed_forms(out).items():
-        assert not any(line.split(' = ')[0] in held for line in _value_lines(text)), (path, text)
-    assert len(_printed_forms(out)) == len(rows), 'no printed form for a name with no row'
+        assert not any(line.split(" = ")[0] in held for line in _value_lines(text)), (path, text)
+    assert len(_printed_forms(out)) == len(rows), "no printed form for a name with no row"
 
 
 # --- 4. the device name as a variable ------------------------------------------
+
 
 def test_the_emitter_prints_a_mapped_field_as_the_table_says(converter_module, tmp_path):
     """The print site is the only place the shape is decided, and it records the pair for the site
     that applies the table, the way `name_ref` records a reference name.
     """
     gen = converter_module.TerraformGenerator(str(tmp_path))
-    obj = {'name': 'trust', 'template': 'HQ-Networks', 'vsys_device': DEVICE}
-    text = gen.location_block('panos_zone', obj)
-    assert f'      ngfw_device = {naming.variable_text(DEVICE)}' in text, text
+    obj = {"name": "trust", "template": "HQ-Networks", "vsys_device": DEVICE}
+    text = gen.location_block("panos_zone", obj)
+    assert f"      ngfw_device = {naming.variable_text(DEVICE)}" in text, text
     assert gen.value_variables() == {unit_manifest.facts_of(obj): {naming.variable_name(DEVICE): DEVICE}}
 
 
@@ -424,11 +457,11 @@ def test_a_field_the_table_does_not_map_still_prints_as_a_literal(converter_modu
     This is the proof that the change is a mapping and not a style.
     """
     gen = converter_module.TerraformGenerator(str(tmp_path))
-    obj = {'name': 'trust', 'template': 'HQ-Networks', 'vsys_device': DEVICE, 'vsys': 'vsys3'}
-    text = gen.location_block('panos_zone', obj)
+    obj = {"name": "trust", "template": "HQ-Networks", "vsys_device": DEVICE, "vsys": "vsys3"}
+    text = gen.location_block("panos_zone", obj)
     assert '      name = "HQ-Networks"' in text, text
     assert '      vsys = "vsys3"' in text, text
-    assert text.count('var.') == 1, text
+    assert text.count("var.") == 1, text
 
 
 def test_the_print_site_keeps_the_value_as_the_fact(converter_module, tmp_path):
@@ -436,13 +469,13 @@ def test_the_print_site_keeps_the_value_as_the_fact(converter_module, tmp_path):
     parses the id, so a variable name is not a device name (§12).
     """
     gen = converter_module.TerraformGenerator(str(tmp_path))
-    obj = {'name': 'vr', 'vsys_device': DEVICE}
-    data = gen.location_data('panos_virtual_router', obj)
-    assert data == {'ngfw': {'ngfw_device': DEVICE}}, data
-    row = import_blocks.row('', 'panos_virtual_router', naming.sanitize(obj['name']), 'vr', data)
-    assert import_blocks.decode_id(row['import_id'])['location'] == data, row
-    block = gen.location_block('panos_virtual_router', obj)
-    assert f'      ngfw_device = {naming.variable_text(DEVICE)}' in block, block
+    obj = {"name": "vr", "vsys_device": DEVICE}
+    data = gen.location_data("panos_virtual_router", obj)
+    assert data == {"ngfw": {"ngfw_device": DEVICE}}, data
+    row = import_blocks.row("", "panos_virtual_router", naming.sanitize(obj["name"]), "vr", data)
+    assert import_blocks.decode_id(row["import_id"])["location"] == data, row
+    block = gen.location_block("panos_virtual_router", obj)
+    assert f"      ngfw_device = {naming.variable_text(DEVICE)}" in block, block
 
 
 def test_a_device_that_names_no_device_names_no_variable(converter_module, tmp_path):
@@ -450,9 +483,8 @@ def test_a_device_that_names_no_device_names_no_variable(converter_module, tmp_p
     site row states it.
     """
     gen = converter_module.TerraformGenerator(str(tmp_path))
-    text = gen.location_block('panos_ethernet_interface', {'name': 'ethernet1/1',
-                                                           'vsys_device': NO_DEVICE})
-    assert NO_DEVICE not in text and 'var.' not in text, text
+    text = gen.location_block("panos_ethernet_interface", {"name": "ethernet1/1", "vsys_device": NO_DEVICE})
+    assert NO_DEVICE not in text and "var." not in text, text
     assert gen.value_variables() == {}
 
 
@@ -465,13 +497,13 @@ def test_a_fact_the_tool_cannot_read_names_a_variable_and_holds_no_value(convert
     form holds no line for it.
     """
     gen = converter_module.TerraformGenerator(str(tmp_path))
-    obj = {'name': 'vr', 'vsys_device': DEVICE}
+    obj = {"name": "vr", "vsys_device": DEVICE}
     facts = unit_manifest.facts_of(obj)
-    assert gen.printed_value('target', '', facts) == naming.variable_text('target'), 'the name is the field'
+    assert gen.printed_value("target", "", facts) == naming.variable_text("target"), "the name is the field"
     # The recorded set holds the name with no value, so the accessor that reads the values returns none for
     # the unit, and `build_rows` writes no row for a unit with no value.
     assert gen.value_variables() == {facts: {}}, gen.value_variables()
-    assert gen.value_shapes() == {facts: {'target': resource_mapping.OPERATOR_SUPPLIED}}, gen.value_shapes()
+    assert gen.value_shapes() == {facts: {"target": resource_mapping.OPERATOR_SUPPLIED}}, gen.value_shapes()
 
 
 def test_the_provider_block_prints_target_only_for_a_unit_that_names_a_device(tmp_path):
@@ -479,38 +511,52 @@ def test_the_provider_block_prints_target_only_for_a_unit_that_names_a_device(tm
     whose manifest row names a device and prints none for a unit that names no device. The placeholder device
     names none (F3.5), so a run that names no device declares no `target` at all.
     """
-    out = tmp_path / 'kitchen'
+    out = tmp_path / "kitchen"
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
-    rows = {row['directory']: row for row in
-            unit_manifest.parse_rows((out / MANIFEST).read_text(encoding='utf-8'))}
+    rows = {row["directory"]: row for row in unit_manifest.parse_rows((out / MANIFEST).read_text(encoding="utf-8"))}
     seen = False
-    for path, text in parts(tf_files(out), 'provider.tf').items():
+    for path, text in parts(tf_files(out), "provider.tf").items():
         unit = Path(path).parent.name
-        device = rows[unit]['vsys_device']
+        device = rows[unit]["vsys_device"]
         names_a_device = bool(device) and device != NO_DEVICE
-        assert ('target = var.target' in text) == names_a_device, (path, device)
+        assert ("target = var.target" in text) == names_a_device, (path, device)
         seen = seen or names_a_device
-    assert seen, 'the kitchen sink names a device, so one provider block prints the reference'
+    assert seen, "the kitchen sink names a device, so one provider block prints the reference"
     # The name is the §5 rule applied to the field, so the printed reference and the declared name agree.
-    assert naming.variable_name('target') == 'target'
+    assert naming.variable_name("target") == "target"
     """The golden bytes pin the shape: the kitchen-sink set prints the variable name for the device
     field in the five files that carry a device location, and the sample set names no device, so it
     holds no `var.` location field at all. F7.14: `certificates.tf` is the fifth, because the record places a
     certificate entry in a virtual system and the type declares a `vsys` sub-block.
     """
-    for path in sorted((GOLDEN_DIR / 'sample').rglob('*.tf')):
-        assert 'ngfw_device = var.' not in path.read_text(encoding='utf-8'), path
-    changed = sorted({path.name for path in (GOLDEN_DIR / 'kitchen_sink').rglob('*.tf')
-                      if 'ngfw_device = var.' in path.read_text(encoding='utf-8')})
-    assert changed == ['address_objects.tf', 'certificates.tf', 'service_objects.tf',
-                       'virtual_routers.tf', 'zones.tf'], changed
+    for path in sorted((GOLDEN_DIR / "sample").rglob("*.tf")):
+        assert "ngfw_device = var." not in path.read_text(encoding="utf-8"), path
+    changed = sorted(
+        {
+            path.name
+            for path in (GOLDEN_DIR / "kitchen_sink").rglob("*.tf")
+            if "ngfw_device = var." in path.read_text(encoding="utf-8")
+        }
+    )
+    assert changed == [
+        "address_objects.tf",
+        "certificates.tf",
+        "service_objects.tf",
+        "virtual_routers.tf",
+        "zones.tf",
+    ], changed
     # F6.10.4: `target` is printed only for a unit whose provider block names a device, so the golden set
     # holds the reference in three unit files and no target row in the sample set, which names no device.
-    printed = sorted({Path(path).parent.name for path in (GOLDEN_DIR / 'kitchen_sink').rglob('provider.tf')
-                      if 'target = var.target' in path.read_text(encoding='utf-8')})
-    assert printed == ['fw_2_example_com_35aafbcf', 'vsys1_78d8e4bc', 'vsys2_30925639'], printed
-    for path in sorted((GOLDEN_DIR / 'sample').rglob('provider.tf')):
-        assert 'var.target' not in path.read_text(encoding='utf-8'), path
+    printed = sorted(
+        {
+            Path(path).parent.name
+            for path in (GOLDEN_DIR / "kitchen_sink").rglob("provider.tf")
+            if "target = var.target" in path.read_text(encoding="utf-8")
+        }
+    )
+    assert printed == ["fw_2_example_com_35aafbcf", "vsys1_78d8e4bc", "vsys2_30925639"], printed
+    for path in sorted((GOLDEN_DIR / "sample").rglob("provider.tf")):
+        assert "var.target" not in path.read_text(encoding="utf-8"), path
     # F6.10.3: `variables.tf` is the unit's file, so the declaration set is the union the run wrote,
     # one file per unit. The set is the site value the table mapped plus the names the table records with no
     # value for it (`hostname`, §11, and `target`, F6.10.4), read through the table and the naming rule.
@@ -519,32 +565,38 @@ def test_the_provider_block_prints_target_only_for_a_unit_that_names_a_device(tm
     # virtual system, so the set holds that entry's name, and the name comes from the table's `sensitive` set so
     # the pin states no field of its own.
     declared = set()
-    for path in sorted((GOLDEN_DIR / 'kitchen_sink').rglob('variables.tf')):
-        declared.update(sanity_checks.VARIABLE_RE.findall(path.read_text(encoding='utf-8')))
-    held = {naming.variable_name(field) for field, shape in resource_mapping.VALUE_VARIABLES.items()
-            if shape == resource_mapping.OPERATOR_SUPPLIED}
-    certificate_fields = {field for row in resource_mapping.CERTIFICATE_TABLE.rows.values()
-                          for field in row['sensitive']}
-    assert certificate_fields, 'the certificate table states the fields the run reads to name the variable'
-    assert sorted(declared) == sorted(held | {naming.variable_name(DEVICE)} |
-                                      {naming.variable_name('Vsys-Cert')}), declared
+    for path in sorted((GOLDEN_DIR / "kitchen_sink").rglob("variables.tf")):
+        declared.update(sanity_checks.VARIABLE_RE.findall(path.read_text(encoding="utf-8")))
+    held = {
+        naming.variable_name(field)
+        for field, shape in resource_mapping.VALUE_VARIABLES.items()
+        if shape == resource_mapping.OPERATOR_SUPPLIED
+    }
+    certificate_fields = {
+        field for row in resource_mapping.CERTIFICATE_TABLE.rows.values() for field in row["sensitive"]
+    }
+    assert certificate_fields, "the certificate table states the fields the run reads to name the variable"
+    assert sorted(declared) == sorted(held | {naming.variable_name(DEVICE)} | {naming.variable_name("Vsys-Cert")}), (
+        declared
+    )
 
 
 # --- 5. the declaration set ----------------------------------------------------
+
 
 def test_the_file_the_data_and_the_tfvars_read_the_same_run(tmp_path):
     """`variables.tf` declares the values the run consumed, and the `.tfvars` states the same names,
     so the three cannot disagree.
     """
-    out = tmp_path / 'kitchen'
+    out = tmp_path / "kitchen"
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
-    site = {name for row in _rows(out) for name in row['variables']}
-    declared = set(sanity_checks.VARIABLE_RE.findall(file_text(tf_files(out), 'variables.tf')))
+    site = {name for row in _rows(out) for name in row["variables"]}
+    declared = set(sanity_checks.VARIABLE_RE.findall(file_text(tf_files(out), "variables.tf")))
     assert site <= declared, (site, declared)
     files = tf_files(out)
     findings = sanity_checks.check_variables(files)
     assert findings == [], [finding.render() for finding in findings]
-    assert sorted(line.split(' = ')[0] for line in _tfvars_lines(out)) == sorted(site)
+    assert sorted(line.split(" = ")[0] for line in _tfvars_lines(out)) == sorted(site)
 
 
 def test_the_declaration_file_is_written_after_the_emitters(converter_module):
@@ -552,12 +604,13 @@ def test_the_declaration_file_is_written_after_the_emitters(converter_module):
     emitters run. The order rule for `scope.tf` is unchanged.
     """
     calls = inspect.getsource(converter_module.generate_run)
-    assert calls.index('generate_variables()') > calls.index('generate_address_objects'), calls
-    assert calls.index('generate_variables()') < calls.index('generate_readme'), calls
-    assert calls.index('generate_scope_objects') < calls.index('generate_address_objects'), calls
+    assert calls.index("generate_variables()") > calls.index("generate_address_objects"), calls
+    assert calls.index("generate_variables()") < calls.index("generate_readme"), calls
+    assert calls.index("generate_scope_objects") < calls.index("generate_address_objects"), calls
 
 
 # --- 6. the two gate rules -----------------------------------------------------
+
 
 def test_the_import_rule_compares_a_mapped_field_by_name():
     """The id keeps the value and the block prints the §5 name of it, so the rule compares the name
@@ -566,45 +619,49 @@ def test_the_import_rule_compares_a_mapped_field_by_name():
     Two violation types: a block that prints the literal for a field the table maps, and a block whose
     value for an unmapped field is not the value the id states.
     """
-    location = {'template': {'name': 'HQ-Networks', 'ngfw_device': DEVICE}}
-    block = ('resource "panos_zone" "trust_00000000" {\n  location = {\n    template = {\n'
-             f'      name = "HQ-Networks"\n      ngfw_device = {naming.variable_text(DEVICE)}\n'
-             '    }\n  }\n  name = "trust"\n}\n')
-    imports = ('import {\n  to = panos_zone.trust_00000000\n'
-               f'  id = "{import_blocks.build_id(location, "trust")}"\n}}\n')
-    assert sanity_checks.check_import_blocks({'imports.tf': imports, 'zones.tf': block}) == []
+    location = {"template": {"name": "HQ-Networks", "ngfw_device": DEVICE}}
+    block = (
+        'resource "panos_zone" "trust_00000000" {\n  location = {\n    template = {\n'
+        f'      name = "HQ-Networks"\n      ngfw_device = {naming.variable_text(DEVICE)}\n'
+        '    }\n  }\n  name = "trust"\n}\n'
+    )
+    imports = f'import {{\n  to = panos_zone.trust_00000000\n  id = "{import_blocks.build_id(location, "trust")}"\n}}\n'
+    assert sanity_checks.check_import_blocks({"imports.tf": imports, "zones.tf": block}) == []
 
     # A block that prints the literal for a field the table maps is not the location the id states.
     literal_block = block.replace(naming.variable_text(DEVICE), site_data.value_text(DEVICE))
-    findings = sanity_checks.check_import_blocks({'imports.tf': imports, 'zones.tf': literal_block})
+    findings = sanity_checks.check_import_blocks({"imports.tf": imports, "zones.tf": literal_block})
     assert len(findings) == 1, findings
-    assert findings[0].check == 'import_blocks' and findings[0].severity == sanity_checks.FAIL, findings
-    assert 'id location is not the location the block states' in findings[0].detail, findings
+    assert findings[0].check == "import_blocks" and findings[0].severity == sanity_checks.FAIL, findings
+    assert "id location is not the location the block states" in findings[0].detail, findings
 
     # An unmapped field is still compared by value, so the one reader keeps the block and the id on
     # the same location.
     other = block.replace('"HQ-Networks"', '"Other-Template"')
-    findings = sanity_checks.check_import_blocks({'imports.tf': imports, 'zones.tf': other})
+    findings = sanity_checks.check_import_blocks({"imports.tf": imports, "zones.tf": other})
     assert len(findings) == 1, findings
-    assert findings[0].check == 'import_blocks', findings
+    assert findings[0].check == "import_blocks", findings
 
 
 def test_the_variable_rule_reads_both_directions():
     """A declaration with no consumer, and a consumer with no declaration, are both findings. The
     second direction is what makes a generated declaration set checkable (F6.6).
     """
-    files = {'variables.tf': 'variable "dead" {\n  type = string\n}\n\n'
-                             'variable "used" {\n  type = string\n}\n',
-             'main.tf': 'provider "panos" {\n  hostname = var.used\n}\n'}
+    files = {
+        "variables.tf": 'variable "dead" {\n  type = string\n}\n\nvariable "used" {\n  type = string\n}\n',
+        "main.tf": 'provider "panos" {\n  hostname = var.used\n}\n',
+    }
     findings = sanity_checks.check_variables(files)
     assert len(findings) == 1, findings
-    assert 'never consumed as var.dead' in findings[0].detail, findings
-    orphan = {'main.tf': 'provider "panos" {\n  hostname = var.orphan\n}\n'}
+    assert "never consumed as var.dead" in findings[0].detail, findings
+    orphan = {"main.tf": 'provider "panos" {\n  hostname = var.orphan\n}\n'}
     findings = sanity_checks.check_variables(orphan)
     assert len(findings) == 1, findings
-    assert 'var.orphan names no variable this run declares' in findings[0].detail, findings
-    both = {'variables.tf': 'variable "used" {\n  type = string\n}\n',
-            'main.tf': 'provider "panos" {\n  hostname = var.used\n}\n'}
+    assert "var.orphan names no variable this run declares" in findings[0].detail, findings
+    both = {
+        "variables.tf": 'variable "used" {\n  type = string\n}\n',
+        "main.tf": 'provider "panos" {\n  hostname = var.used\n}\n',
+    }
     assert sanity_checks.check_variables(both) == []
 
 
@@ -614,20 +671,23 @@ def test_the_corpus_trips_neither_rule(tmp_path):
     """
     for name in sorted(CORPUS_ROWS):
         out = tmp_path / name
-        proc = _run(FIXTURES_DIR / name, out, extra=('--import-blocks',))
+        proc = _run(FIXTURES_DIR / name, out, extra=("--import-blocks",))
         assert proc.returncode == 0, name
         report = sanity_checks.run_checks(out)
-        for check in ('import_blocks', 'variables'):
-            assert not [finding for finding in report.findings(check)
-                        if finding.severity == sanity_checks.FAIL], (name, check)
+        for check in ("import_blocks", "variables"):
+            assert not [finding for finding in report.findings(check) if finding.severity == sanity_checks.FAIL], (
+                name,
+                check,
+            )
         assert report.fail_count == 0, name
 
 
 # --- 7. determinism and the gate rule that reads this record -------------------
 
+
 def test_two_runs_on_the_same_bytes_write_the_same_bytes(tmp_path):
     """Two runs on the same input write the same bytes for both new files."""
-    first, second = tmp_path / 'first', tmp_path / 'second'
+    first, second = tmp_path / "first", tmp_path / "second"
     source = FIXTURES_DIR / KITCHEN
     assert _run(source, first).returncode == 0
     assert _run(source, second).returncode == 0
@@ -644,17 +704,17 @@ def test_the_gate_reads_the_record_and_its_printed_form_through_site_data(tmp_pa
     printed form through `site_data.render_tfvars`, so no second shape rule appears. The printed form is
     not one of the four, so the count names only the records, and the block reader stays `.tf`-only.
     """
-    out = tmp_path / 'kitchen'
+    out = tmp_path / "kitchen"
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
     files = sanity_checks.read_tf_files(out)
-    assert files and all(name.endswith('.tf') for name in files), 'the block reader is .tf-only'
+    assert files and all(name.endswith(".tf") for name in files), "the block reader is .tf-only"
     assert dict(sanity_checks.DATA_FILES)[site_data.SITE_DATA_FILE] is site_data
-    assert site_data.TFVARS_FILE not in dict(sanity_checks.DATA_FILES), 'the print is not a data file'
-    assert not hasattr(site_data, 'check'), 'the record owns no gate check'
+    assert site_data.TFVARS_FILE not in dict(sanity_checks.DATA_FILES), "the print is not a data file"
+    assert not hasattr(site_data, "check"), "the record owns no gate check"
     report = sanity_checks.run_checks(out)
     assert [check.check for check in report.checks] == list(sanity_checks.CHECK_ORDER)
     assert report.data_file_count == 4, report.render()
-    assert report.findings('data_files') == []
+    assert report.findings("data_files") == []
     assert report.fail_count == 0, report.render()
 
 
@@ -666,23 +726,29 @@ def test_no_report_names_a_field_the_site_data_states(tmp_path):
     record and its printed form as files. The label states no row, no value, and no mapping result, so the
     rule holds for the record itself, and no other report names the record.
     """
-    out = tmp_path / 'kitchen'
+    out = tmp_path / "kitchen"
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
     mapping_result = naming.variable_name(DEVICE)
-    for name in (entry_coverage.REPORT_FILE, 'MANUAL_SETUP_REPORT.txt',
-                 'INTERFACE_MIGRATION_REPORT.txt', 'SANITY_REPORT.txt', 'SOURCE.txt', 'README.md'):
+    for name in (
+        entry_coverage.REPORT_FILE,
+        "MANUAL_SETUP_REPORT.txt",
+        "INTERFACE_MIGRATION_REPORT.txt",
+        "SANITY_REPORT.txt",
+        "SOURCE.txt",
+        "README.md",
+    ):
         path = out / name
         if not path.is_file():
-            continue    # a report is written only when it has content
-        text = path.read_text(encoding='utf-8')
-        if name == 'README.md':
+            continue  # a report is written only when it has content
+        text = path.read_text(encoding="utf-8")
+        if name == "README.md":
             # The inventory may name the files; it still states no field, no row and no value.
-            assert '## Site values' in text, name
+            assert "## Site values" in text, name
         else:
             assert site_data.SITE_DATA_FILE not in text, name
             assert site_data.TFVARS_FILE not in text, name
         assert mapping_result not in text, name
-        assert not any(line.strip().startswith(mapping_result + ' =') for line in text.split('\n')), name
+        assert not any(line.strip().startswith(mapping_result + " =") for line in text.split("\n")), name
 
 
 def test_the_readme_names_the_site_files_and_states_no_row(tmp_path):
@@ -692,31 +758,31 @@ def test_the_readme_names_the_site_files_and_states_no_row(tmp_path):
     The label states no row, no value, no mapping result, no count, no path and no timestamp, so the §9 rule 6
     exception is a file name, not a field. It is fixed text, so two runs on the same bytes write the same bytes.
     """
-    out = tmp_path / 'kitchen'
+    out = tmp_path / "kitchen"
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
-    text = (out / 'README.md').read_text(encoding='utf-8')
-    label = text.split('## Site values', 1)[1]
-    for name in (site_data.SITE_DATA_FILE, site_data.TFVARS_FILE, 'imports.tf', 'target'):
+    text = (out / "README.md").read_text(encoding="utf-8")
+    label = text.split("## Site values", 1)[1]
+    for name in (site_data.SITE_DATA_FILE, site_data.TFVARS_FILE, "imports.tf", "target"):
         assert name in text, name
-    assert naming.variable_name(DEVICE) not in text, 'no mapping result'
-    assert DEVICE not in text, 'no value'
-    assert not any(char.isdigit() for char in label), 'no count'
-    for word in ('timestamp', 'generated_at'):
+    assert naming.variable_name(DEVICE) not in text, "no mapping result"
+    assert DEVICE not in text, "no value"
+    assert not any(char.isdigit() for char in label), "no count"
+    for word in ("timestamp", "generated_at"):
         assert word not in text, word
-    second = tmp_path / 'second'
+    second = tmp_path / "second"
     assert _run(FIXTURES_DIR / KITCHEN, second).returncode == 0
-    assert (second / 'README.md').read_text(encoding='utf-8') == text, 'the label is deterministic'
+    assert (second / "README.md").read_text(encoding="utf-8") == text, "the label is deterministic"
     # The label is the only difference the site half makes, so the F5.5 read-through label rule holds.
-    plain = tmp_path / 'plain'
-    read = tmp_path / 'read'
+    plain = tmp_path / "plain"
+    read = tmp_path / "read"
     assert _run(FIXTURES_DIR / KITCHEN, plain).returncode == 0
-    assert _run(FIXTURES_DIR / KITCHEN, read, ('--data-blocks', 'panos_address')).returncode == 0
-    plain_text = (plain / 'README.md').read_text(encoding='utf-8')
-    read_text = (read / 'README.md').read_text(encoding='utf-8')
-    head, tail = plain_text.split('## Important Notes')
-    assert read_text.startswith(head + '## Site values') or read_text.startswith(head), 'same head'
-    assert read_text.endswith(tail), 'same tail'
-    assert 'Read-through data blocks' in read_text, 'the read run adds its own label'
+    assert _run(FIXTURES_DIR / KITCHEN, read, ("--data-blocks", "panos_address")).returncode == 0
+    plain_text = (plain / "README.md").read_text(encoding="utf-8")
+    read_text = (read / "README.md").read_text(encoding="utf-8")
+    head, tail = plain_text.split("## Important Notes")
+    assert read_text.startswith(head + "## Site values") or read_text.startswith(head), "same head"
+    assert read_text.endswith(tail), "same tail"
+    assert "Read-through data blocks" in read_text, "the read run adds its own label"
 
 
 def test_the_readme_names_the_entry_point_that_wrote_the_codebase(tmp_path, monkeypatch):
@@ -725,52 +791,55 @@ def test_the_readme_names_the_entry_point_that_wrote_the_codebase(tmp_path, monk
     2's names `api_to_terraform.py`. The line is fixed text that states no row, no value, no mapping result and
     no count, so the path name it states is digit-free, and two runs on the same bytes write the same bytes.
     """
-    label = 'The entry point that wrote this codebase is'
+    label = "The entry point that wrote this codebase is"
 
     def named(text: str) -> list:
-        return [line for line in text.split('\n') if label in line]
+        return [line for line in text.split("\n") if label in line]
 
     # The name is an argument, so the fixed text holds no entry point of its own.
-    call = [node for node in ast.walk(ast.parse((SRC_DIR / 'panorama_to_terraform.py').read_text(encoding='utf-8')))
-            if isinstance(node, ast.FunctionDef) and node.name == 'generate_readme']
-    assert 'entry_point' in [arg.arg for arg in call[0].args.args], 'the entry point is an argument'
-    assert not any(char.isdigit() for char in label), 'the label itself names nothing that can change'
+    call = [
+        node
+        for node in ast.walk(ast.parse((SRC_DIR / "panorama_to_terraform.py").read_text(encoding="utf-8")))
+        if isinstance(node, ast.FunctionDef) and node.name == "generate_readme"
+    ]
+    assert "entry_point" in [arg.arg for arg in call[0].args.args], "the entry point is an argument"
+    assert not any(char.isdigit() for char in label), "the label itself names nothing that can change"
 
-    path1 = tmp_path / 'path1'
+    path1 = tmp_path / "path1"
     assert _run(FIXTURES_DIR / KITCHEN, path1).returncode == 0
-    text1 = (path1 / 'README.md').read_text(encoding='utf-8')
-    assert named(text1) == [f'{label} `{panorama_to_terraform.ENTRY_POINT}`.'], named(text1)
-    assert named(text1)[0] in text1.split('## Site values', 1)[0], 'the line is in the head, before the site label'
+    text1 = (path1 / "README.md").read_text(encoding="utf-8")
+    assert named(text1) == [f"{label} `{panorama_to_terraform.ENTRY_POINT}`."], named(text1)
+    assert named(text1)[0] in text1.split("## Site values", 1)[0], "the line is in the head, before the site label"
 
     # Path 2 runs in process with the injected producer, so no pin calls a network.
-    cache = tmp_path / 'cache'
-    monkeypatch.setattr(source_fetch, 'network_producer', api_producer)
-    monkeypatch.setenv(source_fetch.API_KEY_ENV, 'test-key')
-    argv = ['--host', 'panorama.test', '--cache-dir', str(cache)]
-    path2 = tmp_path / 'path2'
-    assert api_to_terraform.run(argv + ['--output-dir', str(path2)], api_producer) == 0
-    text2 = (path2 / 'README.md').read_text(encoding='utf-8')
-    assert named(text2) == [f'{label} `{api_to_terraform.ENTRY_POINT}`.'], named(text2)
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(source_fetch, "network_producer", api_producer)
+    monkeypatch.setenv(source_fetch.API_KEY_ENV, "test-key")
+    argv = ["--host", "panorama.test", "--cache-dir", str(cache)]
+    path2 = tmp_path / "path2"
+    assert api_to_terraform.run(argv + ["--output-dir", str(path2)], api_producer) == 0
+    text2 = (path2 / "README.md").read_text(encoding="utf-8")
+    assert named(text2) == [f"{label} `{api_to_terraform.ENTRY_POINT}`."], named(text2)
 
     for text in (text1, text2):
         line = named(text)[0]
         for word in (site_data.SITE_DATA_FILE, site_data.TFVARS_FILE, naming.variable_name(DEVICE), DEVICE):
-            assert word not in line, (word, 'the label states no row, no value, and no mapping result')
-        assert not any(char.isdigit() for char in line), 'no count, so the path name is digit-free'
+            assert word not in line, (word, "the label states no row, no value, and no mapping result")
+        assert not any(char.isdigit() for char in line), "no count, so the path name is digit-free"
 
     # Two runs on the same bytes write the same bytes.
-    again = tmp_path / 'path1-again'
+    again = tmp_path / "path1-again"
     assert _run(FIXTURES_DIR / KITCHEN, again).returncode == 0
-    assert (again / 'README.md').read_text(encoding='utf-8') == text1, 'path 1 is deterministic'
-    second = tmp_path / 'path2-again'
-    assert api_to_terraform.run(argv + ['--output-dir', str(second)], api_producer) == 0
-    assert (second / 'README.md').read_text(encoding='utf-8') == text2, 'path 2 is deterministic'
+    assert (again / "README.md").read_text(encoding="utf-8") == text1, "path 1 is deterministic"
+    second = tmp_path / "path2-again"
+    assert api_to_terraform.run(argv + ["--output-dir", str(second)], api_producer) == 0
+    assert (second / "README.md").read_text(encoding="utf-8") == text2, "path 2 is deterministic"
 
 
 def test_site_data_defines_no_second_naming_rule():
     """The module reads the §5 rule from `naming.py` and defines no second one, the way
     `unit_manifest.py` takes it as an argument.
     """
-    assert not any(hasattr(site_data, name) for name in ('sanitize', 'sanitize_name', 'name_ref'))
-    assert not any(hasattr(site_data, name) for name in ('resolve', 'resolve_reference'))
-    assert not hasattr(site_data, 'value_variable_for')
+    assert not any(hasattr(site_data, name) for name in ("sanitize", "sanitize_name", "name_ref"))
+    assert not any(hasattr(site_data, name) for name in ("resolve", "resolve_reference"))
+    assert not hasattr(site_data, "value_variable_for")

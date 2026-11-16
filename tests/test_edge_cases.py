@@ -42,11 +42,11 @@ def _splitter_rows(splitter_module, name: str):
 def _splitter_tree(splitter_module, source, row: dict):
     """The tree the extraction builds for one row. The join is an argument, so the pin hands the tables the same
     source answers and the extraction states no lookup of its own."""
-    return splitter_module.extract_device_group_config(
-        source, row, splitter_module.device_associations(source))
+    return splitter_module.extract_device_group_config(source, row, splitter_module.device_associations(source))
 
 
 # --- 1. Quoted device-group names (splitter) --------------------------------
+
 
 def test_splitter_finds_dg_with_single_quote_in_name(splitter_module):
     """A DG name with a single quote reaches a row, and the tree built for that row holds that entry.
@@ -57,20 +57,20 @@ def test_splitter_finds_dg_with_single_quote_in_name(splitter_module):
     """
     source, rows = _splitter_rows(splitter_module, "edge_quoted_dg_names.xml")
     row = rows[0]
-    assert row['name'] == "DG-It's Here", rows
+    assert row["name"] == "DG-It's Here", rows
     tree = _splitter_tree(splitter_module, source, row)
-    held = tree.find('.//device-group/entry')
-    assert held.get('name') == row['name'], row
+    held = tree.find(".//device-group/entry")
+    assert held.get("name") == row["name"], row
 
 
 def test_splitter_finds_dg_with_double_quote_in_name(splitter_module):
     """A DG name with double quotes reaches its own row, as the single-quote name does."""
     source, rows = _splitter_rows(splitter_module, "edge_quoted_dg_names.xml")
     row = rows[1]
-    assert row['name'] == 'DG-"East" Prod', rows
+    assert row["name"] == 'DG-"East" Prod', rows
     tree = _splitter_tree(splitter_module, source, row)
-    held = tree.find('.//device-group/entry')
-    assert held.get('name') == row['name'], row
+    held = tree.find(".//device-group/entry")
+    assert held.get("name") == row["name"], row
 
 
 def test_quoted_dg_objects_parse(make_parser):
@@ -81,6 +81,7 @@ def test_quoted_dg_objects_parse(make_parser):
 
 
 # --- 2. Duplicate names across device groups --------------------------------
+
 
 def test_dup_names_across_dgs_both_survive(make_parser):
     """Same-named objects in different DGs both survive (F3.1 keyed identity).
@@ -114,6 +115,7 @@ def test_dup_names_across_vsys_both_survive(make_parser):
 
 # --- 3. Multi-vsys -----------------------------------------------------------
 
+
 def test_multi_vsys_objects_both_parse(make_parser):
     """Objects under different vsys must all be parsed, tagged with their vsys."""
     parser = make_parser("edge_multi_vsys.xml")
@@ -125,6 +127,7 @@ def test_multi_vsys_objects_both_parse(make_parser):
 
 
 # --- 4. Mixed virtual and logical routers ------------------------------------
+
 
 def test_mixed_vr_lr_both_routers_parse(make_parser):
     """A template VR and a vsys LR must both be parsed."""
@@ -150,6 +153,7 @@ def test_mixed_vr_lr_routes_attributed(make_parser):
 
 # --- 5. IPv6 ------------------------------------------------------------------
 
+
 def test_ipv4_object_still_parses(make_parser):
     """The IPv4 object in the same config must parse normally."""
     parser = make_parser("edge_ipv6.xml")
@@ -166,6 +170,7 @@ def test_ipv6_object_keeps_value(make_parser):
 
 
 # --- 6. Multi-port and dual-protocol services ---------------------------------
+
 
 def test_multi_port_service_keeps_full_protocol_block(make_parser):
     """F3.4: port list, source port and override timeouts all survive."""
@@ -197,53 +202,53 @@ def test_dual_protocol_service_keeps_both_protocols(make_parser):
 # The generated format is fixed, so small structural regexes are enough.
 # A resource block ends at the first newline followed by a column-0 brace.
 
-RESOURCE_BLOCK_RE = re.compile(
-    r'resource "([a-z0-9_]+)" "([^"]+)" \{(.*?)\n\}', re.S)
+RESOURCE_BLOCK_RE = re.compile(r'resource "([a-z0-9_]+)" "([^"]+)" \{(.*?)\n\}', re.S)
 
 
 def _resource_blocks(text: str, resource_type: str) -> list[dict]:
     """Parse generated resources into {local, body} dicts in file order."""
-    return [{'local': m.group(2), 'body': m.group(3)}
-            for m in RESOURCE_BLOCK_RE.finditer(text)
-            if m.group(1) == resource_type]
+    return [
+        {"local": m.group(2), "body": m.group(3)}
+        for m in RESOURCE_BLOCK_RE.finditer(text)
+        if m.group(1) == resource_type
+    ]
 
 
 def _generate(fixture_name: str, out_dir: Path) -> dict[str, str]:
     """Run the converter CLI on a fixture. Return {filename: text}."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    proc = run_script('panorama_to_terraform.py', str(FIXTURES_DIR / fixture_name),
-                      '--output-dir', str(out_dir))
+    proc = run_script("panorama_to_terraform.py", str(FIXTURES_DIR / fixture_name), "--output-dir", str(out_dir))
     assert proc.returncode == 0, proc.stdout + proc.stderr
     return tf_files(out_dir)
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def emitted_vsys(tmp_path_factory) -> dict[str, dict[str, str]]:
     """Generate both vsys fixtures once for the whole module."""
-    out = tmp_path_factory.mktemp('vsys_emit')
+    out = tmp_path_factory.mktemp("vsys_emit")
     return {
-        'vsys1_first': _generate('edge_dup_names_across_vsys.xml', out / 'a'),
-        'vsys2_first': _generate('edge_dup_names_across_vsys_swapped.xml', out / 'b'),
+        "vsys1_first": _generate("edge_dup_names_across_vsys.xml", out / "a"),
+        "vsys2_first": _generate("edge_dup_names_across_vsys_swapped.xml", out / "b"),
     }
 
 
 def _addr_assignment(text: str) -> dict[str, str]:
     """{ip_netmask value: local name} for address resources."""
     out = {}
-    for b in _resource_blocks(text, 'panos_address'):
-        m = re.search(r'ip_netmask = "([^"]+)"', b['body'])
-        out[m.group(1)] = b['local']
+    for b in _resource_blocks(text, "panos_address"):
+        m = re.search(r'ip_netmask = "([^"]+)"', b["body"])
+        out[m.group(1)] = b["local"]
     return out
 
 
 def _rule_assignment(text: str) -> dict[str, str]:
     """{PAN-OS rule name: local name} for security rule resources."""
     out = {}
-    for b in _resource_blocks(text, 'panos_security_policy_rules'):
+    for b in _resource_blocks(text, "panos_security_policy_rules"):
         # The rules list holds one object per rule; the rule name is the
         # only name = line inside it (the location block is outside).
-        rules_body = re.search(r'rules = \[(.*?)\n  \]', b['body'], re.S).group(1)
-        out[re.search(r'name = "([^"]+)"', rules_body).group(1)] = b['local']
+        rules_body = re.search(r"rules = \[(.*?)\n  \]", b["body"], re.S).group(1)
+        out[re.search(r'name = "([^"]+)"', rules_body).group(1)] = b["local"]
     return out
 
 
@@ -254,13 +259,12 @@ def test_dup_names_across_vsys_emit_distinct_digests(emitted_vsys):
     every local name is the sanitized base plus the 8-hex identity digest,
     with no _2 suffix.
     """
-    blocks = _resource_blocks(file_text(emitted_vsys['vsys1_first'], 'address_objects.tf'),
-                              'panos_address')
+    blocks = _resource_blocks(file_text(emitted_vsys["vsys1_first"], "address_objects.tf"), "panos_address")
     assert len(blocks) == 2
     for b in blocks:
-        assert re.fullmatch(r'web_[0-9a-f]{8}', b['local']), b['local']
-    assert blocks[0]['local'] != blocks[1]['local']
-    assert '_2' not in file_text(emitted_vsys['vsys1_first'], 'address_objects.tf')
+        assert re.fullmatch(r"web_[0-9a-f]{8}", b["local"]), b["local"]
+    assert blocks[0]["local"] != blocks[1]["local"]
+    assert "_2" not in file_text(emitted_vsys["vsys1_first"], "address_objects.tf")
 
 
 def test_identity_to_name_assignment_survives_entry_order_flip(emitted_vsys):
@@ -269,30 +273,32 @@ def test_identity_to_name_assignment_survives_entry_order_flip(emitted_vsys):
     The digest is computed from the object identity, so the same object
     keeps the same local name in both fixture orderings.
     """
-    assert _addr_assignment(file_text(emitted_vsys['vsys1_first'], 'address_objects.tf')) == \
-        _addr_assignment(file_text(emitted_vsys['vsys2_first'], 'address_objects.tf'))
-    assert _rule_assignment(file_text(emitted_vsys['vsys1_first'], 'security_rules.tf')) == \
-        _rule_assignment(file_text(emitted_vsys['vsys2_first'], 'security_rules.tf'))
+    assert _addr_assignment(file_text(emitted_vsys["vsys1_first"], "address_objects.tf")) == _addr_assignment(
+        file_text(emitted_vsys["vsys2_first"], "address_objects.tf")
+    )
+    assert _rule_assignment(file_text(emitted_vsys["vsys1_first"], "security_rules.tf")) == _rule_assignment(
+        file_text(emitted_vsys["vsys2_first"], "security_rules.tf")
+    )
 
 
 def test_rule_resolves_name_in_its_own_vsys(emitted_vsys):
     """F3.2: a rule wires to the same-vsys object, not the other vsys's copy."""
-    text = file_text(emitted_vsys['vsys1_first'], 'security_rules.tf')
-    addr = _addr_assignment(file_text(emitted_vsys['vsys1_first'], 'address_objects.tf'))
-    vs1_local = addr['10.1.0.1/32']   # the vsys1 web object
-    vs2_local = addr['10.2.0.1/32']   # the vsys2 web object
-    blocks = _resource_blocks(text, 'panos_security_policy_rules')
+    text = file_text(emitted_vsys["vsys1_first"], "security_rules.tf")
+    addr = _addr_assignment(file_text(emitted_vsys["vsys1_first"], "address_objects.tf"))
+    vs1_local = addr["10.1.0.1/32"]  # the vsys1 web object
+    vs2_local = addr["10.2.0.1/32"]  # the vsys2 web object
+    blocks = _resource_blocks(text, "panos_security_policy_rules")
     assert len(blocks) == 4
     wired = {}
     for b in blocks:
-        rules_body = re.search(r'rules = \[(.*?)\n  \]', b['body'], re.S).group(1)
+        rules_body = re.search(r"rules = \[(.*?)\n  \]", b["body"], re.S).group(1)
         rule_name = re.search(r'name = "([^"]+)"', rules_body).group(1)
-        ref = re.search(r'panos_address\.([a-z0-9_]+)\.name', b['body']).group(1)
+        ref = re.search(r"panos_address\.([a-z0-9_]+)\.name", b["body"]).group(1)
         wired[rule_name] = ref
-    assert wired['rule-vs1-a'] == vs1_local
-    assert wired['rule-vs1-b'] == vs1_local
-    assert wired['rule-vs2-a'] == vs2_local
-    assert wired['rule-vs2-b'] == vs2_local
+    assert wired["rule-vs1-a"] == vs1_local
+    assert wired["rule-vs1-b"] == vs1_local
+    assert wired["rule-vs2-a"] == vs2_local
+    assert wired["rule-vs2-b"] == vs2_local
 
 
 def test_rule_chains_do_not_cross_vsys(emitted_vsys):
@@ -302,75 +308,73 @@ def test_rule_chains_do_not_cross_vsys(emitted_vsys):
     boundary), and each later rule pivots on and depends on the previous
     rule of its own vsys only.
     """
-    text = file_text(emitted_vsys['vsys1_first'], 'security_rules.tf')
-    blocks = _resource_blocks(text, 'panos_security_policy_rules')
+    text = file_text(emitted_vsys["vsys1_first"], "security_rules.tf")
+    blocks = _resource_blocks(text, "panos_security_policy_rules")
     by_name = {}
     for b in blocks:
-        rules_body = re.search(r'rules = \[(.*?)\n  \]', b['body'], re.S).group(1)
+        rules_body = re.search(r"rules = \[(.*?)\n  \]", b["body"], re.S).group(1)
         rule_name = re.search(r'name = "([^"]+)"', rules_body).group(1)
-        where = re.search(r'where = "([^"]+)"', b['body'])
-        pivot = re.search(r'pivot = "([^"]+)"', b['body'])
-        dep = re.search(r'depends_on = \[([^\]]*)\]', b['body'])
+        where = re.search(r'where = "([^"]+)"', b["body"])
+        pivot = re.search(r'pivot = "([^"]+)"', b["body"])
+        dep = re.search(r"depends_on = \[([^\]]*)\]", b["body"])
         by_name[rule_name] = {
-            'local': b['local'],
-            'where': where.group(1) if where else None,
-            'pivot': pivot.group(1) if pivot else None,
-            'depends_on': dep.group(1).strip() if dep else None,
+            "local": b["local"],
+            "where": where.group(1) if where else None,
+            "pivot": pivot.group(1) if pivot else None,
+            "depends_on": dep.group(1).strip() if dep else None,
         }
     # Chain 1 (vsys1): anchor, then after-previous.
-    assert by_name['rule-vs1-a']['where'] == 'last'
-    assert by_name['rule-vs1-a']['pivot'] is None
-    assert by_name['rule-vs1-a']['depends_on'] is None
-    assert by_name['rule-vs1-b']['where'] == 'after'
-    assert by_name['rule-vs1-b']['pivot'] == 'rule-vs1-a'
-    assert by_name['rule-vs1-b']['depends_on'] == (
-        f"panos_security_policy_rules.{by_name['rule-vs1-a']['local']}")
+    assert by_name["rule-vs1-a"]["where"] == "last"
+    assert by_name["rule-vs1-a"]["pivot"] is None
+    assert by_name["rule-vs1-a"]["depends_on"] is None
+    assert by_name["rule-vs1-b"]["where"] == "after"
+    assert by_name["rule-vs1-b"]["pivot"] == "rule-vs1-a"
+    assert by_name["rule-vs1-b"]["depends_on"] == (f"panos_security_policy_rules.{by_name['rule-vs1-a']['local']}")
     # Chain 2 (vsys2): the boundary restarts the chain at the anchor.
-    assert by_name['rule-vs2-a']['where'] == 'last'
-    assert by_name['rule-vs2-a']['pivot'] is None
-    assert by_name['rule-vs2-a']['depends_on'] is None
-    assert by_name['rule-vs2-b']['where'] == 'after'
-    assert by_name['rule-vs2-b']['pivot'] == 'rule-vs2-a'
-    assert by_name['rule-vs2-b']['depends_on'] == (
-        f"panos_security_policy_rules.{by_name['rule-vs2-a']['local']}")
+    assert by_name["rule-vs2-a"]["where"] == "last"
+    assert by_name["rule-vs2-a"]["pivot"] is None
+    assert by_name["rule-vs2-a"]["depends_on"] is None
+    assert by_name["rule-vs2-b"]["where"] == "after"
+    assert by_name["rule-vs2-b"]["pivot"] == "rule-vs2-a"
+    assert by_name["rule-vs2-b"]["depends_on"] == (f"panos_security_policy_rules.{by_name['rule-vs2-a']['local']}")
 
 
 # --- 8. F3.4: full object types on the emit side -----------------------------
 
+
 def test_address_emit_covers_v2_types_and_reports_the_rest(tmp_path):
     """ip-wildcard emits; entries with no v2 attribute emit nothing, and report."""
-    files = _generate('address_objects.xml', tmp_path)
-    text = file_text(files, 'address_objects.tf')
+    files = _generate("address_objects.xml", tmp_path)
+    text = file_text(files, "address_objects.tf")
     assert 'ip_wildcard = "10.2.3.*"' in text
     assert 'disable_override = "yes"' in text
     # A location entry has no v2 attribute: it must not become a resource.
-    assert 'Country-US' not in text
-    assert 'Ext-Dynamic' not in text
-    report = (tmp_path / 'MANUAL_SETUP_REPORT.txt').read_text(encoding='utf-8')
-    assert 'Country-US' in report
-    assert 'country=US' in report
-    assert 'Ext-Dynamic' in report
-    assert 'external=dynamic' in report
+    assert "Country-US" not in text
+    assert "Ext-Dynamic" not in text
+    report = (tmp_path / "MANUAL_SETUP_REPORT.txt").read_text(encoding="utf-8")
+    assert "Country-US" in report
+    assert "country=US" in report
+    assert "Ext-Dynamic" in report
+    assert "external=dynamic" in report
 
 
 def test_service_emit_keeps_one_protocol_leg(tmp_path):
     """v2 takes one protocol leg: tcp emits, udp becomes a NOTE + report."""
-    files = _generate('edge_multi_port_services.xml', tmp_path)
-    blocks = {b['local']: b['body'] for b in
-              _resource_blocks(file_text(files, 'service_objects.tf'), 'panos_service')}
+    files = _generate("edge_multi_port_services.xml", tmp_path)
+    blocks = {b["local"]: b["body"] for b in _resource_blocks(file_text(files, "service_objects.tf"), "panos_service")}
 
-    dual = next(b for local, b in blocks.items() if local.startswith('svc_dual'))
-    assert 'tcp = {' in dual
-    assert 'udp = {' not in dual
-    assert '# NOTE: udp leg not emitted' in dual
-    report = (tmp_path / 'MANUAL_SETUP_REPORT.txt').read_text(encoding='utf-8')
-    assert 'svc-dual' in report
+    dual = next(b for local, b in blocks.items() if local.startswith("svc_dual"))
+    assert "tcp = {" in dual
+    assert "udp = {" not in dual
+    assert "# NOTE: udp leg not emitted" in dual
+    report = (tmp_path / "MANUAL_SETUP_REPORT.txt").read_text(encoding="utf-8")
+    assert "svc-dual" in report
 
-    multi = next(b for local, b in blocks.items() if local.startswith('svc_multi_port'))
+    multi = next(b for local, b in blocks.items() if local.startswith("svc_multi_port"))
     assert 'destination_port = "80,443"' in multi
     assert 'source_port = "1024-65535"' in multi
-    assert 'halfclose_timeout = 120' in multi
-    assert 'timewait_timeout = 120' in multi
+    assert "halfclose_timeout = 120" in multi
+    assert "timewait_timeout = 120" in multi
     # F2.6: this fixture declares no "web" tag, so the reference falls back
     # to the literal name (the declared case is covered by the kitchen-sink
     # golden and tests/test_dependency_wiring.py).
@@ -379,22 +383,24 @@ def test_service_emit_keeps_one_protocol_leg(tmp_path):
 
 def test_edl_emit_skips_fields_the_subshape_lacks(tmp_path):
     """expand_domain is domain-only: an ip list must not emit it (F3.4)."""
-    files = _generate('external_lists.xml', tmp_path)
-    blocks = {b['local']: b['body'] for b in
-              _resource_blocks(file_text(files, 'external_lists.tf'), 'panos_external_dynamic_list')}
+    files = _generate("external_lists.xml", tmp_path)
+    blocks = {
+        b["local"]: b["body"]
+        for b in _resource_blocks(file_text(files, "external_lists.tf"), "panos_external_dynamic_list")
+    }
 
-    ip_expand = next(b for local, b in blocks.items() if local.startswith('ip_with_expand'))
-    assert 'expand_domain =' not in ip_expand
-    assert '# NOTE: expand_domain is not modeled by the v2 ip sub-shape' in ip_expand
+    ip_expand = next(b for local, b in blocks.items() if local.startswith("ip_with_expand"))
+    assert "expand_domain =" not in ip_expand
+    assert "# NOTE: expand_domain is not modeled by the v2 ip sub-shape" in ip_expand
 
-    domain = next(b for local, b in blocks.items() if local.startswith('bad_domains'))
-    assert 'expand_domain = true' in domain
+    domain = next(b for local, b in blocks.items() if local.startswith("bad_domains"))
+    assert "expand_domain = true" in domain
     assert 'exception_list = [ "example.com" ]' in domain
     assert 'certificate_profile = "default"' in domain
     assert 'day_of_week = "monday"' in domain
 
-    predefined = next(b for local, b in blocks.items() if local.startswith('panw_url_list'))
+    predefined = next(b for local, b in blocks.items() if local.startswith("panw_url_list"))
     # The export carries a fetch schedule, but the predefined_url sub-shape
     # has no recurring field: it stays a NOTE instead of invalid HCL.
-    assert 'recurring =' not in predefined
-    assert '# NOTE: recurring is not modeled by the v2 predefined_url' in predefined
+    assert "recurring =" not in predefined
+    assert "# NOTE: recurring is not modeled by the v2 predefined_url" in predefined

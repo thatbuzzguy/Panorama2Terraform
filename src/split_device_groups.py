@@ -76,17 +76,17 @@ def _row(entry: ET.Element, source: ParsedSource, path: str) -> dict:
     §2.3 states, and a name is read through the one whitespace rule the read layer states.
     """
     return {
-        'line': source.line_of(entry),
-        'path': path,
-        'name': read_text(entry.get('name')),
-        'entry': entry,
-        'devices': _device_names(entry),
+        "line": source.line_of(entry),
+        "path": path,
+        "name": read_text(entry.get("name")),
+        "entry": entry,
+        "devices": _device_names(entry),
     }
 
 
 def parse_device_groups(source: ParsedSource) -> list:
     """The device group rows, in source line order (§6: the order the input states is preserved on purpose)."""
-    table = device_associations(source)['device_groups']
+    table = device_associations(source)["device_groups"]
     return [table[line] for line in sorted(table)]
 
 
@@ -98,14 +98,14 @@ def _device_names(entry: ET.Element) -> list:
     `<devices><member>fw-1.example.com</member>`.
     """
     names = []
-    listing = entry.find('devices')
+    listing = entry.find("devices")
     if listing is None:
         return names
     for node in list(listing):
-        if node.tag == 'entry':
+        if node.tag == "entry":
             # Both shapes read the name through the one text rule (`xml_input.read_text`).
-            name = read_text(node.get('name'))
-        elif node.tag == 'member':
+            name = read_text(node.get("name"))
+        elif node.tag == "member":
             name = read_text(node.text)
         else:
             continue
@@ -122,8 +122,8 @@ def _entries_by_device(source: ParsedSource, container_tags: tuple) -> dict:
     """
     table = {}
     for tag in container_tags:
-        for entry in source.root.findall(f'.//{tag}/entry'):
-            if read_text(entry.get('name')):
+        for entry in source.root.findall(f".//{tag}/entry"):
+            if read_text(entry.get("name")):
                 table[source.line_of(entry)] = _row(entry, source, tag)
     return table
 
@@ -147,10 +147,9 @@ def device_associations(source: ParsedSource) -> dict:
     the honest answer: no copy, and a printed note saying so.
     """
     return {
-        'device_groups': _entries_by_device(source, ('device-group',)),
-        'templates': _entries_by_device(source, ('templates', 'template')),
-        'template_stacks': _entries_by_device(
-            source, ('template-stack', 'template-stacks')),
+        "device_groups": _entries_by_device(source, ("device-group",)),
+        "templates": _entries_by_device(source, ("templates", "template")),
+        "template_stacks": _entries_by_device(source, ("template-stack", "template-stacks")),
     }
 
 
@@ -160,7 +159,7 @@ def _associated_rows(associations: dict, kind: str, devices: list) -> list:
         return []
     held = set(devices)
     table = associations[kind]
-    return [table[line] for line in sorted(table) if set(table[line]['devices']) & held]
+    return [table[line] for line in sorted(table) if set(table[line]["devices"]) & held]
 
 
 def merge_shared(source: ParsedSource) -> ET.Element:
@@ -176,33 +175,33 @@ def merge_shared(source: ParsedSource) -> ET.Element:
     Copies, not append: `ElementTree.append` keeps no parent bookkeeping, so appending an entry that already has
     a parent makes one element a child of two trees, and the export would grow an entry per device group.
     """
-    merged = ET.Element('shared')
-    containers = {'': merged}
-    seen = {'': []}
+    merged = ET.Element("shared")
+    containers = {"": merged}
+    seen = {"": []}
 
     def merge_level(node: ET.Element, path: str) -> None:
         # A path is a container, an entry is content, so the walk enters the container and stops at the entry.
         for child in node:
-            if child.tag == 'entry':
-                name = read_text(child.get('name'))
+            if child.tag == "entry":
+                name = read_text(child.get("name"))
                 if name and name not in seen[path]:
                     seen[path].append(name)
                     containers[path].append(copy.deepcopy(child))
                 continue
-            child_path = f'{path}/{child.tag}' if path else child.tag
+            child_path = f"{path}/{child.tag}" if path else child.tag
             if child_path not in containers:
                 containers[child_path] = ET.SubElement(containers[path], child.tag)
                 seen[child_path] = []
             merge_level(child, child_path)
 
-    for shared in source.root.findall('.//shared'):
-        merge_level(shared, '')
+    for shared in source.root.findall(".//shared"):
+        merge_level(shared, "")
     return merged
 
 
 def split_file_name(name: str) -> str:
     """The file name one device group name reads to: the §5 shape of the name, plus `.xml`."""
-    return f'{naming.variable_name(name)}.xml'
+    return f"{naming.variable_name(name)}.xml"
 
 
 def split_file_names(rows: list) -> list:
@@ -215,19 +214,19 @@ def split_file_names(rows: list) -> list:
     """
     source_name = {}
     for row in rows:
-        file_name = split_file_name(row['name'])
+        file_name = split_file_name(row["name"])
         if file_name in source_name:
             raise UnsafeInputError(
-                f"two device group names read one file name {file_name}: "
-                f"'{source_name[file_name]}' and '{row['name']}'")
-        source_name[file_name] = row['name']
-    return [split_file_name(row['name']) for row in rows]
+                f"two device group names read one file name {file_name}: '{source_name[file_name]}' and '{row['name']}'"
+            )
+        source_name[file_name] = row["name"]
+    return [split_file_name(row["name"]) for row in rows]
 
 
 def serialize(root: ET.Element) -> str:
     """The text the single writer receives for one tree, with the final line the single writer ends a text with."""
     ET.indent(root, space="  ")
-    return ET.tostring(root, encoding='unicode', xml_declaration=True) + LF
+    return ET.tostring(root, encoding="unicode", xml_declaration=True) + LF
 
 
 def extract_device_group_config(source: ParsedSource, row: dict, join: dict) -> ET.Element:
@@ -241,15 +240,15 @@ def extract_device_group_config(source: ParsedSource, row: dict, join: dict) -> 
     The entry is written at the path its row states, which is the same rule the shared merge states: an entry
     keeps the path it sits at, so this function states no container name of its own.
     """
-    config = ET.Element('config')
-    config.set('version', source.root.get('version', '10.0.0'))
+    config = ET.Element("config")
+    config.set("version", source.root.get("version", "10.0.0"))
 
-    devices = ET.SubElement(config, 'devices')
-    localhost = ET.SubElement(devices, 'entry')
-    localhost.set('name', 'localhost.localdomain')
+    devices = ET.SubElement(config, "devices")
+    localhost = ET.SubElement(devices, "entry")
+    localhost.set("name", "localhost.localdomain")
 
-    group = ET.SubElement(localhost, row['path'])
-    group.append(copy.deepcopy(row['entry']))
+    group = ET.SubElement(localhost, row["path"])
+    group.append(copy.deepcopy(row["entry"]))
 
     # A shared section is written only when the export states one, so a run writes no empty container.
     merged = merge_shared(source)
@@ -259,19 +258,18 @@ def extract_device_group_config(source: ParsedSource, row: dict, join: dict) -> 
     # The network config the export associates with this device group (F3.6): the rows the join answers for
     # this row's own devices. The relationship comes from the device lists, never from a name.
     containers = {}
-    for kind in ('templates', 'template_stacks'):
-        for joined in _associated_rows(join, kind, row['devices']):
+    for kind in ("templates", "template_stacks"):
+        for joined in _associated_rows(join, kind, row["devices"]):
             # The container is made once per path. `setdefault` would build a second element for a path the
             # container already holds, because it evaluates its default even on a hit.
-            if joined['path'] not in containers:
-                containers[joined['path']] = ET.SubElement(localhost, joined['path'])
-            containers[joined['path']].append(copy.deepcopy(joined['entry']))
+            if joined["path"] not in containers:
+                containers[joined["path"]] = ET.SubElement(localhost, joined["path"])
+            containers[joined["path"]].append(copy.deepcopy(joined["entry"]))
 
     return config
 
 
-def split_panorama_config(input_file: str, output_dir: str = None,
-                          max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES):
+def split_panorama_config(input_file: str, output_dir: str = None, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES):
     """Split Panorama configuration by device group"""
     # F3.8: the same safe read as the converter - a capped input size and a
     # parser-level DTD refusal. Nothing is written before it succeeds. F4.2: the read
@@ -308,21 +306,22 @@ def split_panorama_config(input_file: str, output_dir: str = None,
     print(f"\nSplitting configurations into: {output_dir}")
 
     join = device_associations(source)
-    labels = {'templates': 'template', 'template_stacks': 'template stack'}
+    labels = {"templates": "template", "template_stacks": "template stack"}
 
     for row, file_name in zip(rows, file_names):
         print(f"\nProcessing device group: {row['name']}")
 
-        if not row['devices']:
-            print("  - device group lists no devices: no template or "
-                  "template-stack copied")
+        if not row["devices"]:
+            print("  - device group lists no devices: no template or template-stack copied")
 
         tree = extract_device_group_config(source, row, join)
-        copied = [f"{labels[kind]}: {joined['name']}" for kind in ('templates', 'template_stacks')
-                  for joined in _associated_rows(join, kind, row['devices'])]
-        if row['devices'] and not copied:
-            print("  - no template or template-stack targets this device group's "
-                  "devices: none copied")
+        copied = [
+            f"{labels[kind]}: {joined['name']}"
+            for kind in ("templates", "template_stacks")
+            for joined in _associated_rows(join, kind, row["devices"])
+        ]
+        if row["devices"] and not copied:
+            print("  - no template or template-stack targets this device group's devices: none copied")
         for note in copied:
             print(f"  - copied {note}")
 
@@ -341,9 +340,9 @@ def split_panorama_config(input_file: str, output_dir: str = None,
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Split Panorama configuration by device group',
+        description="Split Panorama configuration by device group",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog='''
+        epilog="""
 Examples:
   # Split Panorama export into separate device group configs
   python3 src/split_device_groups.py panorama_export.xml
@@ -360,11 +359,11 @@ Use Case:
   When you have a Panorama managing multiple HA pairs (each with its own
   device group), use this script to split the export so you can migrate
   each HA pair to a separate virtual router on your target firewall.
-        '''
+        """,
     )
 
-    parser.add_argument('input_file', help='Panorama XML export file')
-    parser.add_argument('--output-dir', '-o', help='Output directory for split configs')
+    parser.add_argument("input_file", help="Panorama XML export file")
+    parser.add_argument("--output-dir", "-o", help="Output directory for split configs")
     # F3.8: the same input limit on both entry points.
     add_max_input_argument(parser)
 
@@ -379,5 +378,5 @@ Use Case:
     return 0 if success else 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

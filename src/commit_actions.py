@@ -62,11 +62,11 @@ import import_blocks
 import resource_mapping
 import unit_manifest
 
-ACTIONS_FILE = 'actions.tf'
+ACTIONS_FILE = "actions.tf"
 
 # The block level an action's fields live at. Terraform 1.14 requires it: `terraform validate` refuses
 # a field at the action's own level, so the shape is a grammar fact and not a style choice.
-CONFIG_BLOCK = 'config'
+CONFIG_BLOCK = "config"
 
 # The row shape for an action block, as the gate rule `actions` reads it. Fixed, so two runs write the
 # same bytes and a reader does not guess. The name states the record it belongs to, because `src/` is one
@@ -74,15 +74,15 @@ CONFIG_BLOCK = 'config'
 # `action` is the `ACTION_SCHEMA` row the block is, `fact` is the scope fact the block names, `field` is the
 # field that states it (`ACTION_FILTERS`), `entry_name` is the fact name, `local_name` is the §5 name plus the
 # digest (rule 3), and `directory` is the manifest join, not a block field.
-ACTION_ROW_FIELDS = ('directory', 'action', 'fact', 'field', 'entry_name', 'local_name')
+ACTION_ROW_FIELDS = ("directory", "action", "fact", "field", "entry_name", "local_name")
 
 # The field a push shape uses for the fact key. `ACTION_FILTERS` states the relation (`name` names the fact its
 # `type` states), so this names the field that carries the key, and `block_fields` and `field_fact` are the two
 # readers of that one relation.
-FACT_KEY_FIELD = 'type'
+FACT_KEY_FIELD = "type"
 
 
-def filter_field(fact: str, action: str = '') -> str:
+def filter_field(fact: str, action: str = "") -> str:
     """The `action` field that names `fact`, read through `ACTION_FILTERS`, the one mapping.
 
     With no action the caller means the commit shape, which states the fact through its filter field. For an
@@ -96,7 +96,7 @@ def filter_field(fact: str, action: str = '') -> str:
             continue
         if mapped == fact or (mapped == FACT_KEY_FIELD and resource_mapping.SCOPE_ANSWER.get(fact)):
             return field
-    return ''
+    return ""
 
 
 def block_fields(action: str, fact: str, entry_name: str) -> dict:
@@ -120,7 +120,7 @@ def block_fields(action: str, fact: str, entry_name: str) -> dict:
 def field_text(action: str, field: str, value: str) -> str:
     """One field value as the row declares it, with the escape set `import_blocks.unescape` reads back."""
     shape = resource_mapping.ACTION_SCHEMA[action][1][field]
-    return f'[{json.dumps(value)}]' if shape == 'string_list' else json.dumps(value)
+    return f"[{json.dumps(value)}]" if shape == "string_list" else json.dumps(value)
 
 
 def field_fact(block, field: str) -> str:
@@ -131,21 +131,21 @@ def field_fact(block, field: str) -> str:
     read as the string it states. A field outside the mapping names no fact, so `check_actions` reports
     it as a field the row does not declare, or the block states no fact.
     """
-    mapped = resource_mapping.ACTION_FILTERS.get(field, '')
+    mapped = resource_mapping.ACTION_FILTERS.get(field, "")
     if mapped in unit_manifest.FACT_KEYS:
         return mapped
     value = import_blocks.block_value(block, mapped, CONFIG_BLOCK)
-    return value if value in unit_manifest.FACT_KEYS else ''
+    return value if value in unit_manifest.FACT_KEYS else ""
 
 
 def placed_identity(fact: str, entry_name: str) -> tuple:
     """The identity as the block states it: one fact in its `FACT_KEYS` position, the rest empty."""
-    return tuple(entry_name if key == fact else '' for key in unit_manifest.FACT_KEYS)
+    return tuple(entry_name if key == fact else "" for key in unit_manifest.FACT_KEYS)
 
 
 def local_name(fact: str, entry_name: str, sanitize) -> str:
     """The block address for one name, through the §5 rule and the manifest digest (rule 3)."""
-    return f'{sanitize(entry_name)}_{unit_manifest.identity_digest(placed_identity(fact, entry_name))}'
+    return f"{sanitize(entry_name)}_{unit_manifest.identity_digest(placed_identity(fact, entry_name))}"
 
 
 def build_rows(manifest_rows: list, sanitize) -> list:
@@ -160,18 +160,18 @@ def build_rows(manifest_rows: list, sanitize) -> list:
     for manifest_row in manifest_rows:
         facts = tuple(manifest_row[key] for key in unit_manifest.FACT_KEYS)
         key, name = unit_manifest.named_fact(facts)
-        if key == '' or name == container_coverage.PLACEHOLDER_DEVICE:
+        if key == "" or name == container_coverage.PLACEHOLDER_DEVICE:
             continue
         for action in resource_mapping.ACTION_SCHEMA:
             if not block_fields(action, key, name):
                 continue
-            shape = dict.fromkeys(ACTION_ROW_FIELDS, '')
-            shape['directory'] = manifest_row['directory']
-            shape['action'] = action
-            shape['fact'] = key
-            shape['field'] = filter_field(key, action)
-            shape['entry_name'] = name
-            shape['local_name'] = local_name(key, name, sanitize)
+            shape = dict.fromkeys(ACTION_ROW_FIELDS, "")
+            shape["directory"] = manifest_row["directory"]
+            shape["action"] = action
+            shape["fact"] = key
+            shape["field"] = filter_field(key, action)
+            shape["entry_name"] = name
+            shape["local_name"] = local_name(key, name, sanitize)
             rows.append(shape)
     return rows
 
@@ -183,20 +183,26 @@ def render(rows: list) -> str:
     `FACT_KEYS` order, then the `ACTION_SCHEMA` order inside one unit, so a reader reproduces it from the block
     text alone.
     """
-    lines = ['# Commit and push actions (F6.7, F6.10.4): one block per action the pinned schema declares, for\n'
-            '# each unit the manifest names. The block names the fact its own unit declares, and no fact\n'
-            '# another unit owns. The push block states no `devices`, because the tool names no serial, so\n'
-            '# the provider pushes to all devices in the target.\n'
-            '# Actions need Terraform 1.14 or later, which the `terraform` block declares (§12).\n\n']
+    lines = [
+        "# Commit and push actions (F6.7, F6.10.4): one block per action the pinned schema declares, for\n"
+        "# each unit the manifest names. The block names the fact its own unit declares, and no fact\n"
+        "# another unit owns. The push block states no `devices`, because the tool names no serial, so\n"
+        "# the provider pushes to all devices in the target.\n"
+        "# Actions need Terraform 1.14 or later, which the `terraform` block declares (§12).\n\n"
+    ]
     order = list(resource_mapping.ACTION_SCHEMA)
-    for shape in sorted(rows, key=lambda row: (placed_identity(row['fact'], row['entry_name']),
-                                               order.index(row['action']), row['local_name'])):
-        fields = block_fields(shape['action'], shape['fact'], shape['entry_name'])
-        body = ''.join(f'    {field} = {field_text(shape["action"], field, fields[field])}\n'
-                       for field in fields)
-        lines.append(f'action "{shape["action"]}" "{shape["local_name"]}" {{\n'
-                     f'  {CONFIG_BLOCK} {{\n{body}  }}\n}}\n\n')
-    return ''.join(lines)
+    for shape in sorted(
+        rows,
+        key=lambda row: (
+            placed_identity(row["fact"], row["entry_name"]),
+            order.index(row["action"]),
+            row["local_name"],
+        ),
+    ):
+        fields = block_fields(shape["action"], shape["fact"], shape["entry_name"])
+        body = "".join(f"    {field} = {field_text(shape['action'], field, fields[field])}\n" for field in fields)
+        lines.append(f'action "{shape["action"]}" "{shape["local_name"]}" {{\n  {CONFIG_BLOCK} {{\n{body}  }}\n}}\n\n')
+    return "".join(lines)
 
 
 def read_block(block) -> dict:
@@ -207,29 +213,32 @@ def read_block(block) -> dict:
     not the declared shape (rule 5), so it is a refusal, the way `decode_id` refuses a value that is not
     base64 JSON.
     """
-    shape = dict.fromkeys(ACTION_ROW_FIELDS, '')
+    shape = dict.fromkeys(ACTION_ROW_FIELDS, "")
     fields = import_blocks.fields(block, CONFIG_BLOCK)
     names = {}
-    stated = ''
+    stated = ""
     for field in sorted(fields):
         fact = field_fact(block, field)
         if not fact:
             continue
-        values = (import_blocks.block_list(block, field, CONFIG_BLOCK) if fields[field].startswith('[')
-                  else (import_blocks.block_value(block, field, CONFIG_BLOCK),))
+        values = (
+            import_blocks.block_list(block, field, CONFIG_BLOCK)
+            if fields[field].startswith("[")
+            else (import_blocks.block_value(block, field, CONFIG_BLOCK),)
+        )
         if len(values) > 1:
-            raise ValueError(f'the block states more than one name in {field}: {block}')
+            raise ValueError(f"the block states more than one name in {field}: {block}")
         if values and values[0]:
             names[fact] = values[0]
             stated = field
     if len(names) != 1:
-        raise ValueError(f'the block does not state one fact: {names or "no field names a fact"}')
+        raise ValueError(f"the block does not state one fact: {names or 'no field names a fact'}")
     fact, entry_name = next(iter(names.items()))
-    shape['action'] = block.rtype
-    shape['fact'] = fact
+    shape["action"] = block.rtype
+    shape["fact"] = fact
     # The reader states the field the block used, which is the field the fact key names for a push block
     # and the filter field names for a commit block.
-    shape['field'] = stated
-    shape['entry_name'] = entry_name
-    shape['local_name'] = block.local
+    shape["field"] = stated
+    shape["entry_name"] = entry_name
+    shape["local_name"] = block.local
     return shape

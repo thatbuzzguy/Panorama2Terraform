@@ -110,14 +110,14 @@ DEFAULT_MAX_INPUT_BYTES = 64 * 1024 * 1024
 # The scope vocabulary a source states (F5.4). One definition, read by `provenance.py`, by
 # the per-scope rule in `container_coverage.py`, and by the request-shape check in
 # `source_fetch.py`, which may import only this module.
-DEFAULT_SCOPE = 'whole-config'
-ENTRY_SEGMENT = 'entry'
+DEFAULT_SCOPE = "whole-config"
+ENTRY_SEGMENT = "entry"
 
 # The control characters, as the text rule above states them. One definition, read by the state door
 # (`state_input.py`) and by the gate rule `control_chars` (`sanity_checks.py`). The three escape shapes
 # are the characters a source may state as content, so the door does not refuse them.
-CONTROL_CHARS = {chr(code) for code in range(0x20)} | {chr(0x7f)}
-ESCAPE_SHAPES = frozenset('\t\r\n')
+CONTROL_CHARS = {chr(code) for code in range(0x20)} | {chr(0x7F)}
+ESCAPE_SHAPES = frozenset("\t\r\n")
 
 
 def control_chars(text: str) -> list[str]:
@@ -178,9 +178,9 @@ class SourceOrigin:
     path: Optional[Path] = None
 
     @classmethod
-    def for_path(cls, path: Path) -> 'SourceOrigin':
+    def for_path(cls, path: Path) -> "SourceOrigin":
         """The origin of a file read."""
-        return cls(kind='file', name=path.name, path=path)
+        return cls(kind="file", name=path.name, path=path)
 
 
 def _format_size(count: int) -> str:
@@ -222,7 +222,7 @@ def read_input(path, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> bytes:
     if size > max_input_bytes:
         raise _too_large(origin, size, max_input_bytes)
     try:
-        with origin.path.open('rb') as handle:
+        with origin.path.open("rb") as handle:
             data = handle.read(max_input_bytes + 1)
     except OSError as exc:
         # A directory, a permission denial or a vanished file: a refusal
@@ -303,7 +303,7 @@ class ParsedSource:
     root: ET.Element
     lines: dict = field(default_factory=dict, compare=False, repr=False)
     size: int = 0
-    sha256: str = ''
+    sha256: str = ""
     scope: str = DEFAULT_SCOPE
 
     @property
@@ -319,7 +319,7 @@ class ParsedSource:
     @property
     def scope_container(self) -> str:
         """The first segment of the declared path, or '' for the whole config."""
-        return self.scope.split('/')[0] if self.is_per_scope else ''
+        return self.scope.split("/")[0] if self.is_per_scope else ""
 
     def line_of(self, elem: ET.Element) -> Optional[int]:
         """Line of elem's opening tag, or None when the parse did not record it."""
@@ -333,7 +333,7 @@ def _fixname(name: str) -> str:
     ``uri}local``. ElementTree turns that into ``{uri}local`` and leaves an
     unqualified name alone, so this is the mapping xml.etree applies.
     """
-    return '{' + name if '}' in name else name
+    return "{" + name if "}" in name else name
 
 
 def _parse_with_lines(data: bytes, origin: SourceOrigin) -> ParsedSource:
@@ -403,8 +403,7 @@ def _parse_with_lines(data: bytes, origin: SourceOrigin) -> ParsedSource:
     )
 
 
-def check_bytes(data: bytes, origin: SourceOrigin,
-                max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> None:
+def check_bytes(data: bytes, origin: SourceOrigin, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> None:
     """The two F3.8 checks, run on the bytes a producer handed (F5.1, F5.6).
 
     Both checks are byte checks, so they run for every source kind. The size check is
@@ -421,8 +420,7 @@ def check_bytes(data: bytes, origin: SourceOrigin,
     reject_dtd(data, origin)
 
 
-def parse_bytes(data: bytes, origin: SourceOrigin,
-                max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ParsedSource:
+def parse_bytes(data: bytes, origin: SourceOrigin, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ParsedSource:
     """The producer boundary (F5.1): check the bytes a producer handed, then parse them.
 
     Both F3.8 checks run through `check_bytes`, so no producer can bypass them. The tree is
@@ -468,9 +466,9 @@ def positive_int(text: str) -> int:
 def add_max_input_argument(parser: argparse.ArgumentParser) -> None:
     """Add the shared --max-input-bytes flag so both CLIs behave the same."""
     parser.add_argument(
-        '--max-input-bytes',
+        "--max-input-bytes",
         type=positive_int,
-        metavar='N',
+        metavar="N",
         default=DEFAULT_MAX_INPUT_BYTES,
         help=(
             f"refuse an input larger than N bytes (default {_format_size(DEFAULT_MAX_INPUT_BYTES)}). "

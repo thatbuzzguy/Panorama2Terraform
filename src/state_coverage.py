@@ -47,25 +47,25 @@ import entry_coverage
 from resource_mapping import LOCATION_SCHEMA
 from state_input import StateEntry, StateSource
 
-OWNERSHIP_HEADING = 'Entries Another Workspace Already Owns'
-DRIFT_HEADING = 'Owned Entries With a Value The Run Does Not Match'
+OWNERSHIP_HEADING = "Entries Another Workspace Already Owns"
+DRIFT_HEADING = "Owned Entries With a Value The Run Does Not Match"
 
 OWNERSHIP_RULE = (
-    'An entry this run read that another workspace already owns is listed here. The state '
-    'document names the workspace that holds the object, and the resource address names the '
-    'entry in it. The key is the entry identity (device group, vsys, type, name), read from '
-    'the location the state document holds, so an entry in a different scope is a different '
-    'object and is not listed. A finding is an operator action, not a broken output: it does '
-    'not change the exit code, which the F4.1 gate still decides.'
+    "An entry this run read that another workspace already owns is listed here. The state "
+    "document names the workspace that holds the object, and the resource address names the "
+    "entry in it. The key is the entry identity (device group, vsys, type, name), read from "
+    "the location the state document holds, so an entry in a different scope is a different "
+    "object and is not listed. A finding is an operator action, not a broken output: it does "
+    "not change the exit code, which the F4.1 gate still decides."
 )
 
 DRIFT_RULE = (
-    'An owned entry with a value this run does not match is listed here. Only a property the '
-    'coverage matrix row declares is compared, and only when both sides hold it by the same '
-    'name, because no rule maps a parse key to a provider attribute name. The values are '
-    'printed as JSON text, so one finding stays on one line. A finding is an operator action, '
-    'not a broken output, so it does not change the exit code, which the F4.1 gate still '
-    'decides.'
+    "An owned entry with a value this run does not match is listed here. Only a property the "
+    "coverage matrix row declares is compared, and only when both sides hold it by the same "
+    "name, because no rule maps a parse key to a provider attribute name. The values are "
+    "printed as JSON text, so one finding stays on one line. A finding is an operator action, "
+    "not a broken output, so it does not change the exit code, which the F4.1 gate still "
+    "decides."
 )
 
 # Which §2.2 fact each `location` sub-block fills. The sub-block names and the field names
@@ -77,17 +77,17 @@ DRIFT_RULE = (
 # (F6.10.5), so an entry placed inside a stack is keyed by its stack
 # (`tests/test_state_coverage.py::test_a_stack_sub_block_keys_the_fact_it_names`).
 STATE_SCOPE_KEYS = {
-    'device_group': 'device_group',
-    'vsys': 'vsys',
-    'template': 'template',
-    'ngfw': 'vsys_device',
-    'template_stack': 'template_stack',
-    'shared': None,
+    "device_group": "device_group",
+    "vsys": "vsys",
+    "template": "template",
+    "ngfw": "vsys_device",
+    "template_stack": "template_stack",
+    "shared": None,
 }
 
 # A state entry is an entry, so its identity keys are the entry name and the location. Every
 # other attribute key is a property the scan can read (F4.3 rule 3).
-STATE_IDENTITY_KEYS = frozenset({'name', 'location'})
+STATE_IDENTITY_KEYS = frozenset({"name", "location"})
 
 
 def nested_block(value) -> dict:
@@ -109,8 +109,8 @@ def state_facts(entry: StateEntry) -> Optional[dict]:
     blocks = LOCATION_SCHEMA.get(entry.resource_type)
     if blocks is None:
         return None
-    location = nested_block(entry.attributes.get('location'))
-    facts = dict.fromkeys(container_coverage.SCOPE_FACT_KEYS, '')
+    location = nested_block(entry.attributes.get("location"))
+    facts = dict.fromkeys(container_coverage.SCOPE_FACT_KEYS, "")
     for block, value in location.items():
         declared = blocks.get(block)
         if declared is None:
@@ -124,20 +124,23 @@ def state_facts(entry: StateEntry) -> Optional[dict]:
             name = sub.get(field)
             if not name:
                 continue
-            if field == 'name':
+            if field == "name":
                 facts[fact] = name
-            elif field == 'vsys':
-                facts['vsys'] = name
+            elif field == "vsys":
+                facts["vsys"] = name
             # The PAN-OS "this device" placeholder names no firewall (F3.5).
-            elif field == 'ngfw_device' and name != container_coverage.PLACEHOLDER_DEVICE:
-                facts['vsys_device'] = name
+            elif field == "ngfw_device" and name != container_coverage.PLACEHOLDER_DEVICE:
+                facts["vsys_device"] = name
     return facts
 
 
 def state_properties(entry: StateEntry) -> dict:
     """The attribute values a state entry holds, as the scan reads them (F4.3 rule 3)."""
-    return {key: value for key, value in entry.attributes.items()
-            if key not in STATE_IDENTITY_KEYS and value not in entry_coverage.EMPTY_FIELD_VALUES}
+    return {
+        key: value
+        for key, value in entry.attributes.items()
+        if key not in STATE_IDENTITY_KEYS and value not in entry_coverage.EMPTY_FIELD_VALUES
+    }
 
 
 def ownership_key(matrix_row: str, name: str, facts: dict) -> tuple:
@@ -181,21 +184,21 @@ def state_findings(ledger, source: Optional[StateSource]) -> list:
         if not ledger.is_report_entry(entry):
             continue
         row = ledger.row_for(entry)
-        matrix_row = entry_coverage.matrix_row_for(row['container'])
+        matrix_row = entry_coverage.matrix_row_for(row["container"])
         mark = ledger.mark_for(entry)
         if matrix_row is None or mark is None:
             continue
         facts = {key: row[key] for key in container_coverage.SCOPE_FACT_KEYS}
-        state_entry = index.get(ownership_key(matrix_row['resource'], row['name'], facts))
+        state_entry = index.get(ownership_key(matrix_row["resource"], row["name"], facts))
         if state_entry is None:
             continue
         finding = dict(row)
-        finding['resource'] = matrix_row['resource']
-        finding['state_name'] = source.name
-        finding['state_address'] = state_entry.address
-        finding['drift'] = drift_properties(matrix_row, mark, state_entry)
+        finding["resource"] = matrix_row["resource"]
+        finding["state_name"] = source.name
+        finding["state_address"] = state_entry.address
+        finding["drift"] = drift_properties(matrix_row, mark, state_entry)
         findings.append(finding)
-    return sorted(findings, key=lambda row: (row['line'] or 0, row['container'], row['name']))
+    return sorted(findings, key=lambda row: (row["line"] or 0, row["container"], row["name"]))
 
 
 def drift_properties(matrix_row: dict, mark: dict, state_entry: StateEntry) -> tuple:
@@ -205,8 +208,8 @@ def drift_properties(matrix_row: dict, mark: dict, state_entry: StateEntry) -> t
     same name (rule 3). A read through `RecordingDict.value` does not count as a property an
     output used, so the state scan cannot move a property finding (rule 5).
     """
-    declared = set(matrix_row['properties'])
-    captured = mark['captured']
+    declared = set(matrix_row["properties"])
+    captured = mark["captured"]
     state_values = state_properties(state_entry)
     shared = declared & set(captured.keys()) & set(state_values)
     differing = []
@@ -232,17 +235,19 @@ def ownership_line(finding: dict) -> str:
     fixed (F5.6 AC-4.2), and the section prints no path: a source is named by its report value,
     the same rule the other report bodies follow (F4.2 rule 6).
     """
-    name = f'{finding["container"]}/{finding["name"]}'
-    line = f'{finding["line"] if finding["line"] is not None else 0}'
-    parts = [f'  line {line:>4}  ', f'{name:<38} ', f'{finding["resource"]:<32} ',
-             f'state source: {finding["state_name"]} ({finding["state_address"]})']
-    return ''.join(parts).rstrip()
+    name = f"{finding['container']}/{finding['name']}"
+    line = f"{finding['line'] if finding['line'] is not None else 0}"
+    parts = [
+        f"  line {line:>4}  ",
+        f"{name:<38} ",
+        f"{finding['resource']:<32} ",
+        f"state source: {finding['state_name']} ({finding['state_address']})",
+    ]
+    return "".join(parts).rstrip()
 
 
 def drift_line(finding: dict) -> str:
     """One drift line: the ownership line shape, then the properties the two values disagree on."""
-    parts = [ownership_line(finding), '  value differs: ']
-    parts.append(', '.join(f'{key} ({value_text(run)} vs {value_text(state)})'
-                           for key, run, state in finding['drift']))
-    return ''.join(parts).rstrip()
-
+    parts = [ownership_line(finding), "  value differs: "]
+    parts.append(", ".join(f"{key} ({value_text(run)} vs {value_text(state)})" for key, run, state in finding["drift"]))
+    return "".join(parts).rstrip()

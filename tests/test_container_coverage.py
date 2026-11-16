@@ -44,17 +44,17 @@ import xml_input
 from conftest import FIXTURES_DIR, SRC_DIR, corpus_fixtures, run_script
 
 # A path-like string constant in a parse method: a tag name or a tag chain.
-PATH_STRING_RE = re.compile(r'^[A-Za-z0-9_.\-/]+$')
+PATH_STRING_RE = re.compile(r"^[A-Za-z0-9_.\-/]+$")
 
 # The fixture that holds sections no parse method reads.
-UNKNOWN_FIXTURE = 'unknown_containers.xml'
+UNKNOWN_FIXTURE = "unknown_containers.xml"
 
 # Findings the fixture produces, in report order. Pinned so the report bytes and
 # the console lines can be compared with these values.
 EXPECTED_FINDINGS = [
-    ('data-entry', 23, 1),
-    ('devices/entry/vsys/entry/import', 64, 1),
-    ('document', 14, 2),
+    ("data-entry", 23, 1),
+    ("devices/entry/vsys/entry/import", 64, 1),
+    ("document", 14, 2),
 ]
 
 
@@ -70,10 +70,10 @@ def _segments_of_method(cls, method_name: str) -> set[str]:
     segments: set[str] = set()
     pending = [method_name]
     seen: set[str] = set()
-    spell = getattr(cls, '_protocol_xml_name', None)
+    spell = getattr(cls, "_protocol_xml_name", None)
 
     def add(path: str) -> None:
-        for part in path.split('/'):
+        for part in path.split("/"):
             segments.add(part)
             if spell is not None:
                 segments.add(spell(part))
@@ -96,17 +96,25 @@ def _segments_of_method(cls, method_name: str) -> set[str]:
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 if PATH_STRING_RE.match(node.value):
                     add(node.value)
-            elif (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
-                  and node.value.id == 'resource_mapping' and hasattr(resource_mapping, node.attr)):
+            elif (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "resource_mapping"
+                and hasattr(resource_mapping, node.attr)
+            ):
                 add_value(getattr(resource_mapping, node.attr))
             elif isinstance(node, ast.JoinedStr):
                 for part in node.values:
                     if isinstance(part, ast.Constant) and PATH_STRING_RE.match(part.value):
                         add(part.value)
                     elif isinstance(part, ast.FormattedValue):
-                        segments.add('entry')  # the entry placeholder
-            elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-                  and isinstance(node.func.value, ast.Name) and node.func.value.id == 'self'):
+                        segments.add("entry")  # the entry placeholder
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "self"
+            ):
                 pending.append(node.func.attr)
     return segments
 
@@ -120,11 +128,12 @@ def _scan(fixture_name: str):
 
 # --- 1. Table <-> code -------------------------------------------------------
 
+
 def test_every_parse_method_has_a_table_row(converter_module):
     """A parse method without a row is an entry the report cannot describe."""
-    methods = {name for name in dir(converter_module.PanoramaParser) if name.startswith('parse_')}
+    methods = {name for name in dir(converter_module.PanoramaParser) if name.startswith("parse_")}
     missing = sorted(methods - set(container_coverage.parse_methods()))
-    assert not missing, f'parse methods with no container row: {missing}'
+    assert not missing, f"parse methods with no container row: {missing}"
 
 
 def test_every_row_names_a_method_that_exists(converter_module):
@@ -136,11 +145,11 @@ def test_every_row_names_a_method_that_exists(converter_module):
 def test_every_row_path_is_read_by_its_method(converter_module):
     """Every row path is a path the named method reads."""
     for row in container_coverage.CONTAINER_TABLE:
-        if row.read_via != 'pattern':
+        if row.read_via != "pattern":
             continue
         segments = _segments_of_method(converter_module.PanoramaParser, row.method)
-        missing = [s for s in row.path.split('/') if s not in segments]
-        assert not missing, f'{row.method} does not read {row.path} (missing {missing})'
+        missing = [s for s in row.path.split("/") if s not in segments]
+        assert not missing, f"{row.method} does not read {row.path} (missing {missing})"
 
 
 def test_destination_kinds_are_the_documented_set():
@@ -153,30 +162,33 @@ def test_destination_kinds_are_the_documented_set():
 def test_emitted_rows_name_a_provider_resource():
     """A row that writes output names a resource type the mapping can emit."""
     from resource_mapping import EMITTED_TYPES
+
     for row in container_coverage.CONTAINER_TABLE:
-        if row.destination not in ('emitted', 'nested-block'):
+        if row.destination not in ("emitted", "nested-block"):
             continue
-        named = re.findall(r'panos_[a-z0-9_]+', row.note)
-        if row.destination == 'emitted':
+        named = re.findall(r"panos_[a-z0-9_]+", row.note)
+        if row.destination == "emitted":
             assert named and any(word in EMITTED_TYPES for word in named), row
         else:
             # A nested block has no resource type of its own; it names the
             # parent type or the table that picks the parent type.
-            assert (named and any(word in EMITTED_TYPES for word in named)) or \
-                   'INTERFACE_RESOURCE_TYPES' in row.note, row
+            assert (named and any(word in EMITTED_TYPES for word in named)) or "INTERFACE_RESOURCE_TYPES" in row.note, (
+                row
+            )
 
 
 def test_scope_walk_rows_are_the_scope_containers(converter_module):
     """The read-by-walk rows are the five scope facts over the scope containers (F6.10.5)."""
-    facts = {'device_group_of', 'vsys_of', 'template_of', 'device_of', 'template_stack_of'}
+    facts = {"device_group_of", "vsys_of", "template_of", "device_of", "template_stack_of"}
     for row in container_coverage.CONTAINER_TABLE:
-        if row.read_via != 'scope walk':
+        if row.read_via != "scope walk":
             continue
         assert row.method in facts, row
         assert row.path in container_coverage.SCOPE_CONTAINERS, row
 
 
 # --- 2. The section rule -----------------------------------------------------
+
 
 def _tree(text: str):
     """A parsed fixture-like tree plus its parent map."""
@@ -188,14 +200,14 @@ def test_container_inside_a_config_object_entry_is_a_property_level():
     """`schedule/entry/schedule-type/recurring` is a property level, not a section."""
     root, parents = _tree(
         '<config><shared><schedule><entry name="weekly">'
-        '<schedule-type><recurring><name>monday</name></recurring></schedule-type>'
-        '</entry></schedule></shared></config>'
+        "<schedule-type><recurring><name>monday</name></recurring></schedule-type>"
+        "</entry></schedule></shared></config>"
     )
-    section = root.find('.//schedule')
-    property_level = root.find('.//recurring')
+    section = root.find(".//schedule")
+    property_level = root.find(".//recurring")
     assert container_coverage.is_section(section, parents)
     assert not container_coverage.is_section(property_level, parents)
-    assert container_coverage.section_path(property_level, parents) == 'schedule/entry/schedule-type/recurring'
+    assert container_coverage.section_path(property_level, parents) == "schedule/entry/schedule-type/recurring"
 
 
 def test_container_under_a_scope_entry_is_a_section():
@@ -204,20 +216,21 @@ def test_container_under_a_scope_entry_is_a_section():
         '<config><panorama><device-group><entry name="Edge"><tag>'
         '<entry name="prod"/></tag></entry></device-group></panorama></config>'
     )
-    container = root.find('.//tag')
+    container = root.find(".//tag")
     assert container_coverage.is_section(container, parents)
-    assert container_coverage.section_path(container, parents) == 'device-group/entry/tag'
+    assert container_coverage.section_path(container, parents) == "device-group/entry/tag"
     assert container_coverage.is_known(container_coverage.section_path(container, parents))
 
 
 def test_scope_entry_itself_is_not_a_config_object_entry():
     """The five scope containers define a scope, so they do not break the rule."""
     root, parents = _tree('<config><shared><devices><entry name="fw-1"/></devices></shared></config>')
-    entry = root.find('.//devices/entry')
+    entry = root.find(".//devices/entry")
     assert container_coverage.is_scope_entry(entry, parents)
 
 
 # --- 3. Findings --------------------------------------------------------------
+
 
 def test_unknown_section_is_reported():
     """A section no row covers produces one finding with its line and entry count."""
@@ -226,7 +239,7 @@ def test_unknown_section_is_reported():
     assert got == EXPECTED_FINDINGS, got
     for finding in findings:
         assert finding.path, finding
-        assert finding.line, f'{finding.path} carries no line'
+        assert finding.line, f"{finding.path} carries no line"
         assert finding.entries > 0, finding
 
 
@@ -239,52 +252,56 @@ def test_findings_are_sorted_by_path_then_line():
 def test_predefined_entries_are_not_findings():
     """A PAN-OS built-in definition is not an operator object."""
     _, _, findings = _scan(UNKNOWN_FIXTURE)
-    assert not any('predefined' in f.path for f in findings)
+    assert not any("predefined" in f.path for f in findings)
 
 
 def test_property_level_entries_are_not_findings():
     """A config-object entry is a property level, so F4.2 does not report it."""
-    _, _, findings = _scan('kitchen_sink.xml')
+    _, _, findings = _scan("kitchen_sink.xml")
     assert findings == [], findings
 
 
 def test_absent_container_is_not_a_finding():
     """An export does not have to contain every container the converter knows."""
-    _, _, findings = _scan('kitchen_sink.xml')
-    assert not any('region' in f.path for f in findings)
+    _, _, findings = _scan("kitchen_sink.xml")
+    assert not any("region" in f.path for f in findings)
 
 
 def test_the_envelope_is_never_a_scanned_container():
     """F4.2 and F5.4: `response` and `result` are the wrapper, not a container name."""
-    assert frozenset({'response', 'result'}) == container_coverage.ENVELOPE
-    assert not ({'response', 'result'} & {row.path for row in container_coverage.CONTAINER_TABLE})
-    assert not {'response', 'result'} & container_coverage.PATH_ROOTS
+    assert frozenset({"response", "result"}) == container_coverage.ENVELOPE
+    assert not ({"response", "result"} & {row.path for row in container_coverage.CONTAINER_TABLE})
+    assert not {"response", "result"} & container_coverage.PATH_ROOTS
 
 
 def test_the_scan_reads_a_per_scope_root_as_the_place_the_path_names():
     """F5.4: for a per-scope source the root `result` is the place the path names, so the
     entry under it is the declared scope entry and the container inside it is a section."""
-    origin = xml_input.SourceOrigin(kind='api', name='scope_child.xml')
-    parsed = xml_input.parse_bytes((FIXTURES_DIR / 'scope_child.xml').read_bytes(), origin)
-    result = parsed.root.find('result')
-    source = dataclasses.replace(parsed, root=result, scope='device-group/entry/Production-DG')
+    origin = xml_input.SourceOrigin(kind="api", name="scope_child.xml")
+    parsed = xml_input.parse_bytes((FIXTURES_DIR / "scope_child.xml").read_bytes(), origin)
+    result = parsed.root.find("result")
+    source = dataclasses.replace(parsed, root=result, scope="device-group/entry/Production-DG")
     parents = container_coverage.parent_map(result)
 
     scope_entry = result[0]
-    assert container_coverage.container_tag(scope_entry, parents, source) == 'device-group'
+    assert container_coverage.container_tag(scope_entry, parents, source) == "device-group"
     assert container_coverage.is_scope_entry(scope_entry, parents, source)
-    assert container_coverage.section_path(result, parents, source) == 'device-group'
-    assert container_coverage.section_path(scope_entry.find('address'), parents, source) == \
-        'device-group/entry/address', 'the chain keeps the entry the operator sees in the file'
+    assert container_coverage.section_path(result, parents, source) == "device-group"
+    assert (
+        container_coverage.section_path(scope_entry.find("address"), parents, source) == "device-group/entry/address"
+    ), "the chain keeps the entry the operator sees in the file"
     assert container_coverage.scan(source, parents) == [], container_coverage.scan(source, parents)
 
     # The same bytes read as a file have no request, so `result` is the envelope and is
     # never a scanned container.
-    file_source = xml_input.parse_bytes((FIXTURES_DIR / 'scope_child.xml').read_bytes(),
-                                        xml_input.SourceOrigin(kind='file', name='scope_child.xml'))
+    file_source = xml_input.parse_bytes(
+        (FIXTURES_DIR / "scope_child.xml").read_bytes(), xml_input.SourceOrigin(kind="file", name="scope_child.xml")
+    )
     file_parents = container_coverage.parent_map(file_source.root)
-    assert all(container.tag not in container_coverage.ENVELOPE
-               for container in container_coverage.entry_containers(file_source.root, file_parents, file_source))
+    assert all(
+        container.tag not in container_coverage.ENVELOPE
+        for container in container_coverage.entry_containers(file_source.root, file_parents, file_source)
+    )
     assert container_coverage.scan(file_source, file_parents) == []
 
 
@@ -292,33 +309,44 @@ def test_a_predefined_path_is_read_by_the_one_scope_path_definition(tmp_path):
     """F8.1 AC-4.1 and AC-4.2: `predefined` is a place the one definition validates, so a
     built-in path is a scope path, and the run can read it. It is read as a place, not as a
     scope: no scope fact comes from a built-in entry."""
-    assert 'predefined' in container_coverage.SCOPE_PATH_ROOTS
-    assert 'predefined' not in container_coverage.SCOPE_CONTAINERS, \
-        'a built-in section is a place, not one of the five scope containers'
+    assert "predefined" in container_coverage.SCOPE_PATH_ROOTS
+    assert "predefined" not in container_coverage.SCOPE_CONTAINERS, (
+        "a built-in section is a place, not one of the five scope containers"
+    )
 
-    assert container_coverage.is_scope_path('/predefined')
-    assert container_coverage.is_scope_path('/predefined/entry/url-list')
-    assert not container_coverage.is_scope_path('/predefined/url-list'), \
-        'the shape rule is unchanged: a path names the place or an entry inside it'
+    assert container_coverage.is_scope_path("/predefined")
+    assert container_coverage.is_scope_path("/predefined/entry/url-list")
+    assert not container_coverage.is_scope_path("/predefined/url-list"), (
+        "the shape rule is unchanged: a path names the place or an entry inside it"
+    )
 
     entry = ET.fromstring('<predefined><url-list><entry name="url-list"/></url-list></predefined>')
     parents = container_coverage.parent_map(entry)
     built_in_entry = entry.find(".//entry[@name='url-list']")
-    assert not container_coverage.is_scope_entry(built_in_entry, parents), \
-        'a built-in entry answers no scope fact'
+    assert not container_coverage.is_scope_entry(built_in_entry, parents), "a built-in entry answers no scope fact"
 
     # The CLI prints the set through the one definition, so the argument error names `predefined`.
-    result = run_script('panorama_to_terraform.py', '--source', 'api', '--host', 'panorama.test',
-                        '--path', '/predefined/url-list', '--cache-dir', str(tmp_path),
-                        '--output-dir', str(tmp_path))
+    result = run_script(
+        "panorama_to_terraform.py",
+        "--source",
+        "api",
+        "--host",
+        "panorama.test",
+        "--path",
+        "/predefined/url-list",
+        "--cache-dir",
+        str(tmp_path),
+        "--output-dir",
+        str(tmp_path),
+    )
     assert result.returncode == 2, result.stdout + result.stderr
-    assert 'predefined' in result.stderr, result.stderr
+    assert "predefined" in result.stderr, result.stderr
 
 
 def test_empty_known_container_is_not_a_finding(tmp_path):
     """A known container with no entries is not a coverage gap."""
-    source_file = tmp_path / 'empty.xml'
-    source_file.write_text('<config><shared><tag></tag></shared></config>', encoding='utf-8')
+    source_file = tmp_path / "empty.xml"
+    source_file.write_text("<config><shared><tag></tag></shared></config>", encoding="utf-8")
     source = xml_input.parse_xml(source_file)
     assert container_coverage.scan(source, container_coverage.parent_map(source.root)) == []
 
@@ -332,7 +360,7 @@ def test_committed_corpus_has_no_findings():
     # The read rule's accepted set, so the parse cannot fail here.
     for name in corpus_fixtures():
         if name == UNKNOWN_FIXTURE:
-            continue    # the fixture that demonstrates the report
+            continue  # the fixture that demonstrates the report
         source, parents, findings = _scan(name)
         assert findings == [], (name, findings)
 
@@ -341,22 +369,22 @@ def test_report_line_wording_counts_the_entries():
     """The wording is one place: a single entry is not called 'entries'."""
     _, _, findings = _scan(UNKNOWN_FIXTURE)
     phrases = [container_coverage.entry_phrase(f.entries) for f in findings]
-    assert phrases == ['1 entry', '1 entry', '2 entries'], phrases
-    single = container_coverage.Finding(path='document', line=14, entries=1)
-    assert container_coverage.report_line(single).endswith('1 entry - no parse method reads this container')
-    unknown = container_coverage.Finding(path='document', line=None, entries=2)
-    assert container_coverage.position_phrase(unknown) == 'position unknown'
+    assert phrases == ["1 entry", "1 entry", "2 entries"], phrases
+    single = container_coverage.Finding(path="document", line=14, entries=1)
+    assert container_coverage.report_line(single).endswith("1 entry - no parse method reads this container")
+    unknown = container_coverage.Finding(path="document", line=None, entries=2)
+    assert container_coverage.position_phrase(unknown) == "position unknown"
 
 
 # --- 4. Report and console --------------------------------------------------
 
+
 def _convert(fixture_name: str, out_dir: Path) -> dict:
     """Run the converter on one fixture and return its outputs."""
-    proc = run_script('panorama_to_terraform.py', str(FIXTURES_DIR / fixture_name),
-                      '--output-dir', str(out_dir))
+    proc = run_script("panorama_to_terraform.py", str(FIXTURES_DIR / fixture_name), "--output-dir", str(out_dir))
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    report = out_dir / 'MANUAL_SETUP_REPORT.txt'
-    return {'proc': proc, 'report': report.read_text(encoding='utf-8') if report.is_file() else ''}
+    report = out_dir / "MANUAL_SETUP_REPORT.txt"
+    return {"proc": proc, "report": report.read_text(encoding="utf-8") if report.is_file() else ""}
 
 
 def test_report_names_the_source_not_the_path(tmp_path):
@@ -365,27 +393,27 @@ def test_report_names_the_source_not_the_path(tmp_path):
     The path is in the provenance record (F5.3), which is not a report body.
     """
     result = _convert(UNKNOWN_FIXTURE, tmp_path)
-    lines = result['report'].splitlines()
-    section = [line for line in lines if 'Entry Coverage' in line]
-    assert section, result['report']
+    lines = result["report"].splitlines()
+    section = [line for line in lines if "Entry Coverage" in line]
+    assert section, result["report"]
     file_line = [line for line in lines if line.startswith(container_coverage.SOURCE_LABEL)]
-    assert file_line == [f'Source: {UNKNOWN_FIXTURE}'], file_line
-    assert str(FIXTURES_DIR) not in result['report']
+    assert file_line == [f"Source: {UNKNOWN_FIXTURE}"], file_line
+    assert str(FIXTURES_DIR) not in result["report"]
 
 
 def test_report_lists_every_finding_with_its_line(tmp_path):
     """One report line per finding, in the scan order."""
     _, _, findings = _scan(UNKNOWN_FIXTURE)
-    report = _convert(UNKNOWN_FIXTURE, tmp_path)['report']
-    lines = [line for line in report.splitlines() if 'no parse method reads' in line]
+    report = _convert(UNKNOWN_FIXTURE, tmp_path)["report"]
+    lines = [line for line in report.splitlines() if "no parse method reads" in line]
     assert lines == [container_coverage.report_line(f) for f in findings], lines
 
 
 def test_report_bytes_are_identical_between_runs(tmp_path):
     """The same input produces the same report bytes."""
-    first = _convert(UNKNOWN_FIXTURE, tmp_path / 'a')
-    second = _convert(UNKNOWN_FIXTURE, tmp_path / 'b')
-    assert first['report'] == second['report']
+    first = _convert(UNKNOWN_FIXTURE, tmp_path / "a")
+    second = _convert(UNKNOWN_FIXTURE, tmp_path / "b")
+    assert first["report"] == second["report"]
 
 
 def test_console_lists_the_findings(tmp_path):
@@ -395,14 +423,17 @@ def test_console_lists_the_findings(tmp_path):
     and the report section names its source rather than a scope, so the scope part is empty.
     """
     _, _, findings = _scan(UNKNOWN_FIXTURE)
-    stdout = _convert(UNKNOWN_FIXTURE, tmp_path)['proc'].stdout
+    stdout = _convert(UNKNOWN_FIXTURE, tmp_path)["proc"].stdout
     block = container_coverage.console_lines(findings)
     for line in block:
         assert line in stdout, line
     for finding, line in zip(findings, block[1:]):
-        parts = line[len(container_coverage.CONSOLE_PREFIX):].split('  ')
-        assert parts == [container_coverage.position_part(finding.line), finding.path,
-                         container_coverage.finding_fact(finding)], parts
+        parts = line[len(container_coverage.CONSOLE_PREFIX) :].split("  ")
+        assert parts == [
+            container_coverage.position_part(finding.line),
+            finding.path,
+            container_coverage.finding_fact(finding),
+        ], parts
 
 
 def test_the_console_line_shape_is_stated_in_one_place():
@@ -412,20 +443,23 @@ def test_the_console_line_shape_is_stated_in_one_place():
     fact phrase and its block header and calls the shape. The scans whose fact names two identities, or a
     second position, print in the report only, so they own no console wording.
     """
-    shape = Path(container_coverage.__file__).read_text(encoding='utf-8')
-    assert 'def console_line(scope: str, position: str, identity: str, fact: str) -> str:' in shape
-    texts = {path.name: path.read_text(encoding='utf-8') for path in sorted(SRC_DIR.glob('*.py'))}
-    assert not [name for name, text in texts.items()
-                if name != 'container_coverage.py' and 'CONSOLE_PREFIX' in text], \
-        'no module builds the console prefix'
-    assert sorted(name for name, text in texts.items()
-                  if 'container_coverage.console_line(' in text) == \
-        ['entry_coverage.py', 'shadow_coverage.py'], 'the shape is the only line builder'
-    for name in ('ownership.py', 'reference_edges.py', 'state_coverage.py'):
-        assert 'def console_line' not in texts[name] and 'def console_lines' not in texts[name], \
-            (name, 'the report-only scans state no console wording')
-    for name in ('entry_coverage.py', 'shadow_coverage.py'):
-        assert 'def console_line(' not in texts[name], (name, 'the block states the fact, not the shape')
+    shape = Path(container_coverage.__file__).read_text(encoding="utf-8")
+    assert "def console_line(scope: str, position: str, identity: str, fact: str) -> str:" in shape
+    texts = {path.name: path.read_text(encoding="utf-8") for path in sorted(SRC_DIR.glob("*.py"))}
+    assert not [name for name, text in texts.items() if name != "container_coverage.py" and "CONSOLE_PREFIX" in text], (
+        "no module builds the console prefix"
+    )
+    assert sorted(name for name, text in texts.items() if "container_coverage.console_line(" in text) == [
+        "entry_coverage.py",
+        "shadow_coverage.py",
+    ], "the shape is the only line builder"
+    for name in ("ownership.py", "reference_edges.py", "state_coverage.py"):
+        assert "def console_line" not in texts[name] and "def console_lines" not in texts[name], (
+            name,
+            "the report-only scans state no console wording",
+        )
+    for name in ("entry_coverage.py", "shadow_coverage.py"):
+        assert "def console_line(" not in texts[name], (name, "the block states the fact, not the shape")
 
 
 # The two checks that read `docs/ARCHITECTURE.md` prose are document-review checks and moved to
@@ -436,14 +470,14 @@ def test_the_console_line_shape_is_stated_in_one_place():
 
 def test_no_coverage_output_when_there_is_nothing_to_report(tmp_path):
     """A covered input writes no coverage section and prints no coverage line."""
-    result = _convert('kitchen_sink.xml', tmp_path)
-    assert 'Entry Coverage' not in result['report']
-    assert 'Entry Coverage' not in result['proc'].stdout
+    result = _convert("kitchen_sink.xml", tmp_path)
+    assert "Entry Coverage" not in result["report"]
+    assert "Entry Coverage" not in result["proc"].stdout
 
 
 def test_a_finding_does_not_change_the_exit_code(tmp_path):
     """A coverage gap is an operator action, not a broken output."""
     result = _convert(UNKNOWN_FIXTURE, tmp_path)
-    assert result['proc'].returncode == 0
-    sanity = (tmp_path / 'SANITY_REPORT.txt').read_text(encoding='utf-8')
-    assert 'Result: PASS' in sanity, sanity
+    assert result["proc"].returncode == 0
+    sanity = (tmp_path / "SANITY_REPORT.txt").read_text(encoding="utf-8")
+    assert "Result: PASS" in sanity, sanity

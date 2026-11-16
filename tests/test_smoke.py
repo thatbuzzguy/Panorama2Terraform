@@ -38,7 +38,7 @@ def test_converter_runs_on_sample(converter_module, tmp_path):
         written = parts(files, name)
         assert written, f"converter did not emit {name}"
         assert all(text for text in written.values()), f"converter emitted empty {name}"
-    assert all(Path(path).parent.name for path in files), 'the core files are inside unit directories'
+    assert all(Path(path).parent.name for path in files), "the core files are inside unit directories"
 
 
 def test_splitter_help_exits_zero():

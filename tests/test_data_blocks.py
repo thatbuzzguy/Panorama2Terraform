@@ -44,8 +44,8 @@ from conftest import (
 )
 from panorama_to_terraform import ADDR_SCOPES, REFERENCE_SCOPES, TerraformGenerator
 
-CONVERTER = 'panorama_to_terraform.py'
-READ_THROUGH = 'read_through.tf'
+CONVERTER = "panorama_to_terraform.py"
+READ_THROUGH = "read_through.tf"
 
 # The fixtures the corpus pins read: the read rule's accepted set, not a name rule. The refused set writes no
 # file, so the gate never sees it (tests/test_robustness.py pins that path).
@@ -56,14 +56,16 @@ FIXTURES = corpus_fixtures()
 SCOPES_WITH_NAME = sorted(scope for scope in REFERENCE_SCOPES if resource_mapping.DATA_SOURCE_SCHEMA[scope][0])
 
 # A `data` block that follows the table for its type.
-GOOD_BLOCK = ('data "panos_address" "web_11111111" {\n  name = "Web"\n'
-              '  location = {\n    device_group = {\n      name = "DG-A"\n'
-              '      panorama_device = "Panorama-1"\n    }\n  }\n}\n')
+GOOD_BLOCK = (
+    'data "panos_address" "web_11111111" {\n  name = "Web"\n'
+    '  location = {\n    device_group = {\n      name = "DG-A"\n'
+    '      panorama_device = "Panorama-1"\n    }\n  }\n}\n'
+)
 
 
 def _run(source: Path, out_dir: Path, extra: tuple = ()) -> subprocess.CompletedProcess:
     """Run the converter and return the process result."""
-    return run_script(CONVERTER, str(source), '--output-dir', str(out_dir), *extra)
+    return run_script(CONVERTER, str(source), "--output-dir", str(out_dir), *extra)
 
 
 def _files(out_dir: Path) -> dict:
@@ -74,123 +76,130 @@ def _files(out_dir: Path) -> dict:
 @pytest.fixture
 def gen(tmp_path):
     """A generator with one read-through scope declared."""
-    return TerraformGenerator(str(tmp_path), data_scopes={'panos_address'})
+    return TerraformGenerator(str(tmp_path), data_scopes={"panos_address"})
 
 
 # --- 1. one block reader -----------------------------------------------------
 
+
 def test_the_reader_reads_a_data_block_as_a_block_of_its_own_kind():
     files = {
-        'a.tf': 'resource "panos_address" "web_11111111" {\n  location = { shared = {} }\n}\n',
-        'b.tf': 'data "panos_address" "web_11111111" {\n  name = "Web"\n'
-                '  location = { shared = {} }\n}\n',
+        "a.tf": 'resource "panos_address" "web_11111111" {\n  location = { shared = {} }\n}\n',
+        "b.tf": 'data "panos_address" "web_11111111" {\n  name = "Web"\n  location = { shared = {} }\n}\n',
     }
     assert [(b.kind, b.rtype, b.local) for b in sanity_checks.blocks(files)] == [
-        ('resource', 'panos_address', 'web_11111111'),
-        ('data', 'panos_address', 'web_11111111'),
+        ("resource", "panos_address", "web_11111111"),
+        ("data", "panos_address", "web_11111111"),
     ]
-    assert [b.kind for b in sanity_checks.resource_blocks(files)] == ['resource']
-    assert [b.kind for b in sanity_checks.data_blocks(files)] == ['data']
+    assert [b.kind for b in sanity_checks.resource_blocks(files)] == ["resource"]
+    assert [b.kind for b in sanity_checks.data_blocks(files)] == ["data"]
 
 
 def test_the_same_reader_serves_the_kinds_epic_6_will_check():
     """F6.4 (import) and F6.7 (action) add rules that read a block. The reader here is
     the one they use, so no second block reader appears."""
     files = {
-        'c.tf': 'import "panos_address" "web_11111111" {\n  id = "abc"\n'
-                '  to = panos_address.web_11111111\n}\n',
-        'd.tf': 'action "panos_commit" "commit" {\n  location = { shared = {} }\n}\n',
+        "c.tf": 'import "panos_address" "web_11111111" {\n  id = "abc"\n  to = panos_address.web_11111111\n}\n',
+        "d.tf": 'action "panos_commit" "commit" {\n  location = { shared = {} }\n}\n',
     }
-    assert [b.kind for b in sanity_checks.blocks(files)] == ['import', 'action']
+    assert [b.kind for b in sanity_checks.blocks(files)] == ["import", "action"]
     assert sanity_checks.data_blocks(files) == []
 
 
 def test_the_gate_counts_resources_only(tmp_path):
     """The console summary line names resources, so a `data` block does not change it:
     the same input with and without the opt-in reports the same resource count."""
-    plain = _run(SAMPLE_CONFIG, tmp_path / 'plain')
-    read = _run(SAMPLE_CONFIG, tmp_path / 'read', ('--data-blocks', 'panos_address'))
+    plain = _run(SAMPLE_CONFIG, tmp_path / "plain")
+    read = _run(SAMPLE_CONFIG, tmp_path / "read", ("--data-blocks", "panos_address"))
     assert plain.returncode == 0 and read.returncode == 0
-    assert sanity_checks.run_checks(tmp_path / 'plain').resource_count == \
-        sanity_checks.run_checks(tmp_path / 'read').resource_count
-    assert len(sanity_checks.data_blocks(_files(tmp_path / 'read'))) > 0
+    assert (
+        sanity_checks.run_checks(tmp_path / "plain").resource_count
+        == sanity_checks.run_checks(tmp_path / "read").resource_count
+    )
+    assert len(sanity_checks.data_blocks(_files(tmp_path / "read"))) > 0
 
 
 # --- 2. the gate rule for a data block ---------------------------------------
 
+
 def test_the_data_check_passes_a_block_that_follows_the_table():
-    assert sanity_checks.check_data_blocks({'a.tf': GOOD_BLOCK}) == []
+    assert sanity_checks.check_data_blocks({"a.tf": GOOD_BLOCK}) == []
 
 
 def test_the_data_check_reports_a_type_outside_the_table():
-    files = {'bad.tf': 'data "panos_made_up_type" "x_11111111" {\n  name = "x"\n'
-                       '  location = { shared = {} }\n}\n'}
+    files = {"bad.tf": 'data "panos_made_up_type" "x_11111111" {\n  name = "x"\n  location = { shared = {} }\n}\n'}
     findings = sanity_checks.check_data_blocks(files)
     assert len(findings) == 1
-    assert findings[0].check == 'data_blocks'
+    assert findings[0].check == "data_blocks"
     assert findings[0].severity == sanity_checks.FAIL
-    assert findings[0].detail == 'data panos_made_up_type.x_11111111 is not in DATA_SOURCE_SCHEMA'
+    assert findings[0].detail == "data panos_made_up_type.x_11111111 is not in DATA_SOURCE_SCHEMA"
 
 
 def test_the_data_check_reports_a_sub_block_the_type_does_not_declare():
-    files = {'bad.tf': 'data "panos_address" "web_11111111" {\n  name = "Web"\n'
-                       '  location = { template = { name = "T-1" } }\n}\n'}
+    files = {
+        "bad.tf": 'data "panos_address" "web_11111111" {\n  name = "Web"\n'
+        '  location = { template = { name = "T-1" } }\n}\n'
+    }
     findings = sanity_checks.check_data_blocks(files)
     assert len(findings) == 1
     assert findings[0].detail == (
-        'data panos_address.web_11111111 location.template is not a sub-block '
-        'panos_address declares')
+        "data panos_address.web_11111111 location.template is not a sub-block panos_address declares"
+    )
 
 
 def test_the_data_check_reports_a_field_the_type_does_not_declare():
-    files = {'bad.tf': 'data "panos_address" "web_11111111" {\n  name = "Web"\n'
-                       '  location = { device_group = { name = "DG-A" vsys = "v1" } }\n}\n'}
+    files = {
+        "bad.tf": 'data "panos_address" "web_11111111" {\n  name = "Web"\n'
+        '  location = { device_group = { name = "DG-A" vsys = "v1" } }\n}\n'
+    }
     findings = sanity_checks.check_data_blocks(files)
     assert len(findings) == 1
     assert findings[0].detail == (
-        'data panos_address.web_11111111 location.device_group.vsys is not a field '
-        'panos_address declares')
+        "data panos_address.web_11111111 location.device_group.vsys is not a field panos_address declares"
+    )
 
 
 def test_the_data_check_reports_a_missing_name_for_a_type_that_declares_one():
-    files = {'bad.tf': 'data "panos_address" "web_11111111" {\n  location = { shared = {} }\n}\n'}
+    files = {"bad.tf": 'data "panos_address" "web_11111111" {\n  location = { shared = {} }\n}\n'}
     findings = sanity_checks.check_data_blocks(files)
     assert len(findings) == 1
-    assert findings[0].detail == (
-        'data panos_address.web_11111111 has no name, which panos_address declares')
+    assert findings[0].detail == ("data panos_address.web_11111111 has no name, which panos_address declares")
 
 
 def test_a_no_name_type_is_not_refused_for_having_no_name():
     """The 22 rows that declare no `name` (the settings, policy, and collection shapes)
     are correct without one, so the rule is stated per row."""
-    files = {'ok.tf': 'data "panos_general_settings" "s_11111111" {\n'
-                      '  location = { template = { name = "T-1" } }\n}\n'}
+    files = {"ok.tf": 'data "panos_general_settings" "s_11111111" {\n  location = { template = { name = "T-1" } }\n}\n'}
     assert sanity_checks.check_data_blocks(files) == []
 
 
 def test_location_presence_is_one_rule_for_both_kinds():
     """The missing `location` block is the `location_present` finding, so the `data` rule
     does not report the same fact twice."""
-    files = {'bad.tf': 'data "panos_address" "web_11111111" {\n  name = "Web"\n}\n'}
+    files = {"bad.tf": 'data "panos_address" "web_11111111" {\n  name = "Web"\n}\n'}
     findings = sanity_checks.check_location_present(files)
     assert len(findings) == 1
-    assert findings[0].detail == 'data panos_address.web_11111111 has no location block'
+    assert findings[0].detail == "data panos_address.web_11111111 has no location block"
     assert sanity_checks.check_data_blocks(files) == []
     resource = sanity_checks.check_location_present(
-        {'r.tf': 'resource "panos_address" "web_11111111" {\n  name = "Web"\n}\n'})
-    assert resource[0].detail == 'resource panos_address.web_11111111 has no location block'
+        {"r.tf": 'resource "panos_address" "web_11111111" {\n  name = "Web"\n}\n'}
+    )
+    assert resource[0].detail == "resource panos_address.web_11111111 has no location block"
 
 
 def test_the_data_check_row_is_in_the_fixed_report_order(tmp_path):
     """The report order is fixed, so a run that gains the new row still prints the same
     order between runs."""
-    result = _run(SAMPLE_CONFIG, tmp_path, ('--data-blocks', 'panos_address'))
+    result = _run(SAMPLE_CONFIG, tmp_path, ("--data-blocks", "panos_address"))
     assert result.returncode == 0, result.stdout + result.stderr
-    text = (tmp_path / 'SANITY_REPORT.txt').read_text(encoding='utf-8')
-    rows = [line.split()[0] for line in text.split('CHECK RESULTS')[1].split('FINDINGS')[0].split('\n')
-            if line.split() and line.split()[0] in sanity_checks.CHECK_ORDER]
+    text = (tmp_path / "SANITY_REPORT.txt").read_text(encoding="utf-8")
+    rows = [
+        line.split()[0]
+        for line in text.split("CHECK RESULTS")[1].split("FINDINGS")[0].split("\n")
+        if line.split() and line.split()[0] in sanity_checks.CHECK_ORDER
+    ]
     assert rows == list(sanity_checks.CHECK_ORDER)
-    assert rows.index('data_blocks') == rows.index('location_present') + 1
+    assert rows.index("data_blocks") == rows.index("location_present") + 1
 
 
 def test_the_data_check_reports_no_finding_on_the_corpus(tmp_path):
@@ -198,150 +207,156 @@ def test_the_data_check_reports_no_finding_on_the_corpus(tmp_path):
     blocks that follow the table, and the gate still passes."""
     for fixture in FIXTURES:
         out = tmp_path / fixture
-        result = _run(FIXTURES_DIR / fixture, out, ('--data-blocks', ','.join(SCOPES_WITH_NAME)))
-        assert result.returncode == 0, f'{fixture}: {result.stderr[-400:]}'
+        result = _run(FIXTURES_DIR / fixture, out, ("--data-blocks", ",".join(SCOPES_WITH_NAME)))
+        assert result.returncode == 0, f"{fixture}: {result.stderr[-400:]}"
         findings = sanity_checks.check_data_blocks(_files(out))
-        assert findings == [], f'{fixture}: ' + ', '.join(f.render() for f in findings)
+        assert findings == [], f"{fixture}: " + ", ".join(f.render() for f in findings)
 
 
 # --- 3. a reference resolves to a block of its own kind ----------------------
 
+
 def test_a_data_reference_resolves_to_the_data_block():
     files = {
-        'a.tf': GOOD_BLOCK,
-        'b.tf': 'resource "panos_security_policy_rules" "r_11111111" {\n  location = { shared = {} }\n'
-                '  source_addresses = [data.panos_address.web_11111111.name]\n}\n',
+        "a.tf": GOOD_BLOCK,
+        "b.tf": 'resource "panos_security_policy_rules" "r_11111111" {\n  location = { shared = {} }\n'
+        "  source_addresses = [data.panos_address.web_11111111.name]\n}\n",
     }
     assert sanity_checks.check_references(files) == []
 
 
 def test_a_plain_reference_cannot_resolve_to_a_data_block():
     files = {
-        'a.tf': GOOD_BLOCK,
-        'b.tf': 'resource "panos_security_policy_rules" "r_11111111" {\n  location = { shared = {} }\n'
-                '  source_addresses = [panos_address.web_11111111.name]\n}\n',
+        "a.tf": GOOD_BLOCK,
+        "b.tf": 'resource "panos_security_policy_rules" "r_11111111" {\n  location = { shared = {} }\n'
+        "  source_addresses = [panos_address.web_11111111.name]\n}\n",
     }
     findings = sanity_checks.check_references(files)
     assert len(findings) == 1
-    assert findings[0].detail == 'dangling reference panos_address.web_11111111.name'
+    assert findings[0].detail == "dangling reference panos_address.web_11111111.name"
 
 
 def test_a_data_reference_to_a_block_the_run_did_not_write_is_dangling():
-    files = {'a.tf': 'resource "panos_security_policy_rules" "r_11111111" {\n  location = { shared = {} }\n'
-                     '  source_addresses = [data.panos_address.ghost.name]\n}\n'}
+    files = {
+        "a.tf": 'resource "panos_security_policy_rules" "r_11111111" {\n  location = { shared = {} }\n'
+        "  source_addresses = [data.panos_address.ghost.name]\n}\n"
+    }
     findings = sanity_checks.check_references(files)
     assert len(findings) == 1
-    assert findings[0].detail == 'dangling reference data.panos_address.ghost.name'
+    assert findings[0].detail == "dangling reference data.panos_address.ghost.name"
 
 
 # --- 4. the emit path --------------------------------------------------------
+
 
 def test_a_run_that_declares_no_read_through_scope_writes_the_golden_bytes(tmp_path):
     """The default keeps the plain-string rule, so the committed goldens are unchanged
     and no read-through file is written."""
     result = _run(SAMPLE_CONFIG, tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
-    golden = tf_bytes(GOLDEN_DIR / 'sample')
+    golden = tf_bytes(GOLDEN_DIR / "sample")
     generated = tf_bytes(tmp_path)
     # Both sets must hold content, or the comparison measures nothing.
     # The tool reads inputs through tests/conftest.py (see the module header).
-    assert golden, 'the golden case holds no .tf content to compare'
-    assert generated, 'the run wrote no .tf content'
+    assert golden, "the golden case holds no .tf content to compare"
+    assert generated, "the run wrote no .tf content"
     assert generated == golden
     assert READ_THROUGH not in _files(tmp_path)
 
 
 def test_a_name_outside_the_run_becomes_one_data_block(tmp_path):
-    result = _run(SAMPLE_CONFIG, tmp_path, ('--data-blocks', 'panos_address'))
+    result = _run(SAMPLE_CONFIG, tmp_path, ("--data-blocks", "panos_address"))
     assert result.returncode == 0, result.stdout + result.stderr
     files = _files(tmp_path)
     blocks = sanity_checks.data_blocks({READ_THROUGH: file_text(files, READ_THROUGH)})
-    assert blocks, 'the run wrote no data block'
+    assert blocks, "the run wrote no data block"
     for block in blocks:
         # A block holds the type, the name, and the location, and nothing else.
-        keys = sorted(set(re.findall(r'^  ([A-Za-z0-9_]+) =', block.body, re.M)))
-        assert keys == ['location', 'name'], block.render()
-        assert f'data.{block.rtype}.{block.local}.name' in '\n'.join(files.values())
+        keys = sorted(set(re.findall(r"^  ([A-Za-z0-9_]+) =", block.body, re.M)))
+        assert keys == ["location", "name"], block.render()
+        assert f"data.{block.rtype}.{block.local}.name" in "\n".join(files.values())
     # The reference sites name the blocks the file wrote, so the gate resolves them.
     assert sanity_checks.check_references(files) == []
 
 
 def test_a_name_the_referrers_unit_declares_stays_a_resource_reference(gen):
     """A read-through scope does not turn a name the referrer's own unit declared into a block."""
-    entry = {'name': 'Web', 'device_group': 'DG-A'}
-    local = gen.declare_resource_name('Web', 'panos_address', entry, context='DG-A')
-    assert str(gen.name_ref('Web', ADDR_SCOPES, entry)) == f'panos_address.{local}.name'
+    entry = {"name": "Web", "device_group": "DG-A"}
+    local = gen.declare_resource_name("Web", "panos_address", entry, context="DG-A")
+    assert str(gen.name_ref("Web", ADDR_SCOPES, entry)) == f"panos_address.{local}.name"
     assert gen._data_blocks == {}
 
 
 def test_a_name_another_unit_declares_is_the_plain_name_not_a_block(gen):
     """F6.10.2, `docs/CODEBASE_ASSEMBLY.md` §5 rule 5: the read-through branch answers a name outside
     the codebase, so a name one unit declares and another unit uses stays the plain name."""
-    gen.declare_resource_name('Web', 'panos_address', {'name': 'Web', 'device_group': 'DG-A'},
-                              context='DG-A')
-    referrer = {'name': 'rule-1', 'device_group': 'DG-B'}
-    assert gen.name_ref('Web', ADDR_SCOPES, referrer) == 'Web'
+    gen.declare_resource_name("Web", "panos_address", {"name": "Web", "device_group": "DG-A"}, context="DG-A")
+    referrer = {"name": "rule-1", "device_group": "DG-B"}
+    assert gen.name_ref("Web", ADDR_SCOPES, referrer) == "Web"
     assert gen._data_blocks == {}
 
 
 def test_two_reference_sites_in_one_unit_share_one_block(gen):
-    first = gen.name_ref('Ghost', ADDR_SCOPES, {'name': 'rule-1', 'device_group': 'DG-A'})
-    again = gen.name_ref('Ghost', ADDR_SCOPES, {'name': 'rule-2', 'device_group': 'DG-A'})
+    first = gen.name_ref("Ghost", ADDR_SCOPES, {"name": "rule-1", "device_group": "DG-A"})
+    again = gen.name_ref("Ghost", ADDR_SCOPES, {"name": "rule-2", "device_group": "DG-A"})
     assert str(first) == str(again)
     assert len(gen._data_blocks) == 1
 
 
 def test_two_units_write_two_blocks(gen):
-    first = gen.name_ref('Ghost', ADDR_SCOPES, {'name': 'rule-1', 'device_group': 'DG-A'})
-    second = gen.name_ref('Ghost', ADDR_SCOPES, {'name': 'rule-2', 'device_group': 'DG-B'})
+    first = gen.name_ref("Ghost", ADDR_SCOPES, {"name": "rule-1", "device_group": "DG-A"})
+    second = gen.name_ref("Ghost", ADDR_SCOPES, {"name": "rule-2", "device_group": "DG-B"})
     assert str(first) != str(second)
     assert len(gen._data_blocks) == 2
     # The location is the block's own unit, so the reader can tell the two apart.
     units = {key[1] for key in gen._data_blocks}
-    assert units == {unit_manifest.facts_of({'name': 'rule-1', 'device_group': 'DG-A'}),
-                     unit_manifest.facts_of({'name': 'rule-2', 'device_group': 'DG-B'})}
+    assert units == {
+        unit_manifest.facts_of({"name": "rule-1", "device_group": "DG-A"}),
+        unit_manifest.facts_of({"name": "rule-2", "device_group": "DG-B"}),
+    }
 
 
 def test_a_name_two_devices_declares_stays_a_plain_name_for_a_third_unit(gen):
     """F3.5 and F3.6 are one case of the per-unit rule: two devices are two units, so each device
     resolves its own copy, and the read-through branch still never runs for a name the run declares."""
-    fw1 = {'name': 'Web', 'device_group': 'DG-A', 'vsys_device': 'fw-1'}
-    fw2 = {'name': 'Web', 'device_group': 'DG-A', 'vsys_device': 'fw-2'}
-    one = gen.declare_resource_name('Web', 'panos_address', fw1, context='DG-A')
-    two = gen.declare_resource_name('Web', 'panos_address', fw2, context='DG-A')
+    fw1 = {"name": "Web", "device_group": "DG-A", "vsys_device": "fw-1"}
+    fw2 = {"name": "Web", "device_group": "DG-A", "vsys_device": "fw-2"}
+    one = gen.declare_resource_name("Web", "panos_address", fw1, context="DG-A")
+    two = gen.declare_resource_name("Web", "panos_address", fw2, context="DG-A")
     assert one != two
-    assert gen.name_ref('Web', ADDR_SCOPES, fw1).expr == f'panos_address.{one}.name'
-    assert gen.name_ref('Web', ADDR_SCOPES, fw2).expr == f'panos_address.{two}.name'
+    assert gen.name_ref("Web", ADDR_SCOPES, fw1).expr == f"panos_address.{one}.name"
+    assert gen.name_ref("Web", ADDR_SCOPES, fw2).expr == f"panos_address.{two}.name"
     # A referrer that names neither device keeps the plain name and writes no block.
-    assert gen.name_ref('Web', ADDR_SCOPES, {'name': 'rule-1', 'device_group': 'DG-A'}) == 'Web'
+    assert gen.name_ref("Web", ADDR_SCOPES, {"name": "rule-1", "device_group": "DG-A"}) == "Web"
     assert gen._data_blocks == {}
 
 
 def test_the_block_type_is_the_first_opted_in_scope_in_the_lookup_order(gen):
     """ADDR_SCOPES is (object, group). Only the group is opted in here, so the block type
     is the group."""
-    gen.data_scopes = frozenset({'panos_address_group'})
-    referrer = {'name': 'rule-1', 'device_group': 'DG-A'}
-    assert str(gen.name_ref('Ghost', ADDR_SCOPES, referrer)).startswith('data.panos_address_group.')
+    gen.data_scopes = frozenset({"panos_address_group"})
+    referrer = {"name": "rule-1", "device_group": "DG-A"}
+    assert str(gen.name_ref("Ghost", ADDR_SCOPES, referrer)).startswith("data.panos_address_group.")
 
 
 def test_a_data_block_enter_no_declaration_index(tmp_path):
     """The name rule is one rule (F2.7, F5.5), so a read-through block takes the sanitized name plus the
     digest of the identity the reference site named, and a block a reference site creates enters no
     declaration index (F6.10.2)."""
-    gen = TerraformGenerator(str(tmp_path), data_scopes={'panos_address'})
-    referrer = {'name': 'rule-1', 'device_group': 'DG-A'}
-    local = str(gen.name_ref('Web', ADDR_SCOPES, referrer)).split('.')[2]
-    assert re.fullmatch(r'web_[0-9a-f]{8}', local), local
+    gen = TerraformGenerator(str(tmp_path), data_scopes={"panos_address"})
+    referrer = {"name": "rule-1", "device_group": "DG-A"}
+    local = str(gen.name_ref("Web", ADDR_SCOPES, referrer)).split(".")[2]
+    assert re.fullmatch(r"web_[0-9a-f]{8}", local), local
     # The identity the site named is the unit, so a second run that reads the same referrer writes the
     # same block address.
-    same_run = TerraformGenerator(str(tmp_path / 'same'), data_scopes={'panos_address'})
-    assert str(same_run.name_ref('Web', ADDR_SCOPES, referrer)).split('.')[2] == local
+    same_run = TerraformGenerator(str(tmp_path / "same"), data_scopes={"panos_address"})
+    assert str(same_run.name_ref("Web", ADDR_SCOPES, referrer)).split(".")[2] == local
     # A site in another unit names another identity, so it cannot take this block's address.
-    other_unit = TerraformGenerator(str(tmp_path / 'other'), data_scopes={'panos_address'})
-    assert str(other_unit.name_ref('Web', ADDR_SCOPES,
-                                   {'name': 'rule-2', 'device_group': 'DG-B'})).split('.')[2] != local
-    assert gen._declaration_index == {}, 'a data block is not a declaration index entry'
+    other_unit = TerraformGenerator(str(tmp_path / "other"), data_scopes={"panos_address"})
+    assert (
+        str(other_unit.name_ref("Web", ADDR_SCOPES, {"name": "rule-2", "device_group": "DG-B"})).split(".")[2] != local
+    )
+    assert gen._declaration_index == {}, "a data block is not a declaration index entry"
 
 
 def test_the_data_path_targets_only_types_that_declare_name():
@@ -355,57 +370,61 @@ def test_the_data_path_targets_only_types_that_declare_name():
 
 # --- 5. the CLI opt-in -------------------------------------------------------
 
+
 def test_a_data_source_that_answers_no_reference_is_an_argument_error(tmp_path):
     """A data source outside the reference sets cannot answer a name a reference needs,
     so the CLI refuses it. Every reference scope declares `name` (pinned by
     `test_the_data_path_targets_only_types_that_declare_name`), so the `name` half of the
     rule cannot fire today: it stands for a reference scope a future feature adds."""
-    result = _run(SAMPLE_CONFIG, tmp_path, ('--data-blocks', 'panos_general_settings'))
+    result = _run(SAMPLE_CONFIG, tmp_path, ("--data-blocks", "panos_general_settings"))
     assert result.returncode == 2
-    assert 'answers no reference' in result.stderr
+    assert "answers no reference" in result.stderr
 
 
 def test_a_scope_outside_the_reference_sets_is_an_argument_error(tmp_path):
-    result = _run(SAMPLE_CONFIG, tmp_path, ('--data-blocks', 'panos_zone_protection_profile'))
+    result = _run(SAMPLE_CONFIG, tmp_path, ("--data-blocks", "panos_zone_protection_profile"))
     assert result.returncode == 2
-    assert 'a scope a reference resolves against' in result.stderr
+    assert "a scope a reference resolves against" in result.stderr
 
 
 def test_data_blocks_needs_at_least_one_scope(tmp_path):
-    result = _run(SAMPLE_CONFIG, tmp_path, ('--data-blocks', ' '))
+    result = _run(SAMPLE_CONFIG, tmp_path, ("--data-blocks", " "))
     assert result.returncode == 2
-    assert 'needs at least one scope' in result.stderr
+    assert "needs at least one scope" in result.stderr
 
 
 def test_a_list_and_a_repeated_argument_are_both_read(tmp_path):
-    result = _run(SAMPLE_CONFIG, tmp_path, ('--data-blocks', 'panos_address,panos_zone',
-                                           '--data-blocks', 'panos_service'))
+    result = _run(
+        SAMPLE_CONFIG, tmp_path, ("--data-blocks", "panos_address,panos_zone", "--data-blocks", "panos_service")
+    )
     assert result.returncode == 0, result.stdout + result.stderr
-    readme = (tmp_path / 'README.md').read_text(encoding='utf-8')
-    assert 'read-through scopes (panos_address, panos_service, panos_zone)' in readme
+    readme = (tmp_path / "README.md").read_text(encoding="utf-8")
+    assert "read-through scopes (panos_address, panos_service, panos_zone)" in readme
 
 
 # --- 6. the reports ----------------------------------------------------------
+
 
 def test_no_coverage_section_names_a_read_through_name(tmp_path):
     """The entry report, the property scan, and the shadow scan read entries the parse
     captured, so a read-through name cannot enter them: the report bytes are the same
     with and without the opt-in."""
-    plain = _run(SAMPLE_CONFIG, tmp_path / 'plain')
-    read = _run(SAMPLE_CONFIG, tmp_path / 'read', ('--data-blocks', 'panos_address'))
+    plain = _run(SAMPLE_CONFIG, tmp_path / "plain")
+    read = _run(SAMPLE_CONFIG, tmp_path / "read", ("--data-blocks", "panos_address"))
     assert plain.returncode == 0 and read.returncode == 0
-    for name in ('CONVERSION_REPORT.txt', 'SOURCE.txt'):
-        assert (tmp_path / 'plain' / name).read_bytes() == (tmp_path / 'read' / name).read_bytes(), name
-    for name in ('any', 'Public-IP'):
-        assert name not in (tmp_path / 'read' / 'CONVERSION_REPORT.txt').read_text(), name
+    for name in ("CONVERSION_REPORT.txt", "SOURCE.txt"):
+        assert (tmp_path / "plain" / name).read_bytes() == (tmp_path / "read" / name).read_bytes(), name
+    for name in ("any", "Public-IP"):
+        assert name not in (tmp_path / "read" / "CONVERSION_REPORT.txt").read_text(), name
 
 
 def test_the_property_scan_records_no_read_through_name(converter_module, tmp_path):
     """The read-through path reads no captured object, so the property record is the same
     for both runs."""
-    plain = run_pipeline(converter_module, None, tmp_path / 'plain', extra_args=(str(SAMPLE_CONFIG),))
-    read = run_pipeline(converter_module, None, tmp_path / 'read',
-                        extra_args=(str(SAMPLE_CONFIG), '--data-blocks', 'panos_address'))
+    plain = run_pipeline(converter_module, None, tmp_path / "plain", extra_args=(str(SAMPLE_CONFIG),))
+    read = run_pipeline(
+        converter_module, None, tmp_path / "read", extra_args=(str(SAMPLE_CONFIG), "--data-blocks", "panos_address")
+    )
     assert plain is not None and read is not None
     assert plain.ledger.rows() == read.ledger.rows()
     assert plain.ledger.property_findings() == read.ledger.property_findings()
@@ -415,63 +434,65 @@ def test_the_manual_setup_report_can_name_a_read_through_block(tmp_path):
     """The one report that may name a read-through name is the manual setup report,
     through the existing F3.5 and F3.6 location rules: a read-through block whose location
     cannot be resolved is reported by the rule that already reports it."""
-    result = _run(SAMPLE_CONFIG, tmp_path, ('--data-blocks', 'panos_zone'))
+    result = _run(SAMPLE_CONFIG, tmp_path, ("--data-blocks", "panos_zone"))
     assert result.returncode == 0, result.stdout + result.stderr
-    manual = (tmp_path / 'MANUAL_SETUP_REPORT.txt').read_text(encoding='utf-8')
-    report = (tmp_path / 'CONVERSION_REPORT.txt').read_text(encoding='utf-8')
+    manual = (tmp_path / "MANUAL_SETUP_REPORT.txt").read_text(encoding="utf-8")
+    report = (tmp_path / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
     assert 'panos_zone "Trust"' in manual
-    assert 'Trust' not in report
+    assert "Trust" not in report
 
 
 # --- 7. the README label -----------------------------------------------------
 
+
 def test_a_read_through_run_labels_itself(tmp_path):
-    result = _run(SAMPLE_CONFIG, tmp_path, ('--data-blocks', 'panos_address'))
+    result = _run(SAMPLE_CONFIG, tmp_path, ("--data-blocks", "panos_address"))
     assert result.returncode == 0, result.stdout + result.stderr
-    readme = (tmp_path / 'README.md').read_text(encoding='utf-8')
-    assert '## Read-through data blocks' in readme
-    assert 'resolves at plan time' in readme
+    readme = (tmp_path / "README.md").read_text(encoding="utf-8")
+    assert "## Read-through data blocks" in readme
+    assert "resolves at plan time" in readme
     count = len(sanity_checks.data_blocks(_files(tmp_path)))
-    assert f'with {count} data blocks' in readme
+    assert f"with {count} data blocks" in readme
     assert count > 0
 
 
 def test_a_run_that_declares_no_read_through_scope_writes_the_same_readme(tmp_path):
     """The label is the only difference a read-through run makes to the README."""
-    plain = _run(SAMPLE_CONFIG, tmp_path / 'plain')
-    read = _run(SAMPLE_CONFIG, tmp_path / 'read', ('--data-blocks', 'panos_address'))
+    plain = _run(SAMPLE_CONFIG, tmp_path / "plain")
+    read = _run(SAMPLE_CONFIG, tmp_path / "read", ("--data-blocks", "panos_address"))
     assert plain.returncode == 0 and read.returncode == 0
-    baseline = (tmp_path / 'plain' / 'README.md').read_text(encoding='utf-8')
-    label = (tmp_path / 'read' / 'README.md').read_text(encoding='utf-8')
-    assert 'Read-through data blocks' not in baseline
-    head, tail = baseline.split('## Important Notes')
+    baseline = (tmp_path / "plain" / "README.md").read_text(encoding="utf-8")
+    label = (tmp_path / "read" / "README.md").read_text(encoding="utf-8")
+    assert "Read-through data blocks" not in baseline
+    head, tail = baseline.split("## Important Notes")
     assert label.startswith(head)
     assert label.endswith(tail)
 
 
 # --- 8. determinism and the exit code ----------------------------------------
 
+
 def test_the_read_through_file_is_byte_identical_between_runs(tmp_path):
-    args = ('--data-blocks', 'panos_address,panos_zone')
-    first = _run(SAMPLE_CONFIG, tmp_path / 'a', args)
-    second = _run(SAMPLE_CONFIG, tmp_path / 'b', args)
+    args = ("--data-blocks", "panos_address,panos_zone")
+    first = _run(SAMPLE_CONFIG, tmp_path / "a", args)
+    second = _run(SAMPLE_CONFIG, tmp_path / "b", args)
     assert first.returncode == 0 and second.returncode == 0
     # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): `read_through.tf` is a unit-set file, so the two runs are
     # compared on the parts each unit wrote, keyed by the same paths. The root-set files stay at the root.
-    assert parts(tf_files(tmp_path / 'a'), READ_THROUGH) == parts(tf_files(tmp_path / 'b'), READ_THROUGH), \
-        READ_THROUGH
-    for name in ('SANITY_REPORT.txt', 'CONVERSION_REPORT.txt', 'README.md'):
-        assert (tmp_path / 'a' / name).read_bytes() == (tmp_path / 'b' / name).read_bytes(), name
+    assert parts(tf_files(tmp_path / "a"), READ_THROUGH) == parts(tf_files(tmp_path / "b"), READ_THROUGH), READ_THROUGH
+    for name in ("SANITY_REPORT.txt", "CONVERSION_REPORT.txt", "README.md"):
+        assert (tmp_path / "a" / name).read_bytes() == (tmp_path / "b" / name).read_bytes(), name
 
 
 def test_a_data_block_that_breaks_the_table_fails_the_gate(tmp_path):
     """The exit code is still the gate's decision (F4.1), and the new rule is a FAIL."""
-    out = tmp_path / 'out'
-    result = _run(SAMPLE_CONFIG, out, ('--data-blocks', 'panos_address'))
+    out = tmp_path / "out"
+    result = _run(SAMPLE_CONFIG, out, ("--data-blocks", "panos_address"))
     assert result.returncode == 0, result.stdout + result.stderr
     (out / READ_THROUGH).write_text(
-        'data "panos_address" "web_11111111" {\n  name = "Web"\n'
-        '  location = { template = { name = "T-1" } }\n}\n', encoding='utf-8')
+        'data "panos_address" "web_11111111" {\n  name = "Web"\n  location = { template = { name = "T-1" } }\n}\n',
+        encoding="utf-8",
+    )
     report = sanity_checks.run_checks(out)
     assert report.failed, report.render()
-    assert report.result_of('data_blocks') == 'FAIL'
+    assert report.result_of("data_blocks") == "FAIL"

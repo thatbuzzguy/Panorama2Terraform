@@ -5,6 +5,7 @@ config structure. These tests pin down the parser data contract that the
 Terraform generator depends on.
 """
 
+
 def _parser(make_parser, fixture_name):
     return make_parser(fixture_name)
 

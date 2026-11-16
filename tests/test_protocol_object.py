@@ -44,12 +44,12 @@ import site_data
 import unit_manifest
 from conftest import FIXTURES_DIR, GOLDEN_DIR, file_text, run_pipeline, run_script, tf_files
 
-CONVERTER = 'panorama_to_terraform.py'
+CONVERTER = "panorama_to_terraform.py"
 
 
 def _run(fixture: str, out_dir) -> dict:
     """Run the converter on one fixture and return the output files as text."""
-    result = run_script(CONVERTER, str(FIXTURES_DIR / fixture), '--output-dir', str(out_dir))
+    result = run_script(CONVERTER, str(FIXTURES_DIR / fixture), "--output-dir", str(out_dir))
     assert result.returncode == 0, result.stdout + result.stderr
     # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the `.tf` set is read as the gate reads it, so a `.tf`
     # entry holds the parts the run wrote for every unit, in path order. A report is a codebase root-set
@@ -58,7 +58,7 @@ def _run(fixture: str, out_dir) -> dict:
     files = {Path(key).name: file_text(tf, Path(key).name) for key in tf}
     for path in sorted(Path(out_dir).iterdir()):
         if path.is_file() and path.name not in files:
-            files[path.name] = path.read_text(encoding='utf-8')
+            files[path.name] = path.read_text(encoding="utf-8")
     return files
 
 
@@ -68,8 +68,7 @@ def _block(protocol: str) -> dict:
     The rule reads the file text, so the tests that pin a finding state the block the gate reads: the
     field at the block's own level and the closing brace at column 0.
     """
-    return {'vr.tf': 'resource "panos_virtual_router" "default_00000000" {\n'
-                     '  name = "default"\n' + protocol + '}\n'}
+    return {"vr.tf": 'resource "panos_virtual_router" "default_00000000" {\n  name = "default"\n' + protocol + "}\n"}
 
 
 def _findings(protocol: str) -> list:
@@ -78,9 +77,9 @@ def _findings(protocol: str) -> list:
 
 def _schema_node(provider_schema: dict, path: str) -> dict:
     """The provider schema attribute the table path names, walked from `protocol`."""
-    node = provider_schema[resource_mapping.PROTOCOL_TYPE]['block']['attributes'][resource_mapping.PROTOCOL_FIELD]
-    for part in path.split('/')[1:]:
-        node = node['nested_type']['attributes'][part]
+    node = provider_schema[resource_mapping.PROTOCOL_TYPE]["block"]["attributes"][resource_mapping.PROTOCOL_FIELD]
+    for part in path.split("/")[1:]:
+        node = node["nested_type"]["attributes"][part]
     return node
 
 
@@ -91,11 +90,11 @@ def _schema_level(node: dict) -> str:
     whose attributes are the alternatives, and the test checks the mapping's keys against the schema instead
     of guessing a word for it.
     """
-    nested = node.get('nested_type')
+    nested = node.get("nested_type")
     if nested is None:
-        declared = node.get('type')
-        return 'list' if isinstance(declared, list) else declared
-    return nested['nesting_mode']
+        declared = node.get("type")
+        return "list" if isinstance(declared, list) else declared
+    return nested["nesting_mode"]
 
 
 # A `SHAPE_WORDS` word as the schema states it, read through the one definition `resource_mapping` owns.
@@ -103,6 +102,7 @@ WORD_TO_SCHEMA = resource_mapping.SHAPE_TO_SCHEMA
 
 
 # --- 1. the table against the live provider schema ---------------------------
+
 
 def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
     """Every row, field, shape word, `selects` key, and `sensitive` flag is a fact the provider declares.
@@ -126,32 +126,32 @@ def test_the_shape_table_is_the_measured_provider_shape(provider_schema):
     """
     for path, row in sorted(resource_mapping.PROTOCOL_SHAPE.items()):
         node = _schema_node(provider_schema, path)
-        word = WORD_TO_SCHEMA.get(row['shape'], row['shape'])
-        assert _schema_level(node) == word, (path, row['shape'], _schema_level(node))
-        attributes = node['nested_type'].get('attributes', {})
-        assert set(row['fields']) <= set(attributes), (path, row['fields'])
-        for field, shape_word in row['fields'].items():
+        word = WORD_TO_SCHEMA.get(row["shape"], row["shape"])
+        assert _schema_level(node) == word, (path, row["shape"], _schema_level(node))
+        attributes = node["nested_type"].get("attributes", {})
+        assert set(row["fields"]) <= set(attributes), (path, row["fields"])
+        for field, shape_word in row["fields"].items():
             assert _schema_level(attributes[field]) == WORD_TO_SCHEMA.get(shape_word, shape_word), (path, field)
         # A field the table states as `block` is a level the export states by presence: the schema gives it
         # no attribute, so the provider reads the empty object, which is what the reader reads back.
-        for field, shape_word in row['fields'].items():
-            if shape_word == 'block':
-                assert _schema_level(attributes[field]) == 'single', (path, field)
-                assert not attributes[field]['nested_type'].get('attributes'), (path, field)
+        for field, shape_word in row["fields"].items():
+            if shape_word == "block":
+                assert _schema_level(attributes[field]) == "single", (path, field)
+                assert not attributes[field]["nested_type"].get("attributes"), (path, field)
         # F7.1 rule: the fields the row declares as sensitive are the ones the provider marks sensitive.
-        sensitive = {field for field, attribute in attributes.items() if attribute.get('sensitive')}
-        assert row['sensitive'] == frozenset(sensitive & set(row['fields'])), (path, row['sensitive'])
+        sensitive = {field for field, attribute in attributes.items() if attribute.get("sensitive")}
+        assert row["sensitive"] == frozenset(sensitive & set(row["fields"])), (path, row["sensitive"])
         # F7.12: `selects` is the one place the table states a choice, so each selected key is an attribute the
         # provider declares for the level, and each is the field the row states or the row the table states for
         # it. A `one_of` row states the choice as every attribute its level declares, because the choice is the
         # whole value; a row that also states other fields states the choice as part of them, so `selects` is a
         # subset of the attributes.
-        if row['selects']:
-            assert set(row['selects'].values()) <= set(attributes), (path, row['selects'])
-            for key in row['selects'].values():
-                assert key in row['fields'] or f'{path}/{key}' in resource_mapping.PROTOCOL_SHAPE, (path, key)
-            if row['shape'] == 'one_of':
-                assert set(row['selects'].values()) == set(attributes), (path, row['selects'])
+        if row["selects"]:
+            assert set(row["selects"].values()) <= set(attributes), (path, row["selects"])
+            for key in row["selects"].values():
+                assert key in row["fields"] or f"{path}/{key}" in resource_mapping.PROTOCOL_SHAPE, (path, key)
+            if row["shape"] == "one_of":
+                assert set(row["selects"].values()) == set(attributes), (path, row["selects"])
 
 
 def test_the_sensitive_rows_are_the_reference_only_names():
@@ -164,11 +164,12 @@ def test_the_sensitive_rows_are_the_reference_only_names():
     # F7.14: the two tables that state a `sensitive` fact are the protocol table and the certificate table, so
     # the pin reads both through `ShapeTable` and names no field of its own.
     tables = (resource_mapping.PROTOCOL_TABLE, resource_mapping.CERTIFICATE_TABLE)
-    declared = {field for table in tables for row in table.rows.values() for field in row['sensitive']}
-    reference_only = {field for field, row in resource_mapping.VALUE_VARIABLES.items()
-                      if row == resource_mapping.REFERENCE_ONLY}
+    declared = {field for table in tables for row in table.rows.values() for field in row["sensitive"]}
+    reference_only = {
+        field for field, row in resource_mapping.VALUE_VARIABLES.items() if row == resource_mapping.REFERENCE_ONLY
+    }
     assert declared == reference_only, (declared, reference_only)
-    assert declared == {'secret', 'key', 'password', 'private_key', 'passphrase'}, declared
+    assert declared == {"secret", "key", "password", "private_key", "passphrase"}, declared
 
 
 def test_the_table_is_the_only_shape_owner(converter_module):
@@ -186,52 +187,95 @@ def test_the_table_is_the_only_shape_owner(converter_module):
     """
     # The three shape tables are shape owners, so a field name written as a string constant in a reader, an
     # emitter or a gate branch is a second owner for any of them (F7.8, F7.14).
-    fields = {field for table in (resource_mapping.PROTOCOL_TABLE, resource_mapping.FILTER_TABLE,
-                                  resource_mapping.CERTIFICATE_TABLE)
-              for row in table.rows.values() for field in row['fields']}
+    fields = {
+        field
+        for table in (
+            resource_mapping.PROTOCOL_TABLE,
+            resource_mapping.FILTER_TABLE,
+            resource_mapping.CERTIFICATE_TABLE,
+        )
+        for row in table.rows.values()
+        for field in row["fields"]
+    }
     # The static-route emitter is not a protocol owner: `metric` is the route's own field there, and the row
     # `COVERAGE_MATRIX` states for it names that shape. `name` is the field the rule reads for the entry
     # name, and `protocol` is the table's own `PROTOCOL_FIELD`. `interfaces` is the router's own field there,
     # the flat list of interface names the matrix row for `panos_virtual_router` declares, which is a
     # different shape from the `protocol/rip` field the table states (F7.5).
-    static_route = [row for row in resource_mapping.COVERAGE_MATRIX
-                    if row['resource'] == 'panos_virtual_router_static_route_ipv4'][0]
+    static_route = [
+        row for row in resource_mapping.COVERAGE_MATRIX if row["resource"] == "panos_virtual_router_static_route_ipv4"
+    ][0]
     # `entry` is the element the reader walks for an entry list, and it is also a schema attribute name for a
     # nested entry list (F7.8), so the reader has to state it.
-    allowed = (set(resource_mapping.SHAPE_WORDS) | {'name', 'entry', resource_mapping.PROTOCOL_FIELD}
-               | set(static_route['properties']) | {'interfaces'})
-    owners = [getattr(sanity_checks, name, None) for name in
-              ('check_protocol_object', 'check_filter_blocks', 'check_certificate_blocks',
-               '_shape_level_findings', '_shape_field_findings', '_shape_choice_findings', 'value_shape')]
+    allowed = (
+        set(resource_mapping.SHAPE_WORDS)
+        | {"name", "entry", resource_mapping.PROTOCOL_FIELD}
+        | set(static_route["properties"])
+        | {"interfaces"}
+    )
+    owners = [
+        getattr(sanity_checks, name, None)
+        for name in (
+            "check_protocol_object",
+            "check_filter_blocks",
+            "check_certificate_blocks",
+            "_shape_level_findings",
+            "_shape_field_findings",
+            "_shape_choice_findings",
+            "value_shape",
+        )
+    ]
     generator = converter_module.TerraformGenerator
     parser = converter_module.PanoramaParser
-    owners += [getattr(generator, name) for name in ('generate_virtual_routers', '_protocol_fields', 'printed_value')]
-    owners += [getattr(parser, name) for name in
-               ('_parse_router', 'parse_bgp', 'parse_ospf', 'parse_ospfv3', 'parse_rip',
-                'parse_redist_profile', 'parse_redist_profile_ipv6', '_protocol_areas',
-                '_protocol_level', '_protocol_field', '_protocol_choice', '_protocol_interface',
-                '_protocol_field_name', '_protocol_xml_name', '_protocol_entries', '_protocol_body',
-                '_protocol_branch', '_protocol_presence_choice', '_protocol_presence_fields',
-                '_protocol_entry_level')]
+    owners += [getattr(generator, name) for name in ("generate_virtual_routers", "_protocol_fields", "printed_value")]
+    owners += [
+        getattr(parser, name)
+        for name in (
+            "_parse_router",
+            "parse_bgp",
+            "parse_ospf",
+            "parse_ospfv3",
+            "parse_rip",
+            "parse_redist_profile",
+            "parse_redist_profile_ipv6",
+            "_protocol_areas",
+            "_protocol_level",
+            "_protocol_field",
+            "_protocol_choice",
+            "_protocol_interface",
+            "_protocol_field_name",
+            "_protocol_xml_name",
+            "_protocol_entries",
+            "_protocol_body",
+            "_protocol_branch",
+            "_protocol_presence_choice",
+            "_protocol_presence_fields",
+            "_protocol_entry_level",
+        )
+    ]
     offenders = {}
     for owner in owners:
         for node in ast.walk(ast.parse(textwrap.dedent(inspect.getsource(owner)))):
-            if isinstance(node, ast.Constant) and isinstance(node.value, str) \
-                    and node.value in fields and node.value not in allowed:
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and node.value in fields
+                and node.value not in allowed
+            ):
                 offenders.setdefault(owner.__name__, set()).add(node.value)
     assert offenders == {}, offenders
     # The two spelling rules are one function each: the field name to element name rule, and the field name a
     # table path names, which is the key the captured dict holds.
-    assert parser._protocol_xml_name('address_family_identifier') == 'address-family-identifier'
-    assert parser._protocol_xml_name('spf_calculation_delay') == 'spf-calculation-delay'
-    assert parser._protocol_field_name('protocol/ospfv3/export_rules') == 'export_rules'
+    assert parser._protocol_xml_name("address_family_identifier") == "address-family-identifier"
+    assert parser._protocol_xml_name("spf_calculation_delay") == "spf-calculation-delay"
+    assert parser._protocol_field_name("protocol/ospfv3/export_rules") == "export_rules"
     # F7.9: the same rule for the `ospf` level, which the row now states as an entry level.
-    assert parser._protocol_field_name('protocol/ospf/export_rules') == 'export_rules'
-    assert parser._protocol_field_name('protocol/ospf/area/interface/link_type') == 'link_type'
+    assert parser._protocol_field_name("protocol/ospf/export_rules") == "export_rules"
+    assert parser._protocol_field_name("protocol/ospf/area/interface/link_type") == "link_type"
     # F7.3: the provider spells one field name from an element name the `-` rule cannot produce, because it
     # splits the initialism, so `XML_NAME_EXCEPTIONS` is the one place that states it.
-    assert resource_mapping.XML_NAME_EXCEPTIONS == {'strict_l_s_a_checking': 'strict-lsa-checking'}
-    assert parser._protocol_xml_name('strict_l_s_a_checking') == 'strict-lsa-checking'
+    assert resource_mapping.XML_NAME_EXCEPTIONS == {"strict_l_s_a_checking": "strict-lsa-checking"}
+    assert parser._protocol_xml_name("strict_l_s_a_checking") == "strict-lsa-checking"
 
 
 def test_the_ospf_scalar_levels_are_rows_the_parse_reads():
@@ -247,28 +291,53 @@ def test_the_ospf_scalar_levels_are_rows_the_parse_reads():
     states them. `disable_transit_traffic` is the field the provider declares for `ospfv3` and not for `ospf`,
     so this row states no field for it.
     """
-    level = resource_mapping.protocol_row('protocol/ospf')
-    assert list(level['fields']) == [
-        'enable', 'router_id', 'allow_redist_default_route', 'reject_default_route', 'rfc1583',
-        'timers', 'global_bfd', 'graceful_restart', 'area', 'export_rules', 'auth_profile'], level['fields']
-    assert level['fields'] == {
-        'enable': 'bool', 'router_id': 'string', 'allow_redist_default_route': 'bool',
-        'reject_default_route': 'bool', 'rfc1583': 'bool', 'timers': 'object', 'global_bfd': 'object',
-        'graceful_restart': 'object', 'area': 'string_list', 'export_rules': 'string_list',
-        'auth_profile': 'string_list'}, level['fields']
-    for path, shape in (('protocol/ospf/timers', 'object'),
-                        ('protocol/ospf/global_bfd', 'object'),
-                        ('protocol/ospf/graceful_restart', 'object'),
-                        ('protocol/ospf/export_rules', 'string_list')):
-        assert resource_mapping.protocol_row(path)['shape'] == shape, path
+    level = resource_mapping.protocol_row("protocol/ospf")
+    assert list(level["fields"]) == [
+        "enable",
+        "router_id",
+        "allow_redist_default_route",
+        "reject_default_route",
+        "rfc1583",
+        "timers",
+        "global_bfd",
+        "graceful_restart",
+        "area",
+        "export_rules",
+        "auth_profile",
+    ], level["fields"]
+    assert level["fields"] == {
+        "enable": "bool",
+        "router_id": "string",
+        "allow_redist_default_route": "bool",
+        "reject_default_route": "bool",
+        "rfc1583": "bool",
+        "timers": "object",
+        "global_bfd": "object",
+        "graceful_restart": "object",
+        "area": "string_list",
+        "export_rules": "string_list",
+        "auth_profile": "string_list",
+    }, level["fields"]
+    for path, shape in (
+        ("protocol/ospf/timers", "object"),
+        ("protocol/ospf/global_bfd", "object"),
+        ("protocol/ospf/graceful_restart", "object"),
+        ("protocol/ospf/export_rules", "string_list"),
+    ):
+        assert resource_mapping.protocol_row(path)["shape"] == shape, path
         # None of these levels carries a field the provider marks sensitive, so no `VALUE_VARIABLES` row.
-        assert resource_mapping.protocol_row(path)['sensitive'] == frozenset(), path
-    rows = [row.path for row in container_coverage.CONTAINER_TABLE
-            if row.path.startswith('protocol/ospf/')]
-    assert sorted(rows) == ['protocol/ospf/area', 'protocol/ospf/area/interface',
-                             'protocol/ospf/area/interface/neighbor', 'protocol/ospf/area/virtual-link',
-                             'protocol/ospf/auth-profile', 'protocol/ospf/export-rules',
-                             'protocol/ospf/interface', 'protocol/ospf/range'], rows
+        assert resource_mapping.protocol_row(path)["sensitive"] == frozenset(), path
+    rows = [row.path for row in container_coverage.CONTAINER_TABLE if row.path.startswith("protocol/ospf/")]
+    assert sorted(rows) == [
+        "protocol/ospf/area",
+        "protocol/ospf/area/interface",
+        "protocol/ospf/area/interface/neighbor",
+        "protocol/ospf/area/virtual-link",
+        "protocol/ospf/auth-profile",
+        "protocol/ospf/export-rules",
+        "protocol/ospf/interface",
+        "protocol/ospf/range",
+    ], rows
 
 
 def test_the_ospfv3_scalar_levels_are_rows_the_parse_reads():
@@ -282,24 +351,37 @@ def test_the_ospfv3_scalar_levels_are_rows_the_parse_reads():
     F7.10 added the three `bool` fields the row did not state, so they are the fields after the levels, in the
     order the schema names them.
     """
-    level = resource_mapping.protocol_row('protocol/ospfv3')
-    assert [field for field in level['fields'] if field not in ('enable', 'router_id', 'area')] == [
-        'timers', 'global_bfd', 'graceful_restart', 'export_rules', 'auth_profile',
-        'allow_redist_default_route', 'disable_transit_traffic', 'reject_default_route'], level['fields']
-    for path, shape in (('protocol/ospfv3/timers', 'object'),
-                        ('protocol/ospfv3/global_bfd', 'object'),
-                        ('protocol/ospfv3/graceful_restart', 'object'),
-                        ('protocol/ospfv3/export_rules', 'string_list')):
-        assert resource_mapping.protocol_row(path)['shape'] == shape, path
+    level = resource_mapping.protocol_row("protocol/ospfv3")
+    assert [field for field in level["fields"] if field not in ("enable", "router_id", "area")] == [
+        "timers",
+        "global_bfd",
+        "graceful_restart",
+        "export_rules",
+        "auth_profile",
+        "allow_redist_default_route",
+        "disable_transit_traffic",
+        "reject_default_route",
+    ], level["fields"]
+    for path, shape in (
+        ("protocol/ospfv3/timers", "object"),
+        ("protocol/ospfv3/global_bfd", "object"),
+        ("protocol/ospfv3/graceful_restart", "object"),
+        ("protocol/ospfv3/export_rules", "string_list"),
+    ):
+        assert resource_mapping.protocol_row(path)["shape"] == shape, path
         # None of these levels carries a field the provider marks sensitive, so no `VALUE_VARIABLES` row.
-        assert resource_mapping.protocol_row(path)['sensitive'] == frozenset(), path
-    rows = [row.path for row in container_coverage.CONTAINER_TABLE
-            if row.path.startswith('protocol/ospfv3/')]
-    assert sorted(rows) == ['protocol/ospfv3/area', 'protocol/ospfv3/area/interface',
-                             'protocol/ospfv3/area/interface/neighbor',
-                             'protocol/ospfv3/area/virtual-link', 'protocol/ospfv3/auth-profile',
-                             'protocol/ospfv3/export-rules', 'protocol/ospfv3/interface',
-                             'protocol/ospfv3/range'], rows
+        assert resource_mapping.protocol_row(path)["sensitive"] == frozenset(), path
+    rows = [row.path for row in container_coverage.CONTAINER_TABLE if row.path.startswith("protocol/ospfv3/")]
+    assert sorted(rows) == [
+        "protocol/ospfv3/area",
+        "protocol/ospfv3/area/interface",
+        "protocol/ospfv3/area/interface/neighbor",
+        "protocol/ospfv3/area/virtual-link",
+        "protocol/ospfv3/auth-profile",
+        "protocol/ospfv3/export-rules",
+        "protocol/ospfv3/interface",
+        "protocol/ospfv3/range",
+    ], rows
 
 
 def test_the_rip_levels_are_rows_the_parse_reads():
@@ -315,35 +397,44 @@ def test_the_rip_levels_are_rows_the_parse_reads():
     states, and no row names `protocol/rip/auth-profile/md5` for the same reason: an entry inside an entry is
     not in the scan scope.
     """
-    level = resource_mapping.protocol_row('protocol/rip')
-    assert level['fields'] == {
-        'enable': 'bool', 'allow_redist_default_route': 'bool', 'reject_default_route': 'bool',
-        'timers': 'object', 'global_bfd': 'object', 'interfaces': 'string_list',
-        'export_rules': 'string_list', 'auth_profile': 'string_list'}, level['fields']
-    for path, shape in (('protocol/rip/timers', 'object'),
-                        ('protocol/rip/global_bfd', 'object'),
-                        ('protocol/rip/interfaces', 'string_list'),
-                        ('protocol/rip/interfaces/bfd', 'object'),
-                        ('protocol/rip/interfaces/default_route', 'one_of'),
-                        ('protocol/rip/interfaces/default_route/advertise', 'object'),
-                        ('protocol/rip/interfaces/default_route/disable', 'block'),
-                        ('protocol/rip/export_rules', 'string_list')):
+    level = resource_mapping.protocol_row("protocol/rip")
+    assert level["fields"] == {
+        "enable": "bool",
+        "allow_redist_default_route": "bool",
+        "reject_default_route": "bool",
+        "timers": "object",
+        "global_bfd": "object",
+        "interfaces": "string_list",
+        "export_rules": "string_list",
+        "auth_profile": "string_list",
+    }, level["fields"]
+    for path, shape in (
+        ("protocol/rip/timers", "object"),
+        ("protocol/rip/global_bfd", "object"),
+        ("protocol/rip/interfaces", "string_list"),
+        ("protocol/rip/interfaces/bfd", "object"),
+        ("protocol/rip/interfaces/default_route", "one_of"),
+        ("protocol/rip/interfaces/default_route/advertise", "object"),
+        ("protocol/rip/interfaces/default_route/disable", "block"),
+        ("protocol/rip/export_rules", "string_list"),
+    ):
         row = resource_mapping.protocol_row(path)
-        assert row['shape'] == shape, path
+        assert row["shape"] == shape, path
         # None of the levels `parse_rip` reads carries a field the provider marks sensitive, so no
         # `VALUE_VARIABLES` row for them.
-        assert row['sensitive'] == frozenset(), path
+        assert row["sensitive"] == frozenset(), path
     # F7.7: `parse_rip` reads the profile level, so the run prints the reference for `password`, and `key` is
     # the field the reader reads inside the `md5` entry.
-    assert resource_mapping.protocol_row('protocol/rip/auth_profile')['sensitive'] == frozenset({'password'})
-    assert resource_mapping.protocol_row('protocol/rip/auth_profile/md5')['sensitive'] == frozenset({'key'})
+    assert resource_mapping.protocol_row("protocol/rip/auth_profile")["sensitive"] == frozenset({"password"})
+    assert resource_mapping.protocol_row("protocol/rip/auth_profile/md5")["sensitive"] == frozenset({"key"})
     # `selects` is the one place that maps the value the export states to the key the print states, the same
     # mapping the two OSPF levels use for a default route.
-    assert resource_mapping.protocol_row('protocol/rip/interfaces/default_route')['selects'] == {
-        'advertise': 'advertise', 'no': 'disable'}
-    rows = [row.path for row in container_coverage.CONTAINER_TABLE if row.path.startswith('protocol/rip/')]
-    assert sorted(rows) == ['protocol/rip/auth-profile', 'protocol/rip/export-rules',
-                            'protocol/rip/interfaces'], rows
+    assert resource_mapping.protocol_row("protocol/rip/interfaces/default_route")["selects"] == {
+        "advertise": "advertise",
+        "no": "disable",
+    }
+    rows = [row.path for row in container_coverage.CONTAINER_TABLE if row.path.startswith("protocol/rip/")]
+    assert sorted(rows) == ["protocol/rip/auth-profile", "protocol/rip/export-rules", "protocol/rip/interfaces"], rows
 
 
 def test_the_redist_profile_rows_are_the_levels_the_two_methods_read():
@@ -358,47 +449,79 @@ def test_the_redist_profile_rows_are_the_levels_the_two_methods_read():
     The three entry levels are in the scan scope, so they have a container row naming the method that reads
     them, and the single levels inside an entry hold no entry, so no row names them.
     """
-    level = resource_mapping.protocol_row('protocol')
-    assert level['fields'] == {
-        'bgp': 'object', 'ospf': 'object', 'ospfv3': 'object', 'rip': 'object',
-        'redist_profile': 'string_list', 'redist_profile_ipv6': 'string_list'}, level['fields']
+    level = resource_mapping.protocol_row("protocol")
+    assert level["fields"] == {
+        "bgp": "object",
+        "ospf": "object",
+        "ospfv3": "object",
+        "rip": "object",
+        "redist_profile": "string_list",
+        "redist_profile_ipv6": "string_list",
+    }, level["fields"]
     # `name` is first because the entry name is the first field the block prints, and the fields a row gains
     # follow in the order the schema names them.
-    for path in ('protocol/redist_profile', 'protocol/redist_profile_ipv6'):
+    for path in ("protocol/redist_profile", "protocol/redist_profile_ipv6"):
         row = resource_mapping.protocol_row(path)
-        assert row['shape'] == 'string_list', path
-        assert list(row['fields']) == ['name', 'action', 'filter', 'priority'], row['fields']
-        assert row['selects'] == {} and row['sensitive'] == frozenset(), path
+        assert row["shape"] == "string_list", path
+        assert list(row["fields"]) == ["name", "action", "filter", "priority"], row["fields"]
+        assert row["selects"] == {} and row["sensitive"] == frozenset(), path
         # The scan scope row names the method the field name gives.
-        container = next(r for r in container_coverage.CONTAINER_TABLE if r.path == path.replace('_', '-'))
-        assert container.method == f'parse_{path.rsplit("/", 1)[-1]}', container
-    assert resource_mapping.protocol_row('protocol/redist_profile/action')['fields'] == {
-        'no_redist': 'block', 'redist': 'block'}, 'action states no choice'
-    assert resource_mapping.protocol_row('protocol/redist_profile/action')['selects'] == {}
-    for path in ('protocol/redist_profile/filter', 'protocol/redist_profile_ipv6/filter'):
+        container = next(r for r in container_coverage.CONTAINER_TABLE if r.path == path.replace("_", "-"))
+        assert container.method == f"parse_{path.rsplit('/', 1)[-1]}", container
+    assert resource_mapping.protocol_row("protocol/redist_profile/action")["fields"] == {
+        "no_redist": "block",
+        "redist": "block",
+    }, "action states no choice"
+    assert resource_mapping.protocol_row("protocol/redist_profile/action")["selects"] == {}
+    for path in ("protocol/redist_profile/filter", "protocol/redist_profile_ipv6/filter"):
         row = resource_mapping.protocol_row(path)
-        assert list(row['fields']) == ['bgp', 'destination', 'interface', 'nexthop',
-                                       'ospf' if 'ipv6' not in path else 'ospfv3', 'type'], row['fields']
-        assert all(word == 'member_list' for name, word in row['fields'].items()
-                   if name not in ('bgp', 'ospf', 'ospfv3')), row['fields']
-    for path in ('protocol/redist_profile/filter/bgp', 'protocol/redist_profile_ipv6/filter/bgp'):
-        assert list(resource_mapping.protocol_row(path)['fields']) == [
-            'community', 'extended_community'], path
-    assert list(resource_mapping.protocol_row('protocol/redist_profile/filter/ospf')['fields']) == [
-        'area', 'path_type', 'tag']
-    assert list(resource_mapping.protocol_row('protocol/redist_profile_ipv6/filter/ospfv3')['fields']) == [
-        'area', 'path_type', 'tag']
+        assert list(row["fields"]) == [
+            "bgp",
+            "destination",
+            "interface",
+            "nexthop",
+            "ospf" if "ipv6" not in path else "ospfv3",
+            "type",
+        ], row["fields"]
+        assert all(
+            word == "member_list" for name, word in row["fields"].items() if name not in ("bgp", "ospf", "ospfv3")
+        ), row["fields"]
+    for path in ("protocol/redist_profile/filter/bgp", "protocol/redist_profile_ipv6/filter/bgp"):
+        assert list(resource_mapping.protocol_row(path)["fields"]) == ["community", "extended_community"], path
+    assert list(resource_mapping.protocol_row("protocol/redist_profile/filter/ospf")["fields"]) == [
+        "area",
+        "path_type",
+        "tag",
+    ]
+    assert list(resource_mapping.protocol_row("protocol/redist_profile_ipv6/filter/ospfv3")["fields"]) == [
+        "area",
+        "path_type",
+        "tag",
+    ]
     # The three entry levels are the rows the scan scope names; the single levels inside an entry are not.
-    entry_rows = sorted(row.path for row in container_coverage.CONTAINER_TABLE
-                        if row.path.startswith(('protocol/redist', 'protocol/bgp/dampening')))
-    assert entry_rows == ['protocol/bgp/dampening-profile', 'protocol/redist-profile',
-                          'protocol/redist-profile-ipv6'], entry_rows
-    assert next(r for r in container_coverage.CONTAINER_TABLE
-                if r.path == 'protocol/bgp/dampening-profile').method == 'parse_bgp'
+    entry_rows = sorted(
+        row.path
+        for row in container_coverage.CONTAINER_TABLE
+        if row.path.startswith(("protocol/redist", "protocol/bgp/dampening"))
+    )
+    assert entry_rows == [
+        "protocol/bgp/dampening-profile",
+        "protocol/redist-profile",
+        "protocol/redist-profile-ipv6",
+    ], entry_rows
+    assert (
+        next(r for r in container_coverage.CONTAINER_TABLE if r.path == "protocol/bgp/dampening-profile").method
+        == "parse_bgp"
+    )
     inside = {row.path for row in container_coverage.CONTAINER_TABLE}
-    for path in ('protocol/redist-profile/action', 'protocol/redist-profile/filter',
-                 'protocol/redist-profile/filter/bgp', 'protocol/redist-profile/filter/ospf',
-                 'protocol/redist-profile-ipv6/filter', 'protocol/redist-profile-ipv6/filter/ospfv3'):
+    for path in (
+        "protocol/redist-profile/action",
+        "protocol/redist-profile/filter",
+        "protocol/redist-profile/filter/bgp",
+        "protocol/redist-profile/filter/ospf",
+        "protocol/redist-profile-ipv6/filter",
+        "protocol/redist-profile-ipv6/filter/ospfv3",
+    ):
         assert path not in inside, path
 
 
@@ -416,49 +539,76 @@ def test_the_auth_profile_rows_are_the_levels_the_four_methods_read():
     The provider accepts `ah` or `esp` for one entry, and the table has no word for that, so the fixture states
     the two choice levels in two entries.
     """
-    for level in ('bgp', 'ospf', 'rip', 'ospfv3'):
-        row = resource_mapping.protocol_row(f'protocol/{level}/auth_profile')
-        assert row['shape'] == 'string_list', level
+    for level in ("bgp", "ospf", "rip", "ospfv3"):
+        row = resource_mapping.protocol_row(f"protocol/{level}/auth_profile")
+        assert row["shape"] == "string_list", level
         # The entry name is the field the row reads for the entry, so it is never a property.
-        assert 'name' in row['fields'], level
-        for field in row['sensitive']:
+        assert "name" in row["fields"], level
+        for field in row["sensitive"]:
             assert resource_mapping.VALUE_VARIABLES[field] == resource_mapping.REFERENCE_ONLY, (level, field)
-    assert resource_mapping.protocol_row('protocol/bgp/auth_profile')['fields'] == {
-        'name': 'string', 'secret': 'string'}, resource_mapping.protocol_row('protocol/bgp/auth_profile')['fields']
-    assert resource_mapping.protocol_row('protocol/bgp/auth_profile')['sensitive'] == frozenset({'secret'})
-    for level in ('ospf', 'rip'):
-        row = resource_mapping.protocol_row(f'protocol/{level}/auth_profile')
-        assert row['fields'] == {'name': 'string', 'password': 'string', 'md5': 'string_list'}, level
-        assert row['sensitive'] == frozenset({'password'}), level
-        assert resource_mapping.protocol_row(f'protocol/{level}/auth_profile/md5')['fields'] == {
-            'name': 'string', 'key': 'string', 'preferred': 'bool'}, level
+    assert resource_mapping.protocol_row("protocol/bgp/auth_profile")["fields"] == {
+        "name": "string",
+        "secret": "string",
+    }, resource_mapping.protocol_row("protocol/bgp/auth_profile")["fields"]
+    assert resource_mapping.protocol_row("protocol/bgp/auth_profile")["sensitive"] == frozenset({"secret"})
+    for level in ("ospf", "rip"):
+        row = resource_mapping.protocol_row(f"protocol/{level}/auth_profile")
+        assert row["fields"] == {"name": "string", "password": "string", "md5": "string_list"}, level
+        assert row["sensitive"] == frozenset({"password"}), level
+        assert resource_mapping.protocol_row(f"protocol/{level}/auth_profile/md5")["fields"] == {
+            "name": "string",
+            "key": "string",
+            "preferred": "bool",
+        }, level
     # The `ospfv3` profile is the level the run reads through the table: `ah` and `esp/authentication` are
     # choice levels, and `none` is the alternative that declares no attribute, so it is the `block` field.
-    assert resource_mapping.protocol_row('protocol/ospfv3/auth_profile')['fields'] == {
-        'name': 'string', 'spi': 'string', 'ah': 'one_of', 'esp': 'object'}
-    assert resource_mapping.protocol_row('protocol/ospfv3/auth_profile/ah')['selects'] == {
-        'md5': 'md5', 'sha1': 'sha1', 'sha256': 'sha256', 'sha384': 'sha384', 'sha512': 'sha512'}
-    authentication = resource_mapping.protocol_row('protocol/ospfv3/auth_profile/esp/authentication')
-    assert authentication['fields'] == {'none': 'block'}, authentication['fields']
-    assert authentication['selects'] == {
-        'md5': 'md5', 'none': 'none', 'sha1': 'sha1', 'sha256': 'sha256', 'sha384': 'sha384',
-        'sha512': 'sha512'}, authentication['selects']
-    for path in (f'protocol/ospfv3/auth_profile/ah/{key}' for key in authentication['selects'].values()
-                 if key != 'none'):
+    assert resource_mapping.protocol_row("protocol/ospfv3/auth_profile")["fields"] == {
+        "name": "string",
+        "spi": "string",
+        "ah": "one_of",
+        "esp": "object",
+    }
+    assert resource_mapping.protocol_row("protocol/ospfv3/auth_profile/ah")["selects"] == {
+        "md5": "md5",
+        "sha1": "sha1",
+        "sha256": "sha256",
+        "sha384": "sha384",
+        "sha512": "sha512",
+    }
+    authentication = resource_mapping.protocol_row("protocol/ospfv3/auth_profile/esp/authentication")
+    assert authentication["fields"] == {"none": "block"}, authentication["fields"]
+    assert authentication["selects"] == {
+        "md5": "md5",
+        "none": "none",
+        "sha1": "sha1",
+        "sha256": "sha256",
+        "sha384": "sha384",
+        "sha512": "sha512",
+    }, authentication["selects"]
+    for path in (
+        f"protocol/ospfv3/auth_profile/ah/{key}" for key in authentication["selects"].values() if key != "none"
+    ):
         row = resource_mapping.protocol_row(path)
-        assert row['shape'] == 'object', path
-        assert row['sensitive'] == frozenset({'key'}), path
-    assert resource_mapping.protocol_row('protocol/ospfv3/auth_profile/esp/encryption')['fields'] == {
-        'algorithm': 'string', 'key': 'string'}
-    assert resource_mapping.protocol_row('protocol/ospfv3/auth_profile/esp/encryption')['sensitive'] == \
-        frozenset({'key'})
+        assert row["shape"] == "object", path
+        assert row["sensitive"] == frozenset({"key"}), path
+    assert resource_mapping.protocol_row("protocol/ospfv3/auth_profile/esp/encryption")["fields"] == {
+        "algorithm": "string",
+        "key": "string",
+    }
+    assert resource_mapping.protocol_row("protocol/ospfv3/auth_profile/esp/encryption")["sensitive"] == frozenset(
+        {"key"}
+    )
     # The four rows the scan reads are the four levels, in the input's spelling.
-    rows = sorted(row.path for row in container_coverage.CONTAINER_TABLE
-                  if row.path.endswith('/auth-profile'))
-    assert rows == ['protocol/bgp/auth-profile', 'protocol/ospf/auth-profile',
-                    'protocol/ospfv3/auth-profile', 'protocol/rip/auth-profile'], rows
-    assert not [row for row in container_coverage.CONTAINER_TABLE if '/md5' in row.path], \
-        [row.path for row in container_coverage.CONTAINER_TABLE]
+    rows = sorted(row.path for row in container_coverage.CONTAINER_TABLE if row.path.endswith("/auth-profile"))
+    assert rows == [
+        "protocol/bgp/auth-profile",
+        "protocol/ospf/auth-profile",
+        "protocol/ospfv3/auth-profile",
+        "protocol/rip/auth-profile",
+    ], rows
+    assert not [row for row in container_coverage.CONTAINER_TABLE if "/md5" in row.path], [
+        row.path for row in container_coverage.CONTAINER_TABLE
+    ]
 
 
 def test_the_six_rows_are_the_whole_measurement(provider_schema):
@@ -473,54 +623,117 @@ def test_the_six_rows_are_the_whole_measurement(provider_schema):
     Field order is the print order, so the fields each row already stated keep their order and the fields it
     gained follow in the order the schema names them.
     """
-    for path in ('protocol/bgp/peer_group', 'protocol/bgp/peer_group/peer', 'protocol/bgp/redist_rules',
-                 'protocol/ospf/area/interface', 'protocol/ospfv3/area', 'protocol/ospfv3/area/interface'):
+    for path in (
+        "protocol/bgp/peer_group",
+        "protocol/bgp/peer_group/peer",
+        "protocol/bgp/redist_rules",
+        "protocol/ospf/area/interface",
+        "protocol/ospfv3/area",
+        "protocol/ospfv3/area/interface",
+    ):
         row = resource_mapping.protocol_row(path)
-        attributes = _schema_node(provider_schema, path)['nested_type'].get('attributes', {})
-        assert set(row['fields']) == set(attributes), (path, sorted(attributes - set(row['fields'])))
-        assert row['sensitive'] == frozenset(), (path, row['sensitive'])
+        attributes = _schema_node(provider_schema, path)["nested_type"].get("attributes", {})
+        assert set(row["fields"]) == set(attributes), (path, sorted(attributes - set(row["fields"])))
+        assert row["sensitive"] == frozenset(), (path, row["sensitive"])
     # The order the six rows state, which is the order the block prints.
     orders = {
-        'protocol/bgp/peer_group': ['name', 'enable', 'type', 'peer',
-                                    'aggregated_confed_as_path', 'soft_reset_with_stored_info'],
-        'protocol/bgp/peer_group/peer': ['name', 'enable', 'peer_as', 'local_address', 'peer_address',
-                                         'address_family_identifier', 'bfd', 'connection_options',
-                                         'enable_mp_bgp', 'enable_sender_side_loop_detection', 'max_prefixes',
-                                         'peering_type', 'reflector_client',
-                                         'subsequent_address_family_identifier'],
-        'protocol/bgp/redist_rules': ['name', 'enable', 'address_family_identifier', 'metric', 'route_table',
-                                      'set_as_path_limit', 'set_community', 'set_extended_community',
-                                      'set_local_preference', 'set_med', 'set_origin'],
-        'protocol/ospf/area/interface': ['name', 'enable', 'passive', 'metric', 'link_type', 'neighbor',
-                                         'authentication', 'bfd', 'dead_counts', 'gr_delay', 'hello_interval',
-                                         'priority', 'retransmit_interval', 'transit_delay'],
-        'protocol/ospfv3/area': ['name', 'type', 'range', 'interface', 'virtual_link', 'authentication'],
-        'protocol/ospfv3/area/interface': ['name', 'enable', 'passive', 'metric', 'link_type', 'neighbor',
-                                           'authentication', 'bfd', 'dead_counts', 'gr_delay', 'hello_interval',
-                                           'instance_id', 'priority', 'retransmit_interval', 'transit_delay'],
+        "protocol/bgp/peer_group": [
+            "name",
+            "enable",
+            "type",
+            "peer",
+            "aggregated_confed_as_path",
+            "soft_reset_with_stored_info",
+        ],
+        "protocol/bgp/peer_group/peer": [
+            "name",
+            "enable",
+            "peer_as",
+            "local_address",
+            "peer_address",
+            "address_family_identifier",
+            "bfd",
+            "connection_options",
+            "enable_mp_bgp",
+            "enable_sender_side_loop_detection",
+            "max_prefixes",
+            "peering_type",
+            "reflector_client",
+            "subsequent_address_family_identifier",
+        ],
+        "protocol/bgp/redist_rules": [
+            "name",
+            "enable",
+            "address_family_identifier",
+            "metric",
+            "route_table",
+            "set_as_path_limit",
+            "set_community",
+            "set_extended_community",
+            "set_local_preference",
+            "set_med",
+            "set_origin",
+        ],
+        "protocol/ospf/area/interface": [
+            "name",
+            "enable",
+            "passive",
+            "metric",
+            "link_type",
+            "neighbor",
+            "authentication",
+            "bfd",
+            "dead_counts",
+            "gr_delay",
+            "hello_interval",
+            "priority",
+            "retransmit_interval",
+            "transit_delay",
+        ],
+        "protocol/ospfv3/area": ["name", "type", "range", "interface", "virtual_link", "authentication"],
+        "protocol/ospfv3/area/interface": [
+            "name",
+            "enable",
+            "passive",
+            "metric",
+            "link_type",
+            "neighbor",
+            "authentication",
+            "bfd",
+            "dead_counts",
+            "gr_delay",
+            "hello_interval",
+            "instance_id",
+            "priority",
+            "retransmit_interval",
+            "transit_delay",
+        ],
     }
     for path, order in orders.items():
-        assert list(resource_mapping.protocol_row(path)['fields']) == order, (path, order)
+        assert list(resource_mapping.protocol_row(path)["fields"]) == order, (path, order)
     # The seven levels inside an entry are rows, each read as an object, and none of them holds an entry.
-    inside_entry = {row.path.replace('_', '-') for row in container_coverage.CONTAINER_TABLE}
-    for path in ('protocol/bgp/peer_group/peer/bfd', 'protocol/bgp/peer_group/peer/connection_options',
-                 'protocol/bgp/peer_group/peer/connection_options/incoming_bgp_connection',
-                 'protocol/bgp/peer_group/peer/connection_options/outgoing_bgp_connection',
-                 'protocol/bgp/peer_group/peer/subsequent_address_family_identifier',
-                 'protocol/ospf/area/interface/bfd', 'protocol/ospfv3/area/interface/bfd'):
-        assert resource_mapping.protocol_row(path)['shape'] == 'object', path
-        assert path.replace('_', '-') not in inside_entry, path
+    inside_entry = {row.path.replace("_", "-") for row in container_coverage.CONTAINER_TABLE}
+    for path in (
+        "protocol/bgp/peer_group/peer/bfd",
+        "protocol/bgp/peer_group/peer/connection_options",
+        "protocol/bgp/peer_group/peer/connection_options/incoming_bgp_connection",
+        "protocol/bgp/peer_group/peer/connection_options/outgoing_bgp_connection",
+        "protocol/bgp/peer_group/peer/subsequent_address_family_identifier",
+        "protocol/ospf/area/interface/bfd",
+        "protocol/ospfv3/area/interface/bfd",
+    ):
+        assert resource_mapping.protocol_row(path)["shape"] == "object", path
+        assert path.replace("_", "-") not in inside_entry, path
     # `instance_id` is the one field the `ospfv3` interface row states that the `ospf` row does not.
-    ospf = resource_mapping.protocol_row('protocol/ospf/area/interface')['fields']
-    ospfv3 = resource_mapping.protocol_row('protocol/ospfv3/area/interface')['fields']
-    assert set(ospfv3) - set(ospf) == {'instance_id'}, (ospfv3, ospf)
+    ospf = resource_mapping.protocol_row("protocol/ospf/area/interface")["fields"]
+    ospfv3 = resource_mapping.protocol_row("protocol/ospfv3/area/interface")["fields"]
+    assert set(ospfv3) - set(ospf) == {"instance_id"}, (ospfv3, ospf)
     # No new field needs a spelling exception, so the exception table stays as F7.3 recorded it.
-    assert resource_mapping.XML_NAME_EXCEPTIONS == {'strict_l_s_a_checking': 'strict-lsa-checking'}
+    assert resource_mapping.XML_NAME_EXCEPTIONS == {"strict_l_s_a_checking": "strict-lsa-checking"}
     assert len(resource_mapping.PROTOCOL_SHAPE) == 194, len(resource_mapping.PROTOCOL_SHAPE)
 
 
-def test_the_shape_table_states_no_row_for_the_level_the_router_records(provider_schema, converter_module,
-                                                                        tmp_path):
+def test_the_shape_table_states_no_row_for_the_level_the_router_records(provider_schema, converter_module, tmp_path):
     """F4.9: `protocol/static-routes` is a level the shape table states no row for, so the record is its report.
 
     Measured 2026-11-13 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14` through
@@ -535,30 +748,33 @@ def test_the_shape_table_states_no_row_for_the_level_the_router_records(provider
     which the read record grounds because `generate_virtual_routers` reads the key and prints one resource block
     per entry, so no golden prints the key as a field of the router block.
     """
-    attributes = _schema_node(provider_schema, 'protocol')['nested_type']['attributes']
-    assert 'static_routes' not in attributes, sorted(attributes)
-    assert set(resource_mapping.protocol_row(resource_mapping.PROTOCOL_FIELD)['fields']) == set(attributes)
-    assert resource_mapping.protocol_row('protocol/static-routes') is None
+    attributes = _schema_node(provider_schema, "protocol")["nested_type"]["attributes"]
+    assert "static_routes" not in attributes, sorted(attributes)
+    assert set(resource_mapping.protocol_row(resource_mapping.PROTOCOL_FIELD)["fields"]) == set(attributes)
+    assert resource_mapping.protocol_row("protocol/static-routes") is None
 
     # The shape the row states for the entries the parse models.
-    static_row = next(row for row in resource_mapping.COVERAGE_MATRIX
-                      if row['resource'] == 'panos_virtual_router_static_route_ipv4')
-    assert static_row['properties'] == ('destination', 'metric', 'nexthop_interface', 'nexthop_ip'), \
-        static_row['properties']
-    router_row = next(row for row in resource_mapping.COVERAGE_MATRIX
-                      if row['resource'] == 'panos_virtual_router')
-    assert 'protocol' in router_row['properties'] and 'static_routes' in router_row['properties'], \
-        router_row['properties']
+    static_row = next(
+        row for row in resource_mapping.COVERAGE_MATRIX if row["resource"] == "panos_virtual_router_static_route_ipv4"
+    )
+    assert static_row["properties"] == ("destination", "metric", "nexthop_interface", "nexthop_ip"), static_row[
+        "properties"
+    ]
+    router_row = next(row for row in resource_mapping.COVERAGE_MATRIX if row["resource"] == "panos_virtual_router")
+    assert "protocol" in router_row["properties"] and "static_routes" in router_row["properties"], router_row[
+        "properties"
+    ]
 
     # `static_routes` is grounded by the read record, so the pin measures the record on a run.
-    parser = run_pipeline(converter_module, 'virtual_routers.xml', tmp_path)
-    assert parser is not None, 'virtual_routers.xml'
+    parser = run_pipeline(converter_module, "virtual_routers.xml", tmp_path)
+    assert parser is not None, "virtual_routers.xml"
     ledger = parser.ledger
-    router = next(e for e in ledger.entries() if e.get('name') == 'default')
-    read = set(ledger.mark_for(router)['captured'].used_keys()) - entry_coverage.NON_FIELD_KEYS
-    assert {'protocol', 'static_routes'} <= read, read
-    assert not [path for path in GOLDEN_DIR.rglob('*.tf')
-                if 'static_routes = [' in path.read_text(encoding='utf-8')], 'no golden prints the key'
+    router = next(e for e in ledger.entries() if e.get("name") == "default")
+    read = set(ledger.mark_for(router)["captured"].used_keys()) - entry_coverage.NON_FIELD_KEYS
+    assert {"protocol", "static_routes"} <= read, read
+    assert not [path for path in GOLDEN_DIR.rglob("*.tf") if "static_routes = [" in path.read_text(encoding="utf-8")], (
+        "no golden prints the key"
+    )
 
 
 def test_value_shape_is_the_reader_inverse_for_every_shape_word():
@@ -570,18 +786,27 @@ def test_value_shape_is_the_reader_inverse_for_every_shape_word():
     same word the reader read; before the change `text.isdigit()` read an unsigned value only, so `-1` read as
     `''` and the gate reported "is not a number value" for a value the reader had accepted.
     """
-    samples = {'string': '"host"', 'bool': 'true', 'number': '10', 'object': '{}',
-               'string_list': '["a"]', 'member_list': '["a"]', 'one_of': '{ebgp = {}}', 'block': '{}'}
+    samples = {
+        "string": '"host"',
+        "bool": "true",
+        "number": "10",
+        "object": "{}",
+        "string_list": '["a"]',
+        "member_list": '["a"]',
+        "one_of": "{ebgp = {}}",
+        "block": "{}",
+    }
     for word, text in samples.items():
         expected = sanity_checks.SHAPE_READS_AS.get(word, word)
         assert sanity_checks.value_shape(text) == expected, (word, text)
     assert set(samples) == set(resource_mapping.SHAPE_WORDS), resource_mapping.SHAPE_WORDS
     # F7.1: the signed form reads back as `number`, the same word as the unsigned form.
-    assert sanity_checks.value_shape('-1') == 'number', sanity_checks.value_shape('-1')
-    assert sanity_checks.value_shape('-') == '', sanity_checks.value_shape('-')
+    assert sanity_checks.value_shape("-1") == "number", sanity_checks.value_shape("-1")
+    assert sanity_checks.value_shape("-") == "", sanity_checks.value_shape("-")
 
 
 # --- 2. the one-of mapping ---------------------------------------------------
+
 
 def test_the_one_of_mapping_is_the_decision_the_report_prints():
     """The mapping states the value the export holds and the key the provider reads.
@@ -589,43 +814,64 @@ def test_the_one_of_mapping_is_the_decision_the_report_prints():
     The area type and the interface link type are the identity, because the export states the provider key;
     the BGP peer group type is the one level where the two spellings differ.
     """
-    assert resource_mapping.protocol_row('protocol/bgp/peer_group/type')['selects'] == {
-        'external': 'ebgp', 'internal': 'ibgp',
-        'external-confederation': 'ebgp_confed', 'internal-confederation': 'ibgp_confed'}
-    assert resource_mapping.protocol_row('protocol/ospf/area/type')['selects'] == {
-        'normal': 'normal', 'nssa': 'nssa', 'stub': 'stub'}
-    assert resource_mapping.protocol_row('protocol/ospf/area/interface/link_type')['selects'] == {
-        'point-to-point': 'p2p', 'broadcast': 'broadcast', 'p2mp': 'p2mp'}
+    assert resource_mapping.protocol_row("protocol/bgp/peer_group/type")["selects"] == {
+        "external": "ebgp",
+        "internal": "ibgp",
+        "external-confederation": "ebgp_confed",
+        "internal-confederation": "ibgp_confed",
+    }
+    assert resource_mapping.protocol_row("protocol/ospf/area/type")["selects"] == {
+        "normal": "normal",
+        "nssa": "nssa",
+        "stub": "stub",
+    }
+    assert resource_mapping.protocol_row("protocol/ospf/area/interface/link_type")["selects"] == {
+        "point-to-point": "p2p",
+        "broadcast": "broadcast",
+        "p2mp": "p2mp",
+    }
     # F7.2: the `ospfv3` choice levels state the same values, because the export spells the provider key there
     # too. The two rows are the same shape read by two parse methods, so one value maps to one key in both.
-    assert resource_mapping.protocol_row('protocol/ospfv3/area/type')['selects'] == {
-        'normal': 'normal', 'nssa': 'nssa', 'stub': 'stub'}
-    assert resource_mapping.protocol_row('protocol/ospfv3/area/interface/link_type')['selects'] == {
-        'point-to-point': 'p2p', 'broadcast': 'broadcast', 'p2mp': 'p2mp'}
+    assert resource_mapping.protocol_row("protocol/ospfv3/area/type")["selects"] == {
+        "normal": "normal",
+        "nssa": "nssa",
+        "stub": "stub",
+    }
+    assert resource_mapping.protocol_row("protocol/ospfv3/area/interface/link_type")["selects"] == {
+        "point-to-point": "p2p",
+        "broadcast": "broadcast",
+        "p2mp": "p2mp",
+    }
     # F7.6: the policy choice levels are the levels `terraform validate` refuses to hold 2 attributes (provider
     # 2.0.14, Terraform 1.16.2, measured 2026-11-02), so each states `one_of` with the identity mapping, where
     # the key is the spelling the export states and the value is the provider name. `action` is the only one
     # whose alternatives name levels, so its mapping is the identity over the two rows for them.
-    for path in ('protocol/bgp/policy/aggregation/address/aggregate_route_attributes/as_path',
-                 'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/community',
-                 'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/extended_community'):
+    for path in (
+        "protocol/bgp/policy/aggregation/address/aggregate_route_attributes/as_path",
+        "protocol/bgp/policy/aggregation/address/aggregate_route_attributes/community",
+        "protocol/bgp/policy/aggregation/address/aggregate_route_attributes/extended_community",
+    ):
         row = resource_mapping.protocol_row(path)
-        assert row['shape'] == 'one_of', path
-        assert row['selects'] == {key.replace('_', '-'): key for key in row['fields']}, path
-    for side in ('export', 'import'):
-        action = f'protocol/bgp/policy/{side}/rules/action'
-        assert resource_mapping.protocol_row(action)['selects'] == {'allow': 'allow', 'deny': 'deny'}, side
-        assert resource_mapping.protocol_row(f'{action}/deny')['shape'] == 'block', side
-        for level in ('as_path', 'community', 'extended_community'):
-            row = resource_mapping.protocol_row(f'{action}/allow/update/{level}')
-            assert row['shape'] == 'one_of', (side, level)
-            assert row['selects'] == {key.replace('_', '-'): key for key in row['fields']}, (side, level)
+        assert row["shape"] == "one_of", path
+        assert row["selects"] == {key.replace("_", "-"): key for key in row["fields"]}, path
+    for side in ("export", "import"):
+        action = f"protocol/bgp/policy/{side}/rules/action"
+        assert resource_mapping.protocol_row(action)["selects"] == {"allow": "allow", "deny": "deny"}, side
+        assert resource_mapping.protocol_row(f"{action}/deny")["shape"] == "block", side
+        for level in ("as_path", "community", "extended_community"):
+            row = resource_mapping.protocol_row(f"{action}/allow/update/{level}")
+            assert row["shape"] == "one_of", (side, level)
+            assert row["selects"] == {key.replace("_", "-"): key for key in row["fields"]}, (side, level)
     # A nexthop belongs to the chosen sub-shape, and two of them exist only under `ebgp`.
-    assert resource_mapping.protocol_row('protocol/bgp/peer_group/type/ebgp')['fields'] == {
-        'export_nexthop': 'string', 'import_nexthop': 'string', 'remove_private_as': 'bool'}
-    for key in ('ebgp_confed', 'ibgp', 'ibgp_confed'):
-        assert 'import_nexthop' not in resource_mapping.protocol_row(
-            f'protocol/bgp/peer_group/type/{key}')['fields'], key
+    assert resource_mapping.protocol_row("protocol/bgp/peer_group/type/ebgp")["fields"] == {
+        "export_nexthop": "string",
+        "import_nexthop": "string",
+        "remove_private_as": "bool",
+    }
+    for key in ("ebgp_confed", "ibgp", "ibgp_confed"):
+        assert "import_nexthop" not in resource_mapping.protocol_row(f"protocol/bgp/peer_group/type/{key}")["fields"], (
+            key
+        )
 
 
 def test_the_choice_rows_state_the_choice_the_provider_reads(provider_schema):
@@ -641,93 +887,111 @@ def test_the_choice_rows_state_the_choice_the_provider_reads(provider_schema):
     value for the profile entry, where `name` and `spi` are attributes that are not alternatives. Both rows are
     the identity, because the export states the provider key there.
     """
-    peer = resource_mapping.protocol_row('protocol/bgp/peer_group/peer/peer_address')
-    assert peer['selects'] == {'fqdn': 'fqdn', 'ip': 'ip'}, peer['selects']
-    assert set(peer['selects'].values()) == set(peer['fields']), peer['fields']
-    profile = resource_mapping.protocol_row('protocol/ospfv3/auth_profile')
-    assert profile['selects'] == {'ah': 'ah', 'esp': 'esp'}, profile['selects']
+    peer = resource_mapping.protocol_row("protocol/bgp/peer_group/peer/peer_address")
+    assert peer["selects"] == {"fqdn": "fqdn", "ip": "ip"}, peer["selects"]
+    assert set(peer["selects"].values()) == set(peer["fields"]), peer["fields"]
+    profile = resource_mapping.protocol_row("protocol/ospfv3/auth_profile")
+    assert profile["selects"] == {"ah": "ah", "esp": "esp"}, profile["selects"]
     # `name` and `spi` are fields the entry states and are not alternatives, so the choice is a subset.
-    assert set(profile['selects'].values()) < set(profile['fields']), profile['fields']
-    for path, row in (('protocol/bgp/peer_group/peer/peer_address', peer),
-                      ('protocol/ospfv3/auth_profile', profile)):
-        assert row['shape'] in sanity_checks.SHAPE_LEVELS, (path, row['shape'])
-        attributes = _schema_node(provider_schema, path)['nested_type'].get('attributes', {})
-        assert set(row['selects'].values()) <= set(attributes), (path, row['selects'])
+    assert set(profile["selects"].values()) < set(profile["fields"]), profile["fields"]
+    for path, row in (("protocol/bgp/peer_group/peer/peer_address", peer), ("protocol/ospfv3/auth_profile", profile)):
+        assert row["shape"] in sanity_checks.SHAPE_LEVELS, (path, row["shape"])
+        attributes = _schema_node(provider_schema, path)["nested_type"].get("attributes", {})
+        assert set(row["selects"].values()) <= set(attributes), (path, row["selects"])
         # The schema declares each alternative as an optional attribute, which is why no word states the choice.
-        for key in row['selects'].values():
-            assert attributes[key].get('optional'), (path, key)
-            assert key in row['fields'], (path, key)
+        for key in row["selects"].values():
+            assert attributes[key].get("optional"), (path, key)
+            assert key in row["fields"], (path, key)
     # The levels that hold a choice the provider does not read as exactly one state no choice, so the choice rule
     # does not reach them. `redist_profile/action` is the level the export requires and the provider does not.
-    for path in ('protocol/redist_profile/action',
-                 'protocol/bgp/peer_group/peer/local_address',
-                 'protocol/bgp/peer_group/peer/subsequent_address_family_identifier'):
-        assert resource_mapping.protocol_row(path)['selects'] == {}, path
-    assert sanity_checks.SHAPE_READS_AS.get('one_of') == 'object', sanity_checks.SHAPE_READS_AS
+    for path in (
+        "protocol/redist_profile/action",
+        "protocol/bgp/peer_group/peer/local_address",
+        "protocol/bgp/peer_group/peer/subsequent_address_family_identifier",
+    ):
+        assert resource_mapping.protocol_row(path)["selects"] == {}, path
+    assert sanity_checks.SHAPE_READS_AS.get("one_of") == "object", sanity_checks.SHAPE_READS_AS
 
 
 def test_a_one_of_level_prints_one_key():
     """The rule accepts the one key the mapping states and refuses any other shape of that level."""
-    good = ('  protocol = {\n    bgp = {\n      peer_group = [\n        {\n'
-            '          name = "PG"\n          type = {\n            ebgp = {\n'
-            '              export_nexthop = "self"\n            }\n          }\n        }\n      ]\n    }\n  }\n')
+    good = (
+        "  protocol = {\n    bgp = {\n      peer_group = [\n        {\n"
+        '          name = "PG"\n          type = {\n            ebgp = {\n'
+        '              export_nexthop = "self"\n            }\n          }\n        }\n      ]\n    }\n  }\n'
+    )
     assert _findings(good) == []
-    findings = _findings(good.replace('            ebgp = {\n              export_nexthop = "self"\n            }',
-                                      '            ebgp = {}\n            ibgp = {}'))
-    assert len(findings) == 1 and 'states 2 keys' in findings[0].detail, findings
-    findings = _findings(good.replace('ebgp = {\n              export_nexthop = "self"\n            }',
-                                      'made_up = {}'))
-    assert len(findings) == 1 and 'is not a key PROTOCOL_SHAPE selects' in findings[0].detail, findings
+    findings = _findings(
+        good.replace(
+            '            ebgp = {\n              export_nexthop = "self"\n            }',
+            "            ebgp = {}\n            ibgp = {}",
+        )
+    )
+    assert len(findings) == 1 and "states 2 keys" in findings[0].detail, findings
+    findings = _findings(good.replace('ebgp = {\n              export_nexthop = "self"\n            }', "made_up = {}"))
+    assert len(findings) == 1 and "is not a key PROTOCOL_SHAPE selects" in findings[0].detail, findings
     # F7.6: a choice level whose alternatives are values is read by the same rule. The level states one key, and
     # the field rule reads the value the row states for that key, so the walk never enters a value.
-    value_choice = ('  protocol = {\n    bgp = {\n      policy = {\n        aggregation = {\n          address = [\n'
-                    '            {\n              name = "a1"\n              aggregate_route_attributes = {\n'
-                    '                community = {\n                  append = [ "1:10" ]\n                }\n'
-                    '              }\n            }\n          ]\n        }\n      }\n    }\n  }\n')
+    value_choice = (
+        "  protocol = {\n    bgp = {\n      policy = {\n        aggregation = {\n          address = [\n"
+        '            {\n              name = "a1"\n              aggregate_route_attributes = {\n'
+        '                community = {\n                  append = [ "1:10" ]\n                }\n'
+        "              }\n            }\n          ]\n        }\n      }\n    }\n  }\n"
+    )
     assert _findings(value_choice) == [], value_choice
-    base = ('protocol panos_virtual_router.default_00000000 '
-            'protocol/bgp/policy/aggregation/address/aggregate_route_attributes/community ')
+    base = (
+        "protocol panos_virtual_router.default_00000000 "
+        "protocol/bgp/policy/aggregation/address/aggregate_route_attributes/community "
+    )
     one_key = '                  append = [ "1:10" ]\n'
-    findings = _findings(value_choice.replace(
-        one_key, one_key + '                  remove_all = {}\n'))
-    assert [f.detail for f in findings] == [
-        base + 'states 2 keys, which is not the one key PROTOCOL_SHAPE selects'], findings
+    findings = _findings(value_choice.replace(one_key, one_key + "                  remove_all = {}\n"))
+    assert [f.detail for f in findings] == [base + "states 2 keys, which is not the one key PROTOCOL_SHAPE selects"], (
+        findings
+    )
     findings = _findings(value_choice.replace('append = [ "1:10" ]', 'made_up = { x = "1" }'))
-    assert [f.detail for f in findings] == [base + 'key made_up is not a key PROTOCOL_SHAPE selects'], findings
+    assert [f.detail for f in findings] == [base + "key made_up is not a key PROTOCOL_SHAPE selects"], findings
     # The run prints one key, so a run reports nothing.
-    files = {str(p.relative_to(GOLDEN_DIR / 'kitchen_sink')): p.read_text(encoding='utf-8')
-              for p in sorted((GOLDEN_DIR / 'kitchen_sink').rglob('*.tf'))}
+    files = {
+        str(p.relative_to(GOLDEN_DIR / "kitchen_sink")): p.read_text(encoding="utf-8")
+        for p in sorted((GOLDEN_DIR / "kitchen_sink").rglob("*.tf"))
+    }
     assert sanity_checks.check_protocol_object(files) == [], sanity_checks.check_protocol_object(files)
 
 
 # --- 3. the print shape ------------------------------------------------------
 
+
 def test_protocol_prints_as_an_object_field_not_a_block(tmp_path):
     """The generated file states `protocol = { ... }`, which the provider reads, and the rule reports the
     block shape it does not.
     """
-    files = _run('kitchen_sink.xml', tmp_path)
-    block = files['virtual_routers.tf']
-    assert '  protocol = {' in block, block
-    assert '  protocol {' not in block, block
-    findings = _findings('  protocol {\n    bgp {\n      enable = true\n    }\n  }\n')
+    files = _run("kitchen_sink.xml", tmp_path)
+    block = files["virtual_routers.tf"]
+    assert "  protocol = {" in block, block
+    assert "  protocol {" not in block, block
+    findings = _findings("  protocol {\n    bgp {\n      enable = true\n    }\n  }\n")
     assert len(findings) == 1, findings
     assert findings[0].detail == (
-        'protocol panos_virtual_router.default_00000000 is a block, not the field PROTOCOL_SHAPE states')
+        "protocol panos_virtual_router.default_00000000 is a block, not the field PROTOCOL_SHAPE states"
+    )
     # A `range` element states the choice the provider requires, and `block` is the shape the export states
     # by presence, so the reader reads the empty object as an object value.
-    good = ('  protocol = {\n    ospf = {\n      area = [\n        {\n          name = "0.0.0.0"\n'
-            '          range = [\n            {\n              name = "10.0.0.0/8"\n'
-            '              advertise = {}\n            }\n          ]\n        }\n      ]\n    }\n  }\n')
+    good = (
+        '  protocol = {\n    ospf = {\n      area = [\n        {\n          name = "0.0.0.0"\n'
+        '          range = [\n            {\n              name = "10.0.0.0/8"\n'
+        "              advertise = {}\n            }\n          ]\n        }\n      ]\n    }\n  }\n"
+    )
     assert _findings(good) == [], _findings(good)
-    findings = _findings(good.replace('advertise = {}', 'advertise = true'))
-    assert len(findings) == 1 and 'advertise is not a block value' in findings[0].detail, findings
+    findings = _findings(good.replace("advertise = {}", "advertise = true"))
+    assert len(findings) == 1 and "advertise is not a block value" in findings[0].detail, findings
     # `import_blocks.fields_at` reads a level, so a `protocol` written as a block is not a field there.
-    assert 'protocol' not in import_blocks.fields_at(
-        '\n  name = "default"\n  protocol {\n    bgp {\n      enable = true\n    }\n  }')
+    assert "protocol" not in import_blocks.fields_at(
+        '\n  name = "default"\n  protocol {\n    bgp {\n      enable = true\n    }\n  }'
+    )
 
 
 # --- 4. the peer membership and the interface placement ----------------------
+
 
 def test_a_peer_prints_inside_its_peer_group(tmp_path):
     """The membership is the parent entry, so the peer prints inside the peer group element (F7.1).
@@ -743,48 +1007,52 @@ def test_a_peer_prints_inside_its_peer_group(tmp_path):
     list of strings. The entry is in the property scan scope, so the run measures these reads against the router
     row, and the gate reads the same table, so the block the run wrote reports no finding.
     """
-    files = _run('bgp.xml', tmp_path)
-    block = files['virtual_routers.tf']
-    peer_section = block[block.index('peer_group = ['):block.index('redist_rules')]
+    files = _run("bgp.xml", tmp_path)
+    block = files["virtual_routers.tf"]
+    peer_section = block[block.index("peer_group = [") : block.index("redist_rules")]
     assert 'name = "PG-Branch"' in peer_section and 'name = "10.55.0.2"' in peer_section, peer_section
     # `peer_group` is no longer a field the block prints: the entry it names is the parent.
     assert 'peer_group = "PG-Branch"' not in block, block
     # F7.11: the fields the two rows gained, in the order the rows state them.
-    expected_peer = ('        {\n          name = "PG-Branch"\n          enable = true\n          type = {\n'
-                     '            ebgp = {\n              export_nexthop = "self"\n'
-                     '              import_nexthop = "self"\n            }\n          }\n          peer = [\n'
-                     '            {\n              name = "10.55.0.2"\n              enable = true\n'
-                     '              peer_as = "65002"\n              local_address = {\n'
-                     '                ip = "10.55.0.1"\n              }\n              peer_address = {\n'
-                     '                ip = "10.55.0.2"\n              }\n'
-                     '              address_family_identifier = "ipv4-unicast"\n              bfd = {\n'
-                     '                profile = "BFD-BGP"\n              }\n              connection_options = {\n'
-                     '                authentication = "simple"\n                hold_time = "180"\n'
-                     '                idle_hold_time = 30\n                incoming_bgp_connection = {\n'
-                     '                  allow = true\n                  remote_port = 179\n                }\n'
-                     '                keep_alive_interval = "60"\n                min_route_adv_interval = 30\n'
-                     '                multihop = 1\n                open_delay_time = 5\n'
-                     '                outgoing_bgp_connection = {\n                  allow = true\n'
-                     '                  local_port = 1024\n                }\n              }\n'
-                     '              enable_mp_bgp = true\n              enable_sender_side_loop_detection = true\n'
-                     '              max_prefixes = "65536"\n              peering_type = "non-default"\n'
-                     '              reflector_client = "non-default"\n'
-                     '              subsequent_address_family_identifier = {\n                multicast = true\n'
-                     '                unicast = true\n              }\n            }\n          ]\n'
-                     '          aggregated_confed_as_path = true\n'
-                     '          soft_reset_with_stored_info = false\n        }\n      ]\n')
+    expected_peer = (
+        '        {\n          name = "PG-Branch"\n          enable = true\n          type = {\n'
+        '            ebgp = {\n              export_nexthop = "self"\n'
+        '              import_nexthop = "self"\n            }\n          }\n          peer = [\n'
+        '            {\n              name = "10.55.0.2"\n              enable = true\n'
+        '              peer_as = "65002"\n              local_address = {\n'
+        '                ip = "10.55.0.1"\n              }\n              peer_address = {\n'
+        '                ip = "10.55.0.2"\n              }\n'
+        '              address_family_identifier = "ipv4-unicast"\n              bfd = {\n'
+        '                profile = "BFD-BGP"\n              }\n              connection_options = {\n'
+        '                authentication = "simple"\n                hold_time = "180"\n'
+        "                idle_hold_time = 30\n                incoming_bgp_connection = {\n"
+        "                  allow = true\n                  remote_port = 179\n                }\n"
+        '                keep_alive_interval = "60"\n                min_route_adv_interval = 30\n'
+        "                multihop = 1\n                open_delay_time = 5\n"
+        "                outgoing_bgp_connection = {\n                  allow = true\n"
+        "                  local_port = 1024\n                }\n              }\n"
+        "              enable_mp_bgp = true\n              enable_sender_side_loop_detection = true\n"
+        '              max_prefixes = "65536"\n              peering_type = "non-default"\n'
+        '              reflector_client = "non-default"\n'
+        "              subsequent_address_family_identifier = {\n                multicast = true\n"
+        "                unicast = true\n              }\n            }\n          ]\n"
+        "          aggregated_confed_as_path = true\n"
+        "          soft_reset_with_stored_info = false\n        }\n      ]\n"
+    )
     assert expected_peer in peer_section, peer_section
-    expected_rule = ('      redist_rules = [\n        {\n          name = "redist-static"\n'
-                     '          enable = true\n          address_family_identifier = "ipv4-unicast"\n'
-                     '          metric = 10\n          route_table = "1"\n          set_as_path_limit = 64\n'
-                     '          set_community = [ "1:10", "2:20" ]\n'
-                     '          set_extended_community = [ "1:1000" ]\n          set_local_preference = 200\n'
-                     '          set_med = 100\n          set_origin = "igp"\n        }\n      ]\n')
+    expected_rule = (
+        '      redist_rules = [\n        {\n          name = "redist-static"\n'
+        '          enable = true\n          address_family_identifier = "ipv4-unicast"\n'
+        '          metric = 10\n          route_table = "1"\n          set_as_path_limit = 64\n'
+        '          set_community = [ "1:10", "2:20" ]\n'
+        '          set_extended_community = [ "1:1000" ]\n          set_local_preference = 200\n'
+        '          set_med = 100\n          set_origin = "igp"\n        }\n      ]\n'
+    )
     assert expected_rule in block, block
     # The peer the file cannot hold is named by the report, once.
-    report = files['MANUAL_SETUP_REPORT.txt']
-    assert 'router default: peer 10.55.0.9 (panos_virtual_router - no peer group names it)' in report, report
-    assert '10.55.0.2' not in report, report
+    report = files["MANUAL_SETUP_REPORT.txt"]
+    assert "router default: peer 10.55.0.9 (panos_virtual_router - no peer group names it)" in report, report
+    assert "10.55.0.2" not in report, report
     # The gate reads the same table, so the block the run wrote reports no finding.
     findings = sanity_checks.check_protocol_object(files)
     assert findings == [], findings
@@ -796,15 +1064,15 @@ def test_an_ospf_interface_inside_an_area_prints_inside_the_area(tmp_path):
     F7.11: the fixture entry states every field the interface row declares, so the eight fields the row gained
     print after `neighbor`, in the row order, which `test_an_ospf_level_prints_the_shape_the_table_states` pins.
     """
-    files = _run('ospf.xml', tmp_path)
-    block = files['virtual_routers.tf']
-    area_section = block[block.index('area = ['):block.index('\n        }\n      ]')]
-    assert 'interface = [' in area_section and 'name = "ethernet1/2"' in area_section, area_section
+    files = _run("ospf.xml", tmp_path)
+    block = files["virtual_routers.tf"]
+    area_section = block[block.index("area = [") : block.index("\n        }\n      ]")]
+    assert "interface = [" in area_section and 'name = "ethernet1/2"' in area_section, area_section
     # The entries the file cannot express are named by the report and are not printed.
-    report = files['MANUAL_SETUP_REPORT.txt']
-    assert 'router default: interface ethernet1/3 (link_type multicast is not a value PROTOCOL_SHAPE states)' in report
-    assert 'router default: range 10.60.0.0/16 (no advertise or suppress)' in report
-    assert 'ethernet1/3' not in block and '10.60.0.0/16' not in block, block
+    report = files["MANUAL_SETUP_REPORT.txt"]
+    assert "router default: interface ethernet1/3 (link_type multicast is not a value PROTOCOL_SHAPE states)" in report
+    assert "router default: range 10.60.0.0/16 (no advertise or suppress)" in report
+    assert "ethernet1/3" not in block and "10.60.0.0/16" not in block, block
 
 
 def test_an_ospfv3_area_prints_the_shape_the_table_states(tmp_path):
@@ -814,29 +1082,31 @@ def test_an_ospfv3_area_prints_the_shape_the_table_states(tmp_path):
     field prints `{}` because the export states it by presence. F7.4: the choice inside a body prints as the
     key the row selects, so the export spelling `no` prints as `disable`.
     """
-    expected = ('  protocol = {\n    ospfv3 = {\n      enable = true\n      router_id = "10.0.0.1"\n'
-                '      area = [\n        {\n          name = "0.0.0.0"\n          type = {\n'
-                '            nssa = {\n              accept_summary = true\n              default_route = {\n'
-                '                disable = {}\n              }\n              nssa_ext_range = [\n'
-                '                {\n                  name = "10.20.0.0/16"\n                  advertise = {}\n'
-                '                }\n              ]\n            }\n          }\n'
-                '          range = [\n            {\n              name = "10.0.0.0/8"\n'
-                '              suppress = {}\n            }\n          ]\n          interface = [\n'
-                '            {\n              name = "ethernet1/2"\n              enable = true\n'
-                '              passive = false\n              metric = 10\n              link_type = {\n'
-                '                p2p = {}\n              }\n              neighbor = [\n'
-                '                {\n                  name = "10.0.0.2"\n                }\n              ]\n'
-                '              authentication = "ipsec"\n              bfd = {\n'
-                '                profile = "BFD-OSPF"\n              }\n'
-                '              dead_counts = 40\n              gr_delay = 10\n'
-                '              hello_interval = 10\n              instance_id = 1\n'
-                '              priority = 1\n              retransmit_interval = 200\n'
-                '              transit_delay = 5\n            }\n          ]\n          virtual_link = [\n'
-                '            {\n              name = "10.0.0.2"\n              instance_id = 1\n'
-                '              neighbor_id = "10.0.0.3"\n            }\n          ]\n'
-                '          authentication = "ipsec"\n        }\n      ]\n'
-                '    }\n  }\n')
-    block = _run('ospfv3.xml', tmp_path)['virtual_routers.tf']
+    expected = (
+        '  protocol = {\n    ospfv3 = {\n      enable = true\n      router_id = "10.0.0.1"\n'
+        '      area = [\n        {\n          name = "0.0.0.0"\n          type = {\n'
+        "            nssa = {\n              accept_summary = true\n              default_route = {\n"
+        "                disable = {}\n              }\n              nssa_ext_range = [\n"
+        '                {\n                  name = "10.20.0.0/16"\n                  advertise = {}\n'
+        "                }\n              ]\n            }\n          }\n"
+        '          range = [\n            {\n              name = "10.0.0.0/8"\n'
+        "              suppress = {}\n            }\n          ]\n          interface = [\n"
+        '            {\n              name = "ethernet1/2"\n              enable = true\n'
+        "              passive = false\n              metric = 10\n              link_type = {\n"
+        "                p2p = {}\n              }\n              neighbor = [\n"
+        '                {\n                  name = "10.0.0.2"\n                }\n              ]\n'
+        '              authentication = "ipsec"\n              bfd = {\n'
+        '                profile = "BFD-OSPF"\n              }\n'
+        "              dead_counts = 40\n              gr_delay = 10\n"
+        "              hello_interval = 10\n              instance_id = 1\n"
+        "              priority = 1\n              retransmit_interval = 200\n"
+        "              transit_delay = 5\n            }\n          ]\n          virtual_link = [\n"
+        '            {\n              name = "10.0.0.2"\n              instance_id = 1\n'
+        '              neighbor_id = "10.0.0.3"\n            }\n          ]\n'
+        '          authentication = "ipsec"\n        }\n      ]\n'
+        "    }\n  }\n"
+    )
+    block = _run("ospfv3.xml", tmp_path)["virtual_routers.tf"]
     assert expected in block, block
     # The gate reads the same table, so the block the run wrote reports no finding.
     findings = _findings(expected)
@@ -852,40 +1122,42 @@ def test_an_ospf_level_prints_the_shape_the_table_states(tmp_path):
     entry. The fixture states every field the four new rows declare, so the run prints every one of them, and
     the gate reads the same table, so the block the run wrote reports no finding.
     """
-    expected = ('  protocol = {\n    ospf = {\n      enable = true\n      router_id = "10.0.0.1"\n'
-                '      allow_redist_default_route = true\n      reject_default_route = false\n'
-                '      rfc1583 = true\n      timers = {\n        lsa_interval = 120\n'
-                '        spf_calculation_delay = 20\n      }\n      global_bfd = {\n'
-                '        profile = "BFD-OSPF"\n      }\n      graceful_restart = {\n'
-                '        enable = true\n        grace_period = 120\n        helper_enable = true\n'
-                '        max_neighbor_restart_time = 200\n        strict_l_s_a_checking = true\n      }\n'
-                '      area = [\n        {\n          name = "0.0.0.0"\n          type = {\n'
-                '            stub = {\n              accept_summary = true\n              default_route = {\n'
-                '                advertise = {\n                  metric = 10\n                }\n'
-                '              }\n            }\n          }\n          range = [\n            {\n'
-                '              name = "10.0.0.0/8"\n              advertise = {}\n            }\n          ]\n'
-                '          interface = [\n            {\n              name = "ethernet1/2"\n'
-                '              enable = true\n              passive = false\n              metric = 10\n'
-                '              link_type = {\n                broadcast = {}\n              }\n'
-                '              neighbor = [\n                {\n                  name = "10.0.0.2"\n'
-                '                }\n              ]\n              authentication = "md5"\n'
-                '              bfd = {\n                profile = "BFD-OSPF"\n              }\n'
-                '              dead_counts = 40\n              gr_delay = 10\n'
-                '              hello_interval = 10\n              priority = 1\n'
-                '              retransmit_interval = 200\n              transit_delay = 5\n'
-                '            }\n          ]\n          virtual_link = [\n'
-                '            {\n              name = "10.0.0.2"\n              hello_interval = 10\n'
-                '              neighbor_id = "10.0.0.3"\n              transit_area_id = "0.0.0.1"\n'
-                '            }\n          ]\n        },\n        {\n          name = "0.0.1.0"\n'
-                '          type = {\n            nssa = {\n              default_route = {\n'
-                '                disable = {}\n              }\n              nssa_ext_range = [\n'
-                '                {\n                  name = "10.20.0.0/16"\n                  suppress = {}\n'
-                '                }\n              ]\n            }\n          }\n        }\n      ]\n'
-                '      export_rules = [\n        {\n          name = "export-static"\n          metric = 10\n'
-                '          new_path_type = "internal"\n          new_tag = "0"\n        }\n      ]\n'
-                '    }\n  }\n')
-    files = _run('ospf.xml', tmp_path)
-    block = files['virtual_routers.tf']
+    expected = (
+        '  protocol = {\n    ospf = {\n      enable = true\n      router_id = "10.0.0.1"\n'
+        "      allow_redist_default_route = true\n      reject_default_route = false\n"
+        "      rfc1583 = true\n      timers = {\n        lsa_interval = 120\n"
+        "        spf_calculation_delay = 20\n      }\n      global_bfd = {\n"
+        '        profile = "BFD-OSPF"\n      }\n      graceful_restart = {\n'
+        "        enable = true\n        grace_period = 120\n        helper_enable = true\n"
+        "        max_neighbor_restart_time = 200\n        strict_l_s_a_checking = true\n      }\n"
+        '      area = [\n        {\n          name = "0.0.0.0"\n          type = {\n'
+        "            stub = {\n              accept_summary = true\n              default_route = {\n"
+        "                advertise = {\n                  metric = 10\n                }\n"
+        "              }\n            }\n          }\n          range = [\n            {\n"
+        '              name = "10.0.0.0/8"\n              advertise = {}\n            }\n          ]\n'
+        '          interface = [\n            {\n              name = "ethernet1/2"\n'
+        "              enable = true\n              passive = false\n              metric = 10\n"
+        "              link_type = {\n                broadcast = {}\n              }\n"
+        '              neighbor = [\n                {\n                  name = "10.0.0.2"\n'
+        '                }\n              ]\n              authentication = "md5"\n'
+        '              bfd = {\n                profile = "BFD-OSPF"\n              }\n'
+        "              dead_counts = 40\n              gr_delay = 10\n"
+        "              hello_interval = 10\n              priority = 1\n"
+        "              retransmit_interval = 200\n              transit_delay = 5\n"
+        "            }\n          ]\n          virtual_link = [\n"
+        '            {\n              name = "10.0.0.2"\n              hello_interval = 10\n'
+        '              neighbor_id = "10.0.0.3"\n              transit_area_id = "0.0.0.1"\n'
+        '            }\n          ]\n        },\n        {\n          name = "0.0.1.0"\n'
+        "          type = {\n            nssa = {\n              default_route = {\n"
+        "                disable = {}\n              }\n              nssa_ext_range = [\n"
+        '                {\n                  name = "10.20.0.0/16"\n                  suppress = {}\n'
+        "                }\n              ]\n            }\n          }\n        }\n      ]\n"
+        '      export_rules = [\n        {\n          name = "export-static"\n          metric = 10\n'
+        '          new_path_type = "internal"\n          new_tag = "0"\n        }\n      ]\n'
+        "    }\n  }\n"
+    )
+    files = _run("ospf.xml", tmp_path)
+    block = files["virtual_routers.tf"]
     assert expected in block, block
     # The gate reads the same table, so the block the run wrote reports no finding.
     findings = sanity_checks.check_protocol_object(files)
@@ -900,21 +1172,23 @@ def test_an_ospfv3_scalar_level_prints_the_shape_the_table_states(tmp_path):
     whole block the run wrote for that router. F7.10 states the three `bool` fields the row added in the fixture,
     so the pin prints them after the levels, in the order the row states them.
     """
-    expected = ('  protocol = {\n    ospfv3 = {\n      enable = true\n      timers = {\n'
-                '        lsa_interval = 120\n        spf_calculation_delay = 20\n      }\n'
-                '      global_bfd = {\n        profile = "BFD-OSP"\n      }\n'
-                '      graceful_restart = {\n        enable = true\n        grace_period = 120\n'
-                '        helper_enable = true\n        max_neighbor_restart_time = 200\n'
-                '        strict_l_s_a_checking = true\n      }\n      export_rules = [\n        {\n'
-                '          name = "static-af"\n          metric = 10\n          new_path_type = "internal"\n'
-                '          new_tag = "0"\n        }\n      ]\n      allow_redist_default_route = true\n'
-                '      disable_transit_traffic = true\n      reject_default_route = false\n    }\n  }\n')
-    files = _run('ospfv3.xml', tmp_path)
-    parts = files['virtual_routers.tf'].split('resource "panos_virtual_router" ')
+    expected = (
+        "  protocol = {\n    ospfv3 = {\n      enable = true\n      timers = {\n"
+        "        lsa_interval = 120\n        spf_calculation_delay = 20\n      }\n"
+        '      global_bfd = {\n        profile = "BFD-OSP"\n      }\n'
+        "      graceful_restart = {\n        enable = true\n        grace_period = 120\n"
+        "        helper_enable = true\n        max_neighbor_restart_time = 200\n"
+        "        strict_l_s_a_checking = true\n      }\n      export_rules = [\n        {\n"
+        '          name = "static-af"\n          metric = 10\n          new_path_type = "internal"\n'
+        '          new_tag = "0"\n        }\n      ]\n      allow_redist_default_route = true\n'
+        "      disable_transit_traffic = true\n      reject_default_route = false\n    }\n  }\n"
+    )
+    files = _run("ospfv3.xml", tmp_path)
+    parts = files["virtual_routers.tf"].split('resource "panos_virtual_router" ')
     assert len(parts) == 3, parts
     assert expected in parts[2], parts[2]
     # The area router states none of these levels, so it prints no field for them.
-    for field in ('timers', 'global_bfd', 'graceful_restart', 'export_rules'):
+    for field in ("timers", "global_bfd", "graceful_restart", "export_rules"):
         assert field not in parts[1], parts[1]
     # The gate reads the same table, so the block the run wrote reports no finding.
     findings = sanity_checks.check_protocol_object(files)
@@ -929,27 +1203,31 @@ def test_an_rip_level_prints_the_shape_the_table_states(tmp_path):
     `no` prints as `disable`. A field the export does not state prints nothing, and the entry whose choice
     element states no alternative is not printed, so the file holds no half of it and the report names it once.
     """
-    expected = ('  protocol = {\n    rip = {\n      enable = true\n'
-                '      allow_redist_default_route = true\n      reject_default_route = false\n'
-                '      timers = {\n        interval_seconds = 30\n        update_intervals = 180\n'
-                '        expire_intervals = 210\n        delete_intervals = 120\n      }\n'
-                '      global_bfd = {\n        profile = "BFD-RIP"\n      }\n      interfaces = [\n'
-                '        {\n          name = "ethernet1/2"\n          enable = true\n          mode = "v2"\n'
-                '          authentication = "md5"\n          bfd = {\n            profile = "BFD-RIP"\n          }\n'
-                '          default_route = {\n            advertise = {\n              metric = 10\n'
-                '            }\n          }\n        },\n        {\n          name = "ethernet1/3"\n'
-                '          enable = false\n          mode = "v1"\n          default_route = {\n'
-                '            disable = {}\n          }\n        }\n      ]\n'
-                '      export_rules = [\n        {\n          name = "static-af"\n          metric = 10\n'
-                '        }\n      ]\n    }\n  }\n')
-    files = _run('rip.xml', tmp_path)
-    block = files['virtual_routers.tf']
+    expected = (
+        "  protocol = {\n    rip = {\n      enable = true\n"
+        "      allow_redist_default_route = true\n      reject_default_route = false\n"
+        "      timers = {\n        interval_seconds = 30\n        update_intervals = 180\n"
+        "        expire_intervals = 210\n        delete_intervals = 120\n      }\n"
+        '      global_bfd = {\n        profile = "BFD-RIP"\n      }\n      interfaces = [\n'
+        '        {\n          name = "ethernet1/2"\n          enable = true\n          mode = "v2"\n'
+        '          authentication = "md5"\n          bfd = {\n            profile = "BFD-RIP"\n          }\n'
+        "          default_route = {\n            advertise = {\n              metric = 10\n"
+        '            }\n          }\n        },\n        {\n          name = "ethernet1/3"\n'
+        '          enable = false\n          mode = "v1"\n          default_route = {\n'
+        "            disable = {}\n          }\n        }\n      ]\n"
+        '      export_rules = [\n        {\n          name = "static-af"\n          metric = 10\n'
+        "        }\n      ]\n    }\n  }\n"
+    )
+    files = _run("rip.xml", tmp_path)
+    block = files["virtual_routers.tf"]
     assert expected in block, block
     # The entry the file cannot hold is named by the report, and the file holds no half of it.
-    report = files['MANUAL_SETUP_REPORT.txt']
-    assert ('router default: interfaces ethernet1/4 '
-            '(panos_virtual_router - default_route states no key PROTOCOL_SHAPE selects)') in report, report
-    assert 'ethernet1/4' not in block, block
+    report = files["MANUAL_SETUP_REPORT.txt"]
+    assert (
+        "router default: interfaces ethernet1/4 "
+        "(panos_virtual_router - default_route states no key PROTOCOL_SHAPE selects)"
+    ) in report, report
+    assert "ethernet1/4" not in block, block
     # The gate reads the same table, so the block the run wrote reports no finding.
     findings = sanity_checks.check_protocol_object(files)
     assert findings == [], findings
@@ -966,14 +1244,14 @@ def test_a_redist_profile_entry_prints_the_shape_the_table_states(tmp_path):
     """
     expected = (
         '  protocol = {\n    redist_profile = [\n      {\n        name = "RP-Internal"\n'
-        '        action = {\n          redist = {}\n        }\n        filter = {\n'
+        "        action = {\n          redist = {}\n        }\n        filter = {\n"
         '          bgp = {\n            community = [ "100:1" ]\n'
         '            extended_community = [ "192.168.1.1:2" ]\n          }\n'
         '          destination = [ "10.20.0.0/16" ]\n          interface = [ "ethernet1/1" ]\n'
         '          nexthop = [ "192.168.1.254" ]\n          ospf = {\n'
         '            area = [ "0.0.0.0" ]\n            path_type = [ "internal" ]\n'
         '            tag = [ "1" ]\n          }\n          type = [ "internal" ]\n        }\n'
-        '        priority = 10\n      }\n    ]\n    redist_profile_ipv6 = [\n      {\n'
+        "        priority = 10\n      }\n    ]\n    redist_profile_ipv6 = [\n      {\n"
         '        name = "RP6-Internal"\n        action = {\n          no_redist = {}\n        }\n'
         '        filter = {\n          bgp = {\n            community = [ "100:2" ]\n'
         '            extended_community = [ "192.168.1.1:3" ]\n          }\n'
@@ -981,9 +1259,10 @@ def test_a_redist_profile_entry_prints_the_shape_the_table_states(tmp_path):
         '          nexthop = [ "192.168.1.254" ]\n          ospfv3 = {\n'
         '            area = [ "0.0.1.0" ]\n            path_type = [ "external" ]\n'
         '            tag = [ "2" ]\n          }\n          type = [ "external" ]\n        }\n'
-        '        priority = 20\n      }\n    ]\n  }\n')
-    files = _run('virtual_routers.xml', tmp_path)
-    block = files['virtual_routers.tf']
+        "        priority = 20\n      }\n    ]\n  }\n"
+    )
+    files = _run("virtual_routers.xml", tmp_path)
+    block = files["virtual_routers.tf"]
     assert expected in block, block
     # The gate reads the same table, so the block the run wrote reports no finding.
     findings = sanity_checks.check_protocol_object(files)
@@ -999,21 +1278,22 @@ def test_a_bgp_level_prints_the_fields_the_table_added(tmp_path):
     field the export states as `no` prints as false, the same rule as `passive`.
     """
     expected = (
-        '      allow_redist_default_route = true\n      dampening_profile = [\n        {\n'
+        "      allow_redist_default_route = true\n      dampening_profile = [\n        {\n"
         '          name = "DAMP-Branch"\n          cutoff = 1500\n'
-        '          decay_half_life_reachable = 60\n          decay_half_life_unreachable = 120\n'
-        '          enable = true\n          max_hold_time = 3000\n          reuse = 750\n        }\n      ]\n'
-        '      ecmp_multi_as = true\n      enforce_first_as = false\n      global_bfd = {\n'
+        "          decay_half_life_reachable = 60\n          decay_half_life_unreachable = 120\n"
+        "          enable = true\n          max_hold_time = 3000\n          reuse = 750\n        }\n      ]\n"
+        "      ecmp_multi_as = true\n      enforce_first_as = false\n      global_bfd = {\n"
         '        profile = "BFD-BGP"\n      }\n      install_route = true\n'
-        '      reject_default_route = false\n      routing_options = {\n        aggregate = {\n'
+        "      reject_default_route = false\n      routing_options = {\n        aggregate = {\n"
         '          aggregate_med = true\n        }\n        as_format = "2-byte"\n'
         '        confederation_member_as = "65010"\n        default_local_preference = 200\n'
-        '        graceful_restart = {\n          enable = true\n          local_restart_time = 180\n'
-        '          max_peer_restart_time = 240\n          stale_route_time = 300\n        }\n        med = {\n'
-        '          always_compare_med = true\n          deterministic_med_comparison = false\n        }\n'
-        '        reflector_cluster_id = "10.0.0.1"\n      }\n    }\n  }\n')
-    files = _run('bgp.xml', tmp_path)
-    block = files['virtual_routers.tf']
+        "        graceful_restart = {\n          enable = true\n          local_restart_time = 180\n"
+        "          max_peer_restart_time = 240\n          stale_route_time = 300\n        }\n        med = {\n"
+        "          always_compare_med = true\n          deterministic_med_comparison = false\n        }\n"
+        '        reflector_cluster_id = "10.0.0.1"\n      }\n    }\n  }\n'
+    )
+    files = _run("bgp.xml", tmp_path)
+    block = files["virtual_routers.tf"]
     assert expected in block, block
     findings = sanity_checks.check_protocol_object(files)
     assert findings == [], findings
@@ -1029,91 +1309,92 @@ def test_a_policy_block_prints_the_shape_the_table_states(tmp_path):
     half of it and the report names it once.
     """
     expected = (
-        '  protocol = {\n' + '    bgp = {\n' + '      enable = true\n'
-        '      local_as = "65001"\n' + '      policy = {\n' + '        aggregation = {\n'
-        '          address = [\n' + '            {\n' + '              advertise_filters = [\n'
-        '                {\n' + '                  enable = true\n'
-        '                  match = {\n' + '                    address_prefix = [\n'
-        '                      {\n' + '                        exact = true\n'
-        '                        name = "agg-prefix"\n' + '                      }\n'
-        '                    ]\n' + '                    as_path = {\n'
-        '                      regex = "65001.*"\n' + '                    }\n'
-        '                    community = {\n' + '                      regex = "1:1"\n'
-        '                    }\n' + '                    extended_community = {\n'
-        '                      regex = "1:2"\n' + '                    }\n'
+        "  protocol = {\n" + "    bgp = {\n" + "      enable = true\n"
+        '      local_as = "65001"\n' + "      policy = {\n" + "        aggregation = {\n"
+        "          address = [\n" + "            {\n" + "              advertise_filters = [\n"
+        "                {\n" + "                  enable = true\n"
+        "                  match = {\n" + "                    address_prefix = [\n"
+        "                      {\n" + "                        exact = true\n"
+        '                        name = "agg-prefix"\n' + "                      }\n"
+        "                    ]\n" + "                    as_path = {\n"
+        '                      regex = "65001.*"\n' + "                    }\n"
+        "                    community = {\n" + '                      regex = "1:1"\n'
+        "                    }\n" + "                    extended_community = {\n"
+        '                      regex = "1:2"\n' + "                    }\n"
         '                    from_peer = [ "192.0.2.1", "192.0.2.2" ]\n'
-        '                    med = 150\n' + '                    nexthop = [ "198.51.100.7" ]\n'
-        '                    route_table = "unicast"\n' + '                  }\n'
-        '                  name = "agg-advertises"\n' + '                }\n' + '              ]\n'
-        '              aggregate_route_attributes = {\n' + '                as_path = {\n'
-        '                  prepend = 5\n' + '                }\n'
-        '                as_path_limit = 5\n' + '                community = {\n'
-        '                  append = [ "1:10" ]\n' + '                }\n'
-        '                extended_community = {\n' + '                  remove_regex = "2:.*"\n'
-        '                }\n' + '                local_preference = 200\n'
-        '                med = 300\n' + '                nexthop = "198.51.100.9"\n'
-        '                origin = "igp"\n' + '                weight = 100\n' + '              }\n'
-        '              as_set = true\n' + '              enable = true\n'
+        "                    med = 150\n" + '                    nexthop = [ "198.51.100.7" ]\n'
+        '                    route_table = "unicast"\n' + "                  }\n"
+        '                  name = "agg-advertises"\n' + "                }\n" + "              ]\n"
+        "              aggregate_route_attributes = {\n" + "                as_path = {\n"
+        "                  prepend = 5\n" + "                }\n"
+        "                as_path_limit = 5\n" + "                community = {\n"
+        '                  append = [ "1:10" ]\n' + "                }\n"
+        "                extended_community = {\n" + '                  remove_regex = "2:.*"\n'
+        "                }\n" + "                local_preference = 200\n"
+        "                med = 300\n" + '                nexthop = "198.51.100.9"\n'
+        '                origin = "igp"\n' + "                weight = 100\n" + "              }\n"
+        "              as_set = true\n" + "              enable = true\n"
         '              name = "agg-10.0.0.0-8"\n' + '              prefix = "10.0.0.0/8"\n'
-        '              summary = true\n' + '              suppress_filters = [\n'
-        '                {\n' + '                  enable = true\n'
-        '                  match = {\n' + '                    address_prefix = [\n'
-        '                      {\n' + '                        exact = false\n'
-        '                        name = "agg-suppressed-prefix"\n' + '                      }\n'
-        '                    ]\n' + '                  }\n'
-        '                  name = "agg-suppresses"\n' + '                }\n' + '              ]\n'
-        '            }\n' + '          ]\n' + '        }\n'
-        '        conditional_advertisement = {\n' + '          policy = [\n' + '            {\n'
-        '              advertise_filters = [\n' + '                {\n'
-        '                  enable = true\n' + '                  match = {\n'
-        '                    address_prefix = [\n' + '                      {\n'
-        '                        name = "cond-prefix"\n' + '                      }\n'
-        '                    ]\n' + '                  }\n'
-        '                  name = "cond-advertises"\n' + '                }\n' + '              ]\n'
-        '              enable = true\n' + '              name = "cond-10.0.0.0-16"\n'
-        '              non_exist_filters = [\n' + '                {\n'
-        '                  enable = true\n' + '                  match = {\n'
-        '                    address_prefix = [\n' + '                      {\n'
-        '                        name = "cond-absent-prefix"\n' + '                      }\n'
-        '                    ]\n' + '                  }\n'
-        '                  name = "cond-non-exist"\n' + '                }\n' + '              ]\n'
-        '              used_by = [ "agg-10.0.0.0-8" ]\n' + '            }\n' + '          ]\n'
-        '        }\n' + '        export = {\n' + '          rules = [\n' + '            {\n'
-        '              action = {\n' + '                allow = {\n'
-        '                  update = {\n' + '                    as_path = {\n'
-        '                      remove = {}\n' + '                    }\n'
-        '                    community = {\n' + '                      append = [ "4:1" ]\n'
-        '                    }\n' + '                    local_preference = 150\n'
-        '                    med = 80\n' + '                    nexthop = "198.51.100.11"\n'
-        '                    origin = "egp"\n' + '                  }\n' + '                }\n'
-        '              }\n' + '              enable = true\n' + '              match = {\n'
-        '                address_prefix = [\n' + '                  {\n'
-        '                    exact = true\n' + '                    name = "export-prefix"\n'
-        '                  }\n' + '                ]\n'
-        '                from_peer = [ "192.0.2.1" ]\n' + '              }\n'
+        "              summary = true\n" + "              suppress_filters = [\n"
+        "                {\n" + "                  enable = true\n"
+        "                  match = {\n" + "                    address_prefix = [\n"
+        "                      {\n" + "                        exact = false\n"
+        '                        name = "agg-suppressed-prefix"\n' + "                      }\n"
+        "                    ]\n" + "                  }\n"
+        '                  name = "agg-suppresses"\n' + "                }\n" + "              ]\n"
+        "            }\n" + "          ]\n" + "        }\n"
+        "        conditional_advertisement = {\n" + "          policy = [\n" + "            {\n"
+        "              advertise_filters = [\n" + "                {\n"
+        "                  enable = true\n" + "                  match = {\n"
+        "                    address_prefix = [\n" + "                      {\n"
+        '                        name = "cond-prefix"\n' + "                      }\n"
+        "                    ]\n" + "                  }\n"
+        '                  name = "cond-advertises"\n' + "                }\n" + "              ]\n"
+        "              enable = true\n" + '              name = "cond-10.0.0.0-16"\n'
+        "              non_exist_filters = [\n" + "                {\n"
+        "                  enable = true\n" + "                  match = {\n"
+        "                    address_prefix = [\n" + "                      {\n"
+        '                        name = "cond-absent-prefix"\n' + "                      }\n"
+        "                    ]\n" + "                  }\n"
+        '                  name = "cond-non-exist"\n' + "                }\n" + "              ]\n"
+        '              used_by = [ "agg-10.0.0.0-8" ]\n' + "            }\n" + "          ]\n"
+        "        }\n" + "        export = {\n" + "          rules = [\n" + "            {\n"
+        "              action = {\n" + "                allow = {\n"
+        "                  update = {\n" + "                    as_path = {\n"
+        "                      remove = {}\n" + "                    }\n"
+        "                    community = {\n" + '                      append = [ "4:1" ]\n'
+        "                    }\n" + "                    local_preference = 150\n"
+        "                    med = 80\n" + '                    nexthop = "198.51.100.11"\n'
+        '                    origin = "egp"\n' + "                  }\n" + "                }\n"
+        "              }\n" + "              enable = true\n" + "              match = {\n"
+        "                address_prefix = [\n" + "                  {\n"
+        "                    exact = true\n" + '                    name = "export-prefix"\n'
+        "                  }\n" + "                ]\n"
+        '                from_peer = [ "192.0.2.1" ]\n' + "              }\n"
         '              name = "export-allow"\n' + '              used_by = [ "cond-10.0.0.0-16" ]\n'
-        '            }\n' + '          ]\n' + '        }\n' + '        import = {\n'
-        '          rules = [\n' + '            {\n' + '              action = {\n'
-        '                deny = {}\n' + '              }\n' + '              enable = true\n'
-        '              match = {\n' + '                address_prefix = [\n'
-        '                  {\n' + '                    exact = true\n'
-        '                    name = "import-prefix"\n' + '                  }\n'
-        '                ]\n' + '                nexthop = [ "198.51.100.12" ]\n'
-        '              }\n' + '              name = "import-deny"\n'
-        '              used_by = [ "agg-10.0.0.0-8" ]\n' + '            }\n' + '          ]\n'
-        '        }\n' + '      }\n' + '    }\n' + '  }\n'
+        "            }\n" + "          ]\n" + "        }\n" + "        import = {\n"
+        "          rules = [\n" + "            {\n" + "              action = {\n"
+        "                deny = {}\n" + "              }\n" + "              enable = true\n"
+        "              match = {\n" + "                address_prefix = [\n"
+        "                  {\n" + "                    exact = true\n"
+        '                    name = "import-prefix"\n' + "                  }\n"
+        "                ]\n" + '                nexthop = [ "198.51.100.12" ]\n'
+        "              }\n" + '              name = "import-deny"\n'
+        '              used_by = [ "agg-10.0.0.0-8" ]\n' + "            }\n" + "          ]\n"
+        "        }\n" + "      }\n" + "    }\n" + "  }\n"
     )
-    files = _run('bgp_policy.xml', tmp_path)
-    block = files['virtual_routers.tf']
+    files = _run("bgp_policy.xml", tmp_path)
+    block = files["virtual_routers.tf"]
     assert expected in block, block
     # The entry the file cannot hold is named by the report, and the file holds no half of it.
-    report = files['MANUAL_SETUP_REPORT.txt']
-    assert ('router policy-vr: rules export-no-action '
-            '(panos_virtual_router - action states no key PROTOCOL_SHAPE selects)') in report, report
+    report = files["MANUAL_SETUP_REPORT.txt"]
+    assert (
+        "router policy-vr: rules export-no-action (panos_virtual_router - action states no key PROTOCOL_SHAPE selects)"
+    ) in report, report
     # F7.6: the policy `address` level is not an address-object section, so the report names no address object
     # for the entry the address rule would otherwise read.
-    assert 'Address Objects With No v2 Attribute' not in report, report
-    assert 'export-no-action' not in block, block
+    assert "Address Objects With No v2 Attribute" not in report, report
+    assert "export-no-action" not in block, block
     # The gate reads the same table, so the block the run wrote reports no finding.
     findings = sanity_checks.check_protocol_object(files)
     assert findings == [], findings
@@ -1129,22 +1410,44 @@ def test_member_list_is_the_word_for_a_field_whose_members_are_values():
     F7.10 added the nine member list fields the redist profile rows state, and F7.11 added the two a redist rule
     states.
     """
-    fields = {field for row in resource_mapping.PROTOCOL_SHAPE.values()
-              for field, word in row['fields'].items() if word == 'member_list'}
-    assert fields == {'append', 'from_peer', 'nexthop', 'overwrite', 'used_by',
-                      # F7.10: the levels inside a redist profile entry state their values as members.
-                      'area', 'community', 'destination', 'extended_community', 'interface',
-                      'path_type', 'tag', 'type',
-                      # F7.11: a redist rule states its communities as members, not as entries.
-                      'set_community', 'set_extended_community'}, fields
-    assert sanity_checks.SHAPE_READS_AS['member_list'] == 'string_list', sanity_checks.SHAPE_READS_AS
-    assert sanity_checks.SHAPE_LEVELS == ('object', 'one_of', 'string_list'), sanity_checks.SHAPE_LEVELS
+    fields = {
+        field
+        for row in resource_mapping.PROTOCOL_SHAPE.values()
+        for field, word in row["fields"].items()
+        if word == "member_list"
+    }
+    assert fields == {
+        "append",
+        "from_peer",
+        "nexthop",
+        "overwrite",
+        "used_by",
+        # F7.10: the levels inside a redist profile entry state their values as members.
+        "area",
+        "community",
+        "destination",
+        "extended_community",
+        "interface",
+        "path_type",
+        "tag",
+        "type",
+        # F7.11: a redist rule states its communities as members, not as entries.
+        "set_community",
+        "set_extended_community",
+    }, fields
+    assert sanity_checks.SHAPE_READS_AS["member_list"] == "string_list", sanity_checks.SHAPE_READS_AS
+    assert sanity_checks.SHAPE_LEVELS == ("object", "one_of", "string_list"), sanity_checks.SHAPE_LEVELS
     # `nexthop` is a string at the aggregate level and a member list at the match level, so the word is the
     # field's shape at the row that states it, not the field name.
-    assert resource_mapping.protocol_row('protocol/bgp/policy/aggregation/address/aggregate_route_attributes')[
-        'fields']['nexthop'] == 'string'
-    assert resource_mapping.protocol_row('protocol/bgp/policy/export/rules/match')['fields']['nexthop'] == (
-        'member_list')
+    assert (
+        resource_mapping.protocol_row("protocol/bgp/policy/aggregation/address/aggregate_route_attributes")["fields"][
+            "nexthop"
+        ]
+        == "string"
+    )
+    assert resource_mapping.protocol_row("protocol/bgp/policy/export/rules/match")["fields"]["nexthop"] == (
+        "member_list"
+    )
 
 
 def test_the_gate_reads_a_member_list_as_values_and_not_as_entries(tmp_path):
@@ -1154,29 +1457,37 @@ def test_the_gate_reads_a_member_list_as_values_and_not_as_entries(tmp_path):
     asked for a `name`. The choice inside the same entry is read by the same rule as any other `one_of` level:
     the entry states one key, and that key is one the row selects.
     """
-    good = ('  protocol = {\n    bgp = {\n      policy = {\n        export = {\n          rules = [\n'
-            '            {\n              name = "r1"\n              used_by = [ "a", "b" ]\n'
-            '              action = {\n                allow = {}\n              }\n            }\n'
-            '          ]\n        }\n      }\n    }\n  }\n')
+    good = (
+        "  protocol = {\n    bgp = {\n      policy = {\n        export = {\n          rules = [\n"
+        '            {\n              name = "r1"\n              used_by = [ "a", "b" ]\n'
+        "              action = {\n                allow = {}\n              }\n            }\n"
+        "          ]\n        }\n      }\n    }\n  }\n"
+    )
     assert _findings(good) == [], good
     findings = _findings(good.replace('used_by = [ "a", "b" ]', 'used_by = "a"'))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/bgp/policy/export/rules '
-        'used_by is not a member_list value'], findings
-    findings = _findings(good.replace('action = {\n                allow = {}\n              }',
-                                      'action = {\n                allow = {}\n'
-                                      '                deny = {}\n              }'))
+        "protocol panos_virtual_router.default_00000000 protocol/bgp/policy/export/rules "
+        "used_by is not a member_list value"
+    ], findings
+    findings = _findings(
+        good.replace(
+            "action = {\n                allow = {}\n              }",
+            "action = {\n                allow = {}\n                deny = {}\n              }",
+        )
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/bgp/policy/export/rules/action '
-        'states 2 keys, which is not the one key PROTOCOL_SHAPE selects'], findings
-    findings = _findings(good.replace('allow = {}', 'approve = {}'))
+        "protocol panos_virtual_router.default_00000000 protocol/bgp/policy/export/rules/action "
+        "states 2 keys, which is not the one key PROTOCOL_SHAPE selects"
+    ], findings
+    findings = _findings(good.replace("allow = {}", "approve = {}"))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/bgp/policy/export/rules/action '
-        'key approve is not a key PROTOCOL_SHAPE selects'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/bgp/policy/export/rules/action "
+        "key approve is not a key PROTOCOL_SHAPE selects"
+    ], findings
     # The block the run wrote for the new fixture is the positive half: the rule reads the whole subtree and
     # reports nothing, including the two levels the export states by presence.
-    files = _run('bgp_policy.xml', tmp_path)
-    assert sanity_checks.check_protocol_object(files) == [], files['virtual_routers.tf']
+    files = _run("bgp_policy.xml", tmp_path)
+    assert sanity_checks.check_protocol_object(files) == [], files["virtual_routers.tf"]
 
 
 def test_the_gate_reads_a_scalar_level_against_the_row_it_states():
@@ -1186,33 +1497,41 @@ def test_the_gate_reads_a_scalar_level_against_the_row_it_states():
     field printed in a shape the row does not state, a field the row does not declare, and an element with no
     name are four findings.
     """
-    good = ('  protocol = {\n    ospfv3 = {\n      timers = {\n        lsa_interval = 120\n      }\n'
-            '      export_rules = [\n        {\n          name = "static-af"\n          new_tag = "0"\n        }\n'
-            '      ]\n    }\n  }\n')
+    good = (
+        "  protocol = {\n    ospfv3 = {\n      timers = {\n        lsa_interval = 120\n      }\n"
+        '      export_rules = [\n        {\n          name = "static-af"\n          new_tag = "0"\n        }\n'
+        "      ]\n    }\n  }\n"
+    )
     assert _findings(good) == [], good
-    findings = _findings(good.replace('timers = {\n        lsa_interval = 120\n      }', 'timers = 120'))
+    findings = _findings(good.replace("timers = {\n        lsa_interval = 120\n      }", "timers = 120"))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3 timers is not a object value'], findings
-    findings = _findings(good.replace('export_rules = [\n        {\n          name = "static-af"\n'
-                                      '          new_tag = "0"\n        }\n      ]',
-                                      'export_rules = {\n        name = "static-af"\n      }'))
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3 timers is not a object value"
+    ], findings
+    findings = _findings(
+        good.replace(
+            'export_rules = [\n        {\n          name = "static-af"\n          new_tag = "0"\n        }\n      ]',
+            'export_rules = {\n        name = "static-af"\n      }',
+        )
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3 export_rules '
-        'is not a string_list value'], findings
-    findings = _findings(good.replace('new_tag = "0"', 'new_tag = 0'))
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3 export_rules is not a string_list value"
+    ], findings
+    findings = _findings(good.replace('new_tag = "0"', "new_tag = 0"))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/export_rules '
-        'new_tag is not a string value'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3/export_rules new_tag is not a string value"
+    ], findings
     # An element inside a `[` container is an entry, so the entry name is the field the row reads for it.
-    findings = _findings(good.replace('{\n          name = "static-af"\n          new_tag = "0"',
-                                      '{\n          new_tag = "0"'))
+    findings = _findings(
+        good.replace('{\n          name = "static-af"\n          new_tag = "0"', '{\n          new_tag = "0"')
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/export_rules '
-        'element states no name'], findings
-    findings = _findings(good.replace('lsa_interval = 120', 'lsa_period = 120'))
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3/export_rules element states no name"
+    ], findings
+    findings = _findings(good.replace("lsa_interval = 120", "lsa_period = 120"))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/timers '
-        'lsa_period is not a field PROTOCOL_SHAPE declares'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3/timers "
+        "lsa_period is not a field PROTOCOL_SHAPE declares"
+    ], findings
 
 
 def test_the_gate_reads_an_ospf_level_against_the_row_it_states():
@@ -1225,31 +1544,37 @@ def test_the_gate_reads_an_ospf_level_against_the_row_it_states():
     finding the field rule reports for any name the row does not declare. The positive half read from a real
     run is `test_an_ospf_level_prints_the_shape_the_table_states`.
     """
-    good = ('  protocol = {\n    ospf = {\n      enable = true\n      router_id = "10.0.0.1"\n'
-            '      allow_redist_default_route = true\n      reject_default_route = false\n'
-            '      rfc1583 = true\n      timers = {\n        lsa_interval = 120\n      }\n'
-            '      global_bfd = {\n        profile = "BFD-OSPF"\n      }\n      graceful_restart = {\n'
-            '        enable = true\n        grace_period = 120\n        helper_enable = true\n'
-            '        max_neighbor_restart_time = 200\n        strict_l_s_a_checking = true\n      }\n'
-            '      export_rules = [\n        {\n          name = "export-static"\n          metric = 10\n'
-            '          new_path_type = "internal"\n          new_tag = "0"\n        }\n      ]\n    }\n  }\n')
+    good = (
+        '  protocol = {\n    ospf = {\n      enable = true\n      router_id = "10.0.0.1"\n'
+        "      allow_redist_default_route = true\n      reject_default_route = false\n"
+        "      rfc1583 = true\n      timers = {\n        lsa_interval = 120\n      }\n"
+        '      global_bfd = {\n        profile = "BFD-OSPF"\n      }\n      graceful_restart = {\n'
+        "        enable = true\n        grace_period = 120\n        helper_enable = true\n"
+        "        max_neighbor_restart_time = 200\n        strict_l_s_a_checking = true\n      }\n"
+        '      export_rules = [\n        {\n          name = "export-static"\n          metric = 10\n'
+        '          new_path_type = "internal"\n          new_tag = "0"\n        }\n      ]\n    }\n  }\n'
+    )
     assert _findings(good) == [], good
-    findings = _findings(good.replace('rfc1583 = true', 'rfc1583 = "yes"'))
+    findings = _findings(good.replace("rfc1583 = true", 'rfc1583 = "yes"'))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospf rfc1583 is not a bool value'], findings
-    findings = _findings(good.replace('reject_default_route = false', 'disable_transit_traffic = true'))
+        "protocol panos_virtual_router.default_00000000 protocol/ospf rfc1583 is not a bool value"
+    ], findings
+    findings = _findings(good.replace("reject_default_route = false", "disable_transit_traffic = true"))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospf '
-        'disable_transit_traffic is not a field PROTOCOL_SHAPE declares'], findings
-    findings = _findings(good.replace('timers = {\n        lsa_interval = 120\n      }', 'timers = 120'))
+        "protocol panos_virtual_router.default_00000000 protocol/ospf "
+        "disable_transit_traffic is not a field PROTOCOL_SHAPE declares"
+    ], findings
+    findings = _findings(good.replace("timers = {\n        lsa_interval = 120\n      }", "timers = 120"))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospf timers is not a object value'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/ospf timers is not a object value"
+    ], findings
     # An entry inside the entry list is an entry, so the entry name is the field the row reads for it.
-    findings = _findings(good.replace('{\n          name = "export-static"\n          metric = 10',
-                                      '{\n          metric = 10'))
+    findings = _findings(
+        good.replace('{\n          name = "export-static"\n          metric = 10', "{\n          metric = 10")
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospf/export_rules '
-        'element states no name'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/ospf/export_rules element states no name"
+    ], findings
 
 
 def test_the_gate_reads_a_redist_profile_entry_against_the_row_it_states():
@@ -1261,35 +1586,44 @@ def test_the_gate_reads_a_redist_profile_entry_against_the_row_it_states():
     provider declares both alternatives as optional, so the rule reads the level as an object. The positive half
     read from a real run is `test_a_redist_profile_entry_prints_the_shape_the_table_states`.
     """
-    good = ('  protocol = {\n    redist_profile = [\n        {\n          name = "RP"\n          priority = 10\n'
-            '          action = {\n            redist = {}\n          }\n          filter = {\n'
-            '            bgp = {\n              community = [ "100:1" ]\n            }\n'
-            '            destination = [ "10.20.0.0/16" ]\n            ospf = {\n'
-            '              area = [ "0.0.0.0" ]\n            }\n          }\n        }\n      ]\n    }\n  }\n')
+    good = (
+        '  protocol = {\n    redist_profile = [\n        {\n          name = "RP"\n          priority = 10\n'
+        "          action = {\n            redist = {}\n          }\n          filter = {\n"
+        '            bgp = {\n              community = [ "100:1" ]\n            }\n'
+        '            destination = [ "10.20.0.0/16" ]\n            ospf = {\n'
+        '              area = [ "0.0.0.0" ]\n            }\n          }\n        }\n      ]\n    }\n  }\n'
+    )
     assert _findings(good) == [], good
-    findings = _findings(good.replace('action = {\n            redist = {}\n          }',
-                                      'action = {\n            redist = true\n          }'))
+    findings = _findings(
+        good.replace(
+            "action = {\n            redist = {}\n          }", "action = {\n            redist = true\n          }"
+        )
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/redist_profile/action '
-        'redist is not a block value'], findings
-    findings = _findings(good.replace('priority = 10', 'priority = "10"'))
+        "protocol panos_virtual_router.default_00000000 protocol/redist_profile/action redist is not a block value"
+    ], findings
+    findings = _findings(good.replace("priority = 10", 'priority = "10"'))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/redist_profile '
-        'priority is not a number value'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/redist_profile priority is not a number value"
+    ], findings
     findings = _findings(good.replace('destination = [ "10.20.0.0/16" ]', 'destination = "10.20.0.0/16"'))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/redist_profile/filter '
-        'destination is not a member_list value'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/redist_profile/filter "
+        "destination is not a member_list value"
+    ], findings
     # An element inside the entry list is an entry, so the entry name is the field the row reads for it.
-    findings = _findings(good.replace('{\n          name = "RP"\n          priority = 10',
-                                      '{\n          priority = 10'))
+    findings = _findings(
+        good.replace('{\n          name = "RP"\n          priority = 10', "{\n          priority = 10")
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/redist_profile '
-        'element states no name'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/redist_profile element states no name"
+    ], findings
     # The dampening entry is read by the same rule, through the row the `bgp` row names.
-    damp = ('  protocol = {\n    bgp = {\n      dampening_profile = [\n        {\n'
-            '          name = "DAMP"\n          cutoff = 1500\n          reuse = 750\n        }\n      ]\n'
-            '    }\n  }\n')
+    damp = (
+        "  protocol = {\n    bgp = {\n      dampening_profile = [\n        {\n"
+        '          name = "DAMP"\n          cutoff = 1500\n          reuse = 750\n        }\n      ]\n'
+        "    }\n  }\n"
+    )
     assert _findings(damp) == [], damp
 
 
@@ -1302,57 +1636,66 @@ def test_the_gate_reads_a_peer_against_the_rows_it_states():
     so the six rows are the whole measurement for the walk as well as for the parse. The pin also reads the
     choice `peer_address` states, which the provider reads as exactly one.
     """
-    good = ('  protocol = {\n    bgp = {\n      peer_group = [\n        {\n'
-            '          name = "PG"\n          aggregated_confed_as_path = true\n'
-            '          soft_reset_with_stored_info = false\n          peer = [\n            {\n'
-            '              name = "10.0.0.1"\n              address_family_identifier = "ipv4-unicast"\n'
-            '              bfd = {\n                profile = "BFD-BGP"\n              }\n'
-            '              connection_options = {\n                hold_time = "180"\n'
-            '                idle_hold_time = 30\n                incoming_bgp_connection = {\n'
-            '                  allow = true\n                  remote_port = 179\n                }\n              }\n'
-            '              max_prefixes = "65536"\n              enable_mp_bgp = true\n'
-            '              subsequent_address_family_identifier = {\n'
-            '                multicast = true\n              }\n'
-            '            }\n          ]\n        }\n      ]\n      redist_rules = [\n        {\n'
-            '          name = "redist-static"\n          route_table = "1"\n          set_med = 100\n'
-            '          set_community = [ "1:10" ]\n        }\n      ]\n    }\n  }\n')
+    good = (
+        "  protocol = {\n    bgp = {\n      peer_group = [\n        {\n"
+        '          name = "PG"\n          aggregated_confed_as_path = true\n'
+        "          soft_reset_with_stored_info = false\n          peer = [\n            {\n"
+        '              name = "10.0.0.1"\n              address_family_identifier = "ipv4-unicast"\n'
+        '              bfd = {\n                profile = "BFD-BGP"\n              }\n'
+        '              connection_options = {\n                hold_time = "180"\n'
+        "                idle_hold_time = 30\n                incoming_bgp_connection = {\n"
+        "                  allow = true\n                  remote_port = 179\n                }\n              }\n"
+        '              max_prefixes = "65536"\n              enable_mp_bgp = true\n'
+        "              subsequent_address_family_identifier = {\n"
+        "                multicast = true\n              }\n"
+        "            }\n          ]\n        }\n      ]\n      redist_rules = [\n        {\n"
+        '          name = "redist-static"\n          route_table = "1"\n          set_med = 100\n'
+        '          set_community = [ "1:10" ]\n        }\n      ]\n    }\n  }\n'
+    )
     assert _findings(good) == [], good
     # The seven levels the walk now enters are rows, so a value the row does not state is a finding.
-    findings = _findings(good.replace('bfd = {\n                profile = "BFD-BGP"\n              }',
-                                      'bfd = "BFD-BGP"'))
+    findings = _findings(
+        good.replace('bfd = {\n                profile = "BFD-BGP"\n              }', 'bfd = "BFD-BGP"')
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer bfd '
-        'is not a object value'], findings
-    findings = _findings(good.replace('idle_hold_time = 30', 'idle_hold_time = "30"'))
+        "protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer bfd is not a object value"
+    ], findings
+    findings = _findings(good.replace("idle_hold_time = 30", 'idle_hold_time = "30"'))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer/connection_options '
-        'idle_hold_time is not a number value'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer/connection_options "
+        "idle_hold_time is not a number value"
+    ], findings
     # `max_prefixes` is a `string` the provider declares, so the block states it as a string.
-    findings = _findings(good.replace('max_prefixes = "65536"', 'max_prefixes = 65536'))
+    findings = _findings(good.replace('max_prefixes = "65536"', "max_prefixes = 65536"))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer '
-        'max_prefixes is not a string value'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer max_prefixes is not a string value"
+    ], findings
     findings = _findings(good.replace('set_community = [ "1:10" ]', 'set_community = "1:10"'))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/bgp/redist_rules '
-        'set_community is not a member_list value'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/bgp/redist_rules "
+        "set_community is not a member_list value"
+    ], findings
     # A field the row does not declare is still a finding, so completing a row does not open the walk to any name.
-    findings = _findings(good.replace('set_med = 100', 'set_weight = 100'))
+    findings = _findings(good.replace("set_med = 100", "set_weight = 100"))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/bgp/redist_rules '
-        'set_weight is not a field PROTOCOL_SHAPE declares'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/bgp/redist_rules "
+        "set_weight is not a field PROTOCOL_SHAPE declares"
+    ], findings
 
     # F7.12: `peer_address` is the level the provider reads as exactly one, so a block that states both
     # alternatives is a finding, and the fixture states one attribute because the provider requires one.
     # Measured 2026-11-03 with `terraform validate` (provider 2.0.14), which also refuses a level that states
     # none.
-    both = (good.replace('name = "10.0.0.1"',
-                         'name = "10.0.0.1"\n              peer_address = {\n'
-                         '                ip = "10.0.0.2"\n                fqdn = "host.example.com"\n'
-                         '              }'))
+    both = good.replace(
+        'name = "10.0.0.1"',
+        'name = "10.0.0.1"\n              peer_address = {\n'
+        '                ip = "10.0.0.2"\n                fqdn = "host.example.com"\n'
+        "              }",
+    )
     assert [f.detail for f in _findings(both)] == [
-        'protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer/peer_address '
-        'states 2 keys, which is not the one key PROTOCOL_SHAPE selects'], both
+        "protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer/peer_address "
+        "states 2 keys, which is not the one key PROTOCOL_SHAPE selects"
+    ], both
 
 
 def test_a_choice_body_prints_the_fields_it_declares(tmp_path):
@@ -1363,16 +1706,20 @@ def test_a_choice_body_prints_the_fields_it_declares(tmp_path):
     the choice inside the body by presence, and the print states the key the row selects for it, which is
     `disable` for the value `no`.
     """
-    ospf_body = ('type = {\n            stub = {\n              accept_summary = true\n'
-                 '              default_route = {\n                advertise = {\n                  metric = 10\n'
-                 '                }\n              }\n            }\n          }')
-    ospfv3_body = ('type = {\n            nssa = {\n              accept_summary = true\n'
-                   '              default_route = {\n                disable = {}\n              }\n'
-                   '              nssa_ext_range = [\n                {\n'
-                   '                  name = "10.20.0.0/16"\n                  advertise = {}\n'
-                   '                }\n              ]\n            }\n          }')
-    ospf = _run('ospf.xml', tmp_path / 'ospf')['virtual_routers.tf']
-    ospfv3 = _run('ospfv3.xml', tmp_path / 'ospfv3')['virtual_routers.tf']
+    ospf_body = (
+        "type = {\n            stub = {\n              accept_summary = true\n"
+        "              default_route = {\n                advertise = {\n                  metric = 10\n"
+        "                }\n              }\n            }\n          }"
+    )
+    ospfv3_body = (
+        "type = {\n            nssa = {\n              accept_summary = true\n"
+        "              default_route = {\n                disable = {}\n              }\n"
+        "              nssa_ext_range = [\n                {\n"
+        '                  name = "10.20.0.0/16"\n                  advertise = {}\n'
+        "                }\n              ]\n            }\n          }"
+    )
+    ospf = _run("ospf.xml", tmp_path / "ospf")["virtual_routers.tf"]
+    ospfv3 = _run("ospfv3.xml", tmp_path / "ospfv3")["virtual_routers.tf"]
     assert ospf_body in ospf, ospf
     assert ospfv3_body in ospfv3, ospfv3
     # F7.4: a neighbor entry prints as the entry name, which is the whole shape the row states.
@@ -1387,29 +1734,38 @@ def test_the_gate_reads_a_choice_inside_a_body():
     states one key, and that key is one the row's mapping selects. The value the export states (`no`) is not
     the key the print states (`disable`), so a block that writes the export spelling is a finding.
     """
-    good = ('  protocol = {\n    ospfv3 = {\n      area = [\n        {\n          name = "0.0.0.0"\n'
-            '          type = {\n            nssa = {\n              default_route = {\n'
-            '                disable = {}\n              }\n            }\n          }\n        }\n      ]\n'
-            '    }\n  }\n')
+    good = (
+        '  protocol = {\n    ospfv3 = {\n      area = [\n        {\n          name = "0.0.0.0"\n'
+        "          type = {\n            nssa = {\n              default_route = {\n"
+        "                disable = {}\n              }\n            }\n          }\n        }\n      ]\n"
+        "    }\n  }\n"
+    )
     assert _findings(good) == [], good
-    findings = _findings(good.replace('disable = {}', 'no = {}'))
+    findings = _findings(good.replace("disable = {}", "no = {}"))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/area/type/nssa/default_route '
-        'key no is not a key PROTOCOL_SHAPE selects'], findings
-    findings = _findings(good.replace('default_route = {\n                disable = {}\n              }',
-                                      'default_route = {}'))
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3/area/type/nssa/default_route "
+        "key no is not a key PROTOCOL_SHAPE selects"
+    ], findings
+    findings = _findings(
+        good.replace("default_route = {\n                disable = {}\n              }", "default_route = {}")
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/area/type/nssa/default_route '
-        'states 0 keys, which is not the one key PROTOCOL_SHAPE selects'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3/area/type/nssa/default_route "
+        "states 0 keys, which is not the one key PROTOCOL_SHAPE selects"
+    ], findings
     # The entries inside a `string_list` level hold the entry name, which is the field the row reads.
-    findings = _findings(good.replace(
-        'default_route = {\n                disable = {}\n              }',
-        'default_route = {\n                disable = {}\n              }\n'
-        '              nssa_ext_range = [\n                {\n                  advertise = {}\n                }\n'
-        '              ]'))
+    findings = _findings(
+        good.replace(
+            "default_route = {\n                disable = {}\n              }",
+            "default_route = {\n                disable = {}\n              }\n"
+            "              nssa_ext_range = [\n                {\n                  advertise = {}\n                }\n"
+            "              ]",
+        )
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/area/type/nssa/nssa_ext_range '
-        'element states no name'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3/area/type/nssa/nssa_ext_range "
+        "element states no name"
+    ], findings
 
 
 def test_the_gate_reads_a_choice_inside_an_entry_level():
@@ -1421,36 +1777,48 @@ def test_the_gate_reads_a_choice_inside_an_entry_level():
     a `string_list` level, and the fields of a chosen alternative are checked against the row for that
     alternative.
     """
-    good = ('  protocol = {\n    rip = {\n      interfaces = [\n        {\n'
-            '          name = "ethernet1/2"\n          default_route = {\n            advertise = {\n'
-            '              metric = 10\n            }\n          }\n        }\n      ]\n    }\n  }\n')
+    good = (
+        "  protocol = {\n    rip = {\n      interfaces = [\n        {\n"
+        '          name = "ethernet1/2"\n          default_route = {\n            advertise = {\n'
+        "              metric = 10\n            }\n          }\n        }\n      ]\n    }\n  }\n"
+    )
     assert _findings(good) == [], good
-    findings = _findings(good.replace('advertise = {\n              metric = 10\n            }',
-                                      'advertise = {}\n            disable = {}'))
+    findings = _findings(
+        good.replace(
+            "advertise = {\n              metric = 10\n            }", "advertise = {}\n            disable = {}"
+        )
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/rip/interfaces/default_route '
-        'states 2 keys, which is not the one key PROTOCOL_SHAPE selects'], findings
-    findings = _findings(good.replace('            advertise = {\n              metric = 10\n            }',
-                                      '            no = {}'))
+        "protocol panos_virtual_router.default_00000000 protocol/rip/interfaces/default_route "
+        "states 2 keys, which is not the one key PROTOCOL_SHAPE selects"
+    ], findings
+    findings = _findings(
+        good.replace("            advertise = {\n              metric = 10\n            }", "            no = {}")
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/rip/interfaces/default_route '
-        'key no is not a key PROTOCOL_SHAPE selects'], findings
-    findings = _findings(good.replace('metric = 10', 'made_up = 10'))
+        "protocol panos_virtual_router.default_00000000 protocol/rip/interfaces/default_route "
+        "key no is not a key PROTOCOL_SHAPE selects"
+    ], findings
+    findings = _findings(good.replace("metric = 10", "made_up = 10"))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/rip/interfaces/default_route/advertise '
-        'made_up is not a field PROTOCOL_SHAPE declares'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/rip/interfaces/default_route/advertise "
+        "made_up is not a field PROTOCOL_SHAPE declares"
+    ], findings
     # `mode` is a string, so the row states no `selects` for it: the value is the string the export states.
-    findings = _findings(good.replace('          name = "ethernet1/2"\n',
-                                      '          name = "ethernet1/2"\n          mode = {\n'
-                                      '            v2 = {}\n          }\n'))
+    findings = _findings(
+        good.replace(
+            '          name = "ethernet1/2"\n',
+            '          name = "ethernet1/2"\n          mode = {\n            v2 = {}\n          }\n',
+        )
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/rip/interfaces '
-        'mode is not a string value'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/rip/interfaces mode is not a string value"
+    ], findings
     # An element inside a `[` container is an entry, so the entry name is the field the row reads for it.
     findings = _findings(good.replace('{\n          name = "ethernet1/2"\n', '{\n          mode = "v2"\n'))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/rip/interfaces '
-        'element states no name'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/rip/interfaces element states no name"
+    ], findings
 
 
 def test_an_unmapped_one_of_value_prints_nothing_and_is_reported(make_parser):
@@ -1459,42 +1827,42 @@ def test_an_unmapped_one_of_value_prints_nothing_and_is_reported(make_parser):
     `_protocol_choice` states both the printed value and the reason it cannot be printed, so the parse
     marks the entry for the report with that reason and does not put it in the printed list.
     """
-    parser = make_parser('ospf.xml')
+    parser = make_parser("ospf.xml")
     parser.parse_virtual_routers()
     rows = entry_coverage.protocol_report_rows(parser.ledger)
-    unmapped = [row for row in rows if row['name'] == 'ethernet1/3']
+    unmapped = [row for row in rows if row["name"] == "ethernet1/3"]
     assert len(unmapped) == 1, rows
-    assert unmapped[0]['detail'] == (
-        'link_type multicast is not a value PROTOCOL_SHAPE states'), unmapped[0]
-    assert unmapped[0]['captured']['link_type'] == {'multicast': {}}, unmapped[0]
+    assert unmapped[0]["detail"] == ("link_type multicast is not a value PROTOCOL_SHAPE states"), unmapped[0]
+    assert unmapped[0]["captured"]["link_type"] == {"multicast": {}}, unmapped[0]
     # The parse prints nothing for a value the mapping cannot state, so the file has no empty field.
-    assert sanity_checks.value_shape('') == ''
+    assert sanity_checks.value_shape("") == ""
 
 
 def test_an_ospf_interface_at_the_router_level_is_reported(make_parser):
     """`PROTOCOL_SHAPE` states no interface outside an area, so the row's note is the reason (F7.1)."""
-    parser = make_parser('ospf.xml')
+    parser = make_parser("ospf.xml")
     parser.parse_virtual_routers()
     rows = entry_coverage.protocol_report_rows(parser.ledger)
-    outside = [row for row in rows if row['name'] == 'ethernet1/1']
+    outside = [row for row in rows if row["name"] == "ethernet1/1"]
     assert len(outside) == 1, rows
     # The mark states no detail, because the container row's note is the reason.
-    assert outside[0]['detail'] == 'no provider field for an interface outside an area', outside[0]
-    assert outside[0]['level'] == 'interface', outside[0]
+    assert outside[0]["detail"] == "no provider field for an interface outside an area", outside[0]
+    assert outside[0]["level"] == "interface", outside[0]
 
 
 def test_an_ospfv3_interface_at_the_level_is_reported(make_parser):
     """The same rule serves both routing levels: the container row's note is the reason (F7.2)."""
-    parser = make_parser('ospfv3.xml')
+    parser = make_parser("ospfv3.xml")
     parser.parse_virtual_routers()
     rows = entry_coverage.protocol_report_rows(parser.ledger)
-    outside = [row for row in rows if row['name'] == 'ethernet1/1']
+    outside = [row for row in rows if row["name"] == "ethernet1/1"]
     assert len(outside) == 1, rows
-    assert outside[0]['detail'] == 'no provider field for an interface outside an area', outside[0]
-    assert outside[0]['level'] == 'interface', outside[0]
+    assert outside[0]["detail"] == "no provider field for an interface outside an area", outside[0]
+    assert outside[0]["level"] == "interface", outside[0]
 
 
 # --- 5. a sensitive field prints as the variable reference -------------------
+
 
 def test_a_sensitive_field_prints_as_the_variable_reference(converter_module, tmp_path):
     """The rule refuses a secret written as a literal, and the emitter prints the reference the table says.
@@ -1503,29 +1871,35 @@ def test_a_sensitive_field_prints_as_the_variable_reference(converter_module, tm
     (`test_an_auth_profile_prints_the_reference_the_entry_names`); the block here is written by hand, so the pin
     is the rule alone: the table row is what both the emitter and the rule read.
     """
-    findings = _findings('  protocol = {\n    bgp = {\n      auth_profile = [\n        {\n'
-                         '          name = "AP-1"\n          secret = "hunter2"\n        }\n      ]\n    }\n  }\n')
+    findings = _findings(
+        "  protocol = {\n    bgp = {\n      auth_profile = [\n        {\n"
+        '          name = "AP-1"\n          secret = "hunter2"\n        }\n      ]\n    }\n  }\n'
+    )
     assert len(findings) == 1, findings
-    assert 'prints a sensitive value as a literal' in findings[0].detail, findings[0]
-    assert _findings('  protocol = {\n    bgp = {\n      auth_profile = [\n        {\n'
-                     '          name = "AP-1"\n          secret = var.ap_1\n        }\n      ]\n    }\n  }\n') == []
+    assert "prints a sensitive value as a literal" in findings[0].detail, findings[0]
+    assert (
+        _findings(
+            "  protocol = {\n    bgp = {\n      auth_profile = [\n        {\n"
+            '          name = "AP-1"\n          secret = var.ap_1\n        }\n      ]\n    }\n  }\n'
+        )
+        == []
+    )
 
     # The print site is `printed_value`, and a reference-only name records no value for the `.tfvars`, so
     # the run declares nothing and writes no line for it: the operator supplies the value.
     # F6.10.4: the print site takes the unit's facts, so the record is keyed by the unit the block reads.
     generator = converter_module.TerraformGenerator(str(tmp_path))
-    entry = {'name': 'AP-1'}
+    entry = {"name": "AP-1"}
     facts = unit_manifest.facts_of(entry)
-    assert generator.printed_value('secret', 'AP-1', facts) == naming.variable_text('AP-1')
+    assert generator.printed_value("secret", "AP-1", facts) == naming.variable_text("AP-1")
     assert generator.value_variables() == {facts: {}}, generator.value_variables()
-    printed = generator._protocol_fields('protocol/bgp/auth_profile',
-                                         {'name': 'AP-1', 'secret': 'hunter2'}, entry)
+    printed = generator._protocol_fields("protocol/bgp/auth_profile", {"name": "AP-1", "secret": "hunter2"}, entry)
     # A reference prints unquoted, so the value is the HCL expression the reader reads as an object, not a
     # quoted string.
-    assert printed['secret'].expr == naming.variable_text('AP-1'), printed
-    assert 'name' in printed, printed
+    assert printed["secret"].expr == naming.variable_text("AP-1"), printed
+    assert "name" in printed, printed
     rendered = generator.hcl_value(printed)
-    assert 'secret = var.ap_1' in rendered and '"hunter2"' not in rendered, rendered
+    assert "secret = var.ap_1" in rendered and '"hunter2"' not in rendered, rendered
 
 
 def test_a_rip_auth_profile_field_prints_the_reference_only():
@@ -1535,17 +1909,21 @@ def test_a_rip_auth_profile_field_prints_the_reference_only():
     read above. The schema marks `password` on the profile level and `key` inside `md5`, so the rule refuses a
     literal for each and accepts the variable reference.
     """
-    literal = ('  protocol = {\n    rip = {\n      auth_profile = [\n        {\n'
-               '          name = "AP-RIP"\n          password = "hunter2"\n          md5 = [\n'
-               '            {\n              name = "MD5-1"\n              key = "hunter2"\n            }\n'
-               '          ]\n        }\n      ]\n    }\n  }\n')
+    literal = (
+        "  protocol = {\n    rip = {\n      auth_profile = [\n        {\n"
+        '          name = "AP-RIP"\n          password = "hunter2"\n          md5 = [\n'
+        '            {\n              name = "MD5-1"\n              key = "hunter2"\n            }\n'
+        "          ]\n        }\n      ]\n    }\n  }\n"
+    )
     assert [f.detail for f in _findings(literal)] == [
-        'protocol panos_virtual_router.default_00000000 protocol/rip/auth_profile '
-        'password prints a sensitive value as a literal',
-        'protocol panos_virtual_router.default_00000000 protocol/rip/auth_profile/md5 '
-        'key prints a sensitive value as a literal'], _findings(literal)
-    reference = literal.replace('password = "hunter2"', 'password = var.ap_rip').replace(
-        'key = "hunter2"', 'key = var.md5_1')
+        "protocol panos_virtual_router.default_00000000 protocol/rip/auth_profile "
+        "password prints a sensitive value as a literal",
+        "protocol panos_virtual_router.default_00000000 protocol/rip/auth_profile/md5 "
+        "key prints a sensitive value as a literal",
+    ], _findings(literal)
+    reference = literal.replace('password = "hunter2"', "password = var.ap_rip").replace(
+        'key = "hunter2"', "key = var.md5_1"
+    )
     assert _findings(reference) == [], reference
 
 
@@ -1559,27 +1937,29 @@ def test_an_auth_profile_prints_the_reference_the_entry_names(tmp_path):
     block the run wrote reports no finding. The fixture states the two `ospfv3` choice levels in two entries,
     because the provider accepts one or the other for an entry, which `terraform validate` confirms.
     """
-    expected = ('  protocol = {\n    bgp = {\n      enable = true\n      auth_profile = [\n'
-                '        {\n          name = "profile-bgp"\n          secret = var.profile_bgp\n'
-                '        }\n      ]\n    }\n    ospf = {\n      enable = true\n'
-                '      auth_profile = [\n        {\n          name = "profile-ospf"\n'
-                '          password = var.profile_ospf\n          md5 = [\n            {\n'
-                '              name = "profile-ospf-md5"\n              key = var.profile_ospf_md5\n'
-                '              preferred = true\n            }\n          ]\n        }\n      ]'
-                '\n    }\n    ospfv3 = {\n      enable = true\n      auth_profile = [\n        {'
-                '\n          name = "profile-ospfv3-ah"\n          spi = "2000"\n          ah = {\n'
-                '            sha1 = {\n              key = var.profile_ospfv3_ah\n            }\n'
-                '          }\n        },\n        {\n          name = "profile-ospfv3-esp"\n'
-                '          esp = {\n            authentication = {\n              none = {}\n'
-                '            }\n            encryption = {\n              algorithm = "aes256"\n'
-                '              key = var.profile_ospfv3_esp\n            }\n          }\n        }'
-                '\n      ]\n    }\n    rip = {\n      enable = true\n      auth_profile = [\n'
-                '        {\n          name = "profile-rip"\n          password = var.profile_rip\n'
-                '          md5 = [\n            {\n              name = "profile-rip-md5"\n'
-                '              key = var.profile_rip_md5\n            }\n          ]\n        }\n'
-                '      ]\n    }\n  }\n}')
-    files = _run('auth_profile.xml', tmp_path)
-    block = files['virtual_routers.tf']
+    expected = (
+        "  protocol = {\n    bgp = {\n      enable = true\n      auth_profile = [\n"
+        '        {\n          name = "profile-bgp"\n          secret = var.profile_bgp\n'
+        "        }\n      ]\n    }\n    ospf = {\n      enable = true\n"
+        '      auth_profile = [\n        {\n          name = "profile-ospf"\n'
+        "          password = var.profile_ospf\n          md5 = [\n            {\n"
+        '              name = "profile-ospf-md5"\n              key = var.profile_ospf_md5\n'
+        "              preferred = true\n            }\n          ]\n        }\n      ]"
+        "\n    }\n    ospfv3 = {\n      enable = true\n      auth_profile = [\n        {"
+        '\n          name = "profile-ospfv3-ah"\n          spi = "2000"\n          ah = {\n'
+        "            sha1 = {\n              key = var.profile_ospfv3_ah\n            }\n"
+        '          }\n        },\n        {\n          name = "profile-ospfv3-esp"\n'
+        "          esp = {\n            authentication = {\n              none = {}\n"
+        '            }\n            encryption = {\n              algorithm = "aes256"\n'
+        "              key = var.profile_ospfv3_esp\n            }\n          }\n        }"
+        "\n      ]\n    }\n    rip = {\n      enable = true\n      auth_profile = [\n"
+        '        {\n          name = "profile-rip"\n          password = var.profile_rip\n'
+        '          md5 = [\n            {\n              name = "profile-rip-md5"\n'
+        "              key = var.profile_rip_md5\n            }\n          ]\n        }\n"
+        "      ]\n    }\n  }\n}"
+    )
+    files = _run("auth_profile.xml", tmp_path)
+    block = files["virtual_routers.tf"]
     assert expected in block, block
     assert sanity_checks.check_protocol_object(files) == [], sanity_checks.check_protocol_object(files)
 
@@ -1593,37 +1973,50 @@ def test_the_gate_reads_a_choice_level_inside_an_auth_profile():
     The provider accepts `ah` or `esp` for one entry, so the example states them in two entries, the way the
     fixture does.
     """
-    literal = ('  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n'
-               '          name = "AP-3"\n          ah = {\n            sha1 = {\n'
-               '              key = "hunter2"\n            }\n          }\n        },\n        {\n'
-               '          name = "AP-4"\n          esp = {\n            authentication = {\n'
-               '              md5 = {\n                key = "hunter2"\n              }\n            }\n          }\n'
-               '        }\n      ]\n    }\n  }\n')
+    literal = (
+        "  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n"
+        '          name = "AP-3"\n          ah = {\n            sha1 = {\n'
+        '              key = "hunter2"\n            }\n          }\n        },\n        {\n'
+        '          name = "AP-4"\n          esp = {\n            authentication = {\n'
+        '              md5 = {\n                key = "hunter2"\n              }\n            }\n          }\n'
+        "        }\n      ]\n    }\n  }\n"
+    )
     assert [f.detail for f in _findings(literal)] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile/ah/sha1 '
-        'key prints a sensitive value as a literal',
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile/esp/authentication/md5 '
-        'key prints a sensitive value as a literal'], _findings(literal)
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile/ah/sha1 "
+        "key prints a sensitive value as a literal",
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile/esp/authentication/md5 "
+        "key prints a sensitive value as a literal",
+    ], _findings(literal)
     # Each entry names its own variable, so a reference for each is the shape the gate accepts.
-    reference = ('  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n'
-                 '          name = "AP-3"\n          ah = {\n            sha1 = {\n'
-                 '              key = var.ap_3\n            }\n          }\n        },\n        {\n'
-                 '          name = "AP-4"\n          esp = {\n            authentication = {\n'
-                 '              md5 = {\n                key = var.ap_4\n              }\n            }\n          }\n'
-                 '        }\n      ]\n    }\n  }\n')
+    reference = (
+        "  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n"
+        '          name = "AP-3"\n          ah = {\n            sha1 = {\n'
+        "              key = var.ap_3\n            }\n          }\n        },\n        {\n"
+        '          name = "AP-4"\n          esp = {\n            authentication = {\n'
+        "              md5 = {\n                key = var.ap_4\n              }\n            }\n          }\n"
+        "        }\n      ]\n    }\n  }\n"
+    )
     assert _findings(reference) == [], reference
     # A `block` alternative is the empty object the export stated by presence, so it is the shape the reader
     # reads back.
-    assert _findings('  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n'
-                     '          name = "AP-3"\n          esp = {\n            authentication = {\n'
-                     '              none = {}\n            }\n          }\n        }\n      ]\n    }\n  }\n') == []
+    assert (
+        _findings(
+            "  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n"
+            '          name = "AP-3"\n          esp = {\n            authentication = {\n'
+            "              none = {}\n            }\n          }\n        }\n      ]\n    }\n  }\n"
+        )
+        == []
+    )
     # A value the row does not state as an alternative is the same finding the one-of rule reports.
-    findings = _findings('  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n'
-                         '          name = "AP-3"\n          ah = {\n            unknown = {}\n'
-                         '          }\n        }\n      ]\n    }\n  }\n')
+    findings = _findings(
+        "  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n"
+        '          name = "AP-3"\n          ah = {\n            unknown = {}\n'
+        "          }\n        }\n      ]\n    }\n  }\n"
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile/ah key unknown '
-        'is not a key PROTOCOL_SHAPE selects'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile/ah key unknown "
+        "is not a key PROTOCOL_SHAPE selects"
+    ], findings
 
 
 def test_the_choice_rule_reads_a_level_and_an_entry(tmp_path):
@@ -1636,54 +2029,79 @@ def test_the_choice_rule_reads_a_level_and_an_entry(tmp_path):
     is unchanged: a run that states one alternative prints one key, and the gate reads those blocks with no
     finding.
     """
-    entry = ('  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n'
-             '          name = "AP-1"\n          spi = "100"\n          ah = {\n'
-             '            md5 = {\n              key = var.ap_1\n            }\n          }\n        }\n      ]\n'
-             '    }\n  }\n')
+    entry = (
+        "  protocol = {\n    ospfv3 = {\n      auth_profile = [\n        {\n"
+        '          name = "AP-1"\n          spi = "100"\n          ah = {\n'
+        "            md5 = {\n              key = var.ap_1\n            }\n          }\n        }\n      ]\n"
+        "    }\n  }\n"
+    )
     assert _findings(entry) == [], entry
     # The finding names the level the row states, because the entry is the object the rule reads.
-    assert [f.detail for f in _findings(entry.replace(
-        '          ah = {\n            md5 = {\n              key = var.ap_1\n            }\n          }\n',
-        '          ah = {\n            md5 = {\n              key = var.ap_1\n            }\n          }\n'
-        '          esp = {\n            encryption = {\n              algorithm = "aes256"\n'
-        '              key = var.ap_1\n            }\n          }\n'))] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile '
-        'states 2 keys, which is not the one key PROTOCOL_SHAPE selects']
-    assert [f.detail for f in _findings(entry.replace(
-        '          ah = {\n            md5 = {\n              key = var.ap_1\n            }\n          }\n', ''))] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile '
-        'states 0 keys, which is not the one key PROTOCOL_SHAPE selects']
+    assert [
+        f.detail
+        for f in _findings(
+            entry.replace(
+                "          ah = {\n            md5 = {\n              key = var.ap_1\n            }\n          }\n",
+                "          ah = {\n            md5 = {\n              key = var.ap_1\n            }\n          }\n"
+                '          esp = {\n            encryption = {\n              algorithm = "aes256"\n'
+                "              key = var.ap_1\n            }\n          }\n",
+            )
+        )
+    ] == [
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile "
+        "states 2 keys, which is not the one key PROTOCOL_SHAPE selects"
+    ]
+    assert [
+        f.detail
+        for f in _findings(
+            entry.replace(
+                "          ah = {\n            md5 = {\n              key = var.ap_1\n            }\n          }\n", ""
+            )
+        )
+    ] == [
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile "
+        "states 0 keys, which is not the one key PROTOCOL_SHAPE selects"
+    ]
     # `name` and `spi` are fields and not alternatives, so the field rule reads them and the choice rule counts
     # only the keys it selects.
     findings = _findings(entry.replace('spi = "100"', 'made_up = "100"'))
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile '
-        'made_up is not a field PROTOCOL_SHAPE declares'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/ospfv3/auth_profile "
+        "made_up is not a field PROTOCOL_SHAPE declares"
+    ], findings
     # The whole-value choice is the same rule.
-    level = ('  protocol = {\n    bgp = {\n      peer_group = [\n        {\n          name = "PG"\n'
-             '          peer = [\n            {\n              name = "10.0.0.1"\n              peer_address = {\n'
-             '                fqdn = "host.example.com"\n              }\n            }\n          ]\n        }\n'
-             '      ]\n    }\n  }\n')
+    level = (
+        '  protocol = {\n    bgp = {\n      peer_group = [\n        {\n          name = "PG"\n'
+        '          peer = [\n            {\n              name = "10.0.0.1"\n              peer_address = {\n'
+        '                fqdn = "host.example.com"\n              }\n            }\n          ]\n        }\n'
+        "      ]\n    }\n  }\n"
+    )
     assert _findings(level) == [], level
-    findings = _findings(level.replace('fqdn = "host.example.com"',
-                                       'fqdn = "host.example.com"\n                ip = "10.0.0.2"'))
+    findings = _findings(
+        level.replace('fqdn = "host.example.com"', 'fqdn = "host.example.com"\n                ip = "10.0.0.2"')
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer/peer_address '
-        'states 2 keys, which is not the one key PROTOCOL_SHAPE selects'], findings
-    findings = _findings(level.replace(
-        'peer_address = {\n                fqdn = "host.example.com"\n              }', 'peer_address = {}'))
+        "protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer/peer_address "
+        "states 2 keys, which is not the one key PROTOCOL_SHAPE selects"
+    ], findings
+    findings = _findings(
+        level.replace(
+            'peer_address = {\n                fqdn = "host.example.com"\n              }', "peer_address = {}"
+        )
+    )
     assert [f.detail for f in findings] == [
-        'protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer/peer_address '
-        'states 0 keys, which is not the one key PROTOCOL_SHAPE selects'], findings
+        "protocol panos_virtual_router.default_00000000 protocol/bgp/peer_group/peer/peer_address "
+        "states 0 keys, which is not the one key PROTOCOL_SHAPE selects"
+    ], findings
     # The print path prints one alternative for an export that states one, so a run reports nothing.
-    peer_run = _run('bgp.xml', tmp_path)
-    printed = peer_run['virtual_routers.tf']
+    peer_run = _run("bgp.xml", tmp_path)
+    printed = peer_run["virtual_routers.tf"]
     assert 'peer_address = {\n                ip = "10.55.0.2"\n              }' in printed, printed
     assert sanity_checks.check_protocol_object(peer_run) == [], sanity_checks.check_protocol_object(peer_run)
-    profile_run = _run('auth_profile.xml', tmp_path)
-    printed = profile_run['virtual_routers.tf']
+    profile_run = _run("auth_profile.xml", tmp_path)
+    printed = profile_run["virtual_routers.tf"]
     # The fixture states one alternative per entry, so the run prints one key for each of the two entries.
-    assert printed.count('ah = {') == 1 and printed.count('esp = {') == 1, printed
+    assert printed.count("ah = {") == 1 and printed.count("esp = {") == 1, printed
     assert sanity_checks.check_protocol_object(profile_run) == [], sanity_checks.check_protocol_object(profile_run)
 
 
@@ -1694,56 +2112,62 @@ def test_a_sensitive_field_is_never_written_as_a_value(tmp_path):
     `.tfvars` line and no site data row. F7.7: the same rule for a value the run did read is pinned by
     `tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`.
     """
-    files = _run('kitchen_sink.xml', tmp_path)
-    assert not any('hunter2' in text for text in files.values()), sorted(files)
-    tfvars = files.get(site_data.TFVARS_FILE, '')
-    assert 'secret' not in tfvars and 'key' not in tfvars, tfvars
+    files = _run("kitchen_sink.xml", tmp_path)
+    assert not any("hunter2" in text for text in files.values()), sorted(files)
+    tfvars = files.get(site_data.TFVARS_FILE, "")
+    assert "secret" not in tfvars and "key" not in tfvars, tfvars
 
 
 # --- 6. the gate findings and determinism ------------------------------------
 
+
 def test_the_rule_reports_an_undeclared_field_and_a_wrong_shape():
     """Finding 1: a field the row does not declare, and a value the reader reads as another shape."""
     findings = _findings('  protocol = {\n    bgp = {\n      made_up = "y"\n    }\n  }\n')
-    assert len(findings) == 1 and 'made_up is not a field' in findings[0].detail, findings
+    assert len(findings) == 1 and "made_up is not a field" in findings[0].detail, findings
     findings = _findings('  protocol = {\n    bgp = {\n      enable = "yes"\n    }\n  }\n')
-    assert len(findings) == 1 and 'enable is not a bool value' in findings[0].detail, findings
+    assert len(findings) == 1 and "enable is not a bool value" in findings[0].detail, findings
     # A `list` level that states an object value is the same finding.
-    findings = _findings('  protocol = {\n    bgp = {\n      peer_group = {\n'
-                         '        name = "PG"\n      }\n    }\n  }\n')
-    assert len(findings) == 1 and 'peer_group is not a string_list value' in findings[0].detail, findings
+    findings = _findings(
+        '  protocol = {\n    bgp = {\n      peer_group = {\n        name = "PG"\n      }\n    }\n  }\n'
+    )
+    assert len(findings) == 1 and "peer_group is not a string_list value" in findings[0].detail, findings
     # A level the table states no row for is the same finding. F7.10 made the two redist profile lists rows, so
     # the rule reads them against their rows: the field a row does not state inside an entry is the finding, and
     # a `list` level printed as an object is the same shape finding as `peer_group` above. `rip` is a row now
     # (F7.5), so the rule reads it against its row instead, which
     # `test_the_gate_reads_a_choice_inside_an_entry_level` pins.
-    findings = _findings('  protocol = {\n    redist_profile = [\n        {\n'
-                         '          name = "R1"\n          made_up = "y"\n        }\n      ]\n    }\n  }\n')
-    assert len(findings) == 1 and 'made_up is not a field' in findings[0].detail, findings
+    findings = _findings(
+        "  protocol = {\n    redist_profile = [\n        {\n"
+        '          name = "R1"\n          made_up = "y"\n        }\n      ]\n    }\n  }\n'
+    )
+    assert len(findings) == 1 and "made_up is not a field" in findings[0].detail, findings
     findings = _findings('  protocol = {\n    redist_profile = {\n      name = "R1"\n    }\n  }\n')
-    assert len(findings) == 1 and 'redist_profile is not a string_list value' in findings[0].detail, findings
+    assert len(findings) == 1 and "redist_profile is not a string_list value" in findings[0].detail, findings
 
 
 def test_the_rule_reports_a_list_element_with_no_name():
     """Finding 4: the entry name is the field the row reads for an element inside a container."""
-    findings = _findings('  protocol = {\n    bgp = {\n      peer_group = [\n        {\n'
-                         '          enable = true\n        }\n      ]\n    }\n  }\n')
+    findings = _findings(
+        "  protocol = {\n    bgp = {\n      peer_group = [\n        {\n"
+        "          enable = true\n        }\n      ]\n    }\n  }\n"
+    )
     assert len(findings) == 1, findings
-    assert 'element states no name' in findings[0].detail, findings[0]
-    assert findings[0].check == 'protocol_object', findings[0]
+    assert "element states no name" in findings[0].detail, findings[0]
+    assert findings[0].check == "protocol_object", findings[0]
     assert findings[0].severity == sanity_checks.FAIL, findings[0]
-    assert findings[0].file == 'vr.tf' and findings[0].line == 1, findings[0]
+    assert findings[0].file == "vr.tf" and findings[0].line == 1, findings[0]
 
 
 def test_the_rule_runs_after_actions_in_the_gate_order():
     """`CHECK_ORDER` names `protocol_object` after `actions`, and the runner records it."""
-    assert sanity_checks.CHECK_ORDER[sanity_checks.CHECK_ORDER.index('actions') + 1] == 'protocol_object'
-    assert 'protocol_object' in sanity_checks.CHECK_ORDER
+    assert sanity_checks.CHECK_ORDER[sanity_checks.CHECK_ORDER.index("actions") + 1] == "protocol_object"
+    assert "protocol_object" in sanity_checks.CHECK_ORDER
 
 
 def test_two_runs_write_the_same_bytes(tmp_path):
     """The print order is the table order and `hcl_value` is the only printer, so the bytes repeat."""
-    first = _run('kitchen_sink.xml', tmp_path / 'first')
-    second = _run('kitchen_sink.xml', tmp_path / 'second')
-    assert first['virtual_routers.tf'] == second['virtual_routers.tf']
-    assert first['MANUAL_SETUP_REPORT.txt'] == second['MANUAL_SETUP_REPORT.txt']
+    first = _run("kitchen_sink.xml", tmp_path / "first")
+    second = _run("kitchen_sink.xml", tmp_path / "second")
+    assert first["virtual_routers.tf"] == second["virtual_routers.tf"]
+    assert first["MANUAL_SETUP_REPORT.txt"] == second["MANUAL_SETUP_REPORT.txt"]

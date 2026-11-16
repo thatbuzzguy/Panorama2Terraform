@@ -42,7 +42,8 @@ CASES: dict[str, tuple[Path, Path]] = {
 # is one set per unit, so each path names one unit directory.
 CASE_FILES: list[tuple[str, str]] = sorted(
     (case, str(f.relative_to(golden_dir)))
-    for case, (_src, golden_dir) in CASES.items() for f in golden_dir.rglob("*.tf")
+    for case, (_src, golden_dir) in CASES.items()
+    for f in golden_dir.rglob("*.tf")
 )
 
 

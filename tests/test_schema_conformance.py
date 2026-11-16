@@ -71,10 +71,11 @@ def test_every_block_has_location():
     The rule lives in `sanity_checks.py` (F4.1), so the conversion gate and this
     test share it.
     """
-    files = {str(p.relative_to(GOLDEN_DIR)): p.read_text() for p in sorted(GOLDEN_DIR.rglob('*.tf'))}
+    files = {str(p.relative_to(GOLDEN_DIR)): p.read_text() for p in sorted(GOLDEN_DIR.rglob("*.tf"))}
     findings = sanity_checks.check_location_present(files)
-    assert not findings, 'resource blocks missing the required location block: ' + \
-        ', '.join(f.render() for f in findings)
+    assert not findings, "resource blocks missing the required location block: " + ", ".join(
+        f.render() for f in findings
+    )
 
 
 @pytest.mark.parametrize("rtype", EMITTED_TYPES)
@@ -83,9 +84,7 @@ def test_required_attributes_present(rtype, provider_schema):
     if rtype not in provider_schema:
         pytest.xfail(f"{rtype} is not in the provider schema (see test_resource_type_exists_in_provider)")
     required = sorted(
-        attr
-        for attr, meta in provider_schema[rtype]["block"].get("attributes", {}).items()
-        if meta.get("required")
+        attr for attr, meta in provider_schema[rtype]["block"].get("attributes", {}).items() if meta.get("required")
     )
     blocks = EMITTED_BLOCKS[rtype]
     assert blocks, f"no {rtype!r} blocks found in the goldens"

@@ -80,7 +80,7 @@ def file_text(files: dict[str, str], name: str) -> str:
     A test that pins one emitter's whole file reads the parts the run wrote for every unit, so the same pin
     holds for a file set the run wrote one file per unit. `name` is the file name, not a path.
     """
-    return ''.join(parts(files, name).values())
+    return "".join(parts(files, name).values())
 
 
 def written_bytes(output_dir) -> dict[str, bytes]:
@@ -90,7 +90,7 @@ def written_bytes(output_dir) -> dict[str, bytes]:
     pins two runs writing the same bytes compares the whole layout, not only the files at the root.
     """
     out = Path(output_dir)
-    return {str(path.relative_to(out)): path.read_bytes() for path in sorted(out.rglob('*')) if path.is_file()}
+    return {str(path.relative_to(out)): path.read_bytes() for path in sorted(out.rglob("*")) if path.is_file()}
 
 
 def tf_bytes(output_dir) -> dict[str, bytes]:
@@ -102,10 +102,11 @@ def tf_bytes(output_dir) -> dict[str, bytes]:
     path. This is the shape `tests/test_golden_files.py` reads. A pin that compares two directories through it
     states that both sets are not empty, so the pin measures content.
     """
-    return {key: value for key, value in written_bytes(output_dir).items() if Path(key).suffix == '.tf'}
+    return {key: value for key, value in written_bytes(output_dir).items() if Path(key).suffix == ".tf"}
 
 
 # --- The corpus read rule the corpus pins read (F3.8, F3.9) ---------------------
+
 
 def input_refusal(path) -> str | None:
     """What the tool's input rule answers for one committed fixture: the refusal reason, or None when it accepts.
@@ -121,7 +122,7 @@ def input_refusal(path) -> str | None:
     except xml_input.UnsafeInputError as exc:
         return str(exc)
     except ET.ParseError as exc:
-        return f'the parse cannot read it: {exc}'
+        return f"the parse cannot read it: {exc}"
     return None
 
 
@@ -131,7 +132,7 @@ def corpus_fixtures() -> list[str]:
     Names, in the order the corpus pins read them, so a pin's failure message names the fixture. The rule is
     `input_refusal`; a fixture name is not a rule.
     """
-    return [path.name for path in sorted(FIXTURES_DIR.glob('*.xml')) if input_refusal(path) is None]
+    return [path.name for path in sorted(FIXTURES_DIR.glob("*.xml")) if input_refusal(path) is None]
 
 
 def declared_provider() -> tuple[str, str]:
@@ -165,6 +166,7 @@ def emitted_types() -> set[str]:
 # is fixed, so small structural regexes are enough: a resource block ends at the first newline followed by
 # a column-0 brace.
 
+
 def _search_one(body: str, pattern: str):
     m = re.search(pattern, body, re.S)
     return m.group(1) if m else None
@@ -173,53 +175,53 @@ def _search_one(body: str, pattern: str):
 def rule_blocks(text: str, resource_type: str) -> list[dict]:
     """Parse generated rule resources into ordered dicts (file order)."""
     blocks = []
-    pattern = re.compile(
-        'resource "' + re.escape(resource_type) + r'" "([^"]+)" \{(.*?)\n\}', re.S)
+    pattern = re.compile('resource "' + re.escape(resource_type) + r'" "([^"]+)" \{(.*?)\n\}', re.S)
     for m in pattern.finditer(text):
         local, body = m.group(1), m.group(2)
         # The rules list holds one object per rule; the Panorama rule name
         # is the only name = line inside it (the location block is outside).
-        rules_body = _search_one(body, r'rules = \[(.*?)\n  \]') or ''
+        rules_body = _search_one(body, r"rules = \[(.*?)\n  \]") or ""
         rule_names = re.findall(r'name = "([^"]+)"', rules_body)
-        depends_on = _search_one(body, r'depends_on = \[([^\]]*)\]') or ''
-        blocks.append({
-            'local': local,
-            'device_group': _search_one(body, r'device_group = \{\s*name = "([^"]+)"'),
-            'where': _search_one(body, r'where = "([^"]+)"'),
-            'directly': _search_one(body, r'directly = (true|false)'),
-            'pivot': _search_one(body, r'pivot = "([^"]+)"'),
-            'depends_on': re.findall(r'([A-Za-z_][\w]*\.[A-Za-z_][\w]*)', depends_on),
-            'names': rule_names,
-        })
+        depends_on = _search_one(body, r"depends_on = \[([^\]]*)\]") or ""
+        blocks.append(
+            {
+                "local": local,
+                "device_group": _search_one(body, r'device_group = \{\s*name = "([^"]+)"'),
+                "where": _search_one(body, r'where = "([^"]+)"'),
+                "directly": _search_one(body, r"directly = (true|false)"),
+                "pivot": _search_one(body, r'pivot = "([^"]+)"'),
+                "depends_on": re.findall(r"([A-Za-z_][\w]*\.[A-Za-z_][\w]*)", depends_on),
+                "names": rule_names,
+            }
+        )
     return blocks
 
 
-def check_chain_semantics(blocks: list[dict], resource_type: str,
-                          expected: list[tuple[str, list[str]]], msg: str):
+def check_chain_semantics(blocks: list[dict], resource_type: str, expected: list[tuple[str, list[str]]], msg: str):
     """Assert blocks form per-DG chains with anchor + after-previous positions."""
     assert len(blocks) == sum(len(names) for _, names in expected), msg
     idx = 0
     for dg, names in expected:
-        chain = blocks[idx:idx + len(names)]
+        chain = blocks[idx : idx + len(names)]
         idx += len(names)
         for b in chain:
-            assert b['device_group'] == dg, msg
+            assert b["device_group"] == dg, msg
         # Every block holds exactly one rule; the rule name sequence is the
         # chain's XML order.
-        assert [b['names'] for b in chain] == [[n] for n in names], msg
+        assert [b["names"] for b in chain] == [[n] for n in names], msg
         # First rule of the chain: anchor at the end of the rulebase.
         first = chain[0]
-        assert first['where'] == 'last', msg
-        assert first['pivot'] is None, msg
-        assert first['directly'] is None, msg
-        assert first['depends_on'] == [], msg
+        assert first["where"] == "last", msg
+        assert first["pivot"] is None, msg
+        assert first["directly"] is None, msg
+        assert first["depends_on"] == [], msg
         # Later rules: directly after the previous rule, applied after it.
         for prev, cur in zip(chain, chain[1:]):
-            assert cur['where'] == 'after', msg
-            assert cur['directly'] == 'true', msg
-            assert cur['pivot'] == prev['names'][0], msg
-            expected_dep = f'{resource_type}.{prev["local"]}'
-            assert cur['depends_on'] == [expected_dep], msg
+            assert cur["where"] == "after", msg
+            assert cur["directly"] == "true", msg
+            assert cur["pivot"] == prev["names"][0], msg
+            expected_dep = f"{resource_type}.{prev['local']}"
+            assert cur["depends_on"] == [expected_dep], msg
 
 
 @pytest.fixture(scope="session")
@@ -237,7 +239,7 @@ def provider_schemas(tmp_path_factory) -> dict:
     (workdir / "provider.tf").write_text(
         "terraform {\n"
         "  required_providers {\n"
-        '    panos = {\n'
+        "    panos = {\n"
         f'      source  = "{source}"\n'
         f'      version = "{version}"\n'
         "    }\n"
@@ -319,8 +321,7 @@ def make_parser(converter_module, xml_input_module):
     """
 
     def _make(fixture_name: str):
-        return converter_module.PanoramaParser(
-            xml_input_module.parse_xml(FIXTURES_DIR / fixture_name))
+        return converter_module.PanoramaParser(xml_input_module.parse_xml(FIXTURES_DIR / fixture_name))
 
     return _make
 
@@ -336,18 +337,19 @@ def api_producer(request, key=None, insecure=False):
     return None if not entry.is_file() else entry.read_bytes()
 
 
-def path2_run(output_dir, cache_dir, monkeypatch, host: str = 'panorama.test') -> tuple:
+def path2_run(output_dir, cache_dir, monkeypatch, host: str = "panorama.test") -> tuple:
     """A path 2 run, and the index the join reads for it.
 
     A path 2 pin cannot use `run_script`, because the injected producer lives in this process, so the run is
     in process and the index is built the way the run order builds it: the tables `parse_associations`
     returned for the response the run read, and the read set the join states.
     """
-    monkeypatch.setattr(source_fetch, 'network_producer', api_producer)
-    monkeypatch.setenv(source_fetch.API_KEY_ENV, 'test-key')
-    parser = run_pipeline(panorama_to_terraform, None, output_dir,
-                          ('--source', 'api', '--host', host, '--cache-dir', str(cache_dir)))
-    assert parser is not None, 'the run refused the input'
+    monkeypatch.setattr(source_fetch, "network_producer", api_producer)
+    monkeypatch.setenv(source_fetch.API_KEY_ENV, "test-key")
+    parser = run_pipeline(
+        panorama_to_terraform, None, output_dir, ("--source", "api", "--host", host, "--cache-dir", str(cache_dir))
+    )
+    assert parser is not None, "the run refused the input"
     return parser, api_requests.scope_index(host, parser.parse_associations(), api_requests.membership_lists())
 
 
@@ -377,7 +379,7 @@ def run_main(module, argv: list):
     pytest report.
     """
     saved_argv = list(sys.argv)
-    sys.argv = ['panorama_to_terraform.py', *[str(a) for a in argv]]
+    sys.argv = ["panorama_to_terraform.py", *[str(a) for a in argv]]
     try:
         with contextlib.redirect_stdout(io.StringIO()):
             return module.main()
@@ -406,12 +408,12 @@ def run_pipeline(module, fixture_name, output_dir, extra_args: tuple = ()):
 
     def init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
-        captured['parser'] = self
+        captured["parser"] = self
 
-    argv = ['panorama_to_terraform.py']
+    argv = ["panorama_to_terraform.py"]
     if fixture_name:
         argv.append(str(FIXTURES_DIR / fixture_name))
-    argv.extend(['--output-dir', str(output_dir)])
+    argv.extend(["--output-dir", str(output_dir)])
     argv.extend(str(arg) for arg in extra_args)
 
     saved_argv = list(sys.argv)
@@ -423,4 +425,4 @@ def run_pipeline(module, fixture_name, output_dir, extra_args: tuple = ()):
     finally:
         module.PanoramaParser.__init__ = original_init
         sys.argv = saved_argv
-    return captured.get('parser')
+    return captured.get("parser")

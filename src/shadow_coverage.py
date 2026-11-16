@@ -43,19 +43,19 @@ import container_coverage
 import entry_coverage
 import state_coverage
 
-SHADOW_HEADING = 'Entries That Repeat a Parent Entry Name'
+SHADOW_HEADING = "Entries That Repeat a Parent Entry Name"
 
 # The fact phrases a shadow line states, on the report and on the console, so the two cannot disagree.
 # The source is named by its report value, never by its path (F4.2 rule 6): the path is in the record.
-PARENT_SOURCE_LABEL = 'parent source'
-PARENT_ENTRY_LABEL = 'parent entry'
+PARENT_SOURCE_LABEL = "parent source"
+PARENT_ENTRY_LABEL = "parent entry"
 
 SHADOW_RULE = (
-    'A child entry whose name repeats a parent entry name in the same matrix row is '
-    'listed here. A per-device-group run cannot see its parent, so the parent source '
-    'the run declares is what makes the inherited name visible. A finding is an '
-    'operator action, not a broken output: it does not change the exit code, which the '
-    'F4.1 gate still decides.'
+    "A child entry whose name repeats a parent entry name in the same matrix row is "
+    "listed here. A per-device-group run cannot see its parent, so the parent source "
+    "the run declares is what makes the inherited name visible. A finding is an "
+    "operator action, not a broken output: it does not change the exit code, which the "
+    "F4.1 gate still decides."
 )
 
 
@@ -72,10 +72,10 @@ def parent_index(parent_ledger) -> dict:
     """
     index = {}
     for row in parent_ledger.rows():
-        matrix_row = entry_coverage.matrix_row_for(row['container'])
+        matrix_row = entry_coverage.matrix_row_for(row["container"])
         if matrix_row is None:
             continue
-        index[state_coverage.ownership_key(matrix_row['resource'], row['name'], row)] = row
+        index[state_coverage.ownership_key(matrix_row["resource"], row["name"], row)] = row
     return index
 
 
@@ -96,28 +96,30 @@ def shadow_findings(ledger, parent_ledger) -> list:
     index = parent_index(parent_ledger)
     findings = []
     for row in ledger.rows():
-        matrix_row = entry_coverage.matrix_row_for(row['container'])
+        matrix_row = entry_coverage.matrix_row_for(row["container"])
         if matrix_row is None:
             continue
-        name_part = (matrix_row['resource'], row['name'])
+        name_part = (matrix_row["resource"], row["name"])
         for key, parent in index.items():
             if key[:2] != name_part:
                 continue
             finding = dict(row)
-            finding['resource'] = matrix_row['resource']
-            finding['parent_key'] = key
-            finding['parent'] = parent
-            finding['parent_source'] = parent_ledger.source.name
-            finding['parent_line'] = parent['line']
+            finding["resource"] = matrix_row["resource"]
+            finding["parent_key"] = key
+            finding["parent"] = parent
+            finding["parent_source"] = parent_ledger.source.name
+            finding["parent_line"] = parent["line"]
             findings.append(finding)
-    return sorted(findings, key=lambda finding: (finding['line'] or 0, finding['container'],
-                                                 finding['name'], parent_position(finding)))
+    return sorted(
+        findings,
+        key=lambda finding: (finding["line"] or 0, finding["container"], finding["name"], parent_position(finding)),
+    )
 
 
 def parent_position(finding: dict) -> tuple:
     """The parent entry's report position, which is the report order tie-break for a finding."""
-    parent = finding['parent']
-    return (parent['line'] or 0, parent['container'], parent['name'])
+    parent = finding["parent"]
+    return (parent["line"] or 0, parent["container"], parent["name"])
 
 
 def parent_entry_part(finding: dict, scope_path) -> str:
@@ -128,10 +130,10 @@ def parent_entry_part(finding: dict, scope_path) -> str:
     the parent row the finding names, which is the key read as data. A finding the report does not group
     prints the identity alone.
     """
-    parent = finding['parent']
+    parent = finding["parent"]
     identity = entry_coverage.entry_identity(parent)
     scope = container_coverage.scope_part(parent, scope_path)
-    return f'{scope} / {identity}' if scope else identity
+    return f"{scope} / {identity}" if scope else identity
 
 
 def shadow_fact(finding: dict) -> str:
@@ -143,7 +145,7 @@ def shadow_fact(finding: dict) -> str:
     stay in `SOURCE.txt`, and the parent entry and the parent line stay in the report, because the shape
     names one position and one identity. Pinned by `tests/test_shadow_coverage.py`.
     """
-    return f'{PARENT_SOURCE_LABEL}: {finding["parent_source"]}'
+    return f"{PARENT_SOURCE_LABEL}: {finding['parent_source']}"
 
 
 def shadow_line(finding: dict, scope_path) -> str:
@@ -154,13 +156,16 @@ def shadow_line(finding: dict, scope_path) -> str:
     field names which parent entry the child repeats, because the child identity and the parent identity
     are the same text when the name repeats: only the parent scope tells them apart.
     """
-    line = f'{finding["line"] if finding["line"] is not None else 0}'
-    parent_line = finding['parent_line'] if finding['parent_line'] is not None else 0
-    parts = [f'  line {line:>4}  ', f'{entry_coverage.entry_identity(finding):<38} ',
-             f'{finding["resource"]:<32} ',
-             f'{PARENT_ENTRY_LABEL}: {parent_entry_part(finding, scope_path)}  ',
-             f'{PARENT_SOURCE_LABEL}: {finding["parent_source"]} (parent line {parent_line})']
-    return ''.join(parts).rstrip()
+    line = f"{finding['line'] if finding['line'] is not None else 0}"
+    parent_line = finding["parent_line"] if finding["parent_line"] is not None else 0
+    parts = [
+        f"  line {line:>4}  ",
+        f"{entry_coverage.entry_identity(finding):<38} ",
+        f"{finding['resource']:<32} ",
+        f"{PARENT_ENTRY_LABEL}: {parent_entry_part(finding, scope_path)}  ",
+        f"{PARENT_SOURCE_LABEL}: {finding['parent_source']} (parent line {parent_line})",
+    ]
+    return "".join(parts).rstrip()
 
 
 def console_lines(findings: list, scope_path) -> list:
@@ -172,9 +177,14 @@ def console_lines(findings: list, scope_path) -> list:
     """
     if not findings:
         return []
-    lines = [f'Shadow findings ({len(findings)}):']
-    lines.extend(container_coverage.console_line(container_coverage.scope_part(finding, scope_path),
-                                                 container_coverage.position_part(finding['line']),
-                                                 entry_coverage.entry_identity(finding), shadow_fact(finding))
-                 for finding in findings)
+    lines = [f"Shadow findings ({len(findings)}):"]
+    lines.extend(
+        container_coverage.console_line(
+            container_coverage.scope_part(finding, scope_path),
+            container_coverage.position_part(finding["line"]),
+            entry_coverage.entry_identity(finding),
+            shadow_fact(finding),
+        )
+        for finding in findings
+    )
     return lines

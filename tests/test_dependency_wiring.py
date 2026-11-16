@@ -71,6 +71,7 @@ def _local_of(text: str, rtype: str, panos_name: str) -> str:
 
 # --- Group member lists ------------------------------------------------------
 
+
 def test_address_group_static_mixed_refs(out_dir):
     text = _read(out_dir, "address_groups.tf")
     both_local = _local_of(_read(out_dir, "address_objects.tf"), "panos_address", "both")
@@ -79,8 +80,8 @@ def test_address_group_static_mixed_refs(out_dir):
     m = re.search(r"static = \[([^\]]*)\]", text)
     assert m is not None
     # Object scope wins on the "both" collision; ghost stays plain.
-    assert f'panos_address.{both_local}.name' in m.group(1)
-    assert f'panos_address.{host_local}.name' in m.group(1)
+    assert f"panos_address.{both_local}.name" in m.group(1)
+    assert f"panos_address.{host_local}.name" in m.group(1)
     assert '"ghost-addr"' in m.group(1)
     # The colliding group itself must not be referenced by its own member.
     assert "panos_address_group" not in m.group(1)
@@ -92,12 +93,13 @@ def test_service_group_members_mixed_refs(out_dir):
     assert svc_local
     m = re.search(r"members = \[([^\]]*)\]", text)
     assert m is not None
-    assert f'panos_service.{svc_local}.name' in m.group(1)
+    assert f"panos_service.{svc_local}.name" in m.group(1)
     assert "panos_service_group" not in m.group(1)  # object scope wins
     assert '"ghost-svc"' in m.group(1)
 
 
 # --- Object attributes -------------------------------------------------------
+
 
 def test_address_tag_wired_and_ghost_plain(out_dir):
     text = _read(out_dir, "address_objects.tf")
@@ -110,6 +112,7 @@ def test_address_tag_wired_and_ghost_plain(out_dir):
 
 
 # --- Rule lists --------------------------------------------------------------
+
 
 def test_security_rule_zone_address_service_refs(out_dir):
     text = _read(out_dir, "security_rules.tf")
@@ -159,6 +162,7 @@ def test_nat_rule_refs_and_translation_interface(out_dir):
 
 # --- Network lists -----------------------------------------------------------
 
+
 def _iface_locals(out_dir: Path) -> tuple[str, str, str]:
     """Local names of ethernet1/1, ethernet1/2, and ethernet1/2.10."""
     text = _read(out_dir, "interfaces.tf")
@@ -198,6 +202,7 @@ def test_subinterface_parent_wired(out_dir):
 
 # --- VPN chain -----------------------------------------------------------------
 
+
 def test_vpn_references_and_brown_field_fallback(out_dir):
     text = _read(out_dir, "vpn.tf")
     ike_local = _local_of(text, "panos_ike_crypto_profile", "dw-ike")
@@ -223,6 +228,7 @@ def test_vpn_references_and_brown_field_fallback(out_dir):
 
 # --- F2.7 naming -----------------------------------------------------------------
 
+
 def test_local_names_are_sanitized_name_plus_digest(out_dir):
     """Every local name is the sanitized name plus an 8-hex digest (F2.7),
     and no resource address is declared twice."""
@@ -230,10 +236,12 @@ def test_local_names_are_sanitized_name_plus_digest(out_dir):
     assert len(declared) == len({(rtype, local) for rtype, local in declared})
     for rtype, local in declared:
         assert re.fullmatch(r"[a-z0-9_]+_[0-9a-f]{8}(?:_\d+)?", local), (
-            f"{rtype}.{local} does not match the F2.7 naming shape")
+            f"{rtype}.{local} does not match the F2.7 naming shape"
+        )
 
 
 # --- Invariant ------------------------------------------------------------------
+
 
 def test_every_emitted_reference_resolves_to_a_declared_resource(out_dir):
     """No dangling references anywhere in the generated output.
@@ -247,6 +255,7 @@ def test_every_emitted_reference_resolves_to_a_declared_resource(out_dir):
 
 
 # --- Terraform gate --------------------------------------------------------------
+
 
 def test_terraform_validate(out_dir):
     """The wired output must init and validate against the v2 provider."""

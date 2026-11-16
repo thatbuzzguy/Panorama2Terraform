@@ -19,10 +19,10 @@ import sanity_checks
 import split_device_groups
 from conftest import file_text, run_script, tf_files
 
-CONVERTER = 'panorama_to_terraform.py'
+CONVERTER = "panorama_to_terraform.py"
 
 # The content the pins read: one value that states the export's formatting around it.
-SPACED = '  spaced  '
+SPACED = "  spaced  "
 
 
 def _root():
@@ -86,29 +86,35 @@ def test_the_value_helpers_read_the_text_the_read_layer_states(make_parser):
     """
     p = _any_parser(make_parser)
     root = _spaced_root()
-    assert p._get_text(root, 'description') == 'spaced'
-    assert p._get_members(root, 'members') == ['spaced']
+    assert p._get_text(root, "description") == "spaced"
+    assert p._get_members(root, "members") == ["spaced"]
     # `_get_single_value` reads both shapes the export can state: the element text, one member, and many
     # members. A missing element answers None, so the rule cannot turn an absent field into an empty one.
-    assert p._get_single_value(root, 'description') == 'spaced'
-    assert p._get_single_value(root, 'members') == 'spaced'
-    assert p._get_single_value(root, 'more_members') == ['spaced', 'spaced']
-    assert p._list_names(root, 'devices') == ['spaced', 'spaced']
+    assert p._get_single_value(root, "description") == "spaced"
+    assert p._get_single_value(root, "members") == "spaced"
+    assert p._get_single_value(root, "more_members") == ["spaced", "spaced"]
+    assert p._list_names(root, "devices") == ["spaced", "spaced"]
     # A membership entry names itself, so the name shape is read through the same rule as the member text. The
     # shape words and the element spellings are read through the table, so the pin states no rule of its own.
-    path = 'network/routing-profile/filters/access-list'
+    path = "network/routing-profile/filters/access-list"
     table = resource_mapping.FILTER_TABLE
     row = table.row(path)
-    entry = root.find('devices/entry')
-    assert p._protocol_field(entry, 'name', table.xml_name('name', path), row['fields']['name']) == 'spaced'
-    assert p._protocol_field(root, 'description', table.xml_name('description', path),
-                             row['fields']['description']) == 'spaced'
-    assert split_device_groups._device_names(root) == ['spaced', 'spaced']
-    assert p._get_text(root, 'missing') is None
-    assert p._get_single_value(root, 'missing') is None
-    assert p._get_members(root, 'missing') == []
-    assert p._protocol_field(root.find('missing'), 'description',
-                             table.xml_name('description', path), row['fields']['description']) == ''
+    entry = root.find("devices/entry")
+    assert p._protocol_field(entry, "name", table.xml_name("name", path), row["fields"]["name"]) == "spaced"
+    assert (
+        p._protocol_field(root, "description", table.xml_name("description", path), row["fields"]["description"])
+        == "spaced"
+    )
+    assert split_device_groups._device_names(root) == ["spaced", "spaced"]
+    assert p._get_text(root, "missing") is None
+    assert p._get_single_value(root, "missing") is None
+    assert p._get_members(root, "missing") == []
+    assert (
+        p._protocol_field(
+            root.find("missing"), "description", table.xml_name("description", path), row["fields"]["description"]
+        )
+        == ""
+    )
 
 
 def test_a_value_with_surrounding_whitespace_prints_without_it(tmp_path):
@@ -117,15 +123,17 @@ def test_a_value_with_surrounding_whitespace_prints_without_it(tmp_path):
     The corpus states no value with surrounding whitespace, because an export writes element text without
     padding, so the pin writes its own content. The gate reads the same run clean.
     """
-    source = tmp_path / 'whitespace_value.xml'
+    source = tmp_path / "whitespace_value.xml"
     source.write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n<config>\n  <device-group>\n'
         f'    <entry name="Edge-DG"><description>{SPACED}</description></entry>\n'
-        '  </device-group>\n</config>\n', encoding='utf-8')
-    out = tmp_path / 'out'
-    result = run_script(CONVERTER, str(source), '--output-dir', str(out))
+        "  </device-group>\n</config>\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "out"
+    result = run_script(CONVERTER, str(source), "--output-dir", str(out))
     assert result.returncode == 0, result.stdout + result.stderr
     # A scope entry is the unit's own block, so the run writes it in the unit's scope file (§14).
-    text = file_text(tf_files(out), 'scope.tf')
+    text = file_text(tf_files(out), "scope.tf")
     assert 'description = "spaced"' in text, text
-    assert not sanity_checks.run_checks(out).failed, 'the value prints as the read layer read it'
+    assert not sanity_checks.run_checks(out).failed, "the value prints as the read layer read it"

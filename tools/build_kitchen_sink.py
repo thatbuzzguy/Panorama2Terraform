@@ -21,6 +21,7 @@ Run it from the repository root and redirect the tree to a file:
 
     python3 tools/build_kitchen_sink.py > /tmp/merged.xml
 """
+
 import sys
 import xml.etree.ElementTree as ET
 import xml.parsers.expat as expat
@@ -125,7 +126,7 @@ def assemble(fixdir: Path) -> tuple[ET.Element, list[tuple[str, str]]]:
 def render(root: ET.Element) -> str:
     """The tree in the shape the corpus files hold: the declaration, two-space indent, one final newline."""
     ET.indent(root, space="  ")
-    return "<?xml version=\"1.0\"?>\n" + ET.tostring(root, encoding="unicode", xml_declaration=False) + "\n"
+    return '<?xml version="1.0"?>\n' + ET.tostring(root, encoding="unicode", xml_declaration=False) + "\n"
 
 
 def main() -> int:

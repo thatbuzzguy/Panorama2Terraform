@@ -24,16 +24,16 @@ Usage:
 import re
 
 # A name that sanitizes to nothing, as §5 states it.
-UNNAMED = 'unnamed'
+UNNAMED = "unnamed"
 
 
 def sanitize(name: str) -> str:
     """The §5 shape of a name."""
-    sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', name)
-    sanitized = sanitized.strip('_')
+    sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", name)
+    sanitized = sanitized.strip("_")
     # An identifier cannot start with a digit, so §5 prefixes an underscore.
     if sanitized and sanitized[0].isdigit():
-        sanitized = f'_{sanitized}'
+        sanitized = f"_{sanitized}"
     return sanitized.lower()
 
 
@@ -53,4 +53,4 @@ def variable_text(value: str) -> str:
     The emitter prints this, the gate compares against it, and the tests read it through this function,
     so the three cannot give one value two shapes.
     """
-    return f'var.{variable_name(value)}'
+    return f"var.{variable_name(value)}"
