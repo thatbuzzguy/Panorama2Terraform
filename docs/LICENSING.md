@@ -26,7 +26,9 @@ with them.
 ## The split, measured
 
 Measured 2026-11-16 at commit `ac7609e` through `git blame --line-porcelain` on the committed tree, counted by
-author. The tool that checks these numbers against the same commit is `tools/check_documents.py`.
+author. The tool that checks these numbers against the same commit is `tools/check_documents.py`, and it reads
+each notice's file total at that commit through `git show`, not from the working tree, so a later edit to a
+Python file cannot move a number this document states.
 
 | Measure | Upstream (`devnullNZ`) | Ours (`Ryan Brown`) |
 |---|---|---|

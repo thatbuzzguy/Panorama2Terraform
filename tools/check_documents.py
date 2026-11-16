@@ -10,7 +10,8 @@ Checks:
 
 1. A pin claim in a markdown document names a name the test module defines.
 2. The matrix table in `docs/COVERAGE_MATRIX.md` agrees with `resource_mapping.COVERAGE_MATRIX`, row for row.
-3. The counts `docs/LICENSING.md` states agree with `git blame` at the commit that document names.
+3. The counts `docs/LICENSING.md` states agree with `git blame` at the commit that document names, with each
+   notice's file total read at the same commit.
 4. The wording rules the test set held before it stopped reading document prose: the console line shape stated
    once in §3.2, §3.1 pointing at the container table, §4 of `docs/API_CONVERSION_PATH.md` staying the blocked
    live facts, §1.1 stating that the test set is named by the root index, and the §1 rule column naming each
@@ -157,11 +158,23 @@ def blame_by_author(rev: str, paths: list[str]) -> dict[str, int]:
     return counts
 
 
+def file_lines_at(rev: str, name: str) -> int:
+    """The lines a file holds at the commit the document names, through `git show`.
+
+    The document states the split as measured at that commit, so every part of the measurement is read at that
+    commit. Reading the total from the working tree would move a count on any later edit, which is what the
+    document says must not happen.
+    """
+    out = subprocess.run(["git", "show", f"{rev}:{name}"], cwd=ROOT, capture_output=True, text=True).stdout
+    return len(out.splitlines())
+
+
 def check_licensing() -> None:
     """Check 3: the counts `docs/LICENSING.md` states agree with `git blame` at the commit it names.
 
     The document names the commit it was measured at, so the numbers stay checkable after the tree changes:
-    a later edit moves a count, and the document then has to name a new measurement.
+    a later edit moves a count, and the document then has to name a new measurement. Both sides are read at that
+    commit, so the `ruff format` pass over the Python files cannot move a count the document states.
     """
     text = (DOCS / "LICENSING.md").read_text(encoding="utf-8")
     stated_rev = re.search(r"at commit `([0-9a-f]{7,40})`", text)
@@ -269,17 +282,17 @@ def check_licensing() -> None:
                 f"docs/LICENSING.md: the notice table states {count} upstream lines for {name}, "
                 f"git blame at {rev} measures {upstream_rows.get(name, 0)}"
             )
-        lines = (SRC / Path(name).name).read_text(encoding="utf-8").splitlines()
+        held = file_lines_at(rev, name)
         share = re.search(r"(\d+) of ([\d,]+)", claim)
-        if share and int(share.group(2).replace(",", "")) != len(lines):
+        if share and int(share.group(2).replace(",", "")) != held:
             findings.append(
                 f"docs/LICENSING.md: the notice for {name} states {share.group(2)} lines, "
-                f"while the file holds {len(lines)}"
+                f"while `git show {rev}` measures {held}"
             )
-        if "unchanged" in claim and count < len(lines):
+        if "unchanged" in claim and count < held:
             findings.append(
                 f'docs/LICENSING.md: the notice for {name} states "the upstream, unchanged", '
-                f"while the file holds {len(lines)} lines and {count} upstream lines"
+                f"while the file held {held} lines at {rev} and {count} upstream lines"
             )
     notices = len([p for p in SRC.glob("*.py") if "Copyright (c)" in p.read_text(encoding="utf-8")])
     holders = re.search(r"(\d+) of the (\d+) modules carry a notice", text)

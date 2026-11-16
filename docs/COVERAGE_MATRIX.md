@@ -316,4 +316,4 @@ per-row pipeline test, row shape, and property grounding.
   `tests/golden/filter_containers` pin the converter output byte-for-byte for the four committed cases.
 - **Canonical commands.** `python3 -m pytest` runs the full suite
   (requirements.txt pins `pytest==9.1.1`, `ruff==0.16.10`);
-  `ruff check .` is the lint gate.
+  `ruff check .` is the lint gate and `ruff format --check .` is the format gate.

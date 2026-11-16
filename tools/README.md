@@ -4,13 +4,13 @@ The layout rule is in [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) §1.1
 scripts, and this file is the index that names every document under it. No script here is part of the converter,
 so none uses the `src/` import rule: `build_kitchen_sink.py` imports no tool module, and `check_documents.py`
 imports no tool module either, because it reads the tool's tables through `ast` and reads the license split
-through `git blame`.
+through `git blame` and `git show` at the commit the document names.
 
 | File | What it is for |
 |---|---|
 | [quick_start.sh](quick_start.sh) | Runs the committed sample input from `../examples/` and prints the reports. It resolves `src/` and `examples/` from the repository root, so it runs from any directory |
 | [build_kitchen_sink.py](build_kitchen_sink.py) | Assembles the fixture corpus into one merged tree and prints it. It writes no file, so `../tests/fixtures/kitchen_sink.xml` stays the record the golden set reads |
-| [check_documents.py](check_documents.py) | Prints the document-review findings: a pin claim that names a name the module does not define, a document table that disagrees with the code table, the license counts that disagree with `git blame`, the wording checks the test set no longer holds, and a document that states a test count. It is not part of the gate and the test set does not read it, so a wording edit is a document review and not a CI failure. It writes no file |
+| [check_documents.py](check_documents.py) | Prints the document-review findings: a pin claim that names a name the module does not define, a document table that disagrees with the code table, the license counts that disagree with `git blame` at the commit the document names, with each notice's file total read at the same commit, the wording checks the test set no longer holds, and a document that states a test count. It is not part of the gate and the test set does not read it, so a wording edit is a document review and not a CI failure. It writes no file |
 
 ## The rule the fixture assembler keeps
 

@@ -574,8 +574,8 @@ Add a type in this order, so the tests cannot drift:
 3. Add the parse method, and mark each entry it reads. Add the container-table
    row in `container_coverage.py`.
 4. Add the generator method.
-5. Add or extend a fixture, and the row test. Run `python3 -m pytest` and
-   `ruff check .`.
+5. Add or extend a fixture, and the row test. Run `python3 -m pytest`,
+   `ruff check .` and `ruff format --check .`.
 
 An emitter change that skips step 2 fails `tests/test_coverage_matrix.py`. A
 parse method that reads entries without marking them fails
@@ -618,4 +618,4 @@ texts are `LICENSE-AGPL` and `LICENSE-COMMERCIAL`.
 
 - [Palo Alto Terraform provider](https://registry.terraform.io/providers/PaloAltoNetworks/panos/latest/docs)
 - [PAN-OS API documentation](https://docs.paloaltonetworks.com/pan-os/11-0/pan-os-panorama-api/get-started-with-panorama-api)
-- Testing and linting: `python3 -m pytest`, `ruff check .`
+- Testing and linting: `python3 -m pytest`, `ruff check .`, `ruff format --check .`

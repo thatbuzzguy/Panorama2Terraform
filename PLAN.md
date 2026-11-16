@@ -7,8 +7,8 @@ This file tracks epics and top-level features. Detailed design documents live in
 
 The tool converts a Panorama XML export to provider v2 Terraform, reports what the
 provider cannot model, and runs a post-run gate on the output it wrote. Every test
-runs offline against fixtures and the live provider schema. CI runs `ruff check .`
-and `pytest`, plus a job that runs `terraform init` and `terraform validate`.
+runs offline against fixtures and the live provider schema. CI runs `ruff check .`,
+`ruff format --check .` and `pytest`, plus a job that runs `terraform init` and `terraform validate`.
 
 The work before Epic 6 is complete: the output validates against the pinned
 provider, no parse method keys by name alone, the test gate covers the generated

@@ -643,6 +643,7 @@ The gate, the fixtures, and the corpus:
   and is a generator rather than a pin on the record; the three merge cases; the byte rule between two runs; and
   the rule that the tool reads the corpus and not the committed response set
 - `ruff check .` - lint
+- `ruff format --check .` - format
 - `tests/test_sanity_gate.py` - the post-run gate: every check detects its
   violation, no fixture trips a false positive, the report is byte-identical
   between two runs, and the exit code follows the findings. F8.8: the request-set rule reads the join through
@@ -758,6 +759,7 @@ The gate, the fixtures, and the corpus:
   and is a generator rather than a pin on the record; the three merge cases; the byte rule between two runs; and
   the rule that the tool reads the corpus and not the committed response set
 - `ruff check .` - lint
+- `ruff format --check .` - format
 
 Run counts are not stated here. They change with every feature and are
 recorded in the git history and in `agent-status.md`.

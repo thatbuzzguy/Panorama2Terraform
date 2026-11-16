@@ -99,7 +99,9 @@ paths `tests/conftest.py` builds once. The writer scan reads the `src/` set: the
 `src/write_path.py` is the exception, and the test harness is not a tool module, so it is outside the set
 (`tests/test_write_path.py`).
 
-The gate is the full run: `ruff check .` and `python3 -m pytest`. No subset is the default gate, because the
+The gate is the full run: `ruff check .`, `ruff format --check .` and `python3 -m pytest`. The format check
+reads the repository's own Python, so it is separate from the post-run gate on the output a run wrote (§4.6),
+which reads the `.tf` files and the data files. No subset is the default gate, because the
 pins that carry the tool's promises are the slowest ones: the plan check pins (§4.6) and the corpus pins. A
 partial run is a working loop on one area, stated as an explicit command-line selection, and a result claim and a
 commit come from the full run. A subset is not expressed as a mark or a skip, because a skipped pin proves
