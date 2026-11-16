@@ -34,7 +34,7 @@ An import block binds a resource block to the object the provider already has. S
    data files.
 
 Usage:
-    from import_blocks import IMPORT_FILE, ROW_FIELDS, build_id, decode_id, read_block, render, row
+    from import_blocks import IMPORT_FILE, IMPORT_ROW_FIELDS, build_id, decode_id, read_block, render, row
     from write_path import unit_path, write_file
     shape = row(directory, 'panos_address', 'addr_1a2b3c4d', 'Web', {'device_group': {'name': 'VG1'}})
     write_file(unit_path(output_dir, directory, IMPORT_FILE), render([shape]))
@@ -49,8 +49,10 @@ import resource_mapping
 
 IMPORT_FILE = 'imports.tf'
 
-# The row shape. Fixed, so two runs write the same bytes and a reader does not guess.
-ROW_FIELDS = ('unit', 'resource_type', 'local_name', 'entry_name', 'import_id', 'rule')
+# The row shape for an import block, as the gate rule `import_blocks` reads it. Fixed, so two runs write
+# the same bytes and a reader does not guess. The name states the record it belongs to, because `src/` is
+# one flat namespace (§1).
+IMPORT_ROW_FIELDS = ('unit', 'resource_type', 'local_name', 'entry_name', 'import_id', 'rule')
 
 # The rule decision for a type this module cannot write a block for, as the gate line states it.
 RULE_DECISION = ('the import object names the rulebase, the position, and a list of names, '
@@ -105,7 +107,7 @@ def decode_id(value: str) -> dict:
 
 def row(unit: str, resource_type: str, local_name: str, entry_name: str, location: dict) -> dict:
     """One import row from the same data the resource block uses: the type, the names, the location."""
-    shape = dict.fromkeys(ROW_FIELDS, '')
+    shape = dict.fromkeys(IMPORT_ROW_FIELDS, '')
     shape['unit'] = unit
     shape['resource_type'] = resource_type
     shape['local_name'] = local_name
@@ -139,7 +141,7 @@ def read_block(block) -> dict:
     `unit_manifest.parse_rows` refuses a row that is not the declared shape. `unit` is empty here: the unit
     is the manifest fact, not a block field.
     """
-    shape = dict.fromkeys(ROW_FIELDS, '')
+    shape = dict.fromkeys(IMPORT_ROW_FIELDS, '')
     shape['resource_type'] = block.rtype
     shape['local_name'] = block.local
     decoded = decode_id(block_value(block, 'id'))

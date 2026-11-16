@@ -37,7 +37,7 @@ here.
    and does not count it as a data file.
 
 Usage:
-    from site_data import ROW_FIELDS, SITE_DATA_FILE, TFVARS_FILE, build_rows, parse_rows, render, render_tfvars
+    from site_data import SITE_ROW_FIELDS, SITE_DATA_FILE, TFVARS_FILE, build_rows, parse_rows, render, render_tfvars
     from write_path import root_path, unit_path, write_file
     rows = build_rows(ledger, generator.value_variables(), generator.sanitize_name)
     write_file(root_path(output_dir, SITE_DATA_FILE), render(rows))
@@ -58,9 +58,10 @@ SITE_DATA_FILE = 'SITE_DATA.json'
 # file the operator owns.
 TFVARS_FILE = 'site.auto.tfvars'
 
-# The row shape. Fixed, so two runs write the same bytes and a reader does not guess.
+# The row shape for the site record. Fixed, so two runs write the same bytes and a reader does not
+# guess. The name states the record it belongs to, because `src/` is one flat namespace (§1).
 # `directory` is the join to the manifest row; `variables` is the mapping result.
-ROW_FIELDS = ('directory', 'variables')
+SITE_ROW_FIELDS = ('directory', 'variables')
 
 TFVARS_HEADER = ('# Site values (F6.6), written from ' + SITE_DATA_FILE + '. Terraform loads a\n'
                  '# *.auto.tfvars file automatically, so this file holds the site values and\n'
@@ -84,7 +85,7 @@ def build_rows(ledger, recorded: dict, sanitize) -> list:
         if not variables:
             # A site that names no value writes no row.
             continue
-        row = dict.fromkeys(ROW_FIELDS, '')
+        row = dict.fromkeys(SITE_ROW_FIELDS, '')
         row['directory'] = unit_manifest.directory_name(facts, sanitize)
         row['variables'] = {name: variables[name] for name in sorted(variables)}
         rows.append(row)
@@ -93,7 +94,7 @@ def build_rows(ledger, recorded: dict, sanitize) -> list:
 
 def render(rows: list) -> str:
     """The site data as text: the rows in field order, with one trailing newline."""
-    return json.dumps([{key: row[key] for key in ROW_FIELDS} for row in rows], indent=2) + '\n'
+    return json.dumps([{key: row[key] for key in SITE_ROW_FIELDS} for row in rows], indent=2) + '\n'
 
 
 def parse_rows(text: str) -> list:
@@ -110,10 +111,10 @@ def parse_rows(text: str) -> list:
     for row in document:
         if not isinstance(row, dict):
             raise ValueError(f'not a site row: {row!r}')
-        extra = [key for key in row if key not in ROW_FIELDS]
+        extra = [key for key in row if key not in SITE_ROW_FIELDS]
         if extra:
             raise ValueError(f'not a declared site field: {extra}')
-        missing = [key for key in ROW_FIELDS if key not in row]
+        missing = [key for key in SITE_ROW_FIELDS if key not in row]
         if missing:
             raise ValueError(f'the row does not state its fields: {missing}')
         if not isinstance(row['directory'], str) or not row['directory']:
@@ -129,7 +130,7 @@ def parse_rows(text: str) -> list:
                 raise ValueError(f'a site list holds a value that is not a string: {row}')
             if isinstance(value, str) and name != naming.variable_name(value):
                 raise ValueError(f'the variable name is not the §5 shape of its value: {row}')
-        rows.append({key: row[key] for key in ROW_FIELDS})
+        rows.append({key: row[key] for key in SITE_ROW_FIELDS})
     return rows
 
 

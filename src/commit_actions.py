@@ -47,7 +47,7 @@ once here.
    `action.<type>.<label>`, so the language reads them as two blocks.
 
 Usage:
-    from commit_actions import ACTIONS_FILE, ROW_FIELDS, build_rows, render, read_block
+    from commit_actions import ACTIONS_FILE, ACTION_ROW_FIELDS, build_rows, render, read_block
     from write_path import root_path, unit_path, write_file
     rows = build_rows(manifest_rows, naming.sanitize)
     write_file(unit_path(output_dir, directory, ACTIONS_FILE), render(rows))
@@ -68,11 +68,13 @@ ACTIONS_FILE = 'actions.tf'
 # a field at the action's own level, so the shape is a grammar fact and not a style choice.
 CONFIG_BLOCK = 'config'
 
-# The row shape. Fixed, so two runs write the same bytes and a reader does not guess.
+# The row shape for an action block, as the gate rule `actions` reads it. Fixed, so two runs write the
+# same bytes and a reader does not guess. The name states the record it belongs to, because `src/` is one
+# flat namespace (§1).
 # `action` is the `ACTION_SCHEMA` row the block is, `fact` is the scope fact the block names, `field` is the
 # field that states it (`ACTION_FILTERS`), `entry_name` is the fact name, `local_name` is the §5 name plus the
 # digest (rule 3), and `directory` is the manifest join, not a block field.
-ROW_FIELDS = ('directory', 'action', 'fact', 'field', 'entry_name', 'local_name')
+ACTION_ROW_FIELDS = ('directory', 'action', 'fact', 'field', 'entry_name', 'local_name')
 
 # The field a push shape uses for the fact key. `ACTION_FILTERS` states the relation (`name` names the fact its
 # `type` states), so this names the field that carries the key, and `block_fields` and `field_fact` are the two
@@ -163,7 +165,7 @@ def build_rows(manifest_rows: list, sanitize) -> list:
         for action in resource_mapping.ACTION_SCHEMA:
             if not block_fields(action, key, name):
                 continue
-            shape = dict.fromkeys(ROW_FIELDS, '')
+            shape = dict.fromkeys(ACTION_ROW_FIELDS, '')
             shape['directory'] = manifest_row['directory']
             shape['action'] = action
             shape['fact'] = key
@@ -205,7 +207,7 @@ def read_block(block) -> dict:
     not the declared shape (rule 5), so it is a refusal, the way `decode_id` refuses a value that is not
     base64 JSON.
     """
-    shape = dict.fromkeys(ROW_FIELDS, '')
+    shape = dict.fromkeys(ACTION_ROW_FIELDS, '')
     fields = import_blocks.fields(block, CONFIG_BLOCK)
     names = {}
     stated = ''

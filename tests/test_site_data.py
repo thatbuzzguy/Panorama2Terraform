@@ -296,13 +296,13 @@ def test_the_fields_print_in_the_declared_order():
     """The row shape is fixed, so a reader does not guess, the rows keep the order the run wrote, and
     no field states a timestamp or a path.
     """
-    assert site_data.ROW_FIELDS == ('directory', 'variables')
+    assert site_data.SITE_ROW_FIELDS == ('directory', 'variables')
     rows = [
         {'directory': 'vsys2_30925639', 'variables': {naming.variable_name(DEVICE): DEVICE}},
         {'directory': 'fw_2_example_com_35aafbcf', 'variables': {naming.variable_name(DEVICE): DEVICE}},
     ]
     printed = site_data.render(rows)
-    assert list(site_data.parse_rows(printed)[0]) == list(site_data.ROW_FIELDS)
+    assert list(site_data.parse_rows(printed)[0]) == list(site_data.SITE_ROW_FIELDS)
     assert [row['directory'] for row in site_data.parse_rows(printed)] == [
         row['directory'] for row in rows], printed
     assert not any(field in printed for field in ('timestamp', 'path', 'generated_at')), printed

@@ -162,7 +162,9 @@ def test_row_emits_the_provider_resource(row):
 
 # The eight fields of a row. `emitter` is the generator method that writes
 # `output_file`; `properties` is what that method reads from the entry.
-ROW_FIELDS = ('resource', 'xml_element', 'xml_name', 'emitted_name', 'fixture',
+# Named MATRIX_ROW_FIELDS, because the flat `src/` namespace holds a row shape per record, and
+# each one is named for the record it reads (`docs/ARCHITECTURE.md` §1).
+MATRIX_ROW_FIELDS = ('resource', 'xml_element', 'xml_name', 'emitted_name', 'fixture',
              'output_file', 'emitter', 'properties')
 
 # F6.5 decision 4: the row whose block carries the entry name and the location only, so it declares
@@ -204,7 +206,7 @@ def test_row_names_its_emitter_and_properties(row, converter_module):
     name is the row identity, not a property, and the emitter reads nothing else from the entry
     (F6.5 decision 4). That is the one exception.
     """
-    assert sorted(row) == sorted(ROW_FIELDS), row['resource']
+    assert sorted(row) == sorted(MATRIX_ROW_FIELDS), row['resource']
     assert row['emitter'], f"row for {row['resource']} names no emitter"
     generator = converter_module.TerraformGenerator
     for method in row['emitter']:
