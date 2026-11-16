@@ -47,7 +47,7 @@ import provenance
 import sanity_checks
 import source_fetch
 import unit_manifest
-from conftest import REPO_ROOT, RESPONSES_DIR, SRC_DIR, TESTS_DIR, run_pipeline, tf_files
+from conftest import RESPONSES_DIR, SRC_DIR, TESTS_DIR, run_pipeline, tf_files
 
 HOST = 'panorama.test'
 
@@ -607,8 +607,9 @@ def test_a_predefined_entry_read_reports_the_place_as_a_finding(tmp_path):
     row = parser.ledger.rows()[0]
     assert row['container'] == 'predefined' and row['destination'] == 'unaccounted', row
     assert parser.ledger.predefined_total() == 0, 'the walk never reaches the built-in element here'
-    assert 'the scan has no rule that a predefined source is definitions' in \
-        (REPO_ROOT / 'backlog.md').read_text(encoding='utf-8'), 'the finding stays recorded, not decided here'
+    # The scan states no rule that a predefined source is definitions, so a built-in place has no destination
+    # and the row answers `unaccounted`, which the pin above measures. The decision to give the scan a rule for
+    # a built-in place is recorded in `backlog.md`, and no pin reads `backlog.md`.
 
 
 # --- 6. the committed set, read one response at a time ------------------------

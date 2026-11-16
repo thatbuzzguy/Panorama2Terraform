@@ -41,7 +41,7 @@ from pathlib import Path
 import container_coverage
 import resource_mapping
 import xml_input
-from conftest import FIXTURES_DIR, REPO_ROOT, SRC_DIR, corpus_fixtures, run_script
+from conftest import FIXTURES_DIR, SRC_DIR, corpus_fixtures, run_script
 
 # A path-like string constant in a parse method: a tag name or a tag chain.
 PATH_STRING_RE = re.compile(r'^[A-Za-z0-9_.\-/]+$')
@@ -428,16 +428,10 @@ def test_the_console_line_shape_is_stated_in_one_place():
         assert 'def console_line(' not in texts[name], (name, 'the block states the fact, not the shape')
 
 
-def test_the_architecture_document_states_the_console_line_shape_once():
-    """AC-9: §3.2 states the shape once, names the function that holds it, and no longer says the console
-    prints the gap lines only or prints no shadow line.
-    """
-    doc = (REPO_ROOT / 'docs' / 'ARCHITECTURE.md').read_text(encoding='utf-8')
-    assert '  - <scope>  <position>  <identity>  <fact>' in doc, doc
-    assert 'container_coverage.console_line' in doc, 'the document names the one place'
-    assert 'The console prints the gap lines only' not in doc
-    assert 'The console prints no shadow line' not in doc
-    assert doc.count('  - <scope>  <position>  <identity>  <fact>') == 1, 'the shape is stated once'
+# The two checks that read `docs/ARCHITECTURE.md` prose are document-review checks and moved to
+# `tools/check_documents.py`: §3.2 states the console line shape once and names the function that holds it,
+# and §3.1 points at `container_coverage.CONTAINER_TABLE` instead of restating it. The pins that measure the
+# code half of the rule are above: no module but the owner states a console line.
 
 
 def test_no_coverage_output_when_there_is_nothing_to_report(tmp_path):
@@ -453,10 +447,3 @@ def test_a_finding_does_not_change_the_exit_code(tmp_path):
     assert result['proc'].returncode == 0
     sanity = (tmp_path / 'SANITY_REPORT.txt').read_text(encoding='utf-8')
     assert 'Result: PASS' in sanity, sanity
-
-
-def test_architecture_points_at_the_table_instead_of_restating_it():
-    """docs/ARCHITECTURE.md §3.1 names the code table as the source of truth."""
-    doc = (REPO_ROOT / 'docs' / 'ARCHITECTURE.md').read_text(encoding='utf-8')
-    assert 'container_coverage.CONTAINER_TABLE' in doc, 'section 3.1 must point at the table'
-    assert 'F4.2' in doc

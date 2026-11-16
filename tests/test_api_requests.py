@@ -35,7 +35,7 @@ import container_coverage
 import panorama_to_terraform
 import provenance
 import source_fetch
-from conftest import FIXTURES_DIR, REPO_ROOT, RESPONSES_DIR, SRC_DIR, TESTS_DIR
+from conftest import FIXTURES_DIR, RESPONSES_DIR, SRC_DIR, TESTS_DIR
 
 HOST = 'panorama.test'
 
@@ -285,14 +285,9 @@ def test_the_module_reads_the_layout_rules_through_their_owners():
         'the import rule, so the join reads the fact order and the row source name through their owners'
 
 
-def test_the_module_is_named_in_the_architecture_module_table():
-    """`docs/ARCHITECTURE.md` §1 names the module, and `docs/README.md` names it as the owner of the
-    index rule.
-    """
-    doc = (REPO_ROOT / 'docs' / 'ARCHITECTURE.md').read_text(encoding='utf-8')
-    assert '| `api_requests.py` |' in doc, 'the module is in the §1 table'
-    index = (REPO_ROOT / 'docs' / 'README.md').read_text(encoding='utf-8')
-    assert 'api_requests.py' in index, 'the index names it'
+# The naming rule for this module is the index rule, and one pin measures it for every module:
+# `tests/test_layout.py::test_the_indexes_name_every_document_under_them`. A pin here read document
+# wording, so the check is in `tools/check_documents.py`, which is not part of the gate.
 
 
 # --- 6. the response-to-request join ------------------------------------------
@@ -685,7 +680,9 @@ def test_the_join_reads_the_committed_per_scope_response_through_the_injected_pr
 def test_the_committed_op_response_shows_one_shape_and_names_no_live_fact(tmp_path):
     """AC-4.2: the committed device fact response shows the shape one command gives, and names no fact the
     tool can read offline. The fetch layer states no command-to-element table, so the shape stays an
-    illustration and `docs/API_CONVERSION_PATH.md` §4 stays blocked."""
+    illustration. That `docs/API_CONVERSION_PATH.md` §4 keeps the live facts blocked is a document claim, so
+    `tools/check_documents.py` reads it and this pin does not.
+    """
     request = HARNESS[2][1]
     source = _read_committed(request, tmp_path / 'harness fact')
     held = source.root[0]
@@ -703,5 +700,3 @@ def test_the_committed_op_response_shows_one_shape_and_names_no_live_fact(tmp_pa
                   and any(isinstance(key, ast.Constant) and isinstance(key.value, str)
                           and ' ' in key.value for key in node.keys)]
         assert not tables, (name, 'no command-to-element table, so the shape the fixture shows cannot become a rule')
-    assert '§4' in (REPO_ROOT / 'docs' / 'API_CONVERSION_PATH.md').read_text(encoding='utf-8'), \
-        'the live facts stay blocked in the design record'

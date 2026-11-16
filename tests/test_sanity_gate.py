@@ -688,10 +688,11 @@ def test_the_run_wide_findings_print_through_the_join(tmp_path, monkeypatch):
     assert report.findings('request_set') == findings, report.render()
     assert all(f'  {finding.render()}' in report.render() for finding in run_wide), report.render()
     # The rule states no row set of its own, so the entry set is the join's own table read through the owner.
-    # F8.9 closed the table half of the cross-response join in `backlog.md`; the row half stays open.
+    # F8.9 closed the table half of the cross-response join; the row half stays open in `backlog.md`, which the
+    # pin does not read. The open half is what the pin measures: every index entry is a row, because the join
+    # has no row set to answer from.
     assert sorted(entry.path for entry in index) == sorted(entry.path for _, entry in entry_rows), index
-    assert 'cross-response' in (REPO_ROOT / 'backlog.md').read_text(encoding='utf-8'), \
-        'the cross-response row set is still open, so the rule reports one response only'
+    assert len(entry_rows) == len(index), 'no row set of its own, so the join reports the index it was given'
 
 
 def test_the_join_findings_sort_by_the_data_rule(tmp_path, monkeypatch):
