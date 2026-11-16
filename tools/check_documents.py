@@ -176,7 +176,7 @@ def check_licensing() -> None:
                 agg[author] = agg.get(author, 0) + count
         return (agg.get(UPSTREAM, 0), agg.get(OURS, 0))
 
-    log = subprocess.run(['git', 'log', '--format=%an'], cwd=ROOT, capture_output=True, text=True).stdout
+    log = subprocess.run(['git', 'log', rev, '--format=%an'], cwd=ROOT, capture_output=True, text=True).stdout
     commits: dict[str, int] = {}
     for author in log.splitlines():
         commits[author] = commits.get(author, 0) + 1
