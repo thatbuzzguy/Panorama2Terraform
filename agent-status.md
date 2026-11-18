@@ -86,9 +86,22 @@ from outside the repository root: with both binaries present the report names `t
 `terraform PASS` for each of the 2 unit directories; with no binary found the script asks for
 nothing and the report names both checks as NOT RUN, with the note that names each flag; with one
 binary present, the check with the binary names its result and the other names NOT RUN. Every run
-exits 0. One document-review finding was recorded during the piece and stays open in `backlog.md`:
-`README.md` §Testing states that each module is named once there, and 24 test modules are named
-twice.
+exits 0. One document-review finding was recorded during the piece, in `backlog.md`: `README.md`
+§Testing states that each module is named once there, and test modules are named twice. Piece 14
+closed it.
+
+Piece 14 (2026-11-18) is the last offline-actionable item and is complete, and it closed that
+finding. The decision is that the section was wrong and not its rule: 26 of its 81 entries were a
+block repeated after the gate area, and each pair states the same facts, so nothing was merged and
+each module keeps one row in its own area. The rule stays, and the check that reads it is
+`tools/check_documents.py` check 6, because a pin holds a name being present and cannot hold a name
+appearing once; the script stays a document-review script that the test set does not read. Measured
+before: 81 entries, 55 names, 26 named exactly twice, none three times, so the count the finding
+stated did not hold on the current tree. Measured after: 55 entries, each named once, the same 52
+test modules, and the check reads the committed README as 26 findings and the fixed README as none.
+No pin was added, weakened or removed. One finding stays open in `backlog.md`:
+`tests/test_layout.py` reads the `src/` module-table check twice inside the same pin, which is
+repetition rather than a rule finding.
 
 The licensing rule is in `docs/LICENSING.md`, the owner document: the fork source, the two holders, the split
 measured through `git blame`, and the scope of each grant. `LICENSE-COMMERCIAL` is the upstream author's grant, so
@@ -100,32 +113,37 @@ Test count: `python3 -m pytest` reads 1,697 pins in 52 test modules: no skips wh
 is present, and 4 skips for the missing binary when it is absent, because the pins that run the rule
 set skip only for a missing binary. The count is the same before and after Piece 12, so no pin was
 added, removed, or weakened. Piece 13 adds no pin, and the count is 1,697 in 52 modules before and
-after it, read from the per-module collection counts.
-`ruff check .` is clean at the level `pyproject.toml` states and `ruff format --check .` is clean on the 100 Python
-files.
-`tests/test_api_path.py` reads 33 pins (30 before Piece 8). `tests/test_sanity_gate.py` reads 110 pins, 11 more than
-the 99 it read before Piece 11. `pyproject.toml` sets `addopts = "-q"`, so a second `-q`
-suppresses the summary line; the count is read from the per-module collection counts.
+after it, read from the per-module collection counts. Piece 14 adds no pin, and the count is the
+same 1,697 in 52 modules before and after it, read the same way. `ruff check .` is clean at the
+level `pyproject.toml` states and `ruff format --check .` is clean on the 100 Python files.
+`tests/test_api_path.py` reads 33 pins (30 before Piece 8). `tests/test_sanity_gate.py` reads 110
+pins, 11 more than the 99 it read before Piece 11. `pyproject.toml` sets `addopts = "-q"`, so a
+second `-q` suppresses the summary line; the count is read from the per-module collection counts.
 
-Full-suite time, measured 2026-11-13: 325.4 s, 364.6 s and 364.9 s on three runs of the same set (5 min 25 s to
-6 min 05 s). Measured pin time 335.2 s, collection 0.6 s, `ruff check .` 0.1 s. The recorded run when the test set
-held 663 pins took 35 s, so the growth is the corpus pins and the pins that run `terraform`. The slowest part is
-`tests/test_terraform_validate.py` at 121.4 s, then `tests/test_sanity_gate.py` at 49.9 s (34.0 s of it in the
-three pins that run the gate with the terraform binary), then the corpus pins at 79.8 s. The Piece 7 runs, measured
-2026-11-16, took 4 min 24 s and 6 min 25 s for the same set. The Piece 8 run, measured 2026-11-18, passed 1,688
-pins in 305.56 s. The Piece 10 run, measured 2026-11-18, passed 1,686 pins in 313.68 s, with `ruff check .` at
-0.015 s, `ruff format --check .` at 0.011 s, and `python3 tools/check_documents.py` at 11.09 s. The Piece 11 run,
-measured 2026-11-18, passed 1,697 pins in 280.97 s with the tflint binary present and in 286.45 s with it absent,
-where the four pins that run the rule set skip for the missing binary. The Piece 12 run, measured
-2026-11-18 with the binary present, passed the same 1,697 pins in 52 modules in 273.21 s at the new
-level, against 339.42 s for the same set read on the tree at commit `698c957` in a detached
-worktree; `python3 tools/check_documents.py` reports no finding for either tree. The Piece 13 run,
-measured 2026-11-18 with the tflint binary present, passed the same 1,697 pins in 52 modules in
-335.42 s, with `ruff check .` clean at `py310`, `ruff format --check .` clean on the 100 Python
-files, and `python3 tools/check_documents.py` reporting no finding. The demonstration run through
-the script on the committed sample takes 3.29 s with both binaries present and 0.26 s with neither,
-measured 2026-11-18 from `/tmp/opencode/piece13`, so the script writes no file in the repository
-root.
+Full-suite time, measured 2026-11-13: 325.4 s, 364.6 s and 364.9 s on three runs of the same set (5
+min 25 s to 6 min 05 s). Measured pin time 335.2 s, collection 0.6 s, `ruff check .` 0.1 s. The
+recorded run when the test set held 663 pins took 35 s, so the growth is the corpus pins and the
+pins that run `terraform`. The slowest part is `tests/test_terraform_validate.py` at 121.4 s, then
+`tests/test_sanity_gate.py` at 49.9 s (34.0 s of it in the three pins that run the gate with the
+terraform binary), then the corpus pins at 79.8 s. The Piece 7 runs, measured 2026-11-16, took 4 min
+24 s and 6 min 25 s for the same set. The Piece 8 run, measured 2026-11-18, passed 1,688 pins in
+305.56 s. The Piece 10 run, measured 2026-11-18, passed 1,686 pins in 313.68 s, with `ruff check .`
+at 0.015 s, `ruff format --check .` at 0.011 s, and `python3 tools/check_documents.py` at 11.09 s.
+The Piece 11 run, measured 2026-11-18, passed 1,697 pins in 280.97 s with the tflint binary present
+and in 286.45 s with it absent, where the four pins that run the rule set skip for the missing
+binary. The Piece 12 run, measured 2026-11-18 with the binary present, passed the same 1,697 pins in
+52 modules in 273.21 s at the new level, against 339.42 s for the same set read on the tree at
+commit `698c957` in a detached worktree; `python3 tools/check_documents.py` reports no finding for
+either tree. The Piece 13 run, measured 2026-11-18 with the tflint binary present, passed the same
+1,697 pins in 52 modules in 335.42 s, with `ruff check .` clean at `py310`, `ruff format --check .`
+clean on the 100 Python files, and `python3 tools/check_documents.py` reporting no finding. The
+demonstration run through the script on the committed sample takes 3.29 s with both binaries present
+and 0.26 s with neither, measured 2026-11-18 from `/tmp/opencode/piece13`, so the script writes no
+file in the repository root. The Piece 14 run, measured 2026-11-18 on the final tree with the tflint
+binary present, passed the same 1,697 pins in 52 modules in 360.33 s, with `ruff check .` clean at
+`py310`, `ruff format --check .` clean on the 100 Python files, and `python3 tools/check_documents.py`
+reporting no finding, read at 6.20 s after the final document edits. The same set passed in 299.71 s
+on the run before the final document wrapping, so the wrapping changed no pin.
 
 Gate size, decided 2026-11-13: no smaller default gate is adopted. The measured subset that drops the pins that
 call `terraform` runs in 203.0 s (44% of the full run), and the subset that drops the corpus pins runs in about
@@ -137,36 +155,37 @@ recorded in the report and in `docs/ARCHITECTURE.md` §1.1, and not in the tests
 and a mark would make the smaller set the default. A smaller gate does not change the result: every pin in each
 subset passes, and the full run passes.
 
-The shared test definitions are in `tests/conftest.py`, so a test module reads them there instead of defining
-its own copy, and no test module imports another test module (`docs/ARCHITECTURE.md` §1.1). What landed: the
-rule-block parser and the chain check that `tests/test_policy_order.py` and `tests/test_real_or_report.py` share,
-the terraform binary, the golden set path, and the resource-line patterns. The pattern decision came from
-measurement against the goldens and the corpus run output: the shapes the test set held before answer the same 414
-matches, and no resource line lacks the trailing brace, so the difference was the capture groups only.
-`tests/conftest.py` therefore states two named patterns as data, both requiring the block brace, each with the rule
-it serves: `RESOURCE_RE` answers the resource type for the pins that read the emitted type set, and
-`RESOURCE_ADDRESS_RE` answers the type and the local name for `tests/test_dependency_wiring.py`, which reads
-`findall` as pairs. The measurement and the decision are recorded in the comment at the patterns and in
-`acceptance.md`. The pin count is unchanged, so no pin was weakened.
+The shared test definitions are in `tests/conftest.py`, so a test module reads them there instead of
+defining its own copy, and no test module imports another test module (`docs/ARCHITECTURE.md` §1.1).
+What landed: the rule-block parser and the chain check that `tests/test_policy_order.py` and
+`tests/test_real_or_report.py` share, the terraform binary, the golden set path, and the resource-
+line patterns. The pattern decision came from measurement against the goldens and the corpus run
+output: the shapes the test set held before answer the same 414 matches, and no resource line lacks
+the trailing brace, so the difference was the capture groups only. `tests/conftest.py` therefore
+states two named patterns as data, both requiring the block brace, each with the rule it serves:
+`RESOURCE_RE` answers the resource type for the pins that read the emitted type set, and
+`RESOURCE_ADDRESS_RE` answers the type and the local name for `tests/test_dependency_wiring.py`,
+which reads `findall` as pairs. The measurement and the decision are recorded in the comment at the
+patterns and in `acceptance.md`. The pin count is unchanged, so no pin was weakened.
 
-The CI gate reads the Python floor as 3.10, and the matrix legs are 3.10, 3.11, 3.12 and 3.13. The 3.9
-leg is dropped, not moved to an older runner image, because two facts make it unusable:
+The CI gate reads the Python floor as 3.10, and the matrix legs are 3.10, 3.11, 3.12 and 3.13. The
+3.9 leg is dropped, not moved to an older runner image, because two facts make it unusable:
 `actions/setup-python` has no hosted build for 3.9 on Ubuntu 26.04, the image `ubuntu-latest` names
 from November 2026, and `requirements.txt` pins `pytest==9.1.1`, which requires 3.10. Each leg is a
 minor version, never an exact patch, because the build manifest for 26.04 holds only the newest
 patches for the older minors. `pyproject.toml` states the floor, and `README.md` and
-`docs/USAGE_GUIDE.md` state the same value. `target-version` now equals that floor, so the lint gate enforces the
-spelling the project writes: the PEP 604 union for an optional value, the call rule read from `collections.abc`, and
-`strict` stated at every `zip` call. No pin reads the workflow file, and the workflow states no level of its own, so
-the CI legs read `pyproject.toml`; the legs start at 3.10, so no leg runs a Python below the level the gate enforces.
+`docs/USAGE_GUIDE.md` state the same value. `target-version` now equals that floor, so the lint gate
+enforces the spelling the project writes: the PEP 604 union for an optional value, the call rule
+read from `collections.abc`, and `strict` stated at every `zip` call. No pin reads the workflow
+file, and the workflow states no level of its own, so the CI legs read `pyproject.toml`; the legs
+start at 3.10, so no leg runs a Python below the level the gate enforces.
 
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2
 live facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry
-inside a
-stack, the EDL `certificate_profile` field, and the profile-name report column. The audit series is complete with
-Piece 12, and Piece 13 is the last actionable offline piece, so no actionable slice is left open:
-what stays in `backlog.md` needs a fact a live target states, or is a document-review finding that
-the rules put outside the test set.
+inside a stack, the EDL `certificate_profile` field, and the profile-name report column. The audit
+series is complete with Piece 12, and Pieces 13 and 14 are the last offline-actionable pieces, so no
+actionable slice is left open: what stays in `backlog.md` needs a fact a live target states, or is a
+repetition inside a pin that the rules put outside this piece.
 
 Piece 3 (pins that measure nothing) is complete. The five findings the 2026-11-11 audit recorded in
 `backlog.md` are fixed, each by making the pin read the material its own rule names, and no pin failed when it

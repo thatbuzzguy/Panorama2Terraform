@@ -18,6 +18,8 @@ Checks:
    row shape the module defines.
 5. No document states a test count. `agent-status.md` and `acceptance.md` hold the measurement, so they are
    read for the claims and not for the count rule.
+6. `README.md` §Testing names each entry once, which is the rule that section states. A pin holds a name being
+   present and cannot hold a name appearing once, so this is a document review, not a pin.
 
 Exit 0 when every check agrees, 1 when a finding is printed.
 """
@@ -61,6 +63,8 @@ COUNT_MARKDOWN = DOCUMENT_MARKDOWN
 CLAIM_RE = re.compile(r"`(tests/[A-Za-z0-9_]+\.py)::([A-Za-z0-9_]+)`")
 # A test count, not a path number: `path 2 pins` names the pins of path 2, so the lookbehind excludes it.
 COUNT_RE = re.compile(r"(?<!path )(?<!F\d )\b(\d[\d,]*) (pins|test modules|test functions|collected pins)\b")
+# A list entry in `README.md` §Testing is one name, so the check reads the name at its start and no prose.
+ENTRY_RE = re.compile(r"^- `([^`]+)`")
 UPSTREAM = "devnullNZ"
 OURS = "Ryan Brown"
 
@@ -358,12 +362,40 @@ def check_no_test_counts() -> None:
                 findings.append(f"{md.relative_to(ROOT)}:{lineno}: a document states a test count")
 
 
+def check_test_set_names_each_entry_once() -> None:
+    """Check 6: `README.md` §Testing names each entry once, the rule that section states.
+
+    The index rule is that the root index names every test module, and `tests/test_layout.py` pins it as names.
+    A pin holds a name being present, not a name appearing twice, so the once rule cannot be a pin and lives
+    here. The section is a list of names, so this reads the name at the start of each entry and no prose: a
+    repeated name is a finding, and a section that dropped the rule it states is a finding too.
+    """
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    if "## Testing" not in text:
+        findings.append("README.md: the section that names the test set is not in the document")
+        return
+    section = text.split("## Testing", 1)[1].split("\n## ", 1)[0]
+    if "named once" not in section:
+        findings.append("README.md §Testing: the section must state that each module is named once")
+    counts: dict[str, int] = {}
+    for line in section.splitlines():
+        match = ENTRY_RE.match(line)
+        if match:
+            counts[match.group(1)] = counts.get(match.group(1), 0) + 1
+    for name, count in sorted(counts.items()):
+        if count > 1:
+            findings.append(
+                f"README.md §Testing: {name} is named {count} times, which contradicts the rule the section states"
+            )
+
+
 def main() -> int:
     check_claims()
     check_matrix_table()
     check_licensing()
     check_wording()
     check_no_test_counts()
+    check_test_set_names_each_entry_once()
 
     for finding in findings:
         print(f"FINDING: {finding}")

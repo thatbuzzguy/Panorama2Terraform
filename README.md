@@ -467,7 +467,9 @@ skip for a missing binary, and the one result per unit directory.
   It reads names, not document wording, so a correct rewording cannot fail it. The document-wording checks
   are not pins: they are `tools/check_documents.py`.
 
-The set, by area. Each module is named once here, because the root index names the test set.
+The set, by area. Each module is named once here, because the root index names the test set. An
+entry named more than once is a document-review finding, read by `tools/check_documents.py`, which
+the test set does not read.
 
 Input and the read layer:
 
@@ -651,124 +653,6 @@ The gate, the fixtures, and the corpus:
   template on the device the export lists, and the splitter pins read the row and the parsed source through the
   door
 - `tests/test_multi_vsys_location.py` - the multi-vsys identity and the `location` sub-block choice per type
-- `tests/test_build_kitchen_sink.py` - the fixture assembler (`tools/`): the read rule read on the committed
-  bytes, so a hostile fixture is skipped by rule and not by name and the tool's decision agrees with `xml_input`
-  for every committed fixture; the rule that the tool names no fixture except its own record, writes no file,
-  and is a generator rather than a pin on the record; the three merge cases; the byte rule between two runs; and
-  the rule that the tool reads the corpus and not the committed response set
-- `ruff check .` - lint
-- `ruff format --check .` - format
-- `tests/test_sanity_gate.py` - the post-run gate: every check detects its
-  violation, no fixture trips a false positive, the report is byte-identical
-  between two runs, and the exit code follows the findings. F8.8: the request-set rule reads the join through
-  `api_requests.unit_findings` and the unit through `unit_manifest` and `naming`, so the file it names is the unit
-  directory, the position is 0, the run-wide direction prints through the root shape, the order is the data rule's
-  key, and the report section and the exit code are the gate's, not the join's. The `tflint` pins hold the rule
-  set as data, the severity and exit-code tables, the committed answer for the committed probe content, the skip
-  for a missing binary, and the one result per unit directory the record names
-- `tests/test_container_coverage.py` - the container table and the code stay
-  in step: no parse method without a row, no row naming a path the method
-  does not read
-- `tests/test_entry_coverage.py` - every parse method that reads entries
-  marks them, so the per-entry report cannot lie
-- `tests/test_source_fetch.py` - the api producer: bytes handed to the shared door,
-  the response wrapper, the key-free cache name, `--offline`, the https rules, and the
-  key from the environment. No test calls the network, and the committed response set is read through
-  an injected producer
-- `tests/test_api_requests.py` - the scope index and the response-to-request join (`api_requests.py`): the four
-  membership lists as the container table rows, the scope set read from the membership responses, the sorted
-  one-entry-per-scope order, the join checked against the request that made the response, and the offline
-  harness: one committed response per request shape, each named by the request identity that produced it, read
-  through the injected producer, and read as data by the record
-- `tests/test_api_path.py` - the run over many sources: one response is one source with its own line map, the
-  section-to-response join, the parse method running over the response that holds its container, the report
-  position as the line inside that response, the row naming the source that holds the entry, the predefined
-  read, and the unit join: the run's unit set read through `unit_manifest.units`, the scope the run read for
-  each unit, and the two directions the join reports as data rows. It also pins the entry point
-  `api_to_terraform.py`: the run order, the join across the responses the run read, the arguments, the exit codes,
-  the run view, the report source lines in run order, and that the entry point states no rule an owner states. It
-  also pins the byte agreement between the two paths for content that holds no fact from `API_CONVERSION_PATH.md` §4
-- `tests/test_shadow_coverage.py` - the cross-source shadow scan: the per-scope shape in the
-  scan, the shadow fact (the key is `state_coverage.ownership_key` read with the facts the parent row
-  declares, so it names the parent scope), the report section and its line shape with the parent entry
-  field, one finding per parent entry, the report order, the console line, the CLI argument rules, and the
-  offline run reading both cache entries
-- `tests/test_provenance.py` - the provenance record (`SOURCE.txt`): the fields, the record
-  read back as data, one record per source the run read, one record per request the path 2 run read with the
-  `scope` field naming the path that request declared, the `Source:` label for both sources,
-  the rule that a cache entry is not pruned while a written record references it, the action reading the record
-  file the same run wrote, and the record byte rule between two runs
-- `tests/test_state_input.py` - the state producer: the two byte checks on the state bytes, the entry
-  shape a scan can read, the document refusals, the record facts, the CLI argument rules, and the
-  offline run that calls no producer
-- `tests/test_state_coverage.py` - the state scan: the ownership key, the drift rule, the two report
-  sections and their line shapes, the rule that a state read is not an output read, the exit code, and
-  the record read back with no new field
-- `tests/test_data_source_schema.py` - the data source table against the live provider schema: the rows,
-  the required `location` and `name`, the 22 rows that declare no `name`, and the pin between
-  `DATA_SOURCE_SCHEMA` and `LOCATION_SCHEMA`
-- `tests/test_data_blocks.py` - the read-through data blocks: the one block reader for every block kind,
-  the gate rule for a `data` block, the kind rule for a reference, the opt-in emit path (a run that
-  declares nothing writes the golden bytes), the CLI argument rules, the report rule, the generated
-  `README.md` label, and the byte rule between two runs
-- `tests/test_unit_manifest.py` - the unit as data (`CODEBASE_MANIFEST.json`): one row per declared
-  scope, the directory naming rule, the row shape read back as data, the reference names recorded by
-  the reference rule, the no-change rule for the `.tf` goldens, the report bodies, the gate inputs,
-  and the exit codes, and the byte rule between two runs. F8.7: the unit join in `api_requests.py` reads
-  this unit set through `unit_manifest.units`, so path 2 states no second unit rule
-- `tests/test_reference_edges.py` - the reference between units as data (`REFERENCE_EDGES.json`): one
-  row per pair, the join to the manifest and to the ownership record, the rule that the module
-  resolves no name, self-reference exclusion, the acyclic rule and the report section, the unit order
-  and its three bases, the gate inputs, the exit codes, and the byte rule between two runs
-- `tests/test_import_blocks.py` - the import blocks (`imports.tf`): the id encoding and its inverse, the
-  agreement gate rule and each violation type, the rule that the corpus writes no finding, the decision
-  for the four `*_policy_rules` types, the rule that the block and the id come from one location rule and
-  one naming rule, the order, and the byte rules between two runs and for a run that declares nothing
-- `tests/test_scope_objects.py` - the scope objects (`scope.tf`): one block per scope entry, the level
-  order and the document order, the file written before the config inside it, the file written only when
-  it has content, emission as the default with no flag, the name field for the parent record, the value
-  shape against the live provider schema and against the rows that declare it, the device membership as
-  the objects the provider takes, the placeholder device never entering a printed list, the placement rule
-  and the skipped entry, each violation type of the gate rule, and the byte rule between two runs
-- `tests/test_site_data.py` - the site as data (`SITE_DATA.json`) and the `.tfvars` written from it: the
-  value-to-variable table against `LOCATION_SCHEMA`, the row shape read back as data, the join to the manifest
-  on the unit directory, the `.tfvars` bytes for a string and for a list, the device-name rule at the print
-  site, the declaration set, both directions of the variable gate rule, the corpus rows, the rule that the
-  corpus trips neither, the gate inputs, the report bodies, the rule that the module defines no second naming
-  rule, and the byte rule between two runs
-- `tests/test_data_file_gate.py` - the gate rule that reads the four data files (`data_files`): the file set
-  the gate reads, the `CHECK_ORDER` position, each finding, the row ordinal as the finding position, the rule
-  that each row shape is read through its own module, the truth across the corpus, and the byte rule between
-  two runs
-- `tests/test_round_trip.py` - the cross-check (`round_trip`): the `.tf` block set read through the one gate
-  reader and the entry set read through the run's ledger, the join through the one scope rule and the one unit
-  rule, one finding per unit and row where the two counts do not agree, the position the reader read, the WARN
-  severity, the NOT RUN result when the caller passes no ledger, the rows that enter no count, the findings the
-  corpus reports, and the byte rule between two runs. F8.8: on a path 2 run the entry set is the join's own rows,
-  so the cross-check and the request-set rule read one ledger and name the same unit
-- `tests/test_write_path.py` - the write path (`write_path.py`): the two file sets and the rule that every file
-  names one set, the one function that writes bytes and forces LF, the two path builders, the rule that no module
-  of the tool writes a file outside it, the reader key as the path from the codebase root, the plan check that
-  runs once per unit directory and names the directory it ran on, the rule that no flag names the layout, the
-  golden set read as paths from the case directory, the single-unit case, and the byte rule between two runs
-- `tests/test_commit_actions.py` - the commit action per unit (`actions.tf`): one block per unit the
-  manifest names, the fact its own unit selects, the unit that writes no action, the address that answers
-  the names inside the block, the order, the file written only when it has content, each violation type of
-  the gate rule, the field inside `config`, the one field mapping and the one answer table and the one level
-  rule, `ACTION_SCHEMA` against the live provider schema, the Terraform minimum, and the byte rule between
-  two runs
-- `tests/test_protocol_object.py` - the `protocol` object on `panos_virtual_router`: the shape table against
-  the live provider schema, the print shape (`protocol = { ... }`, not a block), the one-of mapping, the body of
-  a chosen level read from inside the chosen element, the peer inside its peer group, the interface inside its
-  area, the entry the file cannot express, a sensitive field as
-  the variable reference, `VALUE_VARIABLES` as the one shape owner, each violation type of the gate rule, and
-  the byte rule between two runs
-- `tests/test_filter_containers.py` - the six routing-profile filter containers: `FILTER_SHAPE` against the live
-  provider schema, the 14 rows that state an exactly-one choice and the gate refusing two of them or none, the
-  row scope that stops at a `match` or `set` row, the six `CONTAINER_TABLE`,
-  `COVERAGE_MATRIX`, `EMITTED_TYPES` and `LOCATION_SCHEMA` entries with `FILTER_TYPES` as the one decision owner,
-  the parse read and the print, the path-keyed input spellings with every pair grounded by a fixture entry and
-  read from a real run, and each violation type of the gate rule
 - `tests/test_build_kitchen_sink.py` - the fixture assembler (`tools/`): the read rule read on the committed
   bytes, so a hostile fixture is skipped by rule and not by name and the tool's decision agrees with `xml_input`
   for every committed fixture; the rule that the tool names no fixture except its own record, writes no file,

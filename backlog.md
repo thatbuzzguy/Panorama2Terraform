@@ -123,18 +123,16 @@ here with that rule named.
   entry value. Not built: the corpus holds no such entry, so the rule needs a
   fixture that shows how an export states a device-level value.
 
-- The notice set is not pinned. `docs/LICENSING.md` names the 18 files that still hold upstream text and the
-  four `src/` modules that carry a copyright notice, and `git blame` is the authority for the split. No test
-  reads a notice, so a notice can name a holder the split does not support and the gate reports nothing. A pin
-  would read every module source and compare the notice against the blame author, which is a document check
-  rather than a rule the tool enforces, so it is not built.
-- `README.md` §Testing states that each module is named once there, and 24 test modules are named
-  twice: the rows after "The gate, the fixtures, and the corpus" repeat the modules the earlier
-  sections name. Measured 2026-11-18. A document that contradicts a rule it states is a
-  document-review finding, so this stays here and not in a pin: `tests/test_layout.py` reads names,
-  and the wording checks are `tools/check_documents.py`. Fix: remove the repeated rows, so the
-  section agrees with its own rule. Found while reading the index for Piece 13, and not part of that
-  piece.
+- The notice set is not pinned. `docs/LICENSING.md` names the 18 files that still hold upstream text
+  and the four `src/` modules that carry a copyright notice, and `git blame` is the authority for
+  the split. No test reads a notice, so a notice can name a holder the split does not support and
+  the gate reports nothing. A pin would read every module source and compare the notice against the
+  blame author, which is a document check rather than a rule the tool enforces, so it is not built.
+- `tests/test_layout.py` reads one half of the index rule twice: the block that compares every
+  `src/` module with the §1 module table is stated twice in the same pin. Measured 2026-11-18, the
+  pin holds the same check at lines 68 to 73 and at lines 74 to 78, so the same set is read twice on
+  every run. This is repetition, not a rule finding: the pin passes either way. Fix: remove the
+  second block. Found while reading the index pin for Piece 14, and not part of that piece.
 
 ## Out of Scope
 

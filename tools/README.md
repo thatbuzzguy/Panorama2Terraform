@@ -10,7 +10,7 @@ through `git blame` and `git show` at the commit the document names.
 |---|---|
 | [quick_start.sh](quick_start.sh) | Runs the committed sample input from `../examples/` and prints the reports. It resolves `src/` and `examples/` from the repository root, so it runs from any directory |
 | [build_kitchen_sink.py](build_kitchen_sink.py) | Assembles the fixture corpus into one merged tree and prints it. It writes no file, so `../tests/fixtures/kitchen_sink.xml` stays the record the golden set reads |
-| [check_documents.py](check_documents.py) | Prints the document-review findings: a pin claim that names a name the module does not define, a document table that disagrees with the code table, the license counts that disagree with `git blame` at the commit the document names, with each notice's file total read at the same commit, the wording checks the test set no longer holds, and a document that states a test count. It is not part of the gate and the test set does not read it, so a wording edit is a document review and not a CI failure. It writes no file |
+| [check_documents.py](check_documents.py) | Prints the document-review findings: a pin claim that names a name the module does not define, a document table that disagrees with the code table, the license counts that disagree with `git blame` at the commit the document names, with each notice's file total read at the same commit, the wording checks the test set no longer holds, an entry that `README.md` §Testing names more than once, and a document that states a test count. It is not part of the gate and the test set does not read it, so a wording edit is a document review and not a CI failure. It writes no file |
 
 ## The rule the fixture assembler keeps
 

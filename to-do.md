@@ -2,14 +2,23 @@
 
 The tracking markdown for the completed pieces is removed here; the git history and the owner documents hold it.
 
-Piece 13, committed 2026-11-18, is the last actionable offline piece: `tools/quick_start.sh` now
-asks for each gate check that runs an external command when that binary is present, so a run through
-the script reports the rule set's result instead of reporting the rule set as NOT RUN. The decision,
-the reason no pin was written, and the demonstration and gate measurements are in `acceptance.md`.
+Piece 14, committed 2026-11-18, is the last offline-actionable item and is complete. `README.md`
+§Testing now names each entry once. The decision: the section was wrong and not its rule, because 26
+of its 81 entries were a block repeated after the gate area, and each pair states the same facts, so
+nothing was merged. The rule stays as the section states it, and the check that reads it is
+`tools/check_documents.py`, the document-review script, because a pin holds a name being present and
+cannot hold a name appearing once. Measured before: 81 entries, 55 names, 26 named exactly twice and
+none three times, so the `backlog.md` claim of three for `tests/test_sanity_gate.py` did not hold.
+Measured after: 55 entries, each named once, the same 52 test modules, and the check reads the
+committed README as 26 findings and the fixed README as none. No pin was added, weakened or removed:
+1,697 pins in 52 modules before and after. The decision, the criteria and the gate measurement are
+in `acceptance.md`.
 
-No actionable offline slice remains. What stays open in `backlog.md` is blocked on a fact the tool
-cannot read offline, or is a document-review finding that the rules put outside the test set, so no
-item there is a piece here.
+One finding found while reading the index pin stays open in `backlog.md`: `tests/test_layout.py`
+reads the `src/` module-table check twice inside the same pin. It is not part of this piece.
+
+No offline-actionable item remains. What stays open in `backlog.md` is blocked on a fact the tool
+cannot read offline, or is a repetition inside a pin that the rules put outside this piece.
 
 ## Feature-sized items that stay blocked
 
