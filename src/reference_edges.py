@@ -68,7 +68,7 @@ Usage:
 
 import json
 from collections import defaultdict
-from typing import Callable
+from collections.abc import Callable
 
 import unit_manifest
 
@@ -120,7 +120,8 @@ def build_rows(ownership_rows: list, references: dict, sanitize: Callable[[str],
             for type_, owner in sorted(owners.get(name, ())):
                 if not owner or owner == referrer:
                     continue  # rule 1 and rule 3: no target unit, or the same unit twice
-                rows.append(dict(zip(FIELD_ORDER, (referrer, owner, type_, name))))
+                # FIELD_ORDER and the four values the row states in that order are the same set.
+                rows.append(dict(zip(FIELD_ORDER, (referrer, owner, type_, name), strict=True)))
     return sorted(rows, key=lambda row: tuple(row[key] for key in FIELD_ORDER))
 
 

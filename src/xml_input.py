@@ -102,7 +102,6 @@ import xml.etree.ElementTree as ET
 import xml.parsers.expat as expat
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 # Refuse an input larger than this before reading it (F3.8).
 DEFAULT_MAX_INPUT_BYTES = 64 * 1024 * 1024
@@ -125,7 +124,7 @@ def control_chars(text: str) -> list[str]:
     return [ch for ch in text if ch in CONTROL_CHARS and ch not in ESCAPE_SHAPES]
 
 
-def read_text(text: Optional[str]) -> Optional[str]:
+def read_text(text: str | None) -> str | None:
     """Text read from the tree, as the text rule above states it: without the whitespace around it.
 
     An element that is not there answers None, so the rule never turns an absent field into an empty one.
@@ -175,7 +174,7 @@ class SourceOrigin:
 
     kind: str
     name: str
-    path: Optional[Path] = None
+    path: Path | None = None
 
     @classmethod
     def for_path(cls, path: Path) -> "SourceOrigin":
@@ -321,7 +320,7 @@ class ParsedSource:
         """The first segment of the declared path, or '' for the whole config."""
         return self.scope.split("/")[0] if self.is_per_scope else ""
 
-    def line_of(self, elem: ET.Element) -> Optional[int]:
+    def line_of(self, elem: ET.Element) -> int | None:
         """Line of elem's opening tag, or None when the parse did not record it."""
         return self.lines.get(id(elem))
 

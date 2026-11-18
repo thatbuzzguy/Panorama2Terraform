@@ -1,12 +1,13 @@
 # Project tool configuration.
 # Python >= 3.10: Python 3.9 is end-of-life, and the pinned pytest 9 requires 3.10.
-# `target-version` states the syntax level the lint gate enforces, not the floor. It stays
-# py39 because the codebase still writes pre-3.10 typing (`Optional[X]`, `typing.List`) and
-# `zip` without `strict`; the one-time pass that moves it to py310 is in `backlog.md`.
+# `target-version` states the syntax level the lint gate enforces, and it now equals the floor, so the codebase
+# reads a PEP 604 union, the call rule from `collections.abc`, and states `strict` on every `zip` call. The
+# one-time pass that moved it to py310 is complete; a level below the floor would let the gate enforce syntax the
+# project no longer writes.
 
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py310"
 # Where ruff looks for first-party modules, so the import order stays the same after the layout move:
 # the tool's modules in `src/`, and the test harness in `tests/`.
 src = ["src", "tests"]

@@ -84,9 +84,9 @@ import os
 import ssl
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Callable, Optional
 
 import write_path
 from xml_input import (
@@ -289,7 +289,7 @@ def names_element(element, request: ApiRequest) -> bool:
     return element.tag == segments[0]
 
 
-def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = None) -> ParsedSource:
+def unwrap_config_root(source: ParsedSource, request: ApiRequest | None = None) -> ParsedSource:
     """The wrapper decision: move the tree root to the element the request shape names
     (F5.2 AC-2, F5.4 AC-1, F8.1).
 
@@ -390,12 +390,12 @@ def unwrap_config_root(source: ParsedSource, request: Optional[ApiRequest] = Non
 def fetch(
     request: ApiRequest,
     cache_dir,
-    producer: Optional[Callable[[ApiRequest], bytes]] = None,
+    producer: Callable[[ApiRequest], bytes] | None = None,
     offline: bool = False,
     insecure: bool = False,
     max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES,
-    api_key: Optional[str] = None,
-) -> Optional[ParsedSource]:
+    api_key: str | None = None,
+) -> ParsedSource | None:
     """Read the cached API export and return the parsed source (F5.2 AC-3).
 
     The origin names the cache entry as its name and its path, so a report line

@@ -57,7 +57,7 @@ def _run(source: Path, out_dir: Path) -> subprocess.CompletedProcess:
 def _manifest_row(facts: tuple, rank: int = 1, after: tuple = ()) -> dict:
     """A manifest row as the rules state it, so only the field a test changes can be a finding."""
     row = dict(dict.fromkeys(unit_manifest.FIELD_ORDER, ""))
-    row.update(dict(zip(unit_manifest.FACT_KEYS, facts)))
+    row.update(dict(zip(unit_manifest.FACT_KEYS, facts, strict=True)))
     row["unit"] = unit_manifest.unit_name(facts)
     row["directory"] = unit_manifest.directory_name(facts, naming.sanitize)
     row["entry_count"] = 1
@@ -70,7 +70,7 @@ def _manifest_row(facts: tuple, rank: int = 1, after: tuple = ()) -> dict:
 def _ownership_row(facts: tuple, entry: str, kind: str, owner_facts: tuple) -> dict:
     """An ownership row as the rules state it, with the owner named through its own facts."""
     row = dict(dict.fromkeys(ownership.FIELD_ORDER, ""))
-    row.update(dict(zip(ownership.FACT_KEYS, facts)))
+    row.update(dict(zip(ownership.FACT_KEYS, facts, strict=True)))
     row["type"] = "panos_address"
     row["entry"] = entry
     row["source"] = "data_file_gate.xml"

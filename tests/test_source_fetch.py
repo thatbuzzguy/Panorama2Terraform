@@ -940,7 +940,9 @@ def test_source_fetch_imports_are_standard_library(fetch_module):
             if name in local:
                 continue
             top_level.add(name)
-    allowed = {"hashlib", "os", "ssl", "urllib", "dataclasses", "pathlib", "typing"}
+    # `collections` is the standard-library name the call rule lives in (`collections.abc.Callable`), which
+    # is where the pin reads it after the syntax pass.
+    allowed = {"hashlib", "os", "ssl", "urllib", "dataclasses", "pathlib", "collections"}
     assert top_level <= allowed, top_level - allowed
     source = (SRC_DIR / "source_fetch.py").read_text(encoding="utf-8")
     assert "import panos" not in source and "requests" not in source

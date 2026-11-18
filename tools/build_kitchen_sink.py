@@ -26,7 +26,6 @@ import sys
 import xml.etree.ElementTree as ET
 import xml.parsers.expat as expat
 from pathlib import Path
-from typing import Optional
 
 REPO_ROOT = Path(__file__).parent.parent
 FIXDIR = REPO_ROOT / "tests" / "fixtures"
@@ -43,7 +42,7 @@ class _PrologDone(Exception):
     """The prolog scan stopped at the root element start tag, where a DTD cannot legally appear."""
 
 
-def refusal_reason(path: Path) -> Optional[str]:
+def refusal_reason(path: Path) -> str | None:
     """Why the tool does not read one fixture, or None when its read rule accepts it.
 
     The two F3.8 checks, read on the committed bytes. The size check has nothing to protect on a committed

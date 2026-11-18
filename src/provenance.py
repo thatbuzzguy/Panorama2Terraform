@@ -53,7 +53,6 @@ Usage:
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Union
 
 import source_fetch
 import state_input
@@ -84,7 +83,7 @@ class ProvenanceRecord:
 
 
 def record_for(
-    source: Union[ParsedSource, state_input.StateSource], request: Optional[source_fetch.ApiRequest] = None
+    source: ParsedSource | state_input.StateSource, request: source_fetch.ApiRequest | None = None
 ) -> ProvenanceRecord:
     """Build the record for one source the run read, from the source the door returned and
     the request it read.
@@ -152,7 +151,7 @@ def parse_record(text: str) -> ProvenanceRecord:
     return ProvenanceRecord(**values)
 
 
-def cache_reference(record: ProvenanceRecord) -> Optional[str]:
+def cache_reference(record: ProvenanceRecord) -> str | None:
     """The cache entry a record references, or None when the source kind has no cache entry."""
     return None if record.cache_entry == ABSENT else record.cache_entry
 

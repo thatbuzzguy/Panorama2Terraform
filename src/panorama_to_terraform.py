@@ -34,7 +34,7 @@ import hashlib
 import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import commit_actions
 import container_coverage
@@ -118,7 +118,7 @@ class PanoramaParser:
         "certificate-profile": "certificate_profile",
     }
 
-    def __init__(self, source: ParsedSource, ledger: Optional[entry_coverage.EntryLedger] = None):
+    def __init__(self, source: ParsedSource, ledger: entry_coverage.EntryLedger | None = None):
         # F5.2: the parser takes the ParsedSource the producer boundary returns,
         # the same contract for every source. The parser keeps no read of its
         # own: the size cap and the DTD refusal (F3.8) and the line map (F4.2)
@@ -135,11 +135,11 @@ class PanoramaParser:
         # and the report is built from the ledger after the parse.
         self.ledger = ledger if ledger is not None else entry_coverage.EntryLedger(self.source, self.parent_map)
 
-    def line_of(self, elem: ET.Element) -> Optional[int]:
+    def line_of(self, elem: ET.Element) -> int | None:
         """Source line of an element's opening tag (F4.2)."""
         return self.source.line_of(elem)
 
-    def mark(self, entry: ET.Element, captured: dict, detail: str = "", destination: Optional[str] = None) -> dict:
+    def mark(self, entry: ET.Element, captured: dict, detail: str = "", destination: str | None = None) -> dict:
         """Record what this method took from an entry, and return the object.
 
         F4.3 AC-1: a parse method that reads entries marks them. The ledger stores the
@@ -1855,7 +1855,7 @@ class PanoramaParser:
             },
         }
 
-    def _parse_routers(self, container_tag: str, next_hop_tag: str, router_type: Optional[str] = None) -> list[dict]:
+    def _parse_routers(self, container_tag: str, next_hop_tag: str, router_type: str | None = None) -> list[dict]:
         """Parse every router of one kind, whatever scope it lives in.
 
         F3.5: one path, `.//network/<kind>/entry`, covers every place a
@@ -2587,7 +2587,7 @@ class PanoramaParser:
         return entries
 
     def _protocol_entries(
-        self, path: str, holder: list, entries, table: Optional[resource_mapping.ShapeTable] = None
+        self, path: str, holder: list, entries, table: resource_mapping.ShapeTable | None = None
     ) -> None:
         """The entries of a `string_list` level, marked and put in the list that holds them (F7.4, F7.5).
 
@@ -2615,7 +2615,7 @@ class PanoramaParser:
                 holder.append(marked)
 
     def _protocol_body(
-        self, path: str, body: ET.Element, fields: dict, table: Optional[resource_mapping.ShapeTable] = None
+        self, path: str, body: ET.Element, fields: dict, table: resource_mapping.ShapeTable | None = None
     ) -> str:
         """The shapes inside a level that a level dict cannot hold (F7.4, F7.5, F7.6).
 
@@ -2650,7 +2650,7 @@ class PanoramaParser:
         return detail
 
     def _protocol_presence_choice(
-        self, path: str, element: ET.Element, table: Optional[resource_mapping.ShapeTable] = None
+        self, path: str, element: ET.Element, table: resource_mapping.ShapeTable | None = None
     ) -> tuple:
         """The one key a `one_of` level states when the export states the level by presence (F7.4, F7.5).
 
@@ -2667,7 +2667,7 @@ class PanoramaParser:
         return self._protocol_choice(path, child.tag if child is not None else "", element, child, table)
 
     def _protocol_presence_fields(
-        self, path: str, captured: dict, table: Optional[resource_mapping.ShapeTable] = None
+        self, path: str, captured: dict, table: resource_mapping.ShapeTable | None = None
     ) -> str:
         """The reason an entry that states a presence choice states none of its alternatives (F7.1, F7.4).
 
@@ -2682,7 +2682,7 @@ class PanoramaParser:
         return "" if any(captured[f] for f in alternatives) else "no " + " or ".join(alternatives)
 
     def _protocol_interface(
-        self, iface: ET.Element, base: str, table: Optional[resource_mapping.ShapeTable] = None
+        self, iface: ET.Element, base: str, table: resource_mapping.ShapeTable | None = None
     ) -> tuple:
         """One interface entry, read as the shape table names its fields (F7.1, F7.2).
 
@@ -2702,7 +2702,7 @@ class PanoramaParser:
         return captured, detail
 
     @staticmethod
-    def _protocol_field_name(path: str, table: Optional[resource_mapping.ShapeTable] = None) -> str:
+    def _protocol_field_name(path: str, table: resource_mapping.ShapeTable | None = None) -> str:
         """The field name a `PROTOCOL_SHAPE` path names, which is the last part of the path (F7.1).
 
         The parse methods state a level as a path, so the key they write is the field the path names: the
@@ -2714,9 +2714,9 @@ class PanoramaParser:
         self,
         path: str,
         report_value: str,
-        level: Optional[ET.Element],
-        holder: Optional[ET.Element],
-        table: Optional[resource_mapping.ShapeTable] = None,
+        level: ET.Element | None,
+        holder: ET.Element | None,
+        table: resource_mapping.ShapeTable | None = None,
     ) -> tuple:
         """The one key a `one_of` level states, as `({the report value: the alternative's value}, detail)` (F7.1).
 
@@ -2754,10 +2754,10 @@ class PanoramaParser:
 
     def _protocol_level(
         self,
-        entry: Optional[ET.Element],
+        entry: ET.Element | None,
         path: str,
         facts: bool = True,
-        table: Optional[resource_mapping.ShapeTable] = None,
+        table: resource_mapping.ShapeTable | None = None,
     ) -> dict:
         """Read one protocol level as `PROTOCOL_SHAPE` names its fields (F7.1).
 
@@ -2807,7 +2807,7 @@ class PanoramaParser:
         return level
 
     @staticmethod
-    def _protocol_xml_name(field: str, path: str = "", table: Optional[resource_mapping.ShapeTable] = None) -> str:
+    def _protocol_xml_name(field: str, path: str = "", table: resource_mapping.ShapeTable | None = None) -> str:
         """The XML element name for a `PROTOCOL_SHAPE` field name (F7.1).
 
         A PAN-OS export spells a field with `-` where the provider schema spells it with `_`, so the shape
@@ -3093,7 +3093,7 @@ class PanoramaParser:
 
         return profiles
 
-    def _get_text(self, element: ET.Element, path: str) -> Optional[str]:
+    def _get_text(self, element: ET.Element, path: str) -> str | None:
         """Safely get text from an XML element, read through the one text rule (`xml_input.read_text`)."""
         elem = element.find(path)
         return read_text(elem.text) if elem is not None else None
@@ -3155,7 +3155,7 @@ class PanoramaParser:
             names.append(child_name)
         return names or [child.text for child in elem.findall("member") if child.text]
 
-    def _interface_tag(self, entry: ET.Element, name: str) -> Optional[str]:
+    def _interface_tag(self, entry: ET.Element, name: str) -> str | None:
         """Read the `tag` field every interface row declares, from either place the export states it.
 
         The export states the unit tag as a direct child of the entry, or inside the mode block for a
@@ -3316,7 +3316,7 @@ class TerraformGenerator:
     }
 
     def __init__(
-        self, output_dir: str, associations: Optional[dict] = None, data_scopes: Optional[frozenset] = None, ledger=None
+        self, output_dir: str, associations: dict | None = None, data_scopes: frozenset | None = None, ledger=None
     ):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -3485,7 +3485,7 @@ class TerraformGenerator:
         self._declaration_index.setdefault((scope, name), {}).setdefault(unit, candidate)
         return candidate
 
-    def name_ref(self, name: str, scopes, referrer: dict, key: Optional[str] = None):
+    def name_ref(self, name: str, scopes, referrer: dict, key: str | None = None):
         """Apply the reference rule for one unit (F6.10.2) and record what it resolved outside it (F6.1).
 
         `referrer` is the parsed object the reference site belongs to, so the rule reads the unit through
@@ -3554,7 +3554,7 @@ class TerraformGenerator:
         unit = unit_manifest.directory_name(unit_manifest.facts_of(obj), self.sanitize_name)
         self.import_rows.append(import_blocks.row(unit, resource_type, local_name, obj.get("name") or "", location))
 
-    def _resolve_reference(self, name: str, scopes, referrer: dict, key: Optional[str] = None):
+    def _resolve_reference(self, name: str, scopes, referrer: dict, key: str | None = None):
         """Resolve a PAN-OS name inside one unit (F2.6, F6.10.2).
 
         Returns an HclRef of '<scope>.<local>.name' when the referrer's own unit declares the name, else
@@ -4048,7 +4048,7 @@ class TerraformGenerator:
         level: dict,
         router: dict,
         entry_name: str = "",
-        table: Optional[resource_mapping.ShapeTable] = None,
+        table: resource_mapping.ShapeTable | None = None,
     ) -> dict:
         """One level of the protocol object, printed in the shape table's order (F7.1).
 
@@ -4614,7 +4614,7 @@ provider "panos" {
     SERVICE_PROTOCOL_ORDER = ("tcp", "udp")
 
     @classmethod
-    def primary_service_protocol(cls, protocols: dict) -> Optional[str]:
+    def primary_service_protocol(cls, protocols: dict) -> str | None:
         """The one protocol leg a service can emit: tcp wins, then udp."""
         for proto in cls.SERVICE_PROTOCOL_ORDER:
             if proto in protocols:
@@ -4883,7 +4883,7 @@ provider "panos" {
         return list(chains.values())
 
     def _policy_position_block(
-        self, resource_type: str, prev_rule_name: Optional[str], prev_resource_name: Optional[str]
+        self, resource_type: str, prev_rule_name: str | None, prev_resource_name: str | None
     ) -> str:
         """Render position (and depends_on) for one rule in a chain (F2.5).
 
@@ -4914,8 +4914,8 @@ provider "panos" {
         out = UnitText(self, "security_rules.tf", "# Security Policy Rules\n\n")
 
         for chain in self._policy_rule_chains(rules):
-            prev_rule_name: Optional[str] = None
-            prev_resource_name: Optional[str] = None
+            prev_rule_name: str | None = None
+            prev_resource_name: str | None = None
             for rule in chain:
                 resource_name = self.declare_resource_name(
                     rule["name"],
@@ -4997,8 +4997,8 @@ provider "panos" {
         out = UnitText(self, "nat_rules.tf", "# NAT Policy Rules\n\n")
 
         for chain in self._policy_rule_chains(rules):
-            prev_rule_name: Optional[str] = None
-            prev_resource_name: Optional[str] = None
+            prev_rule_name: str | None = None
+            prev_resource_name: str | None = None
             for rule in chain:
                 resource_name = self.declare_resource_name(
                     rule["name"],
@@ -5113,8 +5113,8 @@ provider "panos" {
         out.header += "# chains preserve XML order (F2.5).\n\n"
 
         for chain in self._policy_rule_chains(rules):
-            prev_rule_name: Optional[str] = None
-            prev_resource_name: Optional[str] = None
+            prev_rule_name: str | None = None
+            prev_resource_name: str | None = None
             for rule in chain:
                 device_group = rule.get("device_group") or "Shared"
                 resource_name = self.declare_resource_name(
@@ -5214,8 +5214,8 @@ provider "panos" {
         out.header += "# chains preserve XML order (F2.5).\n\n"
 
         for chain in self._policy_rule_chains(rules):
-            prev_rule_name: Optional[str] = None
-            prev_resource_name: Optional[str] = None
+            prev_rule_name: str | None = None
+            prev_resource_name: str | None = None
             for rule in chain:
                 device_group = rule.get("device_group") or "Shared"
                 resource_name = self.declare_resource_name(
@@ -5951,14 +5951,14 @@ provider "panos" {
         protocol_report: list[dict],
         application_filters: list[dict],
         manual_key_tunnels: list[dict],
-        application_override_rules: Optional[list[dict]] = None,
-        qos_profiles: Optional[list[dict]] = None,
-        tunnel_monitor_profiles: Optional[list[dict]] = None,
-        schedules: Optional[list[dict]] = None,
-        log_settings: Optional[list[dict]] = None,
-        zone_protection_profiles: Optional[list[dict]] = None,
-        report_only_addresses: Optional[list[dict]] = None,
-        dual_protocol_services: Optional[list[dict]] = None,
+        application_override_rules: list[dict] | None = None,
+        qos_profiles: list[dict] | None = None,
+        tunnel_monitor_profiles: list[dict] | None = None,
+        schedules: list[dict] | None = None,
+        log_settings: list[dict] | None = None,
+        zone_protection_profiles: list[dict] | None = None,
+        report_only_addresses: list[dict] | None = None,
+        dual_protocol_services: list[dict] | None = None,
         entry_report: str = "",
     ):
         """Write MANUAL_SETUP_REPORT.txt for items that are not emitted (F2.9)

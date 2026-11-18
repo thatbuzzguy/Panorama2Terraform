@@ -40,7 +40,6 @@ shape. Pinned by `tests/test_container_coverage.py::test_the_console_line_shape_
 
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from typing import Optional
 
 from xml_input import ENTRY_SEGMENT, ParsedSource
 
@@ -492,7 +491,7 @@ def parent_map(root: ET.Element) -> dict:
     return {child: parent for parent in root.iter() for child in parent}
 
 
-def container_tag(node: ET.Element, parents: dict, source: Optional[ParsedSource] = None) -> Optional[str]:
+def container_tag(node: ET.Element, parents: dict, source: ParsedSource | None = None) -> str | None:
     """The container name the scan reads node's parent as (F5.4).
 
     Normally the parent's tag. For a per-scope source, `result` is the place the path
@@ -512,12 +511,12 @@ def container_tag(node: ET.Element, parents: dict, source: Optional[ParsedSource
     return parent.tag
 
 
-def is_scope_entry(elem: ET.Element, parents: dict, source: Optional[ParsedSource] = None) -> bool:
+def is_scope_entry(elem: ET.Element, parents: dict, source: ParsedSource | None = None) -> bool:
     """True when elem is an entry whose container defines a scope (F3.5, F5.4)."""
     return elem.tag == "entry" and container_tag(elem, parents, source) in SCOPE_CONTAINERS
 
 
-def is_section(container: ET.Element, parents: dict, source: Optional[ParsedSource] = None) -> bool:
+def is_section(container: ET.Element, parents: dict, source: ParsedSource | None = None) -> bool:
     """True when no config-object entry lies between container and a config root."""
     node = container
     while node is not None:
@@ -529,7 +528,7 @@ def is_section(container: ET.Element, parents: dict, source: Optional[ParsedSour
     return True
 
 
-def section_path(container: ET.Element, parents: dict, source: Optional[ParsedSource] = None) -> str:
+def section_path(container: ET.Element, parents: dict, source: ParsedSource | None = None) -> str:
     """Tag chain from the config root to the container.
 
     The config element and the Panorama scope markers (``shared``, ``panorama``)
@@ -616,7 +615,7 @@ def is_predefined(container: ET.Element, parents: dict) -> bool:
     return False
 
 
-def entry_containers(root: ET.Element, parents: dict, source: Optional[ParsedSource] = None) -> list[ET.Element]:
+def entry_containers(root: ET.Element, parents: dict, source: ParsedSource | None = None) -> list[ET.Element]:
     """Every element that holds entries, in document order.
 
     The envelope is never a scanned container (F4.2, F5.4). A per-scope source reads its
@@ -635,7 +634,7 @@ class Finding:
     """A section the table does not cover."""
 
     path: str
-    line: Optional[int]
+    line: int | None
     entries: int
 
 

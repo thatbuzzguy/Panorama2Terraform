@@ -432,7 +432,8 @@ def test_console_lists_the_findings(tmp_path):
     block = container_coverage.console_lines(findings)
     for line in block:
         assert line in stdout, line
-    for finding, line in zip(findings, block[1:]):
+    # One line per finding, after the header the block shape states.
+    for finding, line in zip(findings, block[1:], strict=True):
         parts = line[len(container_coverage.CONSOLE_PREFIX) :].split("  ")
         assert parts == [
             container_coverage.position_part(finding.line),

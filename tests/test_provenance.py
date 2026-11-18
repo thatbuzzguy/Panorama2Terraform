@@ -285,7 +285,8 @@ def test_the_path_2_record_names_the_request_that_made_each_response(
     assert len(reads) == len(index), "one response per request the index names"
 
     records = provenance.parse_records((out / provenance.PROVENANCE_FILE).read_text(encoding="utf-8"))
-    for (request, source), record in zip(reads, records):
+    # One record entry per response the run read, which is the record rule this pin measures.
+    for (request, source), record in zip(reads, records, strict=True):
         entry = api_requests.entry_for_path(index, request.path)
         assert entry is not None and entry.request.cache_name() == request.cache_name(), (request, entry)
         assert record.kind == "api", record

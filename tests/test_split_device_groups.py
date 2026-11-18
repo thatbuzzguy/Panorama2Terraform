@@ -252,7 +252,7 @@ def test_two_entries_with_one_name_are_two_rows_that_answer_their_own_devices(tm
     rows = sorted(split_device_groups.parse_device_groups(source), key=lambda row: row["line"])
     assert [row["devices"] for row in rows] == [["fw-1"], ["fw-2"]], rows
 
-    for row, template in zip(rows, ("T-1", "T-2")):
+    for row, template in zip(rows, ("T-1", "T-2"), strict=True):
         tree = _tree(source, row)
         assert [entry.get("name") for entry in tree.findall(".//templates/entry")] == [template], row
         held = tree.find(".//device-group/entry")

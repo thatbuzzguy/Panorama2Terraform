@@ -378,7 +378,8 @@ def test_the_report_line_names_which_parent_entry_the_child_repeats(converter_mo
     assert [("DEVICE GROUP: Parent-DG" in line) for line in lines] == [True, False], lines
     assert [("DEVICE GROUP: Child-DG" in line) for line in lines] == [False, True], lines
     assert all(
-        f"{entry_coverage.entry_identity(finding['parent'])}" in line for finding, line in zip(findings, lines)
+        f"{entry_coverage.entry_identity(finding['parent'])}" in line
+        for finding, line in zip(findings, lines, strict=True)
     ), lines
     # Report order, and the two positions the two parent entries are at.
     assert ("(parent line 18)" in lines[0]) and ("(parent line 26)" in lines[1]), lines

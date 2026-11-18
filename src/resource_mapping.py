@@ -53,8 +53,6 @@ Verified against provider v2.0.14 (128 resource types) with
 `terraform providers schema -json`.
 """
 
-from typing import Optional
-
 # F3.3: parsed interface kind -> provider resource type. The generator uses
 # this table to pick the resource type for each interface entry.
 INTERFACE_RESOURCE_TYPES = {
@@ -4354,12 +4352,12 @@ FILTER_TYPES = {
 FILTER_PATHS = tuple(sorted(FILTER_TYPES))
 
 
-def filter_row(path: str) -> Optional[dict]:
+def filter_row(path: str) -> dict | None:
     """The shape row for one filter level. None when the table states no shape for the level."""
     return FILTER_SHAPE.get(path)
 
 
-def filter_path(resource: str) -> Optional[str]:
+def filter_path(resource: str) -> str | None:
     """The container path a filter resource type belongs to (`FILTER_TYPES`, read the other way)."""
     for path, name in FILTER_TYPES.items():
         if name == resource:
@@ -4476,7 +4474,7 @@ CERTIFICATE_SHAPE: dict[str, dict] = {
 CERTIFICATE_TYPES = {"certificate": "panos_certificate_import", "certificate_profile": "panos_certificate_profile"}
 
 
-def certificate_path(resource: str) -> Optional[str]:
+def certificate_path(resource: str) -> str | None:
     """The entry row a certificate resource type belongs to (`CERTIFICATE_TYPES`, read the other way).
 
     The gate rule reads a block through this lookup, so it states no resource type of its own, the same way
@@ -4501,7 +4499,7 @@ class ShapeTable:
         self,
         name: str,
         rows: dict,
-        exceptions: Optional[dict] = None,
+        exceptions: dict | None = None,
         word: str = "shape",
         rule: str = "shape_blocks",
         root: str = "",
@@ -4517,7 +4515,7 @@ class ShapeTable:
         # state a container of its own.
         self.root = root
 
-    def row(self, path: str) -> Optional[dict]:
+    def row(self, path: str) -> dict | None:
         return self.rows.get(path)
 
     @staticmethod
@@ -4548,7 +4546,7 @@ CERTIFICATE_TABLE = ShapeTable(
 )
 
 
-def protocol_row(path: str) -> Optional[dict]:
+def protocol_row(path: str) -> dict | None:
     """The shape row for one protocol path. None when the table states no shape for the level."""
     return PROTOCOL_SHAPE.get(path)
 

@@ -87,7 +87,7 @@ def _row(facts: dict) -> dict:
     """One manifest row, in the declared shape, for a unit built by hand."""
     identity = tuple(facts.get(key, "") for key in unit_manifest.FACT_KEYS)
     row = dict.fromkeys(unit_manifest.FIELD_ORDER, "")
-    row.update(zip(unit_manifest.FACT_KEYS, identity))
+    row.update(zip(unit_manifest.FACT_KEYS, identity, strict=True))
     row["unit"] = unit_manifest.unit_name(identity)
     row["directory"] = unit_manifest.directory_name(identity, naming.sanitize)
     return row

@@ -72,7 +72,6 @@ that owns the container, through the row that covers that entry.
 import re
 import xml.etree.ElementTree as ET
 from collections import Counter
-from typing import Optional
 
 import container_coverage
 import resource_mapping
@@ -257,7 +256,7 @@ PROPERTY_RULE = (
 )
 
 
-def covering_row(section: str) -> Optional[ContainerRow]:
+def covering_row(section: str) -> ContainerRow | None:
     """The table row that covers a section path.
 
     Matching uses `container_coverage.covers`, so this is the same rule F4.2
@@ -278,7 +277,7 @@ def row_detail(row: ContainerRow) -> str:
     return row.note
 
 
-def matrix_row_for(section: str) -> Optional[dict]:
+def matrix_row_for(section: str) -> dict | None:
     """The matrix row that covers a section path (F4.4 scan scope).
 
     None when no row covers it, or when the covering row is not an emitted row: a
@@ -294,7 +293,7 @@ def matrix_row_for(section: str) -> Optional[dict]:
 class EntryLedger:
     """The marks one parse run made, and the report rows they produce."""
 
-    def __init__(self, source: ParsedSource, parents: Optional[dict] = None):
+    def __init__(self, source: ParsedSource, parents: dict | None = None):
         self.source = source
         self.parents = parents if parents is not None else container_coverage.parent_map(source.root)
         self._marks = {}
@@ -323,13 +322,13 @@ class EntryLedger:
         """The source that holds this entry (F5.4, F8.9). For one ledger that is its own source."""
         return self.source
 
-    def line_of(self, entry: ET.Element) -> Optional[int]:
+    def line_of(self, entry: ET.Element) -> int | None:
         """The line this entry's response names, read through the source that holds it (F4.2 rule 5)."""
         return self.source.line_of(entry)
 
     # --- marks ---------------------------------------------------------------
 
-    def mark(self, entry: ET.Element, captured: dict, detail: str = "", destination: Optional[str] = None) -> dict:
+    def mark(self, entry: ET.Element, captured: dict, detail: str = "", destination: str | None = None) -> dict:
         """Record what a parse method took from an entry, and return the object.
 
         `captured` is stored as a `RecordingDict`, so a field a method adds after the
@@ -346,7 +345,7 @@ class EntryLedger:
         """Record an entry a parse method visited and did not model."""
         self._marks[id(entry)] = {"entry": entry, "captured": {}, "detail": reason, "destination": "skipped"}
 
-    def mark_for(self, entry: ET.Element) -> Optional[dict]:
+    def mark_for(self, entry: ET.Element) -> dict | None:
         return self._marks.get(id(entry))
 
     def marked(self, entry: ET.Element) -> bool:
@@ -404,7 +403,7 @@ class EntryLedger:
             return row.destination
         return "unaccounted"
 
-    def captured_fields(self, mark: Optional[dict]) -> tuple:
+    def captured_fields(self, mark: dict | None) -> tuple:
         """Keys the parse method kept for an entry, in sorted order (F4.3 AC-3)."""
         if not mark:
             return ()
@@ -556,7 +555,7 @@ class RunPart:
     is the entry point's decision, so nothing here decides it.
     """
 
-    def __init__(self, source: ParsedSource, request, parser, results: Optional[dict] = None):
+    def __init__(self, source: ParsedSource, request, parser, results: dict | None = None):
         self.source = source
         self.request = request
         self.parser = parser
@@ -625,7 +624,7 @@ class RunView:
     def row_for(self, entry: ET.Element) -> dict:
         return self.ledger_for(entry).row_for(entry)
 
-    def mark_for(self, entry: ET.Element) -> Optional[dict]:
+    def mark_for(self, entry: ET.Element) -> dict | None:
         return self.ledger_for(entry).mark_for(entry)
 
     def destination(self, entry: ET.Element) -> str:
@@ -634,7 +633,7 @@ class RunView:
     def is_report_entry(self, entry: ET.Element) -> bool:
         return self.ledger_for(entry).is_report_entry(entry)
 
-    def line_of(self, entry: ET.Element) -> Optional[int]:
+    def line_of(self, entry: ET.Element) -> int | None:
         return self.ledger_for(entry).line_of(entry)
 
     def source_of(self, entry: ET.Element) -> ParsedSource:

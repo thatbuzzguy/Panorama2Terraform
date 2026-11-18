@@ -40,7 +40,6 @@ Usage:
 """
 
 import json
-from typing import Optional
 
 import container_coverage
 import entry_coverage
@@ -99,7 +98,7 @@ def nested_block(value) -> dict:
     return {}
 
 
-def state_facts(entry: StateEntry) -> Optional[dict]:
+def state_facts(entry: StateEntry) -> dict | None:
     """The five scope facts the state document declares for an entry, or None when it cannot key.
 
     None when the entry sits in a sub-block `LOCATION_SCHEMA` does not declare for its row,
@@ -148,7 +147,7 @@ def ownership_key(matrix_row: str, name: str, facts: dict) -> tuple:
     return (matrix_row, name) + tuple(facts[key] for key in container_coverage.SCOPE_FACT_KEYS)
 
 
-def state_index(source: Optional[StateSource]) -> dict:
+def state_index(source: StateSource | None) -> dict:
     """The state entries a matrix row covers, keyed by identity, in document order.
 
     The first entry for a key wins, because one run entry is one finding (the F5.4 rule). An
@@ -166,7 +165,7 @@ def state_index(source: Optional[StateSource]) -> dict:
     return index
 
 
-def state_findings(ledger, source: Optional[StateSource]) -> list:
+def state_findings(ledger, source: StateSource | None) -> list:
     """Run entries the state document owns, in report order.
 
     Each finding is the run row, plus the matrix row that covers it, the state source by its

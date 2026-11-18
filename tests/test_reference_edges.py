@@ -215,7 +215,7 @@ def test_the_record_is_one_row_per_edge_the_data_can_name(converter_module, tmp_
         out = tmp_path / "written" / fixture
         assert _run(FIXTURES_DIR / fixture, out).returncode == 0
         assert [{key: row[key] for key in reference_edges.FIELD_ORDER} for row in _record(out)] == [
-            dict(zip(reference_edges.FIELD_ORDER, pair)) for pair in expected
+            dict(zip(reference_edges.FIELD_ORDER, pair, strict=True)) for pair in expected
         ]
 
 
@@ -312,7 +312,9 @@ def test_the_module_resolves_no_name_and_records_no_name():
         for line in Path(reference_edges.__file__).read_text(encoding="utf-8").splitlines()
         if line.startswith(("import ", "from "))
     ]
-    assert modules == ["json", "collections", "typing", "unit_manifest"], modules
+    # The module reads the call rule through `collections.abc`, where the rule lives, and reads the fact
+    # order through its owner, so the import set is these names and no others.
+    assert modules == ["json", "collections", "collections.abc", "unit_manifest"], modules
 
 
 def test_a_self_reference_writes_no_row(converter_module, tmp_path):

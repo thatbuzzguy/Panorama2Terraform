@@ -570,7 +570,8 @@ def test_content_with_no_live_only_fact_writes_the_same_tf_bytes_as_path_1(tmp_p
     view = _view(parts)
     rows2 = sorted(view.rows(), key=lambda row: (row["container"], row["name"]))
     assert rows1 and len(rows1) == len(rows2), (rows1, rows2, "the pin needs rows to read")
-    for row1, row2 in zip(rows1, rows2):
+    # The pin read the two row sets as the same set, so `strict` states that it does.
+    for row1, row2 in zip(rows1, rows2, strict=True):
         assert {key for key in row1 if row1[key] != row2.get(key)} == {"line", "source"}, (row1, row2)
         # The printed entry line agrees apart from the position, so the report differs only on the source.
         line1, line2 = f"line {row1['line']:>4}", f"line {row2['line']:>4}"

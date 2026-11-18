@@ -223,7 +223,9 @@ def check_chain_semantics(blocks: list[dict], resource_type: str, expected: list
         assert first["directly"] is None, msg
         assert first["depends_on"] == [], msg
         # Later rules: directly after the previous rule, applied after it.
-        for prev, cur in zip(chain, chain[1:]):
+        # The two sides are not the same set by construction: the second side is the chain without its
+        # first rule, which this pin reads against the rule before it, so `strict` stays off.
+        for prev, cur in zip(chain, chain[1:], strict=False):
             assert cur["where"] == "after", msg
             assert cur["directly"] == "true", msg
             assert cur["pivot"] == prev["names"][0], msg

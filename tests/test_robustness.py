@@ -251,7 +251,7 @@ def test_a_static_route_block_digests_the_route_name_once(generator):
     assert blocks == expected, blocks
     # The same digest is the key the reference rule reads, so a reference by the route's name reaches the block
     # the run declared for it. Before the change it answered the plain name, because the index held the prefix.
-    for route, local in zip(router["static_routes"], expected):
+    for route, local in zip(router["static_routes"], expected, strict=True):
         ref = generator.name_ref(route["name"], (scope,), router)
         assert isinstance(ref, panorama_to_terraform.HclRef), route["name"]
         assert ref.expr == f"{scope}.{local}.name", route["name"]

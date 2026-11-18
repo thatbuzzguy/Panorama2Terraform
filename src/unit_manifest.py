@@ -56,7 +56,7 @@ Usage:
 
 import hashlib
 import json
-from typing import Callable
+from collections.abc import Callable
 
 import container_coverage
 from naming import UNNAMED
@@ -178,7 +178,9 @@ def build_rows(ledger, references: dict, sanitize: Callable[[str], str]) -> list
     rows = []
     for facts in units(ledger):  # rule 1: the unit set is read through this one rule
         row = dict.fromkeys(FIELD_ORDER, "")
-        row.update(zip(FACT_KEYS, facts))
+        # `facts` is a row read through `facts_of`, which reads it through FACT_KEYS, so the two sides are
+        # the same set. `strict` states that, so a row with a fact missing cannot write a short row.
+        row.update(zip(FACT_KEYS, facts, strict=True))
         row["unit"] = unit_name(facts)
         row["directory"] = directory_name(facts, sanitize)
         row["entry_count"] = counts[facts]

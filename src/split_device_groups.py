@@ -308,7 +308,9 @@ def split_panorama_config(input_file: str, output_dir: str = None, max_input_byt
     join = device_associations(source)
     labels = {"templates": "template", "template_stacks": "template stack"}
 
-    for row, file_name in zip(rows, file_names):
+    # `split_file_names` answers one name per row, so the two sides are the same set: a row with no name
+    # for its file would write nothing and report nothing.
+    for row, file_name in zip(rows, file_names, strict=True):
         print(f"\nProcessing device group: {row['name']}")
 
         if not row["devices"]:

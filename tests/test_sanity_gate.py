@@ -1171,7 +1171,8 @@ def test_a_path_2_run_and_a_path_1_run_report_the_same_findings(tmp_path, monkey
 
     first = sanity_checks.run_checks(tmp_path / "path1", ledger=path1.ledger)
     second = sanity_checks.run_checks(tmp_path / "path2", index=index, ledger=parser.ledger)
-    for a, b in zip(first.checks, second.checks):
+    # Both reports hold one result per rule in `CHECK_ORDER`, so the two sides are the same set.
+    for a, b in zip(first.checks, second.checks, strict=True):
         if a.check == "request_set":
             assert (a.result, b.result) == (sanity_checks.NOT_RUN, sanity_checks.WARN), (a.result, b.result)
         else:

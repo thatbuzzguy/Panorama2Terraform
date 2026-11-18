@@ -87,7 +87,11 @@ name, and no module builds a path. `pyproject.toml` `[tool.pytest.ini_options] p
 only place the path is stated for tests; `testpaths = ["tests"]` keeps discovery at the repository root,
 where no test file sits. A run from `src/` gets the same namespace from Python's script-directory rule, so an
 entry point adds no path code. The project is standard library only, so every import stays offline and
-deterministic, and there is no package build. `tools/` needs no import rule, because `tools/build_kitchen_sink.py`
+deterministic, and there is no package build. A pin that reads a module's import set reads the spelling the level
+`pyproject.toml` states, so the two import-set pins name `collections.abc` for the call rule:
+`tests/test_reference_edges.py::test_the_module_resolves_no_name_and_records_no_name` and
+`tests/test_source_fetch.py::test_source_fetch_imports_are_standard_library`. `tools/` needs no import rule,
+because `tools/build_kitchen_sink.py`
 assembles the fixture corpus from committed files and imports no tool module: it is a developer tool, not an
 entry point, so it does not use `xml_input` and states the F3.8 checks itself, and the tool takes no
 command-line path. It is a generator, not a pin: `tests/fixtures/kitchen_sink.xml` is the record the golden set
@@ -103,7 +107,11 @@ paths `tests/conftest.py` builds once. The writer scan reads the `src/` set: the
 `src/write_path.py` is the exception, and the test harness is not a tool module, so it is outside the set
 (`tests/test_write_path.py`).
 
-The gate is the full run: `ruff check .`, `ruff format --check .` and `python3 -m pytest`. The format check
+The gate is the full run: `ruff check .`, `ruff format --check .` and `python3 -m pytest`. `ruff check .` enforces
+the syntax level `pyproject.toml` states, and that level is the Python floor the project runs on, so the codebase
+writes one spelling for an optional value (`X | None`), reads the callable rule from `collections.abc`, and states
+`strict` at every `zip` call: `strict=True` where the two sides are the same set by construction, `strict=False`
+with the reason where a shorter side is what the code means to read. The format check
 reads the repository's own Python, so it is separate from the post-run gate on the output a run wrote (§4.6),
 which reads the `.tf` files and the data files. No subset is the default gate, because the
 pins that carry the tool's promises are the slowest ones: the plan check pins (§4.6) and the corpus pins. A

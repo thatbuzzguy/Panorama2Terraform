@@ -68,7 +68,6 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import api_requests
 import commit_actions
@@ -1473,7 +1472,9 @@ def check_data_files(output_dir: Path) -> list[Finding]:
     # Finding 4: the order, read through `reference_edges.order`.
     if manifest:
         filled = reference_edges.order(manifest, ownership_rows, edge_rows)
-        for ordinal, (written, expected) in enumerate(zip(manifest, filled), start=1):
+        # `order` fills one row per manifest row, so a manifest row it left out is a disagreement the loop
+        # cannot see. `strict` states that, so the comparison reads every row the record holds.
+        for ordinal, (written, expected) in enumerate(zip(manifest, filled, strict=True), start=1):
             if written["rank"] != expected["rank"] or written["after"] != expected["after"]:
                 findings.append(
                     Finding(
@@ -1805,7 +1806,7 @@ def tflint_findings(unit: str, answer: str, exit_code: int) -> list[Finding]:
     return sorted(findings, key=lambda finding: (finding.file, finding.line, finding.detail))
 
 
-def check_tflint(output_dir: Path, tflint: Optional[str] = None, unit: str = ".", timeout: int = 60) -> CheckResult:
+def check_tflint(output_dir: Path, tflint: str | None = None, unit: str = ".", timeout: int = 60) -> CheckResult:
     """Run the rule set on one unit directory (`--tflint`).
 
     A unit is one directory of `.tf` files, so this check reads one directory, the way the plan check reads one
@@ -1844,9 +1845,7 @@ def check_tflint(output_dir: Path, tflint: Optional[str] = None, unit: str = "."
     return CheckResult("tflint", tuple(findings))
 
 
-def check_terraform(
-    output_dir: Path, terraform: Optional[str] = None, unit: str = ".", timeout: int = 300
-) -> CheckResult:
+def check_terraform(output_dir: Path, terraform: str | None = None, unit: str = ".", timeout: int = 300) -> CheckResult:
     """Run `terraform init` + `terraform validate` on one unit directory (`--validate`).
 
     A unit is one plan and one root, so this check reads one directory (F6.10.3, §14). `unit` is the path
@@ -1949,11 +1948,11 @@ def unit_directories(output_dir: Path) -> list[str]:
 def run_checks(
     output_dir: Path,
     run_terraform: bool = False,
-    terraform: Optional[str] = None,
-    ledger: Optional[entry_coverage.EntryLedger] = None,
-    index: Optional[tuple[api_requests.ScopeIndexEntry, ...]] = None,
+    terraform: str | None = None,
+    ledger: entry_coverage.EntryLedger | None = None,
+    index: tuple[api_requests.ScopeIndexEntry, ...] | None = None,
     run_tflint: bool = False,
-    tflint: Optional[str] = None,
+    tflint: str | None = None,
 ) -> SanityReport:
     """Run every static check on one output directory.
 

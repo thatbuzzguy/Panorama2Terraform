@@ -62,7 +62,7 @@ Usage:
 """
 
 import json
-from typing import Callable
+from collections.abc import Callable
 
 import container_coverage
 import entry_coverage
@@ -122,9 +122,9 @@ def row_facts(row: dict) -> tuple:
 def row_key(row: dict) -> tuple:
     """The order a row sorts by: the identity key, then the source, because two sources can state
     the same identity."""
-    return state_coverage.ownership_key(row["type"], row["entry"], dict(zip(FACT_KEYS, row_facts(row)))) + (
-        row[SOURCE_FIELD],
-    )
+    # `row_facts` reads the row through FACT_KEYS, so the two sides are the same set.
+    key = state_coverage.ownership_key(row["type"], row["entry"], dict(zip(FACT_KEYS, row_facts(row), strict=True)))
+    return key + (row[SOURCE_FIELD],)
 
 
 def in_chain(facts: tuple) -> bool:
@@ -196,12 +196,13 @@ def scan_row(ledger, entry, matrix_row: dict, groups: dict) -> dict:
         return None
     mark = ledger.mark_for(entry)
     facts = unit_manifest.facts_of(row)
-    unit = dict(zip(FACT_KEYS, facts))
+    # `facts_of` reads the row through FACT_KEYS, so the two sides are the same set.
+    unit = dict(zip(FACT_KEYS, facts, strict=True))
     return {
         "type": matrix_row["resource"],
         "entry": row["name"],
         SOURCE_FIELD: row[SOURCE_FIELD],
-        **dict(zip(FACT_KEYS, facts)),
+        **dict(zip(FACT_KEYS, facts, strict=True)),
         "directory": "",  # filled by build_rows, which holds the sanitizing rule
         "owner": "",
         "kind": "",

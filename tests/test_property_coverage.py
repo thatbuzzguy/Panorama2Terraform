@@ -901,7 +901,8 @@ def test_the_console_prints_the_property_findings(converter_module, tmp_path):
     assert code == 0, "a property finding is an operator action, so the F4.1 gate decides the exit code"
     for line in block:
         assert line in console, line
-    for row, line in zip(rows, block[1:]):
+    # One line per finding row, after the header the block shape states.
+    for row, line in zip(rows, block[1:], strict=True):
         parts = line[len(container_coverage.CONSOLE_PREFIX) :].split("  ")
         assert parts == [
             container_coverage.scope_part(row, generator._report_scope_path),
