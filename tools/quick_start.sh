@@ -25,19 +25,24 @@ if [ ! -f "$SAMPLE" ]; then
     exit 1
 fi
 
-# Pass --validate so the post-run gate also runs terraform init and validate.
-# The gate reports the checks it cannot run when the terraform binary is absent,
-# so the run still completes.
-VALIDATE_FLAG=""
+# The script asks for each gate check that runs an external command when that binary is present, so
+# a run through the script reports the result of every check it can run. The gate reports a check it
+# was not asked for as NOT RUN, so without this the demonstration reports the rule set as not run on
+# a machine that has the tool. What a run reports for each check is the gate's rule, in
+# `docs/ARCHITECTURE.md` §4.6, which this comment does not restate.
+FLAGS=()
 if command -v terraform &> /dev/null; then
-    VALIDATE_FLAG="--validate"
+    FLAGS+=("--validate")
+fi
+if command -v tflint &> /dev/null; then
+    FLAGS+=("--tflint")
 fi
 
 echo "Running the example conversion..."
+echo "Flags this run asks for: ${FLAGS[*]:-none}"
 echo ""
 
-python3 "$CONVERTER" "$SAMPLE" \
-    --output-dir terraform_example $VALIDATE_FLAG
+python3 "$CONVERTER" "$SAMPLE" --output-dir terraform_example "${FLAGS[@]}"
 
 echo ""
 echo "Conversion complete. Output is in ./terraform_example/"
@@ -56,5 +61,10 @@ echo "  4. terraform init"
 echo "  5. terraform plan"
 echo "  6. terraform apply"
 echo ""
-echo "The exit code is 1 when a gate check FAILs, so a failed run does not look"
-echo "like a success. See docs/USAGE_GUIDE.md in the repository root for the flags and the reports."
+echo "SANITY_REPORT.txt names each check that runs an external command, for this run:"
+echo "  the result for a check this run asked for, NOT RUN for one it did not ask for,"
+echo "  and SKIPPED for one asked for by name with no binary."
+echo "The gate rule is in docs/ARCHITECTURE.md §4.6."
+echo ""
+echo "The exit code is 1 when a gate check FAILs, so a failed run does not look like a success."
+echo "See docs/USAGE_GUIDE.md in the repository root for the flags and the reports."

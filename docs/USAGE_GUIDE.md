@@ -186,8 +186,13 @@ python3 src/panorama_to_terraform.py export.xml --import-blocks --output-dir out
 
 `tools/quick_start.sh` runs the converter on the committed sample input
 (`examples/sample_panorama_config.xml`) and prints the next steps. It is a demonstration,
-not part of the converter. It adds `--validate` when the terraform binary is
-present, so the gate runs the terraform check when it can.
+not part of the converter. It asks for each gate check that runs an external
+command when that binary is present, so it passes `--validate` for terraform and
+`--tflint` for tflint, and it prints what the run asked for. A run through the
+script reports the result of each check it asked for, and the report names a
+check it did not ask for as NOT RUN, so a check that did not run is never
+printed as a pass. What the report names for a check asked for with no binary,
+and the rule that decides all three, is [ARCHITECTURE.md](ARCHITECTURE.md) §4.6.
 
 ## Running the splitter
 
