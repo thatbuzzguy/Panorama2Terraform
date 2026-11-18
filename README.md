@@ -31,7 +31,9 @@ Every run ends with a static gate (see [Post-run sanity gate](#post-run-sanity-g
 it checks the files it wrote, writes `SANITY_REPORT.txt`, and exits non-zero
 when a check fails. Add `--validate` to run `terraform init` + `terraform
 validate` in the same run, once for each unit directory the manifest names. A unit is one plan against one
-state, so a plan runs inside the unit directory.
+state, so a plan runs inside the unit directory. Add `--tflint` to add the rule set the gate states as data,
+which runs once for each unit directory too. The default gate reads only offline data, so a run that asks for
+neither reports both checks as NOT RUN.
 
 Split a Panorama export into one XML file per device group:
 
@@ -425,20 +427,26 @@ request-set rule is in [`docs/API_CONVERSION_PATH.md`](docs/API_CONVERSION_PATH.
 | `request_set` | the request set agrees with the scope the run read, per unit and per index entry, read through the join (`docs/API_CONVERSION_PATH.md` §3) | WARN, or NOT RUN |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
+| `tflint` | the rule set `sanity_checks.TFLINT_RULES`, run through the `tflint` command, with `--tflint` | FAIL, WARN, SKIPPED, or NOT RUN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
 
 A WARN does not fail the run: a placeholder is correct output that still needs
 an action before apply, and a cross-check or request-set finding names a coverage fact, not a broken
 output, so a count that does not agree and a join that does not agree keep the exit code with the rules
 that read the files. A FAIL finding exits 1. A SKIPPED check never changes
-the exit code, so a run on a machine without terraform still reports the checks
+the exit code, so a run on a machine without the terraform or the tflint binary still reports the checks
 it could not run. The rules are stated once in `sanity_checks.py`; the tests
 call that module instead of restating them. One block reader serves every block
 kind the gate reads, including `import` blocks, which it reads through `to`. The
 reader keys each `.tf` file by the path from the codebase root, so a finding names the unit directory the file
 is in, and the `terraform` check runs once per unit directory the manifest names, so each result names the
-directory it ran on. The
-gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
+directory it ran on. The `tflint` check reads the same directories: its eight rules state a fact about the printed
+text that no other gate rule states, so a `.tf` file a person wrote by hand is still a file the gate can refuse, and
+its rule set is data in `sanity_checks.py`, so no config file restates it. A run that did not ask for one of the two
+command checks reports it as NOT RUN, and a run that asked for one and has no binary reports it as SKIPPED. The gate
+is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6, and `tests/test_sanity_gate.py`
+pins the rule set, the severity and exit-code tables, the committed answer for the committed probe content, the
+skip for a missing binary, and the one result per unit directory.
 
 ## Testing
 
@@ -450,8 +458,10 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   conformance runs `terraform providers schema -json` against the pinned
   version. The rule `tests/conftest.py` owns is that these pins skip only when the `terraform` binary is absent;
   once the binary is present, a failed `terraform init` is a failure, so a missing provider cache or an
-  unreachable registry cannot read as a pass. `.github/workflows/python-tests.yml` is the CI owner: the job that
-  has the terraform binary runs the whole suite, so the pins that read the schema run there.
+  unreachable registry cannot read as a pass. The same rule covers the pins that run the `tflint` command: they
+  skip only for a missing binary, and once the binary is present a non-zero run is a failure.
+  `.github/workflows/python-tests.yml` is the CI owner: the job that has the terraform binary runs the whole suite,
+  so the pins that read the schema and the pins that run the rule set run there.
 - `tests/test_layout.py` - the index rule, pinned in one place: each index names every document under it,
   the root index names the test set and the response set, and the §1 module table names every `src/` module.
   It reads names, not document wording, so a correct rewording cannot fail it. The document-wording checks
@@ -626,7 +636,9 @@ The gate, the fixtures, and the corpus:
   between two runs, and the exit code follows the findings. F8.8: the request-set rule reads the join through
   `api_requests.unit_findings` and the unit through `unit_manifest` and `naming`, so the file it names is the unit
   directory, the position is 0, the run-wide direction prints through the root shape, the order is the data rule's
-  key, and the report section and the exit code are the gate's, not the join's
+  key, and the report section and the exit code are the gate's, not the join's. The `tflint` pins hold the rule
+  set as data, the severity and exit-code tables, the committed answer for the committed probe content, the skip
+  for a missing binary, and the one result per unit directory the record names
 - `tests/test_terraform_validate.py` - `terraform init` + `terraform
   validate` on the sample, kitchen-sink, and crypto-profile-only
   outputs (skipped when the `terraform` binary is absent)
@@ -651,7 +663,9 @@ The gate, the fixtures, and the corpus:
   between two runs, and the exit code follows the findings. F8.8: the request-set rule reads the join through
   `api_requests.unit_findings` and the unit through `unit_manifest` and `naming`, so the file it names is the unit
   directory, the position is 0, the run-wide direction prints through the root shape, the order is the data rule's
-  key, and the report section and the exit code are the gate's, not the join's
+  key, and the report section and the exit code are the gate's, not the join's. The `tflint` pins hold the rule
+  set as data, the severity and exit-code tables, the committed answer for the committed probe content, the skip
+  for a missing binary, and the one result per unit directory the record names
 - `tests/test_container_coverage.py` - the container table and the code stay
   in step: no parse method without a row, no row naming a path the method
   does not read
@@ -766,10 +780,10 @@ The gate, the fixtures, and the corpus:
 Run counts are not stated here. They change with every feature and are
 recorded in the git history and in `agent-status.md`.
 
-`tests/` is flat: the test files sit beside the three sets `fixtures/`, `golden/`, and `responses/`, and
+`tests/` is flat: the test files sit beside the four sets `fixtures/`, `golden/`, `responses/`, and `tflint/`, and
 `tests/conftest.py` is the one shared helper file and the one place the path to each set is built. The rule is a
-content property of each file: a file in `tests/responses/` is a response, so its root element is `response`, and
-a file in `tests/fixtures/` is a Panorama export, so its root element is not. A response is read through the
+content property of each file: a file in `tests/responses/` is a response, so its root element is `response`, and a
+file in `tests/fixtures/` is a Panorama export, so its root element is not. A response is read through the
 injected producer for the request that produced it, so it is not corpus material: the scan and the fixture
 assembler read the corpus only. The five files the response set holds, each named by the key-free request
 identity that produced it, are
@@ -781,7 +795,12 @@ identity that produced it, are
 `tests/responses/4d5f78d78ee8898b238ff3b4b6b2bda6658590c49a27d7173372bfa429f4904e.xml`
 (the F5.4 child scope), and
 `tests/responses/18caa0bbc1b94e0377e658b82f67e90fe8a9a82658ee70e7646f3098ff72a074.xml`
-(the F5.4 parent scope). `pyproject.toml` `testpaths = ["tests"]` keeps discovery at the root, and
+(the F5.4 parent scope). The tflint set is test material for the gate's rule set, not corpus material: no tool
+rule reads it. `tests/tflint/probe.tf` is the content that violates each rule the gate states no rule for, and
+`tests/tflint/probe.json` is the answer tflint 0.66.0 with the bundled ruleset 0.17.0 gave for it, measured
+2026-11-18. `tests/test_sanity_gate.py` reads the pair through `tests/conftest.py`, and one pin compares the
+committed answer with the live answer, so a committed fact cannot drift from the rule it records.
+`pyproject.toml` `testpaths = ["tests"]` keeps discovery at the root, and
 `pythonpath = ["src"]` is the only place a test path is stated, so a test imports a tool module by name.
 The rule is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1.1.
 

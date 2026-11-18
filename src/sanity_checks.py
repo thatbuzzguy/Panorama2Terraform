@@ -43,6 +43,7 @@ Checks, in report order:
 | `request_set` | the request set agrees with the unit set the run read, through the join | WARN, or NOT RUN |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder is listed so the operator replaces it | WARN |
+| `tflint` | the rule set stated as data, run through the `tflint` command (`--tflint`) | FAIL, WARN, SKIPPED, NOT RUN |
 | `terraform` | `terraform init` + `terraform validate` (`--validate` only) | FAIL or SKIPPED |
 
 Exit code: 0 when no finding is FAIL, 1 when one is. A WARN and a SKIPPED do
@@ -61,6 +62,7 @@ A join finding names its file through the owners, `unit_manifest.directory_name`
 shape for a run-wide fact, and it names no line, because the fact compares two sets.
 """
 
+import json
 import re
 import shutil
 import subprocess
@@ -89,8 +91,10 @@ NOT_RUN = "NOT RUN"
 
 # Report order. The order is fixed so the report is byte-identical between runs.
 # The two rules that read two sets sit together: the cross-check reads the block set and the ledger, and the
-# join reads the ledger and the scope index, so `request_set` takes the position after `round_trip`. The plan
-# check stays last, because it is the only rule that runs a command.
+# join reads the ledger and the scope index, so `request_set` takes the position after `round_trip`. The two rules
+# that run an external command sit together at the end, and the rule that reads the files it wrote comes first,
+# because its findings are findings on files. A rule that runs a command is gated by a flag, so a call that did not
+# ask for it reports NOT RUN, and a call that asked for it and has no binary reports SKIPPED.
 CHECK_ORDER = (
     "emitted_types",
     "location_present",
@@ -108,6 +112,7 @@ CHECK_ORDER = (
     "request_set",
     "control_chars",
     "placeholders",
+    "tflint",
     "terraform",
 )
 
@@ -140,6 +145,50 @@ ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 # rule read the same fact. The operator must replace it before apply, so it is an expected output and a WARN,
 # not a failure.
 EXPECTED_PLACEHOLDERS = (resource_mapping.PLACEHOLDER_TEXT,)
+
+# --- The rule set `check_tflint` runs -----------------------------------------
+
+# The tool imports only the standard library, so `tflint` is an external command this module runs, the way
+# `check_terraform` runs `terraform`. The rule set lives here as data, because this is the runtime home for the
+# static rules: `--only` names each rule, and naming a rule also enables one that is off by default, so no config
+# file is needed and no config file can restate the set. Each rule states a fact no gate rule states, so a
+# hand-written file is still a file the gate can refuse (`docs/ARCHITECTURE.md` §4.6).
+TFLINT_RULES = (
+    "terraform_comment_syntax",
+    "terraform_deprecated_index",
+    "terraform_deprecated_interpolation",
+    "terraform_deprecated_lookup",
+    "terraform_empty_list_equality",
+    "terraform_map_duplicate_keys",
+    "terraform_naming_convention",
+    "terraform_unused_required_providers",
+)
+
+# Rules that state a fact this codebase already states, so the check runs no rule for them. The value is the owner
+# that holds the rule: the emitter writes the shape, or the gate rule already reads it. A rule with nothing to read
+# is not here, because a rule that reads a shape the tool writes none of is out of scope (`docs/ARCHITECTURE.md`
+# §4.6), so this table holds no exception list.
+TFLINT_RULES_ALREADY_HELD = {
+    "terraform_typed_variables": "panorama_to_terraform.generate_variables",
+    "terraform_documented_variables": "panorama_to_terraform.generate_variables",
+    "terraform_required_version": "panorama_to_terraform.generate_provider_config",
+    "terraform_required_providers": "panorama_to_terraform.generate_provider_config",
+    "terraform_unused_declarations": "sanity_checks.check_variables",
+}
+
+# tflint reports three severities, and this table maps them to the gate's two. A warning is a shape the printed
+# file holds, so it is a broken output, the way `control_chars` reads a file. An info finding is an operator
+# action, so it does not change the exit code.
+TFLINT_SEVERITY = {"error": FAIL, "warning": FAIL, "info": WARN}
+
+# The tool's own exit codes, which are the exit-code rule for this check (§4.6). The gate's exit code stays its
+# own rule: 0 when no finding is FAIL, 1 when one is, so a run that only reports an info finding still exits 0.
+TFLINT_EXIT_CODES = {0: "no finding", 1: "error entry", 2: "issue reported"}
+
+# The answer shape, stated once. No `--chdir`: the check sets the working directory to the directory it ran on, so
+# the answer names the file name inside the directory and no path that climbs out of the tree (§4.6, §14).
+TFLINT_FLAGS = ("--format=json", "--no-color")
+TFLINT_RULE_FLAG = "--only"
 
 
 @dataclass(frozen=True)
@@ -1685,6 +1734,116 @@ def check_placeholders(files: dict[str, str]) -> list[Finding]:
     return findings
 
 
+# --- The rule set that runs through an external command -----------------------
+
+
+def tflint_path(unit: str, name: str) -> str:
+    """The path the report names for a file inside the directory the check ran on (F6.10.3, §14).
+
+    This is the key the gate's own reader already builds: the path from the codebase root, so no second key rule
+    appears. `unit` is the unit directory the manifest record names, and `.` is the codebase root, where the join
+    answers the file name alone. A name that answers nothing is the directory itself, which is the shape the plan
+    check uses when the fact is about a directory rather than a file.
+    """
+    return str(Path(unit) / name) if name else unit
+
+
+def tflint_arguments(binary: str, rules: tuple[str, ...] = TFLINT_RULES) -> list[str]:
+    """The command the check runs, in the order the byte rule needs.
+
+    The shape first, then one flag per rule in sorted order, so the argument list is the rule set and nothing else.
+    No `--chdir`, because `--chdir` answers a path that climbs out of the tree: the check sets the working directory
+    to the directory it ran on instead, so the answer names the file name inside it.
+    """
+    argv = [binary, *TFLINT_FLAGS]
+    for rule in sorted(rules):
+        argv += [TFLINT_RULE_FLAG, rule]
+    return argv
+
+
+def tflint_findings(unit: str, answer: str, exit_code: int) -> list[Finding]:
+    """One answer read as findings, in the byte rule's key order.
+
+    The rule name is part of the fact, because the fact is the tool's and not the gate's: the gate states no rule
+    for these shapes, so this reads the tool's words and states no wording of its own. A severity the table answers
+    nothing for is reported as a FAIL finding, so a gap in the table cannot read as a pass, and a run that answered
+    non-zero with nothing to report is a FAIL finding for the same reason.
+    """
+    try:
+        payload = json.loads(answer or "")
+    except ValueError:
+        return [Finding("tflint", FAIL, unit, 0, f"the answer is not JSON: {(answer or '').strip()[:200]}")]
+
+    findings = []
+    for entry in list(payload.get("issues", [])) + list(payload.get("errors", [])):
+        rule = entry.get("rule") or {}
+        reported = rule.get("severity") or entry.get("severity") or "error"
+        name = rule.get("name") or entry.get("summary") or "error"
+        position = entry.get("range") or {}
+        start = position.get("start") or {}
+        severity = TFLINT_SEVERITY.get(reported)
+        detail = (
+            f"unmapped severity {reported} for rule {name}" if severity is None else f"{name}: {entry.get('message')}"
+        )
+        if severity is None:
+            severity = FAIL
+        findings.append(
+            Finding("tflint", severity, tflint_path(unit, position.get("filename") or ""), start.get("line", 0), detail)
+        )
+
+    if not findings and exit_code:
+        findings.append(
+            Finding(
+                "tflint",
+                FAIL,
+                unit,
+                0,
+                f"tflint exited {exit_code} ({TFLINT_EXIT_CODES.get(exit_code, 'not a stated exit code')}) "
+                "with nothing to report",
+            )
+        )
+    return sorted(findings, key=lambda finding: (finding.file, finding.line, finding.detail))
+
+
+def check_tflint(output_dir: Path, tflint: Optional[str] = None, unit: str = ".", timeout: int = 60) -> CheckResult:
+    """Run the rule set on one unit directory (`--tflint`).
+
+    A unit is one directory of `.tf` files, so this check reads one directory, the way the plan check reads one
+    root (F6.10.3, §14). `unit` is the path the report names for the directory it ran on, and `.` is the codebase
+    root, which is where the check runs when the manifest record names no unit.
+
+    A missing binary is a SKIPPED result, not a failure: the tool holds no dependency on tflint, the offline CI
+    matrix has no tflint, and the static checks still decide the exit code. The run writes nothing inside the
+    directory it ran on, so a pin that reads a committed golden directory needs no copy of it. A result that passes
+    has no finding, so the note names the directory the check ran on.
+    """
+    if tflint is None:
+        return CheckResult(
+            "tflint",
+            (Finding("tflint", SKIP, unit, 0, "tflint binary not found; skipped"),),
+        )
+
+    try:
+        proc = subprocess.run(
+            tflint_arguments(tflint),
+            cwd=output_dir,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return CheckResult(
+            "tflint",
+            (Finding("tflint", FAIL, unit, 0, f"tflint timed out after {timeout} seconds"),),
+        )
+
+    findings = tflint_findings(unit, proc.stdout, proc.returncode)
+    if not findings:
+        exit_rule = TFLINT_EXIT_CODES.get(proc.returncode, "not a stated exit code")
+        return CheckResult("tflint", (), note=f"{unit}: {exit_rule}")
+    return CheckResult("tflint", tuple(findings))
+
+
 def check_terraform(
     output_dir: Path, terraform: Optional[str] = None, unit: str = ".", timeout: int = 300
 ) -> CheckResult:
@@ -1793,11 +1952,14 @@ def run_checks(
     terraform: Optional[str] = None,
     ledger: Optional[entry_coverage.EntryLedger] = None,
     index: Optional[tuple[api_requests.ScopeIndexEntry, ...]] = None,
+    run_tflint: bool = False,
+    tflint: Optional[str] = None,
 ) -> SanityReport:
     """Run every static check on one output directory.
 
-    `run_terraform` adds the terraform check. Pass `terraform=None` with
-    `run_terraform=True` to report the check as SKIPPED.
+    `run_terraform` adds the terraform check and `run_tflint` adds the check that runs the rule set. Pass
+    `terraform=None`, or `tflint=None`, with the flag set to report that check as SKIPPED. A call that sets
+    neither reports each as NOT RUN, so the gate that runs on every conversion reads no external command.
 
     `ledger` is the run's ledger for the cross-check and the join, the two rules that read two sets. A call
     with no ledger reports both checks as NOT RUN, so a test that reads only the output directory is
@@ -1841,6 +2003,21 @@ def run_checks(
         CheckResult("control_chars", tuple(check_control_chars(files))),
         CheckResult("placeholders", tuple(check_placeholders(files))),
     ]
+    if run_tflint:
+        binary = tflint or shutil.which("tflint")
+        # F6.10.3 (§14): the rule set reads one directory of .tf files, so it runs once per unit directory the
+        # manifest record names, the same shape the plan check uses. A run that names no unit has no unit
+        # directory, so the check runs on the codebase root, which is where the gate reads the files.
+        units = unit_directories(Path(output_dir))
+        if not units:
+            checks.append(check_tflint(Path(output_dir), binary, "."))
+        else:
+            for directory in units:
+                checks.append(check_tflint(Path(output_dir) / directory, binary, directory))
+    else:
+        # State the check the caller did not ask for, so the report cannot look as if the rule set is part of
+        # the default run: the gate that runs on every conversion reads no external command.
+        checks.append(CheckResult("tflint", (), ran=False, note="run the converter with --tflint"))
     if run_terraform:
         binary = terraform or shutil.which("terraform")
         # F6.10.3 (§14): one plan reads one root, so the plan check runs once per unit directory the

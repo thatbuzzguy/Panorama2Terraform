@@ -43,9 +43,10 @@ jobs:
 
   terraform-gate:
     # Runs the whole test set with the terraform binary present, so the pins that read the provider schema through
-    # `tests/conftest.py` run here. The matrix job runs the same set on runners with no terraform, where those pins
-    # skip for the missing binary. The job runs `pytest` with no module list, because a list can drift: a module
-    # that starts reading the schema would not be in CI.
+    # `tests/conftest.py` run here, and with the tflint binary present, so the pins that run the rule set run here.
+    # The matrix job runs the same set on runners with no binary, where those pins skip for the missing binary.
+    # The job runs `pytest` with no module list, because a list can drift: a module that starts reading the schema
+    # would not be in CI.
     runs-on: ubuntu-latest
     needs: lint-and-test
 
@@ -67,5 +68,15 @@ jobs:
       with:
         terraform_version: '1.16.1'
 
-    - name: Run the whole test set with the provider schema
+    - name: Set up tflint
+      # The version is pinned, because the severities and the exit codes the pins hold were measured on it, and the
+      # committed answer was measured on it. The bundled Terraform Language ruleset needs no `--init` and no plugin
+      # install, so the rule set needs no network at test time.
+      run: |
+        curl -sL https://github.com/terraform-linters/tflint/releases/download/v0.66.0/tflint_linux_amd64.zip -o tflint.zip
+        unzip tflint.zip
+        ./tflint --version
+        echo "$GITHUB_WORKSPACE" >> "$GITHUB_PATH"
+
+    - name: Run the whole test set with the provider schema and the rule set
       run: pytest

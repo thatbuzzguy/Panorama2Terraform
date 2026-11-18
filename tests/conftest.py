@@ -38,7 +38,14 @@ GOLDEN_DIR = TESTS_DIR / "golden"
 # The committed API responses (F8.4). A response is not a Panorama export, so the scan and the fixture
 # assembler never read it: `FIXTURES_DIR` is the corpus, and this is a separate set (§1.1).
 RESPONSES_DIR = TESTS_DIR / "responses"
+# The committed tflint material (Piece 11): the content that violates each rule the gate's tflint check reads, and
+# the answer tflint 0.66.0 with the bundled ruleset 0.17.0 gave for it, measured 2026-11-18. Test material, so no
+# tool rule reads it and it is not corpus material.
+TFLINT_DIR = TESTS_DIR / "tflint"
 TERRAFORM = shutil.which("terraform")
+# The one place the test set resolves the tflint binary, so no pin resolves it a second time. A pin that runs the
+# binary skips only when this answers nothing, and asserts on a non-zero run.
+TFLINT = shutil.which("tflint")
 
 # Every `resource "panos_x" "y" {` line in a Terraform file, read through this file by the test set.
 # Two named patterns, each with the rule it serves. `RESOURCE_RE` answers the resource type, which the pins

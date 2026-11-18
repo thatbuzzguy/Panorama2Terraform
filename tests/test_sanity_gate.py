@@ -22,6 +22,15 @@ Pins:
   terraform binary is SKIPPED, never a failure, so the suite stays offline;
 - the plan check reports one result per unit directory the record names, so a
   `--validate` pin reads the files the run wrote;
+- the tflint check (`--tflint`) runs the rule set the tool states as data, so no config file restates it; the
+  rule set is the eight rules the gate states no rule for, and the rules the gate or the emitter already state
+  are recorded as the set the check runs nothing for;
+- the severity rule and the exit-code rule are data in the gate, and a run that answered non-zero with nothing
+  to report is a FAIL finding, never a silent pass;
+- a tflint finding prints through the gate's one finding shape, so no module states a second console shape;
+- the committed tflint material reads as findings through the harness, one finding per rule, and one pin compares
+  the committed answer with the live answer so a committed fact cannot drift; the pins that run the binary skip
+  only for a missing binary and assert on a non-zero run;
 - the splitter writes XML, so the gate has nothing to check there;
 - the join rule (`check_request_set`, F8.8) reads the request set through the join's owners, so it pins the
   join through `api_requests` and the report section through the gate;
@@ -42,6 +51,7 @@ the cross-check reads the same ledger the join reads.
 
 import ast
 import inspect
+import json
 import os
 import re
 import subprocess
@@ -63,11 +73,14 @@ import write_path
 import xml_input
 from conftest import (
     FIXTURES_DIR,
+    GOLDEN_DIR,
     REPO_ROOT,
     RESPONSES_DIR,
     SAMPLE_CONFIG,
     SRC_DIR,
     TERRAFORM,
+    TFLINT,
+    TFLINT_DIR,
     corpus_fixtures,
     file_text,
     path2_run,
@@ -75,6 +88,7 @@ from conftest import (
     run_pipeline,
     run_script,
     tf_files,
+    written_bytes,
 )
 
 # The terraform binary and the golden, fixture and source paths are read through `tests/conftest.py` (§1.1),
@@ -106,8 +120,9 @@ def test_gate_runs_and_writes_the_report(tmp_path):
     assert "Result: PASS (0 FAIL, 0 WARN)" in text
     # Every static check names its result, so a check cannot be silently absent.
     for name in sanity_checks.CHECK_ORDER:
-        # Path 1 read no request, so the entry point passes no index and the join rule reports NOT RUN.
-        expected = "NOT RUN" if name in ("request_set", "terraform") else "PASS"
+        # Path 1 read no request, so the entry point passes no index and the join rule reports NOT RUN. The two
+        # checks that run an external command report NOT RUN for a call that did not ask for them.
+        expected = "NOT RUN" if name in ("request_set", "tflint", "terraform") else "PASS"
         assert re.search(rf"^{name}\s+{expected}$", text, re.M)
 
 
@@ -582,6 +597,316 @@ def test_kitchen_sink_gate_passes_with_validate(tmp_path):
     assert all(re.match(r"terraform\s+PASS$", line) for line in plan_lines), plan_lines
     # A result that passed names the directory it ran on, so the pin can say which unit the plan read.
     assert all(f"{unit}: Success!" in section for unit in units), section
+
+
+# --- The rule set that runs through the tflint command ------------------------
+
+
+def test_the_tflint_flag_runs_the_check_on_a_conversion(tmp_path):
+    """The flag is the mirror of `--validate`: a run that asks for the check reports its result, and the
+    committed goldens read clean through the rule set, so the report names one result per unit directory and
+    names the directory each result ran on.
+    """
+    if TFLINT is None:
+        pytest.skip("tflint binary not found (the CI terraform-gate job provides it)")
+    result = _generate(SAMPLE_CONFIG, tmp_path, ("--tflint",))
+    assert result.returncode == 0, result.stdout + result.stderr
+    text = (tmp_path / "SANITY_REPORT.txt").read_text(encoding="utf-8")
+    units = sanity_checks.unit_directories(tmp_path)
+    assert units, "the run wrote one directory per unit the record names"
+    section = text.split("CHECK RESULTS")[1].split("FINDINGS")[0]
+    rule_lines = [line for line in section.splitlines() if line.startswith("tflint")]
+    assert len(rule_lines) == len(units), "one rule-set result per unit directory"
+    assert all(re.match(r"tflint\s+PASS$", line) for line in rule_lines), rule_lines
+    # A result that passed has no finding, so the note names the directory the check ran on.
+    assert all(f"{unit}: no finding" in section for unit in units), section
+    assert "tflint: PASS" in result.stdout, result.stdout
+
+
+def test_the_tflint_check_reports_not_run_when_the_caller_did_not_ask_for_it(tmp_path):
+    """The default gate reads only offline data, so a call that did not ask for the check reports it as NOT RUN,
+    the shape `check_terraform` already states for a caller that did not pass `--validate`. A NOT RUN result
+    states no finding and does not fail the gate.
+    """
+    result = _generate(SAMPLE_CONFIG, tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    text = (tmp_path / "SANITY_REPORT.txt").read_text(encoding="utf-8")
+    assert re.search(r"^tflint\s+NOT RUN$", text, re.M), text
+    assert "run the converter with --tflint" in text, "the report names the flag that runs it"
+
+    plain = sanity_checks.run_checks(tmp_path)
+    assert plain.result_of("tflint") == sanity_checks.NOT_RUN
+    assert plain.findings("tflint") == [], "NOT RUN states no finding"
+    assert plain.failed is False, "a rule that did not run does not fail the gate"
+    assert "tflint: NOT RUN" in plain.console_summary(), plain.console_summary()
+    # The report order is the byte rule's key, so the rule that reads the files it wrote sits before the rule
+    # that reads a directory.
+    assert [check.check for check in plain.checks] == list(sanity_checks.CHECK_ORDER), plain.render()
+
+
+def test_the_tflint_rule_set_is_data_in_the_gate():
+    """The rule set is stated once, as data in the runtime home for the static rules, and the argument builder
+    names exactly that set in sorted order. `--only` names each rule, so no config file is needed, and a config
+    file would be a second statement of the set.
+    """
+    argv = sanity_checks.tflint_arguments("tflint")
+    assert argv[:3] == ["tflint", *sanity_checks.TFLINT_FLAGS], argv
+    named = [argv[i + 1] for i, part in enumerate(argv) if part == sanity_checks.TFLINT_RULE_FLAG]
+    assert named == sorted(sanity_checks.TFLINT_RULES), argv
+    assert "--chdir" not in argv, "the check sets the working directory, so the answer names the file name"
+
+    source = (SRC_DIR / "sanity_checks.py").read_text(encoding="utf-8")
+    assert source.count("TFLINT_RULES = (") == 1, "the set is stated once"
+    assert not list(REPO_ROOT.rglob(".tflint.hcl")), "no config file, so nothing can restate the set"
+
+    # The gate holds one shape rule, and it is the answer of the command it runs. The data files are read through
+    # the modules that wrote them, so a data rule states no shape rule of its own (`tests/test_data_file_gate.py`).
+    assert source.count("json.loads(") == 1, "one shape rule, the answer read"
+    assert "def tflint_findings" in source, "the shape rule reads the answer, not a row shape"
+
+    # The set holds only the rules the gate states no rule for, so the two sets cannot name one rule twice.
+    overlap = set(sanity_checks.TFLINT_RULES) & set(sanity_checks.TFLINT_RULES_ALREADY_HELD)
+    assert overlap == set(), overlap
+    for rule, owner in sanity_checks.TFLINT_RULES_ALREADY_HELD.items():
+        module, _, name = owner.partition(".")
+        assert f"def {name}(" in (SRC_DIR / f"{module}.py").read_text(encoding="utf-8"), (rule, owner)
+
+
+def test_the_committed_tflint_output_reads_as_findings_through_the_harness():
+    """The committed answer for the committed probe content reads as one finding per rule in the set, through
+    the harness the check uses. The finding shape is the gate's one shape, and the sort key is the byte rule's.
+    """
+    answer = (TFLINT_DIR / "probe.json").read_text(encoding="utf-8")
+    findings = sanity_checks.tflint_findings("tests/tflint", answer, 2)
+    assert len(findings) == len(sanity_checks.TFLINT_RULES), findings
+    assert sorted(finding.detail.split(":", 1)[0] for finding in findings) == sorted(sanity_checks.TFLINT_RULES)
+    assert findings == sorted(findings, key=lambda finding: (finding.file, finding.line, finding.detail))
+
+    for finding in findings:
+        assert finding.check == "tflint", finding.render()
+        assert Path(finding.file).parent.name == "tflint", finding.render()
+        assert Path(finding.file).name == "probe.tf", finding.render()
+        assert finding.line > 0, finding.render()
+        assert finding.render() == f"{finding.file}:{finding.line}  {finding.detail}", finding.render()
+
+    # The severity rule reads the committed answer: a warning is a shape the printed file holds, so it is FAIL,
+    # and the one info finding is an operator action, so it is WARN.
+    assert sanity_checks.WARN in {finding.severity for finding in findings}, findings
+    naming_fact = [finding for finding in findings if "naming_convention" in finding.detail]
+    assert [finding.severity for finding in naming_fact] == [sanity_checks.WARN], naming_fact
+    assert all(finding.severity == sanity_checks.FAIL for finding in findings if finding not in naming_fact)
+
+
+def test_the_committed_tflint_output_agrees_with_the_binary():
+    """A committed fact cannot drift from the rule it records: the same content run through the tool answers the
+    committed bytes. The pin skips only for a missing binary and asserts on a non-zero run.
+    """
+    if TFLINT is None:
+        pytest.skip("tflint binary not found (the CI terraform-gate job provides it)")
+    proc = subprocess.run(
+        sanity_checks.tflint_arguments(TFLINT), cwd=TFLINT_DIR, capture_output=True, text=True, timeout=180
+    )
+    assert proc.returncode in sanity_checks.TFLINT_EXIT_CODES, proc.returncode
+    assert proc.stdout == (TFLINT_DIR / "probe.json").read_text(encoding="utf-8"), (
+        "the committed answer has drifted from the rule it records"
+    )
+
+
+def test_the_tflint_severity_rule_and_the_exit_code_rule_are_data_in_the_gate():
+    """The two tables the check reads, and no second mapping in the check itself. A severity outside the table
+    is reported, so a gap in the table cannot read as a pass.
+    """
+    assert sanity_checks.TFLINT_SEVERITY == {
+        "error": sanity_checks.FAIL,
+        "warning": sanity_checks.FAIL,
+        "info": sanity_checks.WARN,
+    }
+    assert sanity_checks.TFLINT_EXIT_CODES == {0: "no finding", 1: "error entry", 2: "issue reported"}
+
+    source = (SRC_DIR / "sanity_checks.py").read_text(encoding="utf-8")
+    read = source[source.index("def tflint_findings") : source.index("def check_tflint")]
+    assert read.count("TFLINT_SEVERITY.get") == 1, read
+    assert read.count("TFLINT_EXIT_CODES.get") == 1, read
+
+    # A severity the table answers nothing for is a finding, not a pass.
+    unmapped = sanity_checks.tflint_findings(
+        "tests/tflint",
+        json.dumps(
+            {
+                "issues": [
+                    {
+                        "rule": {"name": "terraform_comment_syntax", "severity": "note"},
+                        "message": "m",
+                        "range": {"filename": "probe.tf", "start": {"line": 1}},
+                    }
+                ]
+            }
+        ),
+        2,
+    )
+    assert [finding.severity for finding in unmapped] == [sanity_checks.FAIL], unmapped
+    assert "unmapped severity note" in unmapped[0].detail, unmapped[0].render()
+
+
+def test_a_non_zero_tflint_run_with_nothing_to_report_is_a_fail_finding():
+    """A run that answered non-zero with nothing to report is reported, never a silent pass. A run that answered
+    zero with nothing to report is the pass the exit-code table states.
+    """
+    quiet = '{"issues":[],"errors":[]}'
+    findings = sanity_checks.tflint_findings("tests/tflint", quiet, 2)
+    assert len(findings) == 1, findings
+    assert findings[0].severity == sanity_checks.FAIL, findings[0].render()
+    assert "exited 2 (issue reported) with nothing to report" in findings[0].detail, findings[0].render()
+    assert findings[0].file == "tests/tflint", "the finding names the directory the check ran on"
+    assert findings[0].line == 0, "the fact is about the run, not about a file"
+    assert sanity_checks.tflint_findings("tests/tflint", quiet, 0) == [], "exit 0 is the stated pass"
+
+
+def test_tflint_without_the_binary_is_skipped_not_failed(tmp_path, monkeypatch):
+    """Skip honesty: a check that cannot run because the binary is absent says so, and the exit code stays with
+    the rules that read the files. The pin clears PATH, so it measures the same answer on a machine that has the
+    binary, and it runs in every CI job.
+    """
+    env = dict(os.environ, PATH="")
+    proc = subprocess.run(
+        [sys.executable, str(CONVERTER), str(SAMPLE_CONFIG), "--output-dir", str(tmp_path), "--tflint"],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=REPO_ROOT,
+        timeout=120,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    text = (tmp_path / "SANITY_REPORT.txt").read_text(encoding="utf-8")
+    assert re.search(r"^tflint\s+SKIPPED", text, re.M), text
+    assert "tflint binary not found" in text, text
+
+    # The same shape read in process, so the skip is the check's own answer and not the report's wording.
+    result = sanity_checks.check_tflint(tmp_path, None)
+    assert result.result == "SKIPPED", result
+    assert "tflint binary not found; skipped" in result.findings[0].detail, result.findings[0].render()
+    # The check resolves the binary through `shutil.which`, so the pin clears PATH in process as well and gets
+    # the same answer on a machine that has the binary.
+    monkeypatch.setenv("PATH", "")
+    report = sanity_checks.run_checks(tmp_path, run_tflint=True, tflint=None)
+    assert report.result_of("tflint") == "SKIPPED", report.render()
+    assert report.failed is False, "a SKIPPED result does not fail the gate"
+    assert "tflint: SKIPPED" in report.console_summary(), report.console_summary()
+
+
+def test_the_tflint_check_runs_once_per_unit_directory_and_names_the_directory_it_ran_on(tmp_path):
+    """The check reads one directory, the way the plan check reads one root, so it produces one result per unit
+    directory the record names, and names the directory it ran on in the note. The run writes nothing inside the
+    directory it ran on, so a pin that reads a committed golden directory needs no copy of it.
+    """
+    if TFLINT is None:
+        pytest.skip("tflint binary not found (the CI terraform-gate job provides it)")
+
+    assert _generate(SAMPLE_CONFIG, tmp_path).returncode == 0
+    units = sanity_checks.unit_directories(tmp_path)
+    assert units, "the run wrote one directory per unit the record names"
+    report = sanity_checks.run_checks(tmp_path, run_tflint=True, tflint=TFLINT)
+    results = report.results("tflint")
+    assert len(results) == len(units), "one rule-set result per unit directory"
+    # A result that passed has no finding, so the note names the directory the check ran on.
+    assert sorted(result.note.split(":", 1)[0] for result in results) == sorted(units), results
+
+    # A run that names no unit has no unit directory, so the check runs on the codebase root and names it.
+    root = tmp_path / "no_record"
+    root.mkdir()
+    lone = sanity_checks.run_checks(root, run_tflint=True, tflint=TFLINT)
+    assert sanity_checks.unit_directories(root) == [], "no record, so no unit directory"
+    assert len(lone.results("tflint")) == 1, "the root has one rule-set result"
+    assert lone.results("tflint")[0].note.split(":", 1)[0] == ".", lone.results("tflint")[0].note
+
+    # The committed goldens read clean through the set, and the bytes are the same after the run.
+    before = written_bytes(GOLDEN_DIR)
+    for case in sorted(GOLDEN_DIR.iterdir()):
+        if not case.is_dir():
+            continue
+        for directory in sorted(p for p in case.iterdir() if p.is_dir()):
+            path = f"{case.name}/{directory.name}"
+            result = sanity_checks.check_tflint(directory, TFLINT, path)
+            assert list(result.findings) == [], (path, [f.render() for f in result.findings])
+            assert result.note.split(":", 1)[0] == path, result.note
+    assert written_bytes(GOLDEN_DIR) == before, "the run writes nothing inside the directory it ran on"
+
+
+def test_the_gate_states_no_second_naming_rule_for_the_shape_tflint_reports():
+    """`naming.py` is the owner of the naming rule, so the naming fact the rule set reports is the generator's
+    own output read through the tool's rule. The §5 shape keeps a doubled underscore, which is the shape the
+    naming rule refuses, so the gate holds no second naming rule for it.
+    """
+    assert "terraform_naming_convention" in sanity_checks.TFLINT_RULES
+    assert naming.sanitize("DG East__prod") == "dg_east__prod", "the §5 shape keeps the doubled underscore"
+    source = (SRC_DIR / "sanity_checks.py").read_text(encoding="utf-8")
+    assert "snake_case" not in source, "the gate states no naming rule of its own"
+
+    # The finding names the rule and the message the tool wrote, so the check states no wording of its own.
+    fact = sanity_checks.tflint_findings(
+        ".",
+        json.dumps(
+            {
+                "issues": [
+                    {
+                        "rule": {"name": "terraform_naming_convention", "severity": "info"},
+                        "message": "must match the following format",
+                        "range": {"filename": "scope.tf", "start": {"line": 1}},
+                    }
+                ]
+            }
+        ),
+        2,
+    )
+    assert [finding.detail for finding in fact] == ["terraform_naming_convention: must match the following format"]
+    assert [finding.severity for finding in fact] == [sanity_checks.WARN], fact
+
+
+def test_the_enabled_rule_set_answers_nothing_on_the_goldens_and_one_fact_on_the_corpus(tmp_path):
+    """What the rule set adds beyond the static rules, measured 2026-11-18 on tflint 0.66.0 with the bundled
+    ruleset 0.17.0: nothing on the committed goldens, and one fact on the accepted corpus, on
+    `edge_quoted_dg_names` in `scope.tf`, where the §5 shape kept a doubled underscore. The fact is an info
+    finding, so it is WARN and the run still exits 0.
+    """
+    if TFLINT is None:
+        pytest.skip("tflint binary not found (the CI terraform-gate job provides it)")
+
+    for case in sorted(GOLDEN_DIR.iterdir()):
+        if not case.is_dir():
+            continue
+        # The golden case is the output of one run, so its unit set is the directories it holds.
+        for directory in sorted(p for p in case.iterdir() if p.is_dir()):
+            path = f"{case.name}/{directory.name}"
+            result = sanity_checks.check_tflint(directory, TFLINT, path)
+            assert list(result.findings) == [], (path, [f.render() for f in result.findings])
+
+    facts = []
+    for name in corpus_fixtures():
+        out = tmp_path / name.replace(".xml", "")
+        proc = run_script("panorama_to_terraform.py", str(FIXTURES_DIR / name), "--output-dir", str(out))
+        assert proc.returncode == 0, f"{name}: {proc.stdout}\n{proc.stderr}"
+        report = sanity_checks.run_checks(out, run_tflint=True, tflint=TFLINT)
+        findings = report.findings("tflint")
+        if not findings:
+            continue
+        # Every corpus fact is the same kind: a name the §5 shape keeps and the naming rule refuses.
+        for finding in findings:
+            assert finding.detail.split(":", 1)[0] == "terraform_naming_convention", (name, finding.render())
+            assert "__" in finding.detail, (name, finding.render())
+            facts.append((name, Path(finding.file).name, finding.line, finding.severity, finding.detail))
+            assert report.result_of("tflint") == sanity_checks.WARN, (name, report.render())
+            assert report.failed is False, "a WARN does not change the exit code"
+
+    assert len(facts) == 1, facts
+    fixture, file, line, severity, detail = facts[0]
+    assert fixture == "edge_quoted_dg_names.xml", facts
+    assert file == "scope.tf" and line == 1, facts
+    assert severity == sanity_checks.WARN, facts
+    # The name the fact names is already the §5 shape, so the fact is the generator's own output: the two rules
+    # disagree only on the doubled underscore the §5 shape keeps.
+    block_name = detail.split("`")[1]
+    assert naming.sanitize(block_name) == block_name, (detail, "the name is the §5 shape")
+    assert "__" in block_name, (detail, "the §5 shape keeps the doubled underscore the naming rule refuses")
 
 
 # --- The second entry point --------------------------------------------------

@@ -807,6 +807,15 @@ a run with no network passes CI.
    each unit directory, because a unit is one plan and one root (§1 rule 3), and each result names the directory
    it ran on. No rule reads a report, `README.md` or `SOURCE.txt`.
 
+   **No file is needed for the rule set**, so neither set gains a file and the file inventory is unchanged:
+   `sanity_checks.TFLINT_RULES` states the set as data, `--only` names each rule, and a config file would be a
+   second statement of the set the module already holds. The rule-set check is the second rule that reads one unit
+   directory, so it runs once per directory and names it, the same shape the plan check has, and the answer names
+   the file name inside the directory it ran on, which is the key the reader already builds. The run writes nothing
+   inside the directory it ran on, so a pin that reads a committed golden directory needs no copy of it. Pinned by
+   `tests/test_sanity_gate.py::test_the_tflint_rule_set_is_data_in_the_gate` and
+   `::test_the_tflint_check_runs_once_per_unit_directory_and_names_the_directory_it_ran_on`.
+
    **The shape is default output, with no flag.** §8 rule 1 forces it: the committed goldens pin what a default
    run emits, so a shape a run writes only when a flag is on cannot be pinned. The F5.5 (§4.7) and F6.4 (§7
    rule 2) opt-in precedent is a shape a block labels for itself, not the output layout, so it does not apply:

@@ -184,8 +184,10 @@ def test_the_report_names_both_file_sets(tmp_path):
 
 def test_check_order_puts_the_data_rule_after_the_block_rules(tmp_path):
     """The block rules, then the run-level text rules, then the data rule, then the two rules that read two
-    sets, then the byte rules. `tests/test_round_trip.py` and `tests/test_sanity_gate.py` pin why the two
-    agreement rules sit together."""
+    sets, then the byte rules, then the two rules that run an external command. `tests/test_round_trip.py` and
+    `tests/test_sanity_gate.py` pin why the two agreement rules sit together, and the plan check stays last
+    because it is the command check that reads a directory rather than the files it wrote.
+    """
     assert sanity_checks.CHECK_ORDER == (
         "emitted_types",
         "location_present",
@@ -203,6 +205,7 @@ def test_check_order_puts_the_data_rule_after_the_block_rules(tmp_path):
         "request_set",
         "control_chars",
         "placeholders",
+        "tflint",
         "terraform",
     )
     assert _run(SAMPLE_CONFIG, tmp_path).returncode == 0
@@ -218,7 +221,10 @@ def test_no_block_rule_reads_a_data_file_and_the_data_rule_reads_no_tf_file():
     rule = source[source.index("def check_data_files") : source.index("def check_round_trip")]
     assert "read_tf_files" not in rule and "glob('*.tf')" not in rule, "the data rule reads no .tf file"
     assert "parse_rows" in rule, "the rule reads each row shape through its module"
-    assert "import json" not in source, "no second shape rule"
+    # The shape rule for a data file belongs to the module that wrote it, so the data rule holds none of its own.
+    # The gate holds one shape rule, and it is the answer of the command it runs, not a file it wrote: measured by
+    # `tests/test_sanity_gate.py::test_the_tflint_rule_set_is_data_in_the_gate`.
+    assert "json" not in rule, "the data rule states no shape rule"
     assert "def check_data_files(output_dir: Path)" in source
     # The slice boundary is the cross-check, the rule that reads two sets, so the data rule reads no ledger.
     assert "ledger" not in rule, "the data rule reads no ledger, and the cross-check reads no record"

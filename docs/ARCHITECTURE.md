@@ -64,7 +64,7 @@ hold a name being present, and cannot hold how a document words it, so the docum
   Each directory that holds files names them through its own index.
 - The canonical sample output is the golden set `tests/golden/`, which pins the bytes of a real run.
   `terraform_output/` is only the default value of `--output-dir` and holds no committed sample.
-- `tests/` is flat: the test files sit beside the three sets `fixtures/`, `golden/`, and `responses/`, and
+- `tests/` is flat: the test files sit beside the four sets `fixtures/`, `golden/`, `responses/`, and `tflint/`, and
   `tests/conftest.py` is the one shared helper file and the one place the path to each set is built. A fact more
   than one test module reads is stated there once, so a test module reads it through that file instead of
   defining its own copy, and no test module imports another test module. No test is grouped by rule area, so the
@@ -77,6 +77,10 @@ hold a name being present, and cannot hold how a document words it, so the docum
   through the file producer, because the wrapper decision belongs to the request that produced it. The pins are
   `tests/test_api_requests.py::test_the_committed_responses_are_not_corpus_material` and
   `tests/test_build_kitchen_sink.py::test_the_assembler_reads_the_corpus_and_not_the_response_set`.
+ - The tflint set (`tests/tflint/`) is test material for the gate's rule set, not corpus material: no tool rule
+   reads it, and the pair it holds is the content a rule refuses plus the answer the tool gave for that content.
+   The root index names both test material sets, which is held by
+   `tests/test_layout.py::test_the_indexes_name_every_document_under_them`.
 
 The import rule: `src/` is one flat namespace, so a module in `src/` imports its siblings by plain module
 name, and no module builds a path. `pyproject.toml` `[tool.pytest.ini_options] pythonpath = ["src"]` is the
@@ -607,6 +611,15 @@ entry, the property finding, and the shadow line. The ownership, state and edge 
 report only, because their facts compare two identities or need a second position. Pinned by
 `tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place`,
 `tests/test_property_coverage.py`, and `tests/test_shadow_coverage.py`.
+
+The gate is not a scan, so it holds no console wording: its findings print through the gate's own finding shape,
+`sanity_checks.Finding.render`, the position plus the detail, which is the shape `tests/test_sanity_gate.py` pins.
+A gate finding names a rule and a position and has no entry identity, so the shape above has nothing to hold, and
+the two cannot disagree. The tflint finding is the case that shows this: the fact names the rule the tool states,
+not an entry. Pinned by
+`tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place`, which lists the modules
+that call the shape, and
+`tests/test_sanity_gate.py::test_the_committed_tflint_output_reads_as_findings_through_the_harness`.
 
 ### 3.3 Provenance record
 
@@ -1139,8 +1152,10 @@ name the two sets: the `.tf` files the reader read, and the four records at the 
 (`tests/test_write_path.py`, `tests/test_sanity_gate.py`).
 
 A value constraint the provider carries in its code, not in the schema JSON, is not data the gate can read, so
-it cannot become a gate rule: the gate is static, and its input is the files it wrote plus the tables it reads
-offline. The emitter prints the value the export states, and the `terraform` check is the rule that reports
+it cannot become a gate rule: the gate is static when the run does not ask for a command, and its input is the
+files it wrote plus the tables it reads offline, because the two checks that run an external command are gated by
+a flag and a call that did not ask for one reports it as NOT RUN. The emitter prints the value the export states,
+and the `terraform` check is the rule that reports
 such a value as FAIL when the run uses `--validate`, so the report is the operator's notice. A fixture a plan
 pin reads is test data, so it states the value the provider accepts. Pinned by
 `tests/test_terraform_validate.py::test_terraform_validate_kitchen_succeeds`, which runs the plan once per unit
@@ -1166,7 +1181,53 @@ The provider fact itself is recorded in `backlog.md`, as a fact the tool cannot 
 | `request_set` | the request set agrees with the scope the run read, per unit and per index entry (F8.8, `docs/API_CONVERSION_PATH.md` §3) | WARN, or NOT RUN |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder, such as the VPN key `***CHANGE_ME***`, is listed | WARN |
+| `tflint` | the rule set `TFLINT_RULES`, run through the tflint command, once per unit directory the record names (`--tflint`) | FAIL, WARN, SKIPPED, or NOT RUN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
+
+**The rule set that runs through the `tflint` command.** The tool imports only the standard library, so the rule
+set is an external command the gate runs, the way `check_terraform` runs `terraform`. The set is data in the
+runtime home for the static rules: `sanity_checks.TFLINT_RULES`, named through `--only`, which also enables a rule
+that is off by default. No config file is needed, and a config file would be a second statement of the set the
+module already holds, so none exists in either file set (`docs/CODEBASE_ASSEMBLY.md` §14). The eight rules state a
+fact no gate rule states: the comment shape, the legacy list index, an interpolation-only expression, a
+two-argument `lookup()`, a collection compared with an empty list, a key stated twice in one map, a block label
+outside the §5 shape, and a declared provider no block in the unit uses. Each is a fact about the printed text, so
+a `.tf` file a person wrote by hand is still a file the gate can refuse. `TFLINT_RULES_ALREADY_HELD` names the
+rules the gate or the emitter already state, with the owner that holds each, so the table states no exception list,
+and a rule that reads a shape the tool writes none of is out of scope: the tool writes no `.tf.json`, no module
+block, and no workspace, and a unit directory is the section-file set `write_path.py` states, not a standard
+module. Pinned by `tests/test_sanity_gate.py::test_the_tflint_rule_set_is_data_in_the_gate`.
+
+Severity and the exit code. `TFLINT_SEVERITY` maps the tool's three severities to the gate's two: `error` and
+`warning` answer FAIL, because both state a shape the printed file holds, the way `control_chars` reads a file,
+and `info` answers WARN, because it states an operator action. `TFLINT_EXIT_CODES` states the tool's own exit
+codes, which are the exit-code rule for this check: 0 answers no finding, 1 answers an error entry, 2 answers an
+issue. The gate's exit code stays its own rule, so a run whose only finding is an info fact still exits 0, and a
+run that answered non-zero with nothing to report is a FAIL finding that names the exit code, so a silence cannot
+read as a pass. A missing binary is SKIPPED, never a silent pass. Pinned by
+`tests/test_sanity_gate.py::test_the_tflint_severity_rule_and_the_exit_code_rule_are_data_in_the_gate`,
+`::test_a_non_zero_tflint_run_with_nothing_to_report_is_a_fail_finding`, and
+`::test_tflint_without_the_binary_is_skipped_not_failed`.
+
+The finding shape is the gate's, so no second console shape appears: a tflint finding names a rule name and a
+position, not an entry identity, so it has no part the §3.2 console shape can hold, and the check states no
+wording beyond the rule name and the message the tool wrote. The path a finding names is the key the reader
+already builds, the path from the codebase root, so the check states no second path rule. The check sets the
+working directory to the directory it ran on, because `--chdir` answers a path that climbs out of the tree, so the
+answer names the file name inside the directory. The committed tflint material is test material, named by the root
+index: `tests/test_sanity_gate.py::test_the_committed_tflint_output_reads_as_findings_through_the_harness` reads
+it through the harness, and `::test_the_committed_tflint_output_agrees_with_the_binary` compares the committed
+answer with the live answer, so a committed fact cannot drift from the rule it records. The pins that run the
+binary skip only for a missing binary and assert on a non-zero run, so a skipped pin cannot hide a failure; the
+`terraform-gate` CI job is the job that has the binary and runs the whole test set.
+
+The gate states no naming rule of its own: `naming.py` §5 is the owner, and the naming fact the rule set reports is
+the generator's own output read through that rule, because the §5 shape keeps a doubled underscore. Pinned by
+`tests/test_sanity_gate.py::test_the_gate_states_no_second_naming_rule_for_the_shape_tflint_reports`, and the
+measured corpus fact is held by
+`::test_the_enabled_rule_set_answers_nothing_on_the_goldens_and_one_fact_on_the_corpus`: nothing on the committed
+goldens, and one fact on the accepted corpus, on `edge_quoted_dg_names` in `scope.tf`, an info finding, so the run
+exits 0.
 
 One block reader serves every block kind the gate reads: `resource`, `data`,
 `import`, and `action`. F5.5 added the `data` rule and F6.4 added the `import` rule
@@ -1299,7 +1360,11 @@ by `tests/test_certificate_blocks.py`, one test per finding, the two-reader pin,
   reports the same resource count as the same run without them.
 
 The data rule (`data_files`, F6.8) reads the four data files, each through the module that owns the row
-shape, so no second shape rule appears, and it reads no `.tf` file, so no block rule reads a data file.
+shape, so no second shape rule appears for a file the tool wrote, and it reads no `.tf` file, so no block rule
+reads a data file. The gate holds one shape rule, and it is the answer of the command it runs
+(`tflint_findings`), because the answer is not a file the tool wrote. Pinned by
+`tests/test_data_file_gate.py::test_no_block_rule_reads_a_data_file_and_the_data_rule_reads_no_tf_file` and
+`tests/test_sanity_gate.py::test_the_tflint_rule_set_is_data_in_the_gate`.
 Six findings, each a FAIL:
 
 - a data file that does not read as its declared rows, or a data file with no rows, because the content

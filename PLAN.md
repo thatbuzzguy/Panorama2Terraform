@@ -44,11 +44,12 @@ F7.13 applied the same rule and the same wording to `FILTER_SHAPE`, which states
 measurement names, and the gate reads a filter choice at the block's own level as well. The rules are in
 `docs/ARCHITECTURE.md` §4.9 and §4.10, and the coverage is in `docs/COVERAGE_MATRIX.md`.
 
-The gate keeps one boundary rule, stated in `docs/ARCHITECTURE.md` §4.6: it reads only data it can read offline, so a
-value the provider constrains in its code, not in the schema JSON, stays outside the static rules and the `terraform`
-check reports it on `--validate`. A plan reads the directory it runs on, so the validate pins run the plan once per
-unit directory the manifest record names, and Goal 2 holds for every fixture because the pin reads the files the run
-wrote.
+The gate keeps one boundary rule, stated in `docs/ARCHITECTURE.md` §4.6: the gate that runs on every conversion
+reads only data it can read offline, so a value the provider constrains in its code, not in the schema JSON, stays
+outside the static rules, and the two checks that run an external command are gated by a flag (`--validate` and
+`--tflint`) and report NOT RUN when the call did not ask for one. A plan reads the directory it runs on, so the
+validate pins run the plan once per unit directory the manifest record names, and the rule-set check reads one
+directory the same way, and Goal 2 holds for every fixture because the pin reads the files the run wrote.
 
 The cross-check rule (`sanity_checks.check_round_trip`, `tests/test_round_trip.py`) is the one exception to that
 boundary, because its fact compares two sets: the `.tf` block set it read, and the entry set the run's ledger read,
@@ -137,8 +138,9 @@ the generated HCL back through the one gate reader and compares the block count 
 unit and per coverage matrix row. The `report_only` timing fact that rule measured is landed and closed here,
 through the destination rule in Current State. The certificate `REFERENCE_ONLY` rows for `private_key` and
 `passphrase` are landed in `resource_mapping.VALUE_VARIABLES`, read by the emitter, the gate and the `.tfvars`
-writer through the same table, so that feature is closed. `ruff format` as a gate is landed and closed here.
-The next actionable slice is `tflint` integration, which `backlog.md` records as its own task. The gated
+writer through the same table, so that feature is closed. `ruff format` as a gate is landed and closed here, and so
+is `tflint` integration. The next actionable slice is `pyproject.toml` `target-version` to the Python floor, which
+`backlog.md` records as its own task. The gated
 pieces that stay held in `backlog.md` are the four `*_policy_rules` types, which wait for the F3.5 rulebase
 decision and a live target, and a config entry inside a stack, which needs a provider location shape before the
 emitter can write a block for it. The rows that state fewer fields than the pinned provider declares for their

@@ -23,6 +23,10 @@ key and connects to no server.
 - Terraform 1.14 or later, only for the optional `--validate` check. An `action`
   block is 1.14 syntax, so the generated `terraform` block declares 1.14 as the
   minimum.
+- tflint, only for the optional `--tflint` check. The tool imports only the standard library, so tflint is an
+  external command the gate runs, the way it runs terraform. The Terraform Language ruleset is bundled with the
+  binary, so the rule set needs no `--init` and no plugin install. The measured facts the pins hold were measured
+  on tflint 0.66.0 with the bundled ruleset 0.17.0.
 - A Panorama XML export.
 
 No installation step. Run the script from the repository. The API source needs no
@@ -52,6 +56,7 @@ python3 src/panorama_to_terraform.py export.xml --output-dir out
 | `--output-dir DIR` | Output directory. Default `terraform_output` |
 | `--max-input-bytes N` | Refuse an input larger than N. Default 67,108,864 (64 MiB) |
 | `--validate` | Add the `terraform init` + `terraform validate` check to the post-run gate |
+| `--tflint` | Add the check that runs the rule set `sanity_checks.TFLINT_RULES` through the tflint command. The default gate runs no external command, so a run that does not ask for it reports the check as NOT RUN |
 
 The input check runs before the read allocates and before any file is written.
 The tool refuses a DTD, which is the only path an entity expansion or an
@@ -488,6 +493,7 @@ rules and the four data files for the data rule, and the summary names both coun
 | `data_files` | every data file reads as its declared rows, and the data agrees with the naming rule, the joins, the order rule, and its printed form (F6.8) | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
+| `tflint` | the rule set `sanity_checks.TFLINT_RULES`, run through the tflint command, with `--tflint`. Each rule states a shape no other gate rule states, so a `.tf` file a person wrote by hand is still refused | FAIL, WARN, SKIPPED, or NOT RUN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
 
 One block reader serves every block kind the gate reads, so a `data` block is checked
@@ -496,7 +502,9 @@ missing `location` block is the `location_present` finding for both kinds. The
 `data_blocks` rule is the only check that reads the shape of a `data` block, because
 `terraform validate` accepts an unknown `location` sub-block and drops it silently. A
 WARN does not fail the run. A FAIL finding exits 1. A SKIPPED check never
-changes the exit code. The rules live in `sanity_checks.py` and are stated in
+changes the exit code. The two checks that run an external command are gated by a flag, so a run that did not
+ask for one reports it as NOT RUN: the gate that runs on every conversion reads no external binary. The rules
+live in `sanity_checks.py` and are stated in
 [ARCHITECTURE.md](ARCHITECTURE.md) §4.6.
 
 Exit codes: 0 when the gate reports no FAIL finding, 1 when a check fails or

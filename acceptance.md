@@ -1,13 +1,13 @@
-# Acceptance — the open 2026-11-11 audit findings (Piece 10)
+# Acceptance — `tflint` integration (Piece 11)
 
-Criteria set 2026-11-18 for the six findings `backlog.md` recorded from the audit measured 2026-11-11. One
-section per finding, each with the decision and the pin or measurement that holds it. The six are worked one at
-a time, and each is measured before the next is started.
+Criteria set 2026-11-18 for the `backlog.md` Nice-to-Haves item: the post-run gate gains the check that runs
+`tflint` over the files it wrote. One section per decision, each with the pin or the measurement that holds it.
 
-Owners: `docs/ARCHITECTURE.md` §1.1 for the layout rule and the response set; `tests/test_api_requests.py` for
-the response-set pins; `.github/workflows/python-tests.yml` for the CI gate; `tests/conftest.py` for the skip
-rule; the test modules named in item 5 for the pins that restate a table as a measured count; `docs/ARCHITECTURE.md`
-§1.1 and `tests/test_layout.py` for the index rule.
+Owners: `docs/ARCHITECTURE.md` §4.6 for the gate rule, the severity rule, and the exit-code rule;
+`docs/ARCHITECTURE.md` §3.2 for the console line shape; `src/sanity_checks.py` for the runtime home of the static
+rules and for the rule set as data; `tests/conftest.py` for the binary and for the committed test material the pins
+read; `docs/CODEBASE_ASSEMBLY.md` §14 for the file sets; `README.md` for the index and the command line;
+`.github/workflows/python-tests.yml` for the CI gate; `tests/test_sanity_gate.py` for the pins.
 
 Rules this piece works under, from `agent-status.md` §Rules to keep when writing documents:
 
@@ -17,181 +17,222 @@ Rules this piece works under, from `agent-status.md` §Rules to keep when writin
 - A historical record is not kept in the markdown; the git history is the record.
 - No pin is weakened. When a pin changes what it asserts, the reason is recorded here.
 
-## Item 1 — the committed response inside the corpus
+## Item 1 — tflint is an external command, and the check that runs it is gated
 
-**Decision.** `tests/fixtures/` is the corpus: the files the pins read through the file producer. `tests/responses/`
-is the response set: the bytes the pins read through the injected producer for the request that produced them.
-`tests/fixtures/api_response.xml` has a `response` root, so it is a response, not a Panorama export, and it is not
-corpus material. Its key-free identity for host `panorama.test` is
-`panorama.test?category=configuration&type=export` =
-`241cbc8980537850768efb4f106eaf6665bbc113a5ecd7c9fbd42449f200d34f.xml`, which the committed whole-config export
-response already holds, and the response set holds one file per accepted shape, so the fixture cannot be added as a
-fourth file. Its entries cannot be merged into that file either: the committed response already holds an address
-entry named `web-server` under `shared/address`, so merging would give the address set two entries with the same
-name in two containers, which breaks the pin that reads the address set as the one entry named `web-server`.
+**Decision.** The tool imports only the standard library, so `tflint` cannot be a module the tool reads: it is an
+external command the gate runs, the way `sanity_checks.check_terraform` runs `terraform`. `sanity_checks.py` stays
+the runtime home for the static rules, and `check_tflint` is the check that runs the command.
 
-So the content stays in the corpus in the form the corpus pins read it: the file is renamed
-`tests/fixtures/export_config.xml` and holds the same entries as a Panorama export, root `config`, no wrapper. The
-response set's export response is written to hold the same config content, so the pins that compare the two
-producers read the same content, one through each. The names the pins measure are unchanged
-(`Edge`, `web-server`); the physical lines are re-measured on each file.
+The check is gated by a flag, `--tflint`, because the default gate reads only offline data and runs no external
+binary. A call that did not ask for the check reports it as NOT RUN, the shape `check_terraform` already reports
+for a caller that did not pass `--validate`.
 
-- AC-1.1: a pin that reads the corpus reads only files the read rule accepts. Held by
-  `tests/test_build_kitchen_sink.py::test_the_read_set_is_the_set_the_corpus_pins_read_less_the_record`, read as
-  the derivation from the rule (item 5). Measured 2026-11-18: 66 accepted, 65 read, 3 skipped, held in the pin's
-  docstring as the measurement. Before the piece the corpus measured 68 accepted and 67 read; the three files with
-  a `response` root left it (item 1 and item 2), so the count moved with the set the rule answers, which is what
-  the derivation reading means.
-- AC-1.2: no file in the corpus has a `response` root. Held as the content property in item 2, so the block that
-  keeps `api_response.xml` in the corpus is removed.
-- AC-1.3: a committed response is read through the injected producer for the request that produced it. Held by
-  `tests/test_source_fetch.py::test_a_committed_response_is_read_through_the_injected_producer`, and the module's
-  `_bytes()` reads `RESPONSES_DIR`, not `FIXTURES_DIR`.
-- AC-1.4: a file-source pin reads a Panorama export. The pins change what they measure: they run the tool on
-  `export_config.xml`, which is the corpus form of the same content, instead of on a response. Held by the pins in
-  `tests/test_provenance.py` and `tests/test_source_fetch.py` that read `FETCH_FIXTURE`, including
-  `test_api_run_writes_the_same_tf_bytes_as_the_file_run`, which keeps its strength because the response and its
-  corpus twin hold the same config content.
-- AC-1.5: the same content reaches both producers. Held by
-  `tests/test_source_fetch.py::test_api_run_writes_the_same_tf_bytes_as_the_file_run` (same `.tf` bytes from either
-  source), so the twin relation cannot drift.
-- AC-1.6: the root index names every file in the response set. Held by `tests/test_layout.py`; `README.md` names
-  each file it holds.
+- AC-1.1: `run_checks` runs no external command by default, and reports the tflint check as NOT RUN with the reason
+  when the caller did not ask for it. Held by
+  `tests/test_sanity_gate.py::test_the_tflint_check_reports_not_run_when_the_caller_did_not_ask_for_it`.
+- AC-1.2: `--tflint` adds the check to a conversion, so the report names one result per unit directory and each
+  result names the directory it ran on. Held by
+  `tests/test_sanity_gate.py::test_the_tflint_flag_runs_the_check_on_a_conversion`.
+- AC-1.3: `tflint` sits in `CHECK_ORDER` with the other rule that runs a command, in the position before it,
+  because the two command checks sit together and the plan check stays last. Held by
+  `tests/test_data_file_gate.py::test_check_order_puts_the_data_rule_after_the_block_rules` and by the report order,
+  which the byte rule pins (`tests/test_sanity_gate.py::test_report_is_byte_identical_between_runs`).
+- AC-1.4: the gate's existing offline rules are unchanged: the report counts, the report order, and the exit code
+  are the same for a run that did not ask for the check. Held by the pins that read the report shape, unchanged by
+  this piece. Four pins gained the new rule because the gate gained a rule, and none is weakened: each measures a
+  list that names every rule, every argument, every check that did not run, or the checks a pin asked the gate to
+  run, so the assertion is the same assertion over one more name —
+  `tests/test_sanity_gate.py::test_gate_runs_and_writes_the_report` (the set that reports NOT RUN),
+  `tests/test_data_file_gate.py::test_check_order_puts_the_data_rule_after_the_block_rules` (the order tuple),
+  `tests/test_api_path.py::test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_that_name_one_source`
+  (the argument names), and
+  `tests/test_api_path.py::test_content_with_no_live_only_fact_writes_the_same_tf_bytes_as_path_1`, which read the
+  gate without running a command and so excluded one check from its PASS agreement; it now excludes the two command
+  checks and asserts each is NOT RUN for both runs, so the agreement is measured over the checks the gate ran.
 
-Re-measured lines, recorded in the pins as measurements: the export response carries the `config` element at line
-10, the `device-group` entry `Edge` at line 12, and the address entry `web-server` at line 18; the corpus export
-carries `config` at line 2 and `web-server` at line 8.
+## Item 2 — the rule set is data in the runtime home, so no config file restates it
 
-## Item 2 — the response-set rule as a property of each file
+**Decision.** `sanity_checks.py` states the enabled rule set as data (`TFLINT_RULES`), and the run names each rule
+through `--only`. `--only` also enables a rule that is off by default, measured 2026-11-18 with
+`terraform_naming_convention`. So the codebase holds no `.tflint.hcl`: a config file would be a second statement of
+the set the module already holds.
 
-**Decision.** The rule is stated as a content property of each file, so the pin measures content and not a name
-comparison between the two sets: a file in the response set has a `response` root; a file in the corpus is a
-Panorama export, so its root is not `response`. Three corpus files have a `response root`, so all three are
-responses: one is already the file that holds its shape (item 1), and the other two move, each named by the
-key-free identity of the request the pins name for it.
+The §14 question answers to no set, because no file exists. Had the config file been a codebase root-set file, the
+generated `README.md` file inventory and the two path builders in `write_path.py` would have to name it, which is
+the reason it is not written. The committed probe pair is test material, so it is a set `README.md` names beside
+the response set: `tests/tflint/probe.tf` and `tests/tflint/probe.json`, read through `tests/conftest.py`. No tool
+rule reads it, so it is not corpus material.
 
-| File | Request the pins name | Identity the file is moved under |
+- AC-2.1: the rule set is stated once, as data in `src/sanity_checks.py`, and the argument builder names exactly
+  that set in sorted order. Held by
+  `tests/test_sanity_gate.py::test_the_tflint_rule_set_is_data_in_the_gate`.
+- AC-2.2: no `.tflint.hcl` exists in the tree, so no config file can restate the set, and the file inventory of
+  both sets is unchanged. Held by the same pin, and by `tests/test_layout.py`, which reads the index names.
+- AC-2.3: the run reads the files through the directory it ran on, so the answer names the file name inside the
+  directory and no path above it. Measured 2026-11-18: with `--chdir` the answer names a path that climbs out of
+  the tree, so the check sets the working directory instead, and the finding names the path from the codebase root,
+  which is the unit directory plus the file name (`docs/CODEBASE_ASSEMBLY.md` §14).
+
+## Item 3 — the findings tflint adds beyond the existing static rules
+
+**Decision.** The enabled set is the eight rules that state a fact the gate states no rule for. Each is a fact
+about the printed text, so a hand-written file is still a file the gate can refuse.
+
+| Rule | What tflint reports | The gate rule it adds |
 |---|---|---|
-| `api_response.xml` → `export_config.xml` | the whole-config export | already held, so the corpus keeps the export form (item 1) |
-| `scope_child.xml` | `panorama.test?action=get&path=device-group/entry/Production-DG&type=config` | `4d5f78d78ee8898b238ff3b4b6b2bda6658590c49a27d7173372bfa429f4904e.xml` |
-| `scope_parent.xml` | `panorama.test?action=get&path=shared&type=config` | `18caa0bbc1b94e0377e658b82f67e90fe8a9a82658ee70e7646f3098ff72a074.xml` |
+| `terraform_comment_syntax` | a `//` comment | none before: no gate rule reads the comment shape |
+| `terraform_deprecated_index` | the legacy dot index on a list | none before |
+| `terraform_deprecated_interpolation` | an interpolation-only expression | none before |
+| `terraform_deprecated_lookup` | `lookup()` with two arguments | none before |
+| `terraform_empty_list_equality` | a collection compared with `[]` | none before |
+| `terraform_map_duplicate_keys` | a key stated twice in one map | none before |
+| `terraform_naming_convention` | a block label outside `snake_case` | none before: the gate reads `naming.py` §5, which lowercases and keeps consecutive underscores |
+| `terraform_unused_required_providers` | a declared provider no block in the unit uses | none before |
 
-- AC-2.1: for every file in the response set, the root element is `response`. Held by
-  `tests/test_api_requests.py::test_the_committed_responses_are_not_corpus_material`.
-- AC-2.2: for every file in the corpus, the root element is not `response`, so a response that lives inside the
-  corpus is a finding. Held by the same pin, read as a property of each file rather than as a comparison of the
-  two name sets.
-- AC-2.3: the response set is the files the pins read for the requests the pins name, each named by that request's
-  key-free identity, and every accepted shape is represented by at least one file. Held by
-  `tests/test_api_requests.py::test_one_committed_response_per_request_shape_names_the_request_identity_that_produced_it`,
-  restated so the harness names the requests the pins read (five, measured 2026-11-18) and the shape set is read
-  through `source_fetch.SHAPE_PARAMS`. The pins change what they assert: the old form held one file per shape,
-  which cannot hold once the pins name two more requests; the strength is the same because each file is still named
-  by the identity that produced it and each shape is still represented. The moved files state their request
-  identity in the file, which is what the pin reads.
-- AC-2.4: a committed response is read through the injected producer, so the pins that run the tool on the moved
-  pair hand their bytes through an injected producer for the request that produced them. Held by the pins in
-  `tests/test_source_fetch.py`, `tests/test_provenance.py`, `tests/test_shadow_coverage.py`,
-  `tests/test_ownership.py`, and `tests/test_state_input.py` that read them.
-- AC-2.5: a pin that measures the file-source rule reads a Panorama export, so the pins that read the pair through
-  the file producer change what they measure. `tests/test_container_coverage.py::test_the_scan_reads_a_per_scope_root_as_the_place_the_path_names`
-  hands the response bytes with the origin kind it measures (the pin measures the door's behaviour for one kind, not
-  a corpus run); `tests/test_shadow_coverage.py::test_path_and_parent_apply_to_the_api_source_only` runs the tool on
-  a corpus export. The reason is the rule: the corpus holds exports, and the pair are responses.
-- AC-2.6: the corpus tables keyed by fixture name read the corpus, so the pair leave the round-trip table and the
-  measurement is re-measured. Held by `tests/test_round_trip.py`, read as a derivation (item 5): the table is the
-  facts the corpus produces, so a file that leaves the corpus leaves the table. Measured 2026-11-18: 19 facts,
-  3 + 15 + 1 by category. The pair's facts are still measured through the response reads in
-  `tests/test_shadow_coverage.py` and `tests/test_ownership.py`.
-- AC-2.7: `docs/ARCHITECTURE.md` §1.1 states the property, and `README.md` names the files the response set holds.
+Rules the gate or the generator already state, so they are not in the enabled set:
+`terraform_typed_variables` and `terraform_documented_variables` (every generated declaration carries `type` and
+`description`), `terraform_required_version` and `terraform_required_providers` (the generated `provider.tf` states
+both), `terraform_unused_declarations` for a variable (the `variables` gate rule reads both directions, and the tool
+writes no `locals` or `output` block), `terraform_documented_outputs` (the tool writes no output block).
 
-## Item 3 — the provider-schema pins that never run in CI
+Rules that read a shape the tool writes none of, so they are out of scope:
+`terraform_standard_module_structure` (a unit directory is the section-file set `write_path` states, not a standard
+module, so it fires on every unit directory — measured 2026-11-18 on the committed goldens),
+`terraform_json_syntax` (no `.tf.json`), `terraform_module_pinned_source`, `terraform_module_version`,
+`terraform_module_shallow_clone`, `terraform_workspace_remote` (no module block, no workspace).
 
-**Decision.** The pins that read the provider schema run in the `terraform-gate` CI job, so the gate runs the whole
-test set with the terraform binary present. The matrix job keeps running the whole suite on runners with no
-terraform, where those pins skip for the missing binary. The gate job runs the whole suite rather than a list of
-modules, because a list can drift: a module that starts reading the schema would not be in CI.
+- AC-3.1: the enabled set and the already-stated set are data in `sanity_checks.py` and are disjoint. Held by
+  `tests/test_sanity_gate.py::test_the_tflint_rule_set_is_data_in_the_gate`.
+- AC-3.2: each rule in the enabled set answers for the committed probe content, so the pin compares the committed
+  tflint output with the derivation from the set: one finding per rule. Held by
+  `tests/test_sanity_gate.py::test_the_committed_tflint_output_reads_as_findings_through_the_harness`.
+- AC-3.3: the gate states no naming rule of its own; `naming.py` §5 is the owner, and `check_tflint` reports what
+  tflint answers. `naming.sanitize` answers consecutive underscores, which is the shape the naming rule reports.
+  Held by `tests/test_sanity_gate.py::test_the_gate_states_no_second_naming_rule_for_the_shape_tflint_reports`.
+- AC-3.4: the corpus instance of the naming fact is a measured fact, not an exception list: the enabled set answers
+  nothing on the committed goldens and one finding on the accepted corpus, in `edge_quoted_dg_names`, file
+  `scope.tf`, line 1, and the name it names is already the §5 shape, so the two rules disagree only on the doubled
+  underscore the §5 shape keeps. Held by the binary pin
+  `tests/test_sanity_gate.py::test_the_enabled_rule_set_answers_nothing_on_the_goldens_and_one_fact_on_the_corpus`.
+  Measured 2026-11-18: 17 golden unit directories, nothing; 66 accepted fixtures, 174 unit directories, one finding,
+  28.2 s for the pin.
 
-- AC-3.1: the `terraform-gate` job runs `pytest` with the terraform binary available, so the pins that read the
-  schema fixture run there. Held by `.github/workflows/python-tests.yml`, which is the owner of the CI gate. No pin
-  reads the workflow file, so this is recorded as the CI measurement, not as a pin.
-- AC-3.2: the modules that read the schema through `tests/conftest.py` are named in `README.md` §Testing by the
-  rule they read, and `docs/ARCHITECTURE.md` §1.1 names `tests/conftest.py` as the harness. Measured 2026-11-18:
-  10 modules read the schema fixture; the document names the rule, not the count.
-- AC-3.3: the skip rule says the pins skip only when the terraform binary is absent, so the matrix job is the job
-  that skips and the gate job is the job that runs them. Held by item 4.
+## Item 4 — the severity rule and the exit-code rule
 
-## Item 4 — the skip that hides a failure
+**Decision.** tflint reports three severities, and the gate maps them through one table it holds as data
+(`TFLINT_SEVERITY`): `error` → FAIL, `warning` → FAIL, `info` → WARN. A warning is a shape the printed file holds,
+so it is a broken output, the way `control_chars` reads a file; an info finding is an operator action, so it does
+not change the exit code.
 
-**Decision.** The skip is only for a missing terraform binary. A `terraform init` failure, which is what a missing
-provider cache or an unreachable registry answers, is a failure, not a skip. `tests/conftest.py` is the owner of the
-skip rule for the schema fixture; `tests/test_terraform_validate.py` keeps the skip for a missing binary and reports
-a failed init or validate as a failure.
+The tool's own exit codes are the check's exit-code rule, stated as data (`TFLINT_EXIT_CODES`): 0 answers no
+finding, 1 answers an error entry, 2 answers an issue. The gate's exit code stays its own rule: 0 when no finding is
+FAIL, 1 when one is.
 
-- AC-4.1: `provider_schemas` skips when `shutil.which("terraform")` answers nothing, and asserts when `terraform
-  init` returns non-zero. Held by `tests/conftest.py::provider_schemas`.
-- AC-4.2: with the binary present, a network failure is a failure, so a network failure cannot read as a pass.
-  Measured 2026-11-18 on this machine: `terraform init` against `PaloAltoNetworks/panos ~> 2.0.14` returns 0, so the
-  full run passes with no skips.
-- AC-4.3: the documents that state the skip say only the binary, so `README.md` §Testing, `docs/ARCHITECTURE.md`
-  §4.6, and the module docstrings change to state that a provider-cache failure is a failure.
+- AC-4.1: the severity mapping and the exit-code table are data in `src/sanity_checks.py`, read by the check, so the
+  check states no second mapping. Held by
+  `tests/test_sanity_gate.py::test_the_tflint_severity_rule_and_the_exit_code_rule_are_data_in_the_gate`.
+  Measured 2026-11-18, per rule on a probe that violates it: every rule in the enabled set answers exit 2, and seven
+  rules report `warning`, which the mapping answers FAIL, while one rule reports `info`, `terraform_naming_convention`,
+  which the mapping answers WARN. So the committed probe holds seven FAIL findings and one WARN finding.
+- AC-4.2: a run that answers non-zero with nothing to report is a FAIL finding that names the exit code, never a
+  silent pass. Held by
+  `tests/test_sanity_gate.py::test_a_non_zero_tflint_run_with_nothing_to_report_is_a_fail_finding`.
+- AC-4.3: a WARN does not change the exit code. Held by
+  `tests/test_sanity_gate.py::test_the_enabled_rule_set_answers_nothing_on_the_goldens_and_one_fact_on_the_corpus`,
+  which asserts the corpus fact is WARN, that the check reports WARN for it, and that the report is not failed.
 
-## Item 5 — pins that restate an owner table as a measured count
+## Item 5 — the skip, and what a pin may skip for
 
-**Decision.** Each pin states the property: the tool's answer equals the value derived from the owner table's rows,
-so a wrong table entry is a finding. The measured number stays in the pin's docstring as a dated measurement.
+**Decision.** `check_tflint` reports SKIPPED for a missing binary, the shape `check_terraform` already states, and
+the exit code stays with the rules that read the files. A pin that runs the binary skips only for a missing binary
+and asserts on a non-zero run, so a skipped pin cannot hide a failure. A pin that does not run the binary reads the
+committed tflint output, so it runs in every CI job.
 
-- AC-5.1 `tests/test_build_kitchen_sink.py`: the accepted set, the skipped set and the read set are derived from the
-  read rule and the record, so the pin compares the tool's decision per file with the rule's decision per file in
-  both directions. Measured 2026-11-18: 68 accepted, 67 read, 3 skipped. The comment count and the curated-name
-  count become properties (the printed tree holds no comment; the record's curated names are the names no accepted
-  fixture carries), and the numbers 17 and 13 stay as the measurement in the docstring.
-- AC-5.2 `tests/test_filter_containers.py`: `CHOICE_ROWS` is derived from `resource_mapping.FILTER_SHAPE` (the rows
-  that state `selects`), and the pin checks each choice against the provider schema. The route-map counts (73 levels,
-  34 mirrored rows, 17 `string_list` rows, 14 choice rows) are counts of the table's own rows, so they have no
-  derivation and stay as measurements in the docstring; the pin keeps the per-row properties.
-- AC-5.3 `tests/test_resource_mapping.py`: the `disable_override` pin reads the matrix rows that name the
-  property, and compares that set with the pinned provider schema in both directions, so the pin names no list of
-  its own. The measurement (128 resources, 25 declaring the flag, 9 emitted among them) stays in the docstring.
-- AC-5.4 `tests/test_property_coverage.py`: the unmeasured rows are derived from the container table — a matrix row
-  is measured when a corpus entry reaches the container its row names — so `panos_device_group_parent` is the row the
-  container table names no container for. The single-row fact stays as the measurement in the docstring.
-- AC-5.5 `tests/test_data_file_gate.py`: the data-file count is derived from the `sanity_checks.DATA_FILES` rows
-  present in the run's output, so the pin compares the gate's count with the derivation; the number 4 stays as the
-  measurement in the docstring.
+- AC-5.1: `tests/conftest.py` is the one place the test set resolves the binary (`TFLINT`), the way it resolves
+  `TERRAFORM`, so no pin resolves it a second time.
+- AC-5.2: a missing binary is SKIPPED and the conversion still exits 0. Held by
+  `tests/test_sanity_gate.py::test_tflint_without_the_binary_is_skipped_not_failed`, which runs no binary, so it runs
+  in every job.
+- AC-5.3: the pins that run the binary — the flag pin, the committed output agreement, the golden and corpus
+  measurement, and the directory shape — skip only for a missing binary and assert on a non-zero answer. Held by
+  those four pins.
 
-## Item 6 — the two `.github/` template files outside every index
+## Item 6 — the report line and the console line
 
-**Decision.** The index rule is: every markdown document in the repository is named by the index for its directory,
-and a directory that holds no index of its own is named by the root index. The two `.github/` template files stay in
-the repository, because GitHub reads a contribution template from `.github/`, so `README.md` names them and
-`tests/test_layout.py` reads the rule as a property of every markdown document in the tree. `tools/check_documents.py`
-reads the two files with the rest of the markdown, and `backlog.md` closes the finding.
+**Decision.** The check reports one finding per issue: the path from the codebase root, the line tflint names, the
+rule name, and the message tflint wrote. Findings are sorted by (file, line, detail), which is the key the byte rule
+needs. A tflint finding names no entry identity, so it cannot be a `container_coverage.console_line` line, and the
+check states no console shape of its own: the gate's one finding shape prints it in the report and on the console, so
+the two cannot disagree. A check that ran and reported nothing names the directory it ran on in the note, the shape
+the plan check states.
 
-- AC-6.1: for every markdown document in the tree, its name is in the index for its directory, or in the root index
-  when its directory holds no index of its own. Held by
-  `tests/test_layout.py::test_the_indexes_name_every_document_under_them`, which reads names only.
-- AC-6.2: the root index names the two template files. Held by the same pin, and by `README.md` stating them as the
-  contribution forms.
-- AC-6.3: the response-set half of the pin reads names only, so the count leaves `tests/test_layout.py` and the set
-  is held by `tests/test_api_requests.py`, which states which files the pins read. Measured 2026-11-18: 5 files.
+- AC-6.1: the finding shape and the sort key are the gate's, read through `Finding.render()`. Held by
+  `tests/test_sanity_gate.py::test_the_committed_tflint_output_reads_as_findings_through_the_harness`.
+- AC-6.2: no module states a second console shape, and `sanity_checks.py` states no fact wording beyond the rule
+  name and the message. Held by `tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place`.
+- AC-6.3: one result per unit directory the manifest names, and the result names the directory it ran on. Held by
+  `tests/test_sanity_gate.py::test_the_tflint_check_runs_once_per_unit_directory_and_names_the_directory_it_ran_on`.
+- AC-6.4: a tflint run writes nothing inside the directory it ran on, so a pin that reads a committed golden
+  directory needs no copy of it. Measured 2026-11-18: the bytes of the committed goldens are unchanged after the pin
+  ran the rule set over all 17 golden unit directories. Held by the same pin.
+- AC-6.5: the gate holds one shape rule, and it is the answer of the command it runs, because the answer is not a
+  file the tool wrote. The shapes of the files the tool wrote belong to the modules that wrote them, so the data rule
+  states no shape rule of its own. Held by
+  `tests/test_sanity_gate.py::test_the_tflint_rule_set_is_data_in_the_gate` (the gate has one read site, and it reads
+  the answer) and by
+  `tests/test_data_file_gate.py::test_no_block_rule_reads_a_data_file_and_the_data_rule_reads_no_tf_file`, which
+  reads each row shape through its module. The second pin's shape assertion moved from the whole module to the data
+  rule, because this piece gave the gate a shape rule for a set it did not write; the fact that the data rule states
+  no shape rule is the same fact, measured on the rule that holds it.
+
+## Item 7 — the committed test material, and what keeps it from drifting
+
+**Decision.** The pins read two committed files, in the test material set `README.md` names: `tests/tflint/probe.tf`
+(the content that violates each rule in the enabled set) and `tests/tflint/probe.json` (the answer tflint v0.66.0
+with the bundled ruleset 0.17.0 gave for it, measured 2026-11-18). The pins read them through `tests/conftest.py`.
+
+- AC-7.1: every rule in the enabled set names one finding in the committed output, so the pin compares the set with
+  the answer instead of holding a count. Held by
+  `tests/test_sanity_gate.py::test_the_committed_tflint_output_reads_as_findings_through_the_harness`.
+- AC-7.2: the committed answer is the answer the binary gives for the same content, so a committed fact cannot
+  drift from the rule it records. Held by
+  `tests/test_sanity_gate.py::test_the_committed_tflint_output_agrees_with_the_binary`, which runs the binary and
+  skips only for a missing binary.
+
+## Item 8 — the CI gate
+
+**Decision.** The pins that run the binary run in the `terraform-gate` job, which is the job that runs the whole
+test set with the tool binaries present, so a new tflint step goes there and the job name stays, because six skip
+messages and the tracking markdown name it. The step installs the pinned version, because the measured facts are
+dated facts read from that version. The bundled Terraform Language ruleset needs no `--init` and no plugin install,
+so the rule set runs with no network at test time. The matrix legs have no tflint, so the pins that run the binary
+skip there.
+
+- AC-8.1: the `terraform-gate` job installs `tflint` 0.66.0 before it runs `pytest`. Held by
+  `.github/workflows/python-tests.yml`, the owner of the CI gate. No pin reads the workflow file, so this is recorded
+  as the CI measurement, not as a pin.
+- AC-8.2: no pin asserts a tflint version, so a newer binary is not a failure on its own. The pin that compares the
+  committed answer with the live answer reports a difference as a finding, which is what a dated committed fact
+  needs: a version that changes the answer for the same content is a drift, not a pass.
 
 ## Gate
 
 Run in order, with no parallel runner: `ruff check .`, `ruff format --check .`, `python3 -m pytest`,
 `python3 tools/check_documents.py`. Record the pin count before and after, the module count, and the time. The
-baseline measured 2026-11-18 is 1,688 pins in 52 modules in 305.56 s, with no skips, `ruff check .` clean,
-`ruff format --check .` clean, and `check_documents.py` reporting no finding. No pin is removed from the full run.
+baseline measured 2026-11-18 is 1,686 pins in 52 modules in 313.68 s, with no skips, `ruff check .` clean,
+`ruff format --check .` clean on the 100 Python files, and `check_documents.py` reporting no finding. No pin is
+removed from the full run.
 
-Measured after the piece, 2026-11-18, in one run in the order above: `ruff check .` clean (0.015 s),
-`ruff format --check .` clean on the 100 Python files (0.011 s), 1,686 pins in 52 modules in 313.68 s with no
-skips (305.56 s to 313.68 s across three runs of the same set), and `python3 tools/check_documents.py` reports no
-finding (11.09 s). The count fell by 2 in `tests/test_sanity_gate.py` (101 to 99), and no pin was removed or
-weakened: that pin is the corpus run, parametrized through `tests/conftest.py::corpus_fixtures`, so its case set is
-the corpus the read rule answers. The three response-rooted files left the corpus (item 1 and item 2), so two cases
-left the pin with them. Their facts are still read through the injected producer in `tests/test_shadow_coverage.py`
-and `tests/test_ownership.py`.
+The binary pins are measured twice: on this machine, where `tflint` is absent and those pins skip, and with the
+binary present, where the same set passes with no skips. Record both.
 
-Finished: mark Piece 10 complete in `to-do.md`, close or narrow the six findings in `backlog.md`, update
-`agent-status.md` §Current position, and commit. Only the files this piece changed are committed; `AGENTS.md` is not
-staged, committed, reverted or modified, because it holds an uncommitted user edit.
+Measured 2026-11-18, in that order: `ruff check .` clean, `ruff format --check .` clean on the same 100 Python
+files, and `python3 tools/check_documents.py` reports no finding. 1,697 pins in 52 modules, all pass: 1,686 before,
+11 new, all in `tests/test_sanity_gate.py` (99 to 110). Measured both ways, as two runs of the same set, so the two
+times differ by run noise and not by the pins that skipped: without the binary, 1,693 pass and 4 skip for the missing
+binary, 286.45 s; with tflint 0.66.0 present, all 1,697 pass, 280.97 s. No pin is removed from the full run, and the
+four pins that changed what they read are recorded in Item 1 and Item 6.
+
+Finished 2026-11-18: Piece 11 is marked complete in `to-do.md`, the Nice-to-Haves entry in `backlog.md` is narrowed
+to what stays open, `agent-status.md` §Current position names the piece, and the commit holds only the files this
+piece changed; `AGENTS.md` is not staged, committed, reverted or modified, because it holds an uncommitted user edit.

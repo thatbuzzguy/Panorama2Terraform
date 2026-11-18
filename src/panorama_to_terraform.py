@@ -24,7 +24,7 @@ reported, not dropped. The type list is in docs/RESOURCE_MAPPING.md; this docstr
 does not restate it.
 
 Usage:
-    python3 src/panorama_to_terraform.py <input_file.xml> [--output-dir <dir>] [--validate]
+    python3 src/panorama_to_terraform.py <input_file.xml> [--output-dir <dir>] [--validate] [--tflint]
 
 See docs/USAGE_GUIDE.md for the flags, the report files, and the post-run gate.
 """
@@ -7194,6 +7194,12 @@ def shared_arguments(parser: argparse.ArgumentParser) -> None:
         "--validate", action="store_true", help="Run terraform init and terraform validate on the output"
     )
     parser.add_argument(
+        "--tflint",
+        action="store_true",
+        help="Run the rule set `sanity_checks.TFLINT_RULES` over the output through the tflint command. "
+        "The default gate runs no external command, so a run that does not ask for it reports NOT RUN",
+    )
+    parser.add_argument(
         "--data-blocks",
         action="append",
         metavar="SCOPE",
@@ -7598,7 +7604,9 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
     # reads the records the run wrote. The cross-check is the one rule that reads two sets, so the run's
     # ledger is the second input (`docs/ARCHITECTURE.md` §4.6), and the join gets the index the entry point
     # built (criterion 6): a run that read no request passes no index, so the join reports as NOT RUN.
-    report = sanity_checks.run_checks(run.output_dir, run_terraform=run.validate, ledger=view, index=index)
+    report = sanity_checks.run_checks(
+        run.output_dir, run_terraform=run.validate, ledger=view, index=index, run_tflint=run.tflint
+    )
     report_path = write_path.root_path(run.output_dir, "SANITY_REPORT.txt")
     write_path.write_file(report_path, report.render())
     print()

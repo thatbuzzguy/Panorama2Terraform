@@ -43,17 +43,33 @@ table's rows, with the measured number kept in the docstring as a dated measurem
 that a directory with no index of its own is named by the root index, so the two `.github/` contribution templates
 stay and `README.md` names them. The criteria and the measurement are in `acceptance.md`.
 
+Piece 11 (2026-11-18) landed the `tflint` integration. The gate rule that runs the rule set is
+`sanity_checks.check_tflint`, the way `check_terraform` runs `terraform`, and `--tflint` is its flag, so the gate
+that runs on every conversion reads no external command and reports the check as NOT RUN. The rule set is data
+(`sanity_checks.TFLINT_RULES`), named through `--only`, so no config file restates it, and the rules the gate or the
+emitter already state are recorded as `TFLINT_RULES_ALREADY_HELD` with the owner that holds each.
+`TFLINT_SEVERITY` maps the tool's three severities to the gate's two, `TFLINT_EXIT_CODES` states the tool's own exit
+codes, and a run that answered non-zero with nothing to report is a FAIL finding, so a silence cannot read as a pass.
+The check runs once per unit directory the record names and names the directory it ran on. The committed test
+material is `tests/tflint/probe.tf` and `tests/tflint/probe.json`, read through `tests/conftest.py`, and
+`tests/test_sanity_gate.py::test_the_committed_tflint_output_agrees_with_the_binary` compares the committed answer
+with the live answer, so a committed fact cannot drift from the rule it records. The rule is in
+`docs/ARCHITECTURE.md` §4.6, the test material set in §1.1, and the file-set answer in `docs/CODEBASE_ASSEMBLY.md`
+§14, which answers to no file, so the file inventory is unchanged. The pins that run the binary skip only for a
+missing binary and assert on a non-zero run, so the `terraform-gate` CI job, which has the binary, is where they run;
+the matrix legs skip them. Four pins changed what they read, and the reasons are in `acceptance.md`.
+
 The licensing rule is in `docs/LICENSING.md`, the owner document: the fork source, the two holders, the split
 measured through `git blame`, and the scope of each grant. `LICENSE-COMMERCIAL` is the upstream author's grant, so
 it covers the upstream parts only, and this project grants no commercial terms for its own contributions. The word
 "non-commercial" is not used as a license name, because AGPL v3 permits commercial use and §10 does not allow an
 extra non-commercial condition on a derivative work, so the choice reads as "AGPL v3 only".
 
-Test count: `python3 -m pytest` reads 1,686 pins in 52 test modules, with no skips. `ruff check .` is clean and
-`ruff format --check .` is clean on the 100 Python files. `tests/test_api_path.py` reads 33 pins (30 before
-Piece 8). `tests/test_sanity_gate.py` reads 99 pins, 2 fewer than before Piece 10, because its corpus pin is
-parametrized through `tests/conftest.py::corpus_fixtures` and the two response-rooted files left the corpus.
-`pyproject.toml` sets `addopts = "-q"`, so a second `-q`
+Test count: `python3 -m pytest` reads 1,697 pins in 52 test modules: no skips when the tflint binary is present,
+and 4 skips for the missing binary when it is absent, because the pins that run the rule set skip only for a missing
+binary. `ruff check .` is clean and `ruff format --check .` is clean on the 100 Python files.
+`tests/test_api_path.py` reads 33 pins (30 before Piece 8). `tests/test_sanity_gate.py` reads 110 pins, 11 more than
+the 99 it read before Piece 11. `pyproject.toml` sets `addopts = "-q"`, so a second `-q`
 suppresses the summary line; the count is read from the per-module collection counts.
 
 Full-suite time, measured 2026-11-13: 325.4 s, 364.6 s and 364.9 s on three runs of the same set (5 min 25 s to
@@ -63,7 +79,9 @@ held 663 pins took 35 s, so the growth is the corpus pins and the pins that run 
 three pins that run the gate with the terraform binary), then the corpus pins at 79.8 s. The Piece 7 runs, measured
 2026-11-16, took 4 min 24 s and 6 min 25 s for the same set. The Piece 8 run, measured 2026-11-18, passed 1,688
 pins in 305.56 s. The Piece 10 run, measured 2026-11-18, passed 1,686 pins in 313.68 s, with `ruff check .` at
-0.015 s, `ruff format --check .` at 0.011 s, and `python3 tools/check_documents.py` at 11.09 s.
+0.015 s, `ruff format --check .` at 0.011 s, and `python3 tools/check_documents.py` at 11.09 s. The Piece 11 run,
+measured 2026-11-18, passed 1,697 pins in 280.97 s with the tflint binary present and in 286.45 s with it absent,
+where the four pins that run the rule set skip for the missing binary.
 
 Gate size, decided 2026-11-13: no smaller default gate is adopted. The measured subset that drops the pins that
 call `terraform` runs in 203.0 s (44% of the full run), and the subset that drops the corpus pins runs in about
@@ -100,8 +118,9 @@ the workflow file.
 
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
 facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a
-stack, the EDL `certificate_profile` field, and the profile-name report column. The next actionable slice
-outside Epic 8 is `tflint` integration (`backlog.md`, Nice-to-Haves).
+stack, the EDL `certificate_profile` field, and the profile-name report column. Piece 11 (`tflint` integration) is
+complete, so the next actionable slice outside Epic 8 is `pyproject.toml` `target-version` to the Python floor
+(`backlog.md`, Nice-to-Haves).
 
 Piece 3 (pins that measure nothing) is complete. The five findings the 2026-11-11 audit recorded in
 `backlog.md` are fixed, each by making the pin read the material its own rule names, and no pin failed when it

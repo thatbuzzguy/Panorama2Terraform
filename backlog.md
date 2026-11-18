@@ -157,8 +157,11 @@ here with that rule named.
   findings at that level: 80 `UP045` (`Optional[X]`), 16 `B905` (`zip` without `strict`), 4 `UP035`,
   and 1 `UP007`. Do it as its own task so the diff stays reviewable. The gate stays green while
   `target-version` states the syntax level ruff enforces, which is below the floor.
-- Deeper post-run checks (beyond the gate (F4.1): `tflint` integration. `sanity_checks.py` is the runtime home
-  for the static rules.
+- `tflint` integration is landed. What stays open is the demonstration script: `tools/quick_start.sh` adds
+  `--validate` when the terraform binary is present and adds no flag for the rule set, so a run through the script
+  reports the rule-set check as NOT RUN unless the caller asks for it by name. The rule set, the severity rule and
+  the exit-code rule are in `docs/ARCHITECTURE.md` §4.6, and the rules the gate or the emitter already state, with
+  the rules that read a shape the tool writes none of, are recorded there.
 
 ## Design Decisions (multi-scope model)
 

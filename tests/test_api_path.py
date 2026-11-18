@@ -593,12 +593,19 @@ def test_content_with_no_live_only_fact_writes_the_same_tf_bytes_as_path_1(tmp_p
     ), (gate1, gate2)
     assert not [finding for c in gate1.checks + gate2.checks for finding in c.findings], (gate1.checks, gate2.checks)
     results1, results2 = {c.check: c.result for c in gate1.checks}, {c.check: c.result for c in gate2.checks}
-    # Green means no finding for either run. The one result that is not PASS is `terraform`, because this pin
-    # reads the gate without running terraform, and it is NOT RUN for both runs.
-    assert (
-        all(result == "PASS" for name, result in results2.items() if name != "terraform")
-        and results1["terraform"] == results2["terraform"] == sanity_checks.NOT_RUN
-    ), (results1, results2)
+    # Green means no finding for either run. The results that are not PASS are the two checks this pin did not ask
+    # for, the plan check and the rule set, and each is NOT RUN for both runs, so the agreement is measured over the
+    # checks the gate ran.
+    command_checks = ("tflint", "terraform")
+    assert all(result == "PASS" for name, result in results2.items() if name not in command_checks), (
+        results1,
+        results2,
+    )
+    assert all(results1[name] == results2[name] == sanity_checks.NOT_RUN for name in command_checks), (
+        results1,
+        results2,
+        "this pin reads the gate without running a command",
+    )
     assert {name: value for name, value in results1.items() if name != "request_set"} == {
         name: value for name, value in results2.items() if name != "request_set"
     }, (results1, results2)
@@ -1231,6 +1238,7 @@ def test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_t
         "output_dir",
         "max_input_bytes",
         "validate",
+        "tflint",
         "data_blocks",
         "import_blocks",
         "state",

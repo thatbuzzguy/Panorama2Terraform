@@ -2,9 +2,9 @@
 
 The pin reads names, not wording. An index is a list of names, so a pin can hold it: each index names every
 markdown document under it, a directory with no index of its own is named by the root index, the root index names
-the test set and the response set, and every `src/` module is named in the §1 module table. What a document says
-about a rule is wording, and a wording edit is a document review, not a code failure, so the wording checks live
-in `tools/check_documents.py`, which the test set does not read.
+the test set and the two test material sets (the response set and the tflint set), and every `src/` module is named
+in the §1 module table. What a document says about a rule is wording, and a wording edit is a document review, not
+a code failure, so the wording checks live in `tools/check_documents.py`, which the test set does not read.
 
 `tests/` has no index of its own: the root index names the test set, and §1.1 states that rule. So does
 `.github/`, which holds the two contribution templates, so the root index names them. The pin reads the name of
@@ -48,8 +48,8 @@ def test_the_indexes_name_every_document_under_them():
         text = root_text if index == root_index else index.read_text(encoding="utf-8")
         assert path.name in text, (index.name, path.name, "the index that owns the directory names the document")
 
-    # AC-3: the root index names the test set, so `tests/` keeps no index of its own, and it names the response
-    # set too, because a committed response is not corpus material (§1.1). Names only: the response-set count is
+    # AC-3: the root index names the test set, so `tests/` keeps no index of its own, and it names the two test
+    # material sets too, because neither is corpus material (§1.1). Names only: the response-set count is
     # held by `tests/test_api_requests.py`, which reads the requests the files answer.
     modules = sorted(path.name for path in TESTS_DIR.glob("test_*.py"))
     assert len(modules) > 1, modules
@@ -57,8 +57,13 @@ def test_the_indexes_name_every_document_under_them():
         assert f"tests/{name}" in root_text, (name, "the root index names the test set")
     assert "tests/conftest.py" in root_text, "the root index names the shared harness"
 
-    for path in sorted((TESTS_DIR / "responses").glob("*.xml")):
-        assert f"tests/responses/{path.name}" in root_text, (path.name, "the root index names the response set")
+    for name in ("responses", "tflint"):
+        for path in sorted(p for p in (TESTS_DIR / name).iterdir() if p.is_file()):
+            assert f"tests/{name}/{path.name}" in root_text, (
+                name,
+                path.name,
+                "the root index names the test material set",
+            )
 
     # AC-4: every module in `src/` is named in the §1 module table.
     table = (REPO_ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
