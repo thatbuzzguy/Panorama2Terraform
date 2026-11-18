@@ -59,6 +59,16 @@ with the live answer, so a committed fact cannot drift from the rule it records.
 missing binary and assert on a non-zero run, so the `terraform-gate` CI job, which has the binary, is where they run;
 the matrix legs skip them. Four pins changed what they read, and the reasons are in `acceptance.md`.
 
+Piece 12 (2026-11-18) is the last piece of the audit series and is complete. `pyproject.toml` `target-version` now
+equals the Python floor, so `ruff check .` enforces the spelling the project writes: the PEP 604 union for an
+optional value, the call rule read from `collections.abc`, and `strict` stated at every `zip` call. The findings were
+measured at that level on the tree at commit `698c957`, and the 20 `zip` sites were read one at a time before any was
+written: `strict=True` at 19, where the two sides are the same set by construction, and `strict=False` at
+`tests/conftest.py`, where each rule of a chain is read against the rule before it, so the two sides differ by one by
+construction and `strict=True` would refuse a chain of any length. Two pins that read a module's import spelling read
+the new spelling, and the reason for each is in `acceptance.md`; no pin is weakened. The criteria, the per-site
+decision, and the gate measurement are in `acceptance.md`.
+
 The licensing rule is in `docs/LICENSING.md`, the owner document: the fork source, the two holders, the split
 measured through `git blame`, and the scope of each grant. `LICENSE-COMMERCIAL` is the upstream author's grant, so
 it covers the upstream parts only, and this project grants no commercial terms for its own contributions. The word
@@ -67,7 +77,9 @@ extra non-commercial condition on a derivative work, so the choice reads as "AGP
 
 Test count: `python3 -m pytest` reads 1,697 pins in 52 test modules: no skips when the tflint binary is present,
 and 4 skips for the missing binary when it is absent, because the pins that run the rule set skip only for a missing
-binary. `ruff check .` is clean and `ruff format --check .` is clean on the 100 Python files.
+binary. The count is the same before and after Piece 12, so no pin was added, removed, or weakened.
+`ruff check .` is clean at the level `pyproject.toml` states and `ruff format --check .` is clean on the 100 Python
+files.
 `tests/test_api_path.py` reads 33 pins (30 before Piece 8). `tests/test_sanity_gate.py` reads 110 pins, 11 more than
 the 99 it read before Piece 11. `pyproject.toml` sets `addopts = "-q"`, so a second `-q`
 suppresses the summary line; the count is read from the per-module collection counts.
@@ -81,7 +93,10 @@ three pins that run the gate with the terraform binary), then the corpus pins at
 pins in 305.56 s. The Piece 10 run, measured 2026-11-18, passed 1,686 pins in 313.68 s, with `ruff check .` at
 0.015 s, `ruff format --check .` at 0.011 s, and `python3 tools/check_documents.py` at 11.09 s. The Piece 11 run,
 measured 2026-11-18, passed 1,697 pins in 280.97 s with the tflint binary present and in 286.45 s with it absent,
-where the four pins that run the rule set skip for the missing binary.
+where the four pins that run the rule set skip for the missing binary. The Piece 12 run, measured 2026-11-18 with the
+binary present, passed the same 1,697 pins in 52 modules in 273.21 s at the new level, against 339.42 s for the same
+set read on the tree at commit `698c957` in a detached worktree; `python3 tools/check_documents.py` reports no finding
+for either tree.
 
 Gate size, decided 2026-11-13: no smaller default gate is adopted. The measured subset that drops the pins that
 call `terraform` runs in 203.0 s (44% of the full run), and the subset that drops the corpus pins runs in about
@@ -111,16 +126,17 @@ leg is dropped, not moved to an older runner image, because two facts make it un
 from November 2026, and `requirements.txt` pins `pytest==9.1.1`, which requires 3.10. Each leg is a
 minor version, never an exact patch, because the build manifest for 26.04 holds only the newest
 patches for the older minors. `pyproject.toml` states the floor, and `README.md` and
-`docs/USAGE_GUIDE.md` state the same value. `target-version` stays `py39`: it states the syntax level
-the lint gate enforces, not the floor, and the codebase still writes pre-3.10 typing and `zip`
-without `strict` (101 findings at `py310`), which `backlog.md` records as its own task. No pin reads
-the workflow file.
+`docs/USAGE_GUIDE.md` state the same value. `target-version` now equals that floor, so the lint gate enforces the
+spelling the project writes: the PEP 604 union for an optional value, the call rule read from `collections.abc`, and
+`strict` stated at every `zip` call. No pin reads the workflow file, and the workflow states no level of its own, so
+the CI legs read `pyproject.toml`; the legs start at 3.10, so no leg runs a Python below the level the gate enforces.
 
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
 facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a
-stack, the EDL `certificate_profile` field, and the profile-name report column. Piece 11 (`tflint` integration) is
-complete, so the next actionable slice outside Epic 8 is `pyproject.toml` `target-version` to the Python floor
-(`backlog.md`, Nice-to-Haves).
+stack, the EDL `certificate_profile` field, and the profile-name report column. The audit series is complete with
+Piece 12, so the next actionable slice is the `tools/quick_start.sh` demonstration script (`backlog.md`,
+Nice-to-Haves): it adds no flag for the `tflint` rule set, so a run through the script reports the rule-set check as
+NOT RUN unless the caller names it.
 
 Piece 3 (pins that measure nothing) is complete. The five findings the 2026-11-11 audit recorded in
 `backlog.md` are fixed, each by making the pin read the material its own rule names, and no pin failed when it

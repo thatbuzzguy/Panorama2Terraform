@@ -139,8 +139,10 @@ unit and per coverage matrix row. The `report_only` timing fact that rule measur
 through the destination rule in Current State. The certificate `REFERENCE_ONLY` rows for `private_key` and
 `passphrase` are landed in `resource_mapping.VALUE_VARIABLES`, read by the emitter, the gate and the `.tfvars`
 writer through the same table, so that feature is closed. `ruff format` as a gate is landed and closed here, and so
-is `tflint` integration. The next actionable slice is `pyproject.toml` `target-version` to the Python floor, which
-`backlog.md` records as its own task. The gated
+is `tflint` integration and the one-time syntax pass that raised `pyproject.toml` `target-version` to the Python
+floor, which is the piece `backlog.md` recorded as its own task. The next actionable slice is the
+`tools/quick_start.sh` demonstration script, which `backlog.md` records: it adds no flag for the `tflint` rule set, so
+a run through the script reports the rule-set check as NOT RUN unless the caller names it. The gated
 pieces that stay held in `backlog.md` are the four `*_policy_rules` types, which wait for the F3.5 rulebase
 decision and a live target, and a config entry inside a stack, which needs a provider location shape before the
 emitter can write a block for it. The rows that state fewer fields than the pinned provider declares for their

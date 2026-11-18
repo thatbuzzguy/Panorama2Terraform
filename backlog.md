@@ -153,10 +153,6 @@ here with that rule named.
 
 ## Nice-to-Haves
 
-- Raise `pyproject.toml` `target-version` to the Python floor (`py310`). `ruff check` reports 101
-  findings at that level: 80 `UP045` (`Optional[X]`), 16 `B905` (`zip` without `strict`), 4 `UP035`,
-  and 1 `UP007`. Do it as its own task so the diff stays reviewable. The gate stays green while
-  `target-version` states the syntax level ruff enforces, which is below the floor.
 - `tflint` integration is landed. What stays open is the demonstration script: `tools/quick_start.sh` adds
   `--validate` when the terraform binary is present and adds no flag for the rule set, so a run through the script
   reports the rule-set check as NOT RUN unless the caller asks for it by name. The rule set, the severity rule and
