@@ -213,6 +213,39 @@ and the measurement are in `acceptance.md`.
 Gate: `ruff check .` clean, `ruff format --check .` clean, 1,688 pins in 52 modules, all pass, no skips, 305.56 s.
 `python3 tools/check_documents.py` reports no finding. The F8.10 finding is closed.
 
+### Piece 11 — `tflint` integration (complete, committed 2026-11-18)
+
+Owner: `docs/ARCHITECTURE.md` §4.6 for the gate rule, the severity rule and the exit-code rule, §3.2 for the console
+line shape, §1.1 for the test material set, `docs/CODEBASE_ASSEMBLY.md` §14 for the file sets,
+`src/sanity_checks.py` for the runtime home of the static rules and for the rule set as data, `tests/conftest.py` for
+the binary and for the test material path, `README.md` for the root index and the command line,
+`.github/workflows/python-tests.yml` for the CI gate, and `tests/test_sanity_gate.py` for the pins. The criteria, the
+decisions and the measurements are in `acceptance.md`.
+
+What landed: `check_tflint` is the gate rule that runs the `tflint` command, the way `check_terraform` runs
+`terraform`, and `--tflint` is its flag, so the gate that runs on every conversion reads no external command and
+reports the check as NOT RUN. The rule set is data (`TFLINT_RULES`, eight rules), so no config file restates it, and
+the rules the gate or the emitter already state are recorded as `TFLINT_RULES_ALREADY_HELD` with the owner that holds
+each. `TFLINT_SEVERITY` and `TFLINT_EXIT_CODES` are data read by the check, and a run that answered non-zero with
+nothing to report is a FAIL finding, never a silent pass. The check runs once per unit directory the record names and
+names the directory it ran on. The committed test material is `tests/tflint/probe.tf` and `tests/tflint/probe.json`,
+read through `tests/conftest.py`, and the pin that compares the committed answer with the live answer keeps it from
+drifting.
+
+Four pins changed what they read, each for the reason recorded in `acceptance.md`, and none is weakened: the data
+rule's shape assertion moved to the data rule
+(`tests/test_data_file_gate.py::test_no_block_rule_reads_a_data_file_and_the_data_rule_reads_no_tf_file`), because
+the gate gained a shape rule for the answer of the command it runs; the path 2 agreement pin now excludes both
+command checks and asserts each is NOT RUN for both runs
+(`tests/test_api_path.py::test_content_with_no_live_only_fact_writes_the_same_tf_bytes_as_path_1`); and the index pin
+now reads both test material sets (`tests/test_layout.py::test_the_indexes_name_every_document_under_them`).
+
+Gate, measured 2026-11-18 in the order `ruff check .`, `ruff format --check .`, `python3 -m pytest`,
+`python3 tools/check_documents.py`: `ruff check .` clean, `ruff format --check .` clean on the 100 Python files, and
+the document check reports no finding. 1,697 pins in 52 modules, all pass: 1,686 before, 11 new, all in
+`tests/test_sanity_gate.py` (99 to 110). Measured both ways, because the pins that run the binary skip for a missing
+binary: without it, 1,693 pass and 4 skip, 286.45 s; with tflint 0.66.0 present, all 1,697 pass, 280.97 s.
+
 ### Piece 10 — the open 2026-11-11 audit findings (complete, committed 2026-11-18)
 
 Owner: `docs/ARCHITECTURE.md` §1.1 for the layout rule and the response set, `tests/test_api_requests.py` for the
@@ -263,7 +296,6 @@ pin was removed or weakened. The six findings are closed.
 
 Next in the series (one piece finished before the next is started):
 
-- Piece 11 — `tflint` integration (`backlog.md`, Nice-to-Haves), the next actionable slice outside this series.
 - Piece 12 — `pyproject.toml` `target-version` to the Python floor (`py310`), 101 findings, as its own commit
   (`backlog.md`, Nice-to-Haves).
 
@@ -301,8 +333,8 @@ decision and a live target, a config entry inside a stack needs a provider locat
 `docs/API_CONVERSION_PATH.md` §4 need a live target: the committed response set shows one shape per
 accepted request shape and names no fact.
 
-`ruff format` as a gate is complete, so `tflint` integration (`backlog.md`, Nice-to-Haves) is the next actionable
-slice outside this series.
+`ruff format` as a gate is complete, and `tflint` integration is complete, so `pyproject.toml` `target-version` to
+the Python floor (`backlog.md`, Nice-to-Haves) is the next actionable slice outside this series.
 
 ## Rules the layout keeps
 
