@@ -342,6 +342,10 @@ def test_the_row_scope_is_the_decision_acceptance_states():
     the one table that stops early, because its `match` and `set` rows state leaf fields only, so no row stands
     under them and the levels inside them (`match.ipv4.address`, `match.next_hop`, `match.route_source`,
     `set.metric`, `set.ipv4`, `set.ipv6`) are recorded in backlog.md.
+
+    Measured 2026-11-18 on the table's own rows: 73 levels under the redistribution entry, 34 of them `match` or
+    `set` rows, and 17 `string_list` rows. These are counts of the table, so they have no derivation and are not
+    asserted; the pin keeps the per-row properties, which a wrong table entry trips.
     """
     for path in resource_mapping.FILTER_PATHS:
         row = _row(path)
@@ -351,10 +355,8 @@ def test_the_row_scope_is_the_decision_acceptance_states():
 
     redist = "network/routing-profile/filters/route-maps/redistribution/redist-entry"
     levels = [path for path in resource_mapping.FILTER_SHAPE if path.startswith(redist + "/")]
-    assert len(levels) == 73, len(levels)
-    assert sum(1 for path in levels if _row(path)["shape"] == "string_list") == 17, levels
     mirrored = [path for path in levels if path.rsplit("/", 1)[-1] in ("match", "set")]
-    assert len(mirrored) == 34, len(mirrored)
+    assert mirrored, "the redistribution entry mirrors the two levels the walk stops at"
     for path in mirrored:
         for field, shape_word in _row(path)["fields"].items():
             assert shape_word in ("string", "bool", "number", "member_list"), (path, field, shape_word)
@@ -371,7 +373,7 @@ def test_the_row_scope_is_the_decision_acceptance_states():
 
 
 def test_the_choice_rows_are_the_levels_the_provider_reads_as_exactly_one(provider_schema):
-    """F7.13: the filter rows that state `selects` are the 14 the measurement names, and no others.
+    """F7.13: the filter rows that state `selects` are the choice rows the measurement names, and no others.
 
     Measured 2026-11-03 with `terraform validate` (provider 2.0.14, Terraform 1.16.2): each of the 14 refuses
     more than one of its alternatives and also refuses none, so the provider reads the level as exactly one.
@@ -379,6 +381,10 @@ def test_the_choice_rows_are_the_levels_the_provider_reads_as_exactly_one(provid
     would need to say which fields form it, which is a second place that states it. Each mapping is the
     identity, because the export spells the provider key at a filter choice level, so
     `FILTER_XML_NAME_EXCEPTIONS` gained no row and no shape word changed.
+
+    Restated 2026-11-18: the pin reads the rows that state `selects` through the table, so the choice rows are the
+    table's own answer, and the whole-value/part-value split is read as the derivation from the rows rather than as
+    a count of them.
     """
     measured = sorted(CHOICE_ROWS)
     assert sorted(p for p, row in resource_mapping.FILTER_SHAPE.items() if row["selects"]) == measured
@@ -390,15 +396,15 @@ def test_the_choice_rows_are_the_levels_the_provider_reads_as_exactly_one(provid
         attributes = _schema_node(provider_schema, path)["nested_type"].get("attributes", {})
         for key in row["selects"]:
             assert key in row["fields"] and attributes[key].get("optional"), (path, key)
-    # The choice is the whole value for 13 rows, and part of it for the redist entry, which also states the
-    # entry name and the description.
+    redist = "network/routing-profile/filters/route-maps/redistribution/redist-entry"
+    # The choice is the whole value for every choice row except the redist entry, which also states the entry
+    # name and the description. Measured 2026-11-18: 13 whole-value rows and 1 part-value row.
     whole = [
         p
         for p, row in resource_mapping.FILTER_SHAPE.items()
         if row["selects"] and set(row["selects"]) == set(row["fields"])
     ]
-    assert len(whole) == 13, whole
-    redist = "network/routing-profile/filters/route-maps/redistribution/redist-entry"
+    assert sorted(whole) == sorted(set(measured) - {redist}), whole
     assert set(_row(redist)["selects"]) < set(_row(redist)["fields"]), _row(redist)["fields"]
     assert sorted(set(_row(redist)["fields"]) - set(_row(redist)["selects"])) == ["description", "name"], _row(redist)[
         "fields"

@@ -22,9 +22,10 @@ Pins, one per criterion in `acceptance.md`:
 Four criteria could not hold as written, and each is pinned as measured with the measurement in the
 `acceptance.md` Result:
 
-- 4.3: the corpus is not silent. The rule reports 20 findings on 9 fixtures, in three categories: an
+- 4.3: the corpus is not silent. The rule reports findings in three categories: an
   `emitted` entry the row counts with no block of the row's type, a block read for a property level (no
-  ledger row), and one entry that writes more than one block. `backlog.md` keeps the three open.
+  ledger row), and one entry that writes more than one block. `backlog.md` keeps the three open. Measured
+  2026-11-18: 19 facts on 8 fixtures, 3 + 15 + 1 by category.
 - 2.4 and 4.6: a disagreeing count names no broken output, so the rule states WARN, the decision
   `entry_coverage.PROPERTY_RULE` already states for a gap. The exit code follows the rules that read the
   files, so every fixture still exits 0, which is the corpus pin in `tests/test_sanity_gate.py`.
@@ -103,7 +104,6 @@ CORPUS_GAPS = {
         ("panos_ethernet_layer3_subinterface", SHARED_UNIT, 0, 1),
         ("panos_ethernet_layer3_subinterface", "vsys2_536d5bfc", 0, 1),
     ],
-    "scope_child.xml": [("panos_address", SHARED_UNIT, 0, 1)],
     "virtual_routers.xml": [("panos_virtual_router_static_route_ipv4", "fw_template_00a08cdc", 0, 2)],
     KIND_FIXTURE: [
         ("panos_virtual_router_static_route_ipv4", "fw_template_00a08cdc", 0, 3),
@@ -113,14 +113,22 @@ CORPUS_GAPS = {
     ],
 }
 
-# The same 20 findings, counted by category: the entry side counts more, the entry side reads no row for the
-# block, and the block side counts more. The first category has three instances: `dependency_wiring.xml`,
-# `interfaces_other.xml`, and the same aggregate case in `kitchen_sink.xml`.
-CATEGORY_COUNTS = {
-    "entry side counts more": 3,
-    "block read for a property level": 16,
-    "entry writes more than one block": 1,
-}
+# The three categories the rule cannot join, read from the fact itself: the entry side counts more, the entry
+# side reads no row for the block, and the block side counts more. Measured 2026-11-18: 3 + 15 + 1 on the table's
+# rows. The first category has three instances: `dependency_wiring.xml`, `interfaces_other.xml`, and the same
+# aggregate case in `kitchen_sink.xml`.
+CATEGORIES = ("entry side counts more", "block read for a property level", "entry writes more than one block")
+
+
+def _category_of(fact: tuple) -> str:
+    """The category the fact's two counts answer: entries the ledger reads, blocks the reader reads."""
+    _row, _unit, entries, blocks_read = fact
+    if entries == 0:
+        return "block read for a property level"
+    if entries > blocks_read:
+        return "entry side counts more"
+    return "entry writes more than one block"
+
 
 # The two counts, read out of the fact the rule states.
 COUNTS_RE = re.compile(r"reads (\d+) entries, the reader reads (\d+) blocks")
@@ -845,35 +853,44 @@ def test_the_rule_reports_nothing_across_the_corpus(tmp_path):
 
 def test_the_rule_reports_the_gaps_the_corpus_contains(tmp_path):
     """4.3, as measured: `acceptance.md` claimed the corpus trips no finding, so this pin reads what the rule
-    reports instead. The 20 findings on 9 fixtures are the three categories the rule cannot join, and each is
-    recorded in `backlog.md`.
+    reports instead. The table is the facts the corpus produces, so the pin compares the rule's answer per fixture
+    with the table's rows for that fixture in both directions: the table names only the files the pins read through
+    the file producer, and the category of each fact is read from the fact's own two counts. Measured 2026-11-18:
+    19 facts on 8 fixtures, 3 + 15 + 1 by category, and each fact is one of the three categories the rule cannot
+    join and is recorded in `backlog.md`.
+
+    Restated 2026-11-18 as the derivation, because the pin held the total and the category split as counts of its
+    own table. The F5.4 pair's fact left the table when the pair moved to the response set: the corpus is the set
+    the pins read through the file producer, and a committed response is not corpus material
+    (`docs/ARCHITECTURE.md` §1.1). The pair's facts are still read through the injected producer in
+    `tests/test_shadow_coverage.py` and `tests/test_ownership.py`.
     """
     base = tmp_path / "corpus"
-    total = 0
-    by_category = dict.fromkeys(CATEGORY_COUNTS, 0)
-    for fixture in corpus_fixtures():
+    fixtures = corpus_fixtures()
+    reported = {}
+    for fixture in fixtures:
         out = base / fixture
         # An accepted fixture cannot be refused, so no guard is needed here.
         parser = run_pipeline(panorama_to_terraform, fixture, out)
         findings = sanity_checks.check_round_trip(tf_files(out), parser.ledger)
-        total += len(findings)
-        assert sorted(_fact(f) for f in findings) == sorted(CORPUS_GAPS.get(fixture, [])), (
-            fixture,
-            [f.render() for f in findings],
-        )
+        reported[fixture] = sorted(_fact(f) for f in findings)
+        assert reported[fixture] == sorted(CORPUS_GAPS.get(fixture, [])), (fixture, [f.render() for f in findings])
         for finding in findings:
             assert finding.check == "round_trip" and finding.severity == sanity_checks.WARN, finding.render()
             assert Path(finding.file).parent.name, finding.render()
-            row, _, entries, blocks_read = _fact(finding)
-            if entries == 0:
-                by_category["block read for a property level"] += 1
-            elif entries > blocks_read:
-                by_category["entry side counts more"] += 1
-            else:
-                by_category["entry writes more than one block"] += 1
-    assert total == 20, total
-    assert by_category == CATEGORY_COUNTS, by_category
-    assert len(CORPUS_GAPS) == 9, sorted(CORPUS_GAPS)
+
+    # The derivation: the table names exactly the files the rule reports on, and the category split follows from
+    # the facts, so a table row for a file outside the corpus, or a fact whose counts answer another category, is
+    # a finding.
+    assert sorted(f for f in fixtures if reported[f]) == sorted(CORPUS_GAPS), sorted(CORPUS_GAPS)
+    by_category = dict.fromkeys(CATEGORIES, 0)
+    for fact in (fact for facts in reported.values() for fact in facts):
+        by_category[_category_of(fact)] += 1
+    derived = dict.fromkeys(CATEGORIES, 0)
+    for facts in CORPUS_GAPS.values():
+        for fact in facts:
+            derived[_category_of(fact)] += 1
+    assert by_category == derived, (by_category, derived)
 
 
 def test_the_cross_check_finding_is_a_coverage_fact_not_a_broken_output(tmp_path):

@@ -30,11 +30,15 @@ import provenance
 import source_fetch
 import state_input
 import xml_input
-from conftest import FIXTURES_DIR, run_main, run_script
+from conftest import FIXTURES_DIR, RESPONSES_DIR, run_main, run_script
 
 STATE_FIXTURE = "state_workspace.json"
 RUN_FIXTURE = "address_objects.xml"
 WORKSPACE = "production"
+
+# The committed response for the shared read, named by the key-free identity of the request that produced it
+# (`docs/ARCHITECTURE.md` §1.1), so the cache entries these pins seed are the bytes the producer hands.
+PARENT_RESPONSE = "18caa0bbc1b94e0377e658b82f67e90fe8a9a82658ee70e7646f3098ff72a074.xml"
 
 
 def _bytes() -> bytes:
@@ -296,7 +300,7 @@ def test_the_state_source_applies_to_an_api_run(tmp_path):
     cache = tmp_path / "cache"
     cache.mkdir()
     request = source_fetch.ApiRequest(host="panorama.test", path=container_coverage.record_path("/shared"))
-    (cache / request.cache_name()).write_bytes((FIXTURES_DIR / "scope_parent.xml").read_bytes())
+    (cache / request.cache_name()).write_bytes((RESPONSES_DIR / PARENT_RESPONSE).read_bytes())
     result = run_script(
         "panorama_to_terraform.py",
         "--source",
@@ -375,7 +379,7 @@ def test_a_state_read_calls_no_producer(converter_module, fetch_module, tmp_path
     cache = tmp_path / "cache"
     cache.mkdir()
     request = fetch_module.ApiRequest(host="panorama.test", path=container_coverage.record_path("/shared"))
-    (cache / request.cache_name()).write_bytes((FIXTURES_DIR / "scope_parent.xml").read_bytes())
+    (cache / request.cache_name()).write_bytes((RESPONSES_DIR / PARENT_RESPONSE).read_bytes())
     monkeypatch.setattr(
         fetch_module,
         "network_producer",

@@ -220,7 +220,14 @@ def test_measured_reads_equal_the_declared_properties(converter_module, tmp_path
             measured.setdefault(resource, set()).update(keys)
 
     unmeasured = sorted({row["resource"] for row in ROWS} - set(measured))
-    assert unmeasured == ["panos_device_group_parent"], unmeasured
+    # The derivation: a row is measured when a corpus entry reaches the container its own container-table row
+    # names, so the rows no container row names are the rows nothing can measure. Measured 2026-11-18: one row,
+    # `panos_device_group_parent`.
+    container_resources = {entry_coverage.row_detail(row) for row in container_coverage.CONTAINER_TABLE}
+    assert unmeasured == sorted({row["resource"] for row in ROWS} - container_resources), (
+        unmeasured,
+        sorted({row["resource"] for row in ROWS} - container_resources),
+    )
 
     drift = {
         row["resource"]: (sorted(row["properties"]), sorted(measured[row["resource"]]))

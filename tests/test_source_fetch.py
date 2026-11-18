@@ -46,16 +46,30 @@ import container_coverage
 import xml_input
 from conftest import FIXTURES_DIR, RESPONSES_DIR, SRC_DIR, run_main, run_pipeline, run_script
 
-FETCH_FIXTURE = "api_response.xml"
+# The committed responses the pins read through the injected producer, named by the key-free identity of the
+# request that produced them (`docs/ARCHITECTURE.md` §1.1), and the corpus file that holds the same entries as a
+# Panorama export for the pins that read the file producer.
+EXPORT_RESPONSE = "241cbc8980537850768efb4f106eaf6665bbc113a5ecd7c9fbd42449f200d34f.xml"
+CHILD_RESPONSE = "4d5f78d78ee8898b238ff3b4b6b2bda6658590c49a27d7173372bfa429f4904e.xml"
+PARENT_RESPONSE = "18caa0bbc1b94e0377e658b82f67e90fe8a9a82658ee70e7646f3098ff72a074.xml"
+FETCH_FIXTURE = "export_config.xml"
 
-# Physical lines of the fixture: prolog 1, response 2, result 3, config 4,
-# device-group 5, entry Edge 6, address 7, entry web-server 8.
-CONFIG_LINE = 4
-ENTRY_LINE = 8
+# Physical lines measured 2026-11-18, on the bytes the pins read. The committed export response: prolog 1,
+# comment 2-9, response 10, result 11, config 12, device-group 13, entry Office-FW 14, shared 18, address 19,
+# entry web-server 20.
+CONFIG_LINE = 12
+ENTRY_LINE = 20
+DG_ENTRY_LINE = 14
+
+# The same shape on the two moved per-scope responses: response 10, result 11, the element `result` holds 12,
+# and the address entry inside the child entry 14.
+CHILD_RESULT_LINE = 11
+CHILD_ENTRY_LINE = 14
+PARENT_ELEMENT_LINE = 12
 
 
 def _bytes():
-    return (FIXTURES_DIR / FETCH_FIXTURE).read_bytes()
+    return (RESPONSES_DIR / EXPORT_RESPONSE).read_bytes()
 
 
 def _request(fetch_module, host="panorama.test", path=""):
@@ -129,8 +143,8 @@ def test_fetch_root_is_the_config_element_under_result(fetch_module, tmp_path):
     entry = parsed.root.find(".//entry[@name='web-server']")
     assert parsed.line_of(parsed.root) == CONFIG_LINE
     assert parsed.line_of(entry) == ENTRY_LINE, "a report line names the line the response carries"
-    scope = parsed.root.find(".//entry[@name='Edge']")
-    assert parsed.line_of(scope) == 6
+    scope = parsed.root.find(".//entry[@name='Office-FW']")
+    assert parsed.line_of(scope) == DG_ENTRY_LINE
 
     # The unwrap is not a reparse: it takes the parsed source and hands back the
     # same origin and the same line map, with a different root.
@@ -213,25 +227,25 @@ def test_one_shape_per_request_shape(fetch_module, tmp_path):
 def test_a_per_scope_response_holds_the_element_the_path_names(fetch_module, tmp_path):
     """AC-1.2 and AC-1.3: `result` holds the element the path names, `result` becomes the
     root, and the origin and the line map are the same objects."""
-    data = (FIXTURES_DIR / "scope_child.xml").read_bytes()
+    data = (RESPONSES_DIR / CHILD_RESPONSE).read_bytes()
     path = "device-group/entry/Production-DG"
     request = _request(fetch_module, path=path)
     source = fetch_module.fetch(request, tmp_path, producer=_producer(fetch_module, data))
     assert source.root.tag == "result"
     assert source.scope == path
     assert [child.get("name") for child in source.root] == ["Production-DG"]
-    assert source.line_of(source.root) == 7, "the line map is the response bytes, not a reparse"
-    assert source.line_of(source.root.find(".//entry[@name='Web-Server-1']")) == 10, (
+    assert source.line_of(source.root) == CHILD_RESULT_LINE, "the line map is the response bytes, not a reparse"
+    assert source.line_of(source.root.find(".//entry[@name='Web-Server-1']")) == CHILD_ENTRY_LINE, (
         "the line the report prints is the line the response bytes carry"
     )
 
     # A path that names a container reads the element with that tag.
-    parent = (FIXTURES_DIR / "scope_parent.xml").read_bytes()
+    parent = (RESPONSES_DIR / PARENT_RESPONSE).read_bytes()
     scoped = _request(fetch_module, path="shared")
     source = fetch_module.fetch(scoped, tmp_path / "b", producer=_producer(fetch_module, parent))
     assert source.root[0].tag == "shared"
     assert source.scope == "shared"
-    assert source.line_of(source.root[0]) == 8
+    assert source.line_of(source.root[0]) == PARENT_ELEMENT_LINE
 
 
 def test_a_per_scope_response_that_does_not_match_its_path_is_refused(fetch_module, tmp_path):
@@ -528,19 +542,21 @@ def test_the_element_name_rule_names_no_element_for_a_device_fact(fetch_module, 
 # --- 2d. The committed response harness (F8.4) -------------------------------
 
 
-# `tests/responses/` holds one committed response per accepted request shape, each named by the key-free
-# request identity that produced it. `tests/test_api_requests.py` holds the harness pins. The rule pinned here is
-# the fetch layer's own: a committed response is read through an injected producer, so the no-network rule holds
-# for the harness, and the wrapper decision reads it against the request that produced it. A response is read
-# through the door with an `api` origin, never as a file source, because the file producer has no request to read
-# a shape against.
+# `tests/responses/` holds the bytes the pins read through the injected producer for the request that produced
+# them, each named by the key-free request identity. `tests/test_api_requests.py` holds the response-set pins. The
+# rule pinned here is the fetch layer's own: a committed response is read through an injected producer, so the
+# no-network rule holds for the harness, and the wrapper decision reads it against the request that produced it. A
+# response is read through the door with an `api` origin, never as a file source, because the file producer has no
+# request to read a shape against; a corpus file is a Panorama export, so its root is not `response`.
 def _harness_requests(fetch_module):
-    """The three requests that produced the committed set: the words each shape states, plus the part the
-    request declares. Each one names the committed file it reads."""
+    """The requests the pins read, each naming the committed file it reads: one per accepted shape the table
+    states, plus the two per-scope requests the F5.4 pair answers."""
     return (
         fetch_module.ApiRequest(host="panorama.test"),
         fetch_module.ApiRequest(host="panorama.test", path="device-group"),
         fetch_module.ApiRequest(host="panorama.test", command="show system info"),
+        fetch_module.ApiRequest(host="panorama.test", path="device-group/entry/Production-DG"),
+        fetch_module.ApiRequest(host="panorama.test", path="shared"),
     )
 
 
@@ -671,7 +687,7 @@ def test_offline_refuses_a_missing_entry_for_the_second_request(fetch_module, tm
     """F5.4: `--offline` covers both requests, and each request needs its own entry."""
     child = _request(fetch_module, path="device-group/entry/Production-DG")
     parent = _request(fetch_module, path="shared")
-    child_data = (FIXTURES_DIR / "scope_child.xml").read_bytes()
+    child_data = (RESPONSES_DIR / CHILD_RESPONSE).read_bytes()
     fetch_module.fetch(child, tmp_path, producer=_producer(fetch_module, child_data))
 
     def no_call(request):
@@ -834,8 +850,9 @@ def test_two_runs_on_the_same_cache_bytes_write_identical_bytes(converter_module
     report = files2["CONVERSION_REPORT.txt"].decode("utf-8")
     assert f"Source: {cache_name}" in report, "the report names the cache entry"
     # The report row keeps the line the response bytes carry, so the report can
-    # point back into the cache entry.
-    assert re.search(rf"{ENTRY_LINE}\s+device-group/entry/address/web-server", report), report
+    # point back into the cache entry. The address entry sits in the shared section, so the row groups under the
+    # section and names the container the entry is in.
+    assert re.search(rf"{ENTRY_LINE}\s+address/web-server", report), report
 
 
 def test_fetch_refusal_exits_1_and_writes_no_output(fetch_module, tmp_path):

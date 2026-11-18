@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!-- F8.4 offline harness: one committed response, for the per-scope read of the parent scope, the shared
+     section, the other half of the F5.4 shadow pair.
+     Request identity: panorama.test?action=get&path=shared&type=config
+     The file name is the key-free identity hash, which is the cache entry the record reads as `cache_entry`.
+     `result` holds the container the path names. The entry name repeats the name the child response carries, so
+     the two responses are one shadow pair. A harness pin reads these bytes through the injected producer for this
+     request, so no test calls a network. A response is not a Panorama export, so this file is not corpus
+     material: the scan never runs over it and the fixture assembler never merges it. -->
+<response type="success" code="0">
+<result>
+<shared>
+  <address>
+    <entry name="Web-Server-1">
+      <ip-netmask>10.20.30.99</ip-netmask>
+    </entry>
+  </address>
+</shared>
+</result>
+</response>

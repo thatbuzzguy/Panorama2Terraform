@@ -46,10 +46,10 @@ Every file in this table is a module in `src/`, except the test harness, which i
 
 The layout is a rule, and this section is its owner document. `AGENTS.md` names the tracking markdown set,
 and the four readme indexes (`README.md`, `docs/README.md`, `examples/README.md`, `tools/README.md`) name
-every document under them, so a file outside an index is a finding. The test set is named by the root index:
-`tests/` holds no index of its own, so `README.md` names every test module and `tests/conftest.py`. The two
-`.github/` template files sit outside every index, which `backlog.md` records as its own finding, so the
-naming rule is measured on the four index scopes only. Pinned by
+every document under them. A directory that holds no index of its own is named by the root index, so a markdown
+file that no index names is a finding. The test set is named by the root index: `tests/` holds no index of its
+own, so `README.md` names every test module and `tests/conftest.py`. The two `.github/` contribution templates
+are named the same way, because `.github/` holds no index of its own. Pinned by
 `tests/test_layout.py::test_the_indexes_name_every_document_under_them`, the one pin for this rule: a pin can
 hold a name being present, and cannot hold how a document words it, so the document-review checks sit in
 `tools/check_documents.py` (`tools/README.md`), which the test set does not read.

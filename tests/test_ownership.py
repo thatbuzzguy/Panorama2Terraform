@@ -72,9 +72,9 @@ DECIDED = "Printer-Pool"  # no flag: the rule names the owner
 REVERSED = "Desk-Phone"  # the flag is on a descendant: the rule names no owner
 SERVICE = "app-https"
 
-# The two-source fixtures the F5.4 rule reads, and the offline pair the run builds from them.
-PARENT_FIXTURE = "scope_parent.xml"
-CHILD_FIXTURE = "scope_child.xml"
+# The committed responses the F5.4 rule reads (§1.1), and the offline pair the run builds from them.
+PARENT_RESPONSE = "18caa0bbc1b94e0377e658b82f67e90fe8a9a82658ee70e7646f3098ff72a074.xml"
+CHILD_RESPONSE = "4d5f78d78ee8898b238ff3b4b6b2bda6658590c49a27d7173372bfa429f4904e.xml"
 HOST = "panorama.test"
 PARENT_PATH = "shared"
 CHILD_PATH = "device-group/entry/Production-DG"
@@ -164,8 +164,9 @@ def _facts(row: dict) -> tuple:
     return tuple(row[key] for key in ownership.FACT_KEYS)
 
 
-def _bytes(fixture_name: str) -> bytes:
-    return (FIXTURES_DIR / fixture_name).read_bytes()
+def _bytes(response_name: str) -> bytes:
+    """The committed response for one request, read through the path `tests/conftest.py` builds once (§1.1)."""
+    return (RESPONSES_DIR / response_name).read_bytes()
 
 
 def _seed_cache(fetch_module, cache, paths):
@@ -173,14 +174,18 @@ def _seed_cache(fetch_module, cache, paths):
     cache.mkdir(parents=True, exist_ok=True)
     for path in paths:
         request = fetch_module.ApiRequest(host=HOST, path=path)
-        fixture = CHILD_FIXTURE if path == CHILD_PATH else PARENT_FIXTURE
-        (cache / request.cache_name()).write_bytes(_bytes(fixture))
+        response = CHILD_RESPONSE if path == CHILD_PATH else PARENT_RESPONSE
+        (cache / request.cache_name()).write_bytes(_bytes(response))
     return cache
 
 
 def _producer(fetch_module):
     """The fixture-backed producer, chosen by the request path."""
-    return lambda request, key, insecure=False: _bytes(CHILD_FIXTURE if request.path == CHILD_PATH else PARENT_FIXTURE)
+
+    def produce(request, key, insecure=False):
+        return _bytes(CHILD_RESPONSE if request.path == CHILD_PATH else PARENT_RESPONSE)
+
+    return produce
 
 
 def _parent_ledger(fetch_module, cache):

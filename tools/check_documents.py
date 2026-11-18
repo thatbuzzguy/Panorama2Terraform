@@ -35,13 +35,15 @@ SRC = ROOT / "src"
 TOOLS = ROOT / "tools"
 EXAMPLES = ROOT / "examples"
 
-# The markdown the claim check reads: the four indexes, the documents, and the tracking markdown. The two
-# `.github/` template files sit outside every index (`backlog.md`), so this script does not read them.
+# The markdown the claim check reads: the four indexes, the documents, the tracking markdown, and the two
+# `.github/` contribution templates, which the root index names because `.github/` holds no index of its own
+# (`docs/ARCHITECTURE.md` §1.1).
 MARKDOWN = (
     [ROOT / "README.md", ROOT / "AGENTS.md"]
     + sorted(DOCS.glob("*.md"))
     + sorted(EXAMPLES.glob("*.md"))
     + sorted(TOOLS.glob("*.md"))
+    + sorted((ROOT / ".github").glob("*.md"))
     + [ROOT / name for name in ("PLAN.md", "backlog.md", "to-do.md", "agent-status.md", "acceptance.md")]
 )
 

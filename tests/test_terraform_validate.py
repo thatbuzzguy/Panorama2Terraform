@@ -17,8 +17,10 @@ A validate at the codebase root reads no configuration file, so it passes withou
 is in `docs/ARCHITECTURE.md` §4.6, and the pin uses the gate's own result for the directory, so no second
 plan rule appears here.
 
-The test skips when the ``terraform`` binary is absent so the Python
-matrix jobs are unaffected; the CI ``terraform-gate`` job provides it.
+The test skips only when the ``terraform`` binary is absent, the rule `tests/conftest.py` owns, so the Python
+matrix jobs are unaffected; the CI ``terraform-gate`` job provides the binary and runs the whole set. With the
+binary present, a failed ``terraform init`` or a failed validate is a failure, so a missing provider cache cannot
+read as a pass here either.
 """
 
 import subprocess

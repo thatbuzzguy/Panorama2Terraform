@@ -48,7 +48,12 @@ from conftest import (
     written_bytes,
 )
 
-FETCH_FIXTURE = "api_response.xml"
+# The committed export response, read through the injected producer, and its corpus twin: the same entries as a
+# Panorama export, which the pins that run the tool through the file producer read (`docs/ARCHITECTURE.md` §1.1).
+EXPORT_RESPONSE = "241cbc8980537850768efb4f106eaf6665bbc113a5ecd7c9fbd42449f200d34f.xml"
+CHILD_RESPONSE = "4d5f78d78ee8898b238ff3b4b6b2bda6658590c49a27d7173372bfa429f4904e.xml"
+PARENT_RESPONSE = "18caa0bbc1b94e0377e658b82f67e90fe8a9a82658ee70e7646f3098ff72a074.xml"
+FETCH_FIXTURE = "export_config.xml"
 UNKNOWN_FIXTURE = "unknown_containers.xml"
 
 # The F5.4 pair: the child scope the run reads, and the parent scope it declares.
@@ -77,6 +82,11 @@ PATH_2_BODIES = {
 
 
 def _bytes():
+    return (RESPONSES_DIR / EXPORT_RESPONSE).read_bytes()
+
+
+def _export_bytes():
+    """The corpus file's bytes, so a pin that runs the tool through the file producer reads a Panorama export."""
     return (FIXTURES_DIR / FETCH_FIXTURE).read_bytes()
 
 
@@ -123,9 +133,9 @@ def _run_pair(converter_module, fetch_module, tmp_path, monkeypatch):
     monkeypatch.setenv(fetch_module.API_KEY_ENV, SECRET_KEY)
     cache = tmp_path / "cache"
     cache.mkdir(parents=True, exist_ok=True)
-    for path, fixture in ((CHILD_PATH, "scope_child.xml"), (PARENT_PATH, "scope_parent.xml")):
+    for path, response in ((CHILD_PATH, CHILD_RESPONSE), (PARENT_PATH, PARENT_RESPONSE)):
         request = fetch_module.ApiRequest(host=HOST, path=path)
-        (cache / request.cache_name()).write_bytes((FIXTURES_DIR / fixture).read_bytes())
+        (cache / request.cache_name()).write_bytes((RESPONSES_DIR / response).read_bytes())
     out = tmp_path / "out"
     assert (
         run_main(
@@ -457,7 +467,7 @@ def test_the_reference_is_data_not_a_printed_line(converter_module, fetch_module
     mirror = tmp_path / "mirror"
     mirror.mkdir()
     named = mirror / request.cache_name()
-    named.write_bytes(_bytes())
+    named.write_bytes(_export_bytes())
     file_out = tmp_path / "file_run"
     proc = run_script("panorama_to_terraform.py", str(named), "--output-dir", str(file_out))
     assert proc.returncode == 0, proc.stdout + proc.stderr

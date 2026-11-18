@@ -25,7 +25,7 @@ import io
 import xml.etree.ElementTree as ET
 
 import xml_input
-from conftest import FIXTURES_DIR, RESPONSES_DIR, TOOLS_DIR
+from conftest import FIXTURES_DIR, RESPONSES_DIR, TOOLS_DIR, corpus_fixtures
 
 TOOL_PATH = TOOLS_DIR / "build_kitchen_sink.py"
 _spec = importlib.util.spec_from_file_location("build_kitchen_sink", TOOL_PATH)
@@ -99,15 +99,25 @@ def test_the_read_rule_answers_for_a_fixture_the_tool_has_never_seen(tmp_path):
 
 def test_the_read_set_is_the_set_the_corpus_pins_read_less_the_record():
     """The corpus pins read the fixtures that are not hostile, so the tool reads the same set, less its own
-    record. Measured 2026-11-05 on the committed corpus: 68 accepted, 67 read, 3 skipped."""
-    accepted = [path.name for path in sorted(FIXTURES_DIR.glob("*.xml")) if tool.refusal_reason(path) is None]
-    skipped = [path.name for path in sorted(FIXTURES_DIR.glob("*.xml")) if tool.refusal_reason(path) is not None]
-    read = [name for name in accepted if name != tool.RECORD]
+    record. The pin compares the tool's decision with the rule's decision for every file in the corpus, in both
+    directions, so a file the two answer differently on is a finding. Measured 2026-11-18: 66 accepted, 65 read,
+    3 skipped.
 
-    assert len(accepted) == 68, accepted
-    assert len(skipped) == 3, skipped
-    assert len(read) == 67, read
-    assert tool.RECORD in accepted, "the record is not hostile, so the rule keeps it out for another reason"
+    Restated 2026-11-18 as the derivation, because the pin held the set as three numbers, which a file that leaves
+    the corpus can move without any rule being wrong. `tests/conftest.py::corpus_fixtures` is the rule's answer, so
+    the pin reads the rule and not a name list.
+    """
+    globbed = sorted(FIXTURES_DIR.glob("*.xml"))
+    corpus = sorted(path.name for path in globbed)
+    tool_accepted = sorted(path.name for path in globbed if tool.refusal_reason(path) is None)
+    tool_skipped = sorted(path.name for path in globbed if tool.refusal_reason(path) is not None)
+    rule_accepted = corpus_fixtures()
+
+    assert tool_accepted == rule_accepted, (tool_accepted, rule_accepted)
+    assert tool_skipped == sorted(set(corpus) - set(rule_accepted)), (tool_skipped, corpus)
+    read = [name for name in tool_accepted if name != tool.RECORD]
+    assert read == sorted(set(rule_accepted) - {tool.RECORD}), read
+    assert tool.RECORD in rule_accepted, "the record is not hostile, so the rule keeps it out for another reason"
 
 
 def test_the_assembler_reads_the_corpus_and_not_the_response_set():
@@ -123,7 +133,7 @@ def test_the_assembler_reads_the_corpus_and_not_the_response_set():
         if tool.refusal_reason(path) is None and path.name != tool.RECORD
     ]
     responses = sorted(path.name for path in RESPONSES_DIR.glob("*.xml"))
-    assert len(read) == 67, read  # the set the pin above states, unchanged by this piece
+    assert read == sorted(set(corpus_fixtures()) - {tool.RECORD}), read
     assert not (set(responses) & set(read)), "a committed response is not in the set the tool reads"
     assert all(tool.refusal_reason(RESPONSES_DIR / name) is None for name in responses), (
         "the response files are not hostile, so the pin reads the path and not the rule"
@@ -162,14 +172,18 @@ def test_the_tool_writes_no_file_so_the_record_stays_the_record():
 def test_the_tool_is_not_a_pin_on_the_record():
     """The record is curated by hand, so the tool's output for the committed set is not the record. The two
     facts that keep it so are pinned as data: the record holds comments, which the tool's read rule drops, and
-    entry names no committed fixture carries."""
+    entry names no committed fixture carries. Measured 2026-11-18: 17 comment blocks in the record, and 13 names
+    the record carries that no accepted fixture carries.
+
+    Restated 2026-11-18 as the properties, because the pin held each fact as a count of its own table."""
     root, _skipped = tool.assemble(FIXTURES_DIR)
     output = tool.render(root)
     record = (FIXTURES_DIR / tool.RECORD).read_text(encoding="utf-8")
     assert output != record, "the tool is a generator, so its output is not the record"
 
-    assert record.count("<!--") == 17, "ET.parse builds no comment node, so no merge can answer a comment"
-    assert "<!--" not in output
+    assert "<!--" in record and "<!--" not in output, (
+        "ET.parse builds no comment node, so no merge can answer a comment"
+    )
 
     names = {entry.get("name") for entry in ET.fromstring(record).iter("entry")}
     carried = set()
@@ -177,7 +191,7 @@ def test_the_tool_is_not_a_pin_on_the_record():
         if path.name == tool.RECORD or tool.refusal_reason(path) is not None:
             continue
         carried |= {entry.get("name") for entry in ET.parse(path).getroot().iter("entry")}
-    assert len(names - carried) == 13, sorted(names - carried)
+    assert names - carried, sorted(names - carried)
 
 
 # --- 3. The merge rule ---------------------------------------------------------

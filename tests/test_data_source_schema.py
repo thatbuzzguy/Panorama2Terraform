@@ -9,9 +9,9 @@ The table is the complete declared shape, not the generator subset `LOCATION_SCH
 is, because `terraform validate` accepts an unknown `location` sub-block and drops it
 silently, so the gate rule is the offline check.
 
-The fixture skips when the terraform binary or the provider cache is absent. That is
-the decision this feature recorded: no committed schema snapshot, because a snapshot
-would be a second copy of the same fact and could drift from the pinned provider
+The fixture skips only when the terraform binary is absent, the rule `tests/conftest.py` owns; with the binary
+present, a failed `terraform init` is a failure. That is the decision this feature recorded: no committed schema
+snapshot, because a snapshot would be a second copy of the same fact and could drift from the pinned provider
 version.
 
 Pins:

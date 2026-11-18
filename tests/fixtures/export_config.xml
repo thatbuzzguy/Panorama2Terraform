@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!-- Corpus material: the Panorama export form of the committed whole-config export response, read through the
+     file producer. Its root is the config element, because a Panorama export carries no response wrapper. The
+     response for the same request is
+     `tests/responses/241cbc8980537850768efb4f106eaf6665bbc113a5ecd7c9fbd42449f200d34f.xml`, and the two files hold
+     the same config content, so the pins that compare the two producers read one content. -->
+<config version="11.1.2">
+  <device-group>
+    <entry name="Office-FW">
+      <devices><entry name="fw-1.example.com" /></devices>
+    </entry>
+  </device-group>
+  <shared>
+    <address>
+      <entry name="web-server">
+        <ip-netmask>10.0.0.7</ip-netmask>
+      </entry>
+    </address>
+  </shared>
+</config>

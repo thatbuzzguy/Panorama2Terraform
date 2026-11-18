@@ -12,8 +12,8 @@ produces against the panos provider v2:
   intentionally does not emit (the body is not parsed, F2.9). A
   not-emitted row must correspond to a type that really exists, so the
   report entry can name the real resource.
-- FLAG_ROWS: the coverage matrix rows that name `disable_override` (F4.4),
-  held against the live provider schema in both directions.
+- the `disable_override` rows, read as the derivation from the `COVERAGE_MATRIX` rows that name the property
+  (F4.4) and held against the live provider schema in both directions.
 """
 
 import pytest
@@ -61,20 +61,11 @@ def test_not_emitted_is_genuinely_present(rtype, provider_schema):
     )
 
 
-# F4.4: the matrix rows that name `disable_override`, and the provider fact behind them. Measured
-# 2026-11-04 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14`, terraform v1.16.2):
-# 128 resources, 25 of them declare the flag, and the nine below are the emitted ones among them.
-FLAG_ROWS = {
-    "panos_address",
-    "panos_address_group",
-    "panos_administrative_tag",
-    "panos_application_group",
-    "panos_custom_url_category",
-    "panos_external_dynamic_list",
-    "panos_security_profile_group",
-    "panos_service",
-    "panos_service_group",
-}
+# F4.4: the matrix rows that name `disable_override`, read as the derivation from the table's own rows. Measured
+# 2026-11-04 against the pinned provider (`PaloAltoNetworks/panos ~> 2.0.14`, terraform v1.16.2): 128 resources,
+# 25 of them declare the flag, and 9 of those are emitted — `panos_address`, `panos_address_group`,
+# `panos_administrative_tag`, `panos_application_group`, `panos_custom_url_category`,
+# `panos_external_dynamic_list`, `panos_security_profile_group`, `panos_service`, `panos_service_group`.
 
 
 def test_the_flag_rows_are_the_types_the_provider_declares_it_for(provider_schema):
@@ -84,6 +75,10 @@ def test_the_flag_rows_are_the_types_the_provider_declares_it_for(provider_schem
     emitted type the provider declares the flag for is not a row that omits it. A row that does not name
     the property states `unknown` in `OWNERSHIP.json` (`src/ownership.py` rule 5), so `panos_ike_gateway`
     stays `unknown`: it is an emitted type, and the provider does not declare the flag for it.
+
+    Restated 2026-11-18 as the derivation, because the pin held the nine rows as its own name list, so a wrong
+    table entry could agree with the list and still be wrong. The pin now reads the answer from the matrix's rows
+    and compares it with the pinned provider schema, so a wrong entry is a finding.
     """
     named = {row["resource"] for row in COVERAGE_MATRIX if "disable_override" in row["properties"]}
     declared = {
@@ -92,6 +87,5 @@ def test_the_flag_rows_are_the_types_the_provider_declares_it_for(provider_schem
         if "disable_override" in (schema.get("block") or {}).get("attributes", {})
     }
     provider_types = {rtype for rtype in EMITTED_TYPES if rtype in declared}
-    assert named == FLAG_ROWS, sorted(named)
     assert named == provider_types, (sorted(named), sorted(provider_types))
     assert "panos_ike_gateway" in EMITTED_TYPES and "panos_ike_gateway" not in declared

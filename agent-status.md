@@ -11,8 +11,8 @@ and the pins are in `tests/test_api_requests.py`, `tests/test_api_path.py`, `tes
 F8.10 is the agreement pin: for content that holds none of the five facts `docs/API_CONVERSION_PATH.md` §4 names,
 path 2 writes the same `.tf` bytes as path 1, and the two reports agree on every field except `line` and `source`.
 The pin is `tests/test_api_path.py::test_content_with_no_live_only_fact_writes_the_same_tf_bytes_as_path_1`. The
-content lives in the test file (`AGREEMENT` and `AGREEMENT_EXPORT`), so the committed response set stays at 3
-files, and no test reads a network or a committed response. Measured: 10 `.tf` files byte-for-byte the same,
+content lives in the test file (`AGREEMENT` and `AGREEMENT_EXPORT`), so this pin reads no committed response, and
+no test calls a network. Measured: 10 `.tf` files byte-for-byte the same,
 4 resources, 4 report rows each read through the ledgers, the two source sets disjoint, and the gate reports no
 finding for either run, with `request_set` NOT RUN for path 1 and PASS for path 2. The content states no
 membership list, because a membership list makes the entry its own scope, so the same entry is read twice.
@@ -30,15 +30,30 @@ gate reports nothing for either run. The rule is in `docs/API_CONVERSION_PATH.md
 `test_an_entry_two_responses_hold_gives_one_block_per_response`, and
 `test_the_double_read_agrees_with_the_gate`.
 
+Piece 10 (2026-11-18) closed the six findings the 2026-11-11 audit recorded. The response-set rule reads a content
+property of each file: a file in `tests/responses/` has a `response` root, and a file in `tests/fixtures/` is a
+Panorama export, so its root is not. `tests/fixtures/api_response.xml` is now `tests/fixtures/export_config.xml`,
+the same entries in the export form, and the committed export response holds the same config content. The pair that
+was in the corpus sits in the response set under the identity of the request the pins name for it, so the set reads
+5 files and `tests/test_api_requests.py`'s `HARNESS` names their requests. The `terraform-gate` CI job runs the
+whole test set with the terraform binary present, so the pins that read the provider schema run in CI.
+`tests/conftest.py::provider_schemas` skips only for a missing terraform binary and asserts when `terraform init`
+returns non-zero. The five pin groups that restated an owner table as a measured count read as derivations from the
+table's rows, with the measured number kept in the docstring as a dated measurement. The index rule gained the case
+that a directory with no index of its own is named by the root index, so the two `.github/` contribution templates
+stay and `README.md` names them. The criteria and the measurement are in `acceptance.md`.
+
 The licensing rule is in `docs/LICENSING.md`, the owner document: the fork source, the two holders, the split
 measured through `git blame`, and the scope of each grant. `LICENSE-COMMERCIAL` is the upstream author's grant, so
 it covers the upstream parts only, and this project grants no commercial terms for its own contributions. The word
 "non-commercial" is not used as a license name, because AGPL v3 permits commercial use and §10 does not allow an
 extra non-commercial condition on a derivative work, so the choice reads as "AGPL v3 only".
 
-Test count: `python3 -m pytest` reads 1,688 pins in 52 test modules, with no skips. `ruff check .` is clean and
+Test count: `python3 -m pytest` reads 1,686 pins in 52 test modules, with no skips. `ruff check .` is clean and
 `ruff format --check .` is clean on the 100 Python files. `tests/test_api_path.py` reads 33 pins (30 before
-Piece 8). `pyproject.toml` sets `addopts = "-q"`, so a second `-q`
+Piece 8). `tests/test_sanity_gate.py` reads 99 pins, 2 fewer than before Piece 10, because its corpus pin is
+parametrized through `tests/conftest.py::corpus_fixtures` and the two response-rooted files left the corpus.
+`pyproject.toml` sets `addopts = "-q"`, so a second `-q`
 suppresses the summary line; the count is read from the per-module collection counts.
 
 Full-suite time, measured 2026-11-13: 325.4 s, 364.6 s and 364.9 s on three runs of the same set (5 min 25 s to
@@ -47,7 +62,8 @@ held 663 pins took 35 s, so the growth is the corpus pins and the pins that run 
 `tests/test_terraform_validate.py` at 121.4 s, then `tests/test_sanity_gate.py` at 49.9 s (34.0 s of it in the
 three pins that run the gate with the terraform binary), then the corpus pins at 79.8 s. The Piece 7 runs, measured
 2026-11-16, took 4 min 24 s and 6 min 25 s for the same set. The Piece 8 run, measured 2026-11-18, passed 1,688
-pins in 305.56 s.
+pins in 305.56 s. The Piece 10 run, measured 2026-11-18, passed 1,686 pins in 313.68 s, with `ruff check .` at
+0.015 s, `ruff format --check .` at 0.011 s, and `python3 tools/check_documents.py` at 11.09 s.
 
 Gate size, decided 2026-11-13: no smaller default gate is adopted. The measured subset that drops the pins that
 call `terraform` runs in 203.0 s (44% of the full run), and the subset that drops the corpus pins runs in about
@@ -84,9 +100,8 @@ the workflow file.
 
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
 facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a
-stack, the EDL `certificate_profile` field, the profile-name report column, and the two `.github/`
-template files outside the document indexes. The next actionable slice outside Epic 8 is `tflint` integration
-(`backlog.md`, Nice-to-Haves).
+stack, the EDL `certificate_profile` field, and the profile-name report column. The next actionable slice
+outside Epic 8 is `tflint` integration (`backlog.md`, Nice-to-Haves).
 
 Piece 3 (pins that measure nothing) is complete. The five findings the 2026-11-11 audit recorded in
 `backlog.md` are fixed, each by making the pin read the material its own rule names, and no pin failed when it
@@ -174,8 +189,8 @@ modules in 355.14 s, against 1,673 pins in 50 modules in 258.2 s before the piec
 Piece 7 (the indexes and the documents agree with measurement) is complete, committed 2026-11-16. The findings the
 2026-11-11 audit recorded for the indexes, the documents, and the pins that read documents are closed. What landed:
 the `docs/ARCHITECTURE.md` §1 module table names all 22 `src/` modules, with `commit_actions.py` as a row; the test
-set is named by the root index, which names every test module, `tests/conftest.py` and the three files in
-`tests/responses/`, so `tests/` keeps no index of its own; four document claims took the real pin names; the counts
+set is named by the root index, which names every test module, `tests/conftest.py` and the files the response set
+holds, so `tests/` keeps no index of its own; four document claims took the real pin names; the counts
 the documents state are measured at commit `ac7609e` or stated as derived from the table, and `README.md` states no
 counts and links to the owner documents; the index rule has one pin,
 `tests/test_layout.py::test_the_indexes_name_every_document_under_them`, and the wording checks moved to

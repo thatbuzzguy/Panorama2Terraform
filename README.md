@@ -448,8 +448,10 @@ gate is described in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6.
   matrix row tests, the container-table parity tests, the entry-mark tests,
   and the no-dead-variable checks. XML fixtures drive the converter; schema
   conformance runs `terraform providers schema -json` against the pinned
-  version (skipped when the `terraform` binary or registry access is
-  unavailable).
+  version. The rule `tests/conftest.py` owns is that these pins skip only when the `terraform` binary is absent;
+  once the binary is present, a failed `terraform init` is a failure, so a missing provider cache or an
+  unreachable registry cannot read as a pass. `.github/workflows/python-tests.yml` is the CI owner: the job that
+  has the terraform binary runs the whole suite, so the pins that read the schema run there.
 - `tests/test_layout.py` - the index rule, pinned in one place: each index names every document under it,
   the root index names the test set and the response set, and the §1 module table names every `src/` module.
   It reads names, not document wording, so a correct rewording cannot fail it. The document-wording checks
@@ -765,15 +767,21 @@ Run counts are not stated here. They change with every feature and are
 recorded in the git history and in `agent-status.md`.
 
 `tests/` is flat: the test files sit beside the three sets `fixtures/`, `golden/`, and `responses/`, and
-`tests/conftest.py` is the one shared helper file and the one place the path to each set is built. A committed
-API response is not a Panorama export, so it lives in `tests/responses/` and is not corpus material: the scan
-and the fixture assembler read the corpus only. The three files the response set holds, each named by the
-key-free request identity that produced it, are
+`tests/conftest.py` is the one shared helper file and the one place the path to each set is built. The rule is a
+content property of each file: a file in `tests/responses/` is a response, so its root element is `response`, and
+a file in `tests/fixtures/` is a Panorama export, so its root element is not. A response is read through the
+injected producer for the request that produced it, so it is not corpus material: the scan and the fixture
+assembler read the corpus only. The five files the response set holds, each named by the key-free request
+identity that produced it, are
 `tests/responses/241cbc8980537850768efb4f106eaf6665bbc113a5ecd7c9fbd42449f200d34f.xml`
 (the whole-config export), `tests/responses/181d42732d20ea918cb4ea333000da9280a02de1e818ee6d26300cf4b98d759c.xml`
-(the per-scope read), and
+(the per-scope read),
 `tests/responses/38ee51b9258c5975d45325e2e56479901f2ac1d303012a16c442d62a61f0df53.xml`
-(the device fact). `pyproject.toml` `testpaths = ["tests"]` keeps discovery at the root, and
+(the device fact),
+`tests/responses/4d5f78d78ee8898b238ff3b4b6b2bda6658590c49a27d7173372bfa429f4904e.xml`
+(the F5.4 child scope), and
+`tests/responses/18caa0bbc1b94e0377e658b82f67e90fe8a9a82658ee70e7646f3098ff72a074.xml`
+(the F5.4 parent scope). `pyproject.toml` `testpaths = ["tests"]` keeps discovery at the root, and
 `pythonpath = ["src"]` is the only place a test path is stated, so a test imports a tool module by name.
 The rule is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1.1.
 
@@ -809,7 +817,8 @@ The developer scripts are in [`tools/`](tools/), and its index is
 
 ## Repository layout
 
-The layout rule is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1.1, which is the owner document. The
+The layout rule is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1.1, which is the owner document: each index
+names every markdown document under it, and a directory with no index of its own is named by the root index. The
 root holds `AGENTS.md`, the readme indexes (this file, [`docs/README.md`](docs/README.md),
 [`examples/README.md`](examples/README.md), and [`tools/README.md`](tools/README.md)), the
 tracking markdown ([`PLAN.md`](PLAN.md), [`backlog.md`](backlog.md), [`to-do.md`](to-do.md),
@@ -818,9 +827,11 @@ tracking markdown ([`PLAN.md`](PLAN.md), [`backlog.md`](backlog.md), [`to-do.md`
 ([`pyproject.toml`](pyproject.toml), which states the layout rules, and
 [`requirements.txt`](requirements.txt), the pinned development tools). `docs/` holds every other
 document, `tests/` holds every test, `src/` holds the tool's modules, `tools/` holds the developer scripts,
-and `examples/` holds the sample input and the two example text files. The canonical sample output is the
-golden set `tests/golden/`, so `terraform_output/` is only the default value of `--output-dir` and holds no
-committed sample.
+and `examples/` holds the sample input and the two example text files. `.github/` holds the two contribution
+templates, [`ISSUE_TEMPLATE.md`](.github/ISSUE_TEMPLATE.md) and
+[`PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md), which this index names because `.github/` holds
+no index of its own. The canonical sample output is the golden set `tests/golden/`, so `terraform_output/` is only
+the default value of `--output-dir` and holds no committed sample.
 
 ## License
 

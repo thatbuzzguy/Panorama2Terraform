@@ -35,7 +35,7 @@ import container_coverage
 import panorama_to_terraform
 import provenance
 import source_fetch
-from conftest import FIXTURES_DIR, RESPONSES_DIR, SRC_DIR, TESTS_DIR
+from conftest import FIXTURES_DIR, RESPONSES_DIR, SRC_DIR, TESTS_DIR, corpus_fixtures
 
 HOST = "panorama.test"
 
@@ -609,6 +609,8 @@ def test_the_join_states_no_second_shape_rule_or_wrapper_rule():
 # produced it, which is the cache entry the record reads as `cache_entry`, and each file states the same
 # identity in its prolog comment. The identity is the words the request's shape states plus the part the
 # request declares, so the three requests below find three different entries.
+# The requests the pins read, each naming the committed file it reads: one per accepted shape the table
+# states, plus the two per-scope requests the F5.4 pair answers.
 HARNESS = (
     ("whole-config export", source_fetch.ApiRequest(host=HOST), "panorama.test?category=configuration&type=export"),
     (
@@ -620,6 +622,16 @@ HARNESS = (
         "device fact",
         source_fetch.ApiRequest(host=HOST, command="show system info"),
         "panorama.test?cmd=show system info&type=op",
+    ),
+    (
+        "per-scope read, the F5.4 child",
+        source_fetch.ApiRequest(host=HOST, path="device-group/entry/Production-DG"),
+        "panorama.test?action=get&path=device-group/entry/Production-DG&type=config",
+    ),
+    (
+        "per-scope read, the F5.4 parent",
+        source_fetch.ApiRequest(host=HOST, path="shared"),
+        "panorama.test?action=get&path=shared&type=config",
     ),
 )
 
@@ -636,21 +648,25 @@ def _read_committed(request, cache_dir):
 
 
 def test_one_committed_response_per_request_shape_names_the_request_identity_that_produced_it():
-    """AC-2.1 to AC-2.3: the response set holds one file per accepted shape, and each file is named by the
-    identity that produced it, in the shape the record reads as `cache_entry`. The identity is key-free, so no
-    file name can carry a credential.
+    """AC-2.1 to AC-2.3: the response set is the files the pins read for the requests the pins name, and each
+    file is named by the identity that produced it, in the shape the record reads as `cache_entry`. The identity is
+    key-free, so no file name can carry a credential. Measured 2026-11-18: five files, one per request the pins
+    name, and the three accepted shapes are each represented.
 
     The shape set is read through `source_fetch.SHAPE_PARAMS`, the table that states it, so no pin here measures
-    this file's own harness list: the harness holds one entry per accepted shape the table states, and the params
-    the table states for a shape are inside the identity that names that shape's committed response.
+    this file's own harness list: every accepted shape the table states is represented, and the params the table
+    states for a shape are inside the identity that names that shape's committed response. The pin changed what it
+    asserted on 2026-11-18: it held one file per shape, which cannot hold once the pins read two more requests, so
+    the property is now read in both directions, and the strength is the same.
     """
-    assert len(HARNESS) == len(source_fetch.SHAPE_PARAMS), "one entry per accepted shape the table states"
-    files = sorted(p.name for p in RESPONSES_DIR.glob("*.xml"))
+    files = sorted(path.name for path in RESPONSES_DIR.glob("*.xml"))
     assert files == sorted(request.cache_name() for _label, request, _identity in HARNESS), files
+    assert len(files) == len(HARNESS), "one file per request the pins read"
 
-    # The shape comes from what each request declares, so a file is read by the request whose shape named it.
-    shapes = sorted(request.request_shape() for _label, request, _identity in HARNESS)
-    assert shapes == sorted(source_fetch.SHAPE_PARAMS), shapes
+    # The shape comes from what each request declares, so a file is read by the request whose shape named it, and
+    # every accepted shape the table states is represented by a file the pins read.
+    shapes = {request.request_shape() for _label, request, _identity in HARNESS}
+    assert shapes == set(source_fetch.SHAPE_PARAMS), (sorted(shapes), sorted(source_fetch.SHAPE_PARAMS))
 
     for label, request, identity in HARNESS:
         shape = request.request_shape()
@@ -716,27 +732,33 @@ def test_a_committed_response_reads_through_the_injected_producer_and_the_record
 
 
 def test_the_committed_responses_are_not_corpus_material():
-    """AC-1.1 to AC-1.3 (`docs/ARCHITECTURE.md` §1.1): a response is not a Panorama export, so the response
-    set sits beside the corpus. The scan runs over the corpus, and the fixture assembler reads the corpus, so a
-    committed response changes neither the printed fixture set nor the merge set."""
+    """AC-1.1 to AC-1.3 (`docs/ARCHITECTURE.md` §1.1): the rule is a content property of each file, so the pin
+    reads the root element of every file in both sets. A file in the response set is a response, so its root is
+    `response` and it is read through the injected producer for the request that produced it; a file in the corpus
+    is a Panorama export, so its root is not `response`, and the scan and the fixture assembler read the corpus. A
+    response that lives inside the corpus is a finding, which is what the audit recorded on 2026-11-11 and what the
+    three files that had one moved out of on 2026-11-18. Measured 2026-11-18: 5 response files, 66 accepted corpus
+    files, 3 refused.
+
+    The pin changed what it asserted on 2026-11-18: it compared the two name sets, so a response could sit inside
+    the corpus and still pass. Reading the root element reads the rule itself, so the three files could not pass by
+    name alone.
+    """
     assert RESPONSES_DIR == TESTS_DIR / "responses", "the path is built once, in `tests/conftest.py`"
     assert RESPONSES_DIR != FIXTURES_DIR, "the response set is a set, not part of the corpus"
 
-    harness = sorted(p.name for p in RESPONSES_DIR.glob("*.xml"))
-    corpus = sorted(p.name for p in FIXTURES_DIR.glob("*.xml"))
-    assert len(harness) == len(source_fetch.SHAPE_PARAMS), (
-        harness,
-        "one committed response per accepted shape the table states",
-    )
-    assert not (set(harness) & set(corpus)), "no response file is in the set the scan runs over"
-    assert all(p.is_file() for p in FIXTURES_DIR.iterdir()), (
+    for path in sorted(RESPONSES_DIR.glob("*.xml")):
+        root = source_fetch.parse_bytes(path.read_bytes(), source_fetch.SourceOrigin.for_path(path)).root
+        assert root.tag == "response", (path.name, "the response set holds responses")
+
+    for name in corpus_fixtures():
+        path = FIXTURES_DIR / name
+        root = source_fetch.parse_bytes(path.read_bytes(), source_fetch.SourceOrigin.for_path(path)).root
+        assert root.tag != "response", (name, "the corpus holds Panorama exports")
+
+    assert all(path.is_file() for path in FIXTURES_DIR.iterdir()), (
         "the corpus is one flat directory, so a response cannot enter the set the pins state"
     )
-
-    # The committed response fixtures the corpus pins already read stay in the corpus, so the pins that state
-    # the printed fixture set read the same set as before this piece.
-    for name in ("api_response.xml", "scope_child.xml", "scope_parent.xml"):
-        assert name in corpus, (name, "the corpus pins read it, so it is not moved")
 
 
 def test_the_join_reads_the_committed_per_scope_response_through_the_injected_producer(tmp_path):

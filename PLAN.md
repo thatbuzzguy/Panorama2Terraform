@@ -30,8 +30,9 @@ prints the levels the shape table states (`docs/ARCHITECTURE.md` §4.9). And a v
 prints the variable reference, never the value. Both rules are in `backlog.md`.
 
 The repository layout is a rule with one owner document, `docs/ARCHITECTURE.md` §1.1: `src/` is one flat
-namespace, `tests/` is flat with `tests/conftest.py` as the one shared helper file, and each index names every
-file under it. `AGENTS.md` names the tracking markdown set.
+namespace, `tests/` is flat with `tests/conftest.py` as the one shared helper file, each index names every file
+under it, and a directory with no index of its own is named by the root index. `AGENTS.md` names the tracking
+markdown set.
 
 Epic 7 (routing output through the protocol object) is closed. `resource_mapping.PROTOCOL_SHAPE` states the
 levels the tool prints, `FILTER_SHAPE` states the six filter containers outside it, the routing methods read them

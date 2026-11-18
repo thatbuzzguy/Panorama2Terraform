@@ -4,7 +4,9 @@
      The file name is the key-free identity hash, which is the cache entry the record reads as `cache_entry`.
      A harness pin reads these bytes through the injected producer, so no test calls a network, and the record
      names the same bytes. A response is not a Panorama export, so this file is not corpus material: the scan
-     never runs over it and the fixture assembler never merges it. -->
+     never runs over it and the fixture assembler never merges it. Its corpus twin
+     `tests/fixtures/export_config.xml` holds the same entries as a Panorama export, so the pins that compare the
+     two producers read one content. -->
 <response type="success" code="0">
 <result>
 <config version="11.1.2">

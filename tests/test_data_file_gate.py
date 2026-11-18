@@ -128,9 +128,13 @@ def _for_file(findings: list, name: str) -> list:
 # --- 1. The file set -----------------------------------------------------------
 
 
-def test_the_gate_reads_the_tf_files_and_the_four_data_files(tmp_path):
-    """The block rules read the `.tf` files; the data rule reads the four data files, each through the
-    module that owns its row shape, so no second shape rule appears.
+def test_the_gate_reads_the_tf_files_and_the_data_files_the_table_names(tmp_path):
+    """The block rules read the `.tf` files; the data rule reads the data files the table names, each through
+    the module that owns its row shape, so no second shape rule appears.
+
+    Both counts are read as the derivation: the `.tf` count is the set the reader read, and the data count is the
+    rows `sanity_checks.DATA_FILES` names that the run wrote. Measured 2026-11-18: the table names 4 rows, and the
+    sample run writes 2 of them (the manifest and the ownership record), so the count is 2.
     """
     assert dict(sanity_checks.DATA_FILES) == {
         unit_manifest.MANIFEST_FILE: unit_manifest,
@@ -143,28 +147,39 @@ def test_the_gate_reads_the_tf_files_and_the_four_data_files(tmp_path):
     assert tf_files and all(name.endswith(".tf") for name in tf_files), "the block reader is .tf-only"
     report = sanity_checks.run_checks(tmp_path)
     assert report.file_count == len(tf_files)
-    assert report.data_file_count == 2, "the sample run writes the manifest and the ownership record"
+    written = [name for name, _shape in sanity_checks.DATA_FILES if (tmp_path / name).is_file()]
+    assert report.data_file_count == len(written), (report.data_file_count, sorted(written))
     assert not report.failed, report.render()
 
 
 def test_the_report_names_both_file_sets(tmp_path):
     """The report line and the console summary name the two sets, so a reader can tell which files the
     gate read.
+
+    Both counts are read as the derivation: the `.tf` count is the set the reader read below the root, and the
+    data count is the rows `sanity_checks.DATA_FILES` names that the run wrote. Measured 2026-11-18: the sample
+    run — two units, so two sets — reads 14 `.tf` files and 2 data files, the manifest and the ownership record;
+    the kitchen-sink run writes all four rows, so it reads 4. The resource count is 20 for the sample run.
     """
     assert _run(SAMPLE_CONFIG, tmp_path).returncode == 0
     report = sanity_checks.run_checks(tmp_path)
-    # F6.10.3 (§14): the count names the unit set the reader read below the root, so the sample run — two
-    # units, so two sets — measures 14 .tf files.
     files = sanity_checks.read_tf_files(tmp_path)
+    written = [name for name, _shape in sanity_checks.DATA_FILES if (tmp_path / name).is_file()]
     assert report.file_count == len(files), "the count names the unit set"
-    assert "Files checked: 14 .tf files, 2 data files." in report.render(), report.render()
-    assert "Sanity gate: PASS (0 FAIL, 0 WARN) - 14 .tf files, 2 data files, 20 resources" in report.console_summary()
+    assert report.data_file_count == len(written), (report.data_file_count, sorted(written))
+    assert f"Files checked: {len(files)} .tf files, {len(written)} data files." in report.render(), report.render()
+    assert (
+        f"Sanity gate: PASS (0 FAIL, 0 WARN) - {len(files)} .tf files, {len(written)} data files, 20 resources"
+    ) in report.console_summary(), report.console_summary()
     assert all(Path(name).parent.name for name in files), "the reader read the unit directories"
+
     # The printed form is not one of the four, so the count names only the records.
     kitchen = tmp_path / "kitchen"
     assert _run(FIXTURES_DIR / KITCHEN, kitchen).returncode == 0
-    assert sanity_checks.run_checks(kitchen).data_file_count == 4
-    assert sanity_checks.count_data_files(kitchen) == 4
+    kitchen_rows = [name for name, _shape in sanity_checks.DATA_FILES if (kitchen / name).is_file()]
+    assert len(kitchen_rows) == len(sanity_checks.DATA_FILES), sorted(kitchen_rows)
+    assert sanity_checks.run_checks(kitchen).data_file_count == len(kitchen_rows)
+    assert sanity_checks.count_data_files(kitchen) == len(kitchen_rows)
 
 
 def test_check_order_puts_the_data_rule_after_the_block_rules(tmp_path):
@@ -508,7 +523,11 @@ def test_the_rule_is_the_same_between_two_runs(tmp_path):
         if left.is_file():
             assert left.read_bytes() == right.read_bytes(), name
     assert sanity_checks.check_data_files(first) == sanity_checks.check_data_files(second)
-    assert sanity_checks.count_data_files(first) == sanity_checks.count_data_files(second) == 4
+    # The count is read as the derivation from the table's rows present in the output, so a run that wrote a
+    # different set answers differently. Measured 2026-11-18 on the kitchen-sink run: all 4 rows are written.
+    written = [name for name, _shape in sanity_checks.DATA_FILES if (first / name).is_file()]
+    assert sanity_checks.count_data_files(first) == len(written), (written,)
+    assert sanity_checks.count_data_files(second) == len(written), (written,)
 
 
 def test_a_data_file_finding_exits_non_zero(tmp_path):

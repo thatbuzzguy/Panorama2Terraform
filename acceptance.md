@@ -1,13 +1,13 @@
-# Acceptance — the membership entry read (Piece 8)
+# Acceptance — the open 2026-11-11 audit findings (Piece 10)
 
-Criteria set 2026-11-18 for the finding `backlog.md` recorded from the F8.10 measurement. The finding is the
-case `docs/API_CONVERSION_PATH.md` §2.4 and §6 do not cover: an entry a membership list names is also the entry
-the run read as its own scope, so the run reads it twice.
+Criteria set 2026-11-18 for the six findings `backlog.md` recorded from the audit measured 2026-11-11. One
+section per finding, each with the decision and the pin or measurement that holds it. The six are worked one at
+a time, and each is measured before the next is started.
 
-Owners: `docs/API_CONVERSION_PATH.md` §2.4 and §6 for the rule; `src/api_requests.py` for the join's answer for
-the entry the run read; `src/panorama_to_terraform.py` for the parse method that reads it;
-`tests/test_api_path.py` for the pins. `sanity_checks.check_round_trip` is read through its owner, so this piece
-states no round-trip rule of its own.
+Owners: `docs/ARCHITECTURE.md` §1.1 for the layout rule and the response set; `tests/test_api_requests.py` for
+the response-set pins; `.github/workflows/python-tests.yml` for the CI gate; `tests/conftest.py` for the skip
+rule; the test modules named in item 5 for the pins that restate a table as a measured count; `docs/ARCHITECTURE.md`
+§1.1 and `tests/test_layout.py` for the index rule.
 
 Rules this piece works under, from `agent-status.md` §Rules to keep when writing documents:
 
@@ -15,94 +15,183 @@ Rules this piece works under, from `agent-status.md` §Rules to keep when writin
 - No test counts in a document. A document names the test that pins a rule.
 - A pin measures content or a name, never the wording of a document.
 - A historical record is not kept in the markdown; the git history is the record.
+- No pin is weakened. When a pin changes what it asserts, the reason is recorded here.
 
-## The decision
+## Item 1 — the committed response inside the corpus
 
-**1. The double read stands, and both answers stand.** The run order reads the membership response and then the
-entries the index names, so an entry a membership list names is read twice: once inside the membership response,
-once as the response its own request made. Path 2 states no rule that one of the two answers is the answer for
-the entry, so the run keeps both.
+**Decision.** `tests/fixtures/` is the corpus: the files the pins read through the file producer. `tests/responses/`
+is the response set: the bytes the pins read through the injected producer for the request that produced them.
+`tests/fixtures/api_response.xml` has a `response` root, so it is a response, not a Panorama export, and it is not
+corpus material. Its key-free identity for host `panorama.test` is
+`panorama.test?category=configuration&type=export` =
+`241cbc8980537850768efb4f106eaf6665bbc113a5ecd7c9fbd42449f200d34f.xml`, which the committed whole-config export
+response already holds, and the response set holds one file per accepted shape, so the fixture cannot be added as a
+fourth file. Its entries cannot be merged into that file either: the committed response already holds an address
+entry named `web-server` under `shared/address`, so merging would give the address set two entries with the same
+name in two containers, which breaks the pin that reads the address set as the one entry named `web-server`.
 
-**2. One response is one source, so each response records its own rows.** The same entry read twice is two report
-rows, each naming the response that holds it with the line inside it. The run view states no merge rule, so the
-row set is the parts in run order. This is what `tests/test_api_path.py::test_the_same_name_in_two_responses_gives_two_rows_naming_two_sources`
-and `test_the_entry_point_joins_the_tables_across_the_responses_it_read` already hold; this piece adds no dedupe.
+So the content stays in the corpus in the form the corpus pins read it: the file is renamed
+`tests/fixtures/export_config.xml` and holds the same entries as a Panorama export, root `config`, no wrapper. The
+response set's export response is written to hold the same config content, so the pins that compare the two
+producers read the same content, one through each. The names the pins measure are unchanged
+(`Edge`, `web-server`); the physical lines are re-measured on each file.
 
-**3. The entry read answers the entry its own request names.** A parse method reads the entries at the level its
-container-table row names. A whole-config source and a place read reach that level through the container element,
-so they are unchanged. A per-scope entry response holds no container element: `result` is the place the path names
-(`container_coverage.container_tag`, the one statement of the per-scope shape), so the entry under the root is the
-entry at the level the path names first, and the method named by the row reads it. The membership read stays on the
-place rule: `parse_associations` reads its lists inside the place the response names, so a per-scope entry response
-answers no membership table and the index still reads its set from the membership responses.
+- AC-1.1: a pin that reads the corpus reads only files the read rule accepts. Held by
+  `tests/test_build_kitchen_sink.py::test_the_read_set_is_the_set_the_corpus_pins_read_less_the_record`, read as
+  the derivation from the rule (item 5). Measured 2026-11-18: 66 accepted, 65 read, 3 skipped, held in the pin's
+  docstring as the measurement. Before the piece the corpus measured 68 accepted and 67 read; the three files with
+  a `response` root left it (item 1 and item 2), so the count moved with the set the rule answers, which is what
+  the derivation reading means.
+- AC-1.2: no file in the corpus has a `response` root. Held as the content property in item 2, so the block that
+  keeps `api_response.xml` in the corpus is removed.
+- AC-1.3: a committed response is read through the injected producer for the request that produced it. Held by
+  `tests/test_source_fetch.py::test_a_committed_response_is_read_through_the_injected_producer`, and the module's
+  `_bytes()` reads `RESPONSES_DIR`, not `FIXTURES_DIR`.
+- AC-1.4: a file-source pin reads a Panorama export. The pins change what they measure: they run the tool on
+  `export_config.xml`, which is the corpus form of the same content, instead of on a response. Held by the pins in
+  `tests/test_provenance.py` and `tests/test_source_fetch.py` that read `FETCH_FIXTURE`, including
+  `test_api_run_writes_the_same_tf_bytes_as_the_file_run`, which keeps its strength because the response and its
+  corpus twin hold the same config content.
+- AC-1.5: the same content reaches both producers. Held by
+  `tests/test_source_fetch.py::test_api_run_writes_the_same_tf_bytes_as_the_file_run` (same `.tf` bytes from either
+  source), so the twin relation cannot drift.
+- AC-1.6: the root index names every file in the response set. Held by `tests/test_layout.py`; `README.md` names
+  each file it holds.
 
-**4. Path 2 writes the content of each response it read.** With no merge rule, the joined answer holds one value
-per response for the same entry, so the writer writes one block per response that holds the entry. The name rule
-(`naming.py`, read through `declare_block_name`) gives the second block the `_2` suffix. Path 1 read one response,
-so it writes one block per entry, so the byte agreement between the two paths holds only for content that states
-no membership list. `tests/test_api_path.py::test_content_with_no_live_only_fact_writes_the_same_tf_bytes_as_path_1`
-keeps that content and is unchanged.
+Re-measured lines, recorded in the pins as measurements: the export response carries the `config` element at line
+10, the `device-group` entry `Edge` at line 12, and the address entry `web-server` at line 18; the corpus export
+carries `config` at line 2 and `web-server` at line 8.
 
-**5. The cross-check counts agree for the double read.** `check_round_trip` counts the `emitted` rows against the
-blocks the reader read, per unit and per row. For the double read both counts read 2 for the same unit and row, so
-the rule reports nothing, and `check_request_set` reports nothing because both responses are in the read set. Path 1
-reports nothing on the same content. The gate is not changed by this piece; the pin measures what the existing rule
-reads for the double read.
+## Item 2 — the response-set rule as a property of each file
 
-## The pins this piece adds
+**Decision.** The rule is stated as a content property of each file, so the pin measures content and not a name
+comparison between the two sets: a file in the response set has a `response` root; a file in the corpus is a
+Panorama export, so its root is not `response`. Three corpus files have a `response root`, so all three are
+responses: one is already the file that holds its shape (item 1), and the other two move, each named by the
+key-free identity of the request the pins name for it.
 
-Each pin measures content read through an injected producer, and the content shows a membership list, which the
-F8.10 content does not. No pin calls a network. New content: `MEMBERSHIP` and `MEMBERSHIP_EXPORT`, the same two
-scope entries with a membership list in each.
+| File | Request the pins name | Identity the file is moved under |
+|---|---|---|
+| `api_response.xml` → `export_config.xml` | the whole-config export | already held, so the corpus keeps the export form (item 1) |
+| `scope_child.xml` | `panorama.test?action=get&path=device-group/entry/Production-DG&type=config` | `4d5f78d78ee8898b238ff3b4b6b2bda6658590c49a27d7173372bfa429f4904e.xml` |
+| `scope_parent.xml` | `panorama.test?action=get&path=shared&type=config` | `18caa0bbc1b94e0377e658b82f67e90fe8a9a82658ee70e7646f3098ff72a074.xml` |
 
-- `test_the_entry_read_answers_the_entry_its_own_request_names` — criterion 3: the parse method named by the row
-  for the scope level reads the entry the response holds, so the entry read answers its own entry, and the
-  membership read answers no table for an entry response.
-- `test_an_entry_two_responses_hold_gives_one_block_per_response` — criteria 1, 2 and 4: the run read four
-  responses for the content, the same entry gives two rows naming two sources, path 2 writes two blocks per unit
-  with the `_2` name on the second, and path 1 writes one block per unit for the same entry, so the bytes do not
-  agree for content that states a membership list.
-- `test_the_double_read_agrees_with_the_gate` — criterion 5: `check_round_trip` and `check_request_set` report
-  nothing for the path 2 run on this content, path 1 reports nothing, and the join answers the entry response for
-  the row the entry read and the place response for the row the place read.
+- AC-2.1: for every file in the response set, the root element is `response`. Held by
+  `tests/test_api_requests.py::test_the_committed_responses_are_not_corpus_material`.
+- AC-2.2: for every file in the corpus, the root element is not `response`, so a response that lives inside the
+  corpus is a finding. Held by the same pin, read as a property of each file rather than as a comparison of the
+  two name sets.
+- AC-2.3: the response set is the files the pins read for the requests the pins name, each named by that request's
+  key-free identity, and every accepted shape is represented by at least one file. Held by
+  `tests/test_api_requests.py::test_one_committed_response_per_request_shape_names_the_request_identity_that_produced_it`,
+  restated so the harness names the requests the pins read (five, measured 2026-11-18) and the shape set is read
+  through `source_fetch.SHAPE_PARAMS`. The pins change what they assert: the old form held one file per shape,
+  which cannot hold once the pins name two more requests; the strength is the same because each file is still named
+  by the identity that produced it and each shape is still represented. The moved files state their request
+  identity in the file, which is what the pin reads.
+- AC-2.4: a committed response is read through the injected producer, so the pins that run the tool on the moved
+  pair hand their bytes through an injected producer for the request that produced them. Held by the pins in
+  `tests/test_source_fetch.py`, `tests/test_provenance.py`, `tests/test_shadow_coverage.py`,
+  `tests/test_ownership.py`, and `tests/test_state_input.py` that read them.
+- AC-2.5: a pin that measures the file-source rule reads a Panorama export, so the pins that read the pair through
+  the file producer change what they measure. `tests/test_container_coverage.py::test_the_scan_reads_a_per_scope_root_as_the_place_the_path_names`
+  hands the response bytes with the origin kind it measures (the pin measures the door's behaviour for one kind, not
+  a corpus run); `tests/test_shadow_coverage.py::test_path_and_parent_apply_to_the_api_source_only` runs the tool on
+  a corpus export. The reason is the rule: the corpus holds exports, and the pair are responses.
+- AC-2.6: the corpus tables keyed by fixture name read the corpus, so the pair leave the round-trip table and the
+  measurement is re-measured. Held by `tests/test_round_trip.py`, read as a derivation (item 5): the table is the
+  facts the corpus produces, so a file that leaves the corpus leaves the table. Measured 2026-11-18: 19 facts,
+  3 + 15 + 1 by category. The pair's facts are still measured through the response reads in
+  `tests/test_shadow_coverage.py` and `tests/test_ownership.py`.
+- AC-2.7: `docs/ARCHITECTURE.md` §1.1 states the property, and `README.md` names the files the response set holds.
 
-No existing pin is weakened. The run-order pin, the join pins, the unit-join pins, the round-trip pins and the
-gate pins are re-measured after the change.
+## Item 3 — the provider-schema pins that never run in CI
 
-## Measurement, before the change
+**Decision.** The pins that read the provider schema run in the `terraform-gate` CI job, so the gate runs the whole
+test set with the terraform binary present. The matrix job keeps running the whole suite on runners with no
+terraform, where those pins skip for the missing binary. The gate job runs the whole suite rather than a list of
+modules, because a list can drift: a module that starts reading the schema would not be in CI.
 
-Baseline measured 2026-11-18, on the content `MEMBERSHIP` (two scope entries, a membership list in each, one
-address entry inside each):
+- AC-3.1: the `terraform-gate` job runs `pytest` with the terraform binary available, so the pins that read the
+  schema fixture run there. Held by `.github/workflows/python-tests.yml`, which is the owner of the CI gate. No pin
+  reads the workflow file, so this is recorded as the CI measurement, not as a pin.
+- AC-3.2: the modules that read the schema through `tests/conftest.py` are named in `README.md` §Testing by the
+  rule they read, and `docs/ARCHITECTURE.md` §1.1 names `tests/conftest.py` as the harness. Measured 2026-11-18:
+  10 modules read the schema fixture; the document names the rule, not the count.
+- AC-3.3: the skip rule says the pins skip only when the terraform binary is absent, so the matrix job is the job
+  that skips and the gate job is the job that runs them. Held by item 4.
 
-- The run order reads 4 responses: `device-group`, `templates`, then `device-group/entry/Office-FW` and
-  `templates/entry/HQ-Networks`.
-- 8 report rows: 2 per entry, each naming its own response.
-- Path 2 writes 4 address blocks (2 per unit, the second named `_2`) and 1 scope block per unit.
-- `check_round_trip`: 2 WARN findings, one per unit, each stating that the ledger reads 2 entries and the reader
-  reads 1 block, because the entry read records a row for the entry its own request names and answers no object
-  for it. `check_request_set`: nothing. Path 1 on the same content: nothing.
+## Item 4 — the skip that hides a failure
 
-Gate baseline: `ruff check .` clean, `ruff format --check .` clean, 1,685 pins in 52 test modules, all pass, no
-skips, 333.87 s; `python3 tools/check_documents.py` reports no finding.
+**Decision.** The skip is only for a missing terraform binary. A `terraform init` failure, which is what a missing
+provider cache or an unreachable registry answers, is a failure, not a skip. `tests/conftest.py` is the owner of the
+skip rule for the schema fixture; `tests/test_terraform_validate.py` keeps the skip for a missing binary and reports
+a failed init or validate as a failure.
 
-## Measurement, after the change
+- AC-4.1: `provider_schemas` skips when `shutil.which("terraform")` answers nothing, and asserts when `terraform
+  init` returns non-zero. Held by `tests/conftest.py::provider_schemas`.
+- AC-4.2: with the binary present, a network failure is a failure, so a network failure cannot read as a pass.
+  Measured 2026-11-18 on this machine: `terraform init` against `PaloAltoNetworks/panos ~> 2.0.14` returns 0, so the
+  full run passes with no skips.
+- AC-4.3: the documents that state the skip say only the binary, so `README.md` §Testing, `docs/ARCHITECTURE.md`
+  §4.6, and the module docstrings change to state that a provider-cache failure is a failure.
 
-Measured 2026-11-18 on `MEMBERSHIP`, read through `_membership_producer`:
+## Item 5 — pins that restate an owner table as a measured count
 
-- Path 2 reads 4 responses: `device-group`, `templates`, then `device-group/entry/Office-FW` and
-  `templates/entry/HQ-Networks`. Each entry response answers the entry its own request names, and answers no
-  membership table.
-- 8 emitted report rows: 2 per entry name, each naming its own response. The 4 names are `Office-FW`,
-  `HQ-Networks`, `10.0.0.7`, `10.0.0.9`.
-- Path 2 writes 8 resource blocks: 4 per unit, one scope block and one address block per response that holds the
-  entry, and the second block for a name carries the `_2` the naming rule states. Path 1 writes 4 blocks for the
-  same content read as one export, so the two file sets are not the same bytes.
-- `check_round_trip`: no finding for either run; for the double read both counts read 2 for the same unit and the
-  same row. `check_request_set`: no finding for path 2 (both responses are in the read set) and NOT RUN for path 1.
-- The join answers the entry response for the row the entry read built for its own scope entry, and the place
-  response for the row the place read built for the same entry.
+**Decision.** Each pin states the property: the tool's answer equals the value derived from the owner table's rows,
+so a wrong table entry is a finding. The measured number stays in the pin's docstring as a dated measurement.
 
-Gate after the change: `ruff check .` clean, `ruff format --check .` clean, `python3 -m pytest` passes
-1,688 pins in 52 test modules with no skips in 305.56 s; `python3 tools/check_documents.py` reports no finding.
-`tests/test_api_path.py` reads 33 pins (30 before this piece). No existing pin was weakened: the run-order pin,
-the join pins, the unit-join pins, the round-trip pins and the gate pins pass unchanged.
+- AC-5.1 `tests/test_build_kitchen_sink.py`: the accepted set, the skipped set and the read set are derived from the
+  read rule and the record, so the pin compares the tool's decision per file with the rule's decision per file in
+  both directions. Measured 2026-11-18: 68 accepted, 67 read, 3 skipped. The comment count and the curated-name
+  count become properties (the printed tree holds no comment; the record's curated names are the names no accepted
+  fixture carries), and the numbers 17 and 13 stay as the measurement in the docstring.
+- AC-5.2 `tests/test_filter_containers.py`: `CHOICE_ROWS` is derived from `resource_mapping.FILTER_SHAPE` (the rows
+  that state `selects`), and the pin checks each choice against the provider schema. The route-map counts (73 levels,
+  34 mirrored rows, 17 `string_list` rows, 14 choice rows) are counts of the table's own rows, so they have no
+  derivation and stay as measurements in the docstring; the pin keeps the per-row properties.
+- AC-5.3 `tests/test_resource_mapping.py`: the `disable_override` pin reads the matrix rows that name the
+  property, and compares that set with the pinned provider schema in both directions, so the pin names no list of
+  its own. The measurement (128 resources, 25 declaring the flag, 9 emitted among them) stays in the docstring.
+- AC-5.4 `tests/test_property_coverage.py`: the unmeasured rows are derived from the container table — a matrix row
+  is measured when a corpus entry reaches the container its row names — so `panos_device_group_parent` is the row the
+  container table names no container for. The single-row fact stays as the measurement in the docstring.
+- AC-5.5 `tests/test_data_file_gate.py`: the data-file count is derived from the `sanity_checks.DATA_FILES` rows
+  present in the run's output, so the pin compares the gate's count with the derivation; the number 4 stays as the
+  measurement in the docstring.
+
+## Item 6 — the two `.github/` template files outside every index
+
+**Decision.** The index rule is: every markdown document in the repository is named by the index for its directory,
+and a directory that holds no index of its own is named by the root index. The two `.github/` template files stay in
+the repository, because GitHub reads a contribution template from `.github/`, so `README.md` names them and
+`tests/test_layout.py` reads the rule as a property of every markdown document in the tree. `tools/check_documents.py`
+reads the two files with the rest of the markdown, and `backlog.md` closes the finding.
+
+- AC-6.1: for every markdown document in the tree, its name is in the index for its directory, or in the root index
+  when its directory holds no index of its own. Held by
+  `tests/test_layout.py::test_the_indexes_name_every_document_under_them`, which reads names only.
+- AC-6.2: the root index names the two template files. Held by the same pin, and by `README.md` stating them as the
+  contribution forms.
+- AC-6.3: the response-set half of the pin reads names only, so the count leaves `tests/test_layout.py` and the set
+  is held by `tests/test_api_requests.py`, which states which files the pins read. Measured 2026-11-18: 5 files.
+
+## Gate
+
+Run in order, with no parallel runner: `ruff check .`, `ruff format --check .`, `python3 -m pytest`,
+`python3 tools/check_documents.py`. Record the pin count before and after, the module count, and the time. The
+baseline measured 2026-11-18 is 1,688 pins in 52 modules in 305.56 s, with no skips, `ruff check .` clean,
+`ruff format --check .` clean, and `check_documents.py` reporting no finding. No pin is removed from the full run.
+
+Measured after the piece, 2026-11-18, in one run in the order above: `ruff check .` clean (0.015 s),
+`ruff format --check .` clean on the 100 Python files (0.011 s), 1,686 pins in 52 modules in 313.68 s with no
+skips (305.56 s to 313.68 s across three runs of the same set), and `python3 tools/check_documents.py` reports no
+finding (11.09 s). The count fell by 2 in `tests/test_sanity_gate.py` (101 to 99), and no pin was removed or
+weakened: that pin is the corpus run, parametrized through `tests/conftest.py::corpus_fixtures`, so its case set is
+the corpus the read rule answers. The three response-rooted files left the corpus (item 1 and item 2), so two cases
+left the pin with them. Their facts are still read through the injected producer in `tests/test_shadow_coverage.py`
+and `tests/test_ownership.py`.
+
+Finished: mark Piece 10 complete in `to-do.md`, close or narrow the six findings in `backlog.md`, update
+`agent-status.md` §Current position, and commit. Only the files this piece changed are committed; `AGENTS.md` is not
+staged, committed, reverted or modified, because it holds an uncommitted user edit.

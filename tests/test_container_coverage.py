@@ -41,13 +41,17 @@ from pathlib import Path
 import container_coverage
 import resource_mapping
 import xml_input
-from conftest import FIXTURES_DIR, SRC_DIR, corpus_fixtures, run_script
+from conftest import FIXTURES_DIR, RESPONSES_DIR, SRC_DIR, corpus_fixtures, run_script
 
 # A path-like string constant in a parse method: a tag name or a tag chain.
 PATH_STRING_RE = re.compile(r"^[A-Za-z0-9_.\-/]+$")
 
 # The fixture that holds sections no parse method reads.
 UNKNOWN_FIXTURE = "unknown_containers.xml"
+
+# The committed response for the F5.4 child scope, named by the key-free identity of the request that produced it
+# (`docs/ARCHITECTURE.md` §1.1), so it is read as a response and not as corpus material.
+CHILD_RESPONSE = "4d5f78d78ee8898b238ff3b4b6b2bda6658590c49a27d7173372bfa429f4904e.xml"
 
 # Findings the fixture produces, in report order. Pinned so the report bytes and
 # the console lines can be compared with these values.
@@ -277,8 +281,8 @@ def test_the_envelope_is_never_a_scanned_container():
 def test_the_scan_reads_a_per_scope_root_as_the_place_the_path_names():
     """F5.4: for a per-scope source the root `result` is the place the path names, so the
     entry under it is the declared scope entry and the container inside it is a section."""
-    origin = xml_input.SourceOrigin(kind="api", name="scope_child.xml")
-    parsed = xml_input.parse_bytes((FIXTURES_DIR / "scope_child.xml").read_bytes(), origin)
+    origin = xml_input.SourceOrigin(kind="api", name=CHILD_RESPONSE)
+    parsed = xml_input.parse_bytes((RESPONSES_DIR / CHILD_RESPONSE).read_bytes(), origin)
     result = parsed.root.find("result")
     source = dataclasses.replace(parsed, root=result, scope="device-group/entry/Production-DG")
     parents = container_coverage.parent_map(result)
@@ -292,10 +296,11 @@ def test_the_scan_reads_a_per_scope_root_as_the_place_the_path_names():
     ), "the chain keeps the entry the operator sees in the file"
     assert container_coverage.scan(source, parents) == [], container_coverage.scan(source, parents)
 
-    # The same bytes read as a file have no request, so `result` is the envelope and is
-    # never a scanned container.
+    # The same bytes handed to the door with a file origin carry no request, so `result` is the envelope
+    # and is never a scanned container. The pin reads the door's behaviour for one origin kind, not a corpus
+    # run: the response sits in the response set (§1.1).
     file_source = xml_input.parse_bytes(
-        (FIXTURES_DIR / "scope_child.xml").read_bytes(), xml_input.SourceOrigin(kind="file", name="scope_child.xml")
+        (RESPONSES_DIR / CHILD_RESPONSE).read_bytes(), xml_input.SourceOrigin(kind="file", name=CHILD_RESPONSE)
     )
     file_parents = container_coverage.parent_map(file_source.root)
     assert all(

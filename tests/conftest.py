@@ -228,12 +228,15 @@ def check_chain_semantics(blocks: list[dict], resource_type: str, expected: list
 def provider_schemas(tmp_path_factory) -> dict:
     """The panos provider schema block for one type block: both kinds.
 
-    Runs `terraform init` + `terraform providers schema -json` against the
-    provider version declared in the golden provider.tf. Skips when the
-    terraform binary or registry access is unavailable.
+    Runs `terraform init` + `terraform providers schema -json` against the provider version declared in the golden
+    provider.tf. This is the owner of the skip rule for the schema fixture: the fixture skips only when the
+    terraform binary is absent, which is the case on a runner with no terraform. Once the binary is present, a
+    failed `terraform init` is a failure, not a skip, so a missing provider cache or an unreachable registry reads
+    as a failing run rather than as a pass. `.github/workflows/python-tests.yml` is the CI owner: the job with the
+    terraform binary runs the whole test set, so these pins run there.
     """
     if TERRAFORM is None:
-        pytest.skip("terraform binary not found (F1.5 makes it mandatory in CI)")
+        pytest.skip("terraform binary not found")
     source, version = declared_provider()
     workdir = tmp_path_factory.mktemp("panos_provider")
     (workdir / "provider.tf").write_text(
@@ -253,8 +256,7 @@ def provider_schemas(tmp_path_factory) -> dict:
         text=True,
         timeout=300,
     )
-    if init.returncode != 0:
-        pytest.skip(f"terraform init failed (no registry access?): {init.stderr[-400:]}")
+    assert init.returncode == 0, f"terraform init failed: {init.stderr[-400:]}"
     schema = subprocess.run(
         [TERRAFORM, "providers", "schema", "-json"],
         cwd=workdir,

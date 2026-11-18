@@ -202,11 +202,12 @@ here with that rule named.
   `docs/API_CONVERSION_PATH.md` §3, pinned by `tests/test_sanity_gate.py`). Its finding is a coverage fact, not
   a broken output, so it is a WARN and
   does not change the exit code, the decision `entry_coverage.PROPERTY_RULE` already states for a gap: every
-  corpus fixture still exits 0, and the pins read WARN. Measured 2026-11-05 the corpus is not silent: the rule
-  reports 20 findings on 9 fixtures, which `tests/test_round_trip.py` pins as `CORPUS_GAPS` and
-  `CATEGORY_COUNTS`, and the entry side counts only the entries `entry_coverage.EntryLedger.destination` answers
-  as `emitted`, so an entry the run reports enters no count. The rule states no exception list for the
-  populations it cannot join, so they stay open here.
+  corpus fixture still exits 0, and the pins read WARN. Measured 2026-11-18 the corpus is not silent: the rule
+  reports 19 findings on 8 fixtures, 3 + 15 + 1 by category, which
+  `tests/test_round_trip.py::test_the_rule_reports_the_gaps_the_corpus_contains` pins as `CORPUS_GAPS` and reads
+  the category split from each fact's own two counts, and the entry side counts only the entries
+  `entry_coverage.EntryLedger.destination` answers as `emitted`, so an entry the run reports enters no count. The
+  rule states no exception list for the populations it cannot join, so they stay open here.
   - 3 findings: an `emitted` entry the row counts with no block of the row's type. The measured instances are
     `tests/fixtures/dependency_wiring.xml` (`panos_ethernet_interface`, 3 against 2),
     `tests/fixtures/interfaces_other.xml` (`panos_aggregate_interface`, 2 against 1), and the same aggregate
@@ -217,22 +218,19 @@ here with that rule named.
     has no v2 attribute, has no measured instance left: the `report_only` address entries in
     `tests/fixtures/address_objects.xml` answer `report` through the destination rule and enter no count, so
     that fixture reads clean. The same shape stays open for a config entry inside a stack, above.
-  - 16 findings: a block read for a property level, which has no ledger row, because the ledger records one row
-    per config entry and a property level is not an entry.
+  - 15 findings, measured 2026-11-18: a block read for a property level, which has no ledger row, because the
+    ledger records one row per config entry and a property level is not an entry.
   - 1 finding: one entry that writes more than one block, on `tests/fixtures/interfaces_ethernet.xml`, because
     the `nested-block` entry writes lines inside its parent block and `matrix_row_for` answers no row for that
     container, so the entry side reads no count while the block side counts the block.
   - The facts that stay open, each stated in its own entry in this document: the four `*_policy_rules` types,
     which wait for the F3.5 rulebase decision and a live target; a config entry inside a stack, which needs a
     provider location shape; the EDL `certificate_profile` field, which records no reference edge because the
-    EDL site resolves no names; the profile-name report column, which no certificate type declares; and
-    the two `.github/` template files outside the indexes. The certificate `sensitive` `REFERENCE_ONLY` fact is
+    EDL site resolves no names; and the profile-name report column, which no certificate type declares. The
+    certificate `sensitive` `REFERENCE_ONLY` fact is
     closed: `resource_mapping.VALUE_VARIABLES` holds the `private_key` and `passphrase` rows, and the pins that
     hold it are `tests/test_variables.py` and
     `tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`.
-- The two template files under `.github/` (`ISSUE_TEMPLATE.md` and `PULL_REQUEST_TEMPLATE.md`) sit outside every
-  index, so the layout rule (`docs/ARCHITECTURE.md` §1.1) reads them as a finding. They are not tool documents,
-  so no index names them; either an index gains them or they leave the repository.
 - The gate `location` check is presence only, for both block kinds. The resource sub-block and field
   shape stays pinned by `tests/test_multi_vsys_location.py`, because `terraform validate` accepts an
   unknown sub-block and drops it silently. The `data` shape is checked by the gate, because
@@ -617,35 +615,13 @@ restated here; they are in the record and the git history. Only the open items a
 
 ## Codebase audit findings (measured 2026-11-11)
 
-The audit read the test set (50 modules, 991 test functions, 1,641 collected pins) against the layout rule
-and the import rule. Gate at both ends: `ruff check .` clean, 1,641 pins. Only the actionable findings are
-below, each with the owner that would fix it. Nothing was changed by the audit.
-
-- Layout rule: `tests/fixtures/api_response.xml` is a committed API response inside the corpus, so the
-  corpus scan reads it (`tests/test_container_coverage.py:315`, `tests/test_entry_coverage.py:204`) and the
-  assembler merges it (its entry `web-server` is in the printed tree, and the record does not hold it). Fix:
-  move it to `tests/responses/` under the key-free request identity that names it, and read it through the
-  injected producer. Owner: `docs/ARCHITECTURE.md` §1.1, and `tests/test_api_requests.py:649-650`, which
-  pins it as corpus material and so keeps the violation.
-- The response-set pin cannot see that case: `tests/test_api_requests.py:646` compares names between the two
-  sets, so a response that lives inside the corpus passes it. Fix: state the rule as a property of each file
-  (a root element of `response` is not a Panorama export), not as a name comparison. Owner:
-  `tests/test_api_requests.py`.
-- Provider-schema pins that never run in CI: 9 modules (20 pins read the schema fixture in their arguments,
-  more reach it through module helpers) read the schema through `tests/conftest.py:107-147`, which skips
-  without the terraform binary or the provider cache. The matrix job
-  runs plain `pytest` on a runner with no terraform, and the `terraform-gate` job runs only
-  `tests/test_terraform_validate.py`, so those pins hold only on a developer machine. Fix: run the nine
-  modules in the terraform-gate job, or record the pins as measured facts with the date, as the provider-fact
-  entries above do. Owner: `.github/workflows/python-tests.yml`.
-- Skip that hides a failure: `tests/conftest.py:114` and `:138` report a missing provider cache as a skip, so
-  a network failure reads as a pass. Owner: `tests/conftest.py`.
-- Pins that restate an owner table as a measured count, so they cannot detect a wrong table entry and fail only
-  when the table changes: `tests/test_build_kitchen_sink.py:96-98,112,150,159`,
-  `tests/test_filter_containers.py:330-333,373`, `tests/test_resource_mapping.py:72-76`,
-  `tests/test_property_coverage.py:198`, `tests/test_data_file_gate.py:156-157,482`. Each carries a measured
-  date instead of a derivation. Fix: state each as a property of the table (the count derived from the rows),
-  and keep the measurement in the document. Owner: those tests.
+The six findings this audit recorded here were closed by `to-do.md` Piece 10 on 2026-11-18: the committed
+response inside the corpus, the response-set rule read as a content property of each file, the provider-schema
+pins running inside the CI gate, the skip that reports a failed `terraform init` as a pass, the five pin groups
+that restate an owner table as a measured count, and the two `.github/` contribution templates named by the root
+index. Each decision, each pin, and the gate measurement are in `acceptance.md`. Counts that have no derivation
+are kept as measurements in the pin's docstring, which is where the rule says a measurement lives. Nothing from
+this section stays open.
 
 ## Codebase audit findings (measured 2026-11-12)
 

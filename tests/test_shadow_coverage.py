@@ -38,10 +38,10 @@ import provenance
 import shadow_coverage
 import state_coverage
 import xml_input
-from conftest import FIXTURES_DIR, run_main, run_pipeline, run_script, written_bytes
+from conftest import FIXTURES_DIR, RESPONSES_DIR, run_main, run_pipeline, run_script, written_bytes
 
-CHILD_FIXTURE = "scope_child.xml"
-PARENT_FIXTURE = "scope_parent.xml"
+CHILD_RESPONSE = "4d5f78d78ee8898b238ff3b4b6b2bda6658590c49a27d7173372bfa429f4904e.xml"
+PARENT_RESPONSE = "18caa0bbc1b94e0377e658b82f67e90fe8a9a82658ee70e7646f3098ff72a074.xml"
 HOST = "panorama.test"
 CHILD_PATH = "device-group/entry/Production-DG"
 PARENT_PATH = "shared"
@@ -51,8 +51,12 @@ PARENT_PATH = "shared"
 SHARED_NAME = "Web-Server-1"
 CHILD_NAME = "Production-DG"
 MATRIX_ROW = "panos_address"
-CHILD_LINE = 10
-PARENT_LINE = 10
+CHILD_LINE = 14
+PARENT_LINE = 14
+
+# A Panorama export, for the pins that run the tool through the file producer (§1.1): the argument rule reads no
+# content, so the pin names any corpus export.
+CORPUS_EXPORT = "device_groups.xml"
 
 # The whole-config parent the key pins read: one name under the same matrix row in two device
 # groups, which a per-scope response cannot hold because `result` holds exactly the element the
@@ -68,8 +72,9 @@ PARENT_SCOPE_LINES = (18, 26)
 SHARED_SCOPE = "SHARED SECTION"
 
 
-def _bytes(fixture_name: str) -> bytes:
-    return (FIXTURES_DIR / fixture_name).read_bytes()
+def _bytes(response_name: str) -> bytes:
+    """The committed response for one request, read through the path `tests/conftest.py` builds once (§1.1)."""
+    return (RESPONSES_DIR / response_name).read_bytes()
 
 
 def _source(fetch_module, path: str, data: bytes, name: str):
@@ -95,14 +100,16 @@ def _seed_cache(fetch_module, cache, paths):
     cache.mkdir(parents=True, exist_ok=True)
     for path in paths:
         request = fetch_module.ApiRequest(host=HOST, path=path)
-        fixture = CHILD_FIXTURE if path == CHILD_PATH else PARENT_FIXTURE
-        (cache / request.cache_name()).write_bytes(_bytes(fixture))
+        response = CHILD_RESPONSE if path == CHILD_PATH else PARENT_RESPONSE
+        (cache / request.cache_name()).write_bytes(_bytes(response))
     return cache
 
 
 def _producer(fetch_module):
     """The fixture-backed producer, chosen by the request path."""
-    return lambda request, key, insecure=False: _bytes(CHILD_FIXTURE if request.path == CHILD_PATH else PARENT_FIXTURE)
+    return lambda request, key, insecure=False: _bytes(
+        CHILD_RESPONSE if request.path == CHILD_PATH else PARENT_RESPONSE
+    )
 
 
 def _argv(out_dir, cache, extra: tuple = ()):
@@ -146,7 +153,7 @@ def _parent_ledger(fetch_module, cache):
 def test_result_is_read_as_the_place_the_declared_path_names(fetch_module):
     """The wrapper decision keeps the origin and the line map, so a report line still
     names the line the response bytes carry."""
-    source = _source(fetch_module, CHILD_PATH, _bytes(CHILD_FIXTURE), CHILD_FIXTURE)
+    source = _source(fetch_module, CHILD_PATH, _bytes(CHILD_RESPONSE), CHILD_RESPONSE)
     assert source.scope == CHILD_PATH
     assert source.is_per_scope
     assert source.scope_container == "device-group"
@@ -167,7 +174,7 @@ def test_result_is_read_as_the_place_the_declared_path_names(fetch_module):
 def test_the_declared_scope_fact_replaces_the_shared_fallback(converter_module, fetch_module):
     """AC-1.4: the parser scope walk reads the same rule, so a per-scope entry names the
     declared group instead of falling back to Shared."""
-    source = _source(fetch_module, CHILD_PATH, _bytes(CHILD_FIXTURE), CHILD_FIXTURE)
+    source = _source(fetch_module, CHILD_PATH, _bytes(CHILD_RESPONSE), CHILD_RESPONSE)
     parser = converter_module.PanoramaParser(source)
     child = next(e for e in source.root.iter() if e.get("name") == SHARED_NAME)
     assert parser.device_group_of(child) == CHILD_NAME
@@ -198,7 +205,7 @@ def test_the_matrix_row_is_the_key_not_the_name_alone(fetch_module):
     child = entry_coverage.EntryLedger(
         _source(fetch_module, CHILD_PATH, _shape(CHILD_PATH, "service-group", SHARED_NAME), "child")
     )
-    parent = entry_coverage.EntryLedger(_source(fetch_module, PARENT_PATH, _bytes(PARENT_FIXTURE), "parent"))
+    parent = entry_coverage.EntryLedger(_source(fetch_module, PARENT_PATH, _bytes(PARENT_RESPONSE), "parent"))
     child_row = next(r for r in child.rows() if r["name"] == SHARED_NAME)
     assert entry_coverage.matrix_row_for(child_row["container"])["resource"] == "panos_service_group", (
         "the child entry is the shared name in another matrix row"
@@ -212,7 +219,7 @@ def test_the_scan_scope_is_the_f4_4_rule(fetch_module):
     child = entry_coverage.EntryLedger(
         _source(fetch_module, CHILD_PATH, _shape(CHILD_PATH, "region", SHARED_NAME), "child")
     )
-    parent = entry_coverage.EntryLedger(_source(fetch_module, PARENT_PATH, _bytes(PARENT_FIXTURE), "parent"))
+    parent = entry_coverage.EntryLedger(_source(fetch_module, PARENT_PATH, _bytes(PARENT_RESPONSE), "parent"))
     row = next(r for r in child.rows() if r["name"] == SHARED_NAME)
     assert row["destination"] == "count-only", row
     assert entry_coverage.matrix_row_for(row["container"]) is None, row
@@ -223,7 +230,7 @@ def test_the_parent_is_read_with_the_same_row_rule(fetch_module):
     """No second naming rule: the parent index uses `entry_coverage`, the same row rule, and the key is the
     same rule `tests/test_ownership.py` reads its order through.
     """
-    parent = entry_coverage.EntryLedger(_source(fetch_module, PARENT_PATH, _bytes(PARENT_FIXTURE), "parent"))
+    parent = entry_coverage.EntryLedger(_source(fetch_module, PARENT_PATH, _bytes(PARENT_RESPONSE), "parent"))
     row = next(r for r in parent.rows() if r["name"] == SHARED_NAME)
     key = state_coverage.ownership_key(entry_coverage.matrix_row_for(row["container"])["resource"], row["name"], row)
     assert shadow_coverage.parent_index(parent) == {key: row}, shadow_coverage.parent_index(parent)
@@ -269,7 +276,7 @@ def test_one_child_entry_against_two_parent_entries_is_two_findings(converter_mo
 def test_a_run_with_no_declared_parent_reports_no_shadow(converter_module, fetch_module, tmp_path, monkeypatch):
     """AC-2.3: no second source, no parent to read, no shadow section."""
     monkeypatch.setenv(fetch_module.API_KEY_ENV, "test-key")
-    monkeypatch.setattr(fetch_module, "network_producer", lambda request, key, insecure=False: _bytes(CHILD_FIXTURE))
+    monkeypatch.setattr(fetch_module, "network_producer", lambda request, key, insecure=False: _bytes(CHILD_RESPONSE))
     out = tmp_path / "out"
     parser = run_pipeline(
         converter_module,
@@ -525,10 +532,12 @@ def test_two_runs_on_the_same_sources_write_the_same_bytes(converter_module, fet
 
 
 def test_path_and_parent_apply_to_the_api_source_only(tmp_path):
-    """A file run reads one scope: the file, so a declared path is an argument error."""
+    """A file run reads one scope: the file, so a declared path is an argument error. The run reads a corpus
+    export, because the file producer reads a Panorama export and the pair are responses (§1.1); the argument rule
+    reads no content, so which export the pin names does not matter."""
     result = run_script(
         "panorama_to_terraform.py",
-        str(FIXTURES_DIR / CHILD_FIXTURE),
+        str(FIXTURES_DIR / CORPUS_EXPORT),
         "--path",
         f"/{CHILD_PATH}",
         "--output-dir",
