@@ -64,6 +64,7 @@ from resource_mapping import (
 )
 from xml_input import (
     DEFAULT_SCOPE,
+    ENTRY_SEGMENT,
     ParsedSource,
     UnsafeInputError,
     parse_xml,
@@ -152,6 +153,25 @@ class PanoramaParser:
         """Record an entry this method visited and did not model (F4.3 AC-1.3)."""
         self.ledger.mark_skipped(entry, reason)
 
+    def _section_entries(self, container: str) -> list[ET.Element]:
+        """The entries at the level the container-table row names (F8.10, `docs/API_CONVERSION_PATH.md` §2.4).
+
+        A whole-config source and a place read reach that level through the container element, so the row path is
+        the pattern. A per-scope entry response holds no container element: `result` is the place the path names
+        (`container_coverage.container_tag`, the one statement of the per-scope shape), so the entry directly
+        under the root is the entry at the level the row names, for the container the path names first. An entry
+        read therefore answers the entry its own request named, and no other row answers it: a row that names a
+        level inside the entry, such as a membership row, keeps the pattern and answers nothing for an entry
+        response, so the index reads its set from the place responses.
+        """
+        segments = self.source.scope.split("/")
+        if self.source.is_per_scope and segments[0] == container and ENTRY_SEGMENT in segments:
+            for child in self.root:
+                if child.tag == ENTRY_SEGMENT:
+                    return [child]
+            return []  # the response holds no entry at the level the row names
+        return list(self.root.findall(f".//{container}/entry"))
+
     def parse_device_groups(self) -> list[dict]:
         """Parse the device group entries (F6.5: a scope entry is an object the output writes).
 
@@ -163,9 +183,11 @@ class PanoramaParser:
 
         `parse_associations` reads the same membership for its tables and marks the membership
         entries, not this entry, so the entry keeps one mark (F4.3 rule 1).
+
+        The entries are read through `_section_entries`, so the response that names this entry answers it.
         """
         device_groups = []
-        for dg in self.root.findall(".//device-group/entry"):
+        for dg in self._section_entries("device-group"):
             name = dg.get("name")
             if not name:
                 self.mark_skipped(dg, "entry has no name attribute")
@@ -194,7 +216,7 @@ class PanoramaParser:
         association table and are not captured here.
         """
         templates = []
-        for entry in self.root.findall(".//templates/entry"):
+        for entry in self._section_entries("templates"):
             name = entry.get("name")
             if not name:
                 self.mark_skipped(entry, "entry has no name attribute")
@@ -220,7 +242,7 @@ class PanoramaParser:
         and template lists are fields the block prints.
         """
         stacks = []
-        for entry in self.root.findall(".//template-stack/entry"):
+        for entry in self._section_entries("template-stack"):
             name = entry.get("name")
             if not name:
                 self.mark_skipped(entry, "entry has no name attribute")

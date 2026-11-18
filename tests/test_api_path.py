@@ -1,6 +1,6 @@
 """F8.5 the run over many sources (`docs/API_CONVERSION_PATH.md` §2.4): one response is one source.
 
-Eight groups:
+Nine groups:
 
 1. One response keeps its own line map and its own parent walk, so the run builds no tree from many
    responses. A report position can only name a line inside the response that holds the entry.
@@ -23,6 +23,9 @@ Eight groups:
 8. The entry point and the run view (`docs/API_CONVERSION_PATH.md` §6): the entry point decides the run order
    and the cross-response join, and the run view answers the entry protocol through the ledger that holds the
    entry. Both entry points call the same run sequence.
+9. The entry a membership list names and the run read as its own scope: the run reads that entry twice and keeps
+   both answers, so each response records its own rows and writes its own block, and the gate reads the two sets
+   as agreeing.
 
 Every response is read through `source_fetch.fetch` with an injected producer, so the wrapper decision, the
 origin, and the line map are the ones the run holds. No pin reads a response as a file, because the wrapper
@@ -41,6 +44,7 @@ import api_requests
 import api_to_terraform
 import container_coverage
 import entry_coverage
+import naming
 import ownership
 import panorama_to_terraform
 import provenance
@@ -124,6 +128,22 @@ AGREEMENT = {
 AGREEMENT_EXPORT = (
     '<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n<config>\n<panorama>\n'
     + "".join(f"<{place}>\n{AGREEMENT[place]}</{place}>\n" for place in sorted(AGREEMENT))
+    + "</panorama>\n</config>\n</result>\n</response>\n"
+).encode()
+
+# The same two scope entries with a membership list in each, so the index names each entry as its own scope and
+# the run reads the entry twice: once inside the place response, once as the response its own request made. The
+# content above states no membership list, so it cannot measure the entry that is read twice. `MEMBERSHIP_EXPORT`
+# is the same content as one whole-config export, so path 1 reads the same entries from one response.
+MEMBERSHIP = {
+    "device-group": '<entry name="Office-FW">\n<devices><member>HQ-Networks</member></devices>\n<address>\n'
+    '<entry name="10.0.0.7"><ip-netmask>10.0.0.7</ip-netmask></entry>\n</address>\n</entry>\n',
+    "templates": '<entry name="HQ-Networks">\n<devices><member>Office-FW</member></devices>\n<address>\n'
+    '<entry name="10.0.0.9"><ip-netmask>10.0.0.9</ip-netmask></entry>\n</address>\n</entry>\n',
+}
+MEMBERSHIP_EXPORT = (
+    '<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n<config>\n<panorama>\n'
+    + "".join(f"<{place}>\n{MEMBERSHIP[place]}</{place}>\n" for place in sorted(MEMBERSHIP))
     + "</panorama>\n</config>\n</result>\n</response>\n"
 ).encode()
 
@@ -1449,3 +1469,159 @@ def test_the_report_names_each_response_the_run_read_in_run_order(tmp_path):
     # report the run wrote is the gate's input through the owners.
     assert HOST not in report, "the report names no host, and no path"
     assert all(len(line.split()) == 2 for line in named), "a source line names the source and nothing else"
+
+
+# --- 9. the entry a membership list names and the run read as its own scope -------
+
+
+def _membership_producer(request, key=None, insecure=False):
+    """The content above, handed by an injected producer: one response per place, one response per entry the
+    index names, and the same content as one whole-config export for a request that names no path. No test calls
+    a network, so path 2 reads only this content and path 1 reads the same content as one response.
+    """
+    if request.path == "":
+        return MEMBERSHIP_EXPORT
+    container = request.segments()[0]
+    return _shape(request, MEMBERSHIP[container]) if container in MEMBERSHIP else None
+
+
+def test_the_entry_read_answers_the_entry_its_own_request_names(tmp_path):
+    """Criterion 3: a parse method reads the entries at the level its container-table row names, so the response
+    that holds the entry the path names answers that entry. A whole-config source and a place read reach the level
+    through the container element, so they are unchanged. A membership row names a level inside the entry the path
+    names, so an entry response answers no membership table and the index keeps reading its set from the place
+    responses.
+    """
+    args, _ = _run_args(tmp_path)
+    parts, index = api_to_terraform.run_order(args, _membership_producer)
+    assert len(parts) == 2 * len(MEMBERSHIP), (parts, "one response per place, then one per entry the index names")
+
+    for part in parts:
+        segments = part.request.segments()
+        place = segments[0]
+        row = [r for r in container_coverage.CONTAINER_TABLE if r.path == place and r.method.startswith("parse_")]
+        assert len(row) == 1, row
+        answer = getattr(part.parser, row[0].method)()
+        assert answer, (part.request.path, "the method named by the row answered nothing at the level it names")
+        answered_entry = api_requests.entry_for_path(index, part.request.path)
+
+        if len(segments) == 3:
+            # The response holds the entry its request names, so that entry is the entry at the level the row names.
+            assert [obj["name"] for obj in answer] == [answered_entry.name], (part.request.path, answer)
+            tables = part.parser.parse_associations()
+            assert not [n for table in tables.values() for names in table.values() for n in names], (
+                part.request.path,
+                tables,
+                "a membership row names a level inside the entry, so an entry response answers no table",
+            )
+        else:
+            # The place read reaches the level through the container element, so it answers the names the index
+            # read for that container.
+            assert [obj["name"] for obj in answer] == list(api_requests.names_in_index(index, place)), (
+                part.request.path,
+                answer,
+            )
+
+        # The row a part built for the entry its own request names names that part, so the join answers that part
+        # for it: `name` is the entry the run read for the row's scope, and a place row is answered by the place.
+        scope_rows = [r for r in part.ledger().rows() if r["container"] == place]
+        assert scope_rows, (part.request.path, part.ledger().rows(), "the join needs rows to read")
+        for report_row in scope_rows:
+            answered = (
+                api_requests.response_for_section(place, index, name=report_row["name"])
+                if len(segments) == 3
+                else api_requests.response_for_section(place, index)
+            )
+            assert answered is api_requests.entry_for_path(index, part.request.path), (report_row, answered)
+            assert answered.request.cache_name() == report_row["source"], (report_row, answered)
+
+
+def test_an_entry_two_responses_hold_gives_one_block_per_response(tmp_path, monkeypatch):
+    """Criteria 1, 2 and 4: the entry a membership list names is also the entry the run read as its own scope, so
+    the run reads it twice and keeps both answers. One response is one source, so the entry is two report rows,
+    each naming the response that holds it, and path 2 writes the content of each response it read: one block per
+    response that holds the entry, so the name rule gives the second block the suffix it states for a repeated
+    name. Path 1 read the same content as one response, so it writes one block per entry, and the two paths write
+    different bytes for content that states a membership list.
+    """
+    out1, cache1 = tmp_path / "path1", tmp_path / "cache1"
+    args, argv = _run_args(tmp_path)
+    monkeypatch.setenv(source_fetch.API_KEY_ENV, "test-key")
+    monkeypatch.setattr(source_fetch, "network_producer", _membership_producer)
+    path1 = run_pipeline(
+        panorama_to_terraform, None, out1, ("--source", "api", "--host", HOST, "--cache-dir", str(cache1))
+    )
+    assert path1 is not None, "path 1 refused the content"
+    code, parts, index = _path2_run(argv, _membership_producer, monkeypatch)
+    assert code == 0, "the path 2 run"
+
+    # Path 2 read one response per place and one per entry the index names for the same entries path 1 read as
+    # one response.
+    assert len(parts) == 2 * len(MEMBERSHIP), (parts, "the entry is read twice")
+    assert len({part.request.path for part in parts}) == len(parts), "one response is read once"
+    assert not path1.source.is_per_scope and all(part.source.is_per_scope for part in parts), (
+        "path 1 read one response, path 2 one per place and one per entry",
+    )
+
+    view = _view(parts)
+    emitted = [row for row in view.rows() if row["destination"] == "emitted"]
+    assert emitted, "the pin needs rows to read"
+    for name in sorted({row["name"] for row in emitted}):
+        held = [row for row in emitted if row["name"] == name]
+        assert len(held) == 2, (name, held, "one row per response that holds the entry")
+        assert len({row["source"] for row in held}) == 2, (held, "two rows name two responses")
+
+    files1, files2 = tf_files(out1), tf_files(args.output_dir)
+    blocks1 = sanity_checks.blocks(files1, ("resource",))
+    blocks2 = sanity_checks.blocks(files2, ("resource",))
+    assert blocks1 and blocks2, "the pins need blocks to read"
+    assert len(blocks2) == 2 * len(blocks1), (blocks1, blocks2, "one block per response that holds the entry")
+    assert files1 != files2, "the byte agreement holds only for content that states no membership list"
+
+    # The unit is the one unit rule's name, and the writer writes one file per unit for it. Path 1's block for an
+    # entry is the first of the two, so the second is the entry response's own block with the name rule's suffix.
+    units = {unit_manifest.directory_name(facts, naming.sanitize) for facts in unit_manifest.units(view)}
+    assert units == {block.file.split("/")[0] for block in blocks2}, (units, sorted(block.file for block in blocks2))
+    for unit in sorted(units):
+        read = [block for block in blocks2 if block.file.split("/")[0] == unit]
+        first = sorted(block.local for block in read if not block.local.endswith("_2"))
+        assert first == sorted(block.local for block in blocks1 if block.file.split("/")[0] == unit), (unit, read)
+        assert len(first) == len(read) // 2 == 2, (unit, read, "one entry read twice writes two blocks")
+        assert all(block.local.endswith("_2") for block in read if block.local not in first), (unit, read)
+
+
+def test_the_double_read_agrees_with_the_gate(tmp_path, monkeypatch):
+    """Criterion 5: the gate reads the double read as two sets that agree, so it reports nothing for it. The entry
+    side reads 2 for the unit and the row that names the entry read twice, and the block side reads 2 for the same
+    unit and row, because each response that holds the entry wrote a block. `check_request_set` reports nothing
+    because both responses are in the read set. Path 1 reports nothing on the same content, and it reports
+    `request_set` as NOT RUN because path 1 holds no index (`docs/API_CONVERSION_PATH.md` §3).
+    """
+    out1, cache1 = tmp_path / "path1", tmp_path / "cache1"
+    args, argv = _run_args(tmp_path)
+    monkeypatch.setenv(source_fetch.API_KEY_ENV, "test-key")
+    monkeypatch.setattr(source_fetch, "network_producer", _membership_producer)
+    path1 = run_pipeline(
+        panorama_to_terraform, None, out1, ("--source", "api", "--host", HOST, "--cache-dir", str(cache1))
+    )
+    assert path1 is not None, "path 1 refused the content"
+    code, parts, index = _path2_run(argv, _membership_producer, monkeypatch)
+    assert code == 0, "the path 2 run"
+
+    view = _view(parts)
+    files1, files2 = tf_files(out1), tf_files(args.output_dir)
+    assert sanity_checks.check_round_trip(files2, view) == [], "the two counts read the same set"
+    assert sanity_checks.check_request_set(index, view) == [], "both responses are in the read set"
+    assert sanity_checks.check_round_trip(files1, path1.ledger) == [], "path 1 read one response per entry"
+
+    # The two counts the rule reads for one unit and one row, read through the owners the rule names.
+    row = entry_coverage.matrix_row_for("device-group")
+    assert row is not None, row
+    entries = [
+        r for r in view.rows() if r["destination"] == "emitted" and entry_coverage.matrix_row_for(r["container"]) is row
+    ]
+    assert len(entries) == 2, entries
+    assert len({r["source"] for r in entries}) == 2, (entries, "two responses, two rows")
+    unit = unit_manifest.directory_name(unit_manifest.facts_of(entries[0]), naming.sanitize)
+    counted = [b for b in sanity_checks.blocks(files2, ("resource",)) if b.file.split("/")[0] == unit]
+    assert len([b for b in counted if b.rtype == row["resource"]]) == 2, (unit, counted)

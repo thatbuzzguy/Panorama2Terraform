@@ -155,6 +155,26 @@ place level, so the scan reports the place, which is the finding `backlog.md` ke
 response for a built-in place, because no membership row reads `predefined`. This changes no path 1 rule,
 because the guard reads a per-scope source.
 
+**An entry a membership list names can also be the entry the run read as its own scope.** An entry inside a
+place response that holds a membership list gains an index entry (§2.2), and the run order (§6) reads that entry
+as a response of its own, so the run reads it twice: once inside the place response, once as the response its own
+request made. Path 2 states no rule that one of the two answers is the answer for the entry, so the run keeps
+both, and each response records its own rows. A parse method reads the entries at the level its container-table
+row names. A whole-config source and a place read reach that level through the container element, so they are
+unchanged. A per-scope entry response holds no element at that level, because `result` is the place the path
+names, so the entry directly under the root is the entry at that level and the method named by the row reads it;
+`PanoramaParser._section_entries` is the one place that states this. A membership row names a level inside the
+entry the path names, so an entry response answers no membership table and the index keeps reading its set from
+the place responses. With no merge rule, the joined answer holds one value per response for the same entry, so
+path 2 writes the content of each response it read: one block per response that holds the entry, and the naming
+rule (`naming.py`, read through `declare_block_name`) gives the second block the suffix it states for a repeated
+name. Path 1 read one response, so it writes one block per entry, and the byte agreement in §5 holds only for
+content that states no membership list. The gate reads the double read as two sets that agree, because both read
+one row and one block per response that holds the entry. Pinned by `tests/test_api_path.py`:
+`test_the_entry_read_answers_the_entry_its_own_request_names`,
+`test_an_entry_two_responses_hold_gives_one_block_per_response`, and
+`test_the_double_read_agrees_with_the_gate`.
+
 Pinned by `tests/test_api_path.py`: `test_each_response_keeps_its_own_line_map`,
 `test_the_parent_walk_answers_within_one_response`, `test_the_join_answers_one_response_per_section`,
 `test_a_section_that_names_no_scope_is_refused`,
@@ -306,7 +326,9 @@ only from the request that read the entry, and no parse method reads it off the 
   pin that keeps the two paths honest to each other:
   `tests/test_api_path.py::test_content_with_no_live_only_fact_writes_the_same_tf_bytes_as_path_1`. The pin reads
   the content through an injected producer, so no test reads a network or a committed response, and the content is
-  not corpus material.
+  not corpus material. The content states no membership list, so path 2 reads one response per place; for content
+  that states one, the entry a list names is read twice and the two paths write different bytes (§2.4), which
+  `tests/test_api_path.py::test_an_entry_two_responses_hold_gives_one_block_per_response` pins.
 
 ## 6. The run order, and the join across responses
 
@@ -319,6 +341,12 @@ it, and a container the run already read as a membership response is not read ag
 record file the run wrote is the order's own statement (§2.5). Pinned by
 `tests/test_api_path.py::test_the_run_order_is_the_membership_lists_then_the_index_entries`, which reads the
 order through the owners' names and compares it with the record file the same run wrote.
+
+The order reads a membership response and then the entries the index names, so an entry inside a place that holds
+a membership list is read twice: once inside the place response, once as the response its own request made. One
+response is read once, so no response is read a second time, and the order states no rule that decides which of
+the two answers is the answer for that entry. The run keeps both answers and writes the content of each response
+it read, which is the rule §2.4 states and pins.
 
 **The join across responses.** The four tables stay per response in `api_requests.py`, so a run that read N
 responses needs one set before the index can read them. The join rule is stated once, in
