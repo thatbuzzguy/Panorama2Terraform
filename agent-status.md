@@ -2,9 +2,9 @@
 
 ## Current position
 
-Epic 8 (the second path) is complete with piece F8.10. The rules it landed are in
-`docs/API_CONVERSION_PATH.md`, the modules are `src/api_requests.py` and `src/api_to_terraform.py`, and the pins
-are in `tests/test_api_requests.py`, `tests/test_api_path.py`, `tests/test_unit_manifest.py`,
+Epic 8 (the second path) is complete with piece F8.10, and Piece 8 closed the finding F8.10 left open. The rules
+it landed are in `docs/API_CONVERSION_PATH.md`, the modules are `src/api_requests.py` and `src/api_to_terraform.py`,
+and the pins are in `tests/test_api_requests.py`, `tests/test_api_path.py`, `tests/test_unit_manifest.py`,
 `tests/test_ownership.py`, `tests/test_provenance.py`, `tests/test_sanity_gate.py`, `tests/test_variables.py`, and
 `tests/test_site_data.py`. The completed piece detail is not kept here; the git history holds it.
 
@@ -15,8 +15,20 @@ content lives in the test file (`AGREEMENT` and `AGREEMENT_EXPORT`), so the comm
 files, and no test reads a network or a committed response. Measured: 10 `.tf` files byte-for-byte the same,
 4 resources, 4 report rows each read through the ledgers, the two source sets disjoint, and the gate reports no
 finding for either run, with `request_set` NOT RUN for path 1 and PASS for path 2. The content states no
-membership list, because a membership list makes the entry its own scope, so the same entry is read twice and the
-bytes do not agree; that is a finding in `backlog.md`, with its owner.
+membership list, because a membership list makes the entry its own scope, so the same entry is read twice.
+
+Piece 8 (2026-11-18) decided that double read. The run reads the membership response and then the entries the
+index names, so an entry a membership list names is read twice, once inside the place response and once as the
+response its own request made, and the run keeps both answers: each response records its own rows. A parse method
+reads the entries at the level its row names, so an entry response answers the entry its own request named, through
+`PanoramaParser._section_entries` in `src/panorama_to_terraform.py`, and a membership row answers nothing for an
+entry response. Path 2 writes the content of each response it read, so the same entry read twice gives one block
+per response and the naming rule's suffix on the second. Measured on `MEMBERSHIP`: 4 responses read, 8 emitted
+rows (2 per entry name, each naming its own response), path 2 writes 8 resource blocks against path 1's 4, and the
+gate reports nothing for either run. The rule is in `docs/API_CONVERSION_PATH.md` §2.4 and §6; the pins are
+`tests/test_api_path.py::test_the_entry_read_answers_the_entry_its_own_request_names`,
+`test_an_entry_two_responses_hold_gives_one_block_per_response`, and
+`test_the_double_read_agrees_with_the_gate`.
 
 The licensing rule is in `docs/LICENSING.md`, the owner document: the fork source, the two holders, the split
 measured through `git blame`, and the scope of each grant. `LICENSE-COMMERCIAL` is the upstream author's grant, so
@@ -24,9 +36,9 @@ it covers the upstream parts only, and this project grants no commercial terms f
 "non-commercial" is not used as a license name, because AGPL v3 permits commercial use and §10 does not allow an
 extra non-commercial condition on a derivative work, so the choice reads as "AGPL v3 only".
 
-Test count: `python3 -m pytest` reads 1,685 pins in 52 test modules, with no skips. `ruff check .` is clean and
-`ruff format --check .` is clean on the 100 Python files. `tests/test_api_path.py` reads 30 pins (29 before
-F8.10). `pyproject.toml` sets `addopts = "-q"`, so a second `-q`
+Test count: `python3 -m pytest` reads 1,688 pins in 52 test modules, with no skips. `ruff check .` is clean and
+`ruff format --check .` is clean on the 100 Python files. `tests/test_api_path.py` reads 33 pins (30 before
+Piece 8). `pyproject.toml` sets `addopts = "-q"`, so a second `-q`
 suppresses the summary line; the count is read from the per-module collection counts.
 
 Full-suite time, measured 2026-11-13: 325.4 s, 364.6 s and 364.9 s on three runs of the same set (5 min 25 s to
@@ -34,7 +46,8 @@ Full-suite time, measured 2026-11-13: 325.4 s, 364.6 s and 364.9 s on three runs
 held 663 pins took 35 s, so the growth is the corpus pins and the pins that run `terraform`. The slowest part is
 `tests/test_terraform_validate.py` at 121.4 s, then `tests/test_sanity_gate.py` at 49.9 s (34.0 s of it in the
 three pins that run the gate with the terraform binary), then the corpus pins at 79.8 s. The Piece 7 runs, measured
-2026-11-16, took 4 min 24 s and 6 min 25 s for the same set.
+2026-11-16, took 4 min 24 s and 6 min 25 s for the same set. The Piece 8 run, measured 2026-11-18, passed 1,688
+pins in 305.56 s.
 
 Gate size, decided 2026-11-13: no smaller default gate is adopted. The measured subset that drops the pins that
 call `terraform` runs in 203.0 s (44% of the full run), and the subset that drops the corpus pins runs in about

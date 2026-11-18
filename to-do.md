@@ -3,7 +3,7 @@
 The tracking markdown for the completed pieces is removed here; the git history and the owner documents hold
 it. The open pieces are the actionable findings the 2026-11-11 and 2026-11-12 audits recorded in `backlog.md`.
 Each piece below names the rule it holds, the module that states it, and the test that pins it. One piece is
-finished before the next is started. Pieces 3 to 7, and Piece 9, are kept below with the pins they name; the piece
+finished before the next is started. Pieces 3 to 9 are kept below with the pins they name; the piece
 numbers follow the audit order, apart from Piece 9, which is a `backlog.md` Nice-to-Haves item.
 
 ## Current series
@@ -184,14 +184,43 @@ Owner: the tracking markdown, `docs/ARCHITECTURE.md` §1 and §1.1, `README.md`,
   (`tests/test_coverage_matrix.py`). Each is named in the rule column of its §1 table row, and no `ROW_FIELDS`
   is left in the flat namespace.
 
-### Piece 8 — the membership entry read
+### Piece 8 — the membership entry read (complete, committed 2026-11-18)
 
-Owner: `docs/API_CONVERSION_PATH.md` §2.4 and §6, `api_requests.py`, `tests/test_api_path.py`.
+Owner: `docs/API_CONVERSION_PATH.md` §2.4 and §6 for the rule, `src/panorama_to_terraform.py`
+(`PanoramaParser._section_entries`) for the parse rule, and `tests/test_api_path.py` for the pins. The criteria
+and the measurement are in `acceptance.md`.
 
-- [ ] Decide what a run does when a membership response and an entry response hold the same entry:
-      the index names each entry as its own scope, so the entry is read twice. Pin the decision in
-      `tests/test_api_path.py`. This piece needs the content that shows the shape; the F8.10 agreement
-      holds only for content that states no membership list.
+- The decision: the double read stands and both answers stand. The run order reads the membership response and
+  then the entries the index names, so an entry a membership list names is read twice: once inside the place
+  response, once as the response its own request made. No rule makes one of the two answers the answer for the
+  entry, so the run keeps both, and each response records its own rows.
+- A parse method reads the entries at the level its container-table row names, so an entry response answers the
+  entry its own request named; a whole-config source and a place read reach that level through the container
+  element and are unchanged. A membership row names a level inside the entry the path names, so an entry response
+  answers no membership table and the index keeps reading its set from the place responses.
+- Path 2 writes the content of each response it read, so one block per response that holds the entry, and the name
+  rule gives the second block the suffix it states for a repeated name. Path 1 read one response, so it writes one
+  block per entry, and the byte agreement holds only for content that states no membership list, which is the
+  content the F8.10 pin keeps.
+- The gate reads the double read as two sets that agree, so it reports nothing for it: both counts read 2 for the
+  same unit and the same row, and both responses are in the read set.
+- Pins: `test_the_entry_read_answers_the_entry_its_own_request_names`,
+  `test_an_entry_two_responses_hold_gives_one_block_per_response`, and
+  `test_the_double_read_agrees_with_the_gate`. The content is `MEMBERSHIP` and `MEMBERSHIP_EXPORT`, read through an
+  injected producer, so no pin calls a network and no committed response is added: the committed set stays at 3
+  files.
+
+Gate: `ruff check .` clean, `ruff format --check .` clean, 1,688 pins in 52 modules, all pass, no skips, 305.56 s.
+`python3 tools/check_documents.py` reports no finding. The F8.10 finding is closed.
+
+Next in the series (one piece finished before the next is started):
+
+- Piece 10 — the open 2026-11-11 audit findings: the response-set rule as a file property, the skip that
+  hides a failure, the pins that restate an owner table as a measured count, the provider-schema pins that
+  do not run in CI, and the two `.github/` template files outside every index.
+- Piece 11 — `tflint` integration (`backlog.md`, Nice-to-Haves), the next actionable slice outside this series.
+- Piece 12 — `pyproject.toml` `target-version` to the Python floor (`py310`), 101 findings, as its own commit
+  (`backlog.md`, Nice-to-Haves).
 
 ### Piece 9 — `ruff format` as a gate (complete, committed 2026-11-16)
 
