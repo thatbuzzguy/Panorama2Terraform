@@ -164,7 +164,7 @@ Owner: the tracking markdown, `docs/ARCHITECTURE.md` §1 and §1.1, `README.md`,
   completes the set for all 22 modules. `tests/test_layout.py` measures it, so a module that is not named in the
   table fails.
 - Item 2 — the test set is named by the root index, so `tests/` keeps no index of its own. `README.md` names
-  every test module, `tests/conftest.py`, and the three files in `tests/responses/`; `docs/ARCHITECTURE.md` §1.1
+  every test module, `tests/conftest.py`, and the files the response set holds; `docs/ARCHITECTURE.md` §1.1
   states the rule and names the four index scopes. `tests/test_layout.py` measures it.
 - Item 3 — a document that names a test names a test that exists. Four claims took the real name
   (`docs/ARCHITECTURE.md` §4.9, `docs/API_CONVERSION_PATH.md` §1, `to-do.md` Piece 4, and the profile-name claim
@@ -213,11 +213,56 @@ and the measurement are in `acceptance.md`.
 Gate: `ruff check .` clean, `ruff format --check .` clean, 1,688 pins in 52 modules, all pass, no skips, 305.56 s.
 `python3 tools/check_documents.py` reports no finding. The F8.10 finding is closed.
 
+### Piece 10 — the open 2026-11-11 audit findings (complete, committed 2026-11-18)
+
+Owner: `docs/ARCHITECTURE.md` §1.1 for the layout rule and the response set, `tests/test_api_requests.py` for the
+response-set pins, `.github/workflows/python-tests.yml` for the CI gate, `tests/conftest.py` for the skip rule, the
+test modules named below for the pins that restate a table as a measured count, and `tests/test_layout.py` for the
+index rule. The criteria for all six items are in `acceptance.md`. One item was worked at a time, and each was
+measured before the next was started.
+
+- Item 1 — `tests/fixtures/api_response.xml` left the corpus. Its key-free identity
+  (`241cbc8980537850768efb4f106eaf6665bbc113a5ecd7c9fbd42449f200d34f.xml`) is already held by the
+  committed whole-config export response, so it cannot be a fourth response file, and its entries cannot join that
+  response because the address set would then hold two entries named `web-server` in two containers. The content
+  stays in the corpus in the export form as `tests/fixtures/export_config.xml` (root `config`), and the committed
+  export response holds the same config content, so the pins that compare the two producers read one content, and
+  the pins that read a file source read an export. Lines re-measured: `config` at line 2 and `web-server` at line 8
+  in the corpus file, `config` at line 10, `Edge` at line 12, `web-server` at line 18 in the response.
+- Item 2 — the response-set rule reads a content property of each file, not a name comparison between the two
+  sets. The two remaining response-rooted corpus files moved to `tests/responses/` under the identity of the
+  request the pins name for them: `4d5f78d78ee8898b238ff3b4b6b2bda6658590c49a27d7173372bfa429f4904e.xml`
+  (`path=device-group/entry/Production-DG`) and
+  `18caa0bbc1b94e0377e658b82f67e90fe8a9a82658ee70e7646f3098ff72a074.xml` (`path=shared`), so the set reads 5 files
+  and `HARNESS` gained their requests. `tests/test_api_requests.py::
+  test_one_committed_response_per_request_shape_names_the_request_identity_that_produced_it` reads the property in
+  both directions. The pair left the round-trip corpus table, which is now 19 facts on 8 fixtures, and their facts
+  are read through the injected producer in `tests/test_shadow_coverage.py` and `tests/test_ownership.py`.
+- Item 3 — the `terraform-gate` CI job runs the whole test set with the terraform binary present, so a module that
+  starts reading the provider schema is covered without a module list that can drift.
+- Item 4 — `tests/conftest.py::provider_schemas` skips only when the terraform binary is absent and asserts when
+  `terraform init` returns non-zero, so a provider-cache or registry failure is a failure. `README.md` §Testing and
+  the two module docstrings state the rule.
+- Item 5 — the five pin groups read as derivations from the owner table's rows, with the measured number kept in
+  the docstring as a dated measurement: the read set and the record in `tests/test_build_kitchen_sink.py`, the
+  choice rows and the whole-value split in `tests/test_filter_containers.py`, the `disable_override` rows in
+  `tests/test_resource_mapping.py`, the unmeasured row in `tests/test_property_coverage.py`, and the data-file
+  count in `tests/test_data_file_gate.py`. Counts of a table's own rows have no derivation and stay as
+  measurements.
+- Item 6 — the index rule gained the case that a directory with no index of its own is named by the root index, so
+  the two `.github/` contribution templates stay and `README.md` names them;
+  `tests/test_layout.py::test_the_indexes_name_every_document_under_them` reads names only, so the response-set
+  count left that pin and is held by `tests/test_api_requests.py`.
+
+Gate, measured 2026-11-18 in one run in the order `ruff check .`, `ruff format --check .`, `python3 -m pytest`,
+`python3 tools/check_documents.py`: `ruff check .` clean, `ruff format --check .` clean on the 100 Python files,
+1,686 pins in 52 modules, all pass, no skips, 313.68 s, and the document check reports no finding. The count is 2
+lower than the baseline (1,688), all in `tests/test_sanity_gate.py` (101 to 99), because its corpus pin is
+parametrized through `tests/conftest.py::corpus_fixtures` and the three response-rooted files left the corpus; no
+pin was removed or weakened. The six findings are closed.
+
 Next in the series (one piece finished before the next is started):
 
-- Piece 10 — the open 2026-11-11 audit findings: the response-set rule as a file property, the skip that
-  hides a failure, the pins that restate an owner table as a measured count, the provider-schema pins that
-  do not run in CI, and the two `.github/` template files outside every index.
 - Piece 11 — `tflint` integration (`backlog.md`, Nice-to-Haves), the next actionable slice outside this series.
 - Piece 12 — `pyproject.toml` `target-version` to the Python floor (`py310`), 101 findings, as its own commit
   (`backlog.md`, Nice-to-Haves).
