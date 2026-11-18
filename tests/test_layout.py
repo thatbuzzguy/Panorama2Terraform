@@ -70,9 +70,3 @@ def test_the_indexes_name_every_document_under_them():
     table = table.split("## 1. Modules")[1].split("### 1.1")[0]
     for path in sorted(SRC_DIR.glob("*.py")):
         assert f"| `{path.name}` |" in table, (path.name, "the module table names every src module")
-
-    # AC-4: every module in `src/` is named in the §1 module table.
-    table = (REPO_ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
-    table = table.split("## 1. Modules")[1].split("### 1.1")[0]
-    for path in sorted(SRC_DIR.glob("*.py")):
-        assert f"| `{path.name}` |" in table, (path.name, "the module table names every src module")

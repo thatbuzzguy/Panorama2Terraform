@@ -99,9 +99,21 @@ appearing once; the script stays a document-review script that the test set does
 before: 81 entries, 55 names, 26 named exactly twice, none three times, so the count the finding
 stated did not hold on the current tree. Measured after: 55 entries, each named once, the same 52
 test modules, and the check reads the committed README as 26 findings and the fixed README as none.
-No pin was added, weakened or removed. One finding stays open in `backlog.md`:
-`tests/test_layout.py` reads the `src/` module-table check twice inside the same pin, which is
-repetition rather than a rule finding.
+No pin was added, weakened or removed. The one finding that piece left open is closed by Piece 15.
+
+Piece 15 (2026-11-18) is the last offline-actionable item and is complete, and it closed that
+finding. Re-measured 2026-11-18 on the tree at `5c70949`: `tests/test_layout.py` is 78 lines, the
+pin `test_the_indexes_name_every_document_under_them` holds 8 asserts, and its AC-4 half is stated
+twice, at lines 68 to 72 and at lines 74 to 78, word for word, with the blank line 73 between them,
+so the same 22 `src/` modules were read against the same §1 module table text twice on every run.
+The two blocks state one fact, so nothing was merged: the second block is removed and the pin keeps
+the fact measured once, with the same name, comment, reads and assertion. Measured after: 72 lines,
+7 asserts, one AC-4 comment and one read of the table. The decision on the rule is that no rule
+states that a pin block is not repeated, and none was written: the Piece 7 rule says a pin measures
+content or a name, which says nothing about reading a set twice, and `tools/check_documents.py`
+reads documents, not test files, so a repeated block inside a pin is not a finding a check can
+print. The piece fixes the instance, not the rule. Nothing offline-actionable remains: what stays in
+`backlog.md` needs a fact a live target states.
 
 The licensing rule is in `docs/LICENSING.md`, the owner document: the fork source, the two holders, the split
 measured through `git blame`, and the scope of each grant. `LICENSE-COMMERCIAL` is the upstream author's grant, so
@@ -114,10 +126,12 @@ is present, and 4 skips for the missing binary when it is absent, because the pi
 set skip only for a missing binary. The count is the same before and after Piece 12, so no pin was
 added, removed, or weakened. Piece 13 adds no pin, and the count is 1,697 in 52 modules before and
 after it, read from the per-module collection counts. Piece 14 adds no pin, and the count is the
-same 1,697 in 52 modules before and after it, read the same way. `ruff check .` is clean at the
-level `pyproject.toml` states and `ruff format --check .` is clean on the 100 Python files.
-`tests/test_api_path.py` reads 33 pins (30 before Piece 8). `tests/test_sanity_gate.py` reads 110
-pins, 11 more than the 99 it read before Piece 11. `pyproject.toml` sets `addopts = "-q"`, so a
+same 1,697 in 52 modules before and after it, read the same way. Piece 15 adds no pin, removes no
+pin and weakens no pin, and reads the same count before and after it: the change removes one
+duplicate assert inside the index pin, and a pin is the test function, not an assert. `ruff check .`
+is clean at the level `pyproject.toml` states and `ruff format --check .` is clean on the 100 Python
+files. `tests/test_api_path.py` reads 33 pins (30 before Piece 8). `tests/test_sanity_gate.py` reads
+110 pins, 11 more than the 99 it read before Piece 11. `pyproject.toml` sets `addopts = "-q"`, so a
 second `-q` suppresses the summary line; the count is read from the per-module collection counts.
 
 Full-suite time, measured 2026-11-13: 325.4 s, 364.6 s and 364.9 s on three runs of the same set (5
@@ -143,7 +157,12 @@ file in the repository root. The Piece 14 run, measured 2026-11-18 on the final 
 binary present, passed the same 1,697 pins in 52 modules in 360.33 s, with `ruff check .` clean at
 `py310`, `ruff format --check .` clean on the 100 Python files, and `python3 tools/check_documents.py`
 reporting no finding, read at 6.20 s after the final document edits. The same set passed in 299.71 s
-on the run before the final document wrapping, so the wrapping changed no pin.
+on the run before the final document wrapping, so the wrapping changed no pin. The Piece 15 run,
+measured 2026-11-18 on the final tree with this piece's change and the tflint binary present, passed
+the same 1,697 pins in 52 modules in 258.53 s, with `ruff check .` clean at `py310`,
+`ruff format --check .` clean on the 100 Python files, and `python3 tools/check_documents.py`
+reporting no finding, read at 6.54 s after the final document edits. The same set measured 263.54 s
+before the final document edits and 271.38 s on the tree before the change.
 
 Gate size, decided 2026-11-13: no smaller default gate is adopted. The measured subset that drops the pins that
 call `terraform` runs in 203.0 s (44% of the full run), and the subset that drops the corpus pins runs in about
@@ -183,9 +202,8 @@ start at 3.10, so no leg runs a Python below the level the gate enforces.
 The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2
 live facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry
 inside a stack, the EDL `certificate_profile` field, and the profile-name report column. The audit
-series is complete with Piece 12, and Pieces 13 and 14 are the last offline-actionable pieces, so no
-actionable slice is left open: what stays in `backlog.md` needs a fact a live target states, or is a
-repetition inside a pin that the rules put outside this piece.
+series is complete with Piece 12, and Pieces 13 to 15 are the last offline-actionable pieces, so no
+actionable slice is left open: what stays in `backlog.md` needs a fact a live target states.
 
 Piece 3 (pins that measure nothing) is complete. The five findings the 2026-11-11 audit recorded in
 `backlog.md` are fixed, each by making the pin read the material its own rule names, and no pin failed when it

@@ -1,111 +1,87 @@
-# Acceptance — `README.md` §Testing names each module once (Piece 14)
+# Acceptance — the index pin reads the module-table half once (Piece 15)
 
-Criteria set 2026-11-18 for the `backlog.md` finding Piece 13 recorded: `README.md` §Testing states
-that each module is named once there, and the section names test modules twice. This piece measures
-the duplication again, decides which side is wrong, and records the measurement.
+Criteria set 2026-11-18 for the `backlog.md` finding Piece 14 recorded: the index pin reads the half
+of the index rule that compares every `src/` module with the `docs/ARCHITECTURE.md` §1 module table
+twice inside the same pin, so the same set is read twice on every run. This piece measures the
+repetition again, removes the second block, and records the measurement.
 
 Owners: `docs/ARCHITECTURE.md` §1.1 owns the layout rule and the index rule, and states that a pin
-holds a name being present and cannot hold how a document words it, so the document-review checks
-sit in `tools/check_documents.py`, which the test set does not read. `tests/test_layout.py` holds
-the one pin for the index rule and reads names only. `README.md` is the root index, so it owns
-naming the test set; its §Testing section states the rule that each module is named once there,
-which is wording, so the check that reads it is the document-review script and not a pin.
-`agent-status.md` and `acceptance.md` hold the measurement.
+holds a name being present and cannot hold how a document words it, so the document-review checks sit
+in `tools/check_documents.py`, which the test set does not read.
+
+`tests/test_layout.py` holds the one pin for the index rule and reads names only, so this piece
+changes no other test file. `agent-status.md` and `acceptance.md` hold the measurement.
 
 Rules this piece works under, from `agent-status.md` §Rules to keep when writing documents:
 
-One owner document per rule; every other document links to it. A pin measures content or a name,
-never the wording of a document, so a wording check lives in `tools/check_documents.py`, which the
-test set does not read. No pin is weakened or removed. If this piece writes no pin, the reason is
-recorded here. No document states a test count; `agent-status.md` and `acceptance.md` hold the
-measurement. Standard library only; everything stays offline and deterministic.
-`tools/check_documents.py` reads the tool's tables through `ast` and the license split through
-`git`, imports no tool module, and writes no file. The repository root stays clean: this piece
-changes no output, no golden and no fixture.
+- One owner document per rule; every other document links to it.
+- A pin measures content or a name, never the wording of a document. A wording check is a document
+  review, so it lives in `tools/check_documents.py`, which the test set does not read.
+- A pin is not weakened or removed: the pin keeps the same fact, the same name, and the same reads.
+- No document states a test count; `agent-status.md` and `acceptance.md` hold the measurement.
+- Standard library only; everything stays offline and deterministic.
+- The repository root stays clean: this piece changes no output, no golden and no fixture.
 
-## Item 1 — which side is wrong
+## Item 1 — the instance, measured before the fix
 
-**Decision: the README is wrong, not the rule.** The section states one rule (a module is named
-once, because the root index names the test set) and then repeats a block of rows it had already
-listed. Each duplicate is a repeat of the same facts in another place, not a second fact about one
-module, so the section agrees with its own rule once the repeated rows are gone. The rule stays as
-it is: the section lists each module in its own area, so a module has one row.
+`tests/test_layout.py`, measured 2026-11-18 on the tree at commit `5c70949`. The file is 78 lines,
+the pin runs from line 28 to line 78, and it holds 8 asserts. Its AC-4 half is stated twice:
 
-AC-1.1: measure the duplication again before fixing it, and report the count before and after. The
-`backlog.md` entry says 24 test modules named twice, with `tests/test_sanity_gate.py` three times;
-the count is re-read on the current tree, because it moves with Pieces 10 to 13. AC-1.2: each
-duplicate is read as a pair before any row is removed, and a pair is removed only when the two rows
-state the same facts. A pair that states different facts is merged into one row instead of deleted.
-AC-1.3: every module the section named before is still named after, in one row, in its own area, so
-the index pin still reads every test module name in the root index. AC-1.4: the sentence that states
-the rule stays, and names where the rule is checked, so the document does not claim a check the
-project does not have.
+- Block one, lines 68 to 72: the AC-4 comment, the read of `docs/ARCHITECTURE.md`, the split to the
+  §1 module table, and the loop that asserts each `src/` module is named in it.
+- Line 73 is the blank line between the two blocks, which is why `backlog.md` read the first block as
+  lines 68 to 73.
+- Block two, lines 74 to 78: the same five lines, word for word, so the pin reads the same 22 `src/`
+  modules against the same table text a second time on every run.
 
-## Item 2 — the check that reads the rule
+The two blocks are identical, so they state one fact, not two: every module in `src/` is named in the
+§1 module table. Nothing needs merging, so the fix removes the second block, and the pin keeps the
+fact, the name, the comment, the reads and the assertion.
 
-**Decision: the duplicate-name check goes in `tools/check_documents.py`, as a document-review
-check.** The project rule puts a wording rule there, because a pin can hold a name being present and
-cannot hold a name appearing once. The check reads the section as a list of names, so it measures
-the names and not the prose, and it reports the section disagreeing with the rule the section
-states.
+- AC-1.1: the repetition is measured before any line is removed, and the count is reported before and
+  after.
+- AC-1.2: the removed lines are the second block only. The first block is unchanged, including its
+  AC-4 comment, so the pin's AC wording stays honest: one AC-4 block remains, and this file names one.
+- AC-1.3: the pin's name, its docstring, the set it reads, and its assertion are unchanged. The assert
+  count falls from 8 to 7 because one duplicate assert is removed, and the pin count does not change,
+  because a pin is the test function, not an assert.
+- AC-1.4: after, measured on the tree with the change: the file is 72 lines, the pin holds 7 asserts,
+  and the AC-4 comment and the read of the §1 module table each appear once, so the pin reads the same
+  22 `src/` modules against the table text once per run. The pin passes.
 
-AC-2.1: the check is in the document-review script, not in a test. No pin is added, and no pin reads
-document wording. AC-2.2: the script keeps its own rules: standard library only, no tool module
-import, no file written, not part of the gate, and the test set does not read it. AC-2.3: the check
-reports the duplication before the fix, so the finding it was written for is measured by the check
-itself, and reports no finding after the fix. AC-2.4: the check reads only the section that states
-the rule, so it cannot read a name in another document as a duplicate of a name in §Testing.
+## Item 2 — is there a rule that a pin block is not repeated
 
-## Item 3 — the layout and the index pins
+**Decision: no such rule exists, and this piece does not invent one.** The rule that a pin measures
+content or a name, never the wording of a document, says nothing about a pin reading the same set
+twice. The checks that read documents are `tools/check_documents.py` checks 1 to 6, and none of them
+reads a test file for a repeated block, so a pin block that repeats is not a finding a check can
+print. The pins that read test files read a name or a needle, not a repeated block.
 
-AC-3.1: no document is moved, renamed, or deleted, so no index changes and the index pin is
-unchanged. AC-3.2: `tools/check_documents.py` is named by `tools/README.md`, and `tests/` keeps no
-index of its own, so both stay as §1.1 states. AC-3.3: the pin count is recorded before and after
-and is expected unchanged, because this piece adds no pin.
+- AC-2.1: the decision is recorded here and in `backlog.md`, and no check and no pin is added for it,
+  so this piece fixes the instance, not the rule.
+- AC-2.2: the rule that a pin reads names and not wording stays where its owner states it, and
+  `tools/check_documents.py` stays the place a wording check lives, so nothing moves.
 
-## Item 4 — the measurement
-
-Before, measured 2026-11-18 on `README.md` §Testing (read from `## Testing` to the next heading, the
-list entries read as the name at the start of each entry):
-
-81 entries, 55 distinct names: 52 test modules, `python3 -m pytest`, and the two lint and format
-legs. The 52 test modules are the whole test set, so the index pin reads the same names before and
-after. 26 names are named more than once, each exactly twice: 24 test modules and the two legs. No
-name is named three times, so the `backlog.md` claim of three for `tests/test_sanity_gate.py` does
-not hold on the current tree. Read as the entry text from the name to the next entry or heading, 25
-of the 26 pairs are identical word for word, and the pair for `ruff format --check .` is the same
-line: the text that read as different is the prose paragraph that follows its second occurrence, the
-flat layout rule. So no pair states two different facts, and nothing needed merging. The repeated
-block is the 26 entries that follow the first occurrence of the two lint and format legs, in the
-order the earlier areas list them, so the fix removes that block and keeps each module's row in its
-own area.
-
-After, measured the same way: 55 entries, 55 names, each named once: the same 52 test modules,
-`python3 -m pytest`, and the two legs.
-
-## Item 5 — a finding recorded during the piece
-
-`tests/test_layout.py` reads one half of the index rule twice: the block that compares every `src/`
-module with the §1 module table is stated twice in the same pin, at lines 68 to 73 and at lines 74
-to 78, measured 2026-11-18. This is repetition, not a rule finding: the pin passes either way, so
-the fix is to remove the second block. It is outside this piece, so it stays in `backlog.md`. The
-piece changed no test file.
-
-## Gate
+## Item 3 — the gate
 
 Run in order, with no parallel runner: `ruff check .`, `ruff format --check .`, `python3 -m pytest`,
-`python3 tools/check_documents.py`. Conservative threads.
-
-Before, on the committed tree at `d2ca9fd`: `ruff check .` clean at `py310`, `ruff format --check .`
-clean on the 100 Python files, 1,697 pins in 52 test modules, all pass, no skips, 335.42 s, and
-`python3 tools/check_documents.py` reports no finding. The count is read from the per-module
+`python3 tools/check_documents.py`. Conservative threads. The count is read from the per-module
 collection counts, because `pyproject.toml` sets `addopts = "-q"`.
 
-After, measured 2026-11-18 on the tree with this piece's edits, in that order, with tflint 0.66.0
+Before, measured 2026-11-18 on the committed tree at `5c70949`: `ruff check .` clean at `py310`,
+`ruff format --check .` clean on the 100 Python files, 1,697 pins in 52 test modules, all pass, no
+skips, 271.38 s with tflint 0.66.0 present, and `python3 tools/check_documents.py` reports no finding.
+
+After, measured 2026-11-18 on the final tree with the change, in that order, with tflint 0.66.0
 present: `ruff check .` clean at `py310`, `ruff format --check .` clean on the 100 Python files,
-1,697 pins in 52 modules, all pass, no skips, 360.33 s, and `python3 tools/check_documents.py`
-reports no finding, read at 6.20 s. The count is unchanged, so no pin was added, removed, or
-weakened (AC-3.3). The check reads the committed README as 26 findings and the fixed README as none,
-so the finding it was written for is measured by the check itself (AC-2.3). The same 1,697 pins in the
-same 52 modules passed in 299.71 s on the run before the final document wrapping, so the wrapping
-changed no pin.
+1,697 pins in 52 modules, all pass, no skips, 258.53 s, and `python3 tools/check_documents.py` reports
+no finding, read at 6.54 s after the final document edits. The same set measured 263.54 s on the run
+before those document edits, and 271.38 s on the tree before the change, so the document edits changed
+no pin. The pin count is unchanged, so AC-1.3 holds, and `tests/test_layout.py` still reads 1 pin.
+
+## Item 4 — the files this piece changes
+
+`tests/test_layout.py` (the second block removed), `acceptance.md`, `to-do.md`, `backlog.md` (the
+finding closed), `agent-status.md`. `AGENTS.md` is not changed and not committed: it holds an
+uncommitted user edit. `agent-status.md` keeps its name, because the tree holds `agent-status.md` even
+though `AGENTS.md` names `agent-status.html`.
