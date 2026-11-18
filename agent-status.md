@@ -69,15 +69,38 @@ construction and `strict=True` would refuse a chain of any length. Two pins that
 the new spelling, and the reason for each is in `acceptance.md`; no pin is weakened. The criteria, the per-site
 decision, and the gate measurement are in `acceptance.md`.
 
+Piece 13 (2026-11-18) is the last actionable offline piece and is complete. `tools/quick_start.sh`
+asks for each gate check that runs an external command when that binary is present, so it passes
+`--validate` for terraform and `--tflint` for tflint, and it prints what the run asked for. Its Next
+steps text names what `SANITY_REPORT.txt` reports for each command check: the result for a check the
+run asked for, NOT RUN for one it did not ask for, and SKIPPED for one asked for by name with no
+binary. The script states no rule of the tool: its comment states what it adds and why, and points
+at `docs/ARCHITECTURE.md` §4.6, which is the owner of what a run reports. `docs/USAGE_GUIDE.md`
+§Quick start script owns how the script runs, so it carries the change; `tools/README.md` names the
+file and states no flag, and `README.md` states the converter's flags, so neither changes. No pin
+reads the script, and none was written: a pin measures content, and the only content this piece
+changes is the script's own text, while the flag behavior is already pinned on the entry point by
+the five flag pins in `tests/test_sanity_gate.py`. So the piece is recorded as a dated measurement,
+the way `backlog.md` records the provider facts. Measured 2026-11-18 on the committed sample, run
+from outside the repository root: with both binaries present the report names `tflint PASS` and
+`terraform PASS` for each of the 2 unit directories; with no binary found the script asks for
+nothing and the report names both checks as NOT RUN, with the note that names each flag; with one
+binary present, the check with the binary names its result and the other names NOT RUN. Every run
+exits 0. One document-review finding was recorded during the piece and stays open in `backlog.md`:
+`README.md` §Testing states that each module is named once there, and 24 test modules are named
+twice.
+
 The licensing rule is in `docs/LICENSING.md`, the owner document: the fork source, the two holders, the split
 measured through `git blame`, and the scope of each grant. `LICENSE-COMMERCIAL` is the upstream author's grant, so
 it covers the upstream parts only, and this project grants no commercial terms for its own contributions. The word
 "non-commercial" is not used as a license name, because AGPL v3 permits commercial use and §10 does not allow an
 extra non-commercial condition on a derivative work, so the choice reads as "AGPL v3 only".
 
-Test count: `python3 -m pytest` reads 1,697 pins in 52 test modules: no skips when the tflint binary is present,
-and 4 skips for the missing binary when it is absent, because the pins that run the rule set skip only for a missing
-binary. The count is the same before and after Piece 12, so no pin was added, removed, or weakened.
+Test count: `python3 -m pytest` reads 1,697 pins in 52 test modules: no skips when the tflint binary
+is present, and 4 skips for the missing binary when it is absent, because the pins that run the rule
+set skip only for a missing binary. The count is the same before and after Piece 12, so no pin was
+added, removed, or weakened. Piece 13 adds no pin, and the count is 1,697 in 52 modules before and
+after it, read from the per-module collection counts.
 `ruff check .` is clean at the level `pyproject.toml` states and `ruff format --check .` is clean on the 100 Python
 files.
 `tests/test_api_path.py` reads 33 pins (30 before Piece 8). `tests/test_sanity_gate.py` reads 110 pins, 11 more than
@@ -93,10 +116,16 @@ three pins that run the gate with the terraform binary), then the corpus pins at
 pins in 305.56 s. The Piece 10 run, measured 2026-11-18, passed 1,686 pins in 313.68 s, with `ruff check .` at
 0.015 s, `ruff format --check .` at 0.011 s, and `python3 tools/check_documents.py` at 11.09 s. The Piece 11 run,
 measured 2026-11-18, passed 1,697 pins in 280.97 s with the tflint binary present and in 286.45 s with it absent,
-where the four pins that run the rule set skip for the missing binary. The Piece 12 run, measured 2026-11-18 with the
-binary present, passed the same 1,697 pins in 52 modules in 273.21 s at the new level, against 339.42 s for the same
-set read on the tree at commit `698c957` in a detached worktree; `python3 tools/check_documents.py` reports no finding
-for either tree.
+where the four pins that run the rule set skip for the missing binary. The Piece 12 run, measured
+2026-11-18 with the binary present, passed the same 1,697 pins in 52 modules in 273.21 s at the new
+level, against 339.42 s for the same set read on the tree at commit `698c957` in a detached
+worktree; `python3 tools/check_documents.py` reports no finding for either tree. The Piece 13 run,
+measured 2026-11-18 with the tflint binary present, passed the same 1,697 pins in 52 modules in
+335.42 s, with `ruff check .` clean at `py310`, `ruff format --check .` clean on the 100 Python
+files, and `python3 tools/check_documents.py` reporting no finding. The demonstration run through
+the script on the committed sample takes 3.29 s with both binaries present and 0.26 s with neither,
+measured 2026-11-18 from `/tmp/opencode/piece13`, so the script writes no file in the repository
+root.
 
 Gate size, decided 2026-11-13: no smaller default gate is adopted. The measured subset that drops the pins that
 call `terraform` runs in 203.0 s (44% of the full run), and the subset that drops the corpus pins runs in about
@@ -131,12 +160,13 @@ spelling the project writes: the PEP 604 union for an optional value, the call r
 `strict` stated at every `zip` call. No pin reads the workflow file, and the workflow states no level of its own, so
 the CI legs read `pyproject.toml`; the legs start at 3.10, so no leg runs a Python below the level the gate enforces.
 
-The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2 live
-facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry inside a
+The pieces that stay blocked on a fact the tool cannot read offline are in `backlog.md`: the path 2
+live facts in `docs/API_CONVERSION_PATH.md` §4, the four `*_policy_rules` types, a config entry
+inside a
 stack, the EDL `certificate_profile` field, and the profile-name report column. The audit series is complete with
-Piece 12, so the next actionable slice is the `tools/quick_start.sh` demonstration script (`backlog.md`,
-Nice-to-Haves): it adds no flag for the `tflint` rule set, so a run through the script reports the rule-set check as
-NOT RUN unless the caller names it.
+Piece 12, and Piece 13 is the last actionable offline piece, so no actionable slice is left open:
+what stays in `backlog.md` needs a fact a live target states, or is a document-review finding that
+the rules put outside the test set.
 
 Piece 3 (pins that measure nothing) is complete. The five findings the 2026-11-11 audit recorded in
 `backlog.md` are fixed, each by making the pin read the material its own rule names, and no pin failed when it

@@ -2,16 +2,14 @@
 
 The tracking markdown for the completed pieces is removed here; the git history and the owner documents hold it.
 
-The audit series is complete: the findings the 2026-11-11 and 2026-11-12 audits recorded in `backlog.md` are closed,
-and the two Nice-to-Haves items that ran with the series (`ruff format` as a gate, and `pyproject.toml`
-`target-version` to the Python floor) are complete. Piece 12, committed 2026-11-18, is the last piece: `target-version`
-now equals the floor, so the lint gate enforces the spelling the project writes. The piece detail is not kept here.
+Piece 13, committed 2026-11-18, is the last actionable offline piece: `tools/quick_start.sh` now
+asks for each gate check that runs an external command when that binary is present, so a run through
+the script reports the rule set's result instead of reporting the rule set as NOT RUN. The decision,
+the reason no pin was written, and the demonstration and gate measurements are in `acceptance.md`.
 
-## Next actionable slice
-
-- The `tflint` rule set is landed, and the demonstration script is what stays open: `tools/quick_start.sh` adds
-  `--validate` when the terraform binary is present and adds no flag for the rule set, so a run through the script
-  reports the rule-set check as NOT RUN unless the caller asks for it by name (`backlog.md`, Nice-to-Haves).
+No actionable offline slice remains. What stays open in `backlog.md` is blocked on a fact the tool
+cannot read offline, or is a document-review finding that the rules put outside the test set, so no
+item there is a piece here.
 
 ## Feature-sized items that stay blocked
 

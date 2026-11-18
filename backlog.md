@@ -128,6 +128,13 @@ here with that rule named.
   reads a notice, so a notice can name a holder the split does not support and the gate reports nothing. A pin
   would read every module source and compare the notice against the blame author, which is a document check
   rather than a rule the tool enforces, so it is not built.
+- `README.md` §Testing states that each module is named once there, and 24 test modules are named
+  twice: the rows after "The gate, the fixtures, and the corpus" repeat the modules the earlier
+  sections name. Measured 2026-11-18. A document that contradicts a rule it states is a
+  document-review finding, so this stays here and not in a pin: `tests/test_layout.py` reads names,
+  and the wording checks are `tools/check_documents.py`. Fix: remove the repeated rows, so the
+  section agrees with its own rule. Found while reading the index for Piece 13, and not part of that
+  piece.
 
 ## Out of Scope
 
@@ -150,14 +157,6 @@ here with that rule named.
   the split is measured through `git blame`, but no lawyer has read it.
 - The state source has no write path (F5.6). A run reports what a state document holds and never
   writes one, so a drift finding is an operator action, not an update.
-
-## Nice-to-Haves
-
-- `tflint` integration is landed. What stays open is the demonstration script: `tools/quick_start.sh` adds
-  `--validate` when the terraform binary is present and adds no flag for the rule set, so a run through the script
-  reports the rule-set check as NOT RUN unless the caller asks for it by name. The rule set, the severity rule and
-  the exit-code rule are in `docs/ARCHITECTURE.md` §4.6, and the rules the gate or the emitter already state, with
-  the rules that read a shape the tool writes none of, are recorded there.
 
 ## Design Decisions (multi-scope model)
 
