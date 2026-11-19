@@ -1,87 +1,66 @@
-# Acceptance — the index pin reads the module-table half once (Piece 15)
+# Acceptance — rules as data: the decision record (Epic 9, Piece 16)
 
-Criteria set 2026-11-18 for the `backlog.md` finding Piece 14 recorded: the index pin reads the half
-of the index rule that compares every `src/` module with the `docs/ARCHITECTURE.md` §1 module table
-twice inside the same pin, so the same set is read twice on every run. This piece measures the
-repetition again, removes the second block, and records the measurement.
+Criteria set 2026-11-18 for the new requirement: rule entries are written as a data file, and one
+Terraform object iterates the file instead of the tool writing one block per rule. This task is the
+decision record. No code, no test, no fixture, and no golden changed; the criteria for each piece
+are set when that piece begins.
 
-Owners: `docs/ARCHITECTURE.md` §1.1 owns the layout rule and the index rule, and states that a pin
-holds a name being present and cannot hold how a document words it, so the document-review checks sit
-in `tools/check_documents.py`, which the test set does not read.
+Owners unchanged: `docs/ARCHITECTURE.md` §1.1 owns the layout and names every module through the
+§1 table; `entry_coverage.py` owns the destination rule; `naming.py` owns the §5 naming rule;
+`write_path.py` is the one writer; `sanity_checks.py` owns the gate rules; `COVERAGE_MATRIX.md` §1
+owns the honesty rule. This piece states no second rule for any of them.
 
-`tests/test_layout.py` holds the one pin for the index rule and reads names only, so this piece
-changes no other test file. `agent-status.md` and `acceptance.md` hold the measurement.
+## The four decisions
 
-Rules this piece works under, from `agent-status.md` §Rules to keep when writing documents:
+- D1: the tool writes the iterated object: one resource block with `for_each` per rule type per
+  unit. The tool stays the writer of blocks and data files, and the iterated block is its own
+  emitted shape. This extends the backlog line that a module is a standard a person writes and the
+  tool's part is the data file: the tool's part becomes the data file plus its own iterated block.
+- D2: the rule rows are a data file with two forms of the same rows. JSON is the form a Terraform
+  object reads, because Terraform has no CSV decode function. CSV is the printed form, the way the
+  `.tfvars` is the printed form of the site record. The declared row shape is `RULE_ROW_FIELDS`,
+  read by `parse_rows` the way the other four data files are read.
+- D3: one object per rule type per unit directory, so the rule rows join to the manifest on
+  `directory` and the action blocks stay per unit.
+- D4: the `for_each` key is the zero-padded chain ordinal joined to the identity digest, so the
+  sorted key order is the XML order inside a chain. The pivot moves from the block to a row column.
+  The `depends_on` fact drops with the per-rule block shape, because instances inside one block
+  create in key order. This changes the F2.5 rule that `tests/test_policy_order.py` pins, so the
+  change is measured as its own piece, not inside the decision record.
 
-- One owner document per rule; every other document links to it.
-- A pin measures content or a name, never the wording of a document. A wording check is a document
-  review, so it lives in `tools/check_documents.py`, which the test set does not read.
-- A pin is not weakened or removed: the pin keeps the same fact, the same name, and the same reads.
-- No document states a test count; `agent-status.md` and `acceptance.md` hold the measurement.
-- Standard library only; everything stays offline and deterministic.
-- The repository root stays clean: this piece changes no output, no golden and no fixture.
+## Rules the decisions inherit
 
-## Item 1 — the instance, measured before the fix
+- Identity (`docs/ARCHITECTURE.md` §2.1): the key cannot be the rule name alone. A name in two
+  device groups or two virtual systems is two rules, so the key carries the identity digest.
+- Honesty (`COVERAGE_MATRIX.md` §1): every column names a field the parse captured through the
+  recorded object, so `RULE_ROW_FIELDS` is the matrix field set for the four rule containers plus
+  the scope facts, the chain ordinal, and the pivot.
+- Site values: a block prints the variable reference, never the value, and a block cannot turn a
+  column value into a variable reference, so a site column resolves through a `locals` map read
+  from the site rows.
+- References: F2.6 and F6.10.2 resolution runs through the one naming rule; the row records whether
+  a name resolved inside the unit, so the edge rule reads the rows with no second naming rule.
+- F3.5 stays open on its own conditions: the rulebase value string, the position from a live
+  source, and the import block for a rule entry. The rulebase column prints nothing until the
+  decision lands. The Terraform 1.14 floor already covers `for_each` on import blocks when the
+  import rule lands.
+- The cross-check keeps its boundary: the rule-container rows compare the row set against the
+  ledger instead of the block set, because one iterated block holds N entries.
 
-`tests/test_layout.py`, measured 2026-11-18 on the tree at commit `5c70949`. The file is 78 lines,
-the pin runs from line 28 to line 78, and it holds 8 asserts. Its AC-4 half is stated twice:
+## Criteria for this task
 
-- Block one, lines 68 to 72: the AC-4 comment, the read of `docs/ARCHITECTURE.md`, the split to the
-  §1 module table, and the loop that asserts each `src/` module is named in it.
-- Line 73 is the blank line between the two blocks, which is why `backlog.md` read the first block as
-  lines 68 to 73.
-- Block two, lines 74 to 78: the same five lines, word for word, so the pin reads the same 22 `src/`
-  modules against the same table text a second time on every run.
+- AC-1: `PLAN.md` names Epic 9, the four decisions, the four phases, the held conditions, and the
+  definition of done.
+- AC-2: `to-do.md` names the pieces in order and replaces the "no offline-actionable item
+  remains" state with the open feature.
+- AC-3: no `src/` module, no test module, no fixture, no golden, and no index changes, so the gate
+  is unaffected and no pin changes.
+- AC-4: this file holds the record; the piece measurements go to `agent-status.md` at the commit.
 
-The two blocks are identical, so they state one fact, not two: every module in `src/` is named in the
-§1 module table. Nothing needs merging, so the fix removes the second block, and the pin keeps the
-fact, the name, the comment, the reads and the assertion.
+## Gate
 
-- AC-1.1: the repetition is measured before any line is removed, and the count is reported before and
-  after.
-- AC-1.2: the removed lines are the second block only. The first block is unchanged, including its
-  AC-4 comment, so the pin's AC wording stays honest: one AC-4 block remains, and this file names one.
-- AC-1.3: the pin's name, its docstring, the set it reads, and its assertion are unchanged. The assert
-  count falls from 8 to 7 because one duplicate assert is removed, and the pin count does not change,
-  because a pin is the test function, not an assert.
-- AC-1.4: after, measured on the tree with the change: the file is 72 lines, the pin holds 7 asserts,
-  and the AC-4 comment and the read of the §1 module table each appear once, so the pin reads the same
-  22 `src/` modules against the table text once per run. The pin passes.
-
-## Item 2 — is there a rule that a pin block is not repeated
-
-**Decision: no such rule exists, and this piece does not invent one.** The rule that a pin measures
-content or a name, never the wording of a document, says nothing about a pin reading the same set
-twice. The checks that read documents are `tools/check_documents.py` checks 1 to 6, and none of them
-reads a test file for a repeated block, so a pin block that repeats is not a finding a check can
-print. The pins that read test files read a name or a needle, not a repeated block.
-
-- AC-2.1: the decision is recorded here and in `backlog.md`, and no check and no pin is added for it,
-  so this piece fixes the instance, not the rule.
-- AC-2.2: the rule that a pin reads names and not wording stays where its owner states it, and
-  `tools/check_documents.py` stays the place a wording check lives, so nothing moves.
-
-## Item 3 — the gate
-
-Run in order, with no parallel runner: `ruff check .`, `ruff format --check .`, `python3 -m pytest`,
-`python3 tools/check_documents.py`. Conservative threads. The count is read from the per-module
-collection counts, because `pyproject.toml` sets `addopts = "-q"`.
-
-Before, measured 2026-11-18 on the committed tree at `5c70949`: `ruff check .` clean at `py310`,
-`ruff format --check .` clean on the 100 Python files, 1,697 pins in 52 test modules, all pass, no
-skips, 271.38 s with tflint 0.66.0 present, and `python3 tools/check_documents.py` reports no finding.
-
-After, measured 2026-11-18 on the final tree with the change, in that order, with tflint 0.66.0
-present: `ruff check .` clean at `py310`, `ruff format --check .` clean on the 100 Python files,
-1,697 pins in 52 modules, all pass, no skips, 258.53 s, and `python3 tools/check_documents.py` reports
-no finding, read at 6.54 s after the final document edits. The same set measured 263.54 s on the run
-before those document edits, and 271.38 s on the tree before the change, so the document edits changed
-no pin. The pin count is unchanged, so AC-1.3 holds, and `tests/test_layout.py` still reads 1 pin.
-
-## Item 4 — the files this piece changes
-
-`tests/test_layout.py` (the second block removed), `acceptance.md`, `to-do.md`, `backlog.md` (the
-finding closed), `agent-status.md`. `AGENTS.md` is not changed and not committed: it holds an
-uncommitted user edit. `agent-status.md` keeps its name, because the tree holds `agent-status.md` even
-though `AGENTS.md` names `agent-status.html`.
+`ruff check .`, `ruff format --check .`, `python3 -m pytest`, `python3 tools/check_documents.py`,
+in that order, conservative threads. This task changes only documents, so a run reads the same pin
+set as the committed tree at `ee72345`: 1,697 pins in 52 modules, unchanged. `check_documents.py`
+must report no finding, because `PLAN.md`, `to-do.md`, and `acceptance.md` are the tracking set that
+`AGENTS.md` names, and the root index names them.

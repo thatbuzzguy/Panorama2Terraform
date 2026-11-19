@@ -119,6 +119,57 @@ Definition of done for the epic: CI runs path 2 with no server, its output passe
 record names every request the run read, and for a fixture with no live-only fact the `.tf` bytes
 agree with path 1.
 
+## Epic 9 — rules as data, one iterated object per rule type (Goal 6) — open
+
+New requirement recorded 2026-11-18: rule entries are written as a data file, and one
+Terraform object iterates the file instead of one block per rule. The four rule types are the
+matrix rows `LOCATION_SCHEMA` declares `rulebase` for, so `import_blocks.py` already names them
+through that table.
+
+Decisions, recorded 2026-11-18 before any code:
+
+1. The tool writes the iterated object: one resource block with `for_each` per rule type per
+   unit. This extends the backlog line that the tool's part is the data file a module consumes:
+   the iterated block is the tool's own emitted shape, not a module a person writes.
+2. The rule row set is a data file with two forms of the same rows. JSON is the form a Terraform
+   object reads, because Terraform has no CSV decode function. CSV is the printed form, the way
+   the `.tfvars` is the printed form of the site record. The data rule reads the rows through the
+   declared shape.
+3. One object per rule type per unit directory, so the rows join to the manifest on `directory`
+   and the action blocks stay per unit.
+4. The `for_each` key is the chain ordinal, zero-padded, joined to the identity digest, so the
+   sorted key order is the XML order inside a chain. The pivot becomes a row column, and the
+   `depends_on` fact drops with the per-rule block shape, because instances inside one block
+   create in key order. This changes the F2.5 rule that `tests/test_policy_order.py` pins, so the
+   change is its own piece with its own criteria.
+
+Phase 9A — the row shape. `RULE_ROW_FIELDS` is the declared shape: the field set the four rule
+matrix rows already name, plus the five scope facts, the chain ordinal, and the pivot. The
+honesty rule in `COVERAGE_MATRIX.md` §1 applies to every column: a column must name a field the
+parse captured through the recorded object. The rulebase column is not printed until F3.5 lands.
+
+Phase 9B — the write path. `rule_data.py` writes the consumed JSON and the printed CSV per rule
+type per unit, through `write_path.py` only, and is named in the `docs/ARCHITECTURE.md` §1 table.
+
+Phase 9C — the iterated block. The four rule generators print one block per rule type per unit.
+Reference columns record whether a name resolved inside the unit, read through the one naming
+rule. A site column resolves through a `locals` map read from the site rows, because a block
+cannot turn a column value into a variable reference; the rule that a block prints the variable
+reference, never the value, is not broken by this.
+
+Phase 9D — the gate. The `data_files` rule reads the rule data file as its declared rows and
+joins on `directory`. The cross-check counts the four rule matrix rows against the row set
+instead of the block set, because one iterated block holds N entries. One block rule reads the
+iterated block against the same `LOCATION_SCHEMA` rows.
+
+Held, on the conditions already recorded in `backlog.md`: the rulebase value string, the position
+from a live source, and the import block for a rule entry. The Terraform 1.14 floor already
+covers `for_each` on import blocks when the import rule lands.
+
+Definition of done: the four rule types write as data rows plus one iterated block per rule type
+per unit, every column reads a captured field, the gate reads the rows and the block, the goldens
+re-measure as a whole, and a pin shows the apply order equals the XML order through the key order.
+
 ## Sequencing
 
 The rule that keeps a container outside the scan scope honest is in `docs/COVERAGE_MATRIX.md` §1: the output that
