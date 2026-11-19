@@ -572,7 +572,9 @@ The records, the reports, and the write path:
 - `tests/test_rule_data.py` - the rule as data (`RULE_ROW_FIELDS`): the row shape and the printed CSV form of the
   same rows, the properties read through the recorded object, the `for_each` key as the chain ordinal joined to the
   identity digest read through `state_coverage` and `unit_manifest`, the chain grouping the generator reads through
-  `rule_data`, and the rule that the module states no second rule and writes no file
+  `rule_data`, the rule that the module states no second rule and holds no writer of its own, the two file names read
+  through the same matrix row with the rule that the pair names the unit file set, and the run writing one pair per
+  rule type per unit so that each file reads back as the rows it was built from
 - `tests/test_data_file_gate.py` - the gate rule that reads the four data files (`data_files`): the file set
   the gate reads, the `CHECK_ORDER` position, each finding, the row ordinal as the finding position, the rule
   that each row shape is read through its own module, the truth across the corpus, and the byte rule between
@@ -587,7 +589,8 @@ The records, the reports, and the write path:
   names one set, the one function that writes bytes and forces LF, the two path builders, the rule that no module
   of the tool writes a file outside it, the reader key as the path from the codebase root, the plan check that
   runs once per unit directory and names the directory it ran on, the rule that no flag names the layout, the
-  golden set read as paths from the case directory, the single-unit case, and the byte rule between two runs
+  golden set read as paths from the case directory, the single-unit case, the rule that the rule data pair names
+  the unit set while the two counts do not move, and the byte rule between two runs
 - `tests/test_provenance.py` - the provenance record (`SOURCE.txt`): the fields, the record
   read back as data, one record per source the run read, one record per request the path 2 run read with the
   `scope` field naming the path that request declared, the `Source:` label for both sources,

@@ -6897,6 +6897,9 @@ Terraform configuration, one file per unit inside the unit directory the manifes
 - `actions.tf` - the commit and push actions, one block per action the provider schema declares for
   each unit the manifest names, written last
 - `site.auto.tfvars` - the printed form of this unit's row in `SITE_DATA.json`
+- `security_rules.json`, `nat_rules.json`, `decryption_rules.json`, `pbf_rules.json` - the policy rule rows as
+  data, one file for the unit that has rows for that rule type, and `security_rules.csv`, `nat_rules.csv`,
+  `decryption_rules.csv`, `pbf_rules.csv` - the printed form of the same rows. Written only when it has content
 
 Reports, at the codebase root:
 
@@ -7530,6 +7533,30 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
             write_path.write_file(
                 write_path.unit_path(run.output_dir, row["directory"], site_data.TFVARS_FILE),
                 site_data.render_tfvars([row]),
+            )
+
+    # Epic 9 Piece 18 (`docs/CODEBASE_ASSEMBLY.md` §14): the rule data pair, one pair per rule type per unit. The
+    # four types are read through `import_blocks.rule_types`, the one place that names them, and the rules for one
+    # type are the parse answer the run order names for the parse method the container table names for that type, so
+    # this step states no type table and no join table. The pair is a unit-set file, so the join here is the
+    # `directory` column, the way the other records join, and a rule type with no rows for a unit writes no pair.
+    answer_of_method = {method: key for key, method in PARSE_ORDER}
+    for resource_type in sorted(import_blocks.rule_types()):
+        container_row = next(
+            row for row in container_coverage.CONTAINER_TABLE if entry_coverage.row_detail(row) == resource_type
+        )
+        rows = rule_data.build_rows(
+            resource_type, results[answer_of_method[container_row.method]], tf_gen.sanitize_name
+        )
+        for directory in sorted({row["directory"] for row in rows}):
+            unit_rows = [row for row in rows if row["directory"] == directory]
+            write_path.write_file(
+                write_path.unit_path(run.output_dir, directory, rule_data.data_file(resource_type)),
+                rule_data.render(unit_rows),
+            )
+            write_path.write_file(
+                write_path.unit_path(run.output_dir, directory, rule_data.printed_file(resource_type)),
+                rule_data.render_csv(unit_rows),
             )
 
     # F6.4: the import blocks. A `.tf` file, because the gate rule that checks an import block reads the

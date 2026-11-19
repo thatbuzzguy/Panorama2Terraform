@@ -777,6 +777,19 @@ a run with no network passes CI.
    (`resource_mapping.COVERAGE_MATRIX` `output_file`), `imports.tf`, `actions.tf`, `scope.tf` (§8 rule 2) and
    `read_through.tf` are unit-set files.
 
+   The rule data pair for one rule type is a unit-set file set: `rule_data.data_file` names the form a Terraform
+   object reads and `rule_data.printed_file` names the printed form of the same rows, and both read the name through
+   the same matrix row's `output_file`, so the two names are one stem with the two suffixes. The rows of one rule
+   type are the rows of one unit, because the chain grouping keys on the device group and the virtual system, which
+   are two of the five unit facts, so the run writes one pair per rule type inside the unit directory its rows name,
+   and writes it only when that unit has rows. The name states the rule type and not the unit, so the path is the
+   only place the pair states the unit it belongs to, which is the rule a per-unit file follows. No gate rule reads
+   the pair yet, so the data rule keeps counting only the four records at the root, and the printed half of the pair
+   is not the printed form the data rule compares. The gate rule that reads the rule rows through the declared shape
+   and joins on `directory` is the open piece. Pinned by
+   `tests/test_write_path.py::test_a_new_unit_set_file_shape_names_the_unit_set_and_the_two_counts_do_not_move` and
+   `tests/test_rule_data.py::test_the_two_file_forms_are_unit_set_files_named_through_the_matrix_row`.
+
    **The codebase root set** is the files that describe the whole codebase, one per run: the four records, the
    report files, `README.md`, `SOURCE.txt`. The records stay at the root, because the edge record needs the
    whole unit set and a reader cannot find a per-unit file before it knows the directory name (§3 rule 5). A

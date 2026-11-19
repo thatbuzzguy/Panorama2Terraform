@@ -246,6 +246,8 @@ directory, so a table row names the file, not the path.
 | `REFERENCE_EDGES.json` | One row per reference pair, as data: the referrer unit, the target unit, the matrix row, and the entry name. Written only when it has content (F6.3) |
 | `SITE_DATA.json` | One row per site that names a value, as data: the unit directory and the variable names with their values. Written only when it has content (F6.6) |
 | `site.auto.tfvars` | The `.tfvars` written from the site data rows, one file per unit inside the directory that row names, one line per variable in name order (F6.6). Terraform loads a `*.auto.tfvars` file automatically, so `terraform.tfvars` stays the operator's own file for the values the tool cannot read, and for the key, which the tool never writes (`CODEBASE_ASSEMBLY.md` §11) |
+| `security_rules.json`, `nat_rules.json`, `decryption_rules.json`, `pbf_rules.json` | One row per policy rule, as data, in the shape `rule_data.RULE_ROW_FIELDS`: the unit directory, the rule type, the entry name, the `for_each` key, the pivot entry, and the properties the matrix row names. One file per rule type inside the unit directory the rows name, written only when that unit has rows (Epic 9, Piece 18) |
+| `security_rules.csv`, `nat_rules.csv`, `decryption_rules.csv`, `pbf_rules.csv` | The printed form of the same rows: the header in field order, one line per row in row order, every value as its JSON text. The printed form is not a reader input, so `rule_data.parse_rows` refuses it as data. Written only when the rule type has rows for that unit (Epic 9, Piece 18) |
 
 The interface report, the VPN report, and the conversion report share one grouping
 rule: one section per scope the export declares (device group, then the template or

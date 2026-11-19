@@ -1,6 +1,6 @@
-"""Epic 9 Piece 17: the rule row shape, the two forms of the same rows, and the chain grouping.
+"""Epic 9 Piece 17 and Piece 18: the rule row shape, the two forms of the same rows, and the write path.
 
-Eight pins, in the order the rules in `src/rule_data.py` state them:
+Ten pins, in the order the rules in `src/rule_data.py` state them:
 
 1. The row shape, and `rulebase` not being in it while the parse records no rulebase fact (F3.5).
 2. `parse_rows` refusing a shape it does not declare, including the printed CSV read as data.
@@ -11,7 +11,10 @@ Eight pins, in the order the rules in `src/rule_data.py` state them:
 5. The chain grouping as the F2.5 and F3.2 rule, measured on the multi-device-group fixture.
 6. The generator reading that grouping through `rule_data`, so no module states the group a second time.
 7. The printed CSV stating the same rows as the data.
-8. The module stating no second rule and writing no file.
+8. The module stating no second rule and holding no writer of its own, so the run writes the pair through
+   `write_path.py`.
+9. The two file names, read through the same matrix row, and the pair naming the unit file set.
+10. The run writing one pair per rule type per unit, each file reading back as the rows it was built from.
 
 The read record is read the way `tests/test_property_coverage.py` reads it: the record is turned on before the
 parse, so a read through the recorded object counts as a read this output made. One pin plants its material,
@@ -31,10 +34,14 @@ import naming
 import panorama_to_terraform
 import resource_mapping
 import rule_data
+import sanity_checks
 import state_coverage
 import unit_manifest
 import xml_input
-from conftest import FIXTURES_DIR, SRC_DIR
+from conftest import FIXTURES_DIR, SRC_DIR, run_script, written_bytes
+
+# The run the write-path pins read: the tool's entry point, read through the `src/` set (§1.1).
+CONVERTER = SRC_DIR / "panorama_to_terraform.py"
 
 # The four rule types the single object iterates, read through the matrix rows that name them, and the parse
 # method each row names as its emitter.
@@ -328,11 +335,14 @@ def test_the_printed_csv_states_the_same_rows_as_the_data():
 
 
 def test_the_rule_data_layer_states_no_second_rule_and_writes_no_file():
-    """AC-8: the module states the row shape and the chain grouping and reads every other rule through an owner.
+    """AC-8: the module states the row shape, the two file names, and the chain grouping, and reads every other
+    rule through an owner.
 
     It defines no naming rule, no identity key, no unit rule, no path, no console line, no environment name, and
-    no writer, and it imports only the standard library and the house modules. The row shape and the grouping are
-    the two rules it states, so `parse_rows` is a reader of the shape and not a second statement of it.
+    no writer, and it imports only the standard library and the house modules. The row shape, the grouping and the
+    two file names are the rules it states, so `parse_rows` is a reader of the shape and not a second statement of
+    it, and the pair is written by the run through `write_path.py` (`tests/test_write_path.py` pins that no module
+    of the tool writes a file outside the single writer).
     """
     source = Path(rule_data.__file__).read_text(encoding="utf-8")
     tree = ast.parse(source)
@@ -353,3 +363,97 @@ def test_the_rule_data_layer_states_no_second_rule_and_writes_no_file():
     assert imported <= {"csv", "io", "json"} | house, imported
     assert imported & house, "the module reads its rules through the owners it imports"
     assert not hasattr(rule_data, "write_file"), "the single writer writes the file"
+
+
+# --- 9. The two file names, and the set the pair belongs to ------------------
+
+
+def test_the_two_file_forms_are_unit_set_files_named_through_the_matrix_row(tmp_path):
+    """AC-9: the two names are one stem with the two suffixes, and the pair names the unit file set (rule 5).
+
+    `data_file` and `printed_file` read the same matrix row, so the module states one file-name rule and not two:
+    the stem is the row's `output_file` without its `.tf` suffix, and the two forms are that stem with `.json` and
+    `.csv`. A per-unit file names the kind it holds and never the unit, so the path is the only place the file
+    states the unit it belongs to. The pair is not one of the four records the data rule reads, so the report's
+    data count still names only the records at the codebase root. The generated `README.md` is the file inventory,
+    so it names the two forms as files and states no row, no value, no count, no path and no timestamp, which is
+    the exception `docs/CODEBASE_ASSEMBLY.md` §9 rule 9 grants it.
+    """
+    names = {rule_data.data_file(resource) for resource in RULE_TYPES}
+    names |= {rule_data.printed_file(resource) for resource in RULE_TYPES}
+    for resource in RULE_TYPES:
+        stem = entry_coverage.MATRIX_BY_RESOURCE[resource]["output_file"][: -len(".tf")]
+        for name in (rule_data.data_file(resource), rule_data.printed_file(resource)):
+            assert Path(name).stem == stem, (resource, name, "the two forms are one stem")
+            assert Path(name).suffix in (".json", ".csv"), (resource, name)
+            assert Path(name).name == name, (name, "a per-unit file names its unit only by its directory")
+            assert "unit" not in name, name
+
+    out = tmp_path / "unit_set"
+    assert run_script(CONVERTER, str(FIXTURES_DIR / "kitchen_sink.xml"), "--output-dir", str(out)).returncode == 0
+    written = written_bytes(out)
+    dirs = {
+        row["directory"]
+        for row in unit_manifest.parse_rows((out / unit_manifest.MANIFEST_FILE).read_text(encoding="utf-8"))
+    }
+    pair = {key for key in written if Path(key).name in names}
+    assert pair, "the corpus run writes the pair inside a unit directory"
+    assert all(Path(key).parent.name in dirs for key in pair), sorted(pair)
+    assert not names & set(dict(sanity_checks.DATA_FILES)), "neither form of the pair is one of the four records"
+    assert sanity_checks.count_data_files(out) == len(dict(sanity_checks.DATA_FILES)), (
+        "the data rule counts the records at the root, so the pair is not counted"
+    )
+
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    inventory = readme[readme.index("## File Structure") :].splitlines()
+    lines = [line for line in inventory if any(name in line for name in names)]
+    assert lines, "the inventory names the two forms as files"
+    for line in lines:
+        assert not any(field in line for field in rule_data.RULE_ROW_FIELDS), (line, "the inventory names files")
+        assert not any(char.isdigit() for char in line), (line, "no count")
+        assert "/" not in line, (line, "no path")
+        for word in ("timestamp", "generated_at"):
+            assert word not in line, line
+        assert not [directory for directory in dirs if directory in line], (line, "no unit name")
+
+
+# --- 10. The run writes the pair ---------------------------------------------
+
+
+def test_the_run_writes_one_pair_per_rule_type_per_unit_through_the_write_path(tmp_path):
+    """AC-10: one pair per rule type per unit, inside the directory the `directory` column names (rule 5).
+
+    Measured 2026-11-18 on the two fixtures the chain pins read. On `tests/fixtures/policy_order.xml` the manifest
+    names five units and the three chains name three of them, so `panos_security_policy_rules` writes one pair in
+    each of those three, `panos_nat_policy_rules` writes one pair in the one of them that has nat rows, and the two
+    rule types with no rows write no pair in any unit. On `tests/fixtures/kitchen_sink.xml` all four rule types have
+    rows in one unit, so each writes one pair there and no pair in the other ten. Each written JSON reads back through
+    `parse_rows` as the rows `build_rows` built for that unit, each written CSV is `render_csv` of the same rows,
+    and the bytes hold no CR, which is the byte rule `write_path.py` states in the one write function.
+    """
+    for fixture, units_measured in (("policy_order.xml", 5), ("kitchen_sink.xml", 11)):
+        out = tmp_path / fixture
+        assert run_script(CONVERTER, str(FIXTURES_DIR / fixture), "--output-dir", str(out)).returncode == 0
+        written = written_bytes(out)
+        dirs = {
+            row["directory"]
+            for row in unit_manifest.parse_rows((out / unit_manifest.MANIFEST_FILE).read_text(encoding="utf-8"))
+        }
+        assert len(dirs) == units_measured, (fixture, len(dirs))
+        for resource in RULE_TYPES:
+            rules = recorded_rules(resource, fixture)[1]
+            rows = rule_data.build_rows(resource, rules, naming.sanitize)
+            units = {row["directory"] for row in rows}
+            for directory in dirs:
+                key = f"{directory}/{rule_data.data_file(resource)}"
+                printed = f"{directory}/{rule_data.printed_file(resource)}"
+                assert (key in written) == (directory in units), (fixture, resource, directory)
+                assert (printed in written) == (directory in units), (fixture, resource, directory)
+                if directory not in units:
+                    continue
+                unit_rows = [row for row in rows if row["directory"] == directory]
+                data_text = written[key].decode(encoding="utf-8")
+                assert data_text == rule_data.render(unit_rows), key
+                assert written[printed].decode(encoding="utf-8") == rule_data.render_csv(unit_rows), printed
+                assert rule_data.parse_rows(data_text) == unit_rows, key
+                assert b"\r" not in written[key] and b"\r" not in written[printed], (key, "the byte rule")

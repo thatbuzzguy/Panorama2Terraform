@@ -7,7 +7,8 @@ Four groups:
 1. The two sets: the unit set is the `.tf` files of one unit plus that unit's printed form, the codebase
    root set is the records the whole codebase owns, and the two are distinct. The path 2 case is read through
    the same two sets: the record file a path 2 run wrote is a codebase root-set file, and the prune action
-   protects the entries its records name.
+   protects the entries its records name. A new file shape has to name one set, so one pin reads the rule data
+   pair as a derivation through `rule_data` and holds that it names the unit set while the two counts stay.
 2. How the gate reads each set: one block reader keyed by the path from the codebase root, one data rule
    that reads the records at the root as one rule over the rows of every unit, and no rule reads a report.
 3. The one write path: one function writes bytes, `newline=LF` is forced there, and no other module of the
@@ -288,6 +289,46 @@ def test_the_record_directory_is_the_output_directory_for_the_prune(corpus_run, 
         "the N records protect the N entries they name, and nothing else is pruned"
     )
     assert all((cache / record.cache_entry).is_file() for record in records), "the entry each record references stays"
+
+
+def test_a_new_unit_set_file_shape_names_the_unit_set_and_the_two_counts_do_not_move(corpus_run, tmp_path):
+    """§14: a new file shape must name which set it belongs to, and the rule data pair names the unit set.
+
+    The two names are read as a derivation, so this test states no second file-name rule: the four rule types come
+    from `import_blocks.rule_types`, and the two names are the matrix row's `output_file` stem with the two suffixes
+    `rule_data` states. The pair is not one of the four records the data rule reads, so the report's data count
+    stays the four records at the codebase root, and the file count stays the set the block reader read, because a
+    rule data file is not a `.tf` file. Every file the run wrote still names exactly one set, and the pair's set is
+    the unit directory its own rows name. The printed half of the pair is not the printed form the data rule
+    compares, so that half stays with `site.auto.tfvars` and the two counts do not move.
+    """
+    types = sorted(import_blocks.rule_types())
+    data_names = {rule_data.data_file(resource) for resource in types}
+    printed_names = {rule_data.printed_file(resource) for resource in types}
+    assert data_names and printed_names and not data_names & printed_names, "two forms, two names"
+    stem = {Path(row["output_file"]).stem for row in resource_mapping.COVERAGE_MATRIX if row["resource"] in types}
+    assert {Path(name).stem for name in data_names | printed_names} == stem, "the names come from the table row"
+    assert not data_names & set(RECORDS) and not printed_names & set(RECORDS), "the pair is not a record"
+    assert site_data.TFVARS_FILE not in data_names | printed_names, "the compared printed form stays with site data"
+
+    dirs = {row["directory"] for row in _rows(corpus_run)}
+    pair = {str(p.relative_to(corpus_run)) for p in corpus_run.rglob("*") if p.name in data_names | printed_names}
+    assert pair, "the corpus run writes the pair inside the unit directories its rows name"
+    assert all(Path(name).parent.name in dirs for name in pair), sorted(pair)
+    assert all(Path(name).name in data_names | printed_names for name in pair), sorted(pair)
+
+    report = sanity_checks.run_checks(corpus_run)
+    files = sanity_checks.read_tf_files(corpus_run)
+    assert report.file_count == len(files) and report.data_file_count == len(RECORDS), (
+        "the two counts name the two sets"
+    )
+
+    # A broken rule data row inside a unit directory is no finding, because the data rule reads the records at the
+    # root and reads no file inside a unit directory. The gate rule that reads the rule rows is the open piece.
+    out = _copy(corpus_run, tmp_path / "rule_data")
+    write_path.write_file(out / UNIT_DIR / rule_data.data_file(types[0]), '{"entry": "not a rule row"}')
+    assert sanity_checks.check_data_files(out) == [], "the data rule reads no file inside a unit directory"
+    assert sanity_checks.count_data_files(out) == len(RECORDS), "the count names the records at the root"
 
 
 # --- 2. How the gate reads each set --------------------------------------------

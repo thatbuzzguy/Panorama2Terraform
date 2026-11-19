@@ -2,8 +2,9 @@
 
 A codebase separates the standard from the site (`docs/CODEBASE_ASSEMBLY.md` §9), and the tool's part is the data
 a module consumes. For the four `*_policy_rules` types the single object iterates the rows, so the rule set is data
-and the block is one `for_each` block per rule type per unit. The emitter change is Piece 19 and the write path is
-Piece 18; this module owns the row shape, the chain grouping the single object reads, and the two forms.
+and the block is one `for_each` block per rule type per unit. The write path landed in Piece 18 and the emitter change
+is Piece 19; this module owns the row shape, the two file names, the chain grouping the single object reads, and the
+two forms, and the run writes the pair through `write_path.py`.
 
 Seven rules, stated once here. Every other rule is read through its owner, so no second rule appears.
 
@@ -37,29 +38,37 @@ Seven rules, stated once here. Every other rule is read through its owner, so no
    Terraform object reads. `render_csv` is the printed form of the same rows: the header in field order, one line per
    row in row order, every value as its JSON text, the same escape set `import_blocks.unescape` reads back. A printed
    form is not a reader input, so `parse_rows` reads the data and refuses the printed form. `data_file` names the file
-   through the matrix row's `output_file`, as the `.json` form of it.
+   through the matrix row's `output_file`, as the `.json` form of it, and `printed_file` names the printed form
+   through the same row, as the same stem with the `.csv` suffix. Both are unit-set files
+   (`docs/CODEBASE_ASSEMBLY.md` §14), so the run writes one pair per rule type inside the unit directory the
+   `directory` column names, and writes it only when that unit has rows: the rows of one rule type are the rows of
+   one unit, because the chain grouping keys on the device group and the virtual system, which are two of the five
+   unit facts, so the file holds that unit's rows and names its unit only by its directory.
 6. **No second rule and no writer.** The module states no naming rule (the §5 rule is taken as the `sanitize`
    argument for the rows, the way `unit_manifest.py` and `site_data.py` take it, and read through `naming.py` when a
    written name is read back), no unit rule, no identity key, no digest rule, no path, no console line, no
-   environment name, and holds no writer of its own: `write_path.py` writes the file.
+   environment name, and holds no writer of its own: `write_path.py` is the writer, one pair per rule type per
+   unit, and the run writes a pair only when that unit has rows.
 7. **No timestamp and no path**, so two runs on the same bytes write the same bytes, the byte rule the other data
    files share. `parse_rows` reads a written file back and refuses a row that is not the declared shape, the way
    `site_data.parse_rows` and `unit_manifest.parse_rows` do, including a `key` that is not the declared
    `ordinal_digest` shape and a `resource` that is not a matrix row.
 
 Usage:
-    from rule_data import RULE_ROW_FIELDS, build_rows, parse_rows, render, render_csv, data_file
+    from rule_data import RULE_ROW_FIELDS, build_rows, parse_rows, render, render_csv, data_file, printed_file
     from write_path import unit_path, write_file
     import naming, rule_data
 
     rules = parser.parse_security_rules()
     rows = rule_data.build_rows("panos_security_policy_rules", rules, naming.sanitize)
-    name = rule_data.data_file("panos_security_policy_rules")
-    directory = rows[0]["directory"]
-    write_file(unit_path(output_dir, directory, name), rule_data.render(rows))
-    write_file(unit_path(output_dir, directory, name.replace(".json", ".csv")), rule_data.render_csv(rows))
-    for row in rule_data.parse_rows((output_dir / directory / name).read_text(encoding="utf-8")):
-        print(row["entry"], row["key"])
+    for directory in sorted({row["directory"] for row in rows}):
+        unit_rows = [row for row in rows if row["directory"] == directory]
+        data_name = rule_data.data_file("panos_security_policy_rules")
+        printed_name = rule_data.printed_file("panos_security_policy_rules")
+        write_file(unit_path(output_dir, directory, data_name), rule_data.render(unit_rows))
+        write_file(unit_path(output_dir, directory, printed_name), rule_data.render_csv(unit_rows))
+        for row in rule_data.parse_rows((output_dir / directory / data_name).read_text(encoding="utf-8")):
+            print(row["entry"], row["key"])
 """
 
 import csv
@@ -81,10 +90,10 @@ RULE_ROW_FIELDS = ("directory", "resource", "entry", "key", "pivot", "properties
 # the reader accepts at least this many digits, and `parse_rows` refuses a key that is not the declared shape.
 ORDINAL_WIDTH = 4
 
-# The data file is the `.json` form of the matrix row's `output_file`, which `resource_mapping` owns. This module
-# states no second file-name rule: the name comes from the row, and the printed form is the same name with the
-# `.csv` suffix, which `data_file`'s reader names.
+# The two file names are the two forms of the stem the matrix row's `output_file` names, which `resource_mapping`
+# owns. This module states no second file-name rule: one stem, the two suffixes.
 _JSON_SUFFIX = ".json"
+_CSV_SUFFIX = ".csv"
 
 # A property value is what the recorded object can hold: a string, a boolean, a list, or a mapping. A PBF rule's
 # `action` is a mapping, so the shape cannot declare only strings. A number is not a value the rule parse stores,
@@ -92,10 +101,22 @@ _JSON_SUFFIX = ".json"
 _CAPTURED_SCALARS = (str, bool)
 
 
+def _file_stem(resource_type: str) -> str:
+    """The stem the matrix row names for one rule type (rule 5): `output_file` without its `.tf` suffix.
+
+    Both file names are this stem with one of the two suffixes, so the module states one file-name rule and not two.
+    """
+    return entry_coverage.MATRIX_BY_RESOURCE[resource_type]["output_file"][: -len(".tf")]
+
+
 def data_file(resource_type: str) -> str:
     """The data file name for one rule type: the `.json` form of the matrix row's `output_file` (rule 5)."""
-    output_file = entry_coverage.MATRIX_BY_RESOURCE[resource_type]["output_file"]
-    return output_file[: -len(".tf")] + _JSON_SUFFIX
+    return _file_stem(resource_type) + _JSON_SUFFIX
+
+
+def printed_file(resource_type: str) -> str:
+    """The printed form's name for one rule type: the same stem with the `.csv` suffix (rule 5)."""
+    return _file_stem(resource_type) + _CSV_SUFFIX
 
 
 def chains(rules: list) -> list:
