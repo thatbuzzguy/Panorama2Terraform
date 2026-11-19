@@ -143,9 +143,6 @@ Decisions, recorded 2026-11-18 before any code:
    create in key order. This changes the F2.5 rule that `tests/test_policy_order.py` pins, so the
    change is its own piece with its own criteria.
 
-Phase 9B — the write path. `rule_data.py` writes the consumed JSON and the printed CSV per rule
-type per unit, through `write_path.py` only, and is named in the `docs/ARCHITECTURE.md` §1 table.
-
 Phase 9C — the iterated block. The four rule generators print one block per rule type per unit.
 Reference columns record whether a name resolved inside the unit, read through the one naming
 rule. A site column resolves through a `locals` map read from the site rows, because a block

@@ -1,15 +1,13 @@
 # To Do
 
 The tracking markdown for the completed pieces is removed here; the git history and the owner
-documents hold it. Piece 16 and Piece 17 closed 2026-11-18 (commits `623dea2` and `e4ffe7b`).
+documents hold it. Piece 16, Piece 17 and Piece 18 closed 2026-11-18 and 2026-11-19 (commits `623dea2`,
+`e4ffe7b` and `eda2d1a`).
 
 ## Current feature — Epic 9: rules as data, one iterated object per rule type
 
 The decisions are in `PLAN.md` Epic 9 and the record is in `acceptance.md`. Pieces, in order:
 
-- Piece 18 — the write path (Phase 9B): `rule_data.py` writes the consumed JSON and the printed
-  CSV per rule type per unit through `write_path.py` only, and names itself in the
-  `docs/ARCHITECTURE.md` §1 module table.
 - Piece 19 — the iterated block (Phase 9C): the four rule generators print one block per rule type
   per unit. The key order replaces the `depends_on` fact, which changes the F2.5 rule that
   `tests/test_policy_order.py` pins, so this piece carries its own criteria for that change. The

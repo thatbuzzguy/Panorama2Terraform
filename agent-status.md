@@ -2,9 +2,11 @@
 
 ## Current position
 
-Epic 9 (rules as data, one iterated object per rule type) is open: Piece 16, the decision record, and Piece 17,
-Phase 9A the row shape, are complete, and the next piece is Piece 18, Phase 9B the write path. The pieces are in
-`to-do.md`, the decisions in `PLAN.md` Epic 9, and the Piece 17 criteria and measurement in `acceptance.md`.
+Epic 9 (rules as data, one iterated object per rule type) is open: Piece 16, the decision record, Piece 17,
+Phase 9A the row shape, and Piece 18, Phase 9B the write path, are complete, and the next piece is Piece 19,
+Phase 9C the iterated block. The pieces are in `to-do.md`, the decisions in `PLAN.md` Epic 9, and the Piece 18
+criteria and measurement in `acceptance.md`. Piece 19 carries its own criteria for the F2.5 change, because the
+`for_each` key order replaces the `depends_on` fact that `tests/test_policy_order.py` pins.
 
 Epic 8 (the second path) is complete with piece F8.10, and Piece 8 closed the finding F8.10 left open. The rules
 it landed are in `docs/API_CONVERSION_PATH.md`, the modules are `src/api_requests.py` and `src/api_to_terraform.py`,
@@ -146,6 +148,34 @@ the planted config is read through `xml_input.parse_xml`, the same input door th
 the corpus. `TerraformGenerator._policy_rule_chains` delegates to `rule_data.chains`, so the group is stated once,
 which the pin reads as no other module defining it.
 
+Piece 18 (2026-11-19), Phase 9B, is complete at commit `eda2d1a`. The rule data pair is written per rule type per
+unit inside the unit directory the rows name, and only through `src/write_path.py`: `rule_data.py` holds no writer of
+its own, states no path, and the run's write step calls `write_path.unit_path` and `write_path.write_file`, following
+the `site_data`, `import_blocks` and `commit_actions` per-unit pattern. One file-name rule and not two:
+`rule_data.data_file` and `rule_data.printed_file` read the same coverage matrix row's `output_file`, so the two names
+are that row's stem with the `.json` and `.csv` suffixes. The pair is a unit-set file set, because the rows of one
+rule type are the rows of one unit: the chain grouping keys on the device group and the virtual system, which are two
+of the five unit facts, so the file names its unit only by its directory. Written only when it has content, so the
+file set is the units that have rows, not rule types times units. `docs/CODEBASE_ASSEMBLY.md` §14 names the set the
+new shape belongs to, `docs/USAGE_GUIDE.md` §Output files names the two forms, the generated `README.md` names them as
+files under the §9 rule 9 exception, and the `docs/ARCHITECTURE.md` §1 row for `rule_data.py` states the write half as
+the run writing through `write_path.py`. The pins are ten in `tests/test_rule_data.py` and 21 in
+`tests/test_write_path.py`; the criteria are in `acceptance.md`.
+
+What Piece 18 decided while measuring: no gate rule reads the pair in this piece, because the data rule keeps reading
+the four records at the codebase root as one rule over the rows of every unit and reads no file inside a unit
+directory, so the report's two counts do not move and the gate that reads the rule rows through the declared shape is
+Piece 20. The printed half of the pair is not the printed form the data rule compares, which stays with
+`site.auto.tfvars`, so `rule_data.parse_rows` still refuses the printed form read as data. The write step states no
+type table and no join table: the four types come from `import_blocks.rule_types`, the parse answer for one type is the
+`PARSE_ORDER` entry for the parse method `container_coverage.CONTAINER_TABLE` names for that matrix row, read through
+`entry_coverage.row_detail`, and the join is the `directory` column. `policy_order.xml` names five unit directories
+while its three chains name three of them, so the pin reads the three chains as the units that have rows and not as
+the whole file set. Because `tests/test_write_path.py::test_a_record_module_renders_rows_and_writes_no_file` forbids a
+`def write...` in a record module, the writing cannot sit in `rule_data.py`, which is what the write-path rule means
+in practice. The pins derive the two names through `rule_data` and the matrix row, so no pin restates a file-name rule
+and no pin reads a private module constant.
+
 The licensing rule is in `docs/LICENSING.md`, the owner document: the fork source, the two holders, the split
 measured through `git blame`, and the scope of each grant. `LICENSE-COMMERCIAL` is the upstream author's grant, so
 it covers the upstream parts only, and this project grants no commercial terms for its own contributions. The word
@@ -162,7 +192,9 @@ pin and weakens no pin, and reads the same count before and after it: the change
 duplicate assert inside the index pin, and a pin is the test function, not an assert. Piece 17 adds 8 pins and one
 test module, so the count reads 1,705 pins in 53 modules: 1,701 pass and the same 4 skip for the missing `tflint`
 binary, measured 2026-11-18 on the tree at commit `e4ffe7b`, with `ruff check .` clean and `ruff format --check .`
-clean on the 102 Python files. `ruff check .`
+clean on the 102 Python files. Piece 18 adds 3 pins and no test module, so the count reads 1,708 pins in 53 modules:
+1,704 pass and the same 4 skip for the missing `tflint` binary, measured 2026-11-19 on the tree at commit `eda2d1a`.
+`ruff check .`
 is clean at the level `pyproject.toml` states and `ruff format --check .` is clean on the 100 Python
 files. `tests/test_api_path.py` reads 33 pins (30 before Piece 8). `tests/test_sanity_gate.py` reads
 110 pins, 11 more than the 99 it read before Piece 11. `pyproject.toml` sets `addopts = "-q"`, so a
@@ -201,7 +233,14 @@ before the final document edits and 271.38 s on the tree before the change. The 
 clean at `py310`, `ruff format --check .` clean on the 102 Python files, and
 `python3 tools/check_documents.py` reporting no finding, read at 12.15 s. `tests/test_rule_data.py`
 reads 8 pins. The piece changes no golden, fixture, response or tflint file, so the pins that name
-the printed sets and the golden bytes read the same as before.
+the printed sets and the golden bytes read the same as before. The Piece 18 run, measured 2026-11-19 on the final
+tree at commit `eda2d1a` with the `tflint` binary absent, passed 1,704 pins and skipped the same 4 in 507.48 s,
+against 280.70 s for the same set read on the tree before the final document edits, with `ruff check .`
+clean at `py310`, `ruff format --check .` clean on the 102 Python files, and
+`python3 tools/check_documents.py` reporting no finding, read at 23.20 s after the final document edits.
+`tests/test_rule_data.py` reads 10 pins and `tests/test_write_path.py` reads 21, against the 8 and 20 it read before
+the piece. The piece changes no golden, fixture, response or tflint file, because the golden set is the `.tf` set and
+the records and the reports are not in it, so the golden bytes and the report counts read the same as before.
 
 Gate size, decided 2026-11-13: no smaller default gate is adopted. The measured subset that drops the pins that
 call `terraform` runs in 203.0 s (44% of the full run), and the subset that drops the corpus pins runs in about
