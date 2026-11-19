@@ -45,6 +45,7 @@ import ownership
 import provenance
 import reference_edges
 import resource_mapping
+import rule_data
 import sanity_checks
 import shadow_coverage
 import site_data
@@ -4868,19 +4869,13 @@ provider "panos" {
         out.write()
 
     def _policy_rule_chains(self, rules: list[dict]) -> list[list[dict]]:
-        """Group policy rules into per-(device group, vsys) chains (F2.5, F3.2).
+        """Group policy rules into per-(device group, vsys) chains, read through `rule_data.chains` (F2.5, F3.2).
 
-        The provider places each rule relative to a pivot rule, so rules
-        must emit as independent chains per (device group, vsys): a pivot
-        only exists inside its own rulebase, so one vsys's rules must
-        never chain on another vsys's rule. XML document order is
-        preserved within a chain; chains appear in first-seen order.
+        The grouping is stated once, in `src/rule_data.py`, because the single object of Epic 9 reads the same
+        grouping for its apply order. The provider places each rule relative to a pivot rule, so a pivot only
+        exists inside its own rulebase and one vsys's rules must never chain on another vsys's rule.
         """
-        chains: dict[tuple[str, str], list[dict]] = {}
-        for rule in rules:
-            key = (rule.get("device_group") or "Shared", rule.get("vsys") or "vsys1")
-            chains.setdefault(key, []).append(rule)
-        return list(chains.values())
+        return rule_data.chains(rules)
 
     def _policy_position_block(
         self, resource_type: str, prev_rule_name: str | None, prev_resource_name: str | None

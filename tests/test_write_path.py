@@ -34,6 +34,7 @@ import ownership
 import provenance
 import reference_edges
 import resource_mapping
+import rule_data
 import sanity_checks
 import site_data
 import source_fetch
@@ -527,7 +528,7 @@ def test_a_record_module_renders_rows_and_writes_no_file():
     """A record module owns its row shape and its file name, and its usage example writes through the write
     path, so no module builds a path for a file it does not own.
     """
-    for module in (unit_manifest, ownership, reference_edges, site_data, provenance):
+    for module in (unit_manifest, ownership, reference_edges, site_data, rule_data, provenance):
         usage = Path(module.__file__).read_text(encoding="utf-8")
         assert "write_file(" in usage and "write_path" in usage, (module.__name__, "the usage example writes")
         assert not any(line.strip().startswith("def write") for line in usage.splitlines()), (

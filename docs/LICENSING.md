@@ -74,7 +74,9 @@ carries into it.
 
 ## The copyright notices in `src/`
 
-Four of the 22 modules carry a notice, and each notice names the holder for the lines that module holds:
+4 of the 23 modules carry a notice, and each notice names the holder for the lines that module holds. The counts
+here are the working tree, which is what `tools/check_documents.py` reads for them, so a module added later moves
+the second number and the document is re-stated, not re-measured:
 
 | Module | Upstream lines | Notice |
 |---|---|---|
@@ -86,7 +88,7 @@ Four of the 22 modules carry a notice, and each notice names the holder for the 
 Neither of the two GSW Systems files is upstream whole, so the notice covers the lines the header names and
 not the file. A notice that said "the upstream, unchanged" would claim more than the measurement supports.
 
-The other 18 modules carry no notice. This document is the authority for them, and no header is added: a
+The other 19 modules carry no notice. This document is the authority for them, and no header is added: a
 notice that names one holder for a file the two holders share is a claim the split does not support. The
 choice to keep the notice set unpinned is recorded in [`../backlog.md`](../backlog.md).
 

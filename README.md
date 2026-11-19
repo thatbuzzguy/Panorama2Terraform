@@ -569,6 +569,10 @@ The records, the reports, and the write path:
   site, the declaration set, both directions of the variable gate rule, the corpus rows, the rule that the
   corpus trips neither, the gate inputs, the report bodies, the rule that the module defines no second naming
   rule, and the byte rule between two runs
+- `tests/test_rule_data.py` - the rule as data (`RULE_ROW_FIELDS`): the row shape and the printed CSV form of the
+  same rows, the properties read through the recorded object, the `for_each` key as the chain ordinal joined to the
+  identity digest read through `state_coverage` and `unit_manifest`, the chain grouping the generator reads through
+  `rule_data`, and the rule that the module states no second rule and writes no file
 - `tests/test_data_file_gate.py` - the gate rule that reads the four data files (`data_files`): the file set
   the gate reads, the `CHECK_ORDER` position, each finding, the row ordinal as the finding position, the rule
   that each row shape is read through its own module, the truth across the corpus, and the byte rule between

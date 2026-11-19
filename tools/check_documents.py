@@ -72,6 +72,7 @@ OURS = "Ryan Brown"
 # that reads the matrix, so its §1 row is the table owner.
 SHAPES = (
     ("src/site_data.py", "site_data.py", "SITE_ROW_FIELDS"),
+    ("src/rule_data.py", "rule_data.py", "RULE_ROW_FIELDS"),
     ("src/commit_actions.py", "commit_actions.py", "ACTION_ROW_FIELDS"),
     ("src/import_blocks.py", "import_blocks.py", "IMPORT_ROW_FIELDS"),
     ("tests/test_coverage_matrix.py", "resource_mapping.py", "MATRIX_ROW_FIELDS"),
