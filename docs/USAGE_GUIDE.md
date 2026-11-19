@@ -226,7 +226,7 @@ directory, so a table row names the file, not the path.
 | `variables.tf` | The names the run declares: the host name, the site values the table mapped (F6.6), the reference-only names it recorded (F7.1, F7.7), and the facts the tool cannot read (F6.10.4). Written after the emitters, so it declares only what the run consumed, and it declares no credential (`CODEBASE_ASSEMBLY.md` §11) |
 | `scope.tf` | The six scope objects the export declares: device group, the device-group parent record, template, template stack, template variable, and virtual system. Written by every run that has a scope entry, before the object files, in the F3.9 level order (F6.5) |
 | `address_objects.tf`, `address_groups.tf`, `service_objects.tf`, `service_groups.tf`, `tags.tf`, `custom_url_categories.tf`, `application_groups.tf`, `external_lists.tf` | Object resources |
-| `security_rules.tf`, `nat_rules.tf`, `decryption_rules.tf`, `pbf_rules.tf` | Policy rules, one resource per rule, chained in XML order |
+| `security_rules.tf`, `nat_rules.tf`, `decryption_rules.tf`, `pbf_rules.tf` | Policy rules: the unit's rows as a `locals` map, and one `for_each` block per rule type per unit that reads it. The instances create in the sorted key order, which is the XML order inside the chain, so every instance anchors at the end of the rulebase. The map is the only place the file states a row value; the block body prints references into it (Epic 9, Piece 19) |
 | `security_profile_groups.tf` | Profile group resources |
 | `security_profiles.tf` | Inventory only: names and descriptions, with the resource name the emitter would use |
 | `interfaces.tf`, `zones.tf`, `virtual_routers.tf`, `monitor_profiles.tf`, `vpn.tf` | Network and VPN resources |

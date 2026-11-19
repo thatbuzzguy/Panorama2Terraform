@@ -28,6 +28,8 @@ from pathlib import Path
 
 import pytest
 
+import import_blocks
+import rule_data
 import sanity_checks
 from conftest import FIXTURES_DIR, RESOURCE_ADDRESS_RE, TERRAFORM, file_text, run_script, tf_files
 
@@ -230,11 +232,19 @@ def test_vpn_references_and_brown_field_fallback(out_dir):
 
 
 def test_local_names_are_sanitized_name_plus_digest(out_dir):
-    """Every local name is the sanitized name plus an 8-hex digest (F2.7),
-    and no resource address is declared twice."""
+    """Every local name is the sanitized name plus an 8-hex digest (F2.7), and no resource address is declared twice.
+
+    The four `*_policy_rules` types are the exception the iterated block states: one block per rule type per unit
+    carries the name the coverage matrix row's `output_file` stem names, read through `rule_data.locals_name`,
+    because the block names the set of rows it iterates and not one object. The exception is read through the table
+    that owns the rule-type set, so this pin states no naming rule of its own.
+    """
     declared = _declared(out_dir)
     assert len(declared) == len({(rtype, local) for rtype, local in declared})
     for rtype, local in declared:
+        if rtype in import_blocks.rule_types():
+            assert local == rule_data.locals_name(rtype), f"{rtype}.{local} is not the matrix row's stem"
+            continue
         assert re.fullmatch(r"[a-z0-9_]+_[0-9a-f]{8}(?:_\d+)?", local), (
             f"{rtype}.{local} does not match the F2.7 naming shape"
         )

@@ -5,9 +5,9 @@ either a real provider v2.0.14 resource or an explicit entry in
 MANUAL_SETUP_REPORT.txt that names the captured data and the reason it
 is not emitted:
 
-- decryption rules -> panos_decryption_policy_rules, one resource per
-  rule, chained per device group (F2.5 position semantics);
-- PBF rules -> panos_pbf_policy_rules, the same per-rule chain model,
+- decryption rules -> panos_decryption_policy_rules, one iterated block for the rule type per unit, reading the
+  map that is that unit's rows, so the chain is the key order (F2.5, Epic 9 Piece 19);
+- PBF rules -> panos_pbf_policy_rules, the same iterated-block chain model,
   with the full single-choice action set (forward, forward_to_vsys,
   discard, no_pbf) and optional path monitoring on the forward action;
 - PBF path monitoring profiles -> panos_monitor_profile (the v2 resource
@@ -70,7 +70,8 @@ def _convert(fixture_name: str, tmp_path: Path) -> Path:
 
 
 def test_decryption_rules_emit_real_v2_resources(tmp_path):
-    """One panos_decryption_policy_rules resource per rule, chained, full body."""
+    """One iterated panos_decryption_policy_rules block for the unit, and the full body reaches it through the map
+    entry, in the key order the chain states."""
     out = _convert("decryption_rules.xml", tmp_path)
     # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): one file per unit, so the pin reads the parts the
     # run wrote for the units the fixture names, in path order.
@@ -111,7 +112,8 @@ def test_decryption_rules_emit_real_v2_resources(tmp_path):
 
 
 def test_pbf_rules_emit_chained_v2_resources(tmp_path):
-    """One panos_pbf_policy_rules resource per rule, chained in XML order."""
+    """One iterated panos_pbf_policy_rules block for the unit, in the key order the chain states, and the full
+    single-choice action set reaches it through the map entry."""
     out = _convert("pbf_rules.xml", tmp_path)
     text = file_text(tf_files(out), "pbf_rules.tf")
 

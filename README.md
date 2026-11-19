@@ -493,8 +493,10 @@ The parse set:
 - `tests/test_parse_profiles.py` - the profile parse methods, and the document order the §4.4 rule states
 - `tests/test_parse_rules.py` - the rule parse methods, and the same document-order rule for the policy chains
 - `tests/test_parse_vpn.py` - the VPN parse methods: IPsec tunnels, IKE gateways, and crypto profiles
-- `tests/test_policy_order.py` - the per-device-group rule chain, on the multi-device-group fixture and the
-  goldens
+- `tests/test_policy_order.py` - the per-device-group rule chain read through the iterated block: one block per
+  rule type per unit, the `locals` map that is the printed form of that unit's rows, the sorted key order as the
+  apply order, the block name read through `rule_data.locals_name`, and the chain never crossing a unit, on the
+  multi-device-group fixture and the goldens
 - `tests/test_interfaces.py` - every interface kind emits the type its row declares, `tag` is read through one
   rule, and both address shapes read through one rule
 - `tests/test_real_or_report.py` - every area is a real resource or an explicit report, never a comment, with
@@ -573,15 +575,17 @@ The records, the reports, and the write path:
   same rows, the properties read through the recorded object, the `for_each` key as the chain ordinal joined to the
   identity digest read through `state_coverage` and `unit_manifest`, the chain grouping the generator reads through
   `rule_data`, the rule that the module states no second rule and holds no writer of its own, the two file names read
-  through the same matrix row with the rule that the pair names the unit file set, and the run writing one pair per
-  rule type per unit so that each file reads back as the rows it was built from
+  through the same matrix row with the rule that the pair names the unit file set, the run writing one pair per rule
+  type per unit so that each file reads back as the rows it was built from, and the third form: the printed map
+  reading back through `printed_keys` as the same row keys in the order the `.tf` file prints them
 - `tests/test_data_file_gate.py` - the gate rule that reads the four data files (`data_files`): the file set
   the gate reads, the `CHECK_ORDER` position, each finding, the row ordinal as the finding position, the rule
   that each row shape is read through its own module, the truth across the corpus, and the byte rule between
   two runs
 - `tests/test_round_trip.py` - the cross-check (`round_trip`): the `.tf` block set read through the one gate
   reader and the entry set read through the run's ledger, the join through the one scope rule and the one unit
-  rule, one finding per unit and row where the two counts do not agree, the position the reader read, the WARN
+  rule, one finding per unit and row where the two counts do not agree, the four rule rows reading the printed map
+  through `rule_data`, the position the reader read, the WARN
   severity, the NOT RUN result when the caller passes no ledger, the rows that enter no count, the findings the
   corpus reports, and the byte rule between two runs. F8.8: on a path 2 run the entry set is the join's own rows,
   so the cross-check and the request-set rule read one ledger and name the same unit
@@ -655,7 +659,8 @@ The gate, the fixtures, and the corpus:
 - `tests/test_robustness.py` - hostile input fails cleanly with no data leak, and degenerate input produces
   valid output or skips safely
 - `tests/test_edge_cases.py` - the corpus edge cases: duplicate names across device groups and vsys, IPv6
-  address objects, dual-leg service objects, and the emit-side vsys identity
+  address objects, dual-leg service objects, and the emit-side vsys identity, read through the shared rule-shape
+  parser
 - `tests/test_multi_device_template.py` - the multi-device, template-aware parse: the device group joins the
   template on the device the export lists, and the splitter pins read the row and the parsed source through the
   door

@@ -159,7 +159,8 @@ def test_the_report_names_both_file_sets(tmp_path):
     Both counts are read as the derivation: the `.tf` count is the set the reader read below the root, and the
     data count is the rows `sanity_checks.DATA_FILES` names that the run wrote. Measured 2026-11-18: the sample
     run — two units, so two sets — reads 14 `.tf` files and 2 data files, the manifest and the ownership record;
-    the kitchen-sink run writes all four rows, so it reads 4. The resource count is 20 for the sample run.
+        the kitchen-sink run writes all four rows, so it reads 4. The resource count is 17 for the sample run,
+        measured 2026-11-19 on the iterated rule block, one block per rule type per unit.
     """
     assert _run(SAMPLE_CONFIG, tmp_path).returncode == 0
     report = sanity_checks.run_checks(tmp_path)
@@ -169,7 +170,7 @@ def test_the_report_names_both_file_sets(tmp_path):
     assert report.data_file_count == len(written), (report.data_file_count, sorted(written))
     assert f"Files checked: {len(files)} .tf files, {len(written)} data files." in report.render(), report.render()
     assert (
-        f"Sanity gate: PASS (0 FAIL, 0 WARN) - {len(files)} .tf files, {len(written)} data files, 20 resources"
+        f"Sanity gate: PASS (0 FAIL, 0 WARN) - {len(files)} .tf files, {len(written)} data files, 17 resources"
     ) in report.console_summary(), report.console_summary()
     assert all(Path(name).parent.name for name in files), "the reader read the unit directories"
 

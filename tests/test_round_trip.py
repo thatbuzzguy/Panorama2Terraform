@@ -2,15 +2,22 @@
 
 The rule compares two sets, each read through the module that owns it: the `.tf` block set through the one
 block reader (`sanity_checks.blocks`, `kinds = ('resource',)`), and the entry set through the run's
-`entry_coverage.EntryLedger` and the one scope rule `entry_coverage.matrix_row_for`. The join is the matrix
+`entry_coverage.EntryLedger` and the one scope rule `entry_coverage.matrix_row_for`. For the four
+`*_policy_rules` rows the block prints the set and not one entry, so its block side is the entry keys the
+printed `locals` map holds for that unit, read through `rule_data.printed_keys`, the module that owns the row
+shape, the key shape and the three forms; the rule states no reader for the map. The join is the matrix
 row and the unit, so the rule states no reader, no count, no scope, no kind, no type, no field name, no file
-name and no unit rule of its own. `run_checks` takes the ledger as an argument, so a call with no ledger
-reports the check as NOT RUN and a pin that reads only the output directory is unchanged.
+`sanity_checks.position`.
+`run_checks` takes the ledger as an argument, so a call with no ledger reports the check as NOT RUN and a
+pin that reads only the output directory is unchanged.
 
 Pins, one per criterion in `acceptance.md`:
 
 - 1.1-1.7 what the rule reads: the one block reader, the run's ledger, the one scope rule, the one unit rule,
   the NOT RUN path, the second source, and the report's two counts;
+- 1.8 the third reading: for the four rule rows the block side is the keys `rule_data.printed_keys` reads from
+  the map the `.tf` file prints, which is the printed form of the same rows, so those four rows read clean
+  across the corpus and the corpus table names no rule row;
 - 2.1-2.8 the finding: one finding per unit and per row, the fact is the two counts, the position is the
   position the reader read, the row is named through `COVERAGE_MATRIX`, both directions, the sort, the root
   file, and no scan console line;
@@ -130,8 +137,10 @@ def _category_of(fact: tuple) -> str:
     return "entry writes more than one block"
 
 
-# The two counts, read out of the fact the rule states.
-COUNTS_RE = re.compile(r"reads (\d+) entries, the reader reads (\d+) blocks")
+# The two counts, read out of the fact the rule states. The second count is the blocks the reader read for a row
+# the block prints one at a time, and the entries the reader read in the map the iterated block reads for the four
+# rule rows, so the pattern stops at the number and names no shape of its own.
+COUNTS_RE = re.compile(r"reads (\d+) entries, the reader reads (\d+)")
 STATE_ARGS = ("--state", str(FIXTURES_DIR / "state_workspace.json"), "--workspace", "production")
 
 
@@ -330,11 +339,13 @@ def test_the_report_counts_do_not_move_for_the_cross_check(tmp_path):
     plain = sanity_checks.run_checks(tmp_path)
     parser = run_pipeline(panorama_to_terraform, None, tmp_path, (str(SAMPLE_CONFIG),))
     ran = sanity_checks.run_checks(tmp_path, ledger=parser.ledger)
-    assert (plain.file_count, plain.data_file_count, plain.resource_count) == (14, 2, 20), plain.render()
+    # Measured 2026-11-19: the iterated rule block prints one block per rule type per unit, so the sample run's
+    # resource count is 17, not the 20 the per-rule block shape measured on 2026-11-18.
+    assert (plain.file_count, plain.data_file_count, plain.resource_count) == (14, 2, 17), plain.render()
     assert ran.file_count == len(tf_files(tmp_path)), "the block counts do not move"
     assert "Files checked: 14 .tf files, 2 data files." in ran.render(), ran.render()
-    assert "Resources checked: 20." in ran.render(), ran.render()
-    assert "Sanity gate: PASS (0 FAIL, 0 WARN) - 14 .tf files, 2 data files, 20 resources" in ran.console_summary(), (
+    assert "Resources checked: 17." in ran.render(), ran.render()
+    assert "Sanity gate: PASS (0 FAIL, 0 WARN) - 14 .tf files, 2 data files, 17 resources" in ran.console_summary(), (
         ran.console_summary()
     )
 

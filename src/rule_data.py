@@ -34,16 +34,20 @@ Seven rules, stated once here. Every other rule is read through its owner, so no
    through the recorded object, which records the read. A field the recorded object holds with no value prints no
    column, the way the per-entry report reads `entry_coverage.EMPTY_FIELD_VALUES`, and a field the parse never stored
    is a field held with no value.
-5. **Two forms, one row set.** `render` prints the rows as JSON, which is the form a reader reads and the form the
+5. **Three forms, one row set.** `render` prints the rows as JSON, which is the form a reader reads and the form the
    Terraform object reads. `render_csv` is the printed form of the same rows: the header in field order, one line per
    row in row order, every value as its JSON text, the same escape set `import_blocks.unescape` reads back. A printed
    form is not a reader input, so `parse_rows` reads the data and refuses the printed form. `data_file` names the file
    through the matrix row's `output_file`, as the `.json` form of it, and `printed_file` names the printed form
-   through the same row, as the same stem with the `.csv` suffix. Both are unit-set files
+   through the same row, as the same stem with the `.csv` suffix, and `locals_name` names the third form of the same
+   rows through the same row: the map the `.tf` file prints, as the same stem with no suffix, which is also the name
+   of the block that reads it. Both files are unit-set files
    (`docs/CODEBASE_ASSEMBLY.md` §14), so the run writes one pair per rule type inside the unit directory the
    `directory` column names, and writes it only when that unit has rows: the rows of one rule type are the rows of
    one unit, because the chain grouping keys on the device group and the virtual system, which are two of the five
    unit facts, so the file holds that unit's rows and names its unit only by its directory.
+    `printed_keys` reads the keys the `.tf` file prints for one rule type, the only part of the printed map this
+    module owns, so the gate's cross-check reads the printed map through here and states no reader of its own.
 6. **No second rule and no writer.** The module states no naming rule (the §5 rule is taken as the `sanitize`
    argument for the rows, the way `unit_manifest.py` and `site_data.py` take it, and read through `naming.py` when a
    written name is read back), no unit rule, no identity key, no digest rule, no path, no console line, no
@@ -55,7 +59,9 @@ Seven rules, stated once here. Every other rule is read through its owner, so no
    `ordinal_digest` shape and a `resource` that is not a matrix row.
 
 Usage:
-    from rule_data import RULE_ROW_FIELDS, build_rows, parse_rows, render, render_csv, data_file, printed_file
+    from rule_data import (
+        RULE_ROW_FIELDS, build_rows, parse_rows, render, render_csv, data_file, printed_file, locals_name,
+    )
     from write_path import unit_path, write_file
     import naming, rule_data
 
@@ -65,15 +71,17 @@ Usage:
         unit_rows = [row for row in rows if row["directory"] == directory]
         data_name = rule_data.data_file("panos_security_policy_rules")
         printed_name = rule_data.printed_file("panos_security_policy_rules")
+        map_name = rule_data.locals_name("panos_security_policy_rules")
         write_file(unit_path(output_dir, directory, data_name), rule_data.render(unit_rows))
         write_file(unit_path(output_dir, directory, printed_name), rule_data.render_csv(unit_rows))
         for row in rule_data.parse_rows((output_dir / directory / data_name).read_text(encoding="utf-8")):
-            print(row["entry"], row["key"])
+            print(row["key"], map_name)
 """
 
 import csv
 import io
 import json
+import re
 
 import entry_coverage
 import naming
@@ -94,6 +102,12 @@ ORDINAL_WIDTH = 4
 # owns. This module states no second file-name rule: one stem, the two suffixes.
 _JSON_SUFFIX = ".json"
 _CSV_SUFFIX = ".csv"
+
+# The printed map, as rule 5 states the third form: the map name on the `locals` line, then one entry per row
+# keyed by the declared `ordinal_digest` shape, in the order the file prints the entries. The gate's cross-check
+# reads the printed form through `printed_keys`, so no second reader for the map appears.
+_PRINTED_MAP_RE = re.compile(r"locals \{\n  ([a-z0-9_]+) = \{\n(.*?)\n  \}\n\}", re.S)
+_PRINTED_KEY_RE = re.compile(r'^    "([^"]+)" = \{', re.M)
 
 # A property value is what the recorded object can hold: a string, a boolean, a list, or a mapping. A PBF rule's
 # `action` is a mapping, so the shape cannot declare only strings. A number is not a value the rule parse stores,
@@ -117,6 +131,35 @@ def data_file(resource_type: str) -> str:
 def printed_file(resource_type: str) -> str:
     """The printed form's name for one rule type: the same stem with the `.csv` suffix (rule 5)."""
     return _file_stem(resource_type) + _CSV_SUFFIX
+
+
+def locals_name(resource_type: str) -> str:
+    """The `locals` map name for one rule type, and the name of the block that reads it: the same stem (rule 5).
+
+    The map is the third form of the row set, the form the `.tf` file prints, so the block, the map, the `.json`
+    form and the `.csv` form read one name and no second naming rule appears.
+    """
+    return _file_stem(resource_type)
+
+
+def printed_keys(text: str, resource_type: str) -> list:
+    """The entry keys a `.tf` file prints in one rule type's map, in the order the file prints them (rule 5).
+
+    Only the keys are read, because the key is the part of the printed map this module owns: an entry's field values
+    are the printed forms of the row's properties, and `parse_rows` reads those from the data form. A key that is not
+    the declared `ordinal_digest` shape enters no count, the way `parse_rows` refuses it. The map name is read through
+    `locals_name`, so the block name, the map name and the two file names are one name.
+    """
+    map_name = locals_name(resource_type)
+    answer = []
+    for match in _PRINTED_MAP_RE.finditer(text):
+        if match.group(1) != map_name:
+            continue
+        for key in _PRINTED_KEY_RE.findall(match.group(2)):
+            ordinal, _, digest = key.partition("_")
+            if len(ordinal) >= ORDINAL_WIDTH and ordinal.isdigit() and len(digest) == unit_manifest.DIGEST_HEX:
+                answer.append(key)
+    return answer
 
 
 def chains(rules: list) -> list:

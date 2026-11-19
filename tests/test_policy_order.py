@@ -1,29 +1,34 @@
-"""F2.5 order-preserving policy emission.
+"""F2.5 order-preserving policy emission, read through the iterated block (Epic 9 Piece 19).
 
-Pins the per-device-group rule chain semantics on both the dedicated
-multi-DG fixture and the committed goldens:
+Pins the chain semantics on the dedicated multi-DG fixture and on the committed goldens:
 
-- the first rule of each chain anchors at the end of the rulebase
-  (position.where = "last", no pivot, no depends_on);
-- each later rule is placed directly after the previous rule
-  (position.where = "after", directly = true, pivot = previous rule's
-  Panorama name) and declares depends_on on exactly that previous
-  rule's resource, so Terraform applies the chain in XML order;
-- chains never cross device groups.
+- one block per rule type per unit, in the file the coverage matrix row names, and the block reads the `locals`
+  map that is the printed form of that unit's rows;
+- the block's name and the map's name are the one name the matrix row's `output_file` stem names, read through
+  `rule_data.locals_name`, so the block, the map, the `.json` form and the `.csv` form read one name;
+- the apply order comes from the key order: the ordinals run 1..N inside a chain in the order the export lists the
+  rules, the printed entry order is the sorted key order, and `position` anchors every instance at the end of the
+  rulebase, so the per-instance pivot and `depends_on` dropped (Epic 9 decision 4);
+- a chain never crosses a unit, because the chain group (device group, virtual system) is two of the five unit
+  facts and the row's `directory` is the join, so the key's digest half is the digest the directory names.
 
-Provider v2.0.14 requires pivot and directly together for
-where = "after", and fails the move when the pivot is missing, which is
-why the depends_on is part of the contract.
+The rule-shape parser and the chain check are read through `tests/conftest.py` (§1.1), the one place the shape is
+read, so this module and `tests/test_real_or_report.py` share one implementation of the chain semantics.
 """
 
 from pathlib import Path
 
 import pytest
 
+import naming
+import panorama_to_terraform
+import rule_data
 import sanity_checks
+import xml_input
 from conftest import (
     FIXTURES_DIR,
     GOLDEN_DIR,
+    SAMPLE_CONFIG,
     check_chain_semantics,
     file_text,
     parts,
@@ -32,9 +37,23 @@ from conftest import (
     tf_files,
 )
 
-# The structural parser for the generated rule files and the chain check are read through
-# `tests/conftest.py`, the one shared helper file (§1.1), because `tests/test_real_or_report.py` reads the
-# same two functions. A resource block ends at the first newline followed by a column-0 brace.
+# The goldens this piece reads: the case and the source the case is the output of. `tests/test_golden_files.py`
+# holds the byte comparison; this module reads the order the source states. No test module imports another test
+# module, so the pair is stated here for the two cases the pins read.
+GOLDEN_CASES = {
+    "sample": SAMPLE_CONFIG,
+    "kitchen_sink": FIXTURES_DIR / "kitchen_sink.xml",
+}
+
+# The chain groups the fixture states, in first-seen order, and the rule names inside each in export order.
+EXPECTED_SECURITY = [
+    ("Alpha-DG", ["alpha-rule-1", "alpha-rule-2", "alpha-rule-3"]),
+    ("Beta-DG", ["beta-rule-1", "beta-rule-2"]),
+    ("Gamma-DG", ["gamma-rule-1"]),
+]
+EXPECTED_NAT = [
+    ("Alpha-DG", ["alpha-nat-1", "alpha-nat-2"]),
+]
 
 
 @pytest.fixture(scope="module")
@@ -46,57 +65,65 @@ def generated(tmp_path_factory) -> Path:
     return out
 
 
-EXPECTED_SECURITY = [
-    ("Alpha-DG", ["alpha-rule-1", "alpha-rule-2", "alpha-rule-3"]),
-    ("Beta-DG", ["beta-rule-1", "beta-rule-2"]),
-    ("Gamma-DG", ["gamma-rule-1"]),
-]
-EXPECTED_NAT = [
-    ("Alpha-DG", ["alpha-nat-1", "alpha-nat-2"]),
-]
+def _rows(resource_type: str, source: Path) -> list[dict]:
+    """The rows the run's rule names for one rule type: the parse, read through `rule_data`.
+
+    The key, the ordinal and the unit join are read through the module that owns them, so this helper states no key
+    rule, no ordinal rule and no unit rule of its own, and the pin compares the printed shape against the rows
+    rather than restating how a key is built.
+    """
+    parser = panorama_to_terraform.PanoramaParser(xml_input.parse_xml(source))
+    rules = getattr(parser, f"parse_{resource_type.split('_')[1]}_rules")()
+    return rule_data.build_rows(resource_type, rules, naming.sanitize)
 
 
 # --- Fixture: security rules -----------------------------------------------
 
 
-def test_security_chains_emit_in_xml_order_per_device_group(generated):
-    """Chains appear in first-seen DG order, rules in XML order."""
+def test_security_chains_emit_one_block_per_unit_in_key_order(generated):
+    """One block per unit, the units in first-seen order, and the entries in the XML order inside each chain."""
     blocks = rule_blocks(file_text(tf_files(generated), "security_rules.tf"), "panos_security_policy_rules")
     check_chain_semantics(blocks, "panos_security_policy_rules", EXPECTED_SECURITY, "security fixture")
-    assert [b["device_group"] for b in blocks] == (["Alpha-DG"] * 3 + ["Beta-DG"] * 2 + ["Gamma-DG"]), (
-        "security fixture"
-    )
+    assert [b["group"] for b in blocks] == ["Alpha-DG", "Beta-DG", "Gamma-DG"], "security fixture"
+    # The order fact is the key order, so the position the block prints is the same anchor for every instance.
+    assert all(block["where"] == "last" for block in blocks), "security fixture"
 
 
-def test_security_single_rule_chain_has_only_the_anchor(generated):
-    """Gamma-DG has one rule: anchor position, no pivot, no depends_on."""
-    text = file_text(tf_files(generated), "security_rules.tf")
-    blocks = rule_blocks(text, "panos_security_policy_rules")
-    gamma = [b for b in blocks if b["device_group"] == "Gamma-DG"]
+def test_a_single_rule_unit_prints_one_entry(generated):
+    """Gamma-DG has one rule: the anchor, and one entry keyed by the first ordinal."""
+    blocks = rule_blocks(file_text(tf_files(generated), "security_rules.tf"), "panos_security_policy_rules")
+    gamma = [b for b in blocks if b["group"] == "Gamma-DG"]
     assert len(gamma) == 1
     assert gamma[0]["where"] == "last"
-    assert gamma[0]["pivot"] is None
-    assert gamma[0]["depends_on"] == []
+    assert [entry["ordinal"] for entry in gamma[0]["entries"]] == [f"{1:0{rule_data.ORDINAL_WIDTH}d}"]
 
 
-def test_security_chains_do_not_cross_device_groups(generated):
-    """A chain starts fresh in each DG: no pivot or depends_on from another DG."""
-    text = file_text(tf_files(generated), "security_rules.tf")
-    blocks = rule_blocks(text, "panos_security_policy_rules")
-    by_dg: dict[str, list[dict]] = {}
-    for b in blocks:
-        by_dg.setdefault(b["device_group"], []).append(b)
-    for dg, chain in by_dg.items():
-        # Every depends_on target must be a resource of the same chain.
-        locals_in_chain = {f"panos_security_policy_rules.{c['local']}" for c in chain}
-        for c in chain:
-            for dep in c["depends_on"]:
-                assert dep in locals_in_chain, f"{dg}: cross-DG dep {dep}"
-        # No pivot may reference a rule outside the chain's XML names.
-        names_in_chain = {c["names"][0] for c in chain}
-        for c in chain:
-            if c["pivot"] is not None:
-                assert c["pivot"] in names_in_chain, f"{dg}: cross-DG pivot {c['pivot']}"
+def test_a_chain_never_crosses_a_unit(generated):
+    """F3.2: the chain group (device group, virtual system) is two of the five unit facts, so a chain lands in one
+    unit and the block written for that unit holds exactly that chain's rows.
+
+    The rows are read through `rule_data`, so the key, the ordinal and the unit join are the rule that owns them,
+    and the pin compares the printed shape against the rows instead of restating how a key is built. A rule that
+    repeats a name in another virtual system is another block in another unit's file.
+    """
+    resource_type = "panos_security_policy_rules"
+    parser = panorama_to_terraform.PanoramaParser(xml_input.parse_xml(FIXTURES_DIR / "policy_order.xml"))
+    rules = parser.parse_security_rules()
+    rows = rule_data.build_rows(resource_type, rules, naming.sanitize)
+    files = tf_files(generated)
+    seen = 0
+    for chain in rule_data.chains(rules):
+        chain_rows = rows[seen : seen + len(chain)]
+        seen += len(chain)
+        units = {row["directory"] for row in chain_rows}
+        assert len(units) == 1, f"a chain crosses a unit: {chain}"
+        unit = next(iter(units))
+        block = rule_blocks(files[f"{unit}/security_rules.tf"], resource_type)[0]
+        assert [entry["key"] for entry in block["entries"]] == sorted(row["key"] for row in chain_rows), chain
+        # Inside a chain the sorted key order is the order the export lists the rules.
+        assert sorted(row["key"] for row in chain_rows) == [row["key"] for row in chain_rows], chain
+        names = [f'"{row["entry"]}"' for row in chain_rows]
+        assert [entry["fields"]["name"] for entry in block["entries"]] == names, chain
 
 
 # --- Fixture: NAT rules ------------------------------------------------------
@@ -120,24 +147,30 @@ def test_nat_chains_follow_the_same_semantics(generated):
     ],
     ids=lambda p: p.replace("/", "_"),
 )
-def test_goldens_preserve_order_preserving_positions(fixture_file):
+def test_goldens_print_the_rows_in_the_chain_order(fixture_file):
     """The committed goldens already follow the chain contract.
 
-    F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the case holds one part per unit, so the pin reads the parts
-    as paths from the case directory. A chain never crosses a unit, so the grouping is read inside each part.
+    F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the case holds one part per unit, so the pin reads the parts as
+    paths from the case directory. One part is one unit, so the pin reads one block per part and compares the
+    printed entry order with the order the rule names for that unit, read through `rule_data`.
     """
     case, name = fixture_file.split("/")
     written = parts(sanity_checks.read_tf_files(GOLDEN_DIR / case), name)
     assert written, f"no golden part named {name} in {case}"
     resource_type = "panos_security_policy_rules" if "security" in name else "panos_nat_policy_rules"
+    rows = _rows(resource_type, GOLDEN_CASES[case])
     for path, text in written.items():
         blocks = rule_blocks(text, resource_type)
-        assert blocks, f"no rule blocks found in {path}"
-        # Group consecutive blocks by device group (chains are emitted contiguously).
-        expected: list[tuple[str, list[str]]] = []
-        for b in blocks:
-            if expected and expected[-1][0] == b["device_group"]:
-                expected[-1][1].append(b["names"][0])
-            else:
-                expected.append((b["device_group"], [b["names"][0]]))
-        check_chain_semantics(blocks, resource_type, expected, path)
+        assert len(blocks) == 1, (path, blocks)
+        block = blocks[0]
+        unit = Path(path).parent.name
+        unit_rows = [row for row in rows if row["directory"] == unit]
+        assert unit_rows, path
+        # The printed order is the sorted key order, and inside a unit that order is the XML order.
+        assert [entry["key"] for entry in block["entries"]] == sorted(row["key"] for row in unit_rows), path
+        assert [entry["key"] for entry in block["entries"]] == [row["key"] for row in unit_rows], path
+        assert [entry["fields"]["name"] for entry in block["entries"]] == [f'"{row["entry"]}"' for row in unit_rows], (
+            path
+        )
+        assert block["local"] == rule_data.locals_name(resource_type), path
+        assert block["for_each"] == f"local.{rule_data.locals_name(resource_type)}", path

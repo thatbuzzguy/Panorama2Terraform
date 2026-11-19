@@ -132,7 +132,9 @@ def test_console_summary_reports_the_result(tmp_path):
     # F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the count names the unit set the gate read, so the
     # sample run - two units, so two sets - measures 14 .tf files.
     summary = [line for line in result.stdout.split("\n") if line.startswith("Sanity gate:")]
-    assert summary == ["Sanity gate: PASS (0 FAIL, 0 WARN) - 14 .tf files, 2 data files, 20 resources"]
+    # Measured 2026-11-19: the resource count is 17, because the four `*_policy_rules` types print one iterated
+    # block per rule type per unit instead of one block per rule (Epic 9 Piece 19).
+    assert summary == ["Sanity gate: PASS (0 FAIL, 0 WARN) - 14 .tf files, 2 data files, 17 resources"]
     assert "Sanity report: " in result.stdout
 
 

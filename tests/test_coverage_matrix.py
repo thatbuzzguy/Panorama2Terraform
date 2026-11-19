@@ -34,8 +34,18 @@ from pathlib import Path
 import pytest
 
 import entry_coverage
+import import_blocks
+import panorama_to_terraform
 import resource_mapping
-from conftest import FIXTURES_DIR, RESOURCE_RE, file_text, run_script, tf_files
+import rule_data
+from conftest import (
+    FIXTURES_DIR,
+    RESOURCE_RE,
+    file_text,
+    rule_blocks,
+    run_script,
+    tf_files,
+)
 from resource_mapping import COVERAGE_MATRIX, EMITTED_TYPES
 
 # The resource line is read through `tests/conftest.py` (§1.1), which states the pattern once for the test set.
@@ -148,6 +158,19 @@ def test_row_emits_the_provider_resource(row):
     # the file is the unit's file and the reader keys it by the path from the output directory.
     text = file_text(outputs, row["output_file"])
     assert text, f"row for {row['resource']}: converter wrote no {row['output_file']!r} (files: {sorted(outputs)})"
+    if row["resource"] in import_blocks.rule_types():
+        # The four rule types print one iterated block that carries no name field of its own: the name is the map
+        # entry the block reads, so the pin reads the shape through the shared parser (§1.1) and the block name
+        # through `rule_data.locals_name`.
+        blocks = rule_blocks(text, row["resource"])
+        assert blocks, f"row for {row['resource']}: no iterated rule block in {row['output_file']!r}"
+        assert blocks[0]["local"] == rule_data.locals_name(row["resource"]), row["resource"]
+        expected = f'"{row["emitted_name"]}"'
+        field = entry_coverage.name_field(row["resource"])
+        assert any(entry["fields"][field] == expected for block in blocks for entry in block["entries"]), (
+            f"row for {row['resource']}: no entry in the map {blocks[0]['for_each']!r} carries {expected!r}"
+        )
+        return
     blocks = _resource_blocks(text, row["resource"])
     assert blocks, f"row for {row['resource']}: no resource block of this type in {row['output_file']!r}"
     expected = f'{_name_field(row)} = "{row["emitted_name"]}"'
@@ -244,6 +267,11 @@ def _shape_table_grounding(row: dict) -> set:
     # them. `tests/test_data_source_schema.py` is what keeps that table against the live provider schema.
     if "generate_certificates" in row["emitter"] or "generate_certificate_profiles" in row["emitter"]:
         return {field for shape_row in resource_mapping.CERTIFICATE_SHAPE.values() for field in shape_row["fields"]}
+    # Piece 19: a rule row's emitter has no per-field branch. It prints the fields `RULE_ENTRY_FIELDS` declares for
+    # the row, so the table grounds them, and `tests/test_rule_data.py` is what keeps the printed map against the
+    # rows `parse_rows` reads.
+    if row["resource"] in import_blocks.rule_types():
+        return set(panorama_to_terraform.RULE_ENTRY_FIELDS[row["resource"]])
     return set()
 
 

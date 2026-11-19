@@ -78,6 +78,7 @@ import naming
 import ownership
 import reference_edges
 import resource_mapping
+import rule_data
 import site_data
 import unit_manifest
 import write_path
@@ -1537,7 +1538,10 @@ def check_round_trip(files: dict[str, str], ledger) -> list[Finding]:
       names an entry here. The destination is read per entry, so an entry the run reports is not in the
       count even when its container row is `emitted`.
     - the block side through the one block reader, `blocks`, with `kinds = ('resource',)`, so a `data`
-      block, an `import` block, an `action` block and a `variable` declaration enter no count.
+      block, an `import` block, an `action` block and a `variable` declaration enter no count. For the four
+      `*_policy_rules` rows the block prints the set and not one entry, so the block side is the entry keys the
+      `.tf` file prints in the map the block reads, read through `rule_data.printed_keys`, the module that owns the
+      row shape, the key shape and the three forms.
     - the join through `entry_coverage.MATRIX_BY_RESOURCE`, the same table `matrix_row_for` reads, and
       through `unit_manifest` (`facts_of`, `directory_name`, `units`).
 
@@ -1545,15 +1549,16 @@ def check_round_trip(files: dict[str, str], ledger) -> list[Finding]:
     states no exception list. A `.tf` file at the codebase root names no unit, because `write_path.py`
     writes no `.tf` file in the root set, so its count cannot be assigned.
 
-    One finding per unit and per row where the two counts do not agree, and the fact is the two counts. The
-    rule names no entry: `docs/ARCHITECTURE.md` §3.2 owns one entry, and the gap section names the entries
+    One finding per unit and per row where the two counts do not agree, and the fact is the two counts, the second
+    one being the blocks the reader read or the entries the map the block reads prints. The rule names no entry:
+    `docs/ARCHITECTURE.md` §3.2 owns one entry, and the gap section names the entries
     that write nothing, so the gate cannot restate the per-entry report. Both directions are findings: a
     block the reader read that no entry produced, and an entry the parse read and modelled that has no
     block. A finding is a coverage fact, not a broken output, so it is a WARN and does not change the exit
     code, the decision the property scan already states (`entry_coverage.PROPERTY_RULE`). The position is
     the line of the first block the reader read for that unit and row; when the reader read no block, the
     position is the file as a whole (`line` 0) and the file is the unit directory plus the row's
-    `output_file` read from the row.
+    `output_file` read from the row. The position is read through `position`, the helper the rule calls.
 
     The two populations are not the same population, so a disagreeing count is a real gap, not noise: an
     `emitted` entry whose type has no v2 attribute writes no block, a block written for a property level
@@ -1604,8 +1609,6 @@ def check_round_trip(files: dict[str, str], ledger) -> list[Finding]:
         resource, unit = key
         read = blocks_read.get(key, [])
         entries = entry_counts.get(key, 0)
-        if entries == len(read):
-            continue
         row = entry_coverage.MATRIX_BY_RESOURCE[resource]
         if not unit:
             # The reader read the block in the root set, which names no unit, so the count cannot be
@@ -1621,23 +1624,38 @@ def check_round_trip(files: dict[str, str], ledger) -> list[Finding]:
                 )
             )
             continue
-        if read:
-            file_name, line = read[0].file, read[0].line
-        else:
-            # The reader read no block, so the position is the file as a whole and the file is the unit
-            # directory plus the name the row states.
-            file_name, line = f"{unit}/{row['output_file']}", 0
-        findings.append(
-            Finding(
-                "round_trip",
-                WARN,
-                file_name,
-                line,
+        if resource in import_blocks.rule_types():
+            # The four rule types print one iterated block per unit, so the block states no entry value: the printed
+            # form of that unit's rows is the map the block reads, so the block side for these rows is the keys that
+            # map prints. The keys are read through `rule_data`, the module that owns the row shape, the key shape and
+            # the three forms, so this rule states no reader of its own, and one block per unit is the shape the tests
+            # pin rather than a count this rule states.
+            printed = rule_data.printed_keys(files.get(f"{unit}/{row['output_file']}", ""), resource)
+            if entries == len(printed):
+                continue
+            detail = (
                 f"row {resource} in unit {unit}: the ledger reads {entries} entries, "
-                f"the reader reads {len(read)} blocks",
+                f"the reader reads {len(printed)} entries in the map the block reads"
             )
+            findings.append(Finding("round_trip", WARN, *position(read, unit, row), detail))
+            continue
+        if entries == len(read):
+            continue
+        detail = (
+            f"row {resource} in unit {unit}: the ledger reads {entries} entries, the reader reads {len(read)} blocks"
         )
+        findings.append(Finding("round_trip", WARN, *position(read, unit, row), detail))
     return sorted(findings, key=lambda finding: (finding.file, finding.line, finding.detail))
+
+
+def position(read: list, unit: str, row: dict) -> tuple:
+    """The finding's position, the way the rule has always stated it: the line of the first block the reader read for
+    that unit and row, and the file as a whole when the reader read no block, which is the unit directory plus the
+    name the row states.
+    """
+    if read:
+        return read[0].file, read[0].line
+    return f"{unit}/{row['output_file']}", 0
 
 
 def check_request_set(index, ledger) -> list[Finding]:

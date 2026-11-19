@@ -19,8 +19,18 @@ from pathlib import Path
 
 import pytest
 
+import entry_coverage
+import rule_data
 import xml_input
-from conftest import FIXTURES_DIR, file_text, run_script, tf_files
+from conftest import (
+    FIXTURES_DIR,
+    check_chain_semantics,
+    file_text,
+    parts,
+    rule_blocks,
+    run_script,
+    tf_files,
+)
 
 
 def _fixture(name: str):
@@ -242,14 +252,19 @@ def _addr_assignment(text: str) -> dict[str, str]:
 
 
 def _rule_assignment(text: str) -> dict[str, str]:
-    """{PAN-OS rule name: local name} for security rule resources."""
-    out = {}
-    for b in _resource_blocks(text, "panos_security_policy_rules"):
-        # The rules list holds one object per rule; the rule name is the
-        # only name = line inside it (the location block is outside).
-        rules_body = re.search(r"rules = \[(.*?)\n  \]", b["body"], re.S).group(1)
-        out[re.search(r'name = "([^"]+)"', rules_body).group(1)] = b["local"]
-    return out
+    """{PAN-OS rule name: the `for_each` key's digest half} for the iterated security block.
+
+    The rule-shape parser is the one shared implementation (§1.1), so this pin reads the same shape the policy pins
+    read. The name is the map entry's name field, and the digest half is the identity part of the key: the ordinal
+    half is the position in the chain, so an entry-order flip moves it, while the identity half is what F3.2 pins.
+    """
+    resource_type = "panos_security_policy_rules"
+    name_field = entry_coverage.name_field(resource_type)
+    return {
+        entry["fields"][name_field].strip('"'): entry["digest"]
+        for block in rule_blocks(text, resource_type)
+        for entry in block["entries"]
+    }
 
 
 def test_dup_names_across_vsys_emit_distinct_digests(emitted_vsys):
@@ -287,14 +302,13 @@ def test_rule_resolves_name_in_its_own_vsys(emitted_vsys):
     addr = _addr_assignment(file_text(emitted_vsys["vsys1_first"], "address_objects.tf"))
     vs1_local = addr["10.1.0.1/32"]  # the vsys1 web object
     vs2_local = addr["10.2.0.1/32"]  # the vsys2 web object
-    blocks = _resource_blocks(text, "panos_security_policy_rules")
-    assert len(blocks) == 4
+    blocks = rule_blocks(text, "panos_security_policy_rules")
+    assert len(blocks) == 2, "one block per vsys unit"
     wired = {}
-    for b in blocks:
-        rules_body = re.search(r"rules = \[(.*?)\n  \]", b["body"], re.S).group(1)
-        rule_name = re.search(r'name = "([^"]+)"', rules_body).group(1)
-        ref = re.search(r"panos_address\.([a-z0-9_]+)\.name", b["body"]).group(1)
-        wired[rule_name] = ref
+    for block in blocks:
+        for entry in block["entries"]:
+            ref = re.search(r"panos_address\.([a-z0-9_]+)\.name", entry["fields"]["source_addresses"]).group(1)
+            wired[entry["fields"]["name"].strip('"')] = ref
     assert wired["rule-vs1-a"] == vs1_local
     assert wired["rule-vs1-b"] == vs1_local
     assert wired["rule-vs2-a"] == vs2_local
@@ -302,41 +316,30 @@ def test_rule_resolves_name_in_its_own_vsys(emitted_vsys):
 
 
 def test_rule_chains_do_not_cross_vsys(emitted_vsys):
-    """F3.2: each vsys keeps its own rule chain.
+    """F3.2: each vsys keeps its own rule chain, so the fixture prints one block per vsys unit.
 
-    Each chain anchors at where = "last" (the chain restarts at the vsys
-    boundary), and each later rule pivots on and depends on the previous
-    rule of its own vsys only.
+    The chain restarts at the vsys boundary, and the instances inside one block create in key order, so the block
+    prints the same anchor for every instance and no per-instance pivot or `depends_on` appears (Epic 9 decision 4).
+    The two blocks are written in two unit directories, so the chain group is the join the row names: the key's
+    digest half is the digest the directory names, and one block holds one unit's rows.
     """
-    text = file_text(emitted_vsys["vsys1_first"], "security_rules.tf")
-    blocks = _resource_blocks(text, "panos_security_policy_rules")
-    by_name = {}
-    for b in blocks:
-        rules_body = re.search(r"rules = \[(.*?)\n  \]", b["body"], re.S).group(1)
-        rule_name = re.search(r'name = "([^"]+)"', rules_body).group(1)
-        where = re.search(r'where = "([^"]+)"', b["body"])
-        pivot = re.search(r'pivot = "([^"]+)"', b["body"])
-        dep = re.search(r"depends_on = \[([^\]]*)\]", b["body"])
-        by_name[rule_name] = {
-            "local": b["local"],
-            "where": where.group(1) if where else None,
-            "pivot": pivot.group(1) if pivot else None,
-            "depends_on": dep.group(1).strip() if dep else None,
-        }
-    # Chain 1 (vsys1): anchor, then after-previous.
-    assert by_name["rule-vs1-a"]["where"] == "last"
-    assert by_name["rule-vs1-a"]["pivot"] is None
-    assert by_name["rule-vs1-a"]["depends_on"] is None
-    assert by_name["rule-vs1-b"]["where"] == "after"
-    assert by_name["rule-vs1-b"]["pivot"] == "rule-vs1-a"
-    assert by_name["rule-vs1-b"]["depends_on"] == (f"panos_security_policy_rules.{by_name['rule-vs1-a']['local']}")
-    # Chain 2 (vsys2): the boundary restarts the chain at the anchor.
-    assert by_name["rule-vs2-a"]["where"] == "last"
-    assert by_name["rule-vs2-a"]["pivot"] is None
-    assert by_name["rule-vs2-a"]["depends_on"] is None
-    assert by_name["rule-vs2-b"]["where"] == "after"
-    assert by_name["rule-vs2-b"]["pivot"] == "rule-vs2-a"
-    assert by_name["rule-vs2-b"]["depends_on"] == (f"panos_security_policy_rules.{by_name['rule-vs2-a']['local']}")
+    written = parts(emitted_vsys["vsys1_first"], "security_rules.tf")
+    assert len(written) == 2, written
+    for path, text in written.items():
+        blocks = rule_blocks(text, "panos_security_policy_rules")
+        assert len(blocks) == 1, path
+        unit = Path(path).parent.name
+        assert unit.rsplit("_", 1)[1] == blocks[0]["entries"][0]["digest"], path
+        assert [entry["ordinal"] for entry in blocks[0]["entries"]] == [
+            f"{position:0{rule_data.ORDINAL_WIDTH}d}" for position in range(1, 3)
+        ], path
+    # The whole file, read through the shared chain check: each unit's entries are in the export's order.
+    check_chain_semantics(
+        rule_blocks(file_text(emitted_vsys["vsys1_first"], "security_rules.tf"), "panos_security_policy_rules"),
+        "panos_security_policy_rules",
+        [("vsys1", ["rule-vs1-a", "rule-vs1-b"]), ("vsys2", ["rule-vs2-a", "rule-vs2-b"])],
+        "vsys fixture",
+    )
 
 
 # --- 8. F3.4: full object types on the emit side -----------------------------

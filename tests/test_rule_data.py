@@ -15,6 +15,9 @@ Ten pins, in the order the rules in `src/rule_data.py` state them:
    `write_path.py`.
 9. The two file names, read through the same matrix row, and the pair naming the unit file set.
 10. The run writing one pair per rule type per unit, each file reading back as the rows it was built from.
+11. The printed map reading back through `printed_keys` as the same row keys, in the order the `.tf` file prints
+    them, so the gate's cross-check reads the third form through this module and the printed form stays no reader
+    input for a row.
 
 The read record is read the way `tests/test_property_coverage.py` reads it: the record is turned on before the
 parse, so a read through the recorded object counts as a read this output made. One pin plants its material,
@@ -32,7 +35,6 @@ import entry_coverage
 import import_blocks
 import naming
 import panorama_to_terraform
-import resource_mapping
 import rule_data
 import sanity_checks
 import state_coverage
@@ -45,9 +47,8 @@ CONVERTER = SRC_DIR / "panorama_to_terraform.py"
 
 # The four rule types the single object iterates, read through the matrix rows that name them, and the parse
 # method each row names as its emitter.
-RULE_TYPES = sorted(
-    row["resource"] for row in resource_mapping.COVERAGE_MATRIX if row["resource"].endswith("_policy_rules")
-)
+# The four rule types the single object iterates, read through the rule that names them.
+RULE_TYPES = sorted(import_blocks.rule_types())
 
 
 def parse_method(resource: str) -> str:
@@ -288,11 +289,21 @@ def test_the_chain_grouping_and_order_are_the_f2_5_rule_read_through_rule_data()
 
 
 def test_the_generator_reads_the_chain_grouping_through_rule_data():
-    """AC-6: the group is stated once, so the generator delegates to `rule_data.chains` (rule 3)."""
+    """AC-6: the group is stated once, so the generator delegates to `rule_data.chains` (rule 3).
+
+    Measured 2026-11-19: the per-instance position block is gone, because the instances inside one iterated block
+    create in the key order (Epic 9 decision 4), so the helper's method ends at the next rule method. The print site
+    pairs each chain with the rows built for it, so it reads the grouping through the helper and states none of its
+    own; the `setdefault` it writes is the unit join, not a grouping.
+    """
     source = Path(panorama_to_terraform.__file__).read_text(encoding="utf-8")
-    method = source[source.index("def _policy_rule_chains") : source.index("def _policy_position_block")]
+    method = source[source.index("def _policy_rule_chains") : source.index("def _rule_null")]
     assert "rule_data.chains(rules)" in method, method
     assert "setdefault" not in method, "the generator states no second grouping"
+    site = source[source.index("def _print_policy_rules") : source.index("def generate_security_rules")]
+    assert "self._policy_rule_chains(rules)" in site, "the print site reads the grouping through the helper"
+    assert "rule_data.build_rows" in site, "the print site reads the row shape through the module that owns it"
+    assert "rule_data.locals_name" in site, "the print site reads the map name through the same matrix row"
     holders = [
         path.name
         for path in sorted(SRC_DIR.glob("*.py"))
@@ -358,9 +369,11 @@ def test_the_rule_data_layer_states_no_second_rule_and_writes_no_file():
         assert token not in source, token
     assert "RULE_ROW_FIELDS = " in source, "the module states the row shape it owns"
 
+    # `re` is the reader for the third form, `printed_keys`, which reads only the keys of the printed map, the part of
+    # it rule 5 owns. The module still writes nothing and reads no record.
     imported = {alias.name for node in tree.body if isinstance(node, ast.Import) for alias in node.names}
     house = {path.name[:-3] for path in SRC_DIR.glob("*.py")}
-    assert imported <= {"csv", "io", "json"} | house, imported
+    assert imported <= {"csv", "io", "json", "re"} | house, imported
     assert imported & house, "the module reads its rules through the owners it imports"
     assert not hasattr(rule_data, "write_file"), "the single writer writes the file"
 
@@ -371,9 +384,11 @@ def test_the_rule_data_layer_states_no_second_rule_and_writes_no_file():
 def test_the_two_file_forms_are_unit_set_files_named_through_the_matrix_row(tmp_path):
     """AC-9: the two names are one stem with the two suffixes, and the pair names the unit file set (rule 5).
 
-    `data_file` and `printed_file` read the same matrix row, so the module states one file-name rule and not two:
-    the stem is the row's `output_file` without its `.tf` suffix, and the two forms are that stem with `.json` and
-    `.csv`. A per-unit file names the kind it holds and never the unit, so the path is the only place the file
+    `data_file`, `printed_file` and `locals_name` read the same matrix row, so the module states one name rule and
+    not three: the stem is the row's `output_file` without its `.tf` suffix, the two files are that stem with `.json`
+    and `.csv`, and the third form is the stem itself, which is the map the `.tf` file prints and the name of the
+    block that reads it. A per-unit file names the kind it holds and never the unit, so the path is the only place
+    the file states the unit it belongs to.
     states the unit it belongs to. The pair is not one of the four records the data rule reads, so the report's
     data count still names only the records at the codebase root. The generated `README.md` is the file inventory,
     so it names the two forms as files and states no row, no value, no count, no path and no timestamp, which is
@@ -383,6 +398,7 @@ def test_the_two_file_forms_are_unit_set_files_named_through_the_matrix_row(tmp_
     names |= {rule_data.printed_file(resource) for resource in RULE_TYPES}
     for resource in RULE_TYPES:
         stem = entry_coverage.MATRIX_BY_RESOURCE[resource]["output_file"][: -len(".tf")]
+        assert rule_data.locals_name(resource) == stem, (resource, "the third form is the stem with no suffix")
         for name in (rule_data.data_file(resource), rule_data.printed_file(resource)):
             assert Path(name).stem == stem, (resource, name, "the two forms are one stem")
             assert Path(name).suffix in (".json", ".csv"), (resource, name)
@@ -457,3 +473,39 @@ def test_the_run_writes_one_pair_per_rule_type_per_unit_through_the_write_path(t
                 assert written[printed].decode(encoding="utf-8") == rule_data.render_csv(unit_rows), printed
                 assert rule_data.parse_rows(data_text) == unit_rows, key
                 assert b"\r" not in written[key] and b"\r" not in written[printed], (key, "the byte rule")
+
+
+# --- 11. The third form reads back through the module that owns the key shape ---
+
+
+def test_the_printed_map_reads_back_as_the_same_row_keys(tmp_path):
+    """AC-11: the map the `.tf` file prints is the third form of the same rows, and `printed_keys` reads its keys
+    through the shape rule the module owns (rule 5).
+
+    Measured 2026-11-19 on the kitchen-sink run: the file prints the unit's rows as the map, in the sorted key order,
+    which is the XML order inside the chain. The keys read back are the keys `build_rows` built, the map name is the
+    stem, and the printed form still answers no row to `parse_rows`, which refuses the printed forms and reads the
+    data form.
+    """
+    out = tmp_path / "printed_map"
+    assert run_script(CONVERTER, str(FIXTURES_DIR / "kitchen_sink.xml"), "--output-dir", str(out)).returncode == 0
+    tf = {key: value.decode(encoding="utf-8") for key, value in written_bytes(out).items() if key.endswith(".tf")}
+    read = 0
+    for resource in RULE_TYPES:
+        for key, text in sorted(tf.items()):
+            if rule_data.locals_name(resource) not in text:
+                continue
+            directory = Path(key).parent.name
+            rows = rule_data.parse_rows((out / directory / rule_data.data_file(resource)).read_text(encoding="utf-8"))
+            keys = rule_data.printed_keys(text, resource)
+            assert keys, key
+            assert keys == sorted(row["key"] for row in rows), (key, keys)
+            # The printed map is the third form, so the reader that reads rows refuses it.
+            for form in (text, rule_data.render_csv(rows)):
+                try:
+                    rule_data.parse_rows(form)
+                except ValueError:
+                    continue
+                raise AssertionError(f"{key}: the printed form is not reader input")
+            read += 1
+    assert read == 4, "the kitchen-sink run prints one map for each of the four rule types"

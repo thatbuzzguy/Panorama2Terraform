@@ -1,110 +1,155 @@
-# Acceptance — the rule data write path (Epic 9, Piece 18, Phase 9B)
+# Acceptance — the iterated block (Epic 9, Piece 19, Phase 9C)
 
-Criteria set 2026-11-18 for Piece 18: the rule row set is written. The run writes the consumed JSON file and
-the printed CSV file for each rule type inside each unit directory the manifest names, and it writes both
-through `src/write_path.py`, the single writer. Piece 17 declared the row shape `RULE_ROW_FIELDS` and the two
-forms of the same rows; this piece lands the file set those two forms are written into. The iterated block is
-Piece 19, and the gate rule that reads the rows is Piece 20.
+Criteria set 2026-11-19 for Piece 19: the four rule generators print one `for_each` resource block per rule type
+per unit instead of one block per rule entry. This piece carries its own criteria for the F2.5 order rule, because
+the order fact moves from `depends_on` to the key order (Epic 9 decision 4). The gate rule that reads the iterated
+block is Piece 20; this piece states the shape Piece 20 reads and adds no gate rule of its own. Piece 21
+re-measures the goldens as a whole; the goldens this piece moves are the ones that name the printed rule output.
 
-Owners this piece reads and does not restate: the row shape through `rule_data.RULE_ROW_FIELDS`; the two forms
-through `rule_data.render` and `rule_data.render_csv`; the file name through the coverage matrix row's
-`output_file`, as `rule_data.data_file` reads it; the four rule types through `import_blocks.rule_types`, the
-one place that names them; the run order through `PARSE_ORDER`; the parse method that reads a rule container
-through `container_coverage.CONTAINER_TABLE`; the unit join through `unit_manifest.facts_of` and
-`unit_manifest.directory_name`; the path, the two sets and the byte rule through `write_path.py`; the naming
-rule through `naming.py`, taken as the argument `build_rows` already takes.
+Owners this piece reads and does not restate: the row shape through `rule_data.RULE_ROW_FIELDS`; the key, the
+ordinal width and the chain grouping through `rule_data`; the one file-name stem through the coverage matrix row's
+`output_file`, read through `rule_data` (`data_file`, `printed_file`, and the map name `locals_name`); the field
+order through the matrix row's `properties` (table order); the name field through `entry_coverage.name_field`; the
+location through `LOCATION_SCHEMA`; the value-to-variable shape through `resource_mapping.VALUE_VARIABLES`; the
+naming rule through `naming.py`; the unit join through `unit_manifest`; the writer through `write_path.py`.
 
 ## The rules this piece states
 
-1. **The rule data pair is a unit-set file set.** One pair per rule type per unit, written inside the unit
-   directory the manifest row names (`docs/CODEBASE_ASSEMBLY.md` §14), because the rows of one rule type are the
-   rows of one unit: the chain grouping keys on the device group and the virtual system, which are two of the
-   five unit facts, so the file a unit reads holds that unit's rows and names its unit only by its directory. The
-   name states the rule type, not the unit, which is the rule `write_path.py` states for a per-unit file. This is
-   the new file shape, so §14 names the set it belongs to, and the pins that read the file set read the pair as
-   the unit set.
-2. **Two files, the same rows.** The JSON file is the form a Terraform object reads and the form a reader reads
-   back through `parse_rows`. The `.csv` file is the printed form of the same rows, the way `site.auto.tfvars`
-   is the printed form of the site record, so the printed form is compared and not counted, and `parse_rows`
-   still refuses the printed form read as data.
-3. **Written only when it has content.** The rule the report files and the four data files already share: a
-   rule type that has no rows for a unit writes no pair for that unit, so the file set is the units that have
-   rows, not a grid of rule types times units, and a run that reads no rule writes no rule data file.
-4. **`rule_data.py` holds no writer and states no path.** The module keeps its single writer as `write_path.py`,
-   states no path of its own, and writes no file of its own; the run's write step calls `write_path.unit_path`
-   and `write_path.write_file`. The module owns the row shape, the two forms, and the two file names, the second
-   name read through the same matrix row as the first.
-5. **No gate rule reads the pair in this piece.** The data rule keeps reading the four records at the codebase
-   root as one rule over the rows of every unit, and it reads no file inside a unit directory, so the report's
-   two counts do not move and the pin that holds that boundary stays. The gate that reads the rule rows through
-   the declared shape and joins on `directory` is Piece 20, where the `data_files` table gains the rule data file
-   and the count moves with it.
-6. **The write step states no type table and no join table.** The four rule types come from
-   `import_blocks.rule_types`; the rules for one type are the parse answer the run order names for the parse
-   method the container table names for that matrix row. The pair is written per unit by joining the rows on
-   `directory`, the way `commit_actions` and `import_blocks` join their rows to the unit.
-7. **The generated `README.md` names the two forms as files** and states no row, no value, no count, no path and
-   no timestamp, which is the file-inventory exception `docs/CODEBASE_ASSEMBLY.md` §9 rule 9 states. Two runs on
-   the same bytes write the same bytes, so the byte rule and the LF rule cover the new files, and no golden moves:
-   the golden set is the `.tf` set, and the records and the reports are not in it.
+1. **One block per rule type per unit.** The block is written in the file the matrix row names. The block's local
+   name and the map name are the one stem the row names, so the block, the map, the `.json` form and the `.csv`
+   form read one name and no second naming rule appears.
+2. **The `locals` map is the printed form of the unit's rows.** One entry per rule row for that unit, keyed by the
+   row `key`, printed in sorted key order, which is the XML order inside a chain. The entry states the name field
+   first (`entry_coverage.name_field`) and then the fields the rule type prints, in the table order the row
+   declares. A field the recorded object holds with no value prints `null`, because one field list serves every
+   instance; the data record keeps the rule that such a field prints no column, so the printed form is compared
+   against the data read through `parse_rows` field by field, and the fields it states as `null` are exactly the
+   declared fields the recorded object holds with no value.
+3. **The block prints the reference into the map, never a value.** `for_each` reads the map, and every row field
+   in the block body prints as `each.value.<field>`, under the name the provider declares for that field. The map
+   is the only place the file states a row value, so the rule that a block prints the variable reference, never the
+   value, is not broken: the value sits in one place, the printed form of the rows, and the block reads it by
+   reference, the way the `.tfvars` is the printed form of the site record. For a field `VALUE_VARIABLES` maps to a
+   variable the map states `var.<name>`, so no `.tf` file states a value for it, and the block still prints the
+   reference.
+   - Measured 2026-11-19 against the pinned provider schema: `rules = [ each.value ]` is refused, because the
+     provider marks `rules[0].name` required and cannot read it through a dynamically-typed `each.value`
+     (`Value Conversion Error … Target Type: provider.SecurityPolicyRulesResourceRulesObject`). So the block body
+     names the fields. Measured in the same harness: the enumerated body with `each.value.<field>`, a reference in
+     the map entry, and a map entry that states `null` validates.
+   - The two shape words the emitter states are not row values: the `position` anchor, and the NAT family word the
+     export states no value for. `pivot` stays a row column the block does not read.
+4. **Reference columns record whether a name resolved inside the unit, read through `name_ref`.** A reference
+   column prints the name the naming rule answered: the reference for a name the referrer's own unit declares, the
+   plain name otherwise. One iterated block prints one body for every instance, so the resolution is recorded in the
+   map entry and not in the block body, and the provider reads the name either way. The emitter applies the one
+   naming rule at the map site and states no second rule.
+5. **`position` prints `where = "last"`, and `depends_on` drops.** Instances inside one block create in key order,
+   and the key order is the XML order inside a chain, so the apply order comes from the key and not from a
+   per-instance pivot. `pivot` stays a row column of the record; the block does not read it.
+6. **The F2.5 rule, retargeted.** `tests/test_policy_order.py` pins that apply order equals XML order through the
+   key order: one block per rule type per unit, the key ordinals run 1..N inside a chain in XML order, the sorted
+   key order equals the XML order, and a chain never crosses a unit, because the chain group (device group, vsys) is
+   two of the five unit facts and the row's `directory` is the join. These are the criteria own to this piece, and
+   the shared rule-block parser and chain check in `tests/conftest.py` read the block shape.
+7. **The pins that name the printed rule output move with the shape**, and each still measures content: the pins
+   named in the Pins section below.
+8. **No second reader, naming rule, writer, console line, or environment name.** The emitter reads the field order,
+   the name field, the location and the variable shape through the tables that own them, prints through
+   `hcl_value`, and writes through `write_path.py`. The module that owns the row shape gains one name read through
+   the same stem rule (`locals_name`) and states no other rule.
+
+## Field name and shape exceptions the entry states
+
+The entry prints each field as the provider's `rules` object declares it, because `each.value.<field>` is
+dynamically typed and `terraform validate` cannot type-check it, so a shape mismatch shows only at apply. So
+`RULE_ENTRY_FIELDS` is one table of `row field -> (provider field name, shape word)`, read through the matrix row's
+field order and through `SHAPE_WORDS` and `SHAPE_TO_SCHEMA`, and `RULE_ENTRY_READERS` names the reader for a field
+whose provider object key is the value the row records. The shape word is the provider's declared type, measured from
+the pinned provider schema on 2026-11-19: every reference column is a list, `disabled` and the two log flags are
+booleans, `description`, `action`, `profile`, `log_setting` and `schedule` are one string, NAT `service` is one
+string, and `profile_setting`, `source_translation`, `destination_translation`, decryption `type`, PBF `action` and
+`enforce_symmetric_return` are objects or one_of. `destination_zone` is the one row field the parse records as one
+value, through `xml_input._get_text`, while the provider declares `['list','string']`, so the entry prints the
+one-member list. A `panos_nat_policy_rules` `service` member list is the one field the provider cannot take as the
+row's value, so the entry states the field as `null` and the file states the members in the `# NOTE:` line: a value
+is printed or reported, never dropped. The `# NOTE:` lines print inside the entry, before the field line they
+explain, so the printer prints entry fields line by line rather than one `hcl_value` call per entry.
+
+## What Piece 20 reads
+
+The block rule Piece 20 states can be stated from this piece as a gate rule: for each rule type, the block's local
+name and the `for_each` map name are `rule_data.locals_name`, the block's `location` equals the `LOCATION_SCHEMA`
+row for the type, its field list is the name field plus the table order the matrix row declares, every field in the
+block body is `each.value.<field>` with the provider name `RULE_ENTRY_FIELDS` states, one block per rule type per
+unit, and the map entry keyed by the row `key` holds the values the row names when read through `parse_rows`, with
+the entry field printed as the shape word the same table states. The `data_files` rule reads the rule rows through
+`RULE_ROW_FIELDS` and joins on `directory`. The cross-check rule is Piece 19's own retarget, not Piece 20's: for the
+four rule rows its block side is the entry keys the printed map holds for the unit, read through
+`rule_data.printed_keys`, so the gate states no reader for the map and the rule-type set is read through
+`import_blocks.rule_types()`.
 
 ## Pins
 
-Ten pins in `tests/test_rule_data.py`, in the order the rules above state them (the eight Piece 17 pins stay,
-with AC-8 read as the write path rule), and one new pin in `tests/test_write_path.py` group 1.
+Retargeted, in the order the rules above state them:
 
-- AC-1 to AC-7: unchanged from Piece 17.
-- AC-8: `test_the_rule_data_layer_states_no_second_rule_and_writes_no_file` — as before, read as the write-path
-  rule: the module holds no writer and states no path, so the run writes the pair through `write_path` only.
-- AC-9: `test_the_two_file_forms_are_unit_set_files_named_through_the_matrix_row` — `data_file` and
-  `printed_file` read the same matrix row, so the two names are that row's `output_file` stem with the two
-  suffixes; each name states the rule type and not the unit, so the path is the only place the file states the
-  unit; the pair is not one of the four root records, so the data rule counts neither; the generated `README.md`
-  names the two forms as files and states no row, no value, no count, no path and no timestamp.
-- AC-10: `test_the_run_writes_one_pair_per_rule_type_per_unit_through_the_write_path` — measured through the run
-  on the two fixtures the chain pins read. On `tests/fixtures/policy_order.xml` the manifest names five unit
-  directories and the three chains name three of them, so `panos_security_policy_rules` writes one pair in each of
-  those three, `panos_nat_policy_rules` writes one pair in the one of them that has nat rows, and the two rule
-  types with no rows write no pair in any unit. On `tests/fixtures/kitchen_sink.xml` all four rule types have rows
-  in one unit, so each writes one pair there and no pair in the other ten, and no rule data file sits at the
-  codebase root. Each written JSON reads back through `parse_rows` as the rows `build_rows` built for that unit,
-  each written CSV is `render_csv` of the same rows, and the bytes hold no CR, which is the byte rule
-  `write_path.py` states in the one write function.
-- AC-11, in `tests/test_write_path.py`:
-  `test_a_new_unit_set_file_shape_names_the_unit_set_and_the_two_counts_do_not_move` — the pair names exactly one
-  set, the unit set, so the membership rule holds for the corpus run with the new shapes present; the data rule
-  reads no file inside a unit directory, so the report's data count names only the four records at the root and
-  the printed form stays compared and not counted; the two counts name the two sets; the run writes one directory
-  per unit the manifest names, so a rule data file sits inside the directory its rows name. The pair is read as a
-  derivation through `rule_data`, not as a restated list.
+- `tests/conftest.py`: the shared rule-block parser reads one block per rule type per unit — the block's local
+  name, the unit it belongs to, the map entries in printed key order, and the `for_each` reference; the chain check
+  reads the key order, the ordinals, and the no-crossing rule through the row join. `depends_on` and `pivot` are no
+  longer part of what the parser answers.
+- `tests/test_policy_order.py` (8 pins, retargeted): the block set, the key order inside each chain, the ordinals,
+  the goldens read through the same parser.
+- `tests/test_real_or_report.py` (5 pins): the block plus the map entries for the decryption and PBF bodies.
+- `tests/test_edge_cases.py`: the rule chain pins read the shared parser; the assignment pin reads the key's digest
+  half through `rule_data.identity_key`.
+- `tests/test_dependency_wiring.py`: the rule reference pins read the map entry.
+- `tests/test_coverage_matrix.py`: the name pin for the four rule rows reads the name through the map entry keyed by
+  the row key, and the emitter grounding for the four rule rows reads the row's field set through `rule_data`.
+- `tests/test_round_trip.py` (34 pins): the cross-check's block side for the four rule rows is the entry keys the
+  printed map holds, read through `rule_data.printed_keys`, so the corpus table no longer names a rule row; the
+  sample run's resource count moves to the measurement recorded below, and the count fact's second number is now the
+  blocks read or the entries printed in the map, so `COUNTS_RE` stops at the number.
+- Extended, in `tests/test_rule_data.py`: the map name is the same stem as the two file forms, and the printed map
+  agrees with the rows the run wrote for that unit, read through `parse_rows`.
+
+No test module imports another test module, and no test calls a network.
 
 ## Indexes and measurement the piece moves
 
-- `docs/CODEBASE_ASSEMBLY.md` §14 names the set the new file shape belongs to, and `docs/USAGE_GUIDE.md`
-  §Output files names the two forms.
-- `docs/ARCHITECTURE.md` §1 module table row for `rule_data.py`: the rule column states the two file names read
-  through the matrix row, and the write column changes from "writes no file" to "holds no writer: the run writes
-  the two forms per rule type per unit through `write_path.py`".
-- `README.md` §Testing names `tests/test_rule_data.py` once; the entry gains the two pins this piece writes, and
-  `tests/test_write_path.py`'s entry gains the file-set pin. No new test module, so no index name moves.
-- The report counts do not move, because no gate rule reads the new files in this piece; the measurement is
-  recorded below and the pins read the counts as derivations.
-- `docs/LICENSING.md` measures the `src/` module count from the working tree: no new module, so the counts stay.
+- `README.md` §Testing names the modules above with the pins this piece retargets or adds.
+- `docs/ARCHITECTURE.md` §1's row for `rule_data.py`: the rule column gains the map name read through the same stem.
+- `docs/CODEBASE_ASSEMBLY.md` §14 names the map as the printed form of the unit's rows, compared and not counted.
+- `docs/USAGE_GUIDE.md` names the rule output as one iterated block per rule type per unit.
+- The goldens that name the printed rule output move, from a real run, in this piece's commit.
 
 ## Gate
 
-`ruff check .`, `ruff format --check .`, `python3 -m pytest`, `python3 tools/check_documents.py`, in that
+`ruff check .`, `ruff format --check .`, `python3 tools/check_documents.py`, `python3 -m pytest`, in that
 order, conservative threads, single process.
 
-Before, measured 2026-11-18 on the committed tree at `e4ffe7b`: `ruff check .` clean at `py310`,
-`ruff format --check .` clean on the 102 Python files, 1,705 pins in 53 test modules — 1,701 pass and the same
-4 skip for the missing `tflint` binary — 320.31 s, and `python3 tools/check_documents.py` reports no finding,
-read at 12.15 s.
+Before, measured 2026-11-19 on the committed tree at `eda2d1a`: `ruff check .` clean at `py310`,
+`ruff format --check .` clean on the 102 Python files, 1,708 pins in 53 test modules — all pass, with the same
+4 skip for the missing `tflint` binary — and `python3 tools/check_documents.py` reports no finding. Per module for
+the modules this piece touches: `tests/test_rule_data.py` 10, `tests/test_policy_order.py` 8,
+`tests/test_real_or_report.py` 5, `tests/test_round_trip.py` 34, `tests/test_coverage_matrix.py` 211,
+`tests/test_property_coverage.py` 33, `tests/test_golden_files.py` 91, `tests/test_dependency_wiring.py` 11,
+`tests/test_edge_cases.py` 19, `tests/test_import_blocks.py` 32, `tests/test_sanity_gate.py` 110.
 
-After, measured 2026-11-19 on the final tree at commit `eda2d1a`: `ruff check .` clean at `py310`,
-`ruff format --check .` clean on the 102 Python files, 1,708 pins in 53 test modules — 1,704 pass and the same
-4 skip for the missing `tflint` binary — in 507.48 s, against 280.70 s for the same set read on the tree before the
-final document edits, and `python3 tools/check_documents.py` reports no finding, read at 23.20 s after those edits.
-`tests/test_rule_data.py` reads 10 pins and `tests/test_write_path.py` reads 21, against 8 and 20 before the piece.
-No golden, fixture, response or tflint file changes: the golden set is the `.tf` set, so the golden bytes read the
-same as before, and the pins that name the printed sets read the same counts as before.
+After, measured 2026-11-19 on the final tree: `ruff check .` clean at `py310`, `ruff format --check .` clean on the
+102 Python files, 1,709 pins in 53 test modules — 1,705 pass, with the same 4 skip for the missing `tflint` binary —
+and `python3 tools/check_documents.py` reports no finding. The one added pin is
+`tests/test_rule_data.py::test_the_printed_map_reads_back_as_the_same_row_keys`, which measures the third form
+reading back as the rows it was built from; no pin was weakened, and every retargeted pin still measures content.
+
+Per module for the modules this piece touched: `tests/test_rule_data.py` 11 (10 before), `tests/test_policy_order.py`
+8, `tests/test_real_or_report.py` 5, `tests/test_round_trip.py` 34, `tests/test_coverage_matrix.py` 211,
+`tests/test_property_coverage.py` 33, `tests/test_golden_files.py` 91, `tests/test_dependency_wiring.py` 11,
+`tests/test_edge_cases.py` 19, `tests/test_import_blocks.py` 32, `tests/test_sanity_gate.py` 110,
+`tests/test_data_file_gate.py` 21.
+
+Measurement the retargeted pins state: the sample run's resource count is 17 (20 before), because each rule file
+prints one block: the sample fixture's 2 nat entries and 3 security entries become 2 blocks, a drop of 3. The
+kitchen-sink run prints 4 blocks, one per rule type, reading 7 map entries (2 nat, 2 security, 1 decryption,
+2 pbf). The cross-check reports no finding for the four rule rows on any corpus fixture, so the corpus table in
+`tests/test_round_trip.py` names no rule row and the corpus fact count stays 19 on 8 fixtures, 3 + 15 + 1 by
+category.

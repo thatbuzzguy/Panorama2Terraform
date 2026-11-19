@@ -21,7 +21,9 @@ from pathlib import Path
 import pytest
 
 import api_requests
+import entry_coverage
 import panorama_to_terraform
+import rule_data
 import sanity_checks
 import source_fetch
 import split_device_groups
@@ -166,12 +168,17 @@ def emitted_types() -> set[str]:
     return types
 
 
-# --- The rule-block parser the policy pins read (F2.5) ------------------------
+# --- The rule-shape parser the policy pins read (F2.5, Epic 9 Piece 19) -------
 
-# `tests/test_policy_order.py` and `tests/test_real_or_report.py` both read these three functions, so they
-# live in the one shared helper file (§1.1) and neither module defines its own copy. The generated format
-# is fixed, so small structural regexes are enough: a resource block ends at the first newline followed by
-# a column-0 brace.
+# `tests/test_policy_order.py`, `tests/test_real_or_report.py` and `tests/test_edge_cases.py` all read these
+# functions, so they live in the one shared helper file (§1.1) and no module defines its own copy. The emitter
+# prints one `for_each` block per rule type per unit, reading the map that is that unit's rows, so the parser reads
+# two things per unit: the map and the one block that reads it. The generated shape is fixed, so small structural
+# regexes are enough: a resource block ends at the first newline followed by a column-0 brace, and a map entry is
+# the block that starts at four spaces inside the map body.
+
+_ENTRY_FIELD_INDENT = "      "
+_MAP_ENTRY_RE = re.compile(r'    "([^"]+)" = \{\n(.*?)\n    \}', re.S)
 
 
 def _search_one(body: str, pattern: str):
@@ -179,58 +186,102 @@ def _search_one(body: str, pattern: str):
     return m.group(1) if m else None
 
 
+def _entry_fields(body: str) -> dict[str, str]:
+    """One map entry as the file prints it: the field name -> the text the file prints for it, in print order.
+
+    A field whose value is an object prints over several lines, so the lines deeper than the field's own indent
+    belong to the field that started them. The text is the printed form, so a reference reads as the reference and
+    a value reads as the value: the block body prints only `each.value.<field>`, and the entry is the only place a
+    row value appears.
+    """
+    fields: dict[str, str] = {}
+    for line in body.split("\n"):
+        text = line[len(_ENTRY_FIELD_INDENT) :]
+        if line.startswith(_ENTRY_FIELD_INDENT) and " = " in text:
+            name, value = text.split(" = ", 1)
+            fields[name] = value
+        elif fields:
+            fields[list(fields)[-1]] += "\n" + line
+    return fields
+
+
 def rule_blocks(text: str, resource_type: str) -> list[dict]:
-    """Parse generated rule resources into ordered dicts (file order)."""
+    """The iterated rule shape, in file order: one answer per unit, the block and the map it reads.
+
+    Each answer states the block's local name, which is also the map name and the matrix row's stem read through
+    `rule_data.locals_name`; the `for_each` reference; the location name the block states, which is the chain group
+    the block belongs to; the `position` anchor; the block's own field names in print order; and the map's entries
+    in the order the file prints them, which is the sorted key order. An entry states its key, the ordinal and
+    digest halves of that key, and the printed text of each field.
+
+    `pivot` and `depends_on` are not part of the answer, because instances inside one block create in key order
+    (Epic 9 decision 4) and `pivot` stays a row column of the data record the block does not print. A block reads
+    the map the emitter printed for the same unit, and the emitter prints the map before the block, so the parser
+    pairs a block with the map occurrence that ends before it.
+    """
     blocks = []
     pattern = re.compile('resource "' + re.escape(resource_type) + r'" "([^"]+)" \{(.*?)\n\}', re.S)
+    map_pattern = re.compile(r"locals \{\n  ([a-z_][\w]*) = \{\n(.*?)\n  \}\n\}", re.S)
     for m in pattern.finditer(text):
         local, body = m.group(1), m.group(2)
-        # The rules list holds one object per rule; the Panorama rule name
-        # is the only name = line inside it (the location block is outside).
-        rules_body = _search_one(body, r"rules = \[(.*?)\n  \]") or ""
-        rule_names = re.findall(r'name = "([^"]+)"', rules_body)
-        depends_on = _search_one(body, r"depends_on = \[([^\]]*)\]") or ""
+        map_name = _search_one(body, r"for_each = local\.([a-z_][\w]*)")
+        entries = []
+        for map_m in map_pattern.finditer(text[: m.start()]):
+            if map_m.group(1) != map_name:
+                continue
+            entries = [
+                {
+                    "key": match.group(1),
+                    "ordinal": match.group(1).split("_", 1)[0],
+                    "digest": match.group(1).rsplit("_", 1)[1],
+                    "fields": _entry_fields(match.group(2)),
+                }
+                for match in _MAP_ENTRY_RE.finditer(map_m.group(2))
+            ]
         blocks.append(
             {
                 "local": local,
-                "device_group": _search_one(body, r'device_group = \{\s*name = "([^"]+)"'),
+                "for_each": f"local.{map_name}",
+                "group": _search_one(body, r'device_group = \{\s*name = "([^"]+)"')
+                or _search_one(body, r'vsys = \{\s*name = "([^"]+)"'),
                 "where": _search_one(body, r'where = "([^"]+)"'),
-                "directly": _search_one(body, r"directly = (true|false)"),
-                "pivot": _search_one(body, r'pivot = "([^"]+)"'),
-                "depends_on": re.findall(r"([A-Za-z_][\w]*\.[A-Za-z_][\w]*)", depends_on),
-                "names": rule_names,
+                "args": re.findall(r"^  ([a-z_][\w]*) = ", body, re.M),
+                "body_fields": re.findall(r"      ([a-z_][\w]*) = each\.value\.([a-z_][\w]*)", body),
+                "entries": entries,
             }
         )
     return blocks
 
 
 def check_chain_semantics(blocks: list[dict], resource_type: str, expected: list[tuple[str, list[str]]], msg: str):
-    """Assert blocks form per-DG chains with anchor + after-previous positions."""
-    assert len(blocks) == sum(len(names) for _, names in expected), msg
-    idx = 0
-    for dg, names in expected:
-        chain = blocks[idx : idx + len(names)]
-        idx += len(names)
-        for b in chain:
-            assert b["device_group"] == dg, msg
-        # Every block holds exactly one rule; the rule name sequence is the
-        # chain's XML order.
-        assert [b["names"] for b in chain] == [[n] for n in names], msg
-        # First rule of the chain: anchor at the end of the rulebase.
-        first = chain[0]
-        assert first["where"] == "last", msg
-        assert first["pivot"] is None, msg
-        assert first["directly"] is None, msg
-        assert first["depends_on"] == [], msg
-        # Later rules: directly after the previous rule, applied after it.
-        # The two sides are not the same set by construction: the second side is the chain without its
-        # first rule, which this pin reads against the rule before it, so `strict` stays off.
-        for prev, cur in zip(chain, chain[1:], strict=False):
-            assert cur["where"] == "after", msg
-            assert cur["directly"] == "true", msg
-            assert cur["pivot"] == prev["names"][0], msg
-            expected_dep = f"{resource_type}.{prev['local']}"
-            assert cur["depends_on"] == [expected_dep], msg
+    """Assert the printed shape carries the chain: one block per unit, and the key order is the XML order.
+
+    `expected` is one pair per unit, in the order the file prints the units: the location name the block states,
+    and that unit's rule names in the order the export lists them. The names are read as the file prints them, so
+    the entry side of the pin reads the printed form of the row and not a copy of the name.
+
+    The block reads the map named by the one stem (`rule_data.locals_name`), so the block name, the map name, the
+    `.json` form and the `.csv` form are one name; the position anchor is the same for every instance of one block,
+    because the apply order comes from the key and not from a per-instance pivot; the ordinals run 1..N inside a
+    chain; the printed entry order is the sorted key order, which is the XML order inside a chain; and one block
+    holds one unit's rows, so every key's digest half is the digest the block's own location names.
+    """
+    assert len(blocks) == len(expected), msg
+    stem = rule_data.locals_name(resource_type)
+    name_field = entry_coverage.name_field(resource_type)
+    for block, (group, names) in zip(blocks, expected, strict=True):
+        assert block["local"] == stem, f"{msg}: the block name is not the matrix row's stem: {block['local']}"
+        assert block["for_each"] == f"local.{stem}", f"{msg}: the block does not read the map named by the stem"
+        assert block["group"] == group, msg
+        assert block["where"] == "last", msg
+        entries = block["entries"]
+        assert len(entries) == len(names), f"{msg}: {block['local']} prints {len(entries)} for {len(names)} rules"
+        assert [entry["key"] for entry in entries] == sorted(entry["key"] for entry in entries), msg
+        assert [entry["ordinal"] for entry in entries] == [
+            f"{position:0{rule_data.ORDINAL_WIDTH}d}" for position in range(1, len(names) + 1)
+        ], msg
+        assert [entry["fields"][name_field] for entry in entries] == [f'"{name}"' for name in names], msg
+        assert {entry["digest"] for entry in entries} == {entries[0]["digest"]}, msg
 
 
 @pytest.fixture(scope="session")

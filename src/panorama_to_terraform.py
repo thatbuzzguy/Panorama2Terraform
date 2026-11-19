@@ -3253,6 +3253,116 @@ OVERRIDE_REPORT_FIELDS = (
     ("description", "description"),
 )
 
+# Epic 9 Piece 19: the four tables the iterated rule block reads. `entry_coverage.MATRIX_BY_RESOURCE` is the table
+# that names the rule row's fields and their order, so this piece states no field list of its own.
+# `RULE_ENTRY_FIELDS` is the one mapping table: the provider's `rules` field a row field prints as, and the shape
+# word the value prints as (`SHAPE_WORDS`, read through `SHAPE_TO_SCHEMA`). The entry is the only place the
+# provider's declared shape can be honoured, because the block body prints a reference and `terraform validate`
+# cannot type-check `each.value.<field>`: the shape word is the provider's declared type, measured from the pinned
+# provider schema on 2026-11-19. `RULE_ENTRY_READERS` names the reader for a field whose provider object key is the
+# value the row records, because a block body prints a reference and cannot name an object key from a value.
+# `RULE_REFERENCE_FIELDS` names the columns the one naming rule resolves, and `RULE_BODY_DEFAULTS` states the one
+# provider field the parse records no value for.
+RULE_ENTRY_FIELDS = {
+    "panos_security_policy_rules": {
+        "name": ("name", "string"),
+        "action": ("action", "string"),
+        "applications": ("applications", "string_list"),
+        "description": ("description", "string"),
+        "destination_addresses": ("destination_addresses", "string_list"),
+        "destination_zones": ("destination_zones", "string_list"),
+        "disabled": ("disabled", "bool"),
+        "log_end": ("log_end", "bool"),
+        "log_start": ("log_start", "bool"),
+        # F4.4: the parsed-object key the emitter reads for the profile group reference, printed as the object
+        # `profile_setting.group`.
+        "profile_group": ("profile_setting", "object"),
+        "services": ("services", "string_list"),
+        "source_addresses": ("source_addresses", "string_list"),
+        "source_zones": ("source_zones", "string_list"),
+    },
+    "panos_nat_policy_rules": {
+        "name": ("name", "string"),
+        "description": ("description", "string"),
+        "destination_addresses": ("destination_addresses", "string_list"),
+        # The two columns that build one provider object state one entry field: the address column names the object
+        # and the port column names the field inside it.
+        "destination_translation_address": ("destination_translation", "object"),
+        "destination_translation_port": ("destination_translation", "number"),
+        # The one row field the parse records as one value and the provider takes as a list, through `_get_text`.
+        "destination_zone": ("destination_zone", "string_list"),
+        "disabled": ("disabled", "bool"),
+        # F4.4: the provider takes one name here, so a member list cannot print as the field.
+        "service": ("service", "string"),
+        "source_addresses": ("source_addresses", "string_list"),
+        "source_translation_address": ("source_translation", "object"),
+        "source_translation_type": ("source_translation", "one_of"),
+        "source_zones": ("source_zones", "string_list"),
+    },
+    "panos_decryption_policy_rules": {
+        "name": ("name", "string"),
+        "action": ("action", "string"),
+        "categories": ("category", "string_list"),
+        "description": ("description", "string"),
+        "destination_addresses": ("destination_addresses", "string_list"),
+        "destination_zones": ("destination_zones", "string_list"),
+        "disabled": ("disabled", "bool"),
+        "log_end": ("log_fail", "bool"),
+        "log_setting": ("log_setting", "string"),
+        "log_start": ("log_success", "bool"),
+        "profile": ("profile", "string"),
+        "services": ("services", "string_list"),
+        "source_addresses": ("source_addresses", "string_list"),
+        "source_users": ("source_user", "string_list"),
+        "source_zones": ("source_zones", "string_list"),
+        "type": ("type", "one_of"),
+    },
+    "panos_pbf_policy_rules": {
+        "name": ("name", "string"),
+        "action": ("action", "one_of"),
+        "applications": ("applications", "string_list"),
+        "description": ("description", "string"),
+        "destination_addresses": ("destination_addresses", "string_list"),
+        "disabled": ("disabled", "bool"),
+        # The provider declares the fact as an object with one `enabled` field (F2.9).
+        "enforce_symmetric_return": ("enforce_symmetric_return", "object"),
+        "schedule": ("schedule", "string"),
+        "services": ("services", "string_list"),
+        "source_addresses": ("source_addresses", "string_list"),
+        "source_users": ("source_users", "string_list"),
+        # v2 models the PBF source as `from { zone = [...] }` (F2.9).
+        "source_zones": ("from", "object"),
+    },
+}
+RULE_REFERENCE_FIELDS = {
+    # F2.6: the columns the one naming rule reads, through the same scope sets the emitter uses everywhere else.
+    "source_zones": ZONE_SCOPES,
+    "destination_zones": ZONE_SCOPES,
+    "destination_zone": ZONE_SCOPES,
+    "source_addresses": ADDR_SCOPES,
+    "destination_addresses": ADDR_SCOPES,
+    "services": SERVICE_SCOPES,
+    "service": SERVICE_SCOPES,
+    # The dynamic-ip-and-port form names the egress interface, not an address (F2.6).
+    "source_translation_address": INTERFACE_SCOPES,
+}
+RULE_ENTRY_READERS = {
+    "panos_security_policy_rules": {"profile_group": "_profile_setting"},
+    "panos_nat_policy_rules": {
+        "source_translation_address": "_nat_translation",
+        "destination_translation_address": "_destination_translation",
+    },
+    "panos_decryption_policy_rules": {"action": "_decryption_action", "type": "_decryption_type"},
+    "panos_pbf_policy_rules": {
+        "source_zones": "_pbf_from",
+        "action": "_pbf_action",
+        "enforce_symmetric_return": "_pbf_enforce_symmetric_return",
+    },
+}
+# The NAT family is the one provider field the parse records no value for (F3.5), so no row column names it and the
+# block states the default word the export implies. IPv4 is the Panorama default family.
+RULE_BODY_DEFAULTS = {"panos_nat_policy_rules": ("nat_type", "ipv4")}
+
 
 class UnitText:
     """One `.tf` file's text, held per unit directory (F6.10.3, `docs/CODEBASE_ASSEMBLY.md` §14).
@@ -4871,425 +4981,320 @@ provider "panos" {
     def _policy_rule_chains(self, rules: list[dict]) -> list[list[dict]]:
         """Group policy rules into per-(device group, vsys) chains, read through `rule_data.chains` (F2.5, F3.2).
 
-        The grouping is stated once, in `src/rule_data.py`, because the single object of Epic 9 reads the same
-        grouping for its apply order. The provider places each rule relative to a pivot rule, so a pivot only
-        exists inside its own rulebase and one vsys's rules must never chain on another vsys's rule.
+        The grouping is stated once, in `src/rule_data.py`, because the single object reads the same grouping for
+        its apply order. The provider places each rule relative to a pivot rule, so a pivot only exists inside its
+        own rulebase and one vsys's rules must never chain on another vsys's rule. The generator reads the grouping
+        here, and `rule_data.build_rows` reads it through the same rule, so pairing a chain with the rows built for
+        it is the grouping and not a second statement of it.
         """
         return rule_data.chains(rules)
 
-    def _policy_position_block(
-        self, resource_type: str, prev_rule_name: str | None, prev_resource_name: str | None
-    ) -> str:
-        """Render position (and depends_on) for one rule in a chain (F2.5).
+    def _rule_null(self) -> HclRef:
+        """The entry field a block still prints for a row that states no value for it (Piece 19 rule 2).
 
-        The first rule of a chain anchors the managed block at the end of
-        the rulebase, the least disruptive choice for a brown-field
-        rulebase. Each later rule is placed directly after the previous
-        rule (the provider requires pivot and directly together when
-        where = "after"). The provider fails when the pivot is missing,
-        so the rule also declares depends_on on the previous rule's
-        resource to fix the apply order to the XML order.
+        One field list serves every instance of the block, so a field the recorded object holds with no value
+        prints `null` here and prints no column in the data record. That is what lets the printed map be compared
+        against the rows read through `rule_data.parse_rows` field by field.
         """
-        if prev_rule_name is None:
-            return f"  position = {self.hcl_value({'where': 'last'})}\n\n"
-        position = {"where": "after", "directly": True, "pivot": prev_rule_name}
-        return f"  position = {self.hcl_value(position)}\n  depends_on = [ {resource_type}.{prev_resource_name} ]\n\n"
+        return HclRef("null")
+
+    def _shape_word(self, word: str) -> str:
+        """The provider's spelling of a shape word the export states with `-` (v2 names use underscores)."""
+        return word.replace("-", "_")
+
+    def _rule_entry(self, resource_type: str, rule: dict) -> tuple[dict, dict]:
+        """One rule row as the map entry the iterated block prints it through (Piece 19).
+
+        The entry is the printed form of the row: the name field first, through `entry_coverage.name_field`, then
+        the fields the matrix row declares, in the row's order, because `hcl_value` prints a dict in the order it
+        was built. Every declared field prints, since one field list serves every instance of the block.
+
+        The field name and the shape the value prints as are the pair `RULE_ENTRY_FIELDS` states for the field: the
+        entry is the only place the provider's declared shape can be honoured, because the block body prints a
+        reference and `terraform validate` cannot type-check `each.value.<field>`. A field the table names a reader
+        for is built by that reader, because its provider object key is the value the row records. The second column
+        of a pair that builds one provider object states no field of its own.
+
+        The answer is the entry and the per-field `# NOTE:` lines, so a set the field cannot hold is named in the
+        file instead of dropped (F2.9).
+        """
+        facts = unit_manifest.facts_of(rule)
+        entry: dict = {}
+        notes: dict = {}
+        row = entry_coverage.MATRIX_BY_RESOURCE[resource_type]
+        for field in (entry_coverage.name_field(resource_type),) + row["properties"]:
+            name, shape = RULE_ENTRY_FIELDS[resource_type][field]
+            if name in entry:
+                continue
+            value = rule.get(field)
+            reader = RULE_ENTRY_READERS.get(resource_type, {}).get(field)
+            if reader is not None:
+                # The reader answers the field for a row that holds no value for it, because a shape the reader
+                # builds can come from another field: the inspection mode a legacy decryption action carries.
+                entry[name] = getattr(self, reader)(rule, field, value, facts)
+                continue
+            if value in entry_coverage.EMPTY_FIELD_VALUES:
+                entry[name] = self._rule_null()
+                continue
+            if shape in ("string_list", "member_list"):
+                entry[name] = [
+                    self._rule_item(field, item, RULE_REFERENCE_FIELDS.get(field), rule, facts)
+                    for item in self._rule_list(field, value)
+                ]
+                continue
+            if shape == "string" and isinstance(value, list):
+                # F2.9: `panos_nat_policy_rules.rules.service` is one string, so a member list cannot print as the
+                # field. The entry states the field as `null` and the file states the members in the `# NOTE:` line,
+                # so the set is named instead of dropped.
+                notes[name] = [
+                    "service " + ", ".join(value) + " is a member list; the v2 field takes one name, so review manually"
+                ]
+                entry[name] = self._rule_null()
+                continue
+            entry[name] = self._rule_item(field, value, RULE_REFERENCE_FIELDS.get(field), rule, facts)
+        return entry, notes
+
+    def _rule_list(self, field: str, value) -> list:
+        """One value as the list the entry prints for a field the provider declares as a list.
+
+        The recorded object holds the members for such a field, so a scalar reaches here only when the parse read
+        one value for it, which is the `destination_zone` row read through `_get_text`. One value is the one-member
+        list the provider takes.
+        """
+        return value if isinstance(value, list) else [value]
+
+    def _rule_item(self, field: str, item, scopes, referrer: dict, facts: tuple):
+        """One value inside an entry field, through the one naming rule or the one value-to-variable rule (F2.6, F6.6).
+
+        A reference column prints the answer the naming rule gave: the reference for a name the referrer's own unit
+        declares, the plain name otherwise. One iterated block prints one body for every instance, so the resolution
+        is recorded in the entry, at the site that applies the rule, and the provider reads the name either way. A
+        column the naming rule does not resolve prints as `VALUE_VARIABLES` says, so a column the table maps to a
+        variable prints `var.<name>` here and no `.tf` file states its value.
+        """
+        if scopes:
+            return self.name_ref(item, scopes, referrer=referrer)
+        if isinstance(item, str):
+            return HclRef(self.printed_value(field, item, facts))
+        return item
+
+    def _profile_setting(self, rule: dict, field: str, value, facts: tuple):
+        if value in entry_coverage.EMPTY_FIELD_VALUES:
+            return self._rule_null()
+        """`profile_setting.group`, the object v2.0.14 declares for the profile group reference (F4.4).
+
+        No reference scope names a profile group, so the names stay brown-field strings.
+        """
+        return {"group": [self._rule_item(field, item, None, rule, facts) for item in value]}
+
+    def _pbf_from(self, rule: dict, field: str, value, facts: tuple):
+        if value in entry_coverage.EMPTY_FIELD_VALUES:
+            return self._rule_null()
+        """v2 models the PBF source as `from { zone = [...] }` (F2.9)."""
+        return {"zone": [self._rule_item(field, item, ZONE_SCOPES, rule, facts) for item in value]}
+
+    def _pbf_enforce_symmetric_return(self, rule: dict, field: str, value, facts: tuple):
+        if value in entry_coverage.EMPTY_FIELD_VALUES:
+            return self._rule_null()
+        """The provider declares the fact as an object with one `enabled` field (F2.9)."""
+        return {"enabled": True}
+
+    def _nat_translation(self, rule: dict, field: str, value, facts: tuple):
+        """The `source_translation` object the provider declares, from the two columns that build it (F2.6).
+
+        The sub-shape word is the value the other column records, and the provider takes one object per sub-shape:
+        the `dynamic-ip-and-port` form names the egress interface, the other forms name the translated addresses.
+        The sub-shape word cannot be a reference, which is why the entry prints the object and the block prints the
+        reference into it.
+        """
+        word = self._shape_word(rule.get("source_translation_type") or "")
+        members = value or []
+        if word not in ("dynamic_ip_and_port", "dynamic_ip", "static_ip"):
+            return self._rule_null()
+        if word == "dynamic_ip_and_port":
+            interface = self._rule_item(field, members[0], INTERFACE_SCOPES, rule, facts)
+            return {word: {"interface_address": {"interface": interface}}}
+        if word == "static_ip":
+            # The provider takes one translated address for this form.
+            return {word: {"translated_address": self._rule_item(field, members[0], None, rule, facts)}}
+        return {word: {"translated_address": [self._rule_item(field, member, None, rule, facts) for member in members]}}
+
+    def _destination_translation(self, rule: dict, field: str, value, facts: tuple):
+        if value in entry_coverage.EMPTY_FIELD_VALUES:
+            return self._rule_null()
+        """The `destination_translation` object, from the two columns that build it. One address, so one value."""
+        object_value = {"translated_address": self._rule_item(field, value, None, rule, facts)}
+        port = rule.get("destination_translation_port")
+        if port not in entry_coverage.EMPTY_FIELD_VALUES:
+            # The provider declares the port as a number; the parse records the text the export states.
+            object_value["translated_port"] = int(port)
+        return object_value
+
+    def _decryption_action(self, rule: dict, field: str, value, facts: tuple):
+        if value in entry_coverage.EMPTY_FIELD_VALUES:
+            return self._rule_null()
+        """The v2 action enum for a decryption rule (F2.9).
+
+        Modern PAN-OS exports state the enum and the inspection mode separately; a PAN-OS 9 export puts the mode in
+        `<action>`, so the entry prints the enum for that form. An unknown action passes through and fails
+        `terraform validate` explicitly rather than being silently reinterpreted.
+        """
+        if value in self._V2_DECRYPTION_ACTIONS:
+            return value
+        if value in self._DECRYPTION_TYPE_KEYS:
+            return "decrypt"
+        return value
+
+    def _decryption_type(self, rule: dict, field: str, value, facts: tuple):
+        """The inspection mode object, read through the one table, and the mode a legacy action carries (F2.9)."""
+        word = self._DECRYPTION_TYPE_KEYS.get(value) or self._DECRYPTION_TYPE_KEYS.get(rule.get("action"))
+        if not word:
+            return self._rule_null()
+        return {self._shape_word(word): {}}
+
+    def _pbf_action(self, rule: dict, field: str, value, facts: tuple):
+        if value in entry_coverage.EMPTY_FIELD_VALUES:
+            return self._rule_null()
+        """The single-choice PBF action object (F2.9), in the provider's names."""
+        kind = value.get("type")
+        if kind == "forward":
+            forward: dict = {}
+            if value.get("nexthop_ip"):
+                forward["nexthop"] = {"ip_address": self._rule_item(field, value["nexthop_ip"], None, rule, facts)}
+            if value.get("egress_interface"):
+                forward["egress_interface"] = self._rule_item(field, value["egress_interface"], None, rule, facts)
+            monitor = value.get("monitor")
+            if monitor:
+                monitor_out = {}
+                for name, item in monitor.items():
+                    if item not in entry_coverage.EMPTY_FIELD_VALUES:
+                        monitor_out[name] = self._rule_item(field, item, None, rule, facts)
+                if monitor_out:
+                    forward["monitor"] = monitor_out
+            return {"forward": forward}
+        if kind == "discard":
+            return {"discard": {}}
+        if kind == "no-pbf":
+            return {"no_pbf": {}}
+        if kind == "forward_to_vsys" and value.get("vsys"):
+            return {"forward_to_vsys": self._rule_item(field, value["vsys"], None, rule, facts)}
+        return self._rule_null()
+
+    def _print_policy_rules(self, resource_type: str, rules: list[dict], header: str) -> None:
+        """Print one rule type as the single object reads it: the unit's rows as a map, one block over it (Piece 19).
+
+        One block per rule type per unit, in the file the matrix row names, and the block's local name and the map
+        name are the one stem `rule_data.locals_name` reads through that row. The map prints the unit's rows in
+        sorted key order, which is the XML order inside a chain, so the instances create in the XML order (Epic 9
+        decision 4): the per-instance pivot and `depends_on` drop, and `position` anchors every instance at the end
+        of the rulebase, the least disruptive choice for a brown-field rulebase. `pivot` stays a row column of the
+        data record that the block does not read. The block body prints only references into the map, because the
+        map is the only place the file states a row value.
+        """
+        if not rules:
+            return
+
+        matrix_row = entry_coverage.MATRIX_BY_RESOURCE[resource_type]
+        out = UnitText(self, matrix_row["output_file"], header)
+        stem = rule_data.locals_name(resource_type)
+        rows = rule_data.build_rows(resource_type, rules, self.sanitize_name)
+
+        # The entry for each row, held per unit in the order the run read the rows. The join is the row's
+        # `directory`, the way the other records join, so the block is written in that unit's file.
+        units: dict[str, list[tuple]] = {}
+        seen = 0
+        for chain in self._policy_rule_chains(rules):
+            chain_rows = rows[seen : seen + len(chain)]
+            seen += len(chain)
+            for rule, row in zip(chain, chain_rows, strict=True):
+                entry, notes = self._rule_entry(resource_type, rule)
+                units.setdefault(row["directory"], []).append((row["key"], rule, entry, notes))
+
+        for items in units.values():
+            first_rule = items[0][1]
+            out.add(first_rule, f"locals {{\n  {stem} = {{\n")
+            for key, rule, entry, notes in sorted(items, key=lambda item: item[0]):
+                out.add(rule, f'    "{key}" = {{\n')
+                for field, value in entry.items():
+                    for note in notes.get(field, []):
+                        out.add(rule, f"      # NOTE: {note}\n")
+                    out.add(rule, f"      {field} = {self.hcl_value(value, '      ')}\n")
+                out.add(rule, "    }\n")
+            out.add(first_rule, "  }\n}\n\n")
+
+            out.add(first_rule, f'resource "{resource_type}" "{stem}" {{\n')
+            out.add(first_rule, f"  for_each = local.{stem}\n\n")
+            out.add(first_rule, self.location_block(resource_type, first_rule, stem))
+            out.add(first_rule, f"  position = {self.hcl_value({'where': 'last'})}\n\n")
+            out.add(first_rule, "  rules = [\n    {\n")
+            for field in items[0][2]:
+                out.add(first_rule, f"      {field} = each.value.{field}\n")
+            default = RULE_BODY_DEFAULTS.get(resource_type)
+            if default:
+                # The one provider field the parse records no value for (F3.5), so no row column names it and the
+                # block states the default word the export implies, not a row value.
+                out.add(first_rule, f"      {default[0]} = {self.hcl_value(default[1])}\n")
+            out.add(first_rule, "    }\n  ]\n}\n\n")
+        out.write()
 
     def generate_security_rules(self, rules: list[dict]):
         """Generate security policy rules Terraform configuration (F2.5).
 
-        v2: panos_security_policy_rules. One resource per rule, chained
-        per device group in XML order with order-preserving position
-        values (first rule at the end of the rulebase, each later rule
-        directly after the previous one).
+        v2: panos_security_policy_rules. One iterated block per rule type per unit, reading the map that is the
+        unit's rows, so the apply order comes from the key order inside the chain.
         """
-        if not rules:
-            return
-
-        out = UnitText(self, "security_rules.tf", "# Security Policy Rules\n\n")
-
-        for chain in self._policy_rule_chains(rules):
-            prev_rule_name: str | None = None
-            prev_resource_name: str | None = None
-            for rule in chain:
-                resource_name = self.declare_resource_name(
-                    rule["name"],
-                    "panos_security_policy_rules",
-                    rule,
-                    context=rule.get("device_group") or "",
-                    vsys=rule.get("vsys") or "",
-                )
-
-                out.add(rule, f'resource "panos_security_policy_rules" "{resource_name}" {{\n')
-                out.add(rule, self.location_block("panos_security_policy_rules", rule, resource_name))
-                out.add(
-                    rule, self._policy_position_block("panos_security_policy_rules", prev_rule_name, prev_resource_name)
-                )
-
-                # v2 rules is a list of objects
-                rule_obj: dict = {"name": rule["name"]}
-                if rule.get("description"):
-                    rule_obj["description"] = rule["description"]
-                # F2.6: zones, addresses and services declared in this run
-                # become references; the rest stay brown-field strings
-                # F3.2, F6.10.2: resolve inside the referrer's own unit
-                rule.get("device_group")
-                rule.get("vsys") or ""
-                if rule.get("source_zones"):
-                    rule_obj["source_zones"] = [
-                        self.name_ref(z, ZONE_SCOPES, referrer=rule) for z in rule["source_zones"]
-                    ]
-                if rule.get("source_addresses"):
-                    rule_obj["source_addresses"] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["source_addresses"]
-                    ]
-                if rule.get("destination_zones"):
-                    rule_obj["destination_zones"] = [
-                        self.name_ref(z, ZONE_SCOPES, referrer=rule) for z in rule["destination_zones"]
-                    ]
-                if rule.get("destination_addresses"):
-                    rule_obj["destination_addresses"] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["destination_addresses"]
-                    ]
-                if rule.get("applications"):
-                    # Built-in PAN-OS app names: no managed scope, never wired
-                    rule_obj["applications"] = list(rule["applications"])
-                if rule.get("services"):
-                    rule_obj["services"] = [self.name_ref(s, SERVICE_SCOPES, referrer=rule) for s in rule["services"]]
-                if rule.get("profile_group"):
-                    # The provider holds the profile group reference inside the `profile_setting`
-                    # object (v2.0.14 declares `profile_setting.group` as a list of strings). No
-                    # reference scope names a profile group, so the names stay brown-field strings.
-                    rule_obj["profile_setting"] = {"group": list(rule["profile_group"])}
-                rule_obj["action"] = rule.get("action", "allow")
-                if rule.get("log_start"):
-                    rule_obj["log_start"] = True
-                if rule.get("log_end"):
-                    rule_obj["log_end"] = True
-                if rule.get("disabled"):
-                    rule_obj["disabled"] = True
-
-                out.add(rule, f"  rules = {self.hcl_value([rule_obj])}\n")
-                out.add(rule, "}\n\n")
-
-                prev_rule_name = rule["name"]
-                prev_resource_name = resource_name
-
-        out.write()
+        self._print_policy_rules(
+            "panos_security_policy_rules",
+            rules,
+            "# Security Policy Rules\n\n"
+            "# One iterated block per rule type per unit; the map is the printed form of the unit's rows,\n"
+            "# and the key order is the XML order inside the chain (F2.5).\n\n",
+        )
 
     def generate_nat_rules(self, rules: list[dict]):
         """Generate NAT policy rules Terraform configuration (F2.5).
 
-        v2: panos_nat_policy_rules. One resource per rule, chained per
-        device group in XML order with the same order-preserving position
-        semantics as security rules. Translation is modeled as a
-        source_translation block with one of dynamic_ip_and_port, dynamic_ip,
-        or static_ip sub-blocks (v2 names use underscores).
+        v2: panos_nat_policy_rules. One iterated block per rule type per unit, with the same chain semantics as the
+        other rulebases, so the apply order comes from the key order. Translation is the object the provider
+        declares for the two columns that build it.
         """
-        if not rules:
-            return
-
-        out = UnitText(self, "nat_rules.tf", "# NAT Policy Rules\n\n")
-
-        for chain in self._policy_rule_chains(rules):
-            prev_rule_name: str | None = None
-            prev_resource_name: str | None = None
-            for rule in chain:
-                resource_name = self.declare_resource_name(
-                    rule["name"],
-                    "panos_nat_policy_rules",
-                    rule,
-                    context=rule.get("device_group") or "",
-                    vsys=rule.get("vsys") or "",
-                )
-
-                out.add(rule, f'resource "panos_nat_policy_rules" "{resource_name}" {{\n')
-                out.add(rule, self.location_block("panos_nat_policy_rules", rule, resource_name))
-                out.add(rule, self._policy_position_block("panos_nat_policy_rules", prev_rule_name, prev_resource_name))
-
-                # v2 rules is a list of objects
-                rule_obj: dict = {"name": rule["name"]}
-                if rule.get("description"):
-                    rule_obj["description"] = rule["description"]
-                # F2.6: zones, addresses and services declared in this run
-                # become references; the rest stay brown-field strings
-                # F3.2, F6.10.2: resolve inside the referrer's own unit
-                rule.get("device_group")
-                rule.get("vsys") or ""
-                if rule.get("source_zones"):
-                    rule_obj["source_zones"] = [
-                        self.name_ref(z, ZONE_SCOPES, referrer=rule) for z in rule["source_zones"]
-                    ]
-                # v2 destination_zone is a list
-                if rule.get("destination_zone"):
-                    rule_obj["destination_zone"] = [self.name_ref(rule["destination_zone"], ZONE_SCOPES, referrer=rule)]
-                if rule.get("source_addresses"):
-                    rule_obj["source_addresses"] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["source_addresses"]
-                    ]
-                if rule.get("destination_addresses"):
-                    rule_obj["destination_addresses"] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["destination_addresses"]
-                    ]
-                service = rule.get("service")
-                if service:
-                    if isinstance(service, list):
-                        # The provider field takes one string, so a member list cannot be
-                        # printed as the field (v2.0.14 schema). The set is named in the block
-                        # instead of being dropped (F2.9).
-                        out.add(
-                            rule,
-                            "  # NOTE: service "
-                            + ", ".join(service)
-                            + " is a member list; the v2 field takes one name, "
-                            "so review manually\n",
-                        )
-                    else:
-                        rule_obj["service"] = self.name_ref(service, SERVICE_SCOPES, referrer=rule)
-                if rule.get("disabled"):
-                    rule_obj["disabled"] = True
-
-                # Source translation (v2 sub-object names use underscores)
-                st_type = (rule.get("source_translation_type") or "").replace("-", "_")
-                st_addr = rule.get("source_translation_address") or []
-                if st_type in ("dynamic_ip_and_port", "dynamic_ip", "static_ip"):
-                    # v2 nat_type is the NAT family (ipv4/nat64/nptv6), not the
-                    # translation direction; IPv4 is the Panorama default family
-                    rule_obj["nat_type"] = "ipv4"
-                    if st_type == "dynamic_ip_and_port" and st_addr:
-                        # The translation address is the egress interface
-                        # (F2.6: reference when declared in this run;
-                        # F3.2, F6.10.2: resolve inside the rule's unit)
-                        rule_obj["source_translation"] = {
-                            st_type: {
-                                "interface_address": {
-                                    "interface": self.name_ref(st_addr[0], INTERFACE_SCOPES, referrer=rule)
-                                }
-                            }
-                        }
-                    elif st_type == "dynamic_ip" and st_addr:
-                        rule_obj["source_translation"] = {st_type: {"translated_address": list(st_addr)}}
-                    elif st_type == "static_ip" and st_addr:
-                        # static_ip takes a single translated address
-                        rule_obj["source_translation"] = {st_type: {"translated_address": st_addr[0]}}
-
-                # Destination translation (the direction is implied by which
-                # translation object is present, not by nat_type)
-                if rule.get("destination_translation_address"):
-                    dst: dict = {"translated_address": rule["destination_translation_address"]}
-                    if rule.get("destination_translation_port"):
-                        dst["translated_port"] = int(rule["destination_translation_port"])
-                    rule_obj["destination_translation"] = dst
-
-                out.add(rule, f"  rules = {self.hcl_value([rule_obj])}\n")
-                out.add(rule, "}\n\n")
-
-                prev_rule_name = rule["name"]
-                prev_resource_name = resource_name
-
-        out.write()
+        self._print_policy_rules(
+            "panos_nat_policy_rules",
+            rules,
+            "# NAT Policy Rules\n\n"
+            "# One iterated block per rule type per unit; the map is the printed form of the unit's rows,\n"
+            "# and the key order is the XML order inside the chain (F2.5).\n\n",
+        )
 
     def generate_decryption_rules(self, rules: list[dict]):
         """Generate decryption policy rules (F2.9: real v2 resources).
 
-        v2.0.14 has no decryption rule container: each rule is its own
-        `panos_decryption_policy_rules` resource with a position argument.
-        Rules chain per device group exactly like security and NAT rules
-        (F2.5): the first rule anchors at the end of the rulebase and each
-        later rule is placed directly after the previous one with a
-        depends_on on it, so Terraform applies the chain in XML order.
-        The parser captures the full rule, so real emission is safe.
+        v2.0.14 has no decryption rule container: the rule type is one `panos_decryption_policy_rules` block that
+        iterates the unit's rows, with the same chain semantics as the other rulebases (F2.5). The parser captures
+        the full rule, so real emission is safe.
         """
-        if not rules:
-            return
-
-        out = UnitText(self, "decryption_rules.tf", "# Decryption Policy Rules (F2.9: real v2 resources)\n")
-        out.header += "# One panos_decryption_policy_rules resource per rule; per-device-group\n"
-        out.header += "# chains preserve XML order (F2.5).\n\n"
-
-        for chain in self._policy_rule_chains(rules):
-            prev_rule_name: str | None = None
-            prev_resource_name: str | None = None
-            for rule in chain:
-                device_group = rule.get("device_group") or "Shared"
-                resource_name = self.declare_resource_name(
-                    rule["name"],
-                    "panos_decryption_policy_rules",
-                    rule,
-                    context=device_group,
-                    vsys=rule.get("vsys") or "",
-                )
-
-                out.add(rule, f'resource "panos_decryption_policy_rules" "{resource_name}" {{\n')
-                out.add(rule, self.location_block("panos_decryption_policy_rules", rule, resource_name))
-                out.add(
-                    rule,
-                    self._policy_position_block("panos_decryption_policy_rules", prev_rule_name, prev_resource_name),
-                )
-
-                rule_obj: dict = {"name": rule["name"]}
-                if rule.get("description"):
-                    rule_obj["description"] = rule["description"]
-                # F2.6: zones, addresses and services declared in this run
-                # become references; the rest stay brown-field strings
-                # F3.2, F6.10.2: resolve inside the referrer's own unit
-                rule.get("device_group")
-                rule.get("vsys") or ""
-                if rule.get("source_zones"):
-                    rule_obj["source_zones"] = [
-                        self.name_ref(z, ZONE_SCOPES, referrer=rule) for z in rule["source_zones"]
-                    ]
-                if rule.get("destination_zones"):
-                    rule_obj["destination_zones"] = [
-                        self.name_ref(z, ZONE_SCOPES, referrer=rule) for z in rule["destination_zones"]
-                    ]
-                if rule.get("source_addresses"):
-                    rule_obj["source_addresses"] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["source_addresses"]
-                    ]
-                if rule.get("destination_addresses"):
-                    rule_obj["destination_addresses"] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["destination_addresses"]
-                    ]
-                if rule.get("source_users"):
-                    rule_obj["source_user"] = list(rule["source_users"])
-                if rule.get("categories"):
-                    rule_obj["category"] = list(rule["categories"])
-                if rule.get("services"):
-                    rule_obj["services"] = [self.name_ref(s, SERVICE_SCOPES, referrer=rule) for s in rule["services"]]
-                # F2.9: the v2 action is an enum (no-decrypt | decrypt |
-                # decrypt-and-forward) and the inspection mode is a separate
-                # type block. Modern PAN-OS exports carry both; legacy PAN-OS
-                # 9 exports put the mode in <action> instead, so map it.
-                # Unknown actions pass through and fail terraform validate
-                # explicitly rather than being silently reinterpreted.
-                action = rule.get("action")
-                type_key = self._DECRYPTION_TYPE_KEYS.get(rule.get("type"))
-                if action in self._V2_DECRYPTION_ACTIONS:
-                    rule_obj["action"] = action
-                elif action in self._DECRYPTION_TYPE_KEYS:
-                    rule_obj["action"] = "decrypt"
-                    type_key = type_key or self._DECRYPTION_TYPE_KEYS[action]
-                elif action:
-                    rule_obj["action"] = action
-                if type_key:
-                    rule_obj["type"] = {type_key: {}}
-                if rule.get("profile"):
-                    rule_obj["profile"] = rule["profile"]
-                if rule.get("log_setting"):
-                    rule_obj["log_setting"] = rule["log_setting"]
-                if rule.get("log_start"):
-                    rule_obj["log_success"] = True
-                if rule.get("log_end"):
-                    rule_obj["log_fail"] = True
-                if rule.get("disabled"):
-                    rule_obj["disabled"] = True
-
-                out.add(rule, f"  rules = {self.hcl_value([rule_obj])}\n")
-                out.add(rule, "}\n\n")
-
-                prev_rule_name = rule["name"]
-                prev_resource_name = resource_name
-
-        out.write()
+        self._print_policy_rules(
+            "panos_decryption_policy_rules",
+            rules,
+            "# Decryption Policy Rules (F2.9: real v2 resources)\n\n"
+            "# One iterated block per rule type per unit; the map is the printed form of the unit's rows,\n"
+            "# and the key order is the XML order inside the chain (F2.5).\n\n",
+        )
 
     def generate_pbf_rules(self, rules: list[dict]):
         """Generate Policy-Based Forwarding rules (F2.9: real v2 resources).
 
-        v2.0.14 has no PBF rule container: each rule is its own
-        `panos_pbf_policy_rules` resource. The chain semantics match the
-        other policy rulebases (F2.5). The action is a single-choice
-        object: forward, discard, no_pbf, or forward_to_vsys.
+        v2.0.14 has no PBF rule container: the rule type is one `panos_pbf_policy_rules` block that iterates the
+        unit's rows, with the same chain semantics as the other rulebases (F2.5). The action is the single-choice
+        object the provider declares.
         """
-        if not rules:
-            return
-
-        out = UnitText(self, "pbf_rules.tf", "# Policy-Based Forwarding Rules (F2.9: real v2 resources)\n")
-        out.header += "# One panos_pbf_policy_rules resource per rule; per-device-group\n"
-        out.header += "# chains preserve XML order (F2.5).\n\n"
-
-        for chain in self._policy_rule_chains(rules):
-            prev_rule_name: str | None = None
-            prev_resource_name: str | None = None
-            for rule in chain:
-                device_group = rule.get("device_group") or "Shared"
-                resource_name = self.declare_resource_name(
-                    rule["name"], "panos_pbf_policy_rules", rule, context=device_group, vsys=rule.get("vsys") or ""
-                )
-
-                out.add(rule, f'resource "panos_pbf_policy_rules" "{resource_name}" {{\n')
-                out.add(rule, self.location_block("panos_pbf_policy_rules", rule, resource_name))
-                out.add(rule, self._policy_position_block("panos_pbf_policy_rules", prev_rule_name, prev_resource_name))
-
-                rule_obj: dict = {"name": rule["name"]}
-                if rule.get("description"):
-                    rule_obj["description"] = rule["description"]
-                # v2 models the PBF source as from { zone = [...] }
-                # F3.2, F6.10.2: resolve inside the referrer's own unit
-                rule.get("device_group")
-                rule.get("vsys") or ""
-                if rule.get("source_zones"):
-                    rule_obj["from"] = {
-                        "zone": [self.name_ref(z, ZONE_SCOPES, referrer=rule) for z in rule["source_zones"]]
-                    }
-                if rule.get("source_addresses"):
-                    rule_obj["source_addresses"] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["source_addresses"]
-                    ]
-                if rule.get("source_users"):
-                    rule_obj["source_users"] = list(rule["source_users"])
-                if rule.get("destination_addresses"):
-                    rule_obj["destination_addresses"] = [
-                        self.name_ref(a, ADDR_SCOPES, referrer=rule) for a in rule["destination_addresses"]
-                    ]
-                if rule.get("applications"):
-                    rule_obj["applications"] = list(rule["applications"])
-                if rule.get("services"):
-                    rule_obj["services"] = [self.name_ref(s, SERVICE_SCOPES, referrer=rule) for s in rule["services"]]
-                # Single-choice action object (v2 names use underscores)
-                action = rule.get("action")
-                if action:
-                    kind = action.get("type")
-                    if kind == "forward":
-                        forward: dict = {}
-                        if action.get("nexthop_ip"):
-                            forward["nexthop"] = {"ip_address": action["nexthop_ip"]}
-                        if action.get("egress_interface"):
-                            forward["egress_interface"] = action["egress_interface"]
-                        # F2.9: optional path monitoring; the profile name
-                        # references a panos_monitor_profile resource
-                        monitor = action.get("monitor")
-                        if monitor:
-                            monitor_out: dict = {}
-                            if monitor.get("ip_address"):
-                                monitor_out["ip_address"] = monitor["ip_address"]
-                            if monitor.get("profile"):
-                                monitor_out["profile"] = monitor["profile"]
-                            if monitor.get("disable_if_unreachable"):
-                                monitor_out["disable_if_unreachable"] = True
-                            if monitor_out:
-                                forward["monitor"] = monitor_out
-                        rule_obj["action"] = {"forward": forward}
-                    elif kind == "discard":
-                        rule_obj["action"] = {"discard": {}}
-                    elif kind == "no-pbf":
-                        rule_obj["action"] = {"no_pbf": {}}
-                    elif kind == "forward_to_vsys" and action.get("vsys"):
-                        rule_obj["action"] = {"forward_to_vsys": action["vsys"]}
-                if rule.get("enforce_symmetric_return"):
-                    rule_obj["enforce_symmetric_return"] = {"enabled": True}
-                if rule.get("schedule"):
-                    rule_obj["schedule"] = rule["schedule"]
-                if rule.get("disabled"):
-                    rule_obj["disabled"] = True
-
-                out.add(rule, f"  rules = {self.hcl_value([rule_obj])}\n")
-                out.add(rule, "}\n\n")
-
-                prev_rule_name = rule["name"]
-                prev_resource_name = resource_name
-
-        out.write()
+        self._print_policy_rules(
+            "panos_pbf_policy_rules",
+            rules,
+            "# Policy-Based Forwarding Rules (F2.9: real v2 resources)\n\n"
+            "# One iterated block per rule type per unit; the map is the printed form of the unit's rows,\n"
+            "# and the key order is the XML order inside the chain (F2.5).\n\n",
+        )
 
     def generate_pbf_monitor_profiles(self, profiles: list[dict]):
         """Generate PBF path monitoring profiles (F2.9: real v2 resources).
