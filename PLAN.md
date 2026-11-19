@@ -142,17 +142,28 @@ Decisions, recorded 2026-11-18 before any code:
    `depends_on` fact drops with the per-rule block shape, because instances inside one block
    create in key order. This changes the F2.5 rule that `tests/test_policy_order.py` pins, so the
    change is its own piece with its own criteria.
-
-Phase 9C — the iterated block. The four rule generators print one block per rule type per unit.
-Reference columns record whether a name resolved inside the unit, read through the one naming
-rule. A site column resolves through a `locals` map read from the site rows, because a block
-cannot turn a column value into a variable reference; the rule that a block prints the variable
-reference, never the value, is not broken by this.
+5. Recorded 2026-11-19, measured before the block shape was written: the entry enumerates its
+   fields, because `terraform validate` cannot read `rules[0].name` through a dynamically-typed
+   `each.value`, so one table maps each row field to the provider name and the provider's declared
+   shape word, and a reader names the field whose provider object key is the value the row records.
+   The entry prints the shape word the table states, so a shape mismatch cannot reach the block body.
+6. Recorded 2026-11-19: the third form of the same rows is the map the `.tf` file prints, named
+   through the same stem with no suffix, which is also the name of the block that iterates it. The
+   map is the only place the file states a row value, so the rule that a block prints the variable
+   reference, never the value, holds. `rule_data.printed_keys` is the only reader of the printed map,
+   and it reads keys only, so the gate states no reader for the map of its own.
 
 Phase 9D — the gate. The `data_files` rule reads the rule data file as its declared rows and
-joins on `directory`. The cross-check counts the four rule matrix rows against the row set
-instead of the block set, because one iterated block holds N entries. One block rule reads the
-iterated block against the same `LOCATION_SCHEMA` rows.
+joins on `directory`. The cross-check's block side for the four rule rows is the entry keys the
+printed map holds for the unit, read through `rule_data.printed_keys`, because one iterated block
+prints N entries and not one block, and that half landed with Piece 19. The block rule Piece 20
+states reads the block itself against the same `LOCATION_SCHEMA` rows: the block's local name and
+the `for_each` map name are `rule_data.locals_name`, `location` equals the row for the type, the
+field list is the name field plus the table order the matrix row declares, every body field is
+`each.value.<field>` under the provider name and the shape word `RULE_ENTRY_FIELDS` states, one
+block per rule type per unit, and the map entry keyed by the row `key` holds the values the row
+names when read through `parse_rows`. The `data_files` table gains the rule data file and the two
+report counts move with it.
 
 Held, on the conditions already recorded in `backlog.md`: the rulebase value string, the position
 from a live source, and the import block for a rule entry. The Terraform 1.14 floor already

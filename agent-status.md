@@ -3,10 +3,14 @@
 ## Current position
 
 Epic 9 (rules as data, one iterated object per rule type) is open: Piece 16, the decision record, Piece 17,
-Phase 9A the row shape, and Piece 18, Phase 9B the write path, are complete, and the next piece is Piece 19,
-Phase 9C the iterated block. The pieces are in `to-do.md`, the decisions in `PLAN.md` Epic 9, and the Piece 18
-criteria and measurement in `acceptance.md`. Piece 19 carries its own criteria for the F2.5 change, because the
-`for_each` key order replaces the `depends_on` fact that `tests/test_policy_order.py` pins.
+Phase 9A the row shape, Piece 18, Phase 9B the write path, and Piece 19, Phase 9C the iterated block, are complete,
+and the next piece is Piece 20, Phase 9D the gate. The pieces are in `to-do.md`, the decisions in `PLAN.md` Epic 9,
+and the Piece 19 criteria and measurement in `acceptance.md`. Piece 20 states the gate rule for the block shape
+Piece 19 emitted, which is recorded in `acceptance.md` §What Piece 20 reads and in `PLAN.md` Phase 9D: the block's
+local name and its `for_each` map name read `rule_data.locals_name`, its `location` equals the `LOCATION_SCHEMA` row,
+its field list is the name field plus the table order the matrix row declares, every body field is
+`each.value.<field>` under the provider name and the shape word `RULE_ENTRY_FIELDS` states, one block per rule type
+per unit, and the map entry keyed by the row `key` holds the values the row names when read through `parse_rows`.
 
 Epic 8 (the second path) is complete with piece F8.10, and Piece 8 closed the finding F8.10 left open. The rules
 it landed are in `docs/API_CONVERSION_PATH.md`, the modules are `src/api_requests.py` and `src/api_to_terraform.py`,
@@ -176,6 +180,42 @@ the whole file set. Because `tests/test_write_path.py::test_a_record_module_rend
 in practice. The pins derive the two names through `rule_data` and the matrix row, so no pin restates a file-name rule
 and no pin reads a private module constant.
 
+Piece 19 (2026-11-19), Phase 9C, is complete at commit `14e5b92`. The four rule generators print one `for_each`
+block per rule type per unit, and the block reads the `locals` map that is the printed form of that unit's rows, so a
+row value is stated once in the file and the block body prints only `each.value.<field>`. One name rule and not three:
+the map name and the block's local name read the same matrix row's `output_file` stem through `rule_data.locals_name`,
+which is the stem `data_file` and `printed_file` read with the `.json` and `.csv` suffixes. The entry states the name
+field first through `entry_coverage.name_field` and then the row's fields in table order, and a field the recorded
+object holds with no value prints `null`, because one field list serves every instance. Reference columns record
+whether a name resolved inside the unit, read through `name_ref` at the map site; a `VALUE_VARIABLES` column prints
+`var.<name>`. `depends_on` drops, `position` prints `where = "last"` for every instance, and `pivot` stays a row
+column the block does not read, because instances inside one block create in the key order, which is the XML order
+inside a chain. `rule_data` gains `printed_keys`, the only reader of the printed map and a reader of its keys only,
+and the cross-check's block side for the four rule rows reads it, so the gate states no reader for the map. The pins
+retargeted are the shared rule-block parser and chain check in `tests/conftest.py`, then `tests/test_policy_order.py`
+8, `tests/test_real_or_report.py` 5, `tests/test_edge_cases.py` 19, `tests/test_dependency_wiring.py` 11,
+`tests/test_coverage_matrix.py` 211, `tests/test_round_trip.py` 34, `tests/test_property_coverage.py` 33,
+`tests/test_golden_files.py` 91, `tests/test_import_blocks.py` 32, `tests/test_sanity_gate.py` 110,
+`tests/test_data_file_gate.py` 21, and one new pin in `tests/test_rule_data.py`, now 11. The six rule goldens move,
+from a real run, and the sample run's resource count moves 20 to 17.
+
+What Piece 19 decided while measuring: `rules = [ each.value ]` cannot be the printed shape, because `terraform
+validate` refuses it - the provider marks `rules[0].name` required and cannot read it through a dynamically-typed
+`each.value` (measured 2026-11-19 in the offline validate harness, Value Conversion Error, Target Type:
+provider.SecurityPolicyRulesResourceRulesObject), so the entry enumerates its fields and one table holds the name and
+the shape word for each, with `RULE_ENTRY_READERS` naming the reader for a field whose provider object key is the row
+value. The reader is tried before the empty-value check, because a reader can derive the shape from another field: the
+legacy decryption `action` carries the inspection mode. `destination_zone` is the one row field the parse records as
+one value through `xml_input._get_text` while the provider declares `['list','string']`, so the entry prints the
+one-member list. NAT `service` is one string, so a member list prints `null` plus the `# NOTE:` line that names the
+members, which is the never-drop rule, and the `# NOTE:` lines print inside the entry before the field line they
+explain, so the printer prints entries field by field rather than one `hcl_value` call per entry. The cross-check's
+finding wording for a rule row is `the ledger reads N entries, the reader reads M entries in the map the block reads`,
+and `position` is a helper inside the rule's source slice. Measured on the corpus after the retarget the four rule
+rows read clean, so the corpus table in `tests/test_round_trip.py` names no rule row and the fact count stays 19 on 8
+fixtures, 3 + 15 + 1 by category. `check_location_present` reads only `resource`, `data`, `import` and `action`
+blocks, so a `locals` block raises no finding, and `check_references` resolves references inside the map.
+
 The licensing rule is in `docs/LICENSING.md`, the owner document: the fork source, the two holders, the split
 measured through `git blame`, and the scope of each grant. `LICENSE-COMMERCIAL` is the upstream author's grant, so
 it covers the upstream parts only, and this project grants no commercial terms for its own contributions. The word
@@ -194,6 +234,10 @@ test module, so the count reads 1,705 pins in 53 modules: 1,701 pass and the sam
 binary, measured 2026-11-18 on the tree at commit `e4ffe7b`, with `ruff check .` clean and `ruff format --check .`
 clean on the 102 Python files. Piece 18 adds 3 pins and no test module, so the count reads 1,708 pins in 53 modules:
 1,704 pass and the same 4 skip for the missing `tflint` binary, measured 2026-11-19 on the tree at commit `eda2d1a`.
+Piece 19 adds 1 pin and no test module, so the count reads 1,709 pins in 53 modules: 1,705 pass and the same 4 skip
+for the missing `tflint` binary, measured 2026-11-19 on the tree at commit `14e5b92` in 292.16 s, with `ruff check .`
+clean and `ruff format --check .` clean on the 102 Python files and `check_documents` reporting no finding; no pin was
+weakened, and every retargeted pin still measures content.
 `ruff check .`
 is clean at the level `pyproject.toml` states and `ruff format --check .` is clean on the 100 Python
 files. `tests/test_api_path.py` reads 33 pins (30 before Piece 8). `tests/test_sanity_gate.py` reads

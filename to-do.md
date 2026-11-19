@@ -1,20 +1,20 @@
 # To Do
 
 The tracking markdown for the completed pieces is removed here; the git history and the owner
-documents hold it. Piece 16, Piece 17 and Piece 18 closed 2026-11-18 and 2026-11-19 (commits `623dea2`,
-`e4ffe7b` and `eda2d1a`).
+documents hold it. Piece 16, Piece 17, Piece 18 and Piece 19 closed 2026-11-18 and 2026-11-19 (commits `623dea2`,
+`e4ffe7b`, `eda2d1a` and `14e5b92`).
 
 ## Current feature — Epic 9: rules as data, one iterated object per rule type
 
 The decisions are in `PLAN.md` Epic 9 and the record is in `acceptance.md`. Pieces, in order:
 
-- Piece 19 — the iterated block (Phase 9C): the four rule generators print one block per rule type
-  per unit. The key order replaces the `depends_on` fact, which changes the F2.5 rule that
-  `tests/test_policy_order.py` pins, so this piece carries its own criteria for that change. The
-  site columns resolve through the `locals` map read from the site rows.
-- Piece 20 — the gate (Phase 9D): the `data_files` rule reads the rule rows through the declared
-  shape and joins on `directory`; the cross-check counts the four rule matrix rows against the row
-  set; one block rule reads the iterated block against the `LOCATION_SCHEMA` rows.
+- Piece 20 — the gate (Phase 9D): the `data_files` table gains the rule data file, reads the rule
+  rows through the declared shape and joins on `directory`, and the two report counts move with it;
+  one block rule reads the iterated block against the `LOCATION_SCHEMA` rows, reading the block's
+  name and its map name through `rule_data.locals_name`, the field list through the matrix row and
+  `entry_coverage.name_field`, the body fields through `RULE_ENTRY_FIELDS`, and the map entry against
+  `parse_rows`. The cross-check half of this phase landed in Piece 19, which retargeted the block side
+  of the four rule rows to the printed map read through `rule_data.printed_keys`.
 - Piece 21 — the goldens and the pins that name the printed rule output re-measure as a whole.
 
 ## Feature-sized items that stay blocked
