@@ -1,17 +1,12 @@
 # To Do
 
 The tracking markdown for the completed pieces is removed here; the git history and the owner
-documents hold it. Piece 15 closed 2026-11-18 (commit `ee72345`).
+documents hold it. Piece 16 and Piece 17 closed 2026-11-18 (commits `623dea2` and `e4ffe7b`).
 
 ## Current feature — Epic 9: rules as data, one iterated object per rule type
 
 The decisions are in `PLAN.md` Epic 9 and the record is in `acceptance.md`. Pieces, in order:
 
-- Piece 16 — the decision record (complete 2026-11-18): the four decisions, the inherited rules,
-  and the phase list. No code, no test, no fixture, no golden changed.
-- Piece 17 — the row shape (Phase 9A): `RULE_ROW_FIELDS` in `rule_data.py`. The criteria name the
-  field set, the honesty read for every column, and the rulebase column that prints nothing until
-  F3.5.
 - Piece 18 — the write path (Phase 9B): `rule_data.py` writes the consumed JSON and the printed
   CSV per rule type per unit through `write_path.py` only, and names itself in the
   `docs/ARCHITECTURE.md` §1 module table.

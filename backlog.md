@@ -49,7 +49,10 @@ Completed work is not recorded here; the git history and the owner document hold
   `post-rulebase` literal, so the omitted-attribute default is the only safe output. Verify the
   value against a live target, then record the rulebase per rule, chain within one rulebase, and
   emit `rulebase` for the four rule types. Note that `location.vsys` declares no `rulebase` field,
-  so a vsys-scoped rule cannot carry it at all and must be reported instead.
+  so a vsys-scoped rule cannot carry it at all and must be reported instead. The rule row shape declares no
+  rulebase column while the fact is unrecorded (`src/rule_data.py`, measured 2026-11-18): the column enters the
+  shape with the fact, not before, because a column that names a field the parse cannot capture is a finding under
+  `COVERAGE_MATRIX.md` §1.
 
 - Security profile bodies are not parsed (antivirus, anti-spyware, vulnerability, URL filtering,
   file blocking, WildFire, zone protection). The v2 provider has resources for them, but emitting

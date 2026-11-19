@@ -2,6 +2,10 @@
 
 ## Current position
 
+Epic 9 (rules as data, one iterated object per rule type) is open: Piece 16, the decision record, and Piece 17,
+Phase 9A the row shape, are complete, and the next piece is Piece 18, Phase 9B the write path. The pieces are in
+`to-do.md`, the decisions in `PLAN.md` Epic 9, and the Piece 17 criteria and measurement in `acceptance.md`.
+
 Epic 8 (the second path) is complete with piece F8.10, and Piece 8 closed the finding F8.10 left open. The rules
 it landed are in `docs/API_CONVERSION_PATH.md`, the modules are `src/api_requests.py` and `src/api_to_terraform.py`,
 and the pins are in `tests/test_api_requests.py`, `tests/test_api_path.py`, `tests/test_unit_manifest.py`,
@@ -115,6 +119,33 @@ reads documents, not test files, so a repeated block inside a pin is not a findi
 print. The piece fixes the instance, not the rule. Nothing offline-actionable remains: what stays in
 `backlog.md` needs a fact a live target states.
 
+Piece 16 (2026-11-18) recorded the four Epic 9 decisions and the phase list before any code, and is complete;
+the record is in `PLAN.md` Epic 9, and nothing else changed.
+
+Piece 17 (2026-11-18), Phase 9A, is complete at commit `e4ffe7b`. `src/rule_data.py` states the rule row shape
+`RULE_ROW_FIELDS` (`directory`, `resource`, `entry`, `key`, `pivot`, `properties`) and the two forms of the same
+rows: `render` is the consumed JSON, which is the form a Terraform object reads because Terraform has no CSV
+decode function, and `render_csv` is the printed form of the same rows. `parse_rows` reads the data form and
+refuses a row that is not the declared shape, including the printed form read as data. `rulebase` is not in the
+shape, because the parse records no rulebase fact (F3.5), so no column can name a field the parse cannot capture.
+The eight pins are in `tests/test_rule_data.py`, and the criteria are in `acceptance.md`.
+
+What Piece 17 decided while measuring: the property value kinds are string, boolean, list and mapping, because a
+PBF rule's `action` is a nested mapping that holds booleans, so the shape cannot declare only strings, and a
+number is refused because the rule parse stores no number. `build_rows` reads each declared field through the
+recorded object, so a field the parse never stored is a field held with no value and prints no column; measured on
+`tests/fixtures/nat_rules.xml`, where 4 rules hold and some rules hold no `destination_translation_*` key at all.
+The key's digest half is the row's own unit digest, so `parse_rows` refuses the two halves when they disagree, and
+the reader accepts at least four digits rather than exactly four, because a chain longer than 9,999 rules prints a
+longer ordinal and a print rule and a read rule cannot contradict each other. `Shared` is read through
+`unit_manifest.SHARED_UNIT`, and `vsys1` is the default this grouping needs for a rule the export names no virtual
+system for, which is the fact the group keys on and not the parse's honest scope: no pin states that either name is
+stated once, so the delegate removes the generator's two literals and no golden byte changes. The key pin plants its
+material, because a scan of the committed fixtures found no fixture holding one rule name in two device groups, and
+the planted config is read through `xml_input.parse_xml`, the same input door the corpus pins read, and stays out of
+the corpus. `TerraformGenerator._policy_rule_chains` delegates to `rule_data.chains`, so the group is stated once,
+which the pin reads as no other module defining it.
+
 The licensing rule is in `docs/LICENSING.md`, the owner document: the fork source, the two holders, the split
 measured through `git blame`, and the scope of each grant. `LICENSE-COMMERCIAL` is the upstream author's grant, so
 it covers the upstream parts only, and this project grants no commercial terms for its own contributions. The word
@@ -128,7 +159,10 @@ added, removed, or weakened. Piece 13 adds no pin, and the count is 1,697 in 52 
 after it, read from the per-module collection counts. Piece 14 adds no pin, and the count is the
 same 1,697 in 52 modules before and after it, read the same way. Piece 15 adds no pin, removes no
 pin and weakens no pin, and reads the same count before and after it: the change removes one
-duplicate assert inside the index pin, and a pin is the test function, not an assert. `ruff check .`
+duplicate assert inside the index pin, and a pin is the test function, not an assert. Piece 17 adds 8 pins and one
+test module, so the count reads 1,705 pins in 53 modules: 1,701 pass and the same 4 skip for the missing `tflint`
+binary, measured 2026-11-18 on the tree at commit `e4ffe7b`, with `ruff check .` clean and `ruff format --check .`
+clean on the 102 Python files. `ruff check .`
 is clean at the level `pyproject.toml` states and `ruff format --check .` is clean on the 100 Python
 files. `tests/test_api_path.py` reads 33 pins (30 before Piece 8). `tests/test_sanity_gate.py` reads
 110 pins, 11 more than the 99 it read before Piece 11. `pyproject.toml` sets `addopts = "-q"`, so a
@@ -162,7 +196,12 @@ measured 2026-11-18 on the final tree with this piece's change and the tflint bi
 the same 1,697 pins in 52 modules in 258.53 s, with `ruff check .` clean at `py310`,
 `ruff format --check .` clean on the 100 Python files, and `python3 tools/check_documents.py`
 reporting no finding, read at 6.54 s after the final document edits. The same set measured 263.54 s
-before the final document edits and 271.38 s on the tree before the change.
+before the final document edits and 271.38 s on the tree before the change. The Piece 17 run, measured 2026-11-18 on the tree at commit `e4ffe7b` with the
+`tflint` binary absent, passed 1,701 pins and skipped the same 4 in 320.31 s, with `ruff check .`
+clean at `py310`, `ruff format --check .` clean on the 102 Python files, and
+`python3 tools/check_documents.py` reporting no finding, read at 12.15 s. `tests/test_rule_data.py`
+reads 8 pins. The piece changes no golden, fixture, response or tflint file, so the pins that name
+the printed sets and the golden bytes read the same as before.
 
 Gate size, decided 2026-11-13: no smaller default gate is adopted. The measured subset that drops the pins that
 call `terraform` runs in 203.0 s (44% of the full run), and the subset that drops the corpus pins runs in about

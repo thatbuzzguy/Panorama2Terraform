@@ -143,11 +143,6 @@ Decisions, recorded 2026-11-18 before any code:
    create in key order. This changes the F2.5 rule that `tests/test_policy_order.py` pins, so the
    change is its own piece with its own criteria.
 
-Phase 9A — the row shape. `RULE_ROW_FIELDS` is the declared shape: the field set the four rule
-matrix rows already name, plus the five scope facts, the chain ordinal, and the pivot. The
-honesty rule in `COVERAGE_MATRIX.md` §1 applies to every column: a column must name a field the
-parse captured through the recorded object. The rulebase column is not printed until F3.5 lands.
-
 Phase 9B — the write path. `rule_data.py` writes the consumed JSON and the printed CSV per rule
 type per unit, through `write_path.py` only, and is named in the `docs/ARCHITECTURE.md` §1 table.
 
