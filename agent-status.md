@@ -3,14 +3,18 @@
 ## Current position
 
 Epic 9 (rules as data, one iterated object per rule type) is open: Piece 16, the decision record, Piece 17,
-Phase 9A the row shape, Piece 18, Phase 9B the write path, and Piece 19, Phase 9C the iterated block, are complete,
-and the next piece is Piece 20, Phase 9D the gate. The pieces are in `to-do.md`, the decisions in `PLAN.md` Epic 9,
-and the Piece 19 criteria and measurement in `acceptance.md`. Piece 20 states the gate rule for the block shape
-Piece 19 emitted, which is recorded in `acceptance.md` §What Piece 20 reads and in `PLAN.md` Phase 9D: the block's
-local name and its `for_each` map name read `rule_data.locals_name`, its `location` equals the `LOCATION_SCHEMA` row,
-its field list is the name field plus the table order the matrix row declares, every body field is
-`each.value.<field>` under the provider name and the shape word `RULE_ENTRY_FIELDS` states, one block per rule type
-per unit, and the map entry keyed by the row `key` holds the values the row names when read through `parse_rows`.
+Phase 9A the row shape, Piece 18, Phase 9B the write path, Piece 19, Phase 9C the iterated block, and Piece 20,
+Phase 9D the gate, are complete, and the next piece is Piece 21, the goldens and the pins that name the printed
+rule output re-measuring as a whole. The pieces are in `to-do.md`, the decisions in `PLAN.md` Epic 9, and the Piece
+20 criteria and measurement in `acceptance.md`. Piece 20 landed three rules, in commit `5a6780e`: `check_data_files`
+reads the rule data pair inside the unit directories its own rows name through `rule_data.parse_rows` and joins on
+`directory`, with the data count naming the four records at the root plus the pair's data member inside each unit
+directory; `check_round_trip` counts the four rule matrix rows against the same row set read through `parse_rows`,
+so the three forms of one row set are read by one shape rule; and the new block rule `check_rule_blocks` reads the
+iterated block against `LOCATION_SCHEMA` and the map entry against the rows, with FAIL findings, in `CHECK_ORDER`
+after `certificate_blocks`. The three entry tables moved from the emitter to `rule_data.py` because §1.1 forbids a
+cycle, and `printed_keys` became `printed_entries`, the one printed-map reader that reads one entry per row, so the
+pins that named it were retargeted and the emitter's output is unchanged.
 
 Epic 8 (the second path) is complete with piece F8.10, and Piece 8 closed the finding F8.10 left open. The rules
 it landed are in `docs/API_CONVERSION_PATH.md`, the modules are `src/api_requests.py` and `src/api_to_terraform.py`,
@@ -190,8 +194,10 @@ object holds with no value prints `null`, because one field list serves every in
 whether a name resolved inside the unit, read through `name_ref` at the map site; a `VALUE_VARIABLES` column prints
 `var.<name>`. `depends_on` drops, `position` prints `where = "last"` for every instance, and `pivot` stays a row
 column the block does not read, because instances inside one block create in the key order, which is the XML order
-inside a chain. `rule_data` gains `printed_keys`, the only reader of the printed map and a reader of its keys only,
-and the cross-check's block side for the four rule rows reads it, so the gate states no reader for the map. The pins
+inside a chain. `rule_data` gained the printed-map reader, at that time `printed_keys`, a reader of its keys only,
+and the cross-check's block side for the four rule rows read it, so the gate stated no reader for the map; Piece 20
+retargeted that name to `printed_entries`, which reads one entry per row, and the cross-check's block side now reads
+the row set through `parse_rows` from the data member inside the unit directory. The pins
 retargeted are the shared rule-block parser and chain check in `tests/conftest.py`, then `tests/test_policy_order.py`
 8, `tests/test_real_or_report.py` 5, `tests/test_edge_cases.py` 19, `tests/test_dependency_wiring.py` 11,
 `tests/test_coverage_matrix.py` 211, `tests/test_round_trip.py` 34, `tests/test_property_coverage.py` 33,

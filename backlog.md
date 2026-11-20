@@ -593,17 +593,6 @@ restated here; they are in the record and the git history. Only the open items a
   holds, not the create-time position the generator emits, because a chain anchors at
   `where = "last"`. No import block is written for a rule entry until the F3.5 rulebase decision
   lands and a source states the position.
-- Open, measured 2026-11-19 by `tests/test_write_path.py::test_a_new_unit_set_file_shape_names_the_unit_set_and_the_two_counts_do_not_move`:
-  no `data_files` rule reads the rule data pair, so a rule data file inside a unit directory that holds a row outside
-  `rule_data.RULE_ROW_FIELDS` reports nothing. The data rule reads the four records at the codebase root and reads no
-  file inside a unit directory, and the printed half of the pair is not the printed form the data rule compares, which
-  stays with `site.auto.tfvars`. The rule that reads the rule rows through the declared shape and joins on `directory`
-  is `to-do.md` Piece 20, where the `data_files` table gains the rule data file and the two counts move with it. The
-  cross-check half of the same item landed in Piece 19 (2026-11-19): for the four rule rows the block prints the set
-  and not one entry, so the cross-check's block side is the entry keys the printed map holds for the unit, read
-  through `rule_data.printed_keys`, which is the only reader of the printed map, and the four rule rows read clean
-  across the corpus (19 facts on 8 fixtures, 3 + 15 + 1 by category, unchanged). The block rule Piece 20 states reads
-  the block itself against `LOCATION_SCHEMA` and the map entry against `parse_rows`.
 - Actions: the pinned schema declares `panos_commit` and `panos_push_to_devices`. Decided
   2026-10-31: the codebase declares Terraform 1.14 as the minimum, because actions need it, so the
   committed goldens state it. Both actions are emitted per unit (`docs/CODEBASE_ASSEMBLY.md` §10), and the

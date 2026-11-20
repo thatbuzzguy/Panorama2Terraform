@@ -123,8 +123,10 @@ sorted by (file, line, detail):
 - `tests/test_round_trip.py`: pin 1.4 retargeted (the cross-check reads the row set through `parse_rows` and no
   other record), the signature and the NOT RUN path, the corpus re-measurement, and a planted disagreeing pair
   read through a run.
-- `tests/test_sanity_gate.py`: the new check in `CHECK_ORDER`, the report order, the moved counts, the one shape
-  rule, and the new block rule read on a printed run and on a hand-written file.
+- `tests/test_sanity_gate.py`: the new check in `CHECK_ORDER`, the report order, the moved counts read through
+  the shared derivation, the one shape rule, and the new block rule read on a printed run and on a hand-written
+  file: one pin per finding group, the entry that is not the row it names, the block for a unit no rule row names,
+  and the rows the reader read no block for.
 - `tests/test_write_path.py`: the pin that said the two counts do not move is retargeted; the pair still names the
   unit file set, and the printed member is still not a data file.
 - `tests/test_coverage_matrix.py`: the rule row's grounding table is read in its new home, `rule_data`.
@@ -153,4 +155,19 @@ the modules this piece touches: `tests/test_data_file_gate.py` 21, `tests/test_r
 `tests/test_edge_cases.py` 19, `tests/test_real_or_report.py` 5, `tests/test_dependency_wiring.py` 11,
 `tests/test_policy_order.py` 8.
 
-After, measured on the final tree: recorded below when the piece lands.
+## After, measured 2026-11-19 on the final tree (commit `5a6780e`)
+
+- Pins: 1,718 in 53 test modules, up from 1,709. The modules this piece moved:
+  `tests/test_data_file_gate.py` 21 -> 27 (six pins: the pair read inside the unit its rows name, a member at the
+  codebase root naming no unit, a member inside a directory no row names, the two members standing or falling
+  together, the printed member equal to `render_csv`, and a row `directory` disagreement at the row ordinal), and
+  `tests/test_sanity_gate.py` 110 -> 113 (three pins: the entry that is not the row it names, the block for a unit
+  no rule row names, and the rows the reader read no block for). Every other module keeps its count, including the
+  retargeted pins that named `printed_keys`.
+- Corpus, 66 fixtures read through the pipeline: `check_data_files` 0 findings, `check_rule_blocks` 0 findings,
+  and the round-trip cross-check unchanged at 19 findings on 8 fixtures.
+- Sample run: 14 `.tf` files and 4 data files (2 records at the root plus the pair's data member for 2 rule types
+  inside the unit its rows name), `data_files PASS` and `rule_blocks PASS`.
+- Gate: `ruff check .` clean, `ruff format --check .` clean on 103 files, `python3 tools/check_documents.py`
+  reports no finding, `python3 -m pytest` 1,714 passed and 4 skipped for the missing `tflint` binary.
+
