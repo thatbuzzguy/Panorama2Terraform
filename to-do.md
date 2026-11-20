@@ -1,13 +1,10 @@
 # To Do
 
 The tracking markdown for the completed pieces is removed here; the git history and the owner
-documents hold it. Epic 9 (rules as data, one iterated object per rule type) closed 2026-11-19 with
-Piece 21, in commit `fd72c09`.
+documents hold it. The open work is Epic 10, recorded in `PLAN.md` and
+`docs/TEMPLATE_STACK_DEPLOYMENT.md`.
 
 ## Epic 10 — template and stack deployment
-
-Piece 24 (E10.1, the membership names that enter the edge set) is complete, committed 2026-11-20. The rule and the
-measurement are in `docs/TEMPLATE_STACK_DEPLOYMENT.md` §2 and `acceptance.md`.
 
 The pieces that stay open, in the order `PLAN.md` Epic 10 states them:
 

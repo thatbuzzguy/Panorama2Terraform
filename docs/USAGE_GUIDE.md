@@ -1,6 +1,7 @@
 # Usage Guide
 
-This is the technical reference for the two scripts. It states how to run them
+This is the technical reference for the three entry points: the converter (path 1), the path 2 entry point
+(`src/api_to_terraform.py`), and the splitter. It states how to run them
 and what each output file holds. The rules behind the output are in
 [ARCHITECTURE.md](ARCHITECTURE.md); the document index is in
 [README.md](README.md).
@@ -182,6 +183,28 @@ python3 src/panorama_to_terraform.py export.xml --import-blocks --output-dir out
   position in the live rulebase, and a list of names. Each rule entry is a WARN finding with that reason,
   and a WARN does not change the exit code.
 
+## Running path 2 (api-only)
+
+```bash
+export PANOS_API_KEY=...
+python3 src/api_to_terraform.py --host panorama --output-dir out
+python3 src/api_to_terraform.py --host panorama --offline --output-dir out
+```
+
+Path 2 reads only responses, one response per scope, and writes the same codebase as path 1. Its rules are in
+[API_CONVERSION_PATH.md](API_CONVERSION_PATH.md): the request shapes (§2.1), the scope index read from the
+membership responses (§2.2), the run order (§6), and the request-set gate rule (§3).
+
+- The arguments are the shared set (`panorama_to_terraform.shared_arguments`): `--host` (required), `--cache-dir`,
+  `--offline`, `--insecure`, `--output-dir`, `--validate`, `--tflint`, `--data-blocks`, `--import-blocks`,
+  `--state`, `--workspace`, `--prune-cache`, `--max-input-bytes`. The entry point adds no argument of its own, so
+  it takes no input file and refuses the arguments that name one source (`--source`, `--path`, `--parent`).
+- The run reads the membership responses first, then the entries the scope index names, in index order, and the
+  entry point passes the index it built to the gate, so the `request_set` rule reports for a path 2 run. A path 1
+  run reports the same rule as NOT RUN.
+- `--offline` and the cache rule are the same as for the api source above, and the key rule is the same
+  (`CODEBASE_ASSEMBLY.md` §11). A run that reads only committed response files passes CI with no server.
+
 ## Quick start script
 
 `tools/quick_start.sh` runs the converter on the committed sample input
@@ -229,6 +252,8 @@ directory, so a table row names the file, not the path.
 | `security_rules.tf`, `nat_rules.tf`, `decryption_rules.tf`, `pbf_rules.tf` | Policy rules: the unit's rows as a `locals` map, and one `for_each` block per rule type per unit that reads it. The instances create in the sorted key order, which is the XML order inside the chain, so every instance anchors at the end of the rulebase. The map is the only place the file states a row value; the block body prints references into it (Epic 9, Piece 19) |
 | `security_profile_groups.tf` | Profile group resources |
 | `security_profiles.tf` | Inventory only: names and descriptions, with the resource name the emitter would use |
+| `certificates.tf` | Certificate blocks, one resource per entry for the `panos_certificate_import` row, printed through the `CERTIFICATE_SHAPE` row; a `sensitive` field prints as the variable reference ([ARCHITECTURE.md](ARCHITECTURE.md) §4.11) |
+| `certificate_profiles.tf` | Certificate profile blocks, one resource per entry, printed through the `CERTIFICATE_SHAPE` row ([ARCHITECTURE.md](ARCHITECTURE.md) §4.11) |
 | `interfaces.tf`, `zones.tf`, `virtual_routers.tf`, `monitor_profiles.tf`, `vpn.tf` | Network and VPN resources |
 | `filters.tf` | Routing-profile filter containers, one resource per entry (F7.8) |
 | `read_through.tf` | One `data` block per name a reference needed and the run did not read. Written only for a run that declares `--data-blocks` (F5.5) |
@@ -497,10 +522,18 @@ root plus the rule data pair's data member inside each unit directory its own ro
 | `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |
 | `location_present` | every `resource` and `data` block carries `location` | FAIL |
 | `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type (the type, the `location` sub-block and its fields, and `name` when the row declares one) | FAIL |
+| `import_blocks` | every `import` block agrees with the `resource` block it names: the type, the local name, the entry name, and the location | FAIL; WARN for a rule type the shape cannot state |
+| `scope_blocks` | a name inside a scope block's `location` names a scope the run declares, by the type that defines it | FAIL |
+| `actions` | every `action` block matches its `ACTION_SCHEMA` row inside `config` and names one unit | FAIL |
+| `protocol_object` | every `protocol` object on a `panos_virtual_router` block matches the `PROTOCOL_SHAPE` row for its level, prints as a field, and states the one key a row selects | FAIL |
+| `filter_blocks` | every filter container block matches the `FILTER_SHAPE` row for its level, states the one key a row selects, and an element inside a `[` container states the name the row reads as the entry name | FAIL |
+| `certificate_blocks` | every certificate block matches the `CERTIFICATE_SHAPE` row for its level, states the entry name through the one naming rule, states the one key a row selects, prints a `sensitive` field as the variable reference, and an element inside a `[` container states the name the row reads as the entry name | FAIL |
 | `rule_blocks` | every iterated rule block matches the `LOCATION_SCHEMA` row for its type, names the block and the `for_each` map through `rule_data.locals_name`, and holds one map entry per row whose content is the row's value read back through the one field reader (Epic 9, Phase 9D) | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable this run declares (F6.6) | FAIL |
 | `data_files` | every data file reads as its declared rows, and the data agrees with the naming rule, the joins, the order rule, and its printed form. The rule data pair is read inside the unit directory its own rows name, and a member inside a directory no row names is a finding (F6.8, Epic 9 Phase 9D) | FAIL |
+| `round_trip` | the `.tf` block set agrees with the entry set the run's ledger read, per unit and row, where the entry side counts only the entries `entry_coverage.EntryLedger.destination` answers as `emitted`, so an entry the run reports is not counted | WARN, or NOT RUN |
+| `request_set` | the request set agrees with the scope the run read, per unit and per index entry, read through the join ([API_CONVERSION_PATH.md](API_CONVERSION_PATH.md) §3) | WARN, or NOT RUN |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
 | `tflint` | the rule set `sanity_checks.TFLINT_RULES`, run through the tflint command, with `--tflint`. Each rule states a shape no other gate rule states, so a `.tf` file a person wrote by hand is still refused | FAIL, WARN, SKIPPED, or NOT RUN |
@@ -513,8 +546,11 @@ missing `location` block is the `location_present` finding for both kinds. The
 `terraform validate` accepts an unknown `location` sub-block and drops it silently. A
 WARN does not fail the run. A FAIL finding exits 1. A SKIPPED check never
 changes the exit code. The two checks that run an external command are gated by a flag, so a run that did not
-ask for one reports it as NOT RUN: the gate that runs on every conversion reads no external binary. The rules
-live in `sanity_checks.py` and are stated in
+ask for one reports it as NOT RUN: the gate that runs on every conversion reads no external binary. Two rules
+read a set the gate did not write, because their facts compare two sets: `round_trip` compares the `.tf` block
+set with the entry set the run's ledger read, and `request_set` compares the join's rows with the scope index a
+path 2 run built; a call that is missing the set it needs reports the rule as NOT RUN, and `rule_blocks` is the
+block rule that also reads a data file. The rules live in `sanity_checks.py` and are stated in
 [ARCHITECTURE.md](ARCHITECTURE.md) §4.6.
 
 Exit codes: 0 when the gate reports no FAIL finding, 1 when a check fails or

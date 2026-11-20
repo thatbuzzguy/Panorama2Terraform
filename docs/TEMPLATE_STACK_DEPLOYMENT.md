@@ -85,10 +85,11 @@ unchanged. The three fixtures that carry a stack listing a declared template are
 
 The parse records the scope a scope entry sits in through `resource_mapping.SCOPE_PLACEMENT`, which states the
 location sub-block for the two types that can sit inside another scope (`panos_template_variable`, `panos_vsys`)
-and an empty set for the six scope rows, because each of those places itself at the top of its own chain. A device
+and an empty set for the four scope rows that place themselves at the top of their own chain. A device
 group names its base through the parent entry it declares, which the parent record reads. The decision this piece
 takes is what the read answers for a template entry and a stack entry, and whether the manifest row needs a field
-for it. It stays open until the entry rule in §2 has landed, because the read and the edge read the same container.
+for it. The entry rule in §2 that reads the same container has landed, so this decision is the only part of
+the piece that stays open.
 
 ## 4. Piece 3: a new site from an existing template (open)
 

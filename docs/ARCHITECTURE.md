@@ -207,7 +207,7 @@ does not turn into an entry of its own:
 
 | Kind | What it means |
 |---|---|
-| Bookkeeping | an association table or a scope fact (§2.2), and a sub-shape that only selects a shape. The per-entry report line (§3.2) is the only output a membership entry reaches, and the fact the row records is the relation between that entry and the container that lists it, so the entry carries no value for it and the line names no field. The honesty rule for that line is in [`COVERAGE_MATRIX.md`](COVERAGE_MATRIX.md) §1 |
+| Bookkeeping | an association table or a scope fact (§2.2), and a sub-shape that only selects a shape. The per-entry report line (§3.2) is the only report output a membership entry reaches, and the fact the row records is the relation between that entry and the container that lists it, so the entry carries no value for it and the line names no field; a membership name that enters the edge record writes a row there through `reference_edges.py` rule 8 (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §2). The honesty rule for that line is in [`COVERAGE_MATRIX.md`](COVERAGE_MATRIX.md) §1 |
 | Nested block | lines written inside a parent resource block, not a resource of its own. The per-entry report line (§3.2) is the only output its entry reaches, so it names only the fields the print reads through the captured object. The honesty rule for that line is in [`COVERAGE_MATRIX.md`](COVERAGE_MATRIX.md) §1 |
 
 The per-entry report (§3.2) adds two kinds for a single entry, because a
@@ -812,8 +812,9 @@ Pinned by `tests/test_ownership.py`, including
 
 `main()` writes one row per reference pair, as `REFERENCE_EDGES.json` in the output directory. A pair
 cannot be a manifest field (§3.4 holds one row per unit) or an ownership row (§3.5 holds one row per
-entry), so it has its own file. The rules are in `reference_edges.py` and in
-[`CODEBASE_ASSEMBLY.md`](CODEBASE_ASSEMBLY.md) §5 and §6; this section states only the shape.
+entry), so it has its own file. The rules are in `reference_edges.py`, in [`CODEBASE_ASSEMBLY.md`](CODEBASE_ASSEMBLY.md) §5 and §6, and in
+[`TEMPLATE_STACK_DEPLOYMENT.md`](TEMPLATE_STACK_DEPLOYMENT.md) §2 for the membership name that enters the set;
+this section states only the shape.
 
 - **The row shape.** `referrer`, `target`, `type`, `entry`. `referrer` is the unit that uses the name,
   from the §4.3 record; `target` is the `owner` field of the §3.5 row for (`type`, `entry`); `type` is
@@ -1120,13 +1121,16 @@ also writes `read_through.tf` for a run that declares read-through scopes (§4.7
 `REFERENCE_EDGES.json` (§3.6), the site record `SITE_DATA.json` (§3.7), and the `.tfvars` written from
 the site record, `site.auto.tfvars`.
 `SANITY_REPORT.txt` and `SOURCE.txt` are written on every completed run, and the four report files
-above, `scope.tf` (§4.1), `read_through.tf`, `imports.tf`, and the four data files are written only
-when they have content. These files are the complete set a run writes.
+above, `scope.tf` (§4.1), `read_through.tf`, `imports.tf`, `actions.tf` (`CODEBASE_ASSEMBLY.md` §10),
+the four data files, and the rule data pair inside the unit directory its own rows name
+(`CODEBASE_ASSEMBLY.md` §14) are written only when they have content. These files are the complete set a
+run writes.
 
 The four data files are not report bodies, so no report names them or restates a row. `README.md` is the file
 inventory, so it names the site record and its printed form as files (F6.10.4, `CODEBASE_ASSEMBLY.md` §9 rule 9),
 and states no row, no value, no mapping result, no count, no path and no timestamp. The gate reads the
-`.tf` files for the block rules, and it reads the four data files for the data rule (F6.8), which reads
+`.tf` files for the block rules, and it reads the four data files and the rule data pair inside each unit directory for the data rule
+(F6.8, Epic 9 Phase 9D), which reads
 each row shape through the module that owns it, so no second shape rule appears. `site.auto.tfvars` is the
 printed form of the site record, so the data rule compares it with `site_data.render_tfvars` and does not
 count it as a data file. `imports.tf` is a `.tf` file, so the block rules read it (§4.6). Pinned by
@@ -2043,7 +2047,8 @@ is recorded in `backlog.md`.
 
 These are decided limits, not bugs: the rulebase is not emitted, security profile
 bodies are not parsed, EDL credentials are never written, a service emits one
-protocol leg, `location.template_stack` is never used, a template that
+protocol leg, `location.template_stack` is used only for the types `SCOPE_PLACEMENT` places inside a
+stack, a template that
 targets two devices keeps interface names as strings, a state scan compares only
 a property both sides name the same way (the parse key `tags` and the provider
 attribute `tag` are not compared), a state source is read only: it has no

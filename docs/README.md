@@ -10,9 +10,9 @@ that document instead of restating the rule.
 | [RESOURCE_MAPPING.md](RESOURCE_MAPPING.md) | The provider v2 decision for each type, with the reason |
 | [COVERAGE_MATRIX.md](COVERAGE_MATRIX.md) | Which XML element feeds which resource, and the test that proves it |
 | [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) | Plan and run a migration, for one device or several virtual routers |
-| [CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) | What a full codebase needs, and what the converter does not do yet. Design only, Epic 6 |
-| [API_CONVERSION_PATH.md](API_CONVERSION_PATH.md) | The second conversion path, which reads only API responses. Design only, Epic 8 |
-| [TEMPLATE_STACK_DEPLOYMENT.md](TEMPLATE_STACK_DEPLOYMENT.md) | The template and stack unit: which membership name enters the edge set, and what the codebase cannot apply yet. Design only, Epic 10 |
+| [CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) | What a full codebase needs and the rules behind the files the run writes. Design record for Epic 6; §3 to §11 and §14 landed |
+| [API_CONVERSION_PATH.md](API_CONVERSION_PATH.md) | The second conversion path, which reads only API responses. Design record for Epic 8, closed |
+| [TEMPLATE_STACK_DEPLOYMENT.md](TEMPLATE_STACK_DEPLOYMENT.md) | The template and stack unit: which membership name enters the edge set, and what the codebase cannot apply yet. Design record for Epic 10; piece 1 landed, pieces 2 and 3 open |
 | [DEVICE_GROUP_SPLITTING.md](DEVICE_GROUP_SPLITTING.md) | Split one export into one file per device group |
 | [ADVANCED-ROUTING-ENGINE-SUPPORT.md](ADVANCED-ROUTING-ENGINE-SUPPORT.md) | Logical routers, and the routing config the converter does not read |
 | [VPN_ROUTING_CONFIG_EXAMPLES.md](VPN_ROUTING_CONFIG_EXAMPLES.md) | The XML shapes the parser reads for VPN and routing |
@@ -40,11 +40,11 @@ that document instead of restating the rule.
 | Provider element per emitted type | `COVERAGE_MATRIX.md`, and `resource_mapping.COVERAGE_MATRIX` |
 | Migration workflow | `MIGRATION_GUIDE.md` |
 | Device group to template join | `DEVICE_GROUP_SPLITTING.md` |
-| Codebase unit, ownership, order between units, import blocks, scope objects, site data, commit action, the write path | `CODEBASE_ASSEMBLY.md` §3 to §11 and §14, and the modules `unit_manifest.py`, `ownership.py`, `reference_edges.py`, `import_blocks.py`, `site_data.py`, `commit_actions.py`, `write_path.py` |
+| Codebase unit, ownership, order between units, import blocks, scope objects, site data, commit action, the write path, the rule data pair | `CODEBASE_ASSEMBLY.md` §3 to §11 and §14, and the modules `unit_manifest.py`, `ownership.py`, `reference_edges.py`, `import_blocks.py`, `site_data.py`, `commit_actions.py`, `write_path.py`, `rule_data.py` |
 | Which membership name enters the edge set, and the plan order that name produces | `TEMPLATE_STACK_DEPLOYMENT.md` §2, `api_requests.LIST_JOIN` for the join between a membership list and the table its owner returns, and `reference_edges.py` for the pair and the order |
 | The credential rule, stated once | `CODEBASE_ASSEMBLY.md` §11 is the owner; `ARCHITECTURE.md` §3 links to it and keeps only what the fetch layer enforces, and `README.md`, `docs/USAGE_GUIDE.md` and `docs/MIGRATION_GUIDE.md` link to it |
 | Provenance record, the cache reference, and the prune action it gates | `ARCHITECTURE.md` §3.3, and `provenance.py`; the two file sets the record belongs to are `CODEBASE_ASSEMBLY.md` §14; the path 2 case, one record per request the run read, is `API_CONVERSION_PATH.md` §2.5 and `tests/test_provenance.py` |
-| Repository layout: the directories, the import rule, the flat test rule, and the three test sets | `ARCHITECTURE.md` §1.1, `AGENTS.md` (the tracking set), and the four readme indexes (`README.md`, this file, `../examples/README.md`, `../tools/README.md`) |
+| Repository layout: the directories, the import rule, the flat test rule, and the four test sets | `ARCHITECTURE.md` §1.1, `AGENTS.md` (the tracking set), and the four readme indexes (`README.md`, this file, `../examples/README.md`, `../tools/README.md`) |
 | The fixture assembler: its read rule, its merge rule, and the rule that the committed fixture is the record it does not write | `ARCHITECTURE.md` §1.1, `../tools/README.md`, and `tests/test_build_kitchen_sink.py` |
 | The second path: the committed response set, where it lives, and the rule that no test calls a network | `API_CONVERSION_PATH.md` §5, `ARCHITECTURE.md` §1.1 for the set, and `tests/test_api_requests.py`, `tests/test_source_fetch.py`, `tests/test_build_kitchen_sink.py`; the byte agreement between the two paths for content that holds no fact §4 names is `API_CONVERSION_PATH.md` §5 and `tests/test_api_path.py` |
 | The second path: the accepted request shapes, the scope index, and the response-to-request join | `API_CONVERSION_PATH.md` §2, `source_fetch.py` for the shapes, `container_coverage.SCOPE_PATH_ROOTS` for the one scope path definition, and `api_requests.py` for the index and the join |

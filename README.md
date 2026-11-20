@@ -226,8 +226,11 @@ a source. The other files are the unit set, and the run writes one directory per
   join on the unit directory
 - `REFERENCE_EDGES.json` - one row per reference pair, as data: the unit that uses a name another unit
   owns, the unit that owns it, the coverage matrix row, and the entry name
-  ([`src/reference_edges.py`](src/reference_edges.py)). Every run writes it when it has content, and the row
-  joins to the manifest on the unit directory and to the ownership record on (`type`, `entry`)
+  ([`src/reference_edges.py`](src/reference_edges.py)). A name enters the set when the reference rule cannot
+  resolve it inside the referrer's own unit, or when the membership entry rule places it outside the container
+  that names it ([`docs/TEMPLATE_STACK_DEPLOYMENT.md`](docs/TEMPLATE_STACK_DEPLOYMENT.md) §2). Every run writes
+  it when it has content, and the row joins to the manifest on the unit directory and to the ownership record on
+  (`type`, `entry`)
 - `SITE_DATA.json` - one row per site that names a value, as data: the unit directory and the variable
   names with their values ([`src/site_data.py`](src/site_data.py)). Every run writes it when it has content, and the
   row joins to the manifest on the unit directory. The values are the pairs the emitter recorded when it
@@ -243,6 +246,12 @@ a source. The other files are the unit set, and the run writes one directory per
   `target` is such a name, because the export states a device as a hostname, so no serial reaches the parse, and
   `hostname` is the same case, because the export states no host (§11). The operator supplies both values
   ([`docs/CODEBASE_ASSEMBLY.md`](docs/CODEBASE_ASSEMBLY.md) §9 rule 8)
+- `security_rules.json` and `security_rules.csv`, one pair per rule type for the four `*_policy_rules` types -
+  the rule as data, one row per rule in the shape `rule_data.RULE_ROW_FIELDS`. The `.json` is the data form, read
+  back by the gate through `rule_data.parse_rows`; the `.csv` is the printed form of the same rows, and the
+  printed form enters no count. One pair per rule type per unit, inside the unit directory the rows name, written
+  only when that unit has rows ([`src/rule_data.py`](src/rule_data.py),
+  [docs/CODEBASE_ASSEMBLY.md](docs/CODEBASE_ASSEMBLY.md) §14)
 - `scope.tf` - The scope objects the export declares: one `resource` block per scope entry for
   `panos_device_group`, `panos_device_group_parent`, `panos_template`, `panos_template_stack`,
   `panos_template_variable`, and `panos_vsys`, written by every run that has a scope entry, before the
@@ -310,8 +319,10 @@ manifest names, holding that unit's `.tf` files and the printed form of that uni
     tags.tf  custom_url_categories.tf  application_groups.tf  external_lists.tf
     zones.tf  interfaces.tf  virtual_routers.tf  filters.tf  monitor_profiles.tf
     security_profiles.tf  security_profile_groups.tf
+    certificates.tf  certificate_profiles.tf
     vpn.tf
     security_rules.tf  nat_rules.tf  decryption_rules.tf  pbf_rules.tf
+    security_rules.json  security_rules.csv   (the rule data pair, one pair per rule type that has rows)
     read_through.tf  imports.tf        (opt-in: --data-blocks, --import-blocks)
     actions.tf                         (the commit and push actions per unit, the last .tf file written)
     site.auto.tfvars                   (the printed form of that unit's site row)

@@ -42,7 +42,11 @@ the v2 attribute shapes that differ from the v1 output.
 | `panos_service` | `panos_service_object` | flat `protocol`+`destination_port` becomes `protocol = { tcp = { destination_port, source_port, override = { ... } } }`; the provider accepts **one** protocol leg, so a tcp+udp object emits tcp and reports udp |
 | `panos_service_group` | identity | `static` member list |
 
-### Policy rules (one resource per rule, chained per device group)
+### Policy rules (one iterated block per rule type per unit, chained per device group)
+
+The block reads the map that is the printed form of that unit's rule rows, and the same rows are written as
+the rule data pair, a `.json` and a `.csv` per rule type inside the unit directory the rows name
+(`docs/CODEBASE_ASSEMBLY.md` §14).
 
 | v2 type | Renamed from | v2 attribute notes |
 |---|---|---|

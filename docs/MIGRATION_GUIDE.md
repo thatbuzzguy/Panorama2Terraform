@@ -14,8 +14,9 @@ Real Terraform resources for:
 
 - Address objects and groups, service objects and groups, tags, application
   groups, custom URL categories, external dynamic lists
-- Security, NAT, decryption and policy-based forwarding rules, one resource per
-  rule, in XML order
+- Security, NAT, decryption and policy-based forwarding rules, one iterated block per rule type
+  per unit, reading that unit's rule rows; the order inside a chain is the XML order. The same rows
+  are written as the rule data pair inside the unit directory (`docs/CODEBASE_ASSEMBLY.md` §14)
 - Security profile groups
 - Zones, interfaces (physical, subinterface, VLAN, loopback, tunnel, aggregate),
   virtual routers, logical routers, static routes, PBF path monitoring profiles

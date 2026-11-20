@@ -89,7 +89,7 @@ Each row is a dict with exactly eight fields:
 | `xml_name` | The `<entry name=...>` in the row's fixture that feeds the resource. |
 | `emitted_name` | The `name` attribute the emitted resource must carry. Equals `xml_name` except where the converter derives a name: the `.0` layer-3 subinterface is emitted as `ethernet1/1.0` from the `ethernet1/1` entry. For `panos_device_group_parent` the provider declares no `name`, so the value is the entry name carried by the field `entry_coverage.name_field` states. |
 | `fixture` | The XML fixture under `tests/fixtures/` whose pipeline run exercises the row. |
-| `output_file` | The `.tf` file name that must contain the resource block. The run writes it inside the unit directory the manifest row names (§14), so a test reads the parts that name it, keyed by the path from the output directory. |
+| `output_file` | The `.tf` file name that must contain the resource block. The run writes it inside the unit directory the manifest row names (§14), so a test reads the parts that name it, keyed by the path from the output directory. For the four `*_policy_rules` rows the same stem names the rule data pair through `rule_data.data_file` and `rule_data.printed_file` (Epic 9, Phase 9D). |
 | `emitter` | The `TerraformGenerator` method names that read this row's properties. Usually one method. Two names appear when a report writer reads a property the `.tf` emitter does not, which is the case for `panos_address`: the manual setup report prints a report-only address row from the same parsed object. |
 | `properties` | The keys of the parsed object that the row's emitters read. The entry name and the five scope facts are not properties: they are the row identity (§2.2 of [`ARCHITECTURE.md`](ARCHITECTURE.md)), so they are not listed here. |
 
@@ -175,7 +175,9 @@ row where noted:
    `resource "<type>"` block in `output_file` whose body carries
    `name = "<emitted_name>"`. This proves the full parse + generate
    path maps the element to the provider resource, not the parser in
-   isolation.
+   isolation. The four `*_policy_rules` rows are the exception the pin states: the output holds one
+   iterated block with no `name = ` field of its own, so the pin reads the block name through
+   `rule_data.locals_name` and the entry name through `entry_coverage.name_field`.
 4. **Row shape (per row).** A row holds the eight fields of the Row schema, the
    emitter names are real `TerraformGenerator` methods, and `properties` is a
    non-empty tuple of names

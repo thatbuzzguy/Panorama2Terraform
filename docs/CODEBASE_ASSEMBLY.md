@@ -1,19 +1,21 @@
 # Codebase Assembly (design record)
 
-This is the design record for Epic 6 (`PLAN.md`). It states what a full Terraform
-codebase needs and what the converter does not do yet. F6.1 to F6.8 are implemented, so
-their sections name the module and the test that holds them. The rest of this document is
-not implemented, so no test pins it, except the outputs rule decision (§5 rule 5, F6.9),
-which names the test that holds its negative half. Every statement about the converter
-names the module or the test that holds it. Provider facts come from the pinned provider
-(2.0.14) and are listed in §12.
+This is the design record for the codebase output (Epic 6). It states what a full Terraform
+codebase needs and the rules behind the files the run writes. Every rule it states is landed,
+so every section names the module and the test that holds it, including the rule data pair and
+the iterated rule block (Epic 9, Phase 9D). The parts that stay open are the zero-change plan
+half of §7, which no test can pin because a plan needs a device, and Epic 10 pieces E10.2 and
+E10.3. Every statement about the converter names the module or the test that holds it.
+Provider facts come from the pinned provider (2.0.14) and are listed in §12.
 
 ## 1. What a codebase is
 
 The converter writes one output directory per run: the `.tf` files, which include the
 import file `imports.tf` for a run that declares it (§7), the five report files,
 `README.md`, `SOURCE.txt`, the unit manifest `CODEBASE_MANIFEST.json` (§3), the ownership
-record `OWNERSHIP.json` (§4), and the edge record `REFERENCE_EDGES.json` (§5). F6.10.1 decided the shape
+record `OWNERSHIP.json` (§4), the edge record `REFERENCE_EDGES.json` (§5), the site record
+`SITE_DATA.json` (§9), the commit action file `actions.tf` (§10), and the rule data pair, one
+`.json` and one `.csv` per rule type that has rows (§14). F6.10.1 decided the shape
 those files take, and F6.10.3 landed it: the codebase root set is one file per run at the output directory
 root, and the unit set is written inside one directory per unit the manifest names. §14 states the two sets.
 A codebase is a set of directories that a platform plans and applies, one plan per
@@ -57,8 +59,8 @@ These parts are true today, so a codebase can be built on them.
 | The import block | The address that binds a written block to the object the live config already has, from the same identity data the resource block uses (§7) | `import_blocks.py`, §7 |
 | The scope object | The unit as a block in the run, so a new site is created by an apply and a name inside a location can be checked against the run (§8) | `resource_mapping.py`, §8 |
 
-§3 to §11 are landed, and §11 is the owner document for the credential rule. The open work is the write path's
-remaining facts, in §14.
+§3 to §11 are landed, and §11 is the owner document for the credential rule. The open work is Epic 10
+pieces E10.2 and E10.3, recorded in `PLAN.md`.
 
 ## 3. The unit boundary as data (F6.1, landed)
 
@@ -118,7 +120,7 @@ codes are unchanged by the record shape. Pinned by `tests/test_unit_manifest.py`
 `::test_the_gate_reads_the_manifest_through_unit_manifest`, and `::test_two_runs_write_the_same_bytes`.
 
 The decision this section asked for is settled: the manifest is a data file, not a section of
-the conversion report. §4 is landed; the edge list (§5) follows. F6.10.5 settled the second
+the conversion report. §4 is landed, and the edge list (§5) is landed with it. F6.10.5 settled the second
 decision: the stack entry names its own unit, so `template_stack` is one of the five facts. The
 field order, the identity join, and the level order all read the fact order, so the stack is a
 level in the order chain as well (`reference_edges.LEVEL_KEYS`).
@@ -179,14 +181,13 @@ Pinned by `tests/test_ownership.py`, including
 `::test_the_findings_are_grouped_by_the_f3_9_scope_rule`, and
 `::test_a_finding_does_not_change_the_exit_code_and_the_console_prints_no_line`.
 
-The decision this section asked for is settled, and the extraction gap it named is closed: the seven rows whose
+The decision this section asked for is settled, and the extraction gap it named is closed: the nine rows whose
 entries can carry the flag now name the property, so the record states the flag as the parse read it for every
 entry such a row covers. One helper states the print shape for the nine rows
 (`tests/test_ownership.py::test_the_seven_emitters_print_the_flag`, and the shape rule in
 `docs/COVERAGE_MATRIX.md`). Pins: `tests/test_ownership.py::test_the_service_row_names_the_property_the_emitter_reads`
 and `::test_a_group_row_states_the_flag_as_the_parse_read_it`; the row set against the provider is
-`tests/test_resource_mapping.py::test_the_flag_rows_are_the_types_the_provider_declares_it_for`. The edge list
-(§5) is the next gap, and it now has the owner fact to build on.
+`tests/test_resource_mapping.py::test_the_flag_rows_are_the_types_the_provider_declares_it_for`.
 
 ## 5. The reference between units as data (F6.3, landed), and the outputs rule (F6.9, decided)
 
@@ -384,16 +385,17 @@ Pinned by `tests/test_import_blocks.py`, including `::test_the_id_round_trips`,
 `::test_the_module_defines_no_location_rule_and_no_naming_rule`,
 `::test_two_runs_write_the_same_bytes`, and `::test_a_run_that_declares_no_import_blocks_writes_the_golden_bytes`.
 
-Two halves of this section stay open:
+One half of this section stays open:
 
 - **The zero-change plan.** The first plan for a unit should read `N to import, 0 to add, 0 to change,
   0 to destroy`. That holds only for entries the parse models. The per-entry report
   (`ARCHITECTURE.md` §3.2) names the entries that cannot reach zero change, the property gaps in
   `backlog.md` are the list of what can make a plan show a change, and the state scan (F5.6) is the
   offline check for this half. No test pins the plan itself, because a plan needs a device.
-- **The per-unit file, and the label.** The write path (§14) writes one `imports.tf` per unit, so the file
-  holds that unit's blocks and names its unit only by its directory. The generated `README.md` names the file,
-  the site record and its printed form (`docs/CODEBASE_ASSEMBLY.md` §9 rule 9).
+
+The other half landed: the write path (§14) writes one `imports.tf` per unit, so the file
+holds that unit's blocks and names its unit only by its directory. The generated `README.md` names the file,
+the site record and its printed form (`docs/CODEBASE_ASSEMBLY.md` §9 rule 9).
 
 ## 8. The scope objects as data (F6.5, landed)
 
@@ -410,7 +412,7 @@ are in `resource_mapping.py`, and `main()` calls the emitter for every run.
    the scope object before the config inside it, which an optional extra cannot do. No flag names the
    shape, so no new argument error path appears.
 2. **One file for the run, written first.** `scope.tf` follows the `imports.tf` (§7) and
-   `read_through.tf` (§4.7) precedent, because the per-unit write path (§14) is still open. `main()`
+   `read_through.tf` (§4.7) precedent, and the write path (§14) landed it as a per-unit file. `main()`
    writes it after `provider.tf` and before the object files; `variables.tf` is written after the
    emitters, because F6.6 made the declaration set the values the run consumed (§9 rule 5). Inside the file,
    blocks print in the F3.9 level order `SCOPE_LEVEL_ORDER` states — device group, parent record,
@@ -760,31 +762,13 @@ Cloud, GitHub) is the platform, and the platform is not this repository's job. T
 project already holds: standard library only, no network in a test, no credential in a generated file, and
 a run with no network passes CI.
 
-## 14. What it would take, in order
+## 14. The two file sets (F6.10.3, landed)
 
-1. F5.5, because the reference mechanism decides itself: the data block is the first
-   mechanism a codebase can use, and the gate rule for a `data` block is the gate rule
-   the codebase needs.
-2. The unit manifest (§3), because ownership, edges, and import blocks all need the unit.
-   No new parse data is needed. Landed as F6.1.
-3. The ownership assignment (§4), after the override decision. Landed as F6.2.
-4. The reference edge list (§5) and the unit order (§6), because both need the unit and the owner.
-   Landed as F6.3. The outputs rule for a name another unit owns is decided (§5 rule 5, F6.9), so the
-   write path has no open decision.
-5. The import blocks (§7), because they need the unit, the owner, and the local name. The
-   single-unit case does not need the ownership rule. The rule types need the rulebase decision.
-   Landed as F6.4.
-6. The scope objects (§8). Landed as F6.5.
-7. The site data layer (§9). Landed as F6.6, and the `target` name landed as F6.10.4: the run names the variable
-   and holds no value for it, because the export states a device as a hostname.
-8. The commit action (§10), last, because it needs the gate rule for an action block and
-   the Terraform minimum decision. Landed as F6.7, and the push half landed as F6.10.4: the block states the
-   fact and the fact key and no `devices`, because the tool names no serial.
-9. The write path, the step that splits the output per unit directory. It applies the rule decided in
-   §5 rule 5 at the print site, with the LF rule. Landed as F6.10.3: `write_path.py` is the one place a run
-   writes a file, and `unit_path` and `root_path` are the two builders, one per set. The LF rule is stated in
-   `docs/ARCHITECTURE.md` §6, so this section does not restate it. What stays open is the template stack unit and
-   the module parameter rule (F6.10.5), and the held decisions the tracking markdown names.
+The order this section planned is complete, so the steps are removed here and the git history holds
+them; what the section keeps is the shape rule it decided. `write_path.py` is the one place a run writes
+a file, and `unit_path` and `root_path` are the two builders, one per set. The LF rule is stated in
+`docs/ARCHITECTURE.md` §6, so this section does not restate it. What stays open is Epic 10 pieces E10.2
+and E10.3, recorded in `PLAN.md`.
 
    **The unit set** is the files one plan reads, so one directory holds them: the `.tf` files for that unit,
    and the printed form of that unit's site row (§9 rule 4). A run that names one unit writes one directory: the

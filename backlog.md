@@ -9,19 +9,16 @@ Completed work is not recorded here; the git history and the owner document hold
   no matrix row: only an `emitted` container can name the properties an emitter reads.
   The scan scope rule pins this in
   `tests/test_property_coverage.py::test_scan_scope_is_the_entries_a_matrix_row_covers`.
-  The rule now exists for each shape, in `docs/COVERAGE_MATRIX.md` §1: `report`, which closed the application
-  filter, the schedule, and the application override gaps; `count-only`, which closed the regions `addresses`
-  gap; `nested-block`, which closed the `parent` gap on `tests/fixtures/interfaces_ethernet.xml`; and
-  `bookkeeping`, which closed the `devices` and `templates` fields, because the fact those rows record is the
-  relation between an entry and the container that lists it, so the membership entry carries no value for it and
-  its entry line names no field. Measured 2026-11-04 no container outside the scan scope has a captured field no
-  output read, so no field gap is recorded here.
+  The rule exists for each shape, in `docs/COVERAGE_MATRIX.md` §1: `report`, `count-only`,
+  `nested-block`, and `bookkeeping`. A `bookkeeping` row states the row identity only, because the
+  fact it records is the relation between an entry and the container that lists it, so the
+  membership entry carries no value for it and its entry line names no field. Measured 2026-11-04
+  no container outside the scan scope has a captured field no output read, so no field gap is
+  recorded here.
 
-- Parser extraction gaps found by the parse unit tests: none. Each gap was a parse method that dropped data, and
-  each was fixed when a report confirmed it in a fixture. What stays open is the fact a report cannot state, not
-  a gap: no certificate type declares a `profile-name` attribute, so the per-entry report has no profile-name
-  fact for the certificate container, and no pin holds one — the pin the audit named cannot be written from the
-  schema.
+- The fact a report cannot state: no certificate type declares a `profile-name` attribute, so the
+  per-entry report has no profile-name fact for the certificate container, and no pin holds one —
+  the pin the audit named cannot be written from the schema.
 
 - Service objects with both tcp and udp legs cannot be emitted whole. The v2
   `panos_service` schema declares `protocol.tcp` and `protocol.udp`, but the
@@ -238,8 +235,9 @@ here with that rule named.
   `DATA_SOURCE_SCHEMA` is data the gate can read (F5.5). A `resource` shape stays inside
   `LOCATION_SCHEMA`, which is the generator's subset, until the emitted shape becomes data the gate
   can read for both kinds.
-- The placeholder check lists the VPN pre-shared key only. When F4.3 adds per-entry accounting, the
-  expected placeholders should come from the same table that decides the report entries.
+- The placeholder check lists the expected placeholder through `EXPECTED_PLACEHOLDERS`, which is
+  `resource_mapping.PLACEHOLDER_TEXT`, the same table that names the sensitive fields, so one table decides both
+  the shape and the report line. The measured marker is the VPN pre-shared key.
 - A value the provider constrains in its code, not in the schema JSON, is a fact the tool cannot read offline, so no
   table states it. Measured 2026-11-04 against provider 2.0.14: `panos_administrative_tag` accepts one value for
   `disable_override`, while the pinned schema states no value list for the field. The rule that decides how the gate
@@ -528,8 +526,8 @@ here with that rule named.
   `tests/test_robustness.py::test_a_parsed_secret_never_reaches_a_generated_file`.
 - A FIPS-mode export carries no private key and no recoverable password hash, so the value cannot come
   from the source. The tool names the variable; the operator or the platform supplies the value. The
-  placeholder check should read the same table that names the sensitive fields, so one table decides
-  both the shape and the report line.
+  placeholder check reads the same table that names the sensitive fields, which is the decision recorded in
+  the coverage and gate section above.
 - Decided 2026-10-31 (F7.1): a reference-only name records no value, so the site row skips it
   (`site_data.build_rows` filters the names with no value) and the run writes no `.tfvars` line for it.
   The declaration is written by the generator with `sensitive = true` and no value, so the operator
@@ -614,53 +612,6 @@ restated here; they are in the record and the git history. Only the open items a
 - Reports are per run. A codebase-level view (the units, the entries each owns, the managed boundary)
   is not built.
 
-## Codebase audit findings (measured 2026-11-11)
-
-The six findings this audit recorded here were closed by `to-do.md` Piece 10 on 2026-11-18: the committed
-response inside the corpus, the response-set rule read as a content property of each file, the provider-schema
-pins running inside the CI gate, the skip that reports a failed `terraform init` as a pass, the five pin groups
-that restate an owner table as a measured count, and the two `.github/` contribution templates named by the root
-index. Each decision, each pin, and the gate measurement are in `acceptance.md`. Counts that have no derivation
-are kept as measurements in the pin's docstring, which is where the rule says a measurement lives. Nothing from
-this section stays open.
-
-## Codebase audit findings (measured 2026-11-12)
-
-The audit read the parse set, the emitter set, and `src/split_device_groups.py` against the rule owners
-(`entry_coverage.py`, `write_path.py`, `naming.py`, `resource_mapping.py`, `unit_manifest.py`,
-`sanity_checks.py`). Each finding below was measured on a probe run or by a direct read. Nothing was changed
-by the audit. The report is the chat response; only the actionable findings are here. Probe inputs and outputs
-are in `/tmp/opencode/` and are not part of the tree.
-
-### Parse set
-
-The five findings this audit recorded were closed by `to-do.md` Piece 4 on 2026-11-13 (`parse_interfaces`, the
-scan's blind side, the name guards, `parse_schedules`, and `_parse_router`), and the last open part was closed by
-`to-do.md` Piece 22 on 2026-11-20: the entry line reports a `number` text the signed-integer rule cannot read,
-through the fact `entry_coverage.NUMBER_TEXT_NOT_READ` holds on the object the ledger marks, and the field itself
-keeps the no-value answer, so the block prints nothing for it and the gate sees no field to check. The decision,
-the pins and the measurement are in `docs/ARCHITECTURE.md` §4.9 rule 11, §3.2 rule 7 and §4.6, and in
-`acceptance.md`. Nothing from this section stays open.
-
-
-### Naming and printing
-
-The findings this audit recorded here were closed by `to-do.md` Piece 5 on 2026-11-15: the second digest, the
-second statement of `UNNAMED`, the name collision, the order rule split and the order contradiction, the
-control-character rule, the whitespace rule, `UnitText.add_once`, and the placeholder value. Each decision,
-each pin, and the gate measurement are in `acceptance.md`. Nothing from this section stays open.
-
-### `src/split_device_groups.py`
-
-The six findings this audit recorded here were closed by `to-do.md` Piece 6 on 2026-11-15: the writer, the file
-name and its collision decision, the name-keyed tables, the shared-section merge, the dead branch, and the
-refusal kinds. Each decision, each pin, and the gate measurement are in `acceptance.md`. The last open part was
-closed by the measurement `docs/LICENSING.md` records at commit `ac7609e`, confirmed by `to-do.md` Piece 23 on
-2026-11-20. Nothing from this section stays open.
-
-### Error rule
-
-The finding this audit recorded here was closed by `to-do.md` Piece 6 on 2026-11-15: `is_refusal` names the two
-input-layer exceptions, and a plain `ValueError` keeps the shape `failed()` states. The decision, the pin, and the
-gate measurement are in `acceptance.md`. Nothing from this section stays open.
+The codebase audits measured 2026-11-11 and 2026-11-12 are closed. The git history holds the findings, the
+decisions, and the measurements. Nothing from those audits stays open.
 
