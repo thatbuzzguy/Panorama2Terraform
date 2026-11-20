@@ -4,6 +4,21 @@ The tracking markdown for the completed pieces is removed here; the git history 
 documents hold it. Epic 9 (rules as data, one iterated object per rule type) closed 2026-11-19 with
 Piece 21, in commit `fd72c09`.
 
+## Epic 10 — template and stack deployment
+
+Piece 24 (E10.1, the membership names that enter the edge set) is complete, committed 2026-11-20. The rule and the
+measurement are in `docs/TEMPLATE_STACK_DEPLOYMENT.md` §2 and `acceptance.md`.
+
+The pieces that stay open, in the order `PLAN.md` Epic 10 states them:
+
+1. Piece E10.2 — the scope a template or a stack entry is declared inside, read through
+   `resource_mapping.SCOPE_PLACEMENT`, which states a location sub-block for `panos_template_variable` and
+   `panos_vsys` and an empty set for the six scope rows. The decision is what the read answers for a template entry
+   and a stack entry, and whether the manifest row needs a field for it.
+2. Piece E10.3 — a new site instantiated from an existing template: what the tool can state for a template entry the
+   export declares and a device the export does not name. What needs the device the operator adds stays in
+   `backlog.md`.
+
 ## Feature-sized items that stay blocked
 
 Feature-sized items that stay blocked on a fact the tool cannot read offline are recorded in

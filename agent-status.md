@@ -2,38 +2,33 @@
 
 ## Current position
 
-Piece 23 (2026-11-20) closed the last open item in the 2026-11-12 audit's `src/split_device_groups.py` set in
-`backlog.md`: a stale tracking entry that said `docs/LICENSING.md` still states 130 lines for
-`src/split_device_groups.py` and calls it "the upstream, unchanged". The measurement says the entry no longer
-holds. `docs/LICENSING.md` measures the split at commit `ac7609e` (2026-11-16) through
-`git blame --line-porcelain`, counted by author, states 68 upstream lines for that file in the inherited set, and
-states the notice as "GSW Systems, 2025, for the lines it wrote: 68 of 383". Re-read at that commit: `git blame
-ac7609e --line-porcelain -- src/split_device_groups.py` answers 68 lines for `devnullNZ`, and `git show
-ac7609e:src/split_device_groups.py` answers 383 lines, so both numbers the document states agree with the
-measurement. The document also states that neither GSW Systems file is upstream whole, so the notice covers the
-lines the header names and not the file, and that a notice saying "the upstream, unchanged" would claim more than
-the measurement supports — which is the rule `tools/check_documents.py` reads for each notice row. The tool reads
-each notice's file total at the commit the document names, not from the working tree, so a later edit to the file
-cannot move a number the document states, and it reports no finding. The working tree measures 384 lines for the
-file, 60 of them upstream, which is not the set the tool reads, so nothing contradicts the document. Decision: the
-finding is already closed by the measurement, so the entry is removed from `backlog.md` and the fact is stated
-nowhere else; no document needed fixing. The measurement is in `acceptance.md`.
+Piece 24 (E10.1, 2026-11-20), Epic 10 piece 1, is complete at this commit: the membership names that enter the
+edge set, so the order rule ranks a stack unit after the template units its membership lists. What landed: the
+entry rule is `src/reference_edges.py` rule 8 — a membership name enters the edge set when the join container that
+defines its entries is not the container that names it — read through `api_requests.LIST_JOIN`,
+`api_requests.membership_lists`, `entry_coverage.REPORT_SCOPE_KEYS` and `resource_mapping.SCOPE_ANSWER`, with the
+four tables taken as an argument to `build_rows` and the join kept as the F6.2 rule. The level basis states nothing
+for that pair, because `SCOPE_PLACEMENT` declares no location sub-block for `panos_template_stack`, so `LEVEL_KEYS`
+does not move: measured across the corpus, no manifest row carries both the `template` and the `template_stack`
+fact. The rule is in `docs/TEMPLATE_STACK_DEPLOYMENT.md` §2, and the tracking is `PLAN.md` Epic 10 and `to-do.md`.
 
 The gate, measured 2026-11-20 on the final tree, single-threaded: `ruff check .` clean at `py310`,
-`ruff format --check .` clean on the 103 Python files, `python3 tools/check_documents.py` reports no finding, and
-`python3 -m pytest` passes 1,717 pins with the same 4 skip for the missing `tflint` binary — 1,721 pins in 53 test
-modules, as Piece 22 left them, in 5m40s (309.24s). The pin count did not move: this piece adds, removes and
-weakens no pin, and no test reads `docs/LICENSING.md`, so the check is the tool.
+`ruff format --check .` clean on the 104 Python files, `python3 tools/check_documents.py` reports no finding, and
+`python3 -m pytest` passes 1,722 pins with the same 4 skip for the missing `tflint` binary — 1,726 pins in 53 test
+modules, against 1,721 before the piece, in 453.62 s. The piece adds 5 pins, all in `tests/test_reference_edges.py`
+(33 to 38), and retargets three pins in the same module: `CORPUS_EDGES` and its count, the import-set pin, and
+`test_the_shallower_scope_comes_before_the_deeper_scope_inside_it`. No pin was weakened. The piece writes no `.tf`
+byte, so no golden, fixture, response or tflint file moves, and the report counts and the cross-check counts are
+unchanged, because the membership entry keeps its `bookkeeping` destination and the cross-check counts only
+`emitted` entries.
 
-The next work is what `backlog.md` holds and the tool cannot read offline: the rulebase value string and the rule
-position from a live target (F3.5), which also gate the `rulebase` row column and the import block for a rule
-entry; a config entry inside a stack needs a provider location shape; the EDL `certificate_profile` field needs a
-rule that makes the EDL site resolve names; the per-entry report `profile_name` column needs a value the provider
-does not declare; and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4 need a live target. Piece 23 closed
-the last entry in `backlog.md` the tool could act on offline, so what stays open is only the items above, and
-`to-do.md` holds no piece. `PLAN.md` keeps
-Epic 8 open for the live facts its Phase 8D gates on, and Epic 9 is closed, so there is no piece to run until one of
-those facts arrives or a new requirement is recorded.
+The next work is Epic 10 pieces 2 and 3, recorded in `to-do.md` and `docs/TEMPLATE_STACK_DEPLOYMENT.md` §3 and §4,
+and the items `backlog.md` holds that the tool cannot read offline: the rulebase value string and the rule position
+from a live target (F3.5), which also gate the `rulebase` row column and the import block for a rule entry; a config
+entry inside a stack needs a provider location shape; the EDL `certificate_profile` field needs a rule that makes the
+EDL site resolve names; the per-entry report `profile_name` column needs a value the provider does not declare; and
+the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4 need a live target. Piece 23 closed the last `backlog.md`
+entry the tool could act on offline, so what stays open is the live facts and Epic 10's two open decisions.
 
 Epic 8 (the second path) is complete with piece F8.10, and Piece 8 closed the finding F8.10 left open. The rules
 it landed are in `docs/API_CONVERSION_PATH.md`, the modules are `src/api_requests.py` and `src/api_to_terraform.py`,

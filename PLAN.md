@@ -143,6 +143,32 @@ unit, every column reads a captured field, the gate reads the rows and the block
 whole with all 87 `.tf` files equal to the bytes a run wrote, and a pin shows the apply order equals the XML order
 through the key order across the corpus.
 
+## Epic 10 — template and stack deployment (Goal 6) — open
+
+A template unit and a stack unit write one scope object each, but the codebase cannot be applied to a device until
+the plan order puts the template units before the stack unit that lists them, and until the tool can state a site
+the export does not name. The design record is `docs/TEMPLATE_STACK_DEPLOYMENT.md`, and every rule it states names
+the module that holds it and the test that pins it.
+
+The feature space accepted, in the order the pieces take it:
+
+1. **Piece E10.1, landed 2026-11-20.** The membership names enter the edge set as recorded uses, so the order rule
+   can rank a stack unit after the template units it lists. The entry rule is that a membership name enters when the
+   container that names it cannot place that name inside itself; the join is the F6.2 rule and the direction is the
+   order rule's, so no module states a second basis. `reference_edges.py` takes the four tables as an argument and
+   defines no reader of them. The rule is in `docs/TEMPLATE_STACK_DEPLOYMENT.md` §2, read through
+   `api_requests.LIST_JOIN`, `entry_coverage.REPORT_SCOPE_KEYS`, `resource_mapping.SCOPE_ANSWER` and
+   `unit_manifest.py`.
+2. **Piece E10.2, open.** The scope a template entry and a stack entry is declared inside, read through the placement
+   fact the parse records, extended from the device group's parent entry. The decision is what the read answers for
+   those two entries and whether the manifest row needs a field for it.
+3. **Piece E10.3, open.** A new site instantiated from an existing template: what the tool can state for a template
+   entry the export declares and a device the export does not name.
+
+Definition of done for the epic: the order rule ranks a stack unit after each template unit its membership names,
+the pins read that order as data, and the codebase states the site a new template needs. A fact only a live target
+states — the device the operator adds, and the device serial a push target names — stays in `backlog.md`.
+
 ## Sequencing
 
 The rule that keeps a container outside the scan scope honest is in `docs/COVERAGE_MATRIX.md` §1: the output that
