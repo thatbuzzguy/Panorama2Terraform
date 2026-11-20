@@ -628,16 +628,12 @@ are in `/tmp/opencode/` and are not part of the tree.
 ### Parse set
 
 The five findings this audit recorded were closed by `to-do.md` Piece 4 on 2026-11-13 (`parse_interfaces`, the
-scan's blind side, the name guards, `parse_schedules`, and `_parse_router`), and the criteria and the measurement
-are in `acceptance.md`. One part of the last finding stays open:
-
-- `_protocol_field`: a `number` text the value rule cannot read keeps no value, so the field prints nothing and
-  the gate sees no field to check. F2.9's mechanism for an unreadable value is a `# NOTE:` line inside the block,
-  but the protocol emitter prints dict keys, so a note cannot be a key, and `mark` records detail per entry while
-  `_protocol_field` returns only a value. The signed-integer reading is pinned
-  (`tests/test_protocol_object.py::test_value_shape_is_the_reader_inverse_for_every_shape_word`), so what stays
-  open is the report for a text the rule cannot read. Fix: state which output reports an unreadable number, or
-  refuse the value at the input layer. Owner: `_protocol_field`.
+scan's blind side, the name guards, `parse_schedules`, and `_parse_router`), and the last open part was closed by
+`to-do.md` Piece 22 on 2026-11-20: the entry line reports a `number` text the signed-integer rule cannot read,
+through the fact `entry_coverage.NUMBER_TEXT_NOT_READ` holds on the object the ledger marks, and the field itself
+keeps the no-value answer, so the block prints nothing for it and the gate sees no field to check. The decision,
+the pins and the measurement are in `docs/ARCHITECTURE.md` §4.9 rule 11, §3.2 rule 7 and §4.6, and in
+`acceptance.md`. Nothing from this section stays open.
 
 
 ### Naming and printing

@@ -2,41 +2,46 @@
 
 ## Current position
 
-Epic 9 (rules as data, one iterated object per rule type) is complete with Piece 21, the piece that re-measured
-the golden set and the pins that name the printed rule output as they now read with the rule data pair, the
-iterated block, and the retargeted F2.5 key-order rule. Piece 21 changed no generator code and no golden byte: the
-87 golden `.tf` files, read as the four cases `tests/test_golden_files.py` holds, all equal the bytes a run wrote,
-so the set stayed as it read. What moved is one measurement and one pin, in commit `fd72c09`.
+Piece 22 (2026-11-20) closed the last open part of the 2026-11-12 audit's parse set in `backlog.md`: a `number`
+text the signed-integer rule cannot read. The decision is that the entry line reports it. The reason is that no
+rule that reads a shape table can carry a fact the printed file holds nothing for, so the gate cannot report it,
+and the input layer reads no shape table, so it cannot know which element is a `number` field; refusing the value
+there was the other option and was not taken, because a refusal moves the exit code to 1 and writes no file for
+one field, and no committed fixture trips the rule, so it would change no CI output but move the exit code. The
+print path has no carrier either: F2.9's `# NOTE:` mechanism prints dict keys, so a note cannot be a key, and
+`mark`'s `reason` decides the destination and whether the entry line prints at all.
 
-The measurement that no longer held is the resource-line pattern comment in `tests/conftest.py`, which stated 414
-matches and 262 distinct addresses as measured on 2026-11-13; the tree answers 387 matches, 42 distinct types and
-238 distinct addresses, because the four `*_policy_rules` types print one iterated block per rule type per unit
-instead of one block per rule, so the comment now states the numbers the current tree answers. Every other number
-that names a printed rule set already held, so those pins were re-measured and left as they read: the report counts
-for the sample run (14 `.tf` files, 4 data files, 17 resources) and the kitchen-sink run (61, 8, 64), the round-trip
-cross-check's 19 facts on 8 fixtures with 3 + 15 + 1 by category and no fact naming a rule row, and
-`check_data_files` and `check_rule_blocks` reporting nothing across the corpus.
+What landed: `_protocol_field` keeps the no-value answer for the text it cannot read and states the fact for the
+fact set the caller holds for the entry; the fact set lives on the dict `_protocol_level` builds for the entry
+level, which is the object the ledger marks, and the entry level owns it and shares it down the levels inside it;
+`row_for` prints it as the entry line's detail through `recorded_fact`, read through `RecordingDict.value()`, so
+printing a fact records no property use, and the fact key `entry_coverage.NUMBER_TEXT_NOT_READ` is in
+`NON_FIELD_KEYS` because a fact is not a field. A fact read for an entry inside a config-object entry prints on
+the row that counts that entry, with the name it is counted under, because such an entry has no line of its own.
+The decision is in `docs/ARCHITECTURE.md` §4.9 rule 11, the entry-line half in §3.2 rule 7, the exit-code
+boundary in §4.6, and the index row in `docs/README.md`.
 
-The pin that shows the apply order equals the XML order through the key order held for one fixture and two golden
-parts, so Piece 21 added the corpus half, which is the F2.5 definition of done:
-`tests/test_policy_order.py::test_the_key_order_is_the_xml_order_across_the_corpus` reads the 66 accepted fixtures
-through the pipeline and compares the printed entry order with the order the parse listed the rules for that unit.
-Measured: 18 blocks over 9 fixtures, 37 rows and 37 map entries, no unit holds more than one chain for a rule
-type, and every block prints its entries in the order the export lists them. The rule type, the file name and the
-key rule are read through the tables that own them, so the pin states none of its own. `docs/ARCHITECTURE.md` §4.4
-and the README resource table named the emitted rule shape as one block per rule with a per-instance pivot and
-`depends_on`, which is the shape the iterated block replaced, so both now state the key order as the apply order.
+Pins: `tests/test_parse_helpers.py::test_the_number_rule_answers_for_the_text_it_can_read_and_the_text_it_cannot`
+for the three answers the reading rule gives, and
+`tests/test_entry_coverage.py::test_the_entry_line_prints_the_fact_the_number_rule_cannot_read` for the entry line
+through the pipeline, which covers both shapes it can hold: the fact stated for a field at an entry's own level,
+and the fact stated for an entry inside a config-object entry. The unread text, the field and the fact wording are
+in `tests/conftest.py` because two modules read them. Measured: the corpus answers 144 `number` field reads across
+the 66 accepted fixtures — 79 integers, 65 absent, no present-but-unreadable text — so no golden file and no
+report golden moved; the planted run answers no property finding and no gate finding and the exit code stays 0.
 
-The gate, measured 2026-11-19 on the final tree: `ruff check .` clean at `py310`, `ruff format --check .` clean on
-the 103 Python files, `python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` passes 1,715
-pins with the same 4 skip for the missing `tflint` binary — 1,719 pins in 53 test modules against 1,718 before the
-piece, with `tests/test_policy_order.py` reading 9 pins against 8.
+The gate, measured 2026-11-20 on the final tree, single-threaded: `ruff check .` clean at `py310`,
+`ruff format --check .` clean on the 103 Python files, `python3 tools/check_documents.py` reports no finding, and
+`python3 -m pytest` passes 1,717 pins with the same 4 skip for the missing `tflint` binary — 1,721 pins in 53 test
+modules against 1,719 before the piece, in 5m40s, with `tests/test_parse_helpers.py` reading 7 pins against 6 and
+`tests/test_entry_coverage.py` reading 33 pins against 32.
 
 The next work is what `backlog.md` holds and the tool cannot read offline: the rulebase value string and the rule
 position from a live target (F3.5), which also gate the `rulebase` row column and the import block for a rule
 entry; a config entry inside a stack needs a provider location shape; the EDL `certificate_profile` field needs a
 rule that makes the EDL site resolve names; the per-entry report `profile_name` column needs a value the provider
-does not declare; and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4 need a live target. `PLAN.md` keeps
+does not declare; and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4 need a live target. Piece 22 closed
+the last finding in `backlog.md` that the tool could act on offline, so `to-do.md` holds no piece. `PLAN.md` keeps
 Epic 8 open for the live facts its Phase 8D gates on, and Epic 9 is closed, so there is no piece to run until one of
 those facts arrives or a new requirement is recorded.
 
