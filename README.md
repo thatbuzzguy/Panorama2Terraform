@@ -89,7 +89,7 @@ entry is a WARN finding. The rule is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 | Area | Resources |
 |---|---|
 | Objects | `panos_address`, `panos_address_group`, `panos_administrative_tag`, `panos_application_group`, `panos_custom_url_category`, `panos_external_dynamic_list`, `panos_service`, `panos_service_group` |
-| Policy | `panos_security_policy_rules`, `panos_nat_policy_rules`, `panos_decryption_policy_rules`, `panos_pbf_policy_rules` (one resource per rule; per-device-group chains in XML order — the first rule anchors at the end of the rulebase, each later rule is placed directly after the previous one and depends on it) |
+| Policy | `panos_security_policy_rules`, `panos_nat_policy_rules`, `panos_decryption_policy_rules`, `panos_pbf_policy_rules` (one iterated block per rule type per unit, reading the `locals` map that is that unit's rows; the instances create in the sorted key order, which is the XML order inside a chain, and every instance anchors at the end of the rulebase) |
 | Profiles | `panos_security_profile_group` |
 | Network | `panos_ethernet_interface`, `panos_ethernet_layer3_subinterface`, `panos_vlan_interface`, `panos_loopback_interface`, `panos_tunnel_interface`, `panos_aggregate_interface`, `panos_aggregate_layer3_subinterface`, `panos_virtual_router`, `panos_virtual_router_static_route_ipv4`, `panos_zone`, `panos_monitor_profile` (PBF path monitoring profiles; referenced by PBF rule path monitoring) |
 | VPN | `panos_ike_crypto_profile`, `panos_ike_gateway`, `panos_ipsec_crypto_profile`, `panos_ipsec_tunnel` (proxy-ids merged into the tunnel) |
@@ -500,7 +500,7 @@ The parse set:
 - `tests/test_policy_order.py` - the per-device-group rule chain read through the iterated block: one block per
   rule type per unit, the `locals` map that is the printed form of that unit's rows, the sorted key order as the
   apply order, the block name read through `rule_data.locals_name`, and the chain never crossing a unit, on the
-  multi-device-group fixture and the goldens
+  multi-device-group fixture, the goldens, and the accepted corpus
 - `tests/test_interfaces.py` - every interface kind emits the type its row declares, `tag` is read through one
   rule, and both address shapes read through one rule
 - `tests/test_real_or_report.py` - every area is a real resource or an explicit report, never a comment, with

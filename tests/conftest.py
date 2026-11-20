@@ -56,11 +56,14 @@ TFLINT = shutil.which("tflint")
 # that read the emitted type set read. `RESOURCE_ADDRESS_RE` answers the same line with the local name
 # captured, for `tests/test_dependency_wiring.py`, which reads `findall` as (type, local name) pairs, so a
 # one-group pattern cannot serve it. Both require the block brace, so neither pattern is broader than the
-# other, and no pin passes because a merged pattern is wider. Measured 2026-11-13 on the committed goldens
+# other, and no pin passes because a merged pattern is wider. Measured 2026-11-19 on the committed goldens
 # (87 `.tf` files) and the output of a corpus run (584 `.tf` files): the three shapes the test set held
-# before answer the same 414 matches, and 0 resource lines lack the trailing brace, so the brace changes
-# nothing on the measured material; the real difference is the capture groups (42 distinct types, 262
-# distinct addresses). The decision is recorded in `acceptance.md`.
+# before answer the same 387 matches, and 0 resource lines lack the trailing brace, so the brace changes
+# nothing on the measured material; the real difference is the capture groups (42 distinct types, 238
+# distinct addresses). The numbers measured on 2026-11-13 (414 matches and 262 addresses) no longer hold,
+# because the four `*_policy_rules` types print one iterated block per rule type per unit instead of one
+# block per rule, which is the same material read through the emitter change, not a wider or narrower pattern.
+# The decision is recorded in `acceptance.md`.
 RESOURCE_RE = re.compile(r'resource\s+"([a-z0-9_]+)"\s+"[^"]+"\s*\{')
 RESOURCE_ADDRESS_RE = re.compile(r'resource\s+"([a-z0-9_]+)"\s+"([^"]+)"\s*\{')
 

@@ -1,8 +1,10 @@
 """Golden-file tests: pin the generator's Terraform output byte-for-byte.
 
-The goldens under tests/golden/ are the committed expected output of two
-pipeline runs: the sample config and the kitchen-sink fixture (which
-exercises every generator path the sample never reaches).
+The goldens under tests/golden/ are the committed expected output of the four runs `CASES` names, measured
+2026-11-19: the sample config (14 `.tf` files), the kitchen-sink fixture (61, which exercises every generator
+path the sample never reaches), `address_objects.xml` as the single-unit case (3), and `filter_containers.xml`
+(9). Every file in the set equals the bytes a run wrote for its case, so the set is read as the four cases, not
+as a count.
 
 Any change to generator output must update the goldens deliberately so
 the behavior change is visible in review. Reports are not in the golden

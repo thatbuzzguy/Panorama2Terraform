@@ -1054,18 +1054,23 @@ Pinned by `tests/test_robustness.py::test_name_ref_never_dangles`,
 
 ### 4.4 Policy chains
 
-Policy rules emit as one resource per rule. `_policy_rule_chains` groups rules
-by (device group, vsys). XML document order is preserved inside a chain, and
-chains appear in first-seen order. The first rule of a chain anchors the managed
-block at the end of the rulebase (`where = "last"`). Each later rule is placed
-directly after the previous rule (`where = "after"`, `directly = true`, `pivot`)
-and declares `depends_on` on it, because the pivot must exist before the move.
+Policy rules emit as one iterated block per rule type per unit, and the block reads the `locals` map that is the
+printed form of that unit's rows, so the file states each row value in one place and the block body prints a
+reference into the map (Epic 9, Piece 19). `_policy_rule_chains` groups rules by (device group, vsys), which is
+two of the five unit facts, so a chain lands in one unit and one block holds one unit's rows. XML document order
+is preserved inside a chain, and chains appear in first-seen order.
 
-A rule never pivots on, or depends on, a rule in another vsys or another device
-group. The rulebase (pre, post, shared) is not recorded and not emitted; see
+The apply order is the key order: the `for_each` key is the chain ordinal, zero-padded, joined to the identity
+digest of the unit the row names, so the printed entry order is the sorted key order, and inside one chain that
+order is the XML order. Every instance anchors at the end of the rulebase (`where = "last"`), because instances
+inside one block create in key order, so the per-instance `pivot` and `depends_on` dropped with the per-rule block
+shape (Epic 9, decision 4); `pivot` stays a column of the data record the block does not print.
+
+A chain never crosses a unit, and the rulebase (pre, post, shared) is not recorded and not emitted; see
 `backlog.md`.
 
-Pinned by `tests/test_policy_order.py` and
+Pinned by `tests/test_policy_order.py`, which reads the order the export lists the rules against the printed order
+on the multi-device-group fixture, the goldens, and the accepted corpus, and by
 `tests/test_edge_cases.py::test_rule_chains_do_not_cross_vsys`.
 
 ### 4.5 Report path
