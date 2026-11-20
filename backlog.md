@@ -647,9 +647,9 @@ each pin, and the gate measurement are in `acceptance.md`. Nothing from this sec
 
 The six findings this audit recorded here were closed by `to-do.md` Piece 6 on 2026-11-15: the writer, the file
 name and its collision decision, the name-keyed tables, the shared-section merge, the dead branch, and the
-refusal kinds. Each decision, each pin, and the gate measurement are in `acceptance.md`. One part stays open, in
-the tracking-count item above: `docs/LICENSING.md` still states 130 lines for `src/split_device_groups.py` and
-calls it "the upstream, unchanged", while the file now measures 383 lines and holds the piece's decisions.
+refusal kinds. Each decision, each pin, and the gate measurement are in `acceptance.md`. The last open part was
+closed by the measurement `docs/LICENSING.md` records at commit `ac7609e`, confirmed by `to-do.md` Piece 23 on
+2026-11-20. Nothing from this section stays open.
 
 ### Error rule
 

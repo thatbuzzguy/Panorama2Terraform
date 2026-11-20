@@ -1,56 +1,53 @@
-# Piece 22 acceptance criteria — which output reports a `number` text the reading rule cannot read
+# Piece 23 acceptance criteria — the stale line-count entry in `backlog.md`, §`src/split_device_groups.py`
 
-Closes the last open part of the 2026-11-12 audit's parse set, in `backlog.md`: `_protocol_field` keeps no
-value for a `number` text the signed-integer rule cannot read, so the field prints nothing and nothing is
-reported.
+The last open item in the 2026-11-12 audit's `src/split_device_groups.py` set says `docs/LICENSING.md` still
+states 130 lines for `src/split_device_groups.py` and calls it "the upstream, unchanged". This piece measures the
+current facts and closes the entry.
 
 Closed conditions:
 
-1. One output reports the unread `number` text, stated in the document that owns the fact.
-2. The rule has an owner, named in that document, and a pin that names it.
-3. The pin measures content, not a count, and runs through the pipeline.
-4. `ruff check` and `ruff format --check` pass, `tools/check_documents.py` reports no finding, and the full
-   test set passes.
+1. The finding is measured, not assumed: the document's numbers are re-read at the commit the document names as
+   its measurement, and the working-tree count is measured separately.
+2. If the measurement agrees with `docs/LICENSING.md`, the completed finding entry is removed from `backlog.md`,
+   and the fact is stated nowhere else: the git history and the owner document (`docs/LICENSING.md`) hold it.
+3. If the measurement contradicts `docs/LICENSING.md`, the document is fixed and the measurement is recorded here.
+4. The gate, single-threaded: `ruff check .`, `ruff format --check .`, `python3 tools/check_documents.py` reporting
+   no finding, and the full `python3 -m pytest`. The pin count does not move: this piece adds, removes and weakens
+   no pin.
 
-Criteria for the decision:
+Criteria for the measurement:
 
-1. The decision names which output reports the unread text, or which rule refuses it.
-2. The rule that owns the decision cannot reach the fact: the input layer reads no shape table, so it cannot
-   know which element is a `number` field. A rule that cannot reach its fact cannot be the decision maker.
-3. `is_refusal` names exactly two kinds, and the closed set is pinned, so a new refusal kind is a change of
-   the input layer's rule, not a decision inside the read.
-4. A refusal moves the exit code to 1 and writes no file, so it answers one field by stopping the run. The
-   report path answers one field by naming it and keeping the rest of the run.
-5. F2.9's mechanism for a value the reader cannot read is a `# NOTE:` line inside an entry or rule block. The
-   protocol, filter and certificate print paths return one dict of field values and `hcl_value` prints dict
-   keys, so a note cannot be a key there. The property scan cannot name the field either, because the field is
-   stored as no value and `captured_fields` drops a field stored empty. So the entry line is the output that
-   reports an unread `number`.
-6. The fact is recorded on the object the ledger marks for the entry, under the fact key
-   `entry_coverage.NUMBER_TEXT_NOT_READ`, which is in `NON_FIELD_KEYS` because a fact is not a field. The reading
-   rule states only its answer for the field: the integer for text it reads, `''` for an element that is absent or
-   holds no text, and `''` plus the fact for text the shape word cannot read. The fact is stated only when the
-   caller holds the fact set for the entry, so the rule cannot report a fact by itself, and the entry level owns
-   the set and shares it down the levels inside it.
-7. What the entry line prints: the entry, the field, and the text the rule could not read. A fact read for an
-   entry inside a config-object entry prints on the row that counts that entry, with the name it is counted under,
-   because such an entry has no line of its own. The block prints nothing for the field, so the gate sees no field
-   to check and the exit code stays 0, and the read that prints the fact is through `RecordingDict.value()`, so
-   printing it records no property use.
+1. `docs/LICENSING.md` names commit `ac7609e` (measured 2026-11-16) as the measurement for the split, through
+   `git blame --line-porcelain`, counted by author.
+2. `docs/LICENSING.md` states 68 upstream lines for `src/split_device_groups.py` in the inherited set, and the
+   notice as "GSW Systems, 2025, for the lines it wrote: 68 of 383".
+3. `git blame ac7609e --line-porcelain -- src/split_device_groups.py` answers 68 lines for the upstream author, and
+   `git show ac7609e:src/split_device_groups.py` answers 383 lines, so both numbers the document states for that
+   file agree with the measurement at the commit the document names.
+4. `docs/LICENSING.md` states that neither GSW Systems file is upstream whole, so the notice covers the lines the
+   header names and not the file, and that a notice saying "the upstream, unchanged" would claim more than the
+   measurement supports. `tools/check_documents.py` reads that rule: for each notice row it compares the upstream
+   count with `git blame` at the named commit, compares the file total in the "X of Y" claim with `git show` at
+   that commit, and reports a finding when a claim says "unchanged" while the upstream count is less than the file
+   total. The document states no such claim, so no finding.
+5. `python3 tools/check_documents.py` reports no finding, including the LICENSING checks above.
+6. The working tree measures 384 lines for the file, 60 of them upstream. This is not the set of numbers the tool
+   reads, because the tool reads the file total at the commit the document names, so a later edit to the file
+   cannot move a number the document states. The `backlog.md` entry is stale on two counts: it names a number the
+   document no longer states, and a wording the document no longer uses.
+7. No test reads `docs/LICENSING.md`, so the pin count cannot move with this piece; the check is the tool.
 
-Measurement before the change: 66 accepted fixtures, 144 `number` field reads through `_protocol_field`,
-79 read as integers, 65 elements absent, 0 texts present that the rule cannot read. So no committed fixture
-trips the rule, no golden moves, and the pin plants its material read through `xml_input.parse_xml` and stays
-out of the corpus, the way Piece 17's key pin does. The pin cannot measure the rule on the corpus, and that is
-stated here. The pins are
-`tests/test_parse_helpers.py::test_the_number_rule_answers_for_the_text_it_can_read_and_the_text_it_cannot` and
-`tests/test_entry_coverage.py::test_the_entry_line_prints_the_fact_the_number_rule_cannot_read`, and the content
-they share is in `tests/conftest.py` because no test module may import another.
+Measurement, as it landed (2026-11-20):
+- `git blame ac7609e --line-porcelain -- src/split_device_groups.py`: 68 lines by `devnullNZ`, which is the number
+  the document states in both tables.
+- `git show ac7609e:src/split_device_groups.py`: 383 lines, which is the number the notice's claim states.
+- Working tree: `src/split_device_groups.py` 384 lines, 60 of them upstream, and the file holds Piece 6's decisions.
+- `python3 tools/check_documents.py`: no finding.
+- Decision: the finding is already closed by the measurement `docs/LICENSING.md` records, so the entry is removed
+  from `backlog.md` and the fact is restated nowhere else. No document was fixed.
 
-Gate measurement, as it landed (2026-11-20, on the final tree, single-threaded): `ruff check .` clean at
-`py310`, `ruff format --check .` clean on the 103 Python files, `python3 tools/check_documents.py` reports no
-finding, and `python3 -m pytest` passes 1,717 pins with the same 4 skip for the missing `tflint` binary — 1,721
-pins in 53 test modules against 1,719 before the piece, in 5m40s (5m25s on the run before the pin line was
-shortened for the line-length rule). `tests/test_parse_helpers.py` reads 7 pins against 6, and
-`tests/test_entry_coverage.py` reads 33 pins against 32. The planted run answers no property finding and no gate
-finding, so the exit code stays 0, and no golden file and no report golden moved.
+Gate measurement, as it landed (2026-11-20, on the final tree, single-threaded): `ruff check .` clean at `py310`,
+`ruff format --check .` clean on the 103 Python files, `python3 tools/check_documents.py` reports no finding, and
+`python3 -m pytest` passes 1,717 pins with the same 4 skip for the missing `tflint` binary — 1,721 pins in 53 test
+modules, as Piece 22 left them, in 5m40s (309.24s). The pin count did not move, because this piece adds, removes
+and weakens no pin and no test reads `docs/LICENSING.md`.

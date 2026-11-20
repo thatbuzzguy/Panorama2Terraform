@@ -2,46 +2,36 @@
 
 ## Current position
 
-Piece 22 (2026-11-20) closed the last open part of the 2026-11-12 audit's parse set in `backlog.md`: a `number`
-text the signed-integer rule cannot read. The decision is that the entry line reports it. The reason is that no
-rule that reads a shape table can carry a fact the printed file holds nothing for, so the gate cannot report it,
-and the input layer reads no shape table, so it cannot know which element is a `number` field; refusing the value
-there was the other option and was not taken, because a refusal moves the exit code to 1 and writes no file for
-one field, and no committed fixture trips the rule, so it would change no CI output but move the exit code. The
-print path has no carrier either: F2.9's `# NOTE:` mechanism prints dict keys, so a note cannot be a key, and
-`mark`'s `reason` decides the destination and whether the entry line prints at all.
-
-What landed: `_protocol_field` keeps the no-value answer for the text it cannot read and states the fact for the
-fact set the caller holds for the entry; the fact set lives on the dict `_protocol_level` builds for the entry
-level, which is the object the ledger marks, and the entry level owns it and shares it down the levels inside it;
-`row_for` prints it as the entry line's detail through `recorded_fact`, read through `RecordingDict.value()`, so
-printing a fact records no property use, and the fact key `entry_coverage.NUMBER_TEXT_NOT_READ` is in
-`NON_FIELD_KEYS` because a fact is not a field. A fact read for an entry inside a config-object entry prints on
-the row that counts that entry, with the name it is counted under, because such an entry has no line of its own.
-The decision is in `docs/ARCHITECTURE.md` §4.9 rule 11, the entry-line half in §3.2 rule 7, the exit-code
-boundary in §4.6, and the index row in `docs/README.md`.
-
-Pins: `tests/test_parse_helpers.py::test_the_number_rule_answers_for_the_text_it_can_read_and_the_text_it_cannot`
-for the three answers the reading rule gives, and
-`tests/test_entry_coverage.py::test_the_entry_line_prints_the_fact_the_number_rule_cannot_read` for the entry line
-through the pipeline, which covers both shapes it can hold: the fact stated for a field at an entry's own level,
-and the fact stated for an entry inside a config-object entry. The unread text, the field and the fact wording are
-in `tests/conftest.py` because two modules read them. Measured: the corpus answers 144 `number` field reads across
-the 66 accepted fixtures — 79 integers, 65 absent, no present-but-unreadable text — so no golden file and no
-report golden moved; the planted run answers no property finding and no gate finding and the exit code stays 0.
+Piece 23 (2026-11-20) closed the last open item in the 2026-11-12 audit's `src/split_device_groups.py` set in
+`backlog.md`: a stale tracking entry that said `docs/LICENSING.md` still states 130 lines for
+`src/split_device_groups.py` and calls it "the upstream, unchanged". The measurement says the entry no longer
+holds. `docs/LICENSING.md` measures the split at commit `ac7609e` (2026-11-16) through
+`git blame --line-porcelain`, counted by author, states 68 upstream lines for that file in the inherited set, and
+states the notice as "GSW Systems, 2025, for the lines it wrote: 68 of 383". Re-read at that commit: `git blame
+ac7609e --line-porcelain -- src/split_device_groups.py` answers 68 lines for `devnullNZ`, and `git show
+ac7609e:src/split_device_groups.py` answers 383 lines, so both numbers the document states agree with the
+measurement. The document also states that neither GSW Systems file is upstream whole, so the notice covers the
+lines the header names and not the file, and that a notice saying "the upstream, unchanged" would claim more than
+the measurement supports — which is the rule `tools/check_documents.py` reads for each notice row. The tool reads
+each notice's file total at the commit the document names, not from the working tree, so a later edit to the file
+cannot move a number the document states, and it reports no finding. The working tree measures 384 lines for the
+file, 60 of them upstream, which is not the set the tool reads, so nothing contradicts the document. Decision: the
+finding is already closed by the measurement, so the entry is removed from `backlog.md` and the fact is stated
+nowhere else; no document needed fixing. The measurement is in `acceptance.md`.
 
 The gate, measured 2026-11-20 on the final tree, single-threaded: `ruff check .` clean at `py310`,
 `ruff format --check .` clean on the 103 Python files, `python3 tools/check_documents.py` reports no finding, and
 `python3 -m pytest` passes 1,717 pins with the same 4 skip for the missing `tflint` binary — 1,721 pins in 53 test
-modules against 1,719 before the piece, in 5m40s, with `tests/test_parse_helpers.py` reading 7 pins against 6 and
-`tests/test_entry_coverage.py` reading 33 pins against 32.
+modules, as Piece 22 left them, in 5m40s (309.24s). The pin count did not move: this piece adds, removes and
+weakens no pin, and no test reads `docs/LICENSING.md`, so the check is the tool.
 
 The next work is what `backlog.md` holds and the tool cannot read offline: the rulebase value string and the rule
 position from a live target (F3.5), which also gate the `rulebase` row column and the import block for a rule
 entry; a config entry inside a stack needs a provider location shape; the EDL `certificate_profile` field needs a
 rule that makes the EDL site resolve names; the per-entry report `profile_name` column needs a value the provider
-does not declare; and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4 need a live target. Piece 22 closed
-the last finding in `backlog.md` that the tool could act on offline, so `to-do.md` holds no piece. `PLAN.md` keeps
+does not declare; and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4 need a live target. Piece 23 closed
+the last entry in `backlog.md` the tool could act on offline, so what stays open is only the items above, and
+`to-do.md` holds no piece. `PLAN.md` keeps
 Epic 8 open for the live facts its Phase 8D gates on, and Epic 9 is closed, so there is no piece to run until one of
 those facts arrives or a new requirement is recorded.
 
