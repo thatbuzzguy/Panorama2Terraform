@@ -194,7 +194,8 @@ The converter now states the pair as data: `REFERENCE_EDGES.json`, one row per e
 in `reference_edges.py`, and `main()` writes the file.
 
 1. **The edge set is the names the reference rule recorded** (`TerraformGenerator.name_ref`,
-   `ARCHITECTURE.md` §4.3), so the module records no name and resolves no name. A name the rule
+   `ARCHITECTURE.md` §4.3), so the module records no name and resolves no name, plus the pairs the membership fact
+   states through `api_requests.LIST_JOIN`, which rule 7 of this section states. A name the rule
    resolved inside the referrer's own unit is a reference inside one root, not an edge between
    units, so it writes no row. A name no unit in the run declares writes no row either: the pair
    does not exist, and that name is already stated in the manifest's `references` field, the only
@@ -241,11 +242,24 @@ in `reference_edges.py`, and `main()` writes the file.
    The write path (§14) step that runs the rule per unit has landed at the print site (F6.10.2): a name
    the flat chain resolved across scopes is a plain name, and the edge set and the manifest `references`
    field name every cross-unit use the corpus shows, so `CORPUS_EDGES` in `tests/test_reference_edges.py`
-   reads 20 rows over five fixtures. The directory write itself landed with F6.10.3.
+   reads 23 rows over six fixtures, three of them the membership pair rule 7 states. The directory write itself
+   landed with F6.10.3.
 6. **The reference fact stays one fact.** `name_ref` records one fact: the name resolved outside the
    unit that asked for it (F6.10.2). It is not split into two kinds, because the edge row states the
    other unit when the ownership rule can name one, and the two cases are told apart by whether an
    edge row exists. The block that binds an entry to the live config is §7.
+7. **The membership pair** (`reference_edges.py` rule 8, `docs/TEMPLATE_STACK_DEPLOYMENT.md` §2). A
+   membership name enters the edge set when the container that names it cannot place that name inside
+   itself, so the name must already exist when the container names it. The four lists are the
+   `parse_associations` rows in the container table, and each joins to the container that defines the
+   entries its names belong to through `api_requests.LIST_JOIN`: three name devices and join inside the
+   container that names them, so §6 rule 2 states that order for them, and the list a stack keeps for
+   its member templates joins to `templates`, outside the stack that names it. The join is the F6.2 rule
+   and the direction is the order rule's, so no module states a second basis for membership. The module
+   takes the four tables as an argument and defines no reader of them. Pinned by
+   `tests/test_reference_edges.py::test_a_stack_that_names_a_template_records_one_row`,
+   `::test_the_lists_that_name_devices_record_no_row`, and
+   `::test_a_membership_name_the_run_declares_no_entry_for_writes_no_row`.
 
 The decision this section asked for is settled: the edge list is a data file, not a report section,
 and it is written only when it has content. `tests/test_reference_edges.py` pins it, including
@@ -279,8 +293,13 @@ manifest row, because the manifest is the file that names each unit (§3 rule 5)
      and comes before the object files, and `variables.tf` is written after the emitters (F6.6, §9 rule 5),
      because the declaration set is the values the emitters printed
      (`tests/test_scope_objects.py::test_the_scope_file_is_written_before_the_config_inside_it`), and
-     the blocks inside the file print in that order (`::test_blocks_print_in_the_level_order_the_table_states`);
-   - **the reference edge**: the target unit before the referrer unit.
+     the blocks inside the file print in that order (`::test_blocks_print_in_the_level_order_the_table_states`),
+     and the level basis states nothing for a pair the placement fact cannot state: `SCOPE_PLACEMENT` declares no
+     location sub-block for `panos_template_stack`, so no entry is read inside a stack and the level basis reads
+     nothing for that pair (`tests/test_reference_edges.py::test_the_level_basis_states_no_dependency_for_the_pair_the_membership_rule_names`);
+   - **the reference edge**: the target unit before the referrer unit. The pair the membership fact states is read
+     the same way, so a stack unit is planned after the template units its membership names
+     (`::test_the_stack_unit_is_planned_after_the_template_units_it_names`).
 3. **Ties, and the acyclic rule.** A unit with no dependency is ranked in the identity order, which
    is the order the manifest rows already print, so `rank` is deterministic. A cycle is a finding:
    two units that reference each other cannot be put in a plan order. A finding is an operator

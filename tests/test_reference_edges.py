@@ -1,14 +1,16 @@
 """F6.3 the reference between units: the edge record, the acyclic rule, the unit order, and the
 outputs rule decision (F6.9).
 
-Seven groups, one per rule in `reference_edges.py` (`docs/CODEBASE_ASSEMBLY.md` §5 and §6):
+Seven groups over the eight rules in `reference_edges.py` (`docs/CODEBASE_ASSEMBLY.md` §5 and §6):
 
 1. The edge row and the join: one row per pair the data can name, joined to the manifest on
-   `directory` and to the ownership record on (`type`, `entry`).
+   `directory` and to the ownership record on (`type`, `entry`), including the pair the membership fact
+   states (rule 8).
 2. The reference fact stays one fact: the module records no name and resolves no name, and a unit
    cannot be its own target.
 3. The acyclic rule: the cycle walk, the report section, and the unit in a cycle that cannot be ranked.
-4. The unit order: `after` from the three bases (ancestor, level, edge), `rank` with the identity tie.
+4. The unit order: `after` from the three bases (ancestor, level, edge), `rank` with the identity tie,
+   including the stack unit ranked after the template units its membership names.
 5. The report section, the console, and the exit codes.
 6. The gates, determinism, and the rule that a file is written only when it has content.
 7. The outputs rule (F6.9, the decision): the mechanism for a name another unit in the codebase owns
@@ -27,10 +29,12 @@ from pathlib import Path
 
 import pytest
 
+import api_requests
 import container_coverage
 import entry_coverage
 import ownership
 import reference_edges
+import resource_mapping
 import sanity_checks
 import state_coverage
 import state_input
@@ -55,6 +59,7 @@ KITCHEN = "kitchen_sink.xml"
 MULTI = "multi_device_templates.xml"
 OVERRIDE = "ownership_override.xml"
 GROUPING = "report_grouping.xml"
+SCOPE_OBJECTS = "scope_objects.xml"
 STATE_FIXTURE = "state_workspace.json"
 WORKSPACE = "production"
 
@@ -66,7 +71,8 @@ MECHANISM_TOKENS = ("outputs.tf", "remote_state", "terraform_remote_state")
 
 # The edge set across the fixture corpus, measured through the run, in the order the four fields sort
 # by. A fixture that starts producing an edge must be added here in the same change, so no fixture can
-# become a silent false positive (AC-1.1).
+# become a silent false positive (AC-1.1). The three `panos_template` rows are the membership fact
+# (rule 8): one per fixture that lists a stack naming a template the run declares an entry for.
 CORPUS_EDGES = {
     "dependency_wiring.xml": [
         ("device1_8c3ce387", "vsys1_d7045c06", "panos_ethernet_interface", "ethernet1/1"),
@@ -74,6 +80,7 @@ CORPUS_EDGES = {
         ("device1_8c3ce387", "vsys1_d7045c06", "panos_zone", "zone-out"),
     ],
     KITCHEN: [
+        ("branch_stack_5c39384d", "fw_template_00a08cdc", "panos_template", "FW-Template"),
         ("fw_2_example_com_35aafbcf", "shared_a6577c11", "panos_ethernet_interface", "ethernet1/1"),
         ("fw_template_00a08cdc", "shared_a6577c11", "panos_ethernet_interface", "ethernet1/1"),
         ("fw_template_00a08cdc", "shared_a6577c11", "panos_ethernet_interface", "ethernet1/2"),
@@ -84,6 +91,7 @@ CORPUS_EDGES = {
         ("vsys2_30925639", "shared_a6577c11", "panos_ethernet_interface", "ethernet1/2"),
     ],
     MULTI: [
+        ("branch_stack_5c39384d", "hq_networks_8ada44b7", "panos_template", "HQ-Networks"),
         ("dc_networks_19ae87d5", "fw_1_example_com_6a71771b", "panos_ethernet_interface", "ethernet1/1"),
         ("dc_networks_19ae87d5", "fw_2_example_com_35aafbcf", "panos_ethernet_interface", "ethernet1/1"),
         ("hq_networks_8ada44b7", "fw_1_example_com_6a71771b", "panos_ethernet_interface", "ethernet1/1"),
@@ -97,6 +105,9 @@ CORPUS_EDGES = {
         ("alpha_dg_2862f32a", "vsys1_b3e94a35", "panos_address", "alpha-dst"),
         ("alpha_dg_2862f32a", "vsys1_b3e94a35", "panos_address", "alpha-src"),
         ("alpha_dg_2862f32a", "vsys1_b3e94a35", "panos_service", "alpha-svc"),
+    ],
+    SCOPE_OBJECTS: [
+        ("edge_stack_febaf365", "edge_networks_6daf8ff6", "panos_template", "Edge-Networks"),
     ],
 }
 
@@ -156,7 +167,9 @@ def _sets(module, source: Path, out_dir: Path, extra: tuple = ()) -> tuple:
     parser, generator, _code = _pipeline(module, source, out_dir, extra)
     assert parser is not None, (source, "the run refused the input")
     ownership_rows = ownership.build_rows(parser.ledger, None, generator.sanitize_name)
-    edge_rows = reference_edges.build_rows(ownership_rows, generator.unit_references(), generator.sanitize_name)
+    edge_rows = reference_edges.build_rows(
+        ownership_rows, generator.unit_references(), parser.parse_associations(), generator.sanitize_name
+    )
     manifest_rows = reference_edges.order(
         unit_manifest.build_rows(parser.ledger, generator.unit_references(), generator.sanitize_name),
         ownership_rows,
@@ -208,7 +221,7 @@ def test_the_record_is_one_row_per_edge_the_data_can_name(converter_module, tmp_
         if edge_rows:
             edges[path.name] = [tuple(row[key] for key in reference_edges.FIELD_ORDER) for row in edge_rows]
     assert edges == CORPUS_EDGES, edges
-    assert sum(len(rows) for rows in edges.values()) == 20
+    assert sum(len(rows) for rows in edges.values()) == 23
     pairs = [pair for rows in edges.values() for pair in rows]
     assert len(pairs) == len(set(pairs)), "one row per pair"
     for fixture, expected in CORPUS_EDGES.items():
@@ -266,6 +279,68 @@ def test_a_name_no_unit_declares_writes_no_row_and_stays_in_the_manifest(convert
     )
 
 
+def test_a_stack_that_names_a_template_records_one_row(converter_module, tmp_path):
+    """Rule 8: the stack entry names its member templates, and the container that defines those entries is
+    `templates`, outside the stack that names them, so the name cannot be placed inside the container that read
+    it and enters the edge set. The join is the F6.2 rule, unchanged: `type` is the row that answers the fact the
+    join container fills, `entry` is the membership name, the target is the unit that owns the row for that name,
+    and the referrer is the unit that owns the row for the entry that names the membership, because a membership
+    entry writes no ownership row of its own.
+    """
+    parser, gen, _code = _pipeline(converter_module, FIXTURES_DIR / MULTI, tmp_path)
+    own = ownership.build_rows(parser.ledger, None, gen.sanitize_name)
+    assert entry_coverage.matrix_row_for("template-stack/entry/templates") is None, "no row covers the membership entry"
+    rows = reference_edges.build_rows(own, {}, parser.parse_associations(), gen.sanitize_name)
+    expected = ("branch_stack_5c39384d", "hq_networks_8ada44b7", "panos_template", "HQ-Networks")
+    assert rows == [dict(zip(reference_edges.FIELD_ORDER, expected, strict=True))], rows
+
+
+def test_the_lists_that_name_devices_record_no_row(converter_module, tmp_path):
+    """Rule 8, measured on the four lists: three name devices, and each joins to the container that defines the
+    entries its names belong to, which is the container that names them, so those names are placed inside the
+    container that read them and the level rule states that order instead of the edge rule. Only the list a stack
+    keeps for its member templates joins outside itself. A device name is the `vsys_device` fact, which no row
+    answers, so it joins to nothing even when the run read the devices.
+    """
+    lists = api_requests.membership_lists()
+    assert len(lists) == 4, lists
+    outside = [path for path in lists if api_requests.LIST_JOIN[path][1] != api_requests.list_container(path)]
+    assert outside == ["template-stack/entry/templates"], outside
+    assert entry_coverage.REPORT_SCOPE_KEYS["devices"] == "vsys_device", "the devices container fills a fact"
+    assert resource_mapping.SCOPE_ANSWER.get("vsys_device") is None, "no row answers a device fact"
+    parser, gen, _code = _pipeline(converter_module, FIXTURES_DIR / MULTI, tmp_path)
+    tables = parser.parse_associations()
+    assert api_requests.names_read(tables, "templates/entry/devices"), "the fixture names devices inside a template"
+    own = ownership.build_rows(parser.ledger, None, gen.sanitize_name)
+    rows = reference_edges.build_rows(own, {}, tables, gen.sanitize_name)
+    assert rows and all(row["type"] == "panos_template" for row in rows), rows
+
+
+def test_a_membership_name_the_run_declares_no_entry_for_writes_no_row(converter_module, tmp_path):
+    """Rule 1 and rule 8: the pair does not exist when no ownership row covers the name, so a stack that names a
+    template the run declares no entry for records no row. No fixture has a member name with no entry, so the
+    rule is pinned on its own input, and the same tables with a declared entry do record the row.
+    """
+    gen = converter_module.TerraformGenerator(str(tmp_path / "gen"))
+    stack = unit_manifest.directory_name(("", "", "", "", "Branch-Stack"), gen.sanitize_name)
+    template = unit_manifest.directory_name(("", "", "HQ-Networks", "", ""), gen.sanitize_name)
+    stack_row = {"type": "panos_template_stack", "entry": "Branch-Stack", "directory": stack, "owner": stack}
+    missing = reference_edges.build_rows(
+        [stack_row], {}, {"stack_templates": {"Branch-Stack": ["Ghost-Template"]}}, gen.sanitize_name
+    )
+    assert missing == [], missing
+    template_row = {"type": "panos_template", "entry": "HQ-Networks", "directory": template, "owner": template}
+    declared = reference_edges.build_rows(
+        [stack_row, template_row],
+        {},
+        {"stack_templates": {"Branch-Stack": ["Ghost-Template", "HQ-Networks"]}},
+        gen.sanitize_name,
+    )
+    assert [tuple(row[key] for key in reference_edges.FIELD_ORDER) for row in declared] == [
+        (stack, template, "panos_template", "HQ-Networks")
+    ], declared
+
+
 def test_the_record_round_trips_as_data(tmp_path):
     """AC-1.4: a reader reads the record back as itself, the way `provenance.parse_record` reads a
     record.
@@ -304,7 +379,17 @@ def test_the_module_resolves_no_name_and_records_no_name():
     so this module owns the pair, the walk, and the order only.
     """
     assert not any(
-        hasattr(reference_edges, name) for name in ("name_ref", "resolve_reference", "sanitize_name", "unit_references")
+        hasattr(reference_edges, name)
+        for name in (
+            "name_ref",
+            "resolve_reference",
+            "sanitize_name",
+            "unit_references",
+            "parse_associations",
+            "membership_lists",
+            "names_read",
+            "list_container",
+        )
     )
     assert reference_edges.FACT_KEYS == unit_manifest.FACT_KEYS, "no second fact order"
     modules = [
@@ -313,8 +398,19 @@ def test_the_module_resolves_no_name_and_records_no_name():
         if line.startswith(("import ", "from "))
     ]
     # The module reads the call rule through `collections.abc`, where the rule lives, and reads the fact
-    # order through its owner, so the import set is these names and no others.
-    assert modules == ["json", "collections", "collections.abc", "unit_manifest"], modules
+    # order through its owner, so the import set is these names and no others. The three reads rule 8 needs
+    # are each through an owner: `api_requests` for the join between a membership list and the table its owner
+    # returns, `entry_coverage` for the fact each container fills, `resource_mapping` for the row that answers
+    # a fact. The module defines no reader of the four tables, so it holds no membership name.
+    assert modules == [
+        "json",
+        "collections",
+        "collections.abc",
+        "api_requests",
+        "entry_coverage",
+        "resource_mapping",
+        "unit_manifest",
+    ], modules
 
 
 def test_a_self_reference_writes_no_row(converter_module, tmp_path):
@@ -328,6 +424,7 @@ def test_a_self_reference_writes_no_row(converter_module, tmp_path):
         reference_edges.build_rows(
             [{"type": "panos_ethernet_interface", "entry": "ethernet1/1", "directory": own, "owner": own}],
             {facts: ("ethernet1/1",)},
+            {},
             gen.sanitize_name,
         )
         == []
@@ -358,6 +455,7 @@ def test_a_name_several_units_own_gives_one_row_per_owner(converter_module, tmp_
             for owner in owners
         ],
         {facts: ("ethernet1/1",)},
+        {},
         gen.sanitize_name,
     )
     assert len(rows) == 2 and {row["target"] for row in rows} == set(owners)
@@ -500,7 +598,11 @@ def test_the_shallower_scope_comes_before_the_deeper_scope_inside_it(converter_m
     template = _row(rows, "dc_networks_19ae87d5")
     device = _row(rows, "fw_2_example_com_f7b99b64")
     assert reference_edges.LEVEL_KEYS == ("device_group", "template_stack", "template", "vsys_device")
-    assert stack["after"] == []
+    # The stack names its member templates, so its `after` is the membership fact rather than the level chain:
+    # the level basis states nothing for that pair, pinned by
+    # `::test_the_level_basis_states_no_dependency_for_the_pair_the_membership_rule_names`.
+    member = _row(rows, "hq_networks_8ada44b7")
+    assert stack["after"] == [member["directory"]], stack
     # F6.10.5: the stack is a level, so the device inside it depends on the unit that names the stack.
     inside = _row(rows, "fw_3_example_com_a1c0f1a0")
     assert inside["after"] == [stack["directory"]], inside
@@ -513,6 +615,40 @@ def test_the_shallower_scope_comes_before_the_deeper_scope_inside_it(converter_m
     assert template["after"] == sorted(["fw_1_example_com_6a71771b", "fw_2_example_com_35aafbcf"])
     assert stack["rank"] < inside["rank"], (stack, inside)
     assert template["rank"] < device["rank"], (template, device)
+
+
+def test_the_stack_unit_is_planned_after_the_template_units_it_names(converter_module, tmp_path):
+    """Rule 8 and rule 7: a membership name is an edge, so the order rule reads it the same way as any other and
+    the target unit comes before the referrer unit. The stack unit is planned after the template units its
+    membership names, read as data through `reference_edges.order` on `tests/fixtures/multi_device_templates.xml`.
+    """
+    _owners, edges, rows = _sets(converter_module, FIXTURES_DIR / MULTI, tmp_path)
+    stack = _row(rows, "branch_stack_5c39384d")
+    membership = [row for row in edges if row["type"] == "panos_template"]
+    assert membership, edges
+    for row in membership:
+        assert row["referrer"] == stack["directory"], row
+        assert row["target"] in stack["after"], stack
+        assert stack["rank"] > _row(rows, row["target"])["rank"], (stack, _row(rows, row["target"]))
+    assert stack["after"] == sorted(stack["after"]), stack
+
+
+def test_the_level_basis_states_no_dependency_for_the_pair_the_membership_rule_names(converter_module, tmp_path):
+    """Rule 7 and rule 8 read the same pair one way: the placement fact states no sub-block for
+    `panos_template_stack`, so no entry is read inside a stack and the level basis states nothing for the pair the
+    membership fact names. The edge basis is what ranks the stack after the template it names. A row that does
+    declare the sub-block keeps its level dependency, so the device read inside the stack still comes after the
+    stack unit.
+    """
+    assert resource_mapping.SCOPE_PLACEMENT["panos_template_stack"] == (), "the placement fact states no sub-block"
+    parser, gen, _code = _pipeline(converter_module, FIXTURES_DIR / MULTI, tmp_path)
+    level_only = reference_edges.order(
+        unit_manifest.build_rows(parser.ledger, gen.unit_references(), gen.sanitize_name), [], []
+    )
+    stack = _row(level_only, "branch_stack_5c39384d")
+    assert stack["after"] == [], stack
+    inside = _row(level_only, "fw_3_example_com_a1c0f1a0")
+    assert inside["after"] == [stack["directory"]], inside
 
 
 def test_the_edge_target_comes_before_the_referrer(converter_module, tmp_path):

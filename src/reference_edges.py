@@ -2,7 +2,7 @@
 
 An edge is a pair fact: the unit that uses a name, and the unit that owns it. `unit_manifest.py` rule 4
 pins one row per unit, and `ownership.py` rule 1 pins one row per entry, so a pair needs its own record.
-Seven rules, stated once here.
+Eight rules, stated once here.
 
 1. The edge set is the names the reference rule recorded (`TerraformGenerator.name_ref`,
    `ARCHITECTURE.md` §4.3), so this module records no name and resolves no name. A name the rule resolved
@@ -54,11 +54,25 @@ Seven rules, stated once here.
    order graph reads only manifest units. The guard is in `dependencies`, so an override whose owner is
    a parent-source unit adds no dependency, and the gate rule can read the order back. Pinned by
    `tests/test_reference_edges.py::test_a_declared_parent_source_adds_no_dependency`.
+8. The membership fact as a use (Epic 10, piece 1, `docs/TEMPLATE_STACK_DEPLOYMENT.md` §2). A membership name
+   enters the edge set when the container that names it cannot place that name inside itself: the join
+   `api_requests.LIST_JOIN` states for each of the four lists names the container that defines the entries its
+   names belong to, and a name that joins to the same container that names it is placed inside that container,
+   so rule 7 already states that order. Only the list a stack keeps for its member templates joins outside
+   itself, so a stack unit is ranked after the template units it names. The join is the F6.2 rule, unchanged:
+   `type` is the row that answers the fact the join container fills, `entry` is the membership name, and the
+   referrer is the unit that owns the row for the entry that names the membership, because a membership entry
+   writes no ownership row of its own and the edge joins to the entry's own row. The module defines no reader of
+   the four tables and no second fact order: it takes the tables as an argument, the way it takes
+   `sanitize_name`, and reads the join, the fact each container fills, and the row that answers a fact through
+   `api_requests`, `entry_coverage`, and `resource_mapping`. Pinned by
+   `tests/test_reference_edges.py::test_a_stack_that_names_a_template_records_one_row` and
+   `::test_the_lists_that_name_devices_record_no_row`.
 
 Usage:
     from reference_edges import EDGE_FILE, build_rows, render, parse_rows, findings, cycle_line, order
     from write_path import root_path, write_file
-    rows = build_rows(ownership_rows, generator.unit_references(), generator.sanitize_name)
+    rows = build_rows(ownership_rows, generator.unit_references(), membership_tables, generator.sanitize_name)
     manifest_rows = order(unit_manifest.build_rows(ledger, generator.unit_references(),
                                                    generator.sanitize_name), ownership_rows, rows)
     write_file(root_path(output_dir, EDGE_FILE), render(rows))
@@ -70,6 +84,9 @@ import json
 from collections import defaultdict
 from collections.abc import Callable
 
+import api_requests
+import entry_coverage
+import resource_mapping
 import unit_manifest
 
 EDGE_FILE = "REFERENCE_EDGES.json"
@@ -102,18 +119,60 @@ CYCLE_REASON = "no plan order can put one of these units before the other"
 NO_RANK = 0
 
 
-def build_rows(ownership_rows: list, references: dict, sanitize: Callable[[str], str]) -> list:
+def _fact_row(container: str) -> str:
+    """The row that covers an entry inside one scope container, read through the two tables its owners state:
+    the fact each container fills (`entry_coverage.REPORT_SCOPE_KEYS`) and the row that answers that fact
+    (`resource_mapping.SCOPE_ANSWER`). A container that fills a fact no row answers, `devices` and `vsys`, has
+    no row, so a name that is a scope fact joins to nothing.
+    """
+    return resource_mapping.SCOPE_ANSWER.get(entry_coverage.REPORT_SCOPE_KEYS[container])
+
+
+def _membership_pairs(owners: dict, membership: dict) -> list:
+    """The pairs the membership fact states, in field order (rule 8).
+
+    `membership` is the four tables `parse_associations` returned, so this is a reader of the join its owner
+    states and not a second list. A list whose join container is the container that names it is skipped: the
+    name is placed inside that container, so the level rule states that order. The two sides are read through
+    the same ownership join the reference rule uses, so a membership entry that writes no ownership row of its
+    own joins to the row of the entry that names it.
+    """
+    pairs = []
+    for list_path in api_requests.membership_lists():
+        table, join_container = api_requests.LIST_JOIN[list_path]
+        container = api_requests.list_container(list_path)
+        if join_container == container:
+            continue  # rule 8: the level rule already states the order for a name placed inside its container
+        target_type, referrer_type = _fact_row(join_container), _fact_row(container)
+        if not target_type or not referrer_type:
+            continue  # rule 8: a name that is a scope fact names no entry, so no row can join to it
+        for entry, names in sorted(membership.get(table, {}).items()):
+            referrers = sorted(owner for type_, owner in owners.get(entry, ()) if type_ == referrer_type and owner)
+            for name in sorted(names):
+                targets = sorted(owner for type_, owner in owners.get(name, ()) if type_ == target_type and owner)
+                for referrer in referrers:
+                    for target in targets:
+                        if target == referrer:
+                            continue  # rule 3: an edge is a fact between two units
+                        pairs.append((referrer, target, target_type, name))
+    return pairs
+
+
+def build_rows(ownership_rows: list, references: dict, membership: dict, sanitize: Callable[[str], str]) -> list:
     """One row per edge the data can name, in the order the fields sort by.
 
     `references` is the reference names `name_ref` recorded, keyed by the referrer's five scope facts. The
     target unit is the `owner` field of an ownership row that covers (`type`, `entry`). A name no ownership
     row covers writes no row (rule 1), and a row whose target is the referrer writes no row (rule 3).
+    `membership` is the four tables `parse_associations` returned, read through `api_requests.LIST_JOIN`
+    (rule 8). One row per pair: a pair the two rules can name the same way is one row, so the pairs go through
+    a set before the sort.
     """
     owners: dict = defaultdict(set)
     for row in ownership_rows:
         owners[row["entry"]].add((row["type"], row["owner"]))
 
-    rows = []
+    pairs = set()
     for facts, names in references.items():
         referrer = unit_manifest.directory_name(facts, sanitize)
         for name in sorted(names):
@@ -121,8 +180,11 @@ def build_rows(ownership_rows: list, references: dict, sanitize: Callable[[str],
                 if not owner or owner == referrer:
                     continue  # rule 1 and rule 3: no target unit, or the same unit twice
                 # FIELD_ORDER and the four values the row states in that order are the same set.
-                rows.append(dict(zip(FIELD_ORDER, (referrer, owner, type_, name), strict=True)))
-    return sorted(rows, key=lambda row: tuple(row[key] for key in FIELD_ORDER))
+                pairs.add((referrer, owner, type_, name))
+
+    pairs.update(_membership_pairs(owners, membership))
+
+    return [dict(zip(FIELD_ORDER, pair, strict=True)) for pair in sorted(pairs)]
 
 
 def render(rows: list) -> str:

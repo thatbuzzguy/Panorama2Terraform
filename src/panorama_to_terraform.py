@@ -36,6 +36,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
+import api_requests
 import commit_actions
 import container_coverage
 import entry_coverage
@@ -7441,8 +7442,11 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
     ownership_rows = ownership.build_rows(view, parent_ledger, tf_gen.sanitize_name)
     # F6.3: the reference between units as an edge list. The pair comes from the names `name_ref` recorded
     # at the sites that applied the rule, joined to the ownership rows on (`type`, `entry`), so no second
-    # resolution rule and no second naming rule appears here.
-    edge_rows = reference_edges.build_rows(ownership_rows, tf_gen.unit_references(), tf_gen.sanitize_name)
+    # resolution rule and no second naming rule appears here. The membership tables are the fact
+    # `parse_associations` answered for the responses the run read, joined in run order, so the record reads
+    # the join `api_requests.LIST_JOIN` states and the entry point states no list of its own.
+    membership = join_results([part.answer(api_requests.MEMBERSHIP_METHOD) for part in parts])
+    edge_rows = reference_edges.build_rows(ownership_rows, tf_gen.unit_references(), membership, tf_gen.sanitize_name)
     # F6.1: the unit as data. One row per declared scope, from the ledger the parse already writes and the
     # names `name_ref` recorded at the sites that applied the rule. The rows are built before the report,
     # because a cycle finding reads its grouping facts through the manifest row.
