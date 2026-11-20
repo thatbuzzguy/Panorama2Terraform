@@ -18,7 +18,9 @@ Five groups of checks:
    `predefined` entry is not a row, and an entry at a level the table states no row
    for still holds a record.
 4. Captured fields. The names a report line prints, without the identity and scope
-   facts.
+   facts, and without the fact the reading rule states for a `number` text it cannot read
+   (`docs/ARCHITECTURE.md` §4.9 rule 11), which is not a field and prints as detail on the
+   entry line, on the row that counts the entry it was read for.
 5. The report. One line per row, the gap section, file name only, byte-identical
    between runs, and no file when the input has no entries. A gap does not change
    the exit code.
@@ -36,8 +38,18 @@ from pathlib import Path
 
 import container_coverage
 import entry_coverage
+import sanity_checks
 import xml_input
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, corpus_fixtures, run_pipeline, run_script, written_bytes
+from conftest import (
+    FIXTURES_DIR,
+    SAMPLE_CONFIG,
+    UNREAD_NUMBER_FACT,
+    UNREAD_NUMBER_TEXT,
+    corpus_fixtures,
+    run_pipeline,
+    run_script,
+    written_bytes,
+)
 
 GAP_FIXTURE = "entry_gaps.xml"
 UNKNOWN_FIXTURE = "unknown_containers.xml"
@@ -649,6 +661,80 @@ def test_captured_fields_skip_empty_values_and_sort():
         }
     )
     assert line.endswith("captured: name only"), line
+
+
+def test_the_entry_line_prints_the_fact_the_number_rule_cannot_read(tmp_path, converter_module):
+    """The entry line prints the fact the reading rule stated for a `number` text it cannot read (§4.9 rule 11).
+
+    The field is stored with no value, so the block prints nothing for it, the property scan names no property
+    for it, and the gate sees no field to check, which is why the report is the output that reports the fact and
+    the exit code stays 0. The fact is recorded on the object the ledger marks for the entry, and the read that
+    prints it is through `RecordingDict.value()`, so printing a fact records no property use.
+
+    The corpus holds no `number` text the rule cannot read, so the pin plants its content, read through
+    `xml_input.parse_xml` by the run. The two shapes are the two the entry line can hold: the fact stated for a
+    field at an entry's own level, and the fact stated for an entry inside a config-object entry, which is a
+    property level and prints no line of its own, so the fact prints on the row that counts it with the name it
+    is counted under.
+    """
+    content = tmp_path / "unread_number_text.xml"
+    content.write_text(
+        '<?xml version="1.0"?>\n<config version="10.0.0">\n  <shared>\n'
+        "    <certificate>\n      <certificate-profile>\n"
+        f'        <entry name="CP-Pin"><certificate-status-timeout>{UNREAD_NUMBER_TEXT}'
+        "</certificate-status-timeout></entry>\n"
+        "      </certificate-profile>\n    </certificate>\n"
+        "    <network>\n      <routing-profile>\n        <filters>\n          <route-maps>\n            <bgp>\n"
+        '              <bgp-entry>\n                <entry name="RM-Pin">\n                  <route-map>\n'
+        f'                    <entry name="RM-Inner"><match><tag>{UNREAD_NUMBER_TEXT}</tag></match></entry>\n'
+        "                  </route-map>\n                </entry>\n              </bgp-entry>\n"
+        "            </bgp>\n          </route-maps>\n        </filters>\n      </routing-profile>\n"
+        "    </network>\n  </shared>\n</config>\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "out"
+    parser = run_pipeline(converter_module, str(content), out)
+    assert parser is not None, "the run refused the input"
+    ledger = parser.ledger
+
+    # The fact is not a field, so the scan reads no property for it and the run writes nothing for the field.
+    assert ledger.property_findings() == [], ledger.property_findings()
+    # The gate reads the run the report reports, so the field the block did not print is no finding, and the
+    # exit code stays 0 for a run that only prints the fact.
+    assert not sanity_checks.run_checks(out).failed, sanity_checks.run_checks(out)
+
+    own = next(r for r in ledger.rows() if r["name"] == "CP-Pin")
+    own_fact = f"certificate_status_timeout {UNREAD_NUMBER_TEXT!r} is not a signed integer"
+    # The row's own detail is the matrix row's, so the fact is the part `row_for` adds (§3.2).
+    assert own["detail"].endswith(own_fact), own
+    mark = ledger.mark_for(next(e for e in ledger.entries() if e.get("name") == "CP-Pin"))
+    # The fact is recorded on the object the ledger marks, as the field the reading rule named and the fact it
+    # stated for it. It is not a field, so the property scan reads it as no field and the read that prints it
+    # records no property use.
+    assert mark["captured"].value(entry_coverage.NUMBER_TEXT_NOT_READ) == {"certificate_status_timeout": own_fact}, (
+        mark["captured"]
+    )
+    assert entry_coverage.NUMBER_TEXT_NOT_READ not in ledger.captured_fields(mark), ledger.captured_fields(mark)
+    assert entry_coverage.NUMBER_TEXT_NOT_READ not in mark["captured"].used_keys(), mark["captured"].used_keys()
+
+    # The fact read inside a property entry prints on the row that counts that entry, named by it.
+    parent = next(r for r in ledger.rows() if r["name"] == "RM-Pin")
+    assert parent["detail"].endswith(f"RM-Inner {UNREAD_NUMBER_FACT}"), parent
+    assert parent["property_entries"] == 1, parent
+    child = next(e for e in ledger.entries() if e.get("name") == "RM-Inner")
+    assert not ledger.is_report_entry(child), child
+    assert [r["name"] for r in ledger.rows()] == ["CP-Pin", "RM-Pin"], ledger.rows()
+
+    # The line as the report prints it, through the file the run wrote.
+    report = written_bytes(out)[entry_coverage.REPORT_FILE].decode(encoding="utf-8")
+    for row in (own, parent):
+        line = next(line for line in report.splitlines() if row["name"] in line)
+        assert line == entry_coverage.entry_line(row), line
+
+    # The block prints no value for the field, so the `.tf` bytes hold the entry name and not the text.
+    tf = "\n".join(text.decode(encoding="utf-8") for key, text in written_bytes(out).items() if key.endswith(".tf"))
+    assert UNREAD_NUMBER_TEXT not in tf, tf
+    assert 'name = "CP-Pin"' in tf and 'name = "RM-Pin"' in tf, tf
 
 
 # --- 5. The report ---------------------------------------------------------

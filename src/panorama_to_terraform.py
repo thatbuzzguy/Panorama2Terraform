@@ -2284,7 +2284,12 @@ class PanoramaParser:
             choice_path = "protocol/bgp/peer_group/type"
             field = self._protocol_field_name(choice_path)
             choice, detail = self._protocol_choice(
-                choice_path, self._get_text(group, self._protocol_xml_name(field)), group, group
+                choice_path,
+                self._get_text(group, self._protocol_xml_name(field)),
+                group,
+                group,
+                None,
+                captured.get(entry_coverage.NUMBER_TEXT_NOT_READ),
             )
             captured[field] = choice
             entry = self.mark(group, captured, detail, destination="report" if detail else None)
@@ -2616,7 +2621,12 @@ class PanoramaParser:
                 holder.append(marked)
 
     def _protocol_body(
-        self, path: str, body: ET.Element, fields: dict, table: resource_mapping.ShapeTable | None = None
+        self,
+        path: str,
+        body: ET.Element,
+        fields: dict,
+        table: resource_mapping.ShapeTable | None = None,
+        unread: dict | None = None,
     ) -> str:
         """The shapes inside a level that a level dict cannot hold (F7.4, F7.5, F7.6).
 
@@ -2629,8 +2639,15 @@ class PanoramaParser:
         so a level that states none prints nothing, and the detail the mapping cannot state is captured here
         because the entry is the object the ledger marks. A `member_list` field and a `block` field hold no
         entries, so `_protocol_level` reads them and this rule states nothing for them.
+
+        `unread` is the fact set the entry level holds, so a `number` text read at a level under the entry is
+        stated for the entry line (F7.1 rule 11). The set is read off the dict the entry level built; an entry
+        inside the entry is its own marked object, so it is read with its own set.
         """
         table = table or resource_mapping.PROTOCOL_TABLE
+        if unread is None:
+            held = fields.get(entry_coverage.NUMBER_TEXT_NOT_READ)
+            unread = held if isinstance(held, dict) else None
         detail = ""
         for field, shape in table.row(path)["fields"].items():
             element = body.find(self._protocol_xml_name(field, path, table))
@@ -2638,7 +2655,7 @@ class PanoramaParser:
                 continue
             entry_path = f"{path}/{field}"
             if shape == "one_of":
-                fields[field], reason = self._protocol_presence_choice(entry_path, element, table)
+                fields[field], reason = self._protocol_presence_choice(entry_path, element, table, unread)
                 detail = detail or reason
             elif shape == "string_list":
                 # The entries a level holds are its own children, so an entry inside an entry belongs to the
@@ -2647,11 +2664,15 @@ class PanoramaParser:
             elif shape == "object":
                 # F7.6: a level dict is not an entry, so the entries a `string_list` field holds live under the
                 # element this field names. The same rule fills them, through the path the field names.
-                self._protocol_body(entry_path, element, fields[field], table)
+                self._protocol_body(entry_path, element, fields[field], table, unread)
         return detail
 
     def _protocol_presence_choice(
-        self, path: str, element: ET.Element, table: resource_mapping.ShapeTable | None = None
+        self,
+        path: str,
+        element: ET.Element,
+        table: resource_mapping.ShapeTable | None = None,
+        unread: dict | None = None,
     ) -> tuple:
         """The one key a `one_of` level states when the export states the level by presence (F7.4, F7.5).
 
@@ -2659,13 +2680,15 @@ class PanoramaParser:
         the holder is that element: `advertise` or `no` for a default route. `selects` is the one lookup, so
         the key the print uses is the key the row selects for the value, not the tag the export states. A
         level element with no child states none of the alternatives the provider requires, so the mapping
-        cannot state a key for it and the caller marks the entry with that reason.
+        cannot state a key for it and the caller marks the entry with that reason. `unread` is the fact set the
+        caller holds for the entry, so a field alternative the `number` rule cannot read is stated for the entry
+        line (F7.1 rule 11).
         """
         table = table or resource_mapping.PROTOCOL_TABLE
         child = element[0] if len(element) else None
         # The table is passed on, so a choice read for a shape table other than `protocol` cannot fall back to
         # the protocol table (`test_the_shape_tables_are_the_only_shape_owners`).
-        return self._protocol_choice(path, child.tag if child is not None else "", element, child, table)
+        return self._protocol_choice(path, child.tag if child is not None else "", element, child, table, unread)
 
     def _protocol_presence_fields(
         self, path: str, captured: dict, table: resource_mapping.ShapeTable | None = None
@@ -2697,7 +2720,12 @@ class PanoramaParser:
         field = self._protocol_field_name(f"{path}/link_type", table)
         captured = self._protocol_level(iface, path)
         choice, detail = self._protocol_choice(
-            f"{path}/{field}", self._get_text(iface, self._protocol_xml_name(field, table)), iface, iface, table
+            f"{path}/{field}",
+            self._get_text(iface, self._protocol_xml_name(field, table)),
+            iface,
+            iface,
+            table,
+            captured.get(entry_coverage.NUMBER_TEXT_NOT_READ),
         )
         captured[field] = choice
         return captured, detail
@@ -2718,6 +2746,7 @@ class PanoramaParser:
         level: ET.Element | None,
         holder: ET.Element | None,
         table: resource_mapping.ShapeTable | None = None,
+        unread: dict | None = None,
     ) -> tuple:
         """The one key a `one_of` level states, as `({the report value: the alternative's value}, detail)` (F7.1).
 
@@ -2727,7 +2756,9 @@ class PanoramaParser:
         can be a value instead of a level. When the row states it as a field, the field reader reads it from
         `level`, and when the row states it as a level, the level reader reads it from `holder`. `detail` is the
         reason the mapping cannot state the value, which is empty for a value it can state: the caller marks
-        the entry for the report with it, because a one-of level with no key prints nothing.
+        the entry for the report with it, because a one-of level with no key prints nothing. `unread` is the fact
+        set the caller holds for the entry, so the alternative's field reader can state a `number` text it cannot
+        read (F7.1 rule 11).
         """
         table = table or resource_mapping.PROTOCOL_TABLE
         row = table.row(path)
@@ -2746,12 +2777,12 @@ class PanoramaParser:
             return (
                 {
                     report_value: self._protocol_field(
-                        level, field, self._protocol_xml_name(field, table), row["fields"][chosen]
+                        level, field, self._protocol_xml_name(field, table), row["fields"][chosen], unread
                     )
                 },
                 "",
             )
-        return ({report_value: self._protocol_level(holder, f"{path}/{chosen}", False, table)}, "")
+        return ({report_value: self._protocol_level(holder, f"{path}/{chosen}", False, table, unread)}, "")
 
     def _protocol_level(
         self,
@@ -2759,6 +2790,7 @@ class PanoramaParser:
         path: str,
         facts: bool = True,
         table: resource_mapping.ShapeTable | None = None,
+        unread: dict | None = None,
     ) -> dict:
         """Read one protocol level as `PROTOCOL_SHAPE` names its fields (F7.1).
 
@@ -2770,6 +2802,12 @@ class PanoramaParser:
 
         `facts` is the five scope facts. They belong to the object the ledger marks, which is the entry
         level, so a level read for a choice body or for a child element is read without them.
+
+        `unread` is the fact set the reading rule fills for the entry, so a `number` text the shape word cannot
+        read is stated once for the entry line. The entry level owns the set, because that level is the object the
+        ledger marks and the object the report prints, so the set is created there and shared down the levels
+        inside the entry. An entry inside an entry is its own marked object, so it owns its own set, and the fact
+        read for it prints on the line of the entry that lists it (F7.1 rule 11).
         """
         table = table or resource_mapping.PROTOCOL_TABLE
         row = table.row(path)
@@ -2778,6 +2816,11 @@ class PanoramaParser:
             # presence, the same rule as a `block` field (F7.1).
             return HclRef("{}")
         level = {}
+        if facts and entry is not None and entry.tag == "entry":
+            # F3.10: a protocol entry is an object the ledger records, so it carries the five scope facts
+            # of the router that holds it, and the fact set the report reads. A container level (`bgp`, `ospf`)
+            # is not an entry, and the emitter places only the router, so that level holds no facts.
+            unread = level.setdefault(entry_coverage.NUMBER_TEXT_NOT_READ, {})
         for field, shape in row["fields"].items():
             if shape == "string_list":
                 level[field] = []
@@ -2789,7 +2832,7 @@ class PanoramaParser:
                     # alternative there is a level the export states by presence.
                     element = entry.find(self._protocol_xml_name(field, path, table)) if entry is not None else None
                     level[field] = (
-                        self._protocol_presence_choice(f"{path}/{field}", element, table)[0]
+                        self._protocol_presence_choice(f"{path}/{field}", element, table, unread)[0]
                         if element is not None
                         else {}
                     )
@@ -2797,13 +2840,12 @@ class PanoramaParser:
                     level[field] = {}
             elif shape == "object":
                 child = entry.find(self._protocol_xml_name(field, path, table)) if entry is not None else None
-                level[field] = self._protocol_level(child, f"{path}/{field}", True, table)
+                level[field] = self._protocol_level(child, f"{path}/{field}", True, table, unread)
             else:
-                level[field] = self._protocol_field(entry, field, self._protocol_xml_name(field, path, table), shape)
+                level[field] = self._protocol_field(
+                    entry, field, self._protocol_xml_name(field, path, table), shape, unread
+                )
         if facts and entry is not None and entry.tag == "entry":
-            # F3.10: a protocol entry is an object the ledger records, so it carries the five scope facts
-            # of the router that holds it. A container level (`bgp`, `ospf`) is not an entry, and the
-            # emitter places only the router, so that level holds no facts.
             level.update(self.identity_of(entry))
         return level
 
@@ -2818,8 +2860,19 @@ class PanoramaParser:
         """
         return (table or resource_mapping.PROTOCOL_TABLE).xml_name(field, path)
 
-    def _protocol_field(self, entry: ET.Element, field: str, xml_name: str, shape: str):
-        """One protocol field, read as the shape table states it (F7.1), through the one text rule."""
+    def _protocol_field(
+        self,
+        entry: ET.Element,
+        field: str,
+        xml_name: str,
+        shape: str,
+        unread: dict | None = None,
+    ):
+        """One protocol field, read as the shape table states it (F7.1), through the one text rule.
+
+        `unread` is the fact set the shape-field reader holds for the entry it marks, so the reading rule can
+        state a fact about the text it cannot read. It records nothing when no reader holds a set for the entry.
+        """
         if entry is None:
             return ""
         if field == "name":
@@ -2840,6 +2893,12 @@ class PanoramaParser:
             # `isdigit` answers false for the sign, so the sign is read before the digits (F7.1 rule 8).
             if text.isdigit() or (text.startswith("-") and text[1:].isdigit()):
                 return int(text)
+            # The element is there and holds text the shape word cannot read, which is not the same fact as an
+            # element that is absent or holds no text. The value answer stays the no-value answer, so the block
+            # prints nothing for the field and the gate sees no field to check, and the fact is stated for the
+            # entry line (`docs/ARCHITECTURE.md` §4.9 rule 11).
+            if text and unread is not None:
+                unread[field] = f"{field} {text!r} is not a signed integer"
             return ""
         if shape == "block":
             # Presence is the value: the provider reads an empty block as the export having stated it, so

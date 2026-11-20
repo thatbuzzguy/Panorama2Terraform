@@ -100,9 +100,11 @@ PRINTS_VALUE_KINDS = ("count-only",)
 # decides the captured part per kind.
 NAMES_NO_FIELD_KINDS = ("bookkeeping",)
 
-# Keys a parsed object carries that are not entry fields: the entry name and the
-# five scope facts.
-NON_FIELD_KEYS = frozenset({"name"}) | frozenset(container_coverage.SCOPE_FACT_KEYS)
+# Keys a parsed object carries that are not entry fields: the entry name, the five scope facts, and the fact the
+# reading rule states for a `number` text it cannot read (`docs/ARCHITECTURE.md` §4.9 rule 11). A fact is not a
+# field, so the property scan reads it as no field and `row_for` prints it as detail.
+NUMBER_TEXT_NOT_READ = "number_text_not_read"
+NON_FIELD_KEYS = frozenset({"name"}) | frozenset(container_coverage.SCOPE_FACT_KEYS) | {NUMBER_TEXT_NOT_READ}
 
 # A field with no value is not a captured field (F4.3 rule 3), so the property scan and the
 # state scan (F5.6) both drop it through this one definition.
@@ -403,6 +405,32 @@ class EntryLedger:
             return row.destination
         return "unaccounted"
 
+    def recorded_fact(self, entry: ET.Element, mark: dict) -> str:
+        """The fact the reading rule stated for the entry, read off the recorded object.
+
+        The read is through `RecordingDict.value()`, the same rule `destination` reads the `report_only` fact
+        through, so printing a fact records no property use. The fact set belongs to the object the ledger marks
+        for the entry, so a `number` text read at a level inside the entry is stated on that object. An entry
+        inside a config-object entry has no line of its own (§3.2), so the fact stated on its own recorded object
+        prints on the row that counts it, with the name it is counted under. `mark_skipped` records no object, so
+        a skipped entry answers nothing.
+        """
+        facts = [self._fact_of(mark["captured"])]
+        for node in entry.iter():
+            if node.tag == "entry" and node is not entry:
+                child = self.mark_for(node)
+                fact = self._fact_of(child["captured"]) if child else ""
+                if fact:
+                    facts.append(f"{node.get('name') or '(no name)'} {fact}")
+        return "; ".join(fact for fact in facts if fact)
+
+    def _fact_of(self, recorded) -> str:
+        """The fact set stated on one recorded object, read without recording."""
+        value = recorded.value(NUMBER_TEXT_NOT_READ) if isinstance(recorded, RecordingDict) else ""
+        if isinstance(value, dict):
+            return "; ".join(value.values())
+        return value or ""
+
     def captured_fields(self, mark: dict | None) -> tuple:
         """Keys the parse method kept for an entry, in sorted order (F4.3 AC-3)."""
         if not mark:
@@ -468,6 +496,13 @@ class EntryLedger:
             detail = ""
         if mark and mark["detail"]:
             detail = f"{detail} - {mark['detail']}" if detail else mark["detail"]
+        if mark:
+            # The fact the reading rule stated for a `number` text it cannot read is printed as detail, because the
+            # field it names is stored with no value, so `captured_fields` drops it and the property scan cannot
+            # see it (F4.3 rule 4). The entry line is the output that reports it.
+            fact = self.recorded_fact(entry, mark)
+            if fact:
+                detail = f"{detail} - {fact}" if detail else fact
         row_data = {
             "line": self.line_of(entry),
             "source": self.source_of(entry).name,

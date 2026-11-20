@@ -145,6 +145,17 @@ def data_file_set(output_dir) -> list[str]:
     return sorted(names)
 
 
+# --- The content the `number` reading-rule pins read (F7.1 rule 11) ------------
+
+# One text the signed-integer rule cannot read, the `number` field the pins read the rule through, and the fact
+# the reading rule states for that text. Two test modules read this pair, so it lives in this file:
+# `tests/test_parse_helpers.py` pins the three answers the reading rule gives for a `number` field, and
+# `tests/test_entry_coverage.py` pins the entry line that prints the fact. The field is one the shape table
+# states as `number`, so the pins read the shape word through the table and state no shape of their own.
+UNREAD_NUMBER_TEXT = "not-a-number"
+NUMBER_FIELD = "tag"
+UNREAD_NUMBER_FACT = f"{NUMBER_FIELD} {UNREAD_NUMBER_TEXT!r} is not a signed integer"
+
 # --- The corpus read rule the corpus pins read (F3.8, F3.9) ---------------------
 
 

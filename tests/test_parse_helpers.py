@@ -9,7 +9,10 @@ Pins:
 
 - the six helpers read the same content through the one rule, and an element that is not there still answers
   None, so the rule does not turn an absent field into an empty one;
-- the run prints a value without the export's formatting, and the gate reads the same run clean.
+- the run prints a value without the export's formatting, and the gate reads the same run clean;
+- the `number` reading rule answers the integer for text it can read and the no-value answer for text it cannot,
+  and states the fact for the text it cannot read only when the caller holds the fact set for the entry, so the
+  rule cannot report a fact by itself (`docs/ARCHITECTURE.md` §4.9 rule 11).
 """
 
 import xml.etree.ElementTree as ET
@@ -17,12 +20,21 @@ import xml.etree.ElementTree as ET
 import resource_mapping
 import sanity_checks
 import split_device_groups
-from conftest import file_text, run_script, tf_files
+from conftest import (
+    NUMBER_FIELD,
+    UNREAD_NUMBER_FACT,
+    UNREAD_NUMBER_TEXT,
+    file_text,
+    run_script,
+    tf_files,
+)
 
 CONVERTER = "panorama_to_terraform.py"
 
 # The content the pins read: one value that states the export's formatting around it.
 SPACED = "  spaced  "
+# The text the `number` reading rule can read, for the pin that pins the three answers.
+READABLE_NUMBER = "45"
 
 
 def _root():
@@ -137,3 +149,41 @@ def test_a_value_with_surrounding_whitespace_prints_without_it(tmp_path):
     text = file_text(tf_files(out), "scope.tf")
     assert 'description = "spaced"' in text, text
     assert not sanity_checks.run_checks(out).failed, "the value prints as the read layer read it"
+
+
+def test_the_number_rule_answers_for_the_text_it_can_read_and_the_text_it_cannot(make_parser):
+    """The three answers the `number` reading rule gives, through the fact set the caller holds (§4.9 rule 11).
+
+    The rule reads the text, so it answers the integer for text it can read, `''` for an element that is absent
+    or holds no text, and `''` plus the fact it states for text it cannot read. The fact is not a value, so the
+    value answer does not change: the block prints nothing for the field, and the entry line prints the fact. The
+    fact is stated only when the caller holds the set for the entry, so the rule cannot report a fact by itself,
+    and the input layer cannot know which element is a `number` field because it reads no shape table.
+
+    The path, the field and the shape word are read through the table, so the pin states no shape of its own.
+    """
+    p = _any_parser(make_parser)
+    table = resource_mapping.FILTER_TABLE
+    path = "network/routing-profile/filters/route-maps/bgp/bgp-entry/route_map/match"
+    shape = table.row(path)["fields"][NUMBER_FIELD]
+    assert shape == "number", shape
+    name = table.xml_name(NUMBER_FIELD, path)
+    read = ET.fromstring(f"<match><tag>{READABLE_NUMBER}</tag></match>")
+    unread_text = ET.fromstring(f"<match><tag>{UNREAD_NUMBER_TEXT}</tag></match>")
+    empty = ET.fromstring("<match><tag></tag></match>")
+    absent = ET.fromstring("<match><other>x</other></match>")
+
+    # The answers, read with the set the caller holds for the entry.
+    unread = {}
+    assert p._protocol_field(read, NUMBER_FIELD, name, shape, unread) == int(READABLE_NUMBER), unread
+    assert p._protocol_field(absent, NUMBER_FIELD, name, shape, unread) == "", unread
+    assert p._protocol_field(empty, NUMBER_FIELD, name, shape, unread) == "", unread
+    assert unread == {}, "the rule states nothing for a value it read or for no value"
+    # The sign is part of the value, so the rule reads it before the digits.
+    assert p._protocol_field(ET.fromstring("<match><tag>-45</tag></match>"), NUMBER_FIELD, name, shape, unread) == -45
+    assert unread == {}, unread
+    # The text it cannot read answers the no-value answer and states the fact.
+    assert p._protocol_field(unread_text, NUMBER_FIELD, name, shape, unread) == "", unread
+    assert unread == {NUMBER_FIELD: UNREAD_NUMBER_FACT}, unread
+    # Without a set held for the entry the rule states nothing, so it is not the output that reports the fact.
+    assert p._protocol_field(unread_text, NUMBER_FIELD, name, shape) == ""

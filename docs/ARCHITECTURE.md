@@ -435,7 +435,7 @@ one line per config entry the parse pipeline read, in this order:
   line <source line>  <object type>/<entry name>  <destination>  <detail>  captured: <fields>
 ```
 
-Six rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
+Seven entry-line rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
 
 - **One entry is one report row**, at section level only. An entry inside a
   config-object entry is a property level (§3.1), so the property scan reports it and
@@ -474,6 +474,15 @@ Six rules, in `entry_coverage.py`, pinned by `tests/test_entry_coverage.py`:
   does not print it, so the entry-line bytes are unchanged for a one-source run. Pinned by
   `tests/test_entry_coverage.py::test_every_row_names_the_source_that_holds_the_entry` and
   `::test_the_entry_line_prints_no_source`.
+- **A fact the reading rule states for a `number` text it cannot read prints as the entry line's detail**
+  (§4.9 rule 11): the fact is not a field, so `captured_fields` prints no name for it and the property scan reads
+  no property for it, and `row_for` prints it through `recorded_fact`, read off the recorded object with the same
+  rule the destination fact is read with, so printing a fact records no property use. The fact set belongs to the
+  object the ledger marks for the entry, and the entry level owns it and shares it down the levels inside it. An
+  entry inside a config-object entry has no line of its own (rule 1), so a fact read for it prints on the row that
+  counts it, with the name it is counted under, and `recorded_fact` gathers the facts through `mark_for` and names
+  each entry. A run whose only output is this fact keeps the exit code the gate decides (§4.6). Pinned by
+  `tests/test_entry_coverage.py::test_the_entry_line_prints_the_fact_the_number_rule_cannot_read`.
 - **A property the parse captured and no output read is a finding**, and the report
   prints findings in their own section after the gap section:
 
@@ -1229,6 +1238,15 @@ read as a pass. A missing binary is SKIPPED, never a silent pass. Pinned by
 `::test_a_non_zero_tflint_run_with_nothing_to_report_is_a_fail_finding`, and
 `::test_tflint_without_the_binary_is_skipped_not_failed`.
 
+The gate reads the files it wrote, so a rule cannot carry a fact the printed file holds nothing for: a report-only
+fact is not a gate finding, and the exit code stays the gate's decision, so a run whose only output is a report
+fact exits 0. The one shape that moves the exit code is a refusal, which exits 1 and writes no file. That is why
+the field a `number` text the reading rule cannot read is reported on the entry line and not refused at the input
+layer: no committed fixture trips the rule, so a refusal would change no CI output but would move the exit code
+for one field (§4.9 rule 11). Pinned by
+`tests/test_entry_coverage.py::test_the_entry_line_prints_the_fact_the_number_rule_cannot_read`, which reads the
+gate's result on the planted run and answers no finding.
+
 The finding shape is the gate's, so no second console shape appears: a tflint finding names a rule name and a
 position, not an entry identity, so it has no part the §3.2 console shape can hold, and the check states no
 wording beyond the rule name and the message the tool wrote. The path a finding names is the key the reader
@@ -1735,6 +1753,27 @@ block's own level as well as at each level below.
     and recorded in [`../backlog.md`](../backlog.md). Pinned by
     `tests/test_protocol_object.py::test_the_one_of_mapping_is_the_decision_the_report_prints`
     and `tests/test_protocol_object.py::test_a_one_of_level_prints_one_key`.
+
+11. **The `number` reading rule answers the integer for the text it can read and the no-value answer for the text
+    it cannot, and states the fact for the text it cannot read only when the caller holds the fact set for the
+    entry** (measured 2026-11-20, closes the open part of the F2.9 `number` finding). The three answers are the
+    integer for text the signed-integer rule reads, `''` for an element that is absent or holds no text, and `''`
+    plus the fact for text that is present but cannot be read. The value answer does not change for unreadable
+    text, so the field keeps no value, the block prints nothing for it, and the gate sees no field to check; the
+    stored value stays `''` and not `None`, because `hcl_value` refuses `None`. The report is the output that
+    reports it, because the print path has no carrier for a report-only fact: F2.9's `# NOTE:` mechanism prints
+    dict keys, so a note cannot be a key, `mark`'s `reason` decides the destination and whether the entry line
+    prints at all, and `mark`'s `detail` cannot hold the field name without the read that recorded it. The fact key
+    `entry_coverage.NUMBER_TEXT_NOT_READ` holds the fact set on the dict `_protocol_level` builds for the entry
+    level, which is the object the ledger marks, and `row_for` prints it as the entry line's detail (§3.2 rule 7).
+    The fact is stated only when the caller holds the set for the entry, so the input layer is not the owner:
+    `xml_input.py` reads no shape table and cannot know which element is a `number` field, and an input-layer
+    refusal would change no CI output but would move the exit code to 1 and write no file (§4.6). Measured on the
+    accepted corpus: 144 `number` field reads across the 66 accepted fixtures, 79 integers and 65 absent, and no
+    present-but-unreadable text, so no golden and no report golden moves. `bool` is not the same blind side,
+    because an unread `bool` answers `False`, which prints, so the gate sees a field for it. Pinned by
+    `tests/test_parse_helpers.py::test_the_number_rule_answers_for_the_text_it_can_read_and_the_text_it_cannot`
+    and `tests/test_entry_coverage.py::test_the_entry_line_prints_the_fact_the_number_rule_cannot_read`.
 
 The container rows for the levels this converter prints are `emitted` with the note
 `panos_virtual_router` (`container_coverage.CONTAINER_TABLE`), so the property scan measures them against the

@@ -26,6 +26,7 @@ that document instead of restating the rule.
 | Per-scope source shape, the envelope rule, the scope path shape | `ARCHITECTURE.md` §3.1, and `container_coverage.py` |
 | Cross-source shadow scan (the fact, the line shape, the heading) | `ARCHITECTURE.md` §3.2, and `shadow_coverage.py` |
 | The destination one entry takes (the one place that answers it, and the order) | `ARCHITECTURE.md` §3.2, and `entry_coverage.py` (`EntryLedger.destination`) |
+| The `number` reading rule (the three answers, and the fact it states for text it cannot read) | `ARCHITECTURE.md` §4.9 rule 11, and `PanoramaParser._protocol_field`; the entry line that prints the fact is `ARCHITECTURE.md` §3.2 rule 7, and `entry_coverage.py` |
 | Emit order, location, reference resolution, policy chains, reports, gate | `ARCHITECTURE.md` §4 |
 | The round-trip cross-check (the block set against the entry set, per unit and row) | `ARCHITECTURE.md` §4.6, and `sanity_checks.check_round_trip`, which reads the scan scope through `entry_coverage.matrix_row_for` |
 | The request-set gate rule (the join's rows against the scope index, per unit and per entry) | `API_CONVERSION_PATH.md` §3, and `sanity_checks.check_request_set`, which reads the join through `api_requests.unit_findings` and the unit through `unit_manifest` |
