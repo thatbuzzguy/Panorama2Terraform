@@ -22,11 +22,13 @@ import pytest
 
 import api_requests
 import entry_coverage
+import import_blocks
 import panorama_to_terraform
 import rule_data
 import sanity_checks
 import source_fetch
 import split_device_groups
+import write_path
 import xml_input
 
 TESTS_DIR = Path(__file__).parent
@@ -112,6 +114,32 @@ def tf_bytes(output_dir) -> dict[str, bytes]:
     states that both sets are not empty, so the pin measures content.
     """
     return {key: value for key, value in written_bytes(output_dir).items() if Path(key).suffix == ".tf"}
+
+
+# --- The rule row set, shared by the modules that read it (Epic 9, Phase 9D) -----
+
+# The rule-type set, read through the module that owns it, so no test module states its own list.
+RULE_TYPES = tuple(sorted(import_blocks.rule_types()))
+
+
+def data_file_set(output_dir) -> list[str]:
+    """The files the gate's data count names: the four records at the codebase root, plus the rule data pair's
+    data member inside each unit directory its own rows name (Epic 9, rule 5).
+
+    The names are read through `rule_data`, the module that owns the row shape and the three forms, and the unit
+    set through `sanity_checks.unit_directories`, which reads the manifest record, so this states no file-name rule
+    and no unit rule of its own. The printed member is not a data file, the way `site.auto.tfvars` is not, because
+    it is a printed form and not a reader input. A pin that compares the report's data count with this set measures
+    the count through the same derivation the rule states.
+    """
+    out = Path(output_dir)
+    names = [name for name, _shape in sanity_checks.DATA_FILES if (out / name).is_file()]
+    for resource in RULE_TYPES:
+        for directory in sanity_checks.unit_directories(out):
+            path = write_path.unit_path(out, directory, rule_data.data_file(resource))
+            if path.is_file():
+                names.append(str(path.relative_to(out)))
+    return sorted(names)
 
 
 # --- The corpus read rule the corpus pins read (F3.8, F3.9) ---------------------

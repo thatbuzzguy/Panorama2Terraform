@@ -37,7 +37,7 @@ Every file in this table is a module in `src/`, except the test harness, which i
 | `ownership.py` | The owner of a repeated name (F6.2): one row per entry a matrix row covers, as `OWNERSHIP.json` (§3.5), and the report finding for a case the rule cannot decide | the row scope is the F4.4 rule read through the report row, so no second scope rule exists; the identity key and the naming rule are read through `state_coverage` and `unit_manifest`, so no second key or naming rule exists; `disable_override` names the entry that cannot be overridden, not the owner; the scan reads a captured value without recording |
 | `reference_edges.py` | The reference between units (F6.3): one row per pair, as `REFERENCE_EDGES.json` (§3.6), the acyclic rule, and the unit order on the manifest row | the edge set is the names §4.3 recorded, so this module records no name and resolves no name; the target is the ownership `owner`, so the pair joins to §3.4 on `directory` and to §3.5 on (`type`, `entry`); a row that names one unit is refused; the order comes from the three bases §6 of `CODEBASE_ASSEMBLY.md` states, read through the module that holds each fact |
 | `site_data.py` | The site as data (F6.6): one row per site that names a value, as `SITE_DATA.json` (§3.7), and the `.tfvars` written from the rows | the row joins to §3.4 on `directory`, so no second unit rule exists; the module resolves no name and names no value the run did not print; the `.tfvars` is the printed form of the data, not the generator's state; `parse_rows` refuses a shape it does not declare, and the shape it declares is `SITE_ROW_FIELDS`; the name is the §5 rule read through `naming.py` |
-| `rule_data.py` | The rule as data (Epic 9): one row per policy rule for the four `*_policy_rules` types, as the `.json` form of the matrix row's `output_file`, and the printed CSV form of the same rows, both named through that row and both unit-set files, and the third form of the same rows: the map the `.tf` file prints, named through the same stem with no suffix, which is also the name of the block that iterates it, with `printed_keys` reading its keys for the cross-check (`CODEBASE_ASSEMBLY.md` §14) | the row joins to §3.4 on `directory`, so no second unit rule exists; the shape it declares is `RULE_ROW_FIELDS`, and `parse_rows` refuses a shape it does not declare, including the printed form read as data; the identity key is read through `state_coverage.ownership_key` and the digest through `unit_manifest.identity_digest`, so no second key or digest rule exists; the chain grouping (F2.5, F3.2) is stated here and read by the generator, so no module groups rules a second way; the properties are the matrix row's field set read through the recorded object, so no column names a field the parse cannot capture (F3.5); the module takes the §5 rule as an argument and states no path, console line, or environment name, and holds no writer of its own: the run writes one pair per rule type per unit through `write_path.py`, inside the unit directory the rows name, and only when that unit has rows |
+| `rule_data.py` | The rule as data (Epic 9): one row per policy rule for the four `*_policy_rules` types, as the `.json` form of the matrix row's `output_file`, and the printed CSV form of the same rows, both named through that row and both unit-set files, and the third form of the same rows: the map the `.tf` file prints, named through the same stem with no suffix, which is also the name of the block that iterates it, with `printed_entries` reading one entry per row for the block rule (`CODEBASE_ASSEMBLY.md` §14), and the three entry tables the emitter and the gate read: `RULE_ENTRY_FIELDS` for the provider name and the shape word of each field, `RULE_ENTRY_READERS` for the field a reader builds, and `RULE_BODY_DEFAULTS` for the one provider field no row column names | the row joins to §3.4 on `directory`, so no second unit rule exists; the shape it declares is `RULE_ROW_FIELDS`, and `parse_rows` refuses a shape it does not declare, including the printed form read as data; the identity key is read through `state_coverage.ownership_key` and the digest through `unit_manifest.identity_digest`, so no second key or digest rule exists; the chain grouping (F2.5, F3.2) is stated here and read by the generator, so no module groups rules a second way; the properties are the matrix row's field set read through the recorded object, so no column names a field the parse cannot capture (F3.5); `printed_entries` reads the printed map and states no value shape of its own, because the value shape is `sanity_checks.value_shape`, so the gate holds one shape rule; the module takes the §5 rule as an argument and states no path, console line, or environment name, and holds no writer of its own: the run writes one pair per rule type per unit through `write_path.py`, inside the unit directory the rows name, and only when that unit has rows |
 | `import_blocks.py` | The import block (F6.4): one block per entry, as `imports.tf` (§4.8), and the id shape | the block is built from the same data the resource block uses, so this module states no location rule and no naming rule; the id is the base64 JSON object the provider documents, and `decode_id` refuses a shape it does not declare, which is `IMPORT_ROW_FIELDS`; the four `*_policy_rules` types are the rows `LOCATION_SCHEMA` declares `rulebase` for, so no second table names them |
 | `commit_actions.py` | The action block per unit (F6.7, F6.10.4): one block per manifest row for each of the two actions the pinned schema declares, as `actions.tf` (§4.9), and the row shape `ACTION_ROW_FIELDS` | the block states the fact `SCOPE_ANSWER` answers for the unit, read through `unit_manifest.named_fact`, so this module states no fact rule and no naming rule; the row shape names the record it belongs to, because `src/` is one flat namespace (§1); a block that states more than one name is not the declared shape, so `read_block` refuses it the way `decode_id` refuses a value that is not base64 JSON |
 | `write_path.py` | The write path (F6.10.3): the one function that writes a file, and the two path builders, one per file set (§6) | the LF rule is enforced here and nowhere else, so no module of the tool writes a file outside it; `bytes` are written without translation, because the cache holds the bytes the input door parsed; the module states no unit rule and no naming rule, because a per-unit file names its unit only by its directory (§14 of `CODEBASE_ASSEMBLY.md`) |
@@ -55,8 +55,9 @@ are named the same way, because `.github/` holds no index of its own. Pinned by
 hold a name being present, and cannot hold how a document words it, so the document-review checks sit in
 `tools/check_documents.py` (`tools/README.md`), which the test set does not read.
 
-- The root holds `AGENTS.md`, the readme indexes, the tracking markdown, the two license files
-  (`LICENSE-AGPL` and `LICENSE-COMMERCIAL`), and the two tool-config files (`pyproject.toml`, which states
+- The root holds `AGENTS.md`, the readme indexes, the tracking markdown, the commit-message convention
+  `commit.md`, the two license files (`LICENSE-AGPL` and `LICENSE-COMMERCIAL`), and the two tool-config
+  files (`pyproject.toml`, which states
   the rules below, and `requirements.txt`, the pinned development tools). The root index names each of them.
   The license rule is not here: `docs/LICENSING.md` is the owner of the holders and the scope of each grant,
   and this section states only where the license files sit.
@@ -1144,12 +1145,15 @@ Pinned by `tests/test_reports.py`, including
 `main()` runs `sanity_checks.run_checks` after it writes the output. The gate
 reads the files in the output directory, so a rule is satisfied by a file, not
 by a bookkeeping value that never reached one. The gate runs on every
-conversion. It reads the `.tf` files for the block rules and the four data files
-for the data rule (F6.8), and the report names both counts. Two rules read a set the gate did not write,
-because their facts compare two sets: the round-trip cross-check compares the block set it read with the entry
-set the run's ledger read, and the request-set rule compares the join's rows with the scope index the run built
-(F8.8, `docs/API_CONVERSION_PATH.md` §3). Neither reads a report or a data file, and a rule that reads only the
-output directory is unchanged. The splitter writes XML, so it has no `.tf` file and no data file to check.
+conversion. It reads the `.tf` files for the block rules and the data files for the data rule (F6.8), and the
+report names both counts. The data count names the four records at the codebase root plus the rule data pair's
+data member inside each unit directory its own rows name, because the pair is a unit-set file (§14 of
+`CODEBASE_ASSEMBLY.md`), and the printed member enters no count, the way the site print does not. Two rules read
+a set the gate did not write, because their facts compare two sets: the round-trip cross-check compares the block
+set it read with the entry set the run's ledger read, and the request-set rule compares the join's rows with the
+scope index the run built (F8.8, `docs/API_CONVERSION_PATH.md` §3). Neither reads a report, and a rule that reads
+only the output directory is unchanged. The splitter writes XML, so it has no `.tf` file and no data file to
+check.
 
 The reader walks the codebase root and the directories under it and keys each `.tf` file by the path from the
 codebase root, so a finding names the unit the file belongs to: a per-unit file names its unit only by its
@@ -1157,8 +1161,9 @@ directory (§14 of `CODEBASE_ASSEMBLY.md`). The plan check runs once per unit di
 names, because a unit is one plan and one root, so the report prints one result per unit and names the
 directory it ran on — the finding names it, or the note names it when the plan passed. `result_of` is the worst
 result the check produced, so a unit that failed is not hidden behind a unit that passed. The two report counts
-name the two sets: the `.tf` files the reader read, and the four records at the root
-(`tests/test_write_path.py`, `tests/test_sanity_gate.py`).
+name the two sets: the `.tf` files the reader read, and the data files the data rule reads, which are the four
+records at the root plus the rule data pair's data member inside each unit directory its own rows name
+(`tests/test_write_path.py`, `tests/test_sanity_gate.py`, `tests/test_data_file_gate.py`).
 
 A value constraint the provider carries in its code, not in the schema JSON, is not data the gate can read, so
 it cannot become a gate rule: the gate is static when the run does not ask for a command, and its input is the
@@ -1183,6 +1188,7 @@ The provider fact itself is recorded in `backlog.md`, as a fact the tool cannot 
 | `protocol_object` | every `protocol` object on a `panos_virtual_router` block matches its `PROTOCOL_SHAPE` row (§4.9) | FAIL |
 | `filter_blocks` | every filter container block matches its `FILTER_SHAPE` row (§4.10) | FAIL |
 | `certificate_blocks` | every certificate block matches its `CERTIFICATE_SHAPE` row (§4.11) | FAIL |
+| `rule_blocks` | every iterated rule block matches the `LOCATION_SCHEMA` row for its type and the map entries against the row set `rule_data.parse_rows` reads (Epic 9, Phase 9D) | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a variable this run declares (F6.6) | FAIL |
 | `data_files` | every data file reads as its declared rows and agrees with the rules that produced it (F6.8) | FAIL |
@@ -1352,6 +1358,33 @@ by `tests/test_certificate_blocks.py`, one test per finding, the two-reader pin,
 `tests/test_protocol_object.py::test_the_table_is_the_only_shape_owner`, and the report order is pinned by
 `tests/test_data_file_gate.py::test_check_order_puts_the_data_rule_after_the_block_rules`.
 
+`rule_blocks` (Epic 9, Phase 9D) reads an iterated rule block against `resource_mapping.LOCATION_SCHEMA` (§4.8)
+and against the row set the block prints, through the same block reader and the same field reader the other block
+rules use, so no second reader and no shape rule appears. Seven findings, each a FAIL: one block per rule type per
+unit for the units the rows name, in both directions, because a rule type with no rows writes no block and so
+produces no fact; the block's local name and the `for_each` map name are the one stem `rule_data.locals_name`
+reads through the matrix row; `location` is a level `LOCATION_SCHEMA` names for the type and every field inside it
+is one the row names for that level, with the missing `location` block left to `location_present`; the body's field
+list is the name field read through `entry_coverage.name_field` plus the fields the matrix row declares in table
+order, with the provider name `rule_data.RULE_ENTRY_FIELDS` states plus the one field `rule_data.RULE_BODY_DEFAULTS`
+states, and every field prints as `each.value.<field>` because the map is the only place the file states a row
+value; the map holds one entry per row for that unit, keyed by the row `key`, read through
+`rule_data.printed_entries`; each entry field reads as the shape word the table states through `value_shape`, and
+its content is the row's value read back through `import_blocks`, as `entry_is_the_row` states, with `null` for a
+field the row holds no value for, the shape word only for a field the table names a reader for, and the name field's
+row value read from the row's `entry` column, the only column that states it; and the position is the line of the
+block the reader read, or the file as a whole when it read no block, because the block and the map it reads are one
+object in one file. A printed block and a hand-written block are read the same way, because the rule reads the files
+the operator receives, so a hand-written entry that is not the row it names is a finding and a block for a unit no
+row names is a finding. `CHECK_ORDER` puts the rule after `certificate_blocks`, with the other block rules, because
+it reads the `.tf` files, and it is the block rule that also reads the row set the data rule reads. Pinned by
+`tests/test_sanity_gate.py`: `::test_rule_block_check_detects_an_entry_that_is_not_the_row_it_names`,
+`::test_rule_block_check_detects_a_block_for_a_unit_no_rule_row_names`, and
+`::test_rule_block_check_detects_rows_the_reader_read_no_block_for`; the one-reader and no-shape pins are in
+`tests/test_data_file_gate.py::test_no_block_rule_reads_a_data_file_and_the_data_rule_reads_no_tf_file`, and the
+gate order and the report order are pinned by `::test_check_order_puts_the_data_rule_after_the_block_rules` and
+`tests/test_sanity_gate.py::test_the_report_counts_both_file_sets`.
+
 - A WARN does not fail the gate: a placeholder is correct output that still needs
   an operator action, so the run exits 0.
 - A FAIL finding exits 1. A SKIPPED check never changes the exit code, so an
@@ -1368,11 +1401,16 @@ by `tests/test_certificate_blocks.py`, one test per finding, the two-reader pin,
 - The console summary names resource blocks only, so a run that writes `data` blocks
   reports the same resource count as the same run without them.
 
-The data rule (`data_files`, F6.8) reads the four data files, each through the module that owns the row
-shape, so no second shape rule appears for a file the tool wrote, and it reads no `.tf` file, so no block rule
-reads a data file. The gate holds one shape rule, and it is the answer of the command it runs
-(`tflint_findings`), because the answer is not a file the tool wrote. Pinned by
-`tests/test_data_file_gate.py::test_no_block_rule_reads_a_data_file_and_the_data_rule_reads_no_tf_file` and
+The data rule (`data_files`, F6.8) reads the four data files at the codebase root, each through the module that
+owns the row shape, so no second shape rule appears for a file the tool wrote, and it reads no `.tf` file, so no
+block rule reads a data file. The rule data pair is read inside each unit directory its own rows name, through
+`rule_data.parse_rows` and the two names `rule_data.data_file` and `rule_data.printed_file` read through the
+matrix row, so the rule states no file name and no shape rule of its own: a pair member at the codebase root names
+no unit, a member inside a directory no row names is a finding, the two members stand or fall together on the
+content rule, and the printed member must equal `rule_data.render_csv` of the same rows. The gate holds one shape
+rule, and it is the answer of the command it runs (`tflint_findings`), because the answer is not a file the tool
+wrote. Pinned by `tests/test_data_file_gate.py::test_no_block_rule_reads_a_data_file_and_the_data_rule_reads_no_tf_file`,
+`::test_the_rule_data_pair_is_read_inside_the_unit_directory_its_rows_name`, and
 `tests/test_sanity_gate.py::test_the_tflint_rule_set_is_data_in_the_gate`.
 Six findings, each a FAIL:
 
@@ -1384,11 +1422,17 @@ Six findings, each a FAIL:
   ownership record names, because the tool writes an ownership row for an entry from a declared parent
   source and the manifest names no unit for it (F5.4); an edge row must join on (`type`, `entry`) to an
   ownership row whose `owner` names the `target`; a `kind` `ambiguous` row states no owner, so it cannot
-  name one;
+  name one. For the rule data pair the join is the row's `directory` against the unit the file it is in
+  names, and a member at the codebase root names no unit (`tests/test_data_file_gate.py::test_a_pair_member_at_the_codebase_root_names_no_unit`,
+  `::test_a_pair_member_inside_a_directory_no_row_names_is_a_finding`, and
+  `::test_a_pair_row_that_names_another_unit_is_a_finding_at_its_row_ordinal`);
 - an order: the manifest `rank` and `after` must be what `reference_edges.order` produces from the three
   records read back, so `after` names only units the manifest names (`reference_edges.py` rule 7);
 - a printed form: `site.auto.tfvars` must equal `site_data.render_tfvars` of the site rows, and the record
-  and its printed form stand or fall together on the content rule;
+  and its printed form stand or fall together on the content rule. The rule data pair's two members stand or
+  fall together the same way, and its printed member must equal `rule_data.render_csv` of the same rows
+  (`tests/test_data_file_gate.py::test_the_pair_members_stand_or_fall_together` and
+  `::test_the_printed_member_must_be_the_rows_rendered_by_its_rule`);
 - a position: a data-file finding is stated at its row ordinal, because a data row spans many lines, and a
   finding about a whole file states no row.
 
@@ -1404,17 +1448,19 @@ order graph reads only manifest units is pinned by
 
 `round_trip` (`tests/test_round_trip.py`) is one of the two gate rules that read two sets, so it is one exception
 to the boundary stated above. It reads the `.tf` block set through `blocks` with `kinds = ('resource',)`, and
-the entry set through the run's ledger (`entry_coverage.EntryLedger`). It reads no report and no data file, and
-`run_checks` takes the ledger as an argument, so a call with no ledger reports the check as NOT RUN and a rule
-that reads only the output directory is unchanged. The count scope is the property-scan scope read through
+the entry set through the run's ledger (`entry_coverage.EntryLedger`). It reads no report, and `run_checks` takes
+the ledger as an argument, so a call with no ledger reports the check as NOT RUN and a rule that reads only the
+output directory is unchanged; it gained the output directory as its third argument because the rule row set sits
+inside the unit directories. The count scope is the property-scan scope read through
 `entry_coverage.matrix_row_for` (`COVERAGE_MATRIX.md` §1), the join is the matrix row and the unit read through
 `unit_manifest`, and the destination is read per entry through `entry_coverage.EntryLedger.destination`, so the
 rule states no reader, no count, no scope, no kind, no type, no field name, no file name and no unit rule of its
 own. The entry side counts only the entries that rule answers as `emitted`, so an entry the run reports enters
 no count even when its container row is an `emitted` row. For the four `*_policy_rules` rows the block prints the set
-and not one entry, so the block side is the entry keys the printed map holds for that unit, read through
-`rule_data.printed_keys`, which is the module that owns the row shape, the key shape and the three forms; the rule
-states no reader for the map. Pinned by
+and not one entry, so the block side is the row set read through `rule_data.parse_rows` from the data member inside
+the unit directory the rows name: the three forms of one row set are read by one shape rule, and the printed form
+is compared by `rule_blocks`. A pair member `parse_rows` refuses is the data rule's finding, so it enters no count
+here, because the cross-check states no shape rule and cannot report one fact twice. Pinned by
 `tests/test_round_trip.py::test_the_entry_count_is_read_through_the_ledger_and_the_scan_scope_rule`,
 `::test_an_entry_the_run_reports_is_not_counted`, and
 `tests/test_rule_data.py::test_the_printed_map_reads_back_as_the_same_row_keys`. On a path 2 run the entry set is the join's own rows, read

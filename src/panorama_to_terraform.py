@@ -3253,87 +3253,12 @@ OVERRIDE_REPORT_FIELDS = (
     ("description", "description"),
 )
 
-# Epic 9 Piece 19: the four tables the iterated rule block reads. `entry_coverage.MATRIX_BY_RESOURCE` is the table
-# that names the rule row's fields and their order, so this piece states no field list of its own.
-# `RULE_ENTRY_FIELDS` is the one mapping table: the provider's `rules` field a row field prints as, and the shape
-# word the value prints as (`SHAPE_WORDS`, read through `SHAPE_TO_SCHEMA`). The entry is the only place the
-# provider's declared shape can be honoured, because the block body prints a reference and `terraform validate`
-# cannot type-check `each.value.<field>`: the shape word is the provider's declared type, measured from the pinned
-# provider schema on 2026-11-19. `RULE_ENTRY_READERS` names the reader for a field whose provider object key is the
-# value the row records, because a block body prints a reference and cannot name an object key from a value.
-# `RULE_REFERENCE_FIELDS` names the columns the one naming rule resolves, and `RULE_BODY_DEFAULTS` states the one
-# provider field the parse records no value for.
-RULE_ENTRY_FIELDS = {
-    "panos_security_policy_rules": {
-        "name": ("name", "string"),
-        "action": ("action", "string"),
-        "applications": ("applications", "string_list"),
-        "description": ("description", "string"),
-        "destination_addresses": ("destination_addresses", "string_list"),
-        "destination_zones": ("destination_zones", "string_list"),
-        "disabled": ("disabled", "bool"),
-        "log_end": ("log_end", "bool"),
-        "log_start": ("log_start", "bool"),
-        # F4.4: the parsed-object key the emitter reads for the profile group reference, printed as the object
-        # `profile_setting.group`.
-        "profile_group": ("profile_setting", "object"),
-        "services": ("services", "string_list"),
-        "source_addresses": ("source_addresses", "string_list"),
-        "source_zones": ("source_zones", "string_list"),
-    },
-    "panos_nat_policy_rules": {
-        "name": ("name", "string"),
-        "description": ("description", "string"),
-        "destination_addresses": ("destination_addresses", "string_list"),
-        # The two columns that build one provider object state one entry field: the address column names the object
-        # and the port column names the field inside it.
-        "destination_translation_address": ("destination_translation", "object"),
-        "destination_translation_port": ("destination_translation", "number"),
-        # The one row field the parse records as one value and the provider takes as a list, through `_get_text`.
-        "destination_zone": ("destination_zone", "string_list"),
-        "disabled": ("disabled", "bool"),
-        # F4.4: the provider takes one name here, so a member list cannot print as the field.
-        "service": ("service", "string"),
-        "source_addresses": ("source_addresses", "string_list"),
-        "source_translation_address": ("source_translation", "object"),
-        "source_translation_type": ("source_translation", "one_of"),
-        "source_zones": ("source_zones", "string_list"),
-    },
-    "panos_decryption_policy_rules": {
-        "name": ("name", "string"),
-        "action": ("action", "string"),
-        "categories": ("category", "string_list"),
-        "description": ("description", "string"),
-        "destination_addresses": ("destination_addresses", "string_list"),
-        "destination_zones": ("destination_zones", "string_list"),
-        "disabled": ("disabled", "bool"),
-        "log_end": ("log_fail", "bool"),
-        "log_setting": ("log_setting", "string"),
-        "log_start": ("log_success", "bool"),
-        "profile": ("profile", "string"),
-        "services": ("services", "string_list"),
-        "source_addresses": ("source_addresses", "string_list"),
-        "source_users": ("source_user", "string_list"),
-        "source_zones": ("source_zones", "string_list"),
-        "type": ("type", "one_of"),
-    },
-    "panos_pbf_policy_rules": {
-        "name": ("name", "string"),
-        "action": ("action", "one_of"),
-        "applications": ("applications", "string_list"),
-        "description": ("description", "string"),
-        "destination_addresses": ("destination_addresses", "string_list"),
-        "disabled": ("disabled", "bool"),
-        # The provider declares the fact as an object with one `enabled` field (F2.9).
-        "enforce_symmetric_return": ("enforce_symmetric_return", "object"),
-        "schedule": ("schedule", "string"),
-        "services": ("services", "string_list"),
-        "source_addresses": ("source_addresses", "string_list"),
-        "source_users": ("source_users", "string_list"),
-        # v2 models the PBF source as `from { zone = [...] }` (F2.9).
-        "source_zones": ("from", "object"),
-    },
-}
+# Epic 9 Piece 19 and Piece 20: the tables the iterated rule block reads. `entry_coverage.MATRIX_BY_RESOURCE` is
+# the table that names the rule row's fields and their order, so this piece states no field list of its own.
+# `RULE_ENTRY_FIELDS`, `RULE_ENTRY_READERS` and `RULE_BODY_DEFAULTS` are the three tables the printed entry reads,
+# and they live in `rule_data.py`, the module that owns the row shape and the three forms, so the emitter, the gate's
+# block rule, and the matrix test read one table. `RULE_REFERENCE_FIELDS` names the columns the one naming rule
+# resolves, and it is the emitter's own mapping from a row column to the scope sets the emitter uses everywhere else.
 RULE_REFERENCE_FIELDS = {
     # F2.6: the columns the one naming rule reads, through the same scope sets the emitter uses everywhere else.
     "source_zones": ZONE_SCOPES,
@@ -3346,22 +3271,6 @@ RULE_REFERENCE_FIELDS = {
     # The dynamic-ip-and-port form names the egress interface, not an address (F2.6).
     "source_translation_address": INTERFACE_SCOPES,
 }
-RULE_ENTRY_READERS = {
-    "panos_security_policy_rules": {"profile_group": "_profile_setting"},
-    "panos_nat_policy_rules": {
-        "source_translation_address": "_nat_translation",
-        "destination_translation_address": "_destination_translation",
-    },
-    "panos_decryption_policy_rules": {"action": "_decryption_action", "type": "_decryption_type"},
-    "panos_pbf_policy_rules": {
-        "source_zones": "_pbf_from",
-        "action": "_pbf_action",
-        "enforce_symmetric_return": "_pbf_enforce_symmetric_return",
-    },
-}
-# The NAT family is the one provider field the parse records no value for (F3.5), so no row column names it and the
-# block states the default word the export implies. IPv4 is the Panorama default family.
-RULE_BODY_DEFAULTS = {"panos_nat_policy_rules": ("nat_type", "ipv4")}
 
 
 class UnitText:
@@ -5009,9 +4918,10 @@ provider "panos" {
         the fields the matrix row declares, in the row's order, because `hcl_value` prints a dict in the order it
         was built. Every declared field prints, since one field list serves every instance of the block.
 
-        The field name and the shape the value prints as are the pair `RULE_ENTRY_FIELDS` states for the field: the
-        entry is the only place the provider's declared shape can be honoured, because the block body prints a
-        reference and `terraform validate` cannot type-check `each.value.<field>`. A field the table names a reader
+        The field name and the shape the value prints as are the pair `rule_data.RULE_ENTRY_FIELDS` states for the
+        name: the entry is the only place the provider's declared shape can be honoured, because the block body
+        prints a reference and `terraform validate` cannot type-check `each.value.<field>`. A field the table names a
+        reader
         for is built by that reader, because its provider object key is the value the row records. The second column
         of a pair that builds one provider object states no field of its own.
 
@@ -5023,11 +4933,11 @@ provider "panos" {
         notes: dict = {}
         row = entry_coverage.MATRIX_BY_RESOURCE[resource_type]
         for field in (entry_coverage.name_field(resource_type),) + row["properties"]:
-            name, shape = RULE_ENTRY_FIELDS[resource_type][field]
+            name, shape = rule_data.RULE_ENTRY_FIELDS[resource_type][field]
             if name in entry:
                 continue
             value = rule.get(field)
-            reader = RULE_ENTRY_READERS.get(resource_type, {}).get(field)
+            reader = rule_data.RULE_ENTRY_READERS.get(resource_type, {}).get(field)
             if reader is not None:
                 # The reader answers the field for a row that holds no value for it, because a shape the reader
                 # builds can come from another field: the inspection mode a legacy decryption action carries.
@@ -5229,7 +5139,7 @@ provider "panos" {
             out.add(first_rule, "  rules = [\n    {\n")
             for field in items[0][2]:
                 out.add(first_rule, f"      {field} = each.value.{field}\n")
-            default = RULE_BODY_DEFAULTS.get(resource_type)
+            default = rule_data.RULE_BODY_DEFAULTS.get(resource_type)
             if default:
                 # The one provider field the parse records no value for (F3.5), so no row column names it and the
                 # block states the default word the export implies, not a row value.

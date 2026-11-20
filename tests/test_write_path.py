@@ -8,9 +8,12 @@ Four groups:
    root set is the records the whole codebase owns, and the two are distinct. The path 2 case is read through
    the same two sets: the record file a path 2 run wrote is a codebase root-set file, and the prune action
    protects the entries its records name. A new file shape has to name one set, so one pin reads the rule data
-   pair as a derivation through `rule_data` and holds that it names the unit set while the two counts stay.
+   pair as a derivation through `rule_data` and holds that it names the unit set: the data count names the four
+   records at the root plus the pair's data member inside each unit directory its own rows name, and the printed
+   member is not a data file, the way `site.auto.tfvars` is not.
 2. How the gate reads each set: one block reader keyed by the path from the codebase root, one data rule
-   that reads the records at the root as one rule over the rows of every unit, and no rule reads a report.
+   that reads the records at the root as one rule over the rows of every unit and reads the pair inside the unit
+   directories its rows name, and no rule reads a report.
 3. The one write path: one function writes bytes, `newline=LF` is forced there, and no other module of the
    tool writes a file, so the byte rule (`docs/ARCHITECTURE.md` §6) is enforced in one place. A section header
    is stated once per unit, read through the file's own once record rather than through the text it holds.
@@ -41,7 +44,7 @@ import site_data
 import source_fetch
 import unit_manifest
 import write_path
-from conftest import FIXTURES_DIR, GOLDEN_DIR, SRC_DIR, run_script
+from conftest import FIXTURES_DIR, GOLDEN_DIR, RULE_TYPES, SRC_DIR, data_file_set, run_script
 
 # The layout rule (`docs/ARCHITECTURE.md` §1.1): `src/` holds the tool's modules, so the pins that read a
 # module source read it through `SRC_DIR`, and the scan reads the `src/` set.
@@ -297,10 +300,11 @@ def test_a_new_unit_set_file_shape_names_the_unit_set_and_the_two_counts_do_not_
     The two names are read as a derivation, so this test states no second file-name rule: the four rule types come
     from `import_blocks.rule_types`, and the two names are the matrix row's `output_file` stem with the two suffixes
     `rule_data` states. The pair is not one of the four records the data rule reads, so the report's data count
-    stays the four records at the codebase root, and the file count stays the set the block reader read, because a
-    rule data file is not a `.tf` file. Every file the run wrote still names exactly one set, and the pair's set is
-    the unit directory its own rows name. The printed half of the pair is not the printed form the data rule
-    compares, so that half stays with `site.auto.tfvars` and the two counts do not move.
+    names the four records at the codebase root plus the pair's data member inside each unit directory its own rows
+    name, and the file count stays the set the block reader read, because a rule data file is not a `.tf` file.
+    Every file the run wrote still names exactly one set, and the pair's set is the unit directory its own rows
+    name. The printed half of the pair is not a data file, the way `site.auto.tfvars` is not, so the count names the
+    data member only. Measured 2026-11-19 on the kitchen-sink run: 4 root records and 4 data members, so 8.
     """
     types = sorted(import_blocks.rule_types())
     data_names = {rule_data.data_file(resource) for resource in types}
@@ -319,16 +323,23 @@ def test_a_new_unit_set_file_shape_names_the_unit_set_and_the_two_counts_do_not_
 
     report = sanity_checks.run_checks(corpus_run)
     files = sanity_checks.read_tf_files(corpus_run)
-    assert report.file_count == len(files) and report.data_file_count == len(RECORDS), (
+    members = sorted(name for name in pair if Path(name).suffix == ".json")
+    assert report.file_count == len(files) and report.data_file_count == len(data_file_set(corpus_run)), (
         "the two counts name the two sets"
     )
+    assert data_file_set(corpus_run) == sorted(list(RECORDS) + members), sorted(pair)
+    assert not [name for name in data_file_set(corpus_run) if Path(name).suffix == ".csv"], "no printed member"
 
-    # A broken rule data row inside a unit directory is no finding, because the data rule reads the records at the
-    # root and reads no file inside a unit directory. The gate rule that reads the rule rows is the open piece.
+    # A broken rule data row inside a unit directory is a finding, because the data rule reads the pair inside the
+    # directories its rows name: this is the boundary Piece 18 recorded as open and Piece 20 closed.
     out = _copy(corpus_run, tmp_path / "rule_data")
-    write_path.write_file(out / UNIT_DIR / rule_data.data_file(types[0]), '{"entry": "not a rule row"}')
-    assert sanity_checks.check_data_files(out) == [], "the data rule reads no file inside a unit directory"
-    assert sanity_checks.count_data_files(out) == len(RECORDS), "the count names the records at the root"
+    planted = f"{UNIT_DIR}/{rule_data.data_file(types[0])}"
+    write_path.write_file(out / planted, '{"entry": "not a rule row"}')
+    findings = sanity_checks.check_data_files(out)
+    assert len(findings) == 1, [f.render() for f in findings]
+    assert findings[0].file == planted and findings[0].line == 0, findings[0].render()
+    assert findings[0].severity == sanity_checks.FAIL, findings[0].render()
+    assert sanity_checks.count_data_files(out) == len(data_file_set(out)), "the count names the data member"
 
 
 # --- 2. How the gate reads each set --------------------------------------------
@@ -353,9 +364,10 @@ def test_the_block_reader_walks_the_tree_and_a_finding_names_the_path(corpus_run
     assert path in _read_files(report), "the report names the path, not the file name"
 
 
-def test_one_reader_serves_the_unit_set_so_no_rule_can_read_only_the_root(corpus_run):
+def test_one_reader_serves_the_unit_set_so_no_rule_can_read_only_the_root(corpus_run, tmp_path):
     """One reader serves the whole unit set, so the gate holds no second rule for the layout: the reader walks
-    the tree and keys by the path, so a finding names the unit. The two counts name the two sets.
+    the tree and keys by the path, so a finding names the unit. The two counts name the two sets, and the data
+    count names the pair's data member inside the unit directory its rows name.
     """
     files = sanity_checks.read_tf_files(corpus_run)
     dirs = {row["directory"] for row in _rows(corpus_run)}
@@ -366,29 +378,59 @@ def test_one_reader_serves_the_unit_set_so_no_rule_can_read_only_the_root(corpus
     assert ".glob('*.tf')" not in reader, "no block rule reads only the codebase root"
 
     report = sanity_checks.run_checks(corpus_run)
-    assert report.file_count == len(files) and report.data_file_count == len(RECORDS), (
+    assert report.file_count == len(files) and report.data_file_count == len(data_file_set(corpus_run)), (
         "the two counts name the two sets"
     )
     printed = {str(p.relative_to(corpus_run)) for p in corpus_run.rglob(site_data.TFVARS_FILE)}
-    assert _read_files(report) <= set(files) | set(RECORDS) | printed, "a finding names a file in one set"
-    for finding in report.findings("data_files"):
-        assert finding.file in set(RECORDS) | printed, (finding.render(), "the data rule names a record")
+    forms = {rule_data.data_file(resource) for resource in RULE_TYPES} | {
+        rule_data.printed_file(resource) for resource in RULE_TYPES
+    }
+    pair = {str(p.relative_to(corpus_run)) for p in corpus_run.rglob("*") if p.name in forms}
+    assert pair, "the run wrote the pair inside the unit directories"
+    assert _read_files(report) <= set(files) | set(RECORDS) | printed | pair, "a finding names a file in one set"
+
+    # A finding read through a run: a pair member inside a unit directory names the path, the way a record names
+    # its file, because a per-unit file carries no unit field and the directory names the unit.
+    out = _copy(corpus_run, tmp_path / "pair_path")
+    types = sorted(import_blocks.rule_types())
+    planted = f"{UNIT_DIR}/{rule_data.data_file(types[0])}"
+    write_path.write_file(out / planted, '{"entry": "not a rule row"}')
+    findings = sanity_checks.check_data_files(out)
+    assert len(findings) == 1, [f.render() for f in findings]
+    assert findings[0].file == planted, findings[0].render()
+    assert Path(findings[0].file).parent.name == UNIT_DIR, "the path names the unit the file belongs to"
 
 
-def test_the_data_rule_reads_the_records_at_the_codebase_root_only(corpus_run, tmp_path):
-    """The data rule stays at the codebase root, so a record inside a unit directory is neither read nor
-    counted: the same broken row is a finding when the rule reads it at the root.
+def test_the_four_records_are_read_at_the_root_and_the_pair_inside_the_unit_directory(corpus_run, tmp_path):
+    """The four records stay the codebase root set, so a record inside a unit directory is neither read nor
+    counted: the same broken row is a finding when the rule reads it at the root. The pair is the unit set, so the
+    rule reads it inside the directory its rows name and counts its data member there.
     """
     out = _copy(corpus_run, tmp_path / "split")
     broken = '{"unit": "Shared"}'
     write_path.write_file(out / UNIT_DIR / unit_manifest.MANIFEST_FILE, broken)
-    assert sanity_checks.check_data_files(out) == [], "the rule reads no file inside a unit directory"
-    assert sanity_checks.count_data_files(out) == len(RECORDS), "the count names the records at the root"
+    assert sanity_checks.check_data_files(out) == [], "the rule reads no root-set record inside a unit directory"
+    assert sanity_checks.count_data_files(out) == len(data_file_set(out)), "the count names the records and the pair"
 
-    write_path.write_file(out / unit_manifest.MANIFEST_FILE, broken)
-    assert _for_file(sanity_checks.check_data_files(out), unit_manifest.MANIFEST_FILE), (
+    # The same broken row read at the root is a finding, because the four records are the codebase root set.
+    root = _copy(corpus_run, tmp_path / "root_record")
+    write_path.write_file(root / unit_manifest.MANIFEST_FILE, broken)
+    assert _for_file(sanity_checks.check_data_files(root), unit_manifest.MANIFEST_FILE), (
         "the same row is a finding when the rule reads it at the root"
     )
+
+    # A pair member inside a unit directory is read there, so the same broken row inside a unit directory is a
+    # finding: the count names the data member, and not the printed member. Read on its own copy, so the row the
+    # rule reads at the root cannot add a cross-check finding to the half being measured.
+    unit = _copy(corpus_run, tmp_path / "pair_member")
+    types = sorted(import_blocks.rule_types())
+    planted = f"{UNIT_DIR}/{rule_data.data_file(types[0])}"
+    write_path.write_file(unit / planted, broken)
+    findings = sanity_checks.check_data_files(unit)
+    assert len(findings) == 1 and findings[0].file == planted, [f.render() for f in findings]
+    assert sanity_checks.count_data_files(unit) == len(data_file_set(unit)), "only the pair's data member is counted"
+    counted = [Path(name).name for name in data_file_set(unit)]
+    assert rule_data.printed_file(types[0]) not in counted, "the printed member is not counted"
 
 
 def test_the_data_rule_is_one_rule_over_the_rows_of_every_unit(corpus_run):
@@ -404,7 +446,11 @@ def test_the_data_rule_is_one_rule_over_the_rows_of_every_unit(corpus_run):
     assert "parse_rows" in rule and "for name, module in DATA_FILES" in rule and "out / name" in rule, (
         "the rule reads the records at the root, through the module that owns each row shape"
     )
-    assert "rglob" not in rule, "the data rule reads no file inside a unit directory"
+    # The pair is a unit-set file, so the rule finds it inside the directories its own rows name. Both names come
+    # from `rule_data`, so the rule states no file name of its own: it holds no suffix, and it holds no shape rule.
+    assert "rule_data.data_file" in rule and "rule_data.printed_file" in rule, "both names come from their owner"
+    assert '".json"' not in rule and '".csv"' not in rule, "the rule states no file name"
+    assert "json.loads(" not in rule, "the rule states no shape rule of its own"
     assert "unit_path" in rule and "render_tfvars" in rule, (
         "the printed form is read through the write-path builder and the module that renders the row"
     )

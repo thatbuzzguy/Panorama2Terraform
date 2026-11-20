@@ -400,12 +400,15 @@ platform (see `INTERFACE_MIGRATION_REPORT.txt`).
 Every conversion runs a static gate on the output it wrote, then prints a
 summary and writes `SANITY_REPORT.txt`. The gate reads the files, so it reports
 what you receive, not what the generator intended. It reads the `.tf` files for
-the block rules and the four data files for the data rule, and the summary names
-both counts. Two rules read a set the gate did not write, because their facts compare two sets: the round-trip
-cross-check compares the `.tf` block set it read with the entry set the run's ledger read, and the request-set
-rule compares the join's rows with the scope index a path 2 run built. Neither reads a report and neither reads a
-data file, and a call that is missing the set it needs reports the rule as NOT RUN, so the rules that read only
-the files are unchanged. The cross-check is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6, the
+the block rules and the data files for the data rule, and the summary names
+both counts. The data count names the four records at the codebase root plus the rule data pair's data member
+inside each unit directory its own rows name; the printed member of that pair is a printed form and enters no
+count, the way the site print does not. Two rules read a set the gate did not write, because their facts compare
+two sets: the round-trip cross-check compares the `.tf` block set it read with the entry set the run's ledger
+read, and the request-set rule compares the join's rows with the scope index a path 2 run built. Neither reads a
+report, and a call that is missing the set it needs reports the rule as NOT RUN, so the rules that read only
+the files are unchanged. `rule_blocks` reads the iterated rule block against the row set the data rule reads, so
+it is the block rule that also reads a data file. The cross-check is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.6, the
 request-set rule is in [`docs/API_CONVERSION_PATH.md`](docs/API_CONVERSION_PATH.md) §3, and
 `tests/test_round_trip.py` and `tests/test_sanity_gate.py` pin both.
 
@@ -420,6 +423,7 @@ request-set rule is in [`docs/API_CONVERSION_PATH.md`](docs/API_CONVERSION_PATH.
 | `protocol_object` | every `protocol` object on a `panos_virtual_router` block matches the `PROTOCOL_SHAPE` row for its level, prints as a field, and states the one key a row selects | FAIL |
 | `filter_blocks` | every filter container block matches the `FILTER_SHAPE` row for its level, states the one key a row selects, and an element inside a `[` container states the name the row reads as the entry name | FAIL |
 | `certificate_blocks` | every certificate block matches the `CERTIFICATE_SHAPE` row for its level, states the entry name through the one naming rule, states the one key a row selects, prints a `sensitive` field as the variable reference, and an element inside a `[` container states the name the row reads as the entry name | FAIL |
+| `rule_blocks` | every iterated rule block matches the `LOCATION_SCHEMA` row for its type and the map entries against the row set `rule_data.parse_rows` reads; the block name and the `for_each` map name read through `rule_data.locals_name`, the name field through `entry_coverage.name_field`, and the entry content through the one field reader | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable the run declares | FAIL |
 | `data_files` | every data file reads as its declared rows, and the data agrees with the naming rule, the joins, the order rule, and its printed form | FAIL |
@@ -577,15 +581,17 @@ The records, the reports, and the write path:
   `rule_data`, the rule that the module states no second rule and holds no writer of its own, the two file names read
   through the same matrix row with the rule that the pair names the unit file set, the run writing one pair per rule
   type per unit so that each file reads back as the rows it was built from, and the third form: the printed map
-  reading back through `printed_keys` as the same row keys in the order the `.tf` file prints them
-- `tests/test_data_file_gate.py` - the gate rule that reads the four data files (`data_files`): the file set
+  reading back through `printed_entries` as one entry per row key, in the order the `.tf` file prints them
+- `tests/test_data_file_gate.py` - the gate rule that reads the data files (`data_files`): the file set
   the gate reads, the `CHECK_ORDER` position, each finding, the row ordinal as the finding position, the rule
-  that each row shape is read through its own module, the truth across the corpus, and the byte rule between
-  two runs
+  that each row shape is read through its own module, the rule data pair read inside the unit directory its own
+  rows name with the two members standing or falling together and the printed member equal to `render_csv` of the
+  same rows, the rule that the data rule reads no `.tf` file and no block rule reads a data file except
+  `rule_blocks`, the truth across the corpus, and the byte rule between two runs
 - `tests/test_round_trip.py` - the cross-check (`round_trip`): the `.tf` block set read through the one gate
   reader and the entry set read through the run's ledger, the join through the one scope rule and the one unit
-  rule, one finding per unit and row where the two counts do not agree, the four rule rows reading the printed map
-  through `rule_data`, the position the reader read, the WARN
+  rule, one finding per unit and row where the two counts do not agree, the four rule rows reading the row set
+  through `rule_data.parse_rows` from the data member inside the unit directory, the position the reader read, the WARN
   severity, the NOT RUN result when the caller passes no ledger, the rows that enter no count, the findings the
   corpus reports, and the byte rule between two runs. F8.8: on a path 2 run the entry set is the join's own rows,
   so the cross-check and the request-set rule read one ledger and name the same unit
@@ -594,7 +600,8 @@ The records, the reports, and the write path:
   of the tool writes a file outside it, the reader key as the path from the codebase root, the plan check that
   runs once per unit directory and names the directory it ran on, the rule that no flag names the layout, the
   golden set read as paths from the case directory, the single-unit case, the rule that the rule data pair names
-  the unit set while the two counts do not move, and the byte rule between two runs
+  the unit set, the four records read at the root with the pair read inside the unit directory and the data count
+  moving with it while the printed member enters no count, and the byte rule between two runs
 - `tests/test_provenance.py` - the provenance record (`SOURCE.txt`): the fields, the record
   read back as data, one record per source the run read, one record per request the path 2 run read with the
   `scope` field naming the path that request declared, the `Source:` label for both sources,
@@ -651,7 +658,9 @@ The gate, the fixtures, and the corpus:
   directory, the position is 0, the run-wide direction prints through the root shape, the order is the data rule's
   key, and the report section and the exit code are the gate's, not the join's. The `tflint` pins hold the rule
   set as data, the severity and exit-code tables, the committed answer for the committed probe content, the skip
-  for a missing binary, and the one result per unit directory the record names
+  for a missing binary, and the one result per unit directory the record names. The `rule_blocks` pins read the two
+  counts through `tests/conftest.py`, the printed run read clean, an entry that is not the row it names, a block for
+  a unit no rule row names, and rows the reader read no block for
 - `tests/test_terraform_validate.py` - `terraform init` + `terraform
   validate` on the sample, kitchen-sink, and crypto-profile-only
   outputs (skipped when the `terraform` binary is absent)
@@ -737,7 +746,8 @@ names every markdown document under it, and a directory with no index of its own
 root holds `AGENTS.md`, the readme indexes (this file, [`docs/README.md`](docs/README.md),
 [`examples/README.md`](examples/README.md), and [`tools/README.md`](tools/README.md)), the
 tracking markdown ([`PLAN.md`](PLAN.md), [`backlog.md`](backlog.md), [`to-do.md`](to-do.md),
-[`acceptance.md`](acceptance.md), [`agent-status.md`](agent-status.md)), the two license files
+[`acceptance.md`](acceptance.md), [`agent-status.md`](agent-status.md)), the commit-message convention
+[`commit.md`](commit.md) that `AGENTS.md` points commit messages at, the two license files
 ([LICENSE-AGPL](LICENSE-AGPL) and [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL)), and the two tool-config files
 ([`pyproject.toml`](pyproject.toml), which states the layout rules, and
 [`requirements.txt`](requirements.txt), the pinned development tools). `docs/` holds every other

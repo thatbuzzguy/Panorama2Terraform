@@ -150,20 +150,33 @@ Decisions, recorded 2026-11-18 before any code:
 6. Recorded 2026-11-19: the third form of the same rows is the map the `.tf` file prints, named
    through the same stem with no suffix, which is also the name of the block that iterates it. The
    map is the only place the file states a row value, so the rule that a block prints the variable
-   reference, never the value, holds. `rule_data.printed_keys` is the only reader of the printed map,
-   and it reads keys only, so the gate states no reader for the map of its own.
+   reference, never the value, holds. `rule_data.printed_entries` is the only reader of the printed
+   map, and it reads one entry per row and no value inside an entry, so the gate states no reader for
+   the map of its own and no shape rule of its own: the entry's value shape is read through
+   `sanity_checks.value_shape`, the reader's own inverse, and its content through `import_blocks`.
+   The two printed-map patterns read an indent, so a hand-written map reads as the printed one.
 
-Phase 9D — the gate. The `data_files` rule reads the rule data file as its declared rows and
-joins on `directory`. The cross-check's block side for the four rule rows is the entry keys the
-printed map holds for the unit, read through `rule_data.printed_keys`, because one iterated block
-prints N entries and not one block, and that half landed with Piece 19. The block rule Piece 20
-states reads the block itself against the same `LOCATION_SCHEMA` rows: the block's local name and
-the `for_each` map name are `rule_data.locals_name`, `location` equals the row for the type, the
-field list is the name field plus the table order the matrix row declares, every body field is
-`each.value.<field>` under the provider name and the shape word `RULE_ENTRY_FIELDS` states, one
-block per rule type per unit, and the map entry keyed by the row `key` holds the values the row
-names when read through `parse_rows`. The `data_files` table gains the rule data file and the two
-report counts move with it.
+Phase 9D — the gate, landed with Piece 20 (2026-11-19). The `data_files` rule reads the rule data
+pair inside each unit directory its own rows name, as its declared rows through `parse_rows`, and
+joins on `directory`; the pair is a unit-set file, so a member at the codebase root names no unit and
+a member inside a directory no row names is a finding, and the printed member must equal
+`render_csv` of the same rows. The two report counts move with the read: the data count names the four
+records at the root plus the pair's data member inside each unit directory, because the printed member
+is a printed form and not a data file, the way `site.auto.tfvars` is not. The cross-check's block side
+for the four rule rows is the row set read through `parse_rows` from the data member inside the unit
+directory the rows name, because one iterated block prints N entries and not one block, so the three
+forms of one row set are read by one shape rule. The block rule `rule_blocks` reads the block itself
+against the same `LOCATION_SCHEMA` rows: the block's local name and the `for_each` map name are
+`rule_data.locals_name`, `location` is a level `LOCATION_SCHEMA` names for the type with only the
+fields the row names for that level, the field list is the name field plus the table order the matrix
+row declares, with the provider name `RULE_ENTRY_FIELDS` states plus the one field
+`RULE_BODY_DEFAULTS` states, every body field is `each.value.<field>` under that name and that shape
+word, one block per rule type per unit for the units the rows name, and the map entry keyed by the row
+`key` holds the row's value, read back through the one field reader. Its findings are FAIL, because it
+reads the files the operator receives, and `CHECK_ORDER` puts it with the other block rules, after
+`certificate_blocks`. The three entry tables moved from the emitter to `rule_data.py`, the module that
+owns the row shape and the three forms, because §1.1 forbids a cycle: the gate reads the row shape
+through `rule_data` and cannot import the emitter.
 
 Held, on the conditions already recorded in `backlog.md`: the rulebase value string, the position
 from a live source, and the import block for a rule entry. The Terraform 1.14 floor already

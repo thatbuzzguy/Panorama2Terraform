@@ -44,6 +44,7 @@ from conftest import (
     SAMPLE_CONFIG,
     SRC_DIR,
     api_producer,
+    data_file_set,
     file_text,
     parts,
     run_script,
@@ -701,8 +702,10 @@ def test_two_runs_on_the_same_bytes_write_the_same_bytes(tmp_path):
 
 def test_the_gate_reads_the_record_and_its_printed_form_through_site_data(tmp_path):
     """F6.8 changed the file set: the data rule reads this record through `site_data.parse_rows`, and the
-    printed form through `site_data.render_tfvars`, so no second shape rule appears. The printed form is
-    not one of the four, so the count names only the records, and the block reader stays `.tf`-only.
+    printed form through `site_data.render_tfvars`, so no second shape rule appears. The printed form is not a
+    data file, so the count names the four records at the root plus the rule data pair's data member inside each
+    unit directory its own rows name, and the block reader stays `.tf`-only. The count is read through the shared
+    derivation `conftest.data_file_set`, so this pin states no file-name rule of its own.
     """
     out = tmp_path / "kitchen"
     assert _run(FIXTURES_DIR / KITCHEN, out).returncode == 0
@@ -710,10 +713,12 @@ def test_the_gate_reads_the_record_and_its_printed_form_through_site_data(tmp_pa
     assert files and all(name.endswith(".tf") for name in files), "the block reader is .tf-only"
     assert dict(sanity_checks.DATA_FILES)[site_data.SITE_DATA_FILE] is site_data
     assert site_data.TFVARS_FILE not in dict(sanity_checks.DATA_FILES), "the print is not a data file"
+    assert site_data.TFVARS_FILE not in data_file_set(out), "the printed form is not a data file the count names"
     assert not hasattr(site_data, "check"), "the record owns no gate check"
     report = sanity_checks.run_checks(out)
     assert [check.check for check in report.checks] == list(sanity_checks.CHECK_ORDER)
-    assert report.data_file_count == 4, report.render()
+    assert report.data_file_count == len(data_file_set(out)), report.render()
+    assert site_data.SITE_DATA_FILE in data_file_set(out), "this record is one the count names"
     assert report.findings("data_files") == []
     assert report.fail_count == 0, report.render()
 

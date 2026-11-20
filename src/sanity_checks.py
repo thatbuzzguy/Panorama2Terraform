@@ -13,13 +13,20 @@ module that owns each row shape, so no second shape rule appears.
 Two rules read the run's ledger, so they are the exceptions to that boundary: the round-trip cross-check
 compares the `.tf` block set with the entry set the parse read, and the request-set rule compares the join's rows
 with the scope index the run built (`docs/ARCHITECTURE.md` §4.6, `docs/API_CONVERSION_PATH.md` §3). Neither reads
-a report or a data file, and a call that is missing the set it needs reports the rule as NOT RUN, so a rule that
+a report, and a call that is missing the set it needs reports the rule as NOT RUN, so a rule that
 reads only the output directory is unchanged. A fact from either rule is a coverage fact, not a broken output, so
 it is a WARN and the exit code still follows the rules that read the files.
 
+The four `*_policy_rules` rows are the block rules' one exception, because an iterated block prints the row set
+and not one entry: `rule_blocks` reads the block against the rows `rule_data.parse_rows` reads for its unit, and
+the cross-check counts the same rows for its four rule rows. Both read the row set through the module that owns
+the row shape, inside the unit directory the rows name, so no second shape rule and no second reader appears.
+A pair member `parse_rows` refuses is the data rule's finding, so it enters no count in either rule.
+
 F6.10.1 (`docs/CODEBASE_ASSEMBLY.md` §14) states which set each rule reads: the block rules read the
 `.tf` files of one unit, keyed by the path from the codebase root, and the data rule reads the records at
-the root as one rule over the rows of every unit. No rule reads a report. F6.10.3 lands that shape: the
+the root as one rule over the rows of every unit, plus the rule data pair inside each unit directory its own
+rows name. No rule reads a report. F6.10.3 lands that shape: the
 run writes one directory per unit, so the path a finding names is the unit directory plus the file name,
 and the plan check runs once per unit directory.
 
@@ -36,6 +43,7 @@ Checks, in report order:
 | `protocol_object` | a `protocol` object on a `panos_virtual_router` block matches its `PROTOCOL_SHAPE` row | FAIL |
 | `filter_blocks` | a filter container block matches its `FILTER_SHAPE` row | FAIL |
 | `certificate_blocks` | a certificate block matches its `CERTIFICATE_SHAPE` row | FAIL |
+| `rule_blocks` | an iterated rule block matches the row set the map it reads prints (Epic 9) | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | a declared variable has a `var.` consumer, and a `var.` consumer names a declared variable | FAIL |
 | `data_files` | every data file reads as its declared rows and agrees with the rules that produced it (F6.8) | FAIL |
@@ -105,6 +113,7 @@ CHECK_ORDER = (
     "protocol_object",
     "filter_blocks",
     "certificate_blocks",
+    "rule_blocks",
     "references",
     "variables",
     "data_files",
@@ -468,8 +477,9 @@ def read_tf_files(output_dir: Path) -> dict[str, str]:
 # receives, and a data file a person hand-wrote is an input. No second shape rule appears, and the
 # rule reads no `.tf` file, so no block rule reads a data file.
 # F6.10.1 (`docs/CODEBASE_ASSEMBLY.md` §14): this is the codebase root set, one file per run, and the
-# rule reads it as one rule over the rows of every unit, not one rule per unit, so the rule reads no file
-# inside a unit directory.
+# rule reads it as one rule over the rows of every unit, not one rule per unit. The rule data pair is not a
+# fifth row of this table, because it is a unit-set file: one pair per rule type inside the unit directory its
+# own rows name, so the rule reads it inside the unit directories (Epic 9, rule 5).
 DATA_FILES = (
     (unit_manifest.MANIFEST_FILE, unit_manifest),
     (ownership.OWNERSHIP_FILE, ownership),
@@ -479,14 +489,20 @@ DATA_FILES = (
 
 
 def count_data_files(output_dir: Path) -> int:
-    """How many of the four data files the output holds: the count the report names.
+    """How many data files the output holds: the count the report names.
 
     `site.auto.tfvars` is not counted, because it is the printed form of the site record and not a
     data file (F6.8). F6.10.1 (`docs/CODEBASE_ASSEMBLY.md` §14): the printed form is a unit-set file, so
-    it sits in the unit directory named by its own row, and the count names only the records.
+    it sits in the unit directory named by its own row, and the count names only the records. The rule data
+    pair is counted the same way: only its data member is a data file, and only inside the unit directory its
+    own rows name (Epic 9, rule 5), so a pair member at the codebase root names no unit and enters no count.
     """
     out = Path(output_dir)
-    return sum(1 for name, _ in DATA_FILES if (out / name).is_file())
+    count = sum(1 for name, _ in DATA_FILES if (out / name).is_file())
+    for resource in import_blocks.rule_types():
+        name = rule_data.data_file(resource)
+        count += sum(1 for path in out.rglob(name) if path.parent != out)
+    return count
 
 
 def blocks(files: dict[str, str], kinds: tuple[str, ...] = BLOCK_KINDS) -> list[Block]:
@@ -1225,6 +1241,298 @@ def check_certificate_blocks(files: dict[str, str]) -> list[Finding]:
     return findings
 
 
+# One entry field, read back against the row value `parse_rows` read for the same field (rule 6). The reader is
+# the one the other block rules use: a quoted value reads back through `unescape`, a `[` value member by member,
+# and a `bool` reads back as the word `true` or `false`, because `unescape` reads only a quoted value. A member
+# the reader reads as no shape is the naming rule's answer, so its content is not compared here.
+def row_states_the_shape(word: str, value) -> bool:
+    """Whether the row's value is the kind the entry shape word states, so the entry can state it at all (F4.4).
+
+    The kinds are the ones the recorded object can hold (`rule_data`'s rule 4). A `string` field states one name,
+    so a row that holds a member list for it cannot be stated and the entry prints `null` with a note instead: such
+    a field is compared by its shape word only. The one value the parse records for a field the provider takes as
+    a list is the list of one, so a `string_list` field can state a scalar. A number is no kind the rule parse
+    records, so no entry states one.
+    """
+    shape = SHAPE_READS_AS.get(word, word)
+    if shape == "string":
+        return isinstance(value, str)
+    if shape == "bool":
+        return isinstance(value, bool)
+    if shape == "string_list":
+        return isinstance(value, (list, str))
+    if shape == "object":
+        return isinstance(value, dict)
+    return False  # a number is no kind the rule parse records, so the entry cannot state one
+
+
+def entry_is_the_row(entry, field, shape, expected) -> bool:
+    """Whether one printed entry states the value the row holds for one field, through the one field reader.
+
+    A quoted value reads back through `block_value`, the reader every block rule uses, and a `[` value member by
+    member through `block_list`. A `bool` is not quoted, so `block_value` reads it as no value and the content rule
+    compares the word `true` or `false`. One value the parse records for a field the provider takes as a list is the
+    one-member list the entry states, so a scalar row value is compared as the list of one.
+
+    `block_list` reads only a member it reads as a value, so a member the entry prints as a reference is the naming
+    rule's answer and enters no comparison here, and the rule cannot count a member it reads as no shape: the read
+    members must be the row's values, in the order the entry prints them.
+    """
+    if shape == "string_list":
+        values = expected if isinstance(expected, list) else [expected]
+        read = import_blocks.block_list(entry, field)
+        at = 0
+        for member in read:
+            while at < len(values) and values[at] != member:
+                at += 1
+            if at == len(values):
+                return False  # the entry states a member the row does not
+            at += 1
+        return True
+    if shape == "bool":
+        return import_blocks.field_value(entry, field) == str(expected).lower()
+    return import_blocks.block_value(entry, field) == expected
+
+
+def check_rule_blocks(files: dict[str, str], output_dir: Path) -> list[Finding]:
+    """The iterated rule block must match the row set the map it reads prints (Epic 9, Phase 9D).
+
+    Seven findings, each a FAIL, read through the same block reader and the same field reader the other block
+    rules use, so no second reader and no shape rule appears:
+
+    1. One block per rule type per unit, for the units the rows name. A rule type with no rows writes no block,
+       so a unit with no rows produces no fact, the way the pair is written only when it has content. Both
+       directions are findings. `write_path.py` writes no `.tf` file in the root set, so a rule block read there
+       names no unit and is the cross-check's fact, not this rule's.
+    2. The block's local name and the `for_each` map name are the one stem `rule_data.locals_name` reads through
+       the matrix row.
+    3. `location` is a level `LOCATION_SCHEMA` names for the type, and every field inside it is one the row names
+       for that level. The missing `location` block is the `location_present` rule.
+    4. The body's field list is the name field, read through `entry_coverage.name_field`, plus the fields the
+       matrix row declares in the table order, with the provider name `rule_data.RULE_ENTRY_FIELDS` states, plus
+       the one field `rule_data.RULE_BODY_DEFAULTS` states. Every field prints as `each.value.<field>`, because the
+       map is the only place the file states a row value, and the default field prints the word the table states,
+       because no row column names it.
+    5. The map holds one entry per row for that unit, keyed by the row `key`, read through `rule_data.printed_entries`.
+    6. An entry field's shape is the shape word the table states, read through the reader's own inverse,
+       `value_shape`, and its content is the row's value read back through the one field reader, as
+       `entry_is_the_row` above states. The name field's row value is the row's `entry` column, the only column
+       that states it. A field the table names a reader for builds its value from another column,
+       and a value the print rule states as a reference is the naming rule's answer, so both are compared by shape
+       and not by content.
+    7. The position is the line of the block the reader read, because the block and the map it reads are one object
+       in one file, and the file as a whole when the reader read no block.
+
+    A printed block and a hand-written block are read the same way, because the rule reads the files the operator
+    receives: a hand-written block that disagrees with the rows is a finding, and a block for a unit no row names
+    is a finding. A pair member `parse_rows` refuses is the data rule's finding, so it enters no count here, and
+    the rule states no shape rule of its own.
+
+    Findings sort by (file, line, detail), the rule `check_data_files` already uses, so the report is
+    byte-identical between runs on the same files. The rule prints no scan console line, because the console shape
+    names one identity and this rule compares a block with a row set.
+    """
+    out = Path(output_dir)
+
+    # The row set, per rule type and per unit, read through the module that owns the row shape. The unit set comes
+    # from `unit_directories`, so the rule states no unit rule of its own.
+    rows_by_unit: dict[tuple, list] = {}
+    for resource in sorted(import_blocks.rule_types()):
+        name = rule_data.data_file(resource)
+        for directory in unit_directories(out):
+            path = write_path.unit_path(out, directory, name)
+            if not path.is_file():
+                continue
+            try:
+                rows = rule_data.parse_rows(path.read_text(encoding="utf-8", errors="surrogateescape"))
+            except ValueError:
+                continue  # the data rule reports a record that does not read as its rows
+            if rows:
+                rows_by_unit.setdefault((resource, directory), []).extend(rows)
+
+    blocks_read: dict[tuple, list] = {}
+    for block in blocks(files, ("resource",)):
+        if block.rtype in import_blocks.rule_types() and Path(block.file).parent.name:
+            blocks_read.setdefault((block.rtype, Path(block.file).parent.name), []).append(block)
+
+    findings: list[Finding] = []
+    for key in sorted(set(rows_by_unit) | set(blocks_read)):
+        resource, unit = key
+        read = blocks_read.get(key, [])
+        rule_rows = rows_by_unit.get(key, [])
+        matrix_row = entry_coverage.MATRIX_BY_RESOURCE[resource]
+        stem = rule_data.locals_name(resource)
+        table = rule_data.RULE_ENTRY_FIELDS[resource]
+        built_by = rule_data.RULE_ENTRY_READERS.get(resource, {})
+        default = rule_data.RULE_BODY_DEFAULTS.get(resource)
+        name_field = entry_coverage.name_field(resource)
+        field_list = [name_field, *matrix_row["properties"]]
+        # The entry field the file prints for each row column, in the table order: the provider name, the shape
+        # word, the column that names it, and whether a reader builds its value. Two columns that build one
+        # provider object state one field, so the shape word is the one the first of them states, and the field is
+        # read as built when any column of it has a reader.
+        columns = []
+        for field in field_list:
+            name, word = table[field]
+            seen = next((c for c in columns if c[0] == name), None)
+            if seen is None:
+                columns.append((name, word, field, field in built_by))
+            elif field in built_by:
+                columns[columns.index(seen)] = (name, word, field, True)
+        entry_fields = [column[0] for column in columns]
+
+        def report(detail: str, file_name: str, line: int) -> None:
+            findings.append(Finding("rule_blocks", FAIL, file_name, line, detail))
+
+        if not read:
+            # Rule 7: the reader read no block, so the position is the file as a whole.
+            report(
+                f"unit {unit} holds no iterated block for row {resource}, which {len(rule_rows)} rule rows name",
+                *position(read, unit, matrix_row),
+            )
+            continue
+        if len(read) > 1:
+            report(
+                f"row {resource} in unit {unit}: the file holds {len(read)} iterated blocks, one per rule type",
+                read[0].file,
+                read[0].line,
+            )
+
+        for block in read:
+            # Rule 2, the two names, through the one stem.
+            if block.local != stem:
+                report(
+                    f"block {block.address} states a local name that is not the stem rule_data reads ({stem})",
+                    block.file,
+                    block.line,
+                )
+            if import_blocks.field_value(block, "for_each") != f"local.{stem}":
+                report(
+                    f"block {block.address} reads a map that is not the stem rule_data reads (local.{stem})",
+                    block.file,
+                    block.line,
+                )
+            # Rule 3, the location, through the one location reader and the one shape table.
+            shape = resource_mapping.LOCATION_SCHEMA[resource]
+            for level, values in block.location_values().items():
+                if level not in shape:
+                    report(
+                        f"block {block.address} location.{level} is not a level {resource} declares",
+                        block.file,
+                        block.line,
+                    )
+                    continue
+                for field in values:
+                    if field not in shape[level]:
+                        report(
+                            f"block {block.address} location.{level}.{field} is not a field the row names for "
+                            f"that level",
+                            block.file,
+                            block.line,
+                        )
+
+        block = read[0]
+        # Rule 4, the field list the block body prints, in the order the table states it. The `rules` value is the
+        # one object the iterated block prints, read through the same value reader and the same level rule the other
+        # block rules use, so no second reader appears.
+        rules_value = import_blocks.field_value(block, "rules")
+        rules_object = import_blocks.elements_of(rules_value) or (rules_value,)
+        body = import_blocks.fields_at(import_blocks.container_body(rules_object[0]))
+        body_fields = [*entry_fields, default[0]] if default else entry_fields
+        if list(body) != body_fields:
+            report(
+                f"block {block.address} rules states {list(body)}, which is not the name field plus the fields "
+                f"the matrix row declares in table order ({body_fields})",
+                block.file,
+                block.line,
+            )
+        for field in body_fields:
+            if default and field == default[0]:
+                # The one provider field no row column names, so the block states the word the table states.
+                if body.get(field) != f'"{default[1]}"':
+                    report(
+                        f"block {block.address} rules.{field} is not the default word the table states "
+                        f'("{default[1]}")',
+                        block.file,
+                        block.line,
+                    )
+            elif body.get(field) != f"each.value.{field}":
+                report(
+                    f"block {block.address} rules.{field} is not each.value.{field}, the block's reference "
+                    "into the map",
+                    block.file,
+                    block.line,
+                )
+
+        # Rule 5 and 6, the entries against the rows the data record holds for this unit. The entry text is read
+        # through the same reader a block is read through, so a printed entry and a hand-written entry are read
+        # the same way.
+        entries = rule_data.printed_entries(files.get(block.file, ""), resource)
+        if len(entries) != len(rule_rows):
+            report(
+                f"row {resource} in unit {unit}: the map the block reads holds {len(entries)} entries, the data "
+                f"record holds {len(rule_rows)} rows",
+                block.file,
+                block.line,
+            )
+        entry_by_key = {entry["key"]: entry for entry in entries}
+        for rule_row in rule_rows:
+            entry_text = entry_by_key.get(rule_row["key"])
+            if entry_text is None:
+                report(
+                    f"row {resource} in unit {unit}: the map holds no entry for the key the data record states "
+                    f"({rule_row['key']})",
+                    block.file,
+                    block.line,
+                )
+                continue
+            entry = Block(block.file, block.line, "resource", resource, rule_row["key"], entry_text["entry"])
+            stated = import_blocks.fields_at(entry.body)
+            if list(stated) != entry_fields:
+                report(
+                    f"entry {rule_row['key']} states {list(stated)}, which is not the name field plus the fields "
+                    f"the matrix row declares in table order ({entry_fields})",
+                    block.file,
+                    block.line,
+                )
+            for name, word, field, built in columns:
+                raw = import_blocks.field_value(entry, name)
+                shape = value_shape(raw)
+                # The name field's row value is the row's `entry` column, the only column that states it.
+                row_value = rule_row["entry"] if field == name_field else rule_row["properties"].get(field)
+                if not row_states_the_shape(word, row_value):
+                    # The entry cannot state this field's row value, so the shape word is the whole fact: the entry
+                    # prints the name the reader built, or null with a note (F4.4).
+                    continue
+                if shape == "":
+                    # `null` is the entry's answer for a field the row states no value for. A value read as no
+                    # shape is the naming rule's answer, which this rule cannot read as a value.
+                    if raw == "null" and row_value is not None:
+                        report(
+                            f"entry {rule_row['key']}.{name} states null for a field the row holds a value for",
+                            block.file,
+                            block.line,
+                        )
+                    continue
+                if SHAPE_READS_AS.get(word, word) != shape:
+                    report(
+                        f"entry {rule_row['key']}.{name} reads as {shape}, which is not the shape word {word} "
+                        "the table states",
+                        block.file,
+                        block.line,
+                    )
+                    continue
+                if built:
+                    continue  # the value is built from another column, so the shape is the whole fact
+                if not entry_is_the_row(entry, name, shape, row_value):
+                    report(
+                        f"entry {rule_row['key']}.{name} is not the value the data record states for {field}",
+                        block.file,
+                        block.line,
+                    )
+    return sorted(findings, key=lambda finding: (finding.file, finding.line, finding.detail))
+
+
 def check_references(files: dict[str, str]) -> list[Finding]:
     """Every `.name` reference must resolve to a block declared in this run (F2.6, F5.5).
 
@@ -1313,9 +1621,16 @@ def check_data_files(output_dir: Path) -> list[Finding]:
     4. An order. The manifest `rank` and `after` must be what `reference_edges.order` produces from the
        three records read back, so `after` names only units the manifest names.
     5. A printed form. `site.auto.tfvars` must equal `site_data.render_tfvars` of the site rows, and the
-       two files stand or fall together on the content rule.
+       two files stand or fall together on the content rule. The rule data pair's printed member must equal
+       `rule_data.render_csv` of the same rows, and its two members stand or fall together the same way.
     6. A position. A data-file finding is stated at its row ordinal, because a data row spans many
        lines, and a finding about the whole file states no row.
+
+    The four records are the codebase root set, so they are read at the root as one rule over the rows of every
+    unit. The rule data pair is a unit-set file, so the same findings read it inside each unit directory its own
+    rows name (Epic 9, rule 5): both members are named through `rule_data`, and both are read through its one
+    shape rule, so this rule states no file name and no shape rule of its own. A pair member at the codebase root
+    names no unit, and a member inside a directory its rows do not name is a finding.
 
     Findings sort by (file, row), so the report is byte-identical between runs on the same files.
     """
@@ -1523,11 +1838,118 @@ def check_data_files(output_dir: Path) -> list[Finding]:
                 )
             )
 
+    # Findings 1, 3 and 5 for the rule data pair, read inside the unit directory its own rows name (Epic 9,
+    # rule 5). Both members are named through `rule_data`, and the data member is read through its one shape rule,
+    # so this rule states no file name, no unit rule and no shape rule of its own. A group is one rule type inside
+    # one directory, because the rows of one rule type are the rows of one unit.
+    pair_rows: dict[tuple, list] = {}
+    for resource in sorted(import_blocks.rule_types()):
+        data_name, printed_name = rule_data.data_file(resource), rule_data.printed_file(resource)
+        groups: dict[str, dict[str, Path]] = {}
+        for path in sorted(p for p in out.rglob("*") if p.is_file() and p.name in (data_name, printed_name)):
+            # The codebase root names no unit, so a member found there is grouped on the empty directory.
+            groups.setdefault("" if path.parent == out else path.parent.name, {})[path.name] = path
+        for directory, group in sorted(groups.items()):
+            if not directory:
+                # Finding 3: the pair is a unit-set file, so a member at the codebase root names no unit.
+                for name in sorted(group):
+                    findings.append(
+                        Finding(
+                            "data_files",
+                            FAIL,
+                            name,
+                            0,
+                            "the pair is a unit-set file, so a member at the codebase root names no unit",
+                        )
+                    )
+                continue
+            if directory not in units:
+                for name in sorted(group):
+                    findings.append(
+                        Finding(
+                            "data_files",
+                            FAIL,
+                            f"{directory}/{name}",
+                            0,
+                            f"{directory} names no unit the manifest names",
+                        )
+                    )
+                continue
+            data_path = group.get(data_name)
+            printed_path = group.get(printed_name)
+            if data_path is None:
+                # The two members stand or fall together on the content rule, so a printed member cannot be
+                # compared with a record that is not there.
+                findings.append(
+                    Finding(
+                        "data_files",
+                        FAIL,
+                        f"{directory}/{printed_name}",
+                        0,
+                        "the pair's two members stand or fall together, so a printed member with no data member "
+                        "to print it is a finding",
+                    )
+                )
+                continue
+            text = data_path.read_text(encoding="utf-8", errors="surrogateescape")
+            try:
+                rows = rule_data.parse_rows(text)
+            except ValueError as exc:
+                findings.append(Finding("data_files", FAIL, f"{directory}/{data_name}", 0, str(exc)))
+                continue
+            if not rows:
+                findings.append(
+                    Finding(
+                        "data_files",
+                        FAIL,
+                        f"{directory}/{data_name}",
+                        0,
+                        "a data file is written only when it has content, so it cannot hold no rows",
+                    )
+                )
+                continue
+            pair_rows[(resource, directory)] = rows
+            # Finding 3, the join: the row names the unit the file it is in names.
+            for ordinal, row in enumerate(rows, start=1):
+                if row["directory"] != directory:
+                    findings.append(
+                        Finding(
+                            "data_files",
+                            FAIL,
+                            f"{directory}/{data_name}",
+                            ordinal,
+                            f"row {ordinal}: directory {row['directory']} is not the unit the file it is in names "
+                            f"({directory})",
+                        )
+                    )
+            if printed_path is None:
+                findings.append(
+                    Finding(
+                        "data_files",
+                        FAIL,
+                        f"{directory}/{printed_name}",
+                        0,
+                        "the pair's two members stand or fall together, so a data member with rows must hold its "
+                        "printed member",
+                    )
+                )
+                continue
+            if printed_path.read_text(encoding="utf-8", errors="surrogateescape") != rule_data.render_csv(rows):
+                findings.append(
+                    Finding(
+                        "data_files",
+                        FAIL,
+                        f"{directory}/{printed_name}",
+                        0,
+                        "the printed form is not the rows rendered by the rule that prints them",
+                    )
+                )
+
     # Finding 6: the position is the row ordinal, and a finding about a whole file states row 0.
     return sorted(findings, key=lambda finding: (finding.file, finding.line, finding.detail))
 
 
-def check_round_trip(files: dict[str, str], ledger) -> list[Finding]:
+def check_round_trip(files: dict[str, str], ledger, output_dir: Path) -> list[Finding]:
     """Compare the block set the reader read with the entry set the run's ledger read, per unit and per row (§4.6).
 
     Two sets, each read through the module that owns it, so the rule states no reader, no count, no scope,
@@ -1539,19 +1961,21 @@ def check_round_trip(files: dict[str, str], ledger) -> list[Finding]:
       count even when its container row is `emitted`.
     - the block side through the one block reader, `blocks`, with `kinds = ('resource',)`, so a `data`
       block, an `import` block, an `action` block and a `variable` declaration enter no count. For the four
-      `*_policy_rules` rows the block prints the set and not one entry, so the block side is the entry keys the
-      `.tf` file prints in the map the block reads, read through `rule_data.printed_keys`, the module that owns the
-      row shape, the key shape and the three forms.
+      `*_policy_rules` rows the block prints the set and not one entry, so the block side is the row set read
+      through `rule_data.parse_rows` from the data member inside the unit directory the rows name: the three
+      forms of the same rows are one row set, and the printed form is compared by `check_rule_blocks`.
     - the join through `entry_coverage.MATRIX_BY_RESOURCE`, the same table `matrix_row_for` reads, and
       through `unit_manifest` (`facts_of`, `directory_name`, `units`).
 
     A row `matrix_row_for` can never answer is not a count row, because no entry maps to it, so the rule
     states no exception list. A `.tf` file at the codebase root names no unit, because `write_path.py`
-    writes no `.tf` file in the root set, so its count cannot be assigned.
+    writes no `.tf` file in the root set, so its count cannot be assigned. A record `parse_rows` refuses is the
+    data rule's finding, so it enters no count here: the cross-check states no shape rule, so it cannot report
+    the same fact twice.
 
     One finding per unit and per row where the two counts do not agree, and the fact is the two counts, the second
-    one being the blocks the reader read or the entries the map the block reads prints. The rule names no entry:
-    `docs/ARCHITECTURE.md` §3.2 owns one entry, and the gap section names the entries
+    one being the blocks the reader read or the rows `parse_rows` read for that unit and row. The rule names no
+    entry: `docs/ARCHITECTURE.md` §3.2 owns one entry, and the gap section names the entries
     that write nothing, so the gate cannot restate the per-entry report. Both directions are findings: a
     block the reader read that no entry produced, and an entry the parse read and modelled that has no
     block. A finding is a coverage fact, not a broken output, so it is a WARN and does not change the exit
@@ -1568,6 +1992,9 @@ def check_round_trip(files: dict[str, str], ledger) -> list[Finding]:
     Findings sort by (file, line, detail), the rule `check_data_files` already uses, so the report is
     byte-identical between runs on the same files. The rule prints no scan console line, because its fact
     compares two sets and the console shape names one identity (`docs/ARCHITECTURE.md` §3.2).
+
+    `output_dir` is where the rule data pair sits, so the rule needs it for the four rule rows. A call with no
+    ledger still reports the check as NOT RUN, so a pin that reads only the output directory is unchanged.
     """
     # A count row is a matrix row the one scope rule can answer, read over the container table. A row the
     # rule can never answer is not in the count, because no entry maps to it, so no exception list appears.
@@ -1625,17 +2052,22 @@ def check_round_trip(files: dict[str, str], ledger) -> list[Finding]:
             )
             continue
         if resource in import_blocks.rule_types():
-            # The four rule types print one iterated block per unit, so the block states no entry value: the printed
-            # form of that unit's rows is the map the block reads, so the block side for these rows is the keys that
-            # map prints. The keys are read through `rule_data`, the module that owns the row shape, the key shape and
-            # the three forms, so this rule states no reader of its own, and one block per unit is the shape the tests
-            # pin rather than a count this rule states.
-            printed = rule_data.printed_keys(files.get(f"{unit}/{row['output_file']}", ""), resource)
-            if entries == len(printed):
+            # The four rule types print one iterated block per unit, so the block states no entry value: the block
+            # side for these rows is the row set read through `rule_data.parse_rows`, from the data member inside the
+            # unit directory the rows name. A record `parse_rows` refuses is the data rule's finding, so it enters no
+            # count here, and one block per unit is the shape `check_rule_blocks` pins rather than a count here.
+            path = write_path.unit_path(output_dir, unit, rule_data.data_file(resource))
+            rows = []
+            if path.is_file():
+                try:
+                    rows = rule_data.parse_rows(path.read_text(encoding="utf-8", errors="surrogateescape"))
+                except ValueError:
+                    continue  # the data rule reports a record that does not read as its rows
+            if entries == len(rows):
                 continue
             detail = (
-                f"row {resource} in unit {unit}: the ledger reads {entries} entries, "
-                f"the reader reads {len(printed)} entries in the map the block reads"
+                f"row {resource} in unit {unit}: the ledger reads {entries} entries, the reader reads {len(rows)} "
+                "rows in the data record the unit holds"
             )
             findings.append(Finding("round_trip", WARN, *position(read, unit, row), detail))
             continue
@@ -1997,6 +2429,7 @@ def run_checks(
         CheckResult("protocol_object", tuple(check_protocol_object(files))),
         CheckResult("filter_blocks", tuple(check_filter_blocks(files))),
         CheckResult("certificate_blocks", tuple(check_certificate_blocks(files))),
+        CheckResult("rule_blocks", tuple(check_rule_blocks(files, Path(output_dir)))),
         CheckResult("references", tuple(check_references(files))),
         CheckResult("variables", tuple(check_variables(files))),
         CheckResult("data_files", tuple(check_data_files(Path(output_dir)))),
@@ -2004,7 +2437,7 @@ def run_checks(
         # gets NOT RUN, not an empty count: an empty count would read as a rule that ran and passed.
         CheckResult(
             "round_trip",
-            tuple(check_round_trip(files, ledger)) if ledger is not None else (),
+            tuple(check_round_trip(files, ledger, Path(output_dir))) if ledger is not None else (),
             ran=ledger is not None,
             note="the cross-check reads the run's ledger, so pass it to the gate",
         ),

@@ -479,25 +479,28 @@ fw_2_example_com = "fw-2.example.com"
 - The rows keep the identity order, the names inside a row sort, and no field states a path or a timestamp, so
   two runs on the same bytes write the same bytes.
 - The record and its printed form are gate inputs for the data rule: the rule reads the record through
-  `parse_rows` and compares the printed form with `render_tfvars`. The printed form is not one of the four
-  data files, so the report count names only the records. Both files are written only when they have
-  content. The CLI takes no flag for them: the table is the default output.
+  `parse_rows` and compares the printed form with `render_tfvars`. The printed form is not a data file, so the
+  report count names only the records, and the same applies to the rule data pair: its printed member is a printed
+  form and enters no count, while its data member is counted inside the unit directory its rows name. Both files
+  are written only when they have content. The CLI takes no flag for them: the table is the default output.
 
 ## Post-run sanity gate
 
 Every conversion runs the gate on the files it wrote, prints a summary, and
 writes `SANITY_REPORT.txt`. The gate reads the files, so it reports what you
 receive, not what the generator intended. It reads the `.tf` files for the block
-rules and the four data files for the data rule, and the summary names both counts.
+rules and the data files for the data rule, and the summary names both counts: the four records at the codebase
+root plus the rule data pair's data member inside each unit directory its own rows name.
 
 | Check | Rule | Severity |
 |---|---|---|
 | `emitted_types` | every resource type is in `EMITTED_TYPES` | FAIL |
 | `location_present` | every `resource` and `data` block carries `location` | FAIL |
 | `data_blocks` | every `data` block matches the `DATA_SOURCE_SCHEMA` row for its type (the type, the `location` sub-block and its fields, and `name` when the row declares one) | FAIL |
+| `rule_blocks` | every iterated rule block matches the `LOCATION_SCHEMA` row for its type, names the block and the `for_each` map through `rule_data.locals_name`, and holds one map entry per row whose content is the row's value read back through the one field reader (Epic 9, Phase 9D) | FAIL |
 | `references` | every `.name` reference resolves to a block declared in the same run, by kind | FAIL |
 | `variables` | every declared variable has a `var.` consumer, and every `var.` consumer names a variable this run declares (F6.6) | FAIL |
-| `data_files` | every data file reads as its declared rows, and the data agrees with the naming rule, the joins, the order rule, and its printed form (F6.8) | FAIL |
+| `data_files` | every data file reads as its declared rows, and the data agrees with the naming rule, the joins, the order rule, and its printed form. The rule data pair is read inside the unit directory its own rows name, and a member inside a directory no row names is a finding (F6.8, Epic 9 Phase 9D) | FAIL |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder (the VPN key `***CHANGE_ME***`) is listed | WARN |
 | `tflint` | the rule set `sanity_checks.TFLINT_RULES`, run through the tflint command, with `--tflint`. Each rule states a shape no other gate rule states, so a `.tf` file a person wrote by hand is still refused | FAIL, WARN, SKIPPED, or NOT RUN |

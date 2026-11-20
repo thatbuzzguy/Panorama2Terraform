@@ -35,7 +35,6 @@ import pytest
 
 import entry_coverage
 import import_blocks
-import panorama_to_terraform
 import resource_mapping
 import rule_data
 from conftest import (
@@ -271,7 +270,7 @@ def _shape_table_grounding(row: dict) -> set:
     # the row, so the table grounds them, and `tests/test_rule_data.py` is what keeps the printed map against the
     # rows `parse_rows` reads.
     if row["resource"] in import_blocks.rule_types():
-        return set(panorama_to_terraform.RULE_ENTRY_FIELDS[row["resource"]])
+        return set(rule_data.RULE_ENTRY_FIELDS[row["resource"]])
     return set()
 
 

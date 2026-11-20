@@ -781,19 +781,22 @@ a run with no network passes CI.
    object reads and `rule_data.printed_file` names the printed form of the same rows, and both read the name through
    the same matrix row's `output_file`, so the two names are one stem with the two suffixes. The third form of the
    same rows is the map the `.tf` file prints, and it reads the same stem with no suffix, which is also the name of
-   the block that iterates it. The third form of the
-   same rows is the map the `.tf` file prints, and it reads the same stem with no suffix, which is also the name of
    the block that iterates it. The rows of one rule
    type are the rows of one unit, because the chain grouping keys on the device group and the virtual system, which
    are two of the five unit facts, so the run writes one pair per rule type inside the unit directory its rows name,
    and writes it only when that unit has rows. The name states the rule type and not the unit, so the path is the
-   only place the pair states the unit it belongs to, which is the rule a per-unit file follows. No gate rule reads
-   the pair yet, so the data rule keeps counting only the four records at the root, and the printed half of the pair
-   is not the printed form the data rule compares. The cross-check reads the rule rows through the declared shape and
-   joins on `directory`, and for the four rule types its block side is the entry keys the printed map holds, read
-   through `rule_data.printed_keys`, so the gate states no reader for the map of its own. Pinned by
+   only place the pair states the unit it belongs to, which is the rule a per-unit file follows. The data rule reads
+   the pair inside the unit directory its own rows name, so the join, the read rule and the printed-form rule reach
+   it there: the data count names the four records at the root plus the pair's data member, and the printed member
+   is not a data file, the way the site print is not, because it is a printed form and enters no count. The
+   cross-check reads the same rows through `rule_data.parse_rows`, the one shape rule, so the three forms of one row
+   set are read by one shape rule, and the block rule `rule_blocks` compares the printed map's entries with those
+   rows through `rule_data.printed_entries`, so the gate states no reader for the map of its own and no shape rule of
+   its own. Pinned by
    `tests/test_write_path.py::test_a_new_unit_set_file_shape_names_the_unit_set_and_the_two_counts_do_not_move` and
-   `tests/test_rule_data.py::test_the_two_file_forms_are_unit_set_files_named_through_the_matrix_row` and
+   `::test_the_four_records_are_read_at_the_root_and_the_pair_inside_the_unit_directory`,
+   `tests/test_rule_data.py::test_the_two_file_forms_are_unit_set_files_named_through_the_matrix_row`,
+   `tests/test_data_file_gate.py::test_the_rule_data_pair_is_read_inside_the_unit_directory_its_rows_name`, and
    `tests/test_rule_data.py::test_the_printed_map_reads_back_as_the_same_row_keys`.
 
    **The codebase root set** is the files that describe the whole codebase, one per run: the four records, the
@@ -809,8 +812,9 @@ a run with no network passes CI.
    the action it gates are in `ARCHITECTURE.md` §3.3.
 
    **The two sets are distinct**, and every file the run writes names one set: the block set is the `.tf`
-   files, the data set is the four records, and the printed form is compared and not counted (§9 rule 4, and
-   the file-set group of `tests/test_data_file_gate.py`). A new file shape must name which set it belongs to.
+   files, the data set is the four records at the root plus the rule data pair's data member inside the unit
+   directory its rows name, and a printed form is compared and not counted (§9 rule 4, and the file-set group of
+   `tests/test_data_file_gate.py`). A new file shape must name which set it belongs to.
 
    **A per-unit file names its unit only by the directory it is written in**, the name §3 rule 3 states, so
    the unit set is stated once, in the manifest row (§3 rule 5). A reference inside a per-unit file names a
@@ -822,9 +826,11 @@ a run with no network passes CI.
    belongs to; one reader serves the set, keyed by the path from the root, so a path names the unit directory the
    file is in. The data rule keeps reading the four records at the root as one rule over the rows of every unit,
    so no per-unit record and no second shape rule appears (§3 rule 4), and its printed-form half compares each
-   unit's file inside the directory that row names. The plan check runs on one directory, so it runs once for
-   each unit directory, because a unit is one plan and one root (§1 rule 3), and each result names the directory
-   it ran on. No rule reads a report, `README.md` or `SOURCE.txt`.
+   unit's file inside the directory that row names; the rule data pair is read inside the unit directory its own
+   rows name, because it is a unit-set file, so the join, the read rule and the printed-form rule reach it there.
+   The plan check runs on one directory, so it runs once for each unit directory, because a unit is one plan and one
+   root (§1 rule 3), and each result names the directory it ran on. No rule reads a report, `README.md` or
+   `SOURCE.txt`.
 
    **No file is needed for the rule set**, so neither set gains a file and the file inventory is unchanged:
    `sanity_checks.TFLINT_RULES` states the set as data, `--only` names each rule, and a config file would be a

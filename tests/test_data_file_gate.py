@@ -5,16 +5,24 @@ and the gate that runs during a test cannot disagree. The rule reads each file t
 owns the row shape, so no second shape rule appears, and it reads no `.tf` file, so no block rule reads
 a data file.
 
+The four records are the codebase root set. The rule data pair is a unit-set file, so the same findings read
+it inside each unit directory its own rows name (Epic 9, rule 5), and the report's data count names the
+records at the root plus the pair's data member inside those directories: the printed member is not a data
+file, the way the site print is not. `tests/conftest.py` states the set the count names, so the modules that
+read it state no second derivation.
+
 Sections, one per finding:
 
-1. The file set: the gate reads the `.tf` files plus the four data files, the report names both sets,
-   and `CHECK_ORDER` puts the data rule after the block rules and before the round-trip cross-check, which
-   is the rule that reads two sets, and then before the byte rules.
+1. The file set: the gate reads the `.tf` files plus the data files the table names, each through the
+   module that owns its row shape, the report names both sets, and `CHECK_ORDER` puts the data rule after the
+   block rules and before the round-trip cross-check, which is the rule that reads two sets, and then before
+   the byte rules.
 2. Finding 1: a data file that does not read as its declared rows, and a data file with no rows.
 3. Finding 2: the fields `naming.py` decides must be stated as the rule states them.
 4. Finding 3: the joins, through `directory`.
 5. Finding 4: the order, read back through `reference_edges.order`.
-6. Finding 5: the site record and its printed form.
+6. Finding 5: the site record and its printed form, and the rule data pair inside the unit directory its
+   own rows name (Epic 9, rule 5).
 7. Finding 6: the row ordinal, the truth across the corpus, determinism, and the exit code.
 
 Every test runs offline. The planted rows are built through the modules, so the tests state no second
@@ -25,14 +33,16 @@ import json
 import subprocess
 from pathlib import Path
 
+import entry_coverage
 import naming
 import ownership
 import reference_edges
+import rule_data
 import sanity_checks
 import site_data
 import unit_manifest
 import write_path
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, corpus_fixtures, run_script, written_bytes
+from conftest import FIXTURES_DIR, RULE_TYPES, SAMPLE_CONFIG, corpus_fixtures, data_file_set, run_script, written_bytes
 
 CONVERTER = "panorama_to_terraform.py"
 KITCHEN = "kitchen_sink.xml"
@@ -125,6 +135,40 @@ def _for_file(findings: list, name: str) -> list:
     return [finding for finding in findings if finding.file == name]
 
 
+def _rule_row(facts: tuple, entry: str, resource: str) -> dict:
+    """One rule row as the module that owns the row shape builds it, so this test states no second shape rule.
+
+    The recorded object is what `rule_data.build_rows` reads the properties through, so the row is built by the
+    rule that names the fields, and the key and the digest are the ones the identity rules produce.
+    """
+    recorded = dict(zip(unit_manifest.FACT_KEYS, facts, strict=True))
+    recorded["name"] = entry
+    # A field the matrix row names for the rule type, so the row holds a value the print rule can print.
+    recorded[entry_coverage.MATRIX_BY_RESOURCE[resource]["properties"][0]] = "block"
+    return rule_data.build_rows(resource, [recorded], naming.sanitize)[0]
+
+
+def _write_pair(out_dir: Path, rows: list, resource: str, facts: list) -> list:
+    """Write the rule data pair inside the unit directory its own rows name, through the write path (F6.10.3,
+    `docs/CODEBASE_ASSEMBLY.md` §14), and return the data rule's findings.
+
+    The manifest is planted first, through the module that owns the unit rule, so the join reads the unit set the
+    pair joins to and only the pair can be a finding. The facts are the ones the rows were built from, so this
+    helper states no unit rule of its own, and the directory written into is the one the first row names.
+    """
+    write_path.write_file(
+        write_path.root_path(out_dir, unit_manifest.MANIFEST_FILE), unit_manifest.render(_clean(facts))
+    )
+    directory = rows[0]["directory"]
+    write_path.write_file(
+        write_path.unit_path(out_dir, directory, rule_data.data_file(resource)), rule_data.render(rows)
+    )
+    write_path.write_file(
+        write_path.unit_path(out_dir, directory, rule_data.printed_file(resource)), rule_data.render_csv(rows)
+    )
+    return sanity_checks.check_data_files(out_dir)
+
+
 # --- 1. The file set -----------------------------------------------------------
 
 
@@ -133,8 +177,10 @@ def test_the_gate_reads_the_tf_files_and_the_data_files_the_table_names(tmp_path
     the module that owns its row shape, so no second shape rule appears.
 
     Both counts are read as the derivation: the `.tf` count is the set the reader read, and the data count is the
-    rows `sanity_checks.DATA_FILES` names that the run wrote. Measured 2026-11-18: the table names 4 rows, and the
-    sample run writes 2 of them (the manifest and the ownership record), so the count is 2.
+    rows `sanity_checks.DATA_FILES` names that the run wrote plus the rule data pair's data member inside each unit
+    directory its own rows name, read through `conftest.data_file_set`. Measured 2026-11-19: the table names 4 root
+    rows and the sample run writes 2 of them (the manifest and the ownership record), and the pair is written inside
+    one unit directory for 2 rule types, so the count is 4.
     """
     assert dict(sanity_checks.DATA_FILES) == {
         unit_manifest.MANIFEST_FILE: unit_manifest,
@@ -147,7 +193,7 @@ def test_the_gate_reads_the_tf_files_and_the_data_files_the_table_names(tmp_path
     assert tf_files and all(name.endswith(".tf") for name in tf_files), "the block reader is .tf-only"
     report = sanity_checks.run_checks(tmp_path)
     assert report.file_count == len(tf_files)
-    written = [name for name, _shape in sanity_checks.DATA_FILES if (tmp_path / name).is_file()]
+    written = data_file_set(tmp_path)
     assert report.data_file_count == len(written), (report.data_file_count, sorted(written))
     assert not report.failed, report.render()
 
@@ -157,15 +203,17 @@ def test_the_report_names_both_file_sets(tmp_path):
     gate read.
 
     Both counts are read as the derivation: the `.tf` count is the set the reader read below the root, and the
-    data count is the rows `sanity_checks.DATA_FILES` names that the run wrote. Measured 2026-11-18: the sample
-    run — two units, so two sets — reads 14 `.tf` files and 2 data files, the manifest and the ownership record;
-        the kitchen-sink run writes all four rows, so it reads 4. The resource count is 17 for the sample run,
-        measured 2026-11-19 on the iterated rule block, one block per rule type per unit.
+    data count is the rows `sanity_checks.DATA_FILES` names that the run wrote plus the rule data pair's data
+    member inside each unit directory its own rows name, read through `conftest.data_file_set`. Measured
+    2026-11-19: the sample run — two units, so two sets — reads 14 `.tf` files and 4 data files, the manifest, the
+    ownership record, and the pair inside one unit directory for 2 rule types; the kitchen-sink run writes all four
+    root rows and the pair for 4 rule types, so it reads 8 data files. The resource count is 17 for the sample run,
+    measured 2026-11-19 on the iterated rule block, one block per rule type per unit.
     """
     assert _run(SAMPLE_CONFIG, tmp_path).returncode == 0
     report = sanity_checks.run_checks(tmp_path)
     files = sanity_checks.read_tf_files(tmp_path)
-    written = [name for name, _shape in sanity_checks.DATA_FILES if (tmp_path / name).is_file()]
+    written = data_file_set(tmp_path)
     assert report.file_count == len(files), "the count names the unit set"
     assert report.data_file_count == len(written), (report.data_file_count, sorted(written))
     assert f"Files checked: {len(files)} .tf files, {len(written)} data files." in report.render(), report.render()
@@ -179,8 +227,18 @@ def test_the_report_names_both_file_sets(tmp_path):
     assert _run(FIXTURES_DIR / KITCHEN, kitchen).returncode == 0
     kitchen_rows = [name for name, _shape in sanity_checks.DATA_FILES if (kitchen / name).is_file()]
     assert len(kitchen_rows) == len(sanity_checks.DATA_FILES), sorted(kitchen_rows)
-    assert sanity_checks.run_checks(kitchen).data_file_count == len(kitchen_rows)
-    assert sanity_checks.count_data_files(kitchen) == len(kitchen_rows)
+    assert sanity_checks.run_checks(kitchen).data_file_count == len(data_file_set(kitchen))
+    assert sanity_checks.count_data_files(kitchen) == len(data_file_set(kitchen))
+    # The pair's printed member is not a data file, the way the site print is not, so the count names only the
+    # data member: measured on the same run, the derivation names 4 root records and 4 data members.
+    printed = sorted(
+        str(path.relative_to(kitchen))
+        for resource in RULE_TYPES
+        for path in kitchen.rglob(rule_data.printed_file(resource))
+        if path.parent != kitchen
+    )
+    assert len(printed) == len(kitchen_rows), printed
+    assert not any(name in data_file_set(kitchen) for name in printed), "the count names no printed member"
 
 
 def test_check_order_puts_the_data_rule_after_the_block_rules(tmp_path):
@@ -188,6 +246,10 @@ def test_check_order_puts_the_data_rule_after_the_block_rules(tmp_path):
     sets, then the byte rules, then the two rules that run an external command. `tests/test_round_trip.py` and
     `tests/test_sanity_gate.py` pin why the two agreement rules sit together, and the plan check stays last
     because it is the command check that reads a directory rather than the files it wrote.
+
+    `rule_blocks` is the last block rule, because it is the block rule that also reads the row set the data rule
+    reads: it reads the `.tf` files through the one block reader, so it stays in the block-rule group, and the block
+    it reads is the printed form of those rows.
     """
     assert sanity_checks.CHECK_ORDER == (
         "emitted_types",
@@ -199,6 +261,7 @@ def test_check_order_puts_the_data_rule_after_the_block_rules(tmp_path):
         "protocol_object",
         "filter_blocks",
         "certificate_blocks",
+        "rule_blocks",
         "references",
         "variables",
         "data_files",
@@ -229,6 +292,12 @@ def test_no_block_rule_reads_a_data_file_and_the_data_rule_reads_no_tf_file():
     assert "def check_data_files(output_dir: Path)" in source
     # The slice boundary is the cross-check, the rule that reads two sets, so the data rule reads no ledger.
     assert "ledger" not in rule, "the data rule reads no ledger, and the cross-check reads no record"
+    # `rule_blocks` is the block rule that also reads the row set, so it reads the `.tf` files through the one block
+    # reader and the rows through `rule_data`, the module that owns the row shape, and states no shape rule of its own.
+    block_rule = source[source.index("def check_rule_blocks") : source.index("def check_references")]
+    assert "blocks(" in block_rule, "the block rule reads the .tf files through the one block reader"
+    assert "rule_data.parse_rows" in block_rule, "the block rule reads the row set through its module"
+    assert "json" not in block_rule, "the block rule states no shape rule"
 
 
 # --- 2. Finding 1: the row shape -----------------------------------------------
@@ -477,6 +546,122 @@ def test_the_record_and_its_printed_form_stand_or_fall_together(tmp_path):
     assert findings == [], "one file prints one row, so the gate reads no conflict"
 
 
+def test_the_rule_data_pair_is_read_inside_the_unit_directory_its_rows_name(tmp_path):
+    """The pair is a unit-set file, so the data rule reads it inside each unit directory its own rows name
+    (Epic 9, rule 5), and both members are named through `rule_data`, the module that owns the row shape.
+
+    Both names come from the module, so this pin states no file name of its own; the pair reads clean when the
+    directory it is in names the unit its rows name. The printed member is not a data file, so the count names only
+    the data member: measured 2026-11-19 on the sample run, 2 records at the root plus the data member for 2 rule
+    types inside the unit its rows name, so 4.
+    """
+    row = _rule_row(SHARED, "Rule-1", "panos_security_policy_rules")
+    resource = "panos_security_policy_rules"
+    findings = _write_pair(tmp_path, [row], resource, [SHARED])
+    assert findings == [], findings
+    names = {rule_data.data_file(resource), rule_data.printed_file(resource)}
+    assert len(names) == 2, "the pair is two files, so a pair cannot name one file twice"
+    members = sorted(p for p in tmp_path.rglob("*") if p.is_file() and p.name in names)
+    assert len(members) == 2, sorted(p.name for p in members)
+    assert all(p.parent != tmp_path for p in members), "the pair is read inside the unit directory its rows name"
+    counted = set(data_file_set(tmp_path))
+    data_member = f"{row['directory']}/{rule_data.data_file(resource)}"
+    assert counted == {unit_manifest.MANIFEST_FILE, data_member}, sorted(counted)
+
+
+def test_a_pair_member_at_the_codebase_root_names_no_unit(tmp_path):
+    """The four records are the codebase root set and the pair is the unit set, so a member found at the root
+    joins to no unit and is a whole-file finding, stated at row 0.
+    """
+    resource = "panos_security_policy_rules"
+    row = _rule_row(SHARED, "Rule-1", resource)
+    assert _write(tmp_path, unit_manifest.MANIFEST_FILE, unit_manifest, _clean([SHARED])) == []
+    for name in (rule_data.data_file(resource), rule_data.printed_file(resource)):
+        write_path.write_file(write_path.root_path(tmp_path, name), rule_data.render([row]))
+    findings = sanity_checks.check_data_files(tmp_path)
+    whole = [f for f in findings if f.line == 0]
+    assert len(findings) == 2 and len(whole) == 2, [f.render() for f in findings]
+    assert all("names no unit" in f.detail for f in findings), [f.render() for f in findings]
+    assert all(Path(f.file).parent.name == "" for f in findings), "a root member names no directory"
+    assert len(data_file_set(tmp_path)) == 1, sorted(data_file_set(tmp_path))
+
+
+def test_a_pair_member_inside_a_directory_no_row_names_is_a_finding(tmp_path):
+    """The join reads the unit set through the manifest, so a pair inside a directory no manifest row names is a
+    finding, and a pair inside the directory its own rows name reads clean.
+    """
+    resource = "panos_security_policy_rules"
+    row = _rule_row(SHARED, "Rule-1", resource)
+    assert _write_pair(tmp_path, [row], resource, [SHARED]) == []
+    moved = tmp_path / "unit_no_row_names"
+    moved.mkdir()
+    for name in (rule_data.data_file(resource), rule_data.printed_file(resource)):
+        (tmp_path / row["directory"] / name).rename(moved / name)
+    findings = sanity_checks.check_data_files(tmp_path)
+    whole = [f for f in findings if f.line == 0]
+    assert len(findings) == 2 and len(whole) == 2, [f.render() for f in findings]
+    assert all("names no unit the manifest names" in f.detail for f in findings), [f.render() for f in findings]
+    assert all(f.file.startswith("unit_no_row_names/") for f in findings), [f.render() for f in findings]
+    assert len(data_file_set(tmp_path)) == 1, sorted(data_file_set(tmp_path))
+
+
+def test_the_pair_members_stand_or_fall_together(tmp_path):
+    """The content rule writes a data file only when it has content, so the pair's two members stand or fall
+    together the way the site record and its printed form do: each member alone is a whole-file finding.
+    """
+    resource = "panos_security_policy_rules"
+    row = _rule_row(SHARED, "Rule-1", resource)
+    assert _write_pair(tmp_path, [row], resource, [SHARED]) == []
+    directory = row["directory"]
+    data_member = tmp_path / directory / rule_data.data_file(resource)
+    printed_member = tmp_path / directory / rule_data.printed_file(resource)
+
+    printed_member.unlink()
+    findings = sanity_checks.check_data_files(tmp_path)
+    assert len(findings) == 1 and "stand or fall together" in findings[0].detail, [f.render() for f in findings]
+    assert findings[0].file == f"{directory}/{rule_data.printed_file(resource)}", findings[0].render()
+    # The printed member enters no count, so a pair missing its printed member is still one data file.
+    assert len(data_file_set(tmp_path)) == 2, sorted(data_file_set(tmp_path))
+
+    printed_member.write_text(rule_data.render_csv([row]), encoding="utf-8")
+    data_member.unlink()
+    findings = sanity_checks.check_data_files(tmp_path)
+    assert len(findings) == 1 and "stand or fall together" in findings[0].detail, [f.render() for f in findings]
+    assert len(data_file_set(tmp_path)) == 1, sorted(data_file_set(tmp_path))
+
+
+def test_the_printed_member_must_be_the_rows_rendered_by_its_rule(tmp_path):
+    """Finding 5 for the pair: the printed member must equal `rule_data.render_csv` of the same rows, so the pair
+    is one row set in two forms rather than two shapes.
+    """
+    resource = "panos_security_policy_rules"
+    row = _rule_row(SHARED, "Rule-1", resource)
+    assert _write_pair(tmp_path, [row], resource, [SHARED]) == []
+    printed = tmp_path / row["directory"] / rule_data.printed_file(resource)
+    printed.write_text("entry\nRule-1\n", encoding="utf-8")
+    findings = sanity_checks.check_data_files(tmp_path)
+    assert len(findings) == 1 and "is not the rows rendered by the rule that prints them" in findings[0].detail, [
+        f.render() for f in findings
+    ]
+    assert findings[0].file == f"{row['directory']}/{rule_data.printed_file(resource)}", findings[0].render()
+
+
+def test_a_pair_row_that_names_another_unit_is_a_finding_at_its_row_ordinal(tmp_path):
+    """Finding 3 and finding 6 for the pair: the row's `directory` must name the unit the file it is in names, and
+    the finding is stated at the row ordinal because a data row spans many lines.
+    """
+    resource = "panos_security_policy_rules"
+    row = _rule_row(SHARED, "Rule-1", resource)
+    # The second row is built from another unit's facts, so it reads as its own shape and names a different unit
+    # than the file it is in.
+    other = _rule_row(CHILD, "Rule-2", resource)
+    findings = _write_pair(tmp_path, [row, other], resource, [SHARED])
+    assert len(findings) == 1, [f.render() for f in findings]
+    assert findings[0].line == 2, findings[0].render()
+    assert findings[0].file == f"{row['directory']}/{rule_data.data_file(resource)}", findings[0].render()
+    assert "is not the unit the file it is in names" in findings[0].detail, findings[0].render()
+
+
 # --- 7. Finding 6: the position, the corpus, determinism, the exit code ---------
 
 
@@ -511,9 +696,7 @@ def test_the_rule_reports_no_finding_on_the_files_the_tool_writes_for_every_fixt
         # A record the run has no content for is not written, so the rule reads nothing for it, and the
         # report the conversion wrote counts the same files the test gate counts.
         report = sanity_checks.run_checks(out)
-        assert report.data_file_count == sum(1 for name, _ in sanity_checks.DATA_FILES if (out / name).is_file()), (
-            fixture
-        )
+        assert report.data_file_count == len(data_file_set(out)), (fixture, sorted(data_file_set(out)))
         assert f"{report.data_file_count} data files" in report.render(), fixture
 
 
@@ -530,9 +713,11 @@ def test_the_rule_is_the_same_between_two_runs(tmp_path):
         if left.is_file():
             assert left.read_bytes() == right.read_bytes(), name
     assert sanity_checks.check_data_files(first) == sanity_checks.check_data_files(second)
-    # The count is read as the derivation from the table's rows present in the output, so a run that wrote a
-    # different set answers differently. Measured 2026-11-18 on the kitchen-sink run: all 4 rows are written.
-    written = [name for name, _shape in sanity_checks.DATA_FILES if (first / name).is_file()]
+    # The count is read as the derivation from the table's rows present in the output plus the pair's data member
+    # inside each unit directory its own rows name, so a run that wrote a different set answers differently.
+    # Measured 2026-11-19 on the kitchen-sink run: all 4 root rows are written, and the pair is written inside one
+    # unit directory for 4 rule types, so the count is 8.
+    written = data_file_set(first)
     assert sanity_checks.count_data_files(first) == len(written), (written,)
     assert sanity_checks.count_data_files(second) == len(written), (written,)
 

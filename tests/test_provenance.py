@@ -41,6 +41,7 @@ from conftest import (
     FIXTURES_DIR,
     RESPONSES_DIR,
     SAMPLE_CONFIG,
+    data_file_set,
     file_text,
     run_main,
     run_script,
@@ -564,8 +565,10 @@ def test_a_refusal_writes_no_record(converter_module, fetch_module, tmp_path):
 
 
 def test_the_record_is_not_a_gate_input_and_the_exit_code_is_unchanged(tmp_path):
-    """The gate reads the `.tf` files for the block rules and the four data files for the data rule
-    (F6.8), and `SOURCE.txt` is neither, so the record cannot change what the gate counts or decides.
+    """The gate reads the `.tf` files for the block rules and the data files the count names for the data rule
+    (F6.8) — the four records at the codebase root plus the rule data pair's data member inside each unit
+    directory its own rows name — and `SOURCE.txt` is neither, so the record cannot change what the gate counts
+    or decides.
     """
     out = tmp_path / "out"
     proc = run_script("panorama_to_terraform.py", str(SAMPLE_CONFIG), "--output-dir", str(out))
@@ -573,7 +576,8 @@ def test_the_record_is_not_a_gate_input_and_the_exit_code_is_unchanged(tmp_path)
     report = sanity_checks.run_checks(out)
     assert not report.failed
     assert report.file_count == len(tf_files(out)), "the block reader counts the unit set"
-    assert report.data_file_count == 2, "the record is not one of the four data files"
+    assert report.data_file_count == len(data_file_set(out)), "the record is not one of the data files the count names"
+    assert "SOURCE.txt" not in data_file_set(out), "the record is not a data file"
     assert report.result_of("terraform") == "NOT RUN"
 
 
@@ -769,7 +773,7 @@ def test_a_refused_record_exits_one_and_a_prune_that_removes_nothing_changes_not
     )
     report = sanity_checks.run_checks(clean)
     assert not report.failed, "the gate still decides"
-    assert report.data_file_count == 2, "the record is not a gate input"
+    assert report.data_file_count == len(data_file_set(clean)), "the record is not a data file the count names"
     assert not report.findings("data_files")
 
     # The stand-in is the refusal the same action raises, so the run's exit code for a refusal is pinned.

@@ -46,8 +46,11 @@ Seven rules, stated once here. Every other rule is read through its owner, so no
    `directory` column names, and writes it only when that unit has rows: the rows of one rule type are the rows of
    one unit, because the chain grouping keys on the device group and the virtual system, which are two of the five
    unit facts, so the file holds that unit's rows and names its unit only by its directory.
-    `printed_keys` reads the keys the `.tf` file prints for one rule type, the only part of the printed map this
-    module owns, so the gate's cross-check reads the printed map through here and states no reader of its own.
+    `printed_entries` reads the entries the `.tf` file prints for one rule type: the key, and the text the file
+    prints for its values. It is the part of the printed map this module owns, so the gate reads the printed map
+    through here and states no reader of its own, and reads no value from the text it is handed, because reading a
+    value is the gate's one field reader's job and a shape rule stays in `parse_rows`. The three tables the printed
+    form reads are stated here, so the emitter, the gate's block rule and the matrix test read one table.
 6. **No second rule and no writer.** The module states no naming rule (the §5 rule is taken as the `sanitize`
    argument for the rows, the way `unit_manifest.py` and `site_data.py` take it, and read through `naming.py` when a
    written name is read back), no unit rule, no identity key, no digest rule, no path, no console line, no
@@ -61,6 +64,7 @@ Seven rules, stated once here. Every other rule is read through its owner, so no
 Usage:
     from rule_data import (
         RULE_ROW_FIELDS, build_rows, parse_rows, render, render_csv, data_file, printed_file, locals_name,
+        printed_entries,
     )
     from write_path import unit_path, write_file
     import naming, rule_data
@@ -104,15 +108,125 @@ _JSON_SUFFIX = ".json"
 _CSV_SUFFIX = ".csv"
 
 # The printed map, as rule 5 states the third form: the map name on the `locals` line, then one entry per row
-# keyed by the declared `ordinal_digest` shape, in the order the file prints the entries. The gate's cross-check
-# reads the printed form through `printed_keys`, so no second reader for the map appears.
-_PRINTED_MAP_RE = re.compile(r"locals \{\n  ([a-z0-9_]+) = \{\n(.*?)\n  \}\n\}", re.S)
-_PRINTED_KEY_RE = re.compile(r'^    "([^"]+)" = \{', re.M)
+# keyed by the declared `ordinal_digest` shape, in the order the file prints the entries. The indent of the map and
+# of its entries is read from the file, so a hand-written map reads as the same map the emitter printed. The gate
+# reads the printed form through `printed_entries`, so no second reader for the map appears.
+_PRINTED_MAP_RE = re.compile(r"(?m)^(\s*)locals \{\n(\s+)([a-z0-9_]+) = \{\n(.*?)\n\2\}", re.S)
+# One entry of the printed map, from its key line to the line that closes it, at whatever indent the file states.
+# The reader names the entry and hands the text over, so the gate's one field reader reads the values inside it and
+# this module reads no value of its own. The indent is captured and back-referenced so a hand-written entry with a
+# different indent reads as the same entry the emitter printed.
+_PRINTED_ENTRY_RE = re.compile(r'(?m)^(\s+)"([^"]+)" = \{\n(.*?)\n\1\}', re.S)
 
 # A property value is what the recorded object can hold: a string, a boolean, a list, or a mapping. A PBF rule's
 # `action` is a mapping, so the shape cannot declare only strings. A number is not a value the rule parse stores,
 # so a file that states one is refused, and so is no value, because a field with no value prints no column.
 _CAPTURED_SCALARS = (str, bool)
+
+
+# The three tables the printed form reads, stated once here so the emitter, the gate, and the matrix test read one
+# table. `RULE_ENTRY_FIELDS` is the mapping from a row field to the pair the printed entry states for it: the name
+# the provider declares, and the shape word the value prints as (`SHAPE_WORDS`, read through `SHAPE_TO_SCHEMA`). The
+# entry is the only place the provider's declared shape can be honoured, because the block body prints a reference
+# and `terraform validate` cannot type-check `each.value.<field>`: the shape word is the provider's declared type,
+# measured from the pinned provider schema on 2026-11-19. `RULE_ENTRY_READERS` names the reader for a field whose
+# provider object key is the value the row records, because a block body prints a reference and cannot name an object
+# key from a value, so the gate compares such a field by the shape word the table states and not by content.
+# `RULE_BODY_DEFAULTS` states the one provider field the parse records no value for, so the block body prints a value
+# for it and not a reference. Every field order these tables read is the matrix row's `properties` order, so this
+# module states no field list of its own.
+RULE_ENTRY_FIELDS = {
+    "panos_security_policy_rules": {
+        "name": ("name", "string"),
+        "action": ("action", "string"),
+        "applications": ("applications", "string_list"),
+        "description": ("description", "string"),
+        "destination_addresses": ("destination_addresses", "string_list"),
+        "destination_zones": ("destination_zones", "string_list"),
+        "disabled": ("disabled", "bool"),
+        "log_end": ("log_end", "bool"),
+        "log_start": ("log_start", "bool"),
+        # F4.4: the parsed-object key the emitter reads for the profile group reference, printed as the object
+        # `profile_setting.group`.
+        "profile_group": ("profile_setting", "object"),
+        "services": ("services", "string_list"),
+        "source_addresses": ("source_addresses", "string_list"),
+        "source_zones": ("source_zones", "string_list"),
+    },
+    "panos_nat_policy_rules": {
+        "name": ("name", "string"),
+        "description": ("description", "string"),
+        "destination_addresses": ("destination_addresses", "string_list"),
+        # The two columns that build one provider object state one entry field: the address column names the object
+        # and the port column names the field inside it.
+        "destination_translation_address": ("destination_translation", "object"),
+        "destination_translation_port": ("destination_translation", "number"),
+        # The one row field the parse records as one value and the provider takes as a list, through `_get_text`.
+        "destination_zone": ("destination_zone", "string_list"),
+        "disabled": ("disabled", "bool"),
+        # F4.4: the provider takes one name here, so a member list cannot print as the field.
+        "service": ("service", "string"),
+        "source_addresses": ("source_addresses", "string_list"),
+        "source_translation_address": ("source_translation", "object"),
+        "source_translation_type": ("source_translation", "one_of"),
+        "source_zones": ("source_zones", "string_list"),
+    },
+    "panos_decryption_policy_rules": {
+        "name": ("name", "string"),
+        "action": ("action", "string"),
+        "categories": ("category", "string_list"),
+        "description": ("description", "string"),
+        "destination_addresses": ("destination_addresses", "string_list"),
+        "destination_zones": ("destination_zones", "string_list"),
+        "disabled": ("disabled", "bool"),
+        "log_end": ("log_fail", "bool"),
+        "log_setting": ("log_setting", "string"),
+        "log_start": ("log_success", "bool"),
+        "profile": ("profile", "string"),
+        "services": ("services", "string_list"),
+        "source_addresses": ("source_addresses", "string_list"),
+        "source_users": ("source_user", "string_list"),
+        "source_zones": ("source_zones", "string_list"),
+        "type": ("type", "one_of"),
+    },
+    "panos_pbf_policy_rules": {
+        "name": ("name", "string"),
+        "action": ("action", "one_of"),
+        "applications": ("applications", "string_list"),
+        "description": ("description", "string"),
+        "destination_addresses": ("destination_addresses", "string_list"),
+        "disabled": ("disabled", "bool"),
+        # The provider declares the fact as an object with one `enabled` field (F2.9).
+        "enforce_symmetric_return": ("enforce_symmetric_return", "object"),
+        "schedule": ("schedule", "string"),
+        "services": ("services", "string_list"),
+        "source_addresses": ("source_addresses", "string_list"),
+        "source_users": ("source_users", "string_list"),
+        # v2 models the PBF source as `from { zone = [...] }` (F2.9).
+        "source_zones": ("from", "object"),
+    },
+}
+
+# The reader a field is built by, when the provider's object key is the value the row records. `RULE_ENTRY_FIELDS`
+# names the shape word, so the reader names the field that cannot be read as one row value, and the gate compares
+# such a field by its shape word. The names are the emitter's methods, read at the print site.
+RULE_ENTRY_READERS = {
+    "panos_security_policy_rules": {"profile_group": "_profile_setting"},
+    "panos_nat_policy_rules": {
+        "source_translation_address": "_nat_translation",
+        "destination_translation_address": "_destination_translation",
+    },
+    "panos_decryption_policy_rules": {"action": "_decryption_action", "type": "_decryption_type"},
+    "panos_pbf_policy_rules": {
+        "source_zones": "_pbf_from",
+        "action": "_pbf_action",
+        "enforce_symmetric_return": "_pbf_enforce_symmetric_return",
+    },
+}
+
+# The NAT family is the one provider field the parse records no value for (F3.5), so no row column names it and the
+# block states the default word the export implies. IPv4 is the Panorama default family.
+RULE_BODY_DEFAULTS = {"panos_nat_policy_rules": ("nat_type", "ipv4")}
 
 
 def _file_stem(resource_type: str) -> str:
@@ -142,23 +256,24 @@ def locals_name(resource_type: str) -> str:
     return _file_stem(resource_type)
 
 
-def printed_keys(text: str, resource_type: str) -> list:
-    """The entry keys a `.tf` file prints in one rule type's map, in the order the file prints them (rule 5).
+def printed_entries(text: str, resource_type: str) -> list:
+    """One row as the `.tf` file prints it: the key, and the text the file prints for its values (rule 5).
 
-    Only the keys are read, because the key is the part of the printed map this module owns: an entry's field values
-    are the printed forms of the row's properties, and `parse_rows` reads those from the data form. A key that is not
-    the declared `ordinal_digest` shape enters no count, the way `parse_rows` refuses it. The map name is read through
+    One answer per entry, in the order the file prints the entries, which is the sorted key order. A key that is not
+    the declared `ordinal_digest` shape is no answer, the way `parse_rows` refuses it. The module names the entry and
+    hands over its text without reading a value from it: reading a value is the gate's one field reader's job, so a
+    shape rule stays in `parse_rows` and no second reader for the map appears. The map name is read through
     `locals_name`, so the block name, the map name and the two file names are one name.
     """
     map_name = locals_name(resource_type)
     answer = []
     for match in _PRINTED_MAP_RE.finditer(text):
-        if match.group(1) != map_name:
+        if match.group(3) != map_name:
             continue
-        for key in _PRINTED_KEY_RE.findall(match.group(2)):
+        for _indent, key, entry in _PRINTED_ENTRY_RE.findall(match.group(4)):
             ordinal, _, digest = key.partition("_")
             if len(ordinal) >= ORDINAL_WIDTH and ordinal.isdigit() and len(digest) == unit_manifest.DIGEST_HEX:
-                answer.append(key)
+                answer.append({"key": key, "entry": entry})
     return answer
 
 

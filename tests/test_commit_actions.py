@@ -447,9 +447,13 @@ def test_the_action_rule_reads_no_data_file():
     """The rule reads the block text, the tables, and `naming.py`, so the action rule reads no manifest
     row. F6.8 added the data rule for the four data files, so the two file sets are separate: a block rule
     reads a `.tf` file, and the data rule reads a record.
+
+    The slice is the action rule alone: it ends at the next rule in the file, which is also the next rule in
+    `CHECK_ORDER`. `rule_blocks` is the block rule that reads the row set through `rule_data`, and its helpers sit
+    after it, so no helper of another rule enters this slice.
     """
     source = (SRC_DIR / "sanity_checks.py").read_text(encoding="utf-8")
-    check = source[source.index("def check_actions") : source.index("def check_references")]
+    check = source[source.index("def check_actions") : source.index("def check_protocol_object")]
     for name in ("MANIFEST", "manifest", "parse_rows", "unit_manifest", "OWNERSHIP", "SITE_DATA"):
         assert name not in check, name
     assert "commit_actions.read_block" in check and "commit_actions.local_name" in check

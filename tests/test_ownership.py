@@ -44,6 +44,7 @@ from conftest import (
     SAMPLE_CONFIG,
     SRC_DIR,
     corpus_fixtures,
+    data_file_set,
     file_text,
     run_main,
     run_pipeline,
@@ -742,7 +743,8 @@ def test_the_gate_reads_the_record_through_ownership(tmp_path):
     assert not hasattr(ownership, "check"), "the record owns no gate check"
     report = sanity_checks.run_checks(tmp_path)
     assert [result.check for result in report.checks] == list(sanity_checks.CHECK_ORDER)
-    assert report.data_file_count == 2
+    assert report.data_file_count == len(data_file_set(tmp_path)), "the count names the pair's data member"
+    assert RECORD in data_file_set(tmp_path), "this record is one of the files the count names"
     assert report.findings("data_files") == []
     assert report.fail_count == 0
 

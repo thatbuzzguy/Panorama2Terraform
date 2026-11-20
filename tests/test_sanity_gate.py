@@ -31,6 +31,10 @@ Pins:
 - the committed tflint material reads as findings through the harness, one finding per rule, and one pin compares
   the committed answer with the live answer so a committed fact cannot drift; the pins that run the binary skip
   only for a missing binary and assert on a non-zero run;
+- the rule block check (`rule_blocks`, Epic 9 Phase 9D) reads the iterated rule block against the row set the data
+  rule reads, so a printed run reads clean, a hand-written entry that is not the row the data record holds for the
+  unit is one FAIL finding, and a block for a unit no rule row names is one finding; the two report counts are read
+  through `conftest.data_file_set`, so this module states no file set of its own;
 - the splitter writes XML, so the gate has nothing to check there;
 - the join rule (`check_request_set`, F8.8) reads the request set through the join's owners, so it pins the
   join through `api_requests` and the report section through the gate;
@@ -62,9 +66,12 @@ from pathlib import Path
 import pytest
 
 import api_requests
+import entry_coverage
+import import_blocks
 import naming
 import panorama_to_terraform
 import resource_mapping
+import rule_data
 import sanity_checks
 import site_data
 import source_fetch
@@ -82,6 +89,7 @@ from conftest import (
     TFLINT,
     TFLINT_DIR,
     corpus_fixtures,
+    data_file_set,
     file_text,
     path2_run,
     run_main,
@@ -133,8 +141,12 @@ def test_console_summary_reports_the_result(tmp_path):
     # sample run - two units, so two sets - measures 14 .tf files.
     summary = [line for line in result.stdout.split("\n") if line.startswith("Sanity gate:")]
     # Measured 2026-11-19: the resource count is 17, because the four `*_policy_rules` types print one iterated
-    # block per rule type per unit instead of one block per rule (Epic 9 Piece 19).
-    assert summary == ["Sanity gate: PASS (0 FAIL, 0 WARN) - 14 .tf files, 2 data files, 17 resources"]
+    # block per rule type per unit instead of one block per rule (Epic 9 Piece 19). The data count is read through
+    # the shared derivation, so the pin names no file set of its own: the 2 records at the root plus the pair's
+    # data member for 2 rule types inside the unit its rows name, so 4.
+    count = len(data_file_set(tmp_path))
+    assert count == 4, sorted(data_file_set(tmp_path))
+    assert summary == [f"Sanity gate: PASS (0 FAIL, 0 WARN) - 14 .tf files, {count} data files, 17 resources"]
     assert "Sanity report: " in result.stdout
 
 
@@ -252,7 +264,12 @@ def test_variable_check_detects_a_consumer_with_no_declaration():
 
 def test_the_report_counts_both_file_sets(tmp_path):
     """The report names the `.tf` files and the data files, so a reader can tell which set the gate read.
-    The printed form of a record is not one of the four, so the count names only the records.
+
+    A printed form is not a data file, so the count names the records the table holds plus the rule data pair's
+    data member inside each unit directory its own rows name: the site print and the pair's printed member enter
+    no count. The count is read through the shared derivation `conftest.data_file_set`, so this pin states no file
+    set of its own. Measured 2026-11-19 on the sample run: 2 records at the root and the pair's data member for 2
+    rule types inside the unit its rows name, so 4.
     """
     _generate(SAMPLE_CONFIG, tmp_path)
     report = sanity_checks.run_checks(tmp_path)
@@ -261,9 +278,11 @@ def test_the_report_counts_both_file_sets(tmp_path):
     files = tf_files(tmp_path)
     assert report.file_count == len(files), report.render()
     assert all(Path(name).parent.name for name in files), "the count names the unit set"
-    assert report.data_file_count == 2
-    assert "Files checked: 14 .tf files, 2 data files." in report.render(), report.render()
+    written = data_file_set(tmp_path)
+    assert report.data_file_count == len(written), sorted(written)
+    assert f"Files checked: 14 .tf files, {len(written)} data files." in report.render(), report.render()
     assert re.search(r"^data_files\s+PASS$", report.render(), re.M)
+    assert re.search(r"^rule_blocks\s+PASS$", report.render(), re.M), report.render()
 
 
 def test_data_file_check_detects_a_row_that_is_not_the_data_it_declares(tmp_path):
@@ -284,6 +303,86 @@ def test_data_file_check_detects_a_row_that_is_not_the_data_it_declares(tmp_path
     assert findings[0].severity == sanity_checks.FAIL
     assert findings[0].file == unit_manifest.MANIFEST_FILE and findings[0].line == 2
     assert "level rule" in findings[0].detail, findings[0].render()
+
+
+# --- The rule block check reads the iterated block -----------------------------
+
+
+def _rule_block(files: dict[str, str]):
+    """The first iterated rule block the one block reader read, so these pins read the same reader the rule uses."""
+    blocks = sanity_checks.blocks(files, ("resource",))
+    return next(block for block in blocks if block.rtype in import_blocks.rule_types())
+
+
+def test_rule_block_check_detects_an_entry_that_is_not_the_row_it_names(tmp_path):
+    """One negative test per rule: the block rule compares each map entry with the row the data record holds for
+    the unit, so the printed run reads clean and a hand-written entry that states another value is one finding.
+
+    The position is the line of the block the reader read, because the block and the map it reads are one object in
+    one file (part 3, finding 7). The name field's row value is the row's `entry` column, read through
+    `entry_coverage.name_field`, so this pin states no field name and no row shape of its own.
+    """
+    _generate(SAMPLE_CONFIG, tmp_path)
+    files = tf_files(tmp_path)
+    assert sanity_checks.check_rule_blocks(files, tmp_path) == []
+    block = _rule_block(files)
+    unit = Path(block.file).parent.name
+    row = rule_data.parse_rows((tmp_path / unit / rule_data.data_file(block.rtype)).read_text(encoding="utf-8"))[0]
+    name_field = entry_coverage.name_field(block.rtype)
+    planted = dict(files)
+    planted[block.file] = files[block.file].replace(f'{name_field} = "{row["entry"]}"', f'{name_field} = "NotTheRow"')
+    findings = sanity_checks.check_rule_blocks(planted, tmp_path)
+    assert len(findings) == 1, [f.render() for f in findings]
+    assert findings[0].check == "rule_blocks" and findings[0].severity == sanity_checks.FAIL, findings[0].render()
+    assert (findings[0].file, findings[0].line) == (block.file, block.line), findings[0].render()
+    assert row["key"] in findings[0].detail and name_field in findings[0].detail, findings[0].render()
+
+
+def test_rule_block_check_detects_a_block_for_a_unit_no_rule_row_names(tmp_path):
+    """A hand-written block for a unit the manifest names but no rule row names is a finding, because the rule
+    reads the unit set through `unit_directories` and the row set through `rule_data`: the map holds entries the
+    data record holds no rows for. A pair member `parse_rows` refuses is the data rule's fact, so it enters no
+    count here, and the printed run reads clean.
+    """
+    _generate(SAMPLE_CONFIG, tmp_path)
+    files = tf_files(tmp_path)
+    assert sanity_checks.check_rule_blocks(files, tmp_path) == []
+    block = _rule_block(files)
+    unit = Path(block.file).parent.name
+    other = next(d for d in sanity_checks.unit_directories(tmp_path) if d != unit)
+    planted = dict(files)
+    planted[f"{other}/hand_written.tf"] = files[block.file]
+    findings = sanity_checks.check_rule_blocks(planted, tmp_path)
+    assert len(findings) == 1, [f.render() for f in findings]
+    assert findings[0].check == "rule_blocks" and findings[0].severity == sanity_checks.FAIL, findings[0].render()
+    assert findings[0].file == f"{other}/hand_written.tf", findings[0].render()
+    assert findings[0].line == block.line, findings[0].render()
+    assert "the data record holds 0 rows" in findings[0].detail, findings[0].render()
+
+
+def test_rule_block_check_detects_rows_the_reader_read_no_block_for(tmp_path):
+    """A unit the rows name with no block read for it is a finding, and the position is the file as a whole,
+    because the reader read no block. Measured 2026-11-19 on the sample run: the two rule types the run has rows
+    for, in one unit, so two findings, each at the file the matrix row names.
+    """
+    _generate(SAMPLE_CONFIG, tmp_path)
+    files = tf_files(tmp_path)
+    assert sanity_checks.check_rule_blocks(files, tmp_path) == []
+    findings = sanity_checks.check_rule_blocks({}, tmp_path)
+    assert len(findings) == 2, [f.render() for f in findings]
+    assert all(f.check == "rule_blocks" and f.severity == sanity_checks.FAIL and f.line == 0 for f in findings), [
+        f.render() for f in findings
+    ]
+    units = sanity_checks.unit_directories(tmp_path)
+    row_files = []
+    for resource in sorted(import_blocks.rule_types()):
+        for unit in units:
+            if not (tmp_path / unit / rule_data.data_file(resource)).is_file():
+                continue
+            path = write_path.unit_path(tmp_path, unit, entry_coverage.MATRIX_BY_RESOURCE[resource]["output_file"])
+            row_files.append(str(path.relative_to(tmp_path)))
+    assert sorted(f.file for f in findings) == sorted(row_files), [f.render() for f in findings]
+    assert len(findings) == 2, [f.render() for f in findings]
 
 
 def test_the_control_character_rule_is_stated_once_in_src():

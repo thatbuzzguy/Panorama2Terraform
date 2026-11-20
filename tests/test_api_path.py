@@ -1619,9 +1619,9 @@ def test_the_double_read_agrees_with_the_gate(tmp_path, monkeypatch):
 
     view = _view(parts)
     files1, files2 = tf_files(out1), tf_files(args.output_dir)
-    assert sanity_checks.check_round_trip(files2, view) == [], "the two counts read the same set"
+    assert sanity_checks.check_round_trip(files2, view, args.output_dir) == [], "the two counts read the same set"
     assert sanity_checks.check_request_set(index, view) == [], "both responses are in the read set"
-    assert sanity_checks.check_round_trip(files1, path1.ledger) == [], "path 1 read one response per entry"
+    assert sanity_checks.check_round_trip(files1, path1.ledger, out1) == [], "path 1 read one response per entry"
 
     # The two counts the rule reads for one unit and one row, read through the owners the rule names.
     row = entry_coverage.matrix_row_for("device-group")

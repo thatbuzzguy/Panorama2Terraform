@@ -15,9 +15,9 @@ Ten pins, in the order the rules in `src/rule_data.py` state them:
    `write_path.py`.
 9. The two file names, read through the same matrix row, and the pair naming the unit file set.
 10. The run writing one pair per rule type per unit, each file reading back as the rows it was built from.
-11. The printed map reading back through `printed_keys` as the same row keys, in the order the `.tf` file prints
-    them, so the gate's cross-check reads the third form through this module and the printed form stays no reader
-    input for a row.
+11. The printed map reading back through `printed_entries` as the same row keys, in the order the `.tf` file prints
+    them, so the gate's cross-check and the block rule read the third form through this module and the printed form
+    stays no reader input for a row.
 
 The read record is read the way `tests/test_property_coverage.py` reads it: the record is turned on before the
 parse, so a read through the recorded object counts as a read this output made. One pin plants its material,
@@ -40,15 +40,13 @@ import sanity_checks
 import state_coverage
 import unit_manifest
 import xml_input
-from conftest import FIXTURES_DIR, SRC_DIR, run_script, written_bytes
+from conftest import FIXTURES_DIR, RULE_TYPES, SRC_DIR, data_file_set, run_script, written_bytes
 
 # The run the write-path pins read: the tool's entry point, read through the `src/` set (§1.1).
 CONVERTER = SRC_DIR / "panorama_to_terraform.py"
 
-# The four rule types the single object iterates, read through the matrix rows that name them, and the parse
-# method each row names as its emitter.
-# The four rule types the single object iterates, read through the rule that names them.
-RULE_TYPES = sorted(import_blocks.rule_types())
+# The rule types the single object iterates, read through the rule that names them and shared through
+# `conftest.RULE_TYPES`, so no test module states the set a second time.
 
 
 def parse_method(resource: str) -> str:
@@ -369,13 +367,19 @@ def test_the_rule_data_layer_states_no_second_rule_and_writes_no_file():
         assert token not in source, token
     assert "RULE_ROW_FIELDS = " in source, "the module states the row shape it owns"
 
-    # `re` is the reader for the third form, `printed_keys`, which reads only the keys of the printed map, the part of
-    # it rule 5 owns. The module still writes nothing and reads no record.
+    # `re` is the reader for the third form, `printed_entries`, which names each entry of the printed map and hands
+    # over its text, the part of it rule 5 owns. The module reads no value from that text, because reading a value is
+    # the gate's one field reader's job and a shape rule stays in `parse_rows`. The module still writes nothing and
+    # reads no record.
     imported = {alias.name for node in tree.body if isinstance(node, ast.Import) for alias in node.names}
     house = {path.name[:-3] for path in SRC_DIR.glob("*.py")}
     assert imported <= {"csv", "io", "json", "re"} | house, imported
     assert imported & house, "the module reads its rules through the owners it imports"
     assert not hasattr(rule_data, "write_file"), "the single writer writes the file"
+    entry_reader = source[source.index("def printed_entries") :]
+    assert "field_value" not in entry_reader and "block_value" not in entry_reader, (
+        "the printed-map reader names the entry and hands its text over, so no second field reader appears"
+    )
 
 
 # --- 9. The two file names, and the set the pair belongs to ------------------
@@ -416,9 +420,12 @@ def test_the_two_file_forms_are_unit_set_files_named_through_the_matrix_row(tmp_
     assert pair, "the corpus run writes the pair inside a unit directory"
     assert all(Path(key).parent.name in dirs for key in pair), sorted(pair)
     assert not names & set(dict(sanity_checks.DATA_FILES)), "neither form of the pair is one of the four records"
-    assert sanity_checks.count_data_files(out) == len(dict(sanity_checks.DATA_FILES)), (
-        "the data rule counts the records at the root, so the pair is not counted"
-    )
+    # The count names the records at the root plus the pair's data member inside the unit directory its own rows
+    # name, and no printed member: the printed form is not a reader input, the way `site.auto.tfvars` is not.
+    members = {key for key in pair if Path(key).suffix == ".json"}
+    assert members and len(pair) == 2 * len(members), sorted(pair)
+    assert sanity_checks.count_data_files(out) == len(data_file_set(out)), "the count is the derivation"
+    assert data_file_set(out) == sorted(list(dict(sanity_checks.DATA_FILES)) + sorted(members)), sorted(pair)
 
     readme = (out / "README.md").read_text(encoding="utf-8")
     inventory = readme[readme.index("## File Structure") :].splitlines()
@@ -479,13 +486,14 @@ def test_the_run_writes_one_pair_per_rule_type_per_unit_through_the_write_path(t
 
 
 def test_the_printed_map_reads_back_as_the_same_row_keys(tmp_path):
-    """AC-11: the map the `.tf` file prints is the third form of the same rows, and `printed_keys` reads its keys
-    through the shape rule the module owns (rule 5).
+    """AC-11: the map the `.tf` file prints is the third form of the same rows, and `printed_entries` names its
+    entries through the shape rule the module owns (rule 5).
 
     Measured 2026-11-19 on the kitchen-sink run: the file prints the unit's rows as the map, in the sorted key order,
     which is the XML order inside the chain. The keys read back are the keys `build_rows` built, the map name is the
     stem, and the printed form still answers no row to `parse_rows`, which refuses the printed forms and reads the
-    data form.
+    data form. The reader hands over the entry text without reading a value from it, so the answer is the key and the
+    text, and a hand-written map with a different indent reads as the same map.
     """
     out = tmp_path / "printed_map"
     assert run_script(CONVERTER, str(FIXTURES_DIR / "kitchen_sink.xml"), "--output-dir", str(out)).returncode == 0
@@ -497,7 +505,7 @@ def test_the_printed_map_reads_back_as_the_same_row_keys(tmp_path):
                 continue
             directory = Path(key).parent.name
             rows = rule_data.parse_rows((out / directory / rule_data.data_file(resource)).read_text(encoding="utf-8"))
-            keys = rule_data.printed_keys(text, resource)
+            keys = [entry["key"] for entry in rule_data.printed_entries(text, resource)]
             assert keys, key
             assert keys == sorted(row["key"] for row in rows), (key, keys)
             # The printed map is the third form, so the reader that reads rows refuses it.
@@ -509,3 +517,18 @@ def test_the_printed_map_reads_back_as_the_same_row_keys(tmp_path):
                 raise AssertionError(f"{key}: the printed form is not reader input")
             read += 1
     assert read == 4, "the kitchen-sink run prints one map for each of the four rule types"
+
+    # The indent is read from the file, so a map a person wrote answers the same entries as the map the emitter
+    # printed: the gate reads the files the operator receives, so a different indent cannot answer a different set.
+    resource = RULE_TYPES[0]
+    stem = rule_data.locals_name(resource)
+    key = "0001_" + "a" * unit_manifest.DIGEST_HEX
+    printed_map = f'locals {{\n  {stem} = {{\n    "{key}" = {{\n      name = "one"\n    }}\n  }}\n}}\n'
+    hand_written = f'locals {{\n\t{stem} = {{\n\t\t"{key}" = {{\n\t\t\tname = "one"\n\t\t}}\n\t}}\n}}\n'
+    printed_answer = rule_data.printed_entries(printed_map, resource)
+    hand_answer = rule_data.printed_entries(hand_written, resource)
+    assert len(printed_answer) == 1 == len(hand_answer), (printed_answer, hand_answer)
+    assert printed_answer[0]["key"] == hand_answer[0]["key"] == key, "the same key, whatever the indent states"
+    assert set(printed_answer[0]) == {"key", "entry"}, "the answer names the entry and hands over its text"
+    # A key that is not the declared shape is no answer, the way `parse_rows` refuses it.
+    assert rule_data.printed_entries(printed_map.replace(key, "1_aaaaaaaa"), resource) == []

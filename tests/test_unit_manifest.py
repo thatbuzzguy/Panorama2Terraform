@@ -46,6 +46,7 @@ from conftest import (
     SAMPLE_CONFIG,
     SRC_DIR,
     corpus_fixtures,
+    data_file_set,
     file_text,
     run_script,
     tf_bytes,
@@ -646,10 +647,14 @@ def test_the_generated_tf_bytes_are_unchanged(tmp_path):
 
 
 def test_the_gate_reads_the_manifest_through_unit_manifest(tmp_path):
-    """F6.8 changed the file set: the block rules read the `.tf` files, and the data rule reads the four
-    data files, each through the module that owns the row shape, so no second shape rule appears. The
-    report counts the two sets separately, and the data rule reports no finding on a manifest the tool
-    wrote.
+    """F6.8 changed the file set: the block rules read the `.tf` files, and the data rule reads the data files,
+    each through the module that owns the row shape, so no second shape rule appears. The report counts the two
+    sets separately, and the data rule reports no finding on a manifest the tool wrote.
+
+    The count names the four records at the codebase root plus the rule data pair's data member inside each unit
+    directory its own rows name, so it is read through the shared derivation `conftest.data_file_set` and not a
+    number this module states: the sample run writes the manifest and the ownership record at the root, and the
+    pair's data member for 2 rule types inside the unit its rows name, so 4.
     """
     _run(SAMPLE_CONFIG, tmp_path)
     files = sanity_checks.read_tf_files(tmp_path)
@@ -659,9 +664,11 @@ def test_the_gate_reads_the_manifest_through_unit_manifest(tmp_path):
     report = sanity_checks.run_checks(tmp_path)
     assert [result.check for result in report.checks] == list(sanity_checks.CHECK_ORDER)
     assert report.file_count == len(files)
-    assert report.data_file_count == 2, "the sample run writes the manifest and the ownership record"
+    assert report.data_file_count == len(data_file_set(tmp_path)), report.render()
+    assert MANIFEST in data_file_set(tmp_path), "the manifest is one of the files the count names"
     assert report.findings("data_files") == []
-    assert "Files checked: 14 .tf files, 2 data files." in report.render(), report.render()
+    checked = f"Files checked: 14 .tf files, {len(data_file_set(tmp_path))} data files."
+    assert checked in report.render(), report.render()
 
 
 def test_no_report_names_a_field_the_manifest_states(tmp_path):
