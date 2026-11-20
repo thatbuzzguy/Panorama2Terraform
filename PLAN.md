@@ -44,6 +44,12 @@ F7.13 applied the same rule and the same wording to `FILTER_SHAPE`, which states
 measurement names, and the gate reads a filter choice at the block's own level as well. The rules are in
 `docs/ARCHITECTURE.md` §4.9 and §4.10, and the coverage is in `docs/COVERAGE_MATRIX.md`.
 
+Epic 9 (rules as data, one iterated object per rule type) is closed. The row shape, the three forms of one row set,
+the iterated block that reads the printed map, and the key order as the apply order are the rules it landed, in
+`docs/ARCHITECTURE.md` §4.4 and §4.6 and `docs/CODEBASE_ASSEMBLY.md` §14, and the conditions it held stay in
+`backlog.md`. The golden set re-measures as a whole, every golden `.tf` file equals the bytes a run wrote, and a
+pin shows the apply order equals the XML order through the key order across the corpus.
+
 The gate keeps one boundary rule, stated in `docs/ARCHITECTURE.md` §4.6: the gate that runs on every conversion
 reads only data it can read offline, so a value the provider constrains in its code, not in the schema JSON, stays
 outside the static rules, and the two checks that run an external command are gated by a flag (`--validate` and
@@ -119,72 +125,23 @@ Definition of done for the epic: CI runs path 2 with no server, its output passe
 record names every request the run read, and for a fixture with no live-only fact the `.tf` bytes
 agree with path 1.
 
-## Epic 9 — rules as data, one iterated object per rule type (Goal 6) — open
+## Epic 9 — rules as data, one iterated object per rule type (Goal 6) — closed
 
-New requirement recorded 2026-11-18: rule entries are written as a data file, and one
-Terraform object iterates the file instead of one block per rule. The four rule types are the
-matrix rows `LOCATION_SCHEMA` declares `rulebase` for, so `import_blocks.py` already names them
-through that table.
+Rule entries are data. `rule_data.RULE_ROW_FIELDS` states the row shape, `rule_data` holds the three forms of the
+same rows — the consumed `.json`, the printed `.csv`, and the `locals` map a `.tf` file prints — and one pair is
+written per rule type inside the unit directory its own rows name, only when that unit has rows. The tool prints
+one iterated block per rule type per unit that reads that map, so the file states each row value in one place and
+the block body prints a reference into the map. The apply order is the key order, the key is the chain ordinal
+joined to the unit identity digest, and inside one chain the sorted key order is the XML order, so the
+per-instance `pivot` and `depends_on` dropped with the per-rule block shape and `pivot` stays a row column of the
+data record. The gate reads the pair inside the unit directories its rows name and reads the block against the
+same `LOCATION_SCHEMA` rows. The rules are in `docs/ARCHITECTURE.md` §1, §4.4 and §4.6 and in
+`docs/CODEBASE_ASSEMBLY.md` §14, and the held conditions are in `backlog.md`.
 
-Decisions, recorded 2026-11-18 before any code:
-
-1. The tool writes the iterated object: one resource block with `for_each` per rule type per
-   unit. This extends the backlog line that the tool's part is the data file a module consumes:
-   the iterated block is the tool's own emitted shape, not a module a person writes.
-2. The rule row set is a data file with two forms of the same rows. JSON is the form a Terraform
-   object reads, because Terraform has no CSV decode function. CSV is the printed form, the way
-   the `.tfvars` is the printed form of the site record. The data rule reads the rows through the
-   declared shape.
-3. One object per rule type per unit directory, so the rows join to the manifest on `directory`
-   and the action blocks stay per unit.
-4. The `for_each` key is the chain ordinal, zero-padded, joined to the identity digest, so the
-   sorted key order is the XML order inside a chain. The pivot becomes a row column, and the
-   `depends_on` fact drops with the per-rule block shape, because instances inside one block
-   create in key order. This changes the F2.5 rule that `tests/test_policy_order.py` pins, so the
-   change is its own piece with its own criteria.
-5. Recorded 2026-11-19, measured before the block shape was written: the entry enumerates its
-   fields, because `terraform validate` cannot read `rules[0].name` through a dynamically-typed
-   `each.value`, so one table maps each row field to the provider name and the provider's declared
-   shape word, and a reader names the field whose provider object key is the value the row records.
-   The entry prints the shape word the table states, so a shape mismatch cannot reach the block body.
-6. Recorded 2026-11-19: the third form of the same rows is the map the `.tf` file prints, named
-   through the same stem with no suffix, which is also the name of the block that iterates it. The
-   map is the only place the file states a row value, so the rule that a block prints the variable
-   reference, never the value, holds. `rule_data.printed_entries` is the only reader of the printed
-   map, and it reads one entry per row and no value inside an entry, so the gate states no reader for
-   the map of its own and no shape rule of its own: the entry's value shape is read through
-   `sanity_checks.value_shape`, the reader's own inverse, and its content through `import_blocks`.
-   The two printed-map patterns read an indent, so a hand-written map reads as the printed one.
-
-Phase 9D — the gate, landed with Piece 20 (2026-11-19). The `data_files` rule reads the rule data
-pair inside each unit directory its own rows name, as its declared rows through `parse_rows`, and
-joins on `directory`; the pair is a unit-set file, so a member at the codebase root names no unit and
-a member inside a directory no row names is a finding, and the printed member must equal
-`render_csv` of the same rows. The two report counts move with the read: the data count names the four
-records at the root plus the pair's data member inside each unit directory, because the printed member
-is a printed form and not a data file, the way `site.auto.tfvars` is not. The cross-check's block side
-for the four rule rows is the row set read through `parse_rows` from the data member inside the unit
-directory the rows name, because one iterated block prints N entries and not one block, so the three
-forms of one row set are read by one shape rule. The block rule `rule_blocks` reads the block itself
-against the same `LOCATION_SCHEMA` rows: the block's local name and the `for_each` map name are
-`rule_data.locals_name`, `location` is a level `LOCATION_SCHEMA` names for the type with only the
-fields the row names for that level, the field list is the name field plus the table order the matrix
-row declares, with the provider name `RULE_ENTRY_FIELDS` states plus the one field
-`RULE_BODY_DEFAULTS` states, every body field is `each.value.<field>` under that name and that shape
-word, one block per rule type per unit for the units the rows name, and the map entry keyed by the row
-`key` holds the row's value, read back through the one field reader. Its findings are FAIL, because it
-reads the files the operator receives, and `CHECK_ORDER` puts it with the other block rules, after
-`certificate_blocks`. The three entry tables moved from the emitter to `rule_data.py`, the module that
-owns the row shape and the three forms, because §1.1 forbids a cycle: the gate reads the row shape
-through `rule_data` and cannot import the emitter.
-
-Held, on the conditions already recorded in `backlog.md`: the rulebase value string, the position
-from a live source, and the import block for a rule entry. The Terraform 1.14 floor already
-covers `for_each` on import blocks when the import rule lands.
-
-Definition of done: the four rule types write as data rows plus one iterated block per rule type
-per unit, every column reads a captured field, the gate reads the rows and the block, the goldens
-re-measure as a whole, and a pin shows the apply order equals the XML order through the key order.
+The definition of done is met: the four rule types write as data rows plus one iterated block per rule type per
+unit, every column reads a captured field, the gate reads the rows and the block, the goldens re-measure as a
+whole with all 87 `.tf` files equal to the bytes a run wrote, and a pin shows the apply order equals the XML order
+through the key order across the corpus.
 
 ## Sequencing
 

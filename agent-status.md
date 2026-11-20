@@ -2,19 +2,43 @@
 
 ## Current position
 
-Epic 9 (rules as data, one iterated object per rule type) is open: Piece 16, the decision record, Piece 17,
-Phase 9A the row shape, Piece 18, Phase 9B the write path, Piece 19, Phase 9C the iterated block, and Piece 20,
-Phase 9D the gate, are complete, and the next piece is Piece 21, the goldens and the pins that name the printed
-rule output re-measuring as a whole. The pieces are in `to-do.md`, the decisions in `PLAN.md` Epic 9, and the Piece
-20 criteria and measurement in `acceptance.md`. Piece 20 landed three rules, in commit `5a6780e`: `check_data_files`
-reads the rule data pair inside the unit directories its own rows name through `rule_data.parse_rows` and joins on
-`directory`, with the data count naming the four records at the root plus the pair's data member inside each unit
-directory; `check_round_trip` counts the four rule matrix rows against the same row set read through `parse_rows`,
-so the three forms of one row set are read by one shape rule; and the new block rule `check_rule_blocks` reads the
-iterated block against `LOCATION_SCHEMA` and the map entry against the rows, with FAIL findings, in `CHECK_ORDER`
-after `certificate_blocks`. The three entry tables moved from the emitter to `rule_data.py` because §1.1 forbids a
-cycle, and `printed_keys` became `printed_entries`, the one printed-map reader that reads one entry per row, so the
-pins that named it were retargeted and the emitter's output is unchanged.
+Epic 9 (rules as data, one iterated object per rule type) is complete with Piece 21, the piece that re-measured
+the golden set and the pins that name the printed rule output as they now read with the rule data pair, the
+iterated block, and the retargeted F2.5 key-order rule. Piece 21 changed no generator code and no golden byte: the
+87 golden `.tf` files, read as the four cases `tests/test_golden_files.py` holds, all equal the bytes a run wrote,
+so the set stayed as it read. What moved is one measurement and one pin, in commit `fd72c09`.
+
+The measurement that no longer held is the resource-line pattern comment in `tests/conftest.py`, which stated 414
+matches and 262 distinct addresses as measured on 2026-11-13; the tree answers 387 matches, 42 distinct types and
+238 distinct addresses, because the four `*_policy_rules` types print one iterated block per rule type per unit
+instead of one block per rule, so the comment now states the numbers the current tree answers. Every other number
+that names a printed rule set already held, so those pins were re-measured and left as they read: the report counts
+for the sample run (14 `.tf` files, 4 data files, 17 resources) and the kitchen-sink run (61, 8, 64), the round-trip
+cross-check's 19 facts on 8 fixtures with 3 + 15 + 1 by category and no fact naming a rule row, and
+`check_data_files` and `check_rule_blocks` reporting nothing across the corpus.
+
+The pin that shows the apply order equals the XML order through the key order held for one fixture and two golden
+parts, so Piece 21 added the corpus half, which is the F2.5 definition of done:
+`tests/test_policy_order.py::test_the_key_order_is_the_xml_order_across_the_corpus` reads the 66 accepted fixtures
+through the pipeline and compares the printed entry order with the order the parse listed the rules for that unit.
+Measured: 18 blocks over 9 fixtures, 37 rows and 37 map entries, no unit holds more than one chain for a rule
+type, and every block prints its entries in the order the export lists them. The rule type, the file name and the
+key rule are read through the tables that own them, so the pin states none of its own. `docs/ARCHITECTURE.md` §4.4
+and the README resource table named the emitted rule shape as one block per rule with a per-instance pivot and
+`depends_on`, which is the shape the iterated block replaced, so both now state the key order as the apply order.
+
+The gate, measured 2026-11-19 on the final tree: `ruff check .` clean at `py310`, `ruff format --check .` clean on
+the 103 Python files, `python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` passes 1,715
+pins with the same 4 skip for the missing `tflint` binary — 1,719 pins in 53 test modules against 1,718 before the
+piece, with `tests/test_policy_order.py` reading 9 pins against 8.
+
+The next work is what `backlog.md` holds and the tool cannot read offline: the rulebase value string and the rule
+position from a live target (F3.5), which also gate the `rulebase` row column and the import block for a rule
+entry; a config entry inside a stack needs a provider location shape; the EDL `certificate_profile` field needs a
+rule that makes the EDL site resolve names; the per-entry report `profile_name` column needs a value the provider
+does not declare; and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4 need a live target. `PLAN.md` keeps
+Epic 8 open for the live facts its Phase 8D gates on, and Epic 9 is closed, so there is no piece to run until one of
+those facts arrives or a new requirement is recorded.
 
 Epic 8 (the second path) is complete with piece F8.10, and Piece 8 closed the finding F8.10 left open. The rules
 it landed are in `docs/API_CONVERSION_PATH.md`, the modules are `src/api_requests.py` and `src/api_to_terraform.py`,
@@ -307,8 +331,10 @@ defining its own copy, and no test module imports another test module (`docs/ARC
 What landed: the rule-block parser and the chain check that `tests/test_policy_order.py` and
 `tests/test_real_or_report.py` share, the terraform binary, the golden set path, and the resource-
 line patterns. The pattern decision came from measurement against the goldens and the corpus run
-output: the shapes the test set held before answer the same 414 matches, and no resource line lacks
-the trailing brace, so the difference was the capture groups only. `tests/conftest.py` therefore
+output: the shapes the test set held before answer the same 387 matches on the tree as it now reads
+(414 on 2026-11-13, when the decision was taken, before the iterated block), and no resource line lacks
+the trailing brace, so the difference was the capture groups only, which are 42 distinct types and 238
+distinct addresses. `tests/conftest.py` therefore
 states two named patterns as data, both requiring the block brace, each with the rule it serves:
 `RESOURCE_RE` answers the resource type for the pins that read the emitted type set, and
 `RESOURCE_ADDRESS_RE` answers the type and the local name for `tests/test_dependency_wiring.py`,
