@@ -626,7 +626,7 @@ The coverage sets:
 
 - `tests/test_container_coverage.py` - the container table and the code stay
   in step: no parse method without a row, no row naming a path the method
-  does not read
+  does not read, and the definitions rule read through the place a declared path names
 - `tests/test_entry_coverage.py` - every parse method that reads entries
   marks them, so the per-entry report cannot lie
 - `tests/test_property_coverage.py` - what a matrix row declares against what an output reads, per container
@@ -652,9 +652,9 @@ The path 2 set and the splitter:
   through the injected producer, and read as data by the record
 - `tests/test_api_path.py` - the run over many sources: one response is one source with its own line map, the
   section-to-response join, the parse method running over the response that holds its container, the report
-  position as the line inside that response, the row naming the source that holds the entry, the predefined
-  read, and the unit join: the run's unit set read through `unit_manifest.units`, the scope the run read for
-  each unit, and the two directions the join reports as data rows. It also pins the entry point
+  position as the line inside that response, the row naming the source that holds the entry, the predefined read
+  answered as a definitions read, and the unit join: the run's unit set read through `unit_manifest.units`, the
+  scope the run read for each unit, and the two directions the join reports as data rows. It also pins the entry point
   `api_to_terraform.py`: the run order, the join across the responses the run read, the arguments, the exit codes,
   the run view, the report source lines in run order, and that the entry point states no rule an owner states. It
   also pins the byte agreement between the two paths for content that holds no fact from `API_CONVERSION_PATH.md` §4

@@ -442,21 +442,22 @@ here with that rule named.
   project does not hold. The conditions are: the F3.5 rulebase value verified against a live target; the device
   serial, and which element a command names, against a live target; and a response that shows how a device
   states a per-device template variable override.
-- Finding, opened by the F8.1 decision: the scan has no rule that a predefined source is definitions,
-  so a run that reads a predefined scope reports its built-in containers as findings. `is_predefined`
-  answers through the parent walk, and for a per-scope source the parent of the container under the
-  root is `result`, read as the place, so the walk never reaches an element tagged `predefined`. The
-  rule that a built-in entry container is not a finding holds for a file source, which the pin
-  (`tests/test_container_coverage.py::test_predefined_entries_are_not_findings`) reads, and not for a
-  predefined read. A piece must decide whether the scope path names the place only, and the built-in
-  entries are read through the response that holds the container the name table needs.
-  Measured by F8.5 (`tests/test_api_path.py::test_a_predefined_entry_read_reports_the_place_as_a_finding`):
-  for a place read the response holds the `predefined` element, so the walk reaches it and the scan names no
-  finding; for an entry read inside the place the entry sits at the place level, so the scan reports the place.
-  No container table row names a built-in container, so no parse method runs over a predefined response and the
-  entry report names no row for a built-in entry, which the ledger counts through `predefined_total`. The rule
-  that decides whether a predefined source is definitions still has no owner, so the entry read stays a finding
-  here.
+- Decision landed for the F8.1 finding, in `src/container_coverage.py`: `is_predefined` answers a definitions
+  read through the place the declared path names, as well as through the parent walk, so a read inside the built-in
+- Decision landed for the F8.1 finding, in `src/container_coverage.py`: `is_predefined` answers a definitions
+  read through the place the declared path names, as well as through the parent walk, so a read inside the built-in
+  place is answered in both shapes the shape rule accepts. An entry read inside the place names no finding, so the
+  report names no coverage section for it, the console prints no block, and the entry report names no row for it:
+  the header counts it through `predefined_total`, the same answer a file source gives, and it enters no gap count.
+  Measured 2026-11-21 through the committed rules and the injected producer, with no live target, and pinned by:
+  `tests/test_container_coverage.py::test_the_definitions_rule_reads_the_place_the_declared_path_names` holds the
+  rule, and `tests/test_api_path.py::test_a_predefined_entry_read_names_no_finding`,
+  `tests/test_api_path.py::test_a_predefined_entry_read_names_no_row_and_the_header_counts_it`, and
+  `tests/test_api_path.py::test_the_join_reports_nothing_for_a_definitions_read` hold the read. The rule reads the
+  place, so it needs no built-in name. Two parts stay here, because no committed response states them: the built-in
+  name table itself (`docs/API_CONVERSION_PATH.md` §4), which needs a committed response for a `predefined` path and
+  the names a live target states; and the path shape that names a container inside the place, which the shape rule
+  does not accept and which the read that needs the name table would use.
 - Finding, opened by F8.3: the join checks a response against the index entry whose request made it, so it
   reads only a response the index made a request for. The index makes only per-scope requests, and a device
   fact request names no scope path, so the one element-name rule (`source_fetch.names_element`) names no
@@ -498,9 +499,9 @@ here with that rule named.
   single-response run, and that pin uses the response the run itself read: the whole read set is one response, so
   a cross-response read set needs its own rule before it can be pinned.
 - Finding, opened by F8.7: the join reports a unit whose rows name a response the index made no request for, and
-  states no rule that such a source is definitions. The two instances the pin reads are a whole-config export read
-  and a predefined read; the predefined half stays with the F8.1 finding above, because no membership row reads a
-  built-in place, so the index has no entry for it and the join can only report the unit.
+  states no rule that such a source is definitions. The instance the pin reads is a whole-config export read. A
+  definitions read names no row, so it gains no unit and the join reports nothing for it, which
+  `tests/test_api_path.py::test_the_join_reports_nothing_for_a_definitions_read` holds.
 - Measured by F8.8, the join's findings print through the gate's report shape (`docs/ARCHITECTURE.md` §3.2),
   which names no console line for this kind: the console prints one line per finding through the shape §3.2
   already states, so the gate's own line rule prints these findings too. The gate cannot name its own line in a
@@ -615,8 +616,26 @@ restated here; they are in the record and the git history. Only the open items a
   a plan in that mode cannot show drift, so it is not a replacement for the state scan.
 - The tool cannot derive a module from an export: a module is a standard a person writes. The tool's
   part is the data file a module consumes.
-- Reports are per run. A codebase-level view (the units, the entries each owns, the managed boundary)
-  is not built.
+- Reports are per run. The codebase-level view is the merged records (Piece 11C.2); the run's report gains one
+  section that names the units the run built and the codebase units the run did not read, and no fifth root-set
+  file states the unit set a second time. The managed boundary is still not built.
+
+## Design Decisions (the codebase several runs write into, open items)
+
+The design record is `docs/MULTI_RUN_CODEBASE.md`. The rules that landed there are design rules pending a pin, so
+this document holds only what a piece cannot be written from.
+
+- The move fact: an entry the codebase owns and a run reads with different scope facts is a finding read through
+  `state_coverage.ownership_key` and the join on `directory`. It needs a fixture that shows one entry placed in a
+  different scope than the record names, because no committed fixture or response holds one.
+- The stale-file boundary: a unit a run no longer has content for keeps the files an earlier run wrote, because
+  the tool has no delete rule. Deciding when a file is stale needs a rule that names what the tool wrote before,
+  which the tool does not hold.
+- The selection for a `vsys` or a device unit needs the fact that names which device the run read, the open item
+  in `backlog.md` (Finding, opened by F8.2), because the four membership lists name three of the five scope facts.
+- `--prune-cache` on a codebase several runs write into: the action reads the record file the run wrote, and
+  `SOURCE.txt` names only the last run's sources, so an entry an earlier run read is not in the file the action
+  reads. The prune rule itself is unchanged; the consequence for a multi-run codebase is not decided.
 
 The codebase audits measured 2026-11-11 and 2026-11-12 are closed. The git history holds the findings, the
 decisions, and the measurements. Nothing from those audits stays open.

@@ -1,145 +1,67 @@
-# Piece F5.6 acceptance criteria — the state-scan comparison table
+# Piece 11A.1 acceptance criteria — the selection vocabulary and the argument rule
 
-Current task: build the comparison table the state scan reads — the parse key the coverage matrix row
-names, and the attribute name the pinned provider schema declares for the same value — as data in
-`src/state_coverage.py`, and pin it in `tests/test_state_coverage.py`.
+Current task: state the shape a run names as its read set, and the argument rule for a selection that names no
+unit in that set. The design rule is `docs/MULTI_RUN_CODEBASE.md` §2, rules 1 and 2. No code is written until
+these criteria are agreed.
 
-## Criterion 1 — the table content is a measurement, not a choice
+This piece adds no rule of its own. It states the selection as data read through the rules that already own the
+shape, so acceptance is that no second rule appears anywhere.
 
-The table is built from a measurement per matrix row type against the pinned provider schema
-(`tests/conftest.py::provider_schema`, the provider the golden `provider.tf` declares). The measurement
-is:
+## Criterion 1 — what is already pinned and must not change
 
-- run the pipeline on the row's own fixture;
-- read the resource block the run wrote for the row's entry, and read its fields at the block's own
-  level through the gate's one field reader (`sanity_checks.blocks`, `Block.fields`);
-- pair each printed field name with the row property whose value produced it, so the pair is what the
-  run prints, not a name a person picked;
-- keep a pair only when the printed name is an attribute the pinned schema declares at the block's top
-  level for the row's type, because `state_properties` reads only top-level state attributes, so a name
-  inside a nested level is not a value the scan can compare;
-- keep a pair only when the printed value is the same data the parse key holds, so the two sides hold
-  the pair in the same shape; a printed value that answers for more than one parse key is not a pairing.
+- `container_coverage.is_scope_path` is the one scope path definition, and the pin
+  `tests/test_container_coverage.py::test_a_predefined_path_is_read_by_the_one_scope_path_definition` holds the
+  shape: the path names the place or one entry inside it. A selection must be read through this function, so a
+  piece that defines a second path shape is a finding.
+- `unit_manifest.units` is the run's unit set, and a unit exists only when the ledger has a row in it. A
+  selection that dropped units from the set the ledger names would give the unit rule two shapes, so a run that
+  reads a whole export declares no selection and no piece may add one.
+- The argument-error shape is the one `--path` already states: a path that names no unit the run read is an
+  argument error, exit 2, and the run writes no file. The selection reads the same shape, so no second error
+  shape appears.
+- `--parent` names the ancestor the run reads as a reference source, and the pin
+  `tests/test_reference_edges.py::test_a_declared_parent_source_adds_no_dependency` holds that such a source names
+  no unit. A selection that names an ancestor must keep that fact: the ancestor enters the read set and names no
+  unit.
+- `tests/test_layout.py::test_the_indexes_name_every_document_under_them` holds the index rule, so
+  `docs/MULTI_RUN_CODEBASE.md` must be named in `docs/README.md`, which it is, and the §1 module table names
+  `codebase_state.py` only when that module lands, so this piece adds no module and the table is unchanged.
+- The pins that scan the `src/` set read every module: the writer scan, the environment-name scan, the
+  console-line scan, and the second-naming-rule scan. This piece adds no writer, no environment name, no console
+  line, and no naming rule, so those pins are unchanged.
 
-A table row exists only where the two names differ: the same-name rule already covers a property the
-table has no row for, so a row for an equal name would state nothing.
+## Criterion 2 — what the piece must state
 
-The pin runs the same measurement, not a copy of the table. `tests/conftest.py` owns the skip rule: the
-pin skips only when the terraform binary is absent, and a failed `terraform init` is a failure.
+1. A selection names the read set only. The run's unit set stays `unit_manifest.units(ledger)`, so the selection
+   never names a directory.
+2. A selection is a scope path read through `container_coverage.is_scope_path`, so it applies to the api source
+   the way `--path` and `--parent` do, and no file-source piece can state a selection of its own: for a file
+   source, targeted conversion is the splitter's one file per device group plus `--parent`.
+3. A selection that names no unit in the run's read set is an argument error, exit 2, and writes no file, read
+   through the shape `--path` already states.
+4. A selection is data: it states no unit rule, no identity rule, no naming rule, no path rule, and no console
+   line. The vocabulary lives in `panorama_to_terraform.py` (`shared_arguments` and `shared_checks`), which states
+   no rule the owners state.
+5. A run that declares no selection behaves exactly as it does today, so the committed goldens and the report
+   goldens are unchanged, and the pins that read the argument set gain only the new argument.
 
-## Criterion 2 — the scan reads the mapping only through the table
+## Criterion 3 — the pins this piece writes
 
-`state_coverage.state_name_for` is the one lookup the drift scan uses. Where the table has a row for a
-property, the scan compares the parse key with the state attribute named by that row. Where the table
-has no row, the same-name rule stands unchanged. No `src/` module holds a second parse-key-to-attribute
-mapping, and the pin measures that across the `src/` set.
+- The selection shape is pinned in `tests/test_api_requests.py`, in the group that holds the `--path` pins, and
+  each pin reads the shape through `container_coverage.is_scope_path` rather than through a string the test
+  states.
+- The argument error is pinned in `tests/test_api_path.py`, on the run, so the exit code and the no-file fact are
+  read from a run, not from a function that looks like the rule.
+- No pin reads a document word. A wording check for the vocabulary is a document review, so it lives in
+  `tools/check_documents.py`, which the test set does not read.
 
-## Criterion 3 — a finding names a mapped pair the same-name rule cannot reach
+## Criterion 4 — what stays outside the piece
 
-A drift finding for a mapped pair is grounded by committed fixtures: the run side from the row's fixture,
-the state side from `tests/fixtures/state_workspace.json`. The state attribute name in the fixture is a
-name the pinned schema declares, so the pair is a schema fact and not a fixture wording. Under the
-same-name rule the scan compares nothing for that entry, so the finding only exists because of the
-table.
-
-## Criterion 4 — one pin per fact, in the module that owns the rule
-
-- the table against the live schema and against the run's printed field names: one pin;
-- a parse key the run prints under more than one name, so no single name answers and the table has no row:
-  one pin;
-- a drift finding that names a mapped pair: one pin;
-- the same-name rule where the table has no row: one pin;
-- no second mapping rule in `src/`: one pin;
-- the drift line for a mapped pair names both names: one pin.
-
-All pins are in `tests/test_state_coverage.py`, which owns the state scan rules. No test module imports
-another test module; shared facts come from `tests/conftest.py`.
-
-## Criterion 5 — the report line shape
-
-The ownership line shape is unchanged. The drift line keeps its shape and names the property; for a
-mapped pair it names both sides, so the operator can see the two names the finding compared. A property
-the table has no row for prints as one name, as before.
-
-## Criterion 6 — the documents
-
-`docs/ARCHITECTURE.md` §3.2 is the owner document for the drift rule and carries the decision and the
-measurement; every other document that states the state scan links to it. The wrong example — `panos_address`
-declares `tags`, so `tags` and `tag` is not a schema fact — is removed from §3.2, from the §3.2 limitations
-paragraph, and from `docs/USAGE_GUIDE.md`, and no document states that the scan compares only a property both
-sides name the same way. No document restates the table row by row: §3.2 names the count and points at
-`state_coverage.STATE_PROPERTY_NAMES`. The closed backlog entry is removed. `to-do.md` and `agent-status.md`
-carry the current state. No test count in a document, no metaphor, no emoji, ASD-STE100 wording.
-
-## Criterion 7 — the gate, single-threaded, with measured counts
-
-`ruff check .`, `ruff format --check .`, `python3 tools/check_documents.py`, `python3 -m pytest`, all
-single-threaded. The pin counts are read from the per-module collection counts, because `pyproject.toml`
-sets `addopts = "-q"`.
-
-## Measured result
-
-The piece is landed at commit `43d6101`. Criterion 1, measured 2026-11-21 against provider v2.0.14 (`PaloAltoNetworks/panos ~> 2.0.14`, read through
-`tests/conftest.py::provider_schema`): over the 42 matrix rows, 26 types reach a pair, no printed field
-answers for more than one parse key, and 16 rows reach no field at the block's own level — 10 print none of
-their properties there, 4 print one there as a reference, a nested object, or a number text rather than as the
-same data the parse key holds, and 2 hold no report entry in the run. Four pairs name
-the parse key and a different attribute name, and those are the four table rows: `static_members` for
-`static` on `panos_address_group`, and `authentications` for `hash`, `dh_groups` for `dh_group` and
-`encryptions` for `encryption` on `panos_ike_crypto_profile`. Every table key is a property of its own row
-and every table name is a top-level attribute the schema declares for that same type.
-
-Criterion 2: `state_name_for` is the only lookup `drift_properties` reads, and the scan over the `src/` set
-finds no module-level dict that pairs a parse key with an attribute name it is not named under other than
-the table. The pin asserts the hit set is not empty, so it measures the table rather than an absence.
-
-Criterion 3: the committed state document holds `panos_address_group` entry `Web-Servers`, read under
-`static`, the name the schema declares, against the run side `static_members` from
-`tests/fixtures/address_groups.xml`. The state value differs, so the finding exists only because of the
-table. `panos_ike_crypto_profile` cannot be the grounded pair, because `LOCATION_SCHEMA` declares no `shared`
-scope for it, so a state entry of that type cannot be keyed in the shared workspace the scan reads.
-
-Criterion 4: the six pins are group 7 of `tests/test_state_coverage.py` — the measured pairs, the parse key
-printed under four names, the mapped pair read through the state document, the same-name rule where the
-table has no row, the scan reading the mapping only through the table, and the drift line for a mapped pair.
-
-Criterion 5: the drift line prints `static_members as static (["Web-Server-1", "Web-Server-2"] vs
-["Web-Server-1"])` for the mapped pair, and the one name `members` for a property the table has no row for.
-
-Criterion 6: `docs/ARCHITECTURE.md` §3.2 carries the decision, the measurement and the two shapes the
-measurement cannot state as one name; the `tags`/`tag` example is removed, because `panos_address` declares
-`tags`, the same name the parse key has. The closed backlog entry is removed from `backlog.md`, and the two
-measurement gaps are recorded there. `README.md` names the comparison table in the `tests/test_state_coverage.py`
-entry. `tools/check_documents.py` reports no finding.
-
-Criterion 7, single-threaded: `ruff check .` clean at `py310`, `ruff format --check .` clean on the 104
-Python files, `python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` passes 1,738
-pins with the same 4 skip for the missing `tflint` binary — 1,742 pins in 53 test modules, in 243.32 s on the
-recorded run. `terraform` is present, so the pins that read the live provider schema ran, and the 4 skips are
-the `tflint` pins in `tests/test_sanity_gate.py`. Read through the per-module collection counts: 1,736 pins in
-53 modules before the piece, 1,742 here, so the piece adds six pins, all in `tests/test_state_coverage.py`,
-which collects 24 before and 30 here. The measurement pin runs the pipeline for every matrix row, so the gate
-reads 42 fixtures and one provider schema; run-to-run time varies, and the recorded runs of this tree measured
-243.32 s and 265.73 s. The import rule reads clean: no test module imports another test module.
-
-## Review findings, corrected (2026-11-21)
-
-The gate was re-run single-threaded on the committed tree at `bff26d6` and reads the same: 1,738 passed and 4
-skipped (the `tflint` pins in `tests/test_sanity_gate.py`), 1,742 pins in 53 modules, `tests/test_state_coverage.py`
-30, in 273.93 s. `ruff check .`, `ruff format --check .` and `python3 tools/check_documents.py` read clean before
-and after the corrections. Every pin in group 7 passes on its own, the two mapped-pair pins read the run's ledger
-through `tests/conftest.py::run_pipeline`, and the measurement was re-run independently through the tool's own
-modules and agrees with the table. Six things were wrong and are corrected, and no pin changed:
-
-- The `tags`/`tag` example and the claim that the scan compares only a property both sides name the same way
-  remained in `docs/USAGE_GUIDE.md` (two places) and in the `docs/ARCHITECTURE.md` limitations paragraph, which the
-  table contradicts. All three now state the rule and link to §3.2.
-- The reason for the 16 rows was stated as the nested level or the `for_each` map for all of them. The measured
-  split is now stated in §3.2, in the `src/state_coverage.py` comment, and in the test comment.
-- `backlog.md` said the parse reads the tag text as `comments` or as `description`. `parse_tags` stores only
-  `comments`, so `description` is a declared property the parse never fills, which is why no pair is read for it.
-- §3.2 and `agent-status.md` restated the four table rows row by row; both name the count and the table instead.
-- Criterion 4 named five pins for a group that holds six, so the four-names fact is added to the list.
-- `tests/test_state_coverage.py` numbered its sections 1 to 5 and 7 and held the property-read-parity pin inside
-  the drift section, which contradicted its own group list. That pin is now under its own group 5 heading and the
-  record section is group 6, the order the module docstring states.
+- The targeted read set itself, the membership facts a unit identity cannot state on its own, and the rule that a
+  name the selection excludes is not an index entry are Piece 11A.2, so this piece states no read rule.
+- The byte agreement with a full run is Piece 11A.3. A pin for it cannot be written before Piece 11A.2 lands,
+  because the run has no targeted read set to run.
+- The selection for a `vsys` or a device unit needs the fact that names which device the run read, which is a
+  live-target fact, so it stays in `backlog.md` and no pin for it is written here.
+- The merge rule and the report section are Phase 11B and 11C, so this piece writes no record rule and no report
+  rule, and the four root records stay as `CODEBASE_ASSEMBLY.md` §14 defines them for this piece.

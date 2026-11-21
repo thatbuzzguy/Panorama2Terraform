@@ -2,16 +2,31 @@
 
 ## Current position
 
-The last landed piece is the F5.6 comparison table (2026-11-21, commit `43d6101`): the state scan reads a property under the
-name `state_coverage.STATE_PROPERTY_NAMES` gives it, and the table holds a row only where the parse key the
-coverage matrix row declares and the provider attribute name the pinned provider schema declares differ. The
-content is a measurement per matrix row type, not a selection: the run is read on the row's own fixture, the
-field names printed at the block's own level are read through the gate's one field reader, and a pair is kept
-when the printed name is an attribute the pinned schema declares at the block's top level for that type, when
-the printed value is the same data the parse key holds, and when one printed field answers for exactly one
-parse key. `state_name_for` is the one lookup the scan reads, so the same-name rule stands for a property the
-table has no row for, and the drift line names both names for a mapped pair. The decision and the measurement
-are in `docs/ARCHITECTURE.md` §3.2.
+Planning for Epic 11, the codebase several runs write into. No piece is open for it yet; the design record is
+`docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and the acceptance criteria for Piece 11A.1 are in
+`acceptance.md`. Four decisions are agreed, and they are the shape of the record:
+
+1. The four root records become accumulated codebase state: a run reads the existing record through its own
+   module's `parse_rows`, replaces the rows for the units it built, and keeps the rows for the units it did not.
+   The merge is keyed by row identity, not by run, so no record can state which run wrote it, which is what keeps
+   the no-timestamp rule and the determinism rule intact. The reports and `SOURCE.txt` stay per run.
+2. The selection names the read set, not what the run writes. A run that reads a whole export declares no
+   selection, so `unit_manifest.units` stays the only unit set.
+3. The run overwrites the files it owns in a unit directory it wrote into, names the units it wrote in its report,
+   and holds no record of what it wrote before; the byte difference between two runs is read through git.
+4. The merged records are the codebase-level view. The run's report gains one section that names the units the run
+   built and the codebase units it did not read, so no fifth root-set file states the unit set a second time.
+
+The last landed piece is the F5.6 comparison table (commit `43d6101`) and the F8.1 definitions read (the working
+tree, pending commit): the state scan reads a property under the name `state_coverage.STATE_PROPERTY_NAMES` gives
+it, and the table holds a row only where the parse key the coverage matrix row declares and the provider attribute
+name the pinned provider schema declares differ. The content is a measurement per matrix row type, not a
+selection: the run is read on the row's own fixture, the field names printed at the block's own level are read
+through the gate's one field reader, and a pair is kept when the printed name is an attribute the pinned schema
+declares at the block's top level for that type, when the printed value is the same data the parse key holds, and
+when one printed field answers for exactly one parse key. `state_name_for` is the one lookup the scan reads, so the
+same-name rule stands for a property the table has no row for, and the drift line names both names for a mapped
+pair. The decision and the measurement are in `docs/ARCHITECTURE.md` §3.2.
 
 Measured 2026-11-21 over the 42 matrix rows against provider v2.0.14: 26 types reach a pair, four of those
 name the parse key and a different attribute name and are the table rows in `state_coverage.STATE_PROPERTY_NAMES`,

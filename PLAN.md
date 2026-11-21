@@ -68,6 +68,23 @@ markdown set.
 | 5 | Input comes from a declared source, and the run records which source it used | The parse boundary returns the same contract for every source. The F3.8 size and DTD checks apply to the bytes a source returns. A run with no network passes CI. The provenance record names the source, the scope, and the cache entry it read. |
 | 6 | The output is a codebase, not one directory: one unit per declared scope, one owner per entry, and the path that binds each entry to the live config | A codebase run writes one directory per declared scope, a manifest that names each unit and the entries it owns, one scope object per declared scope, an import block per entry, the reference edges between units, and the site values as data with the `.tfvars` written from them. The gate reads the `.tf` files for the block rules and the four data files for the data rule. Every rule stays offline and deterministic. |
 | 7 | A second conversion path that reads only Panorama and PAN-OS API responses | Path 2 reads no file. Its scope set comes from the membership responses it read, and every response is checked against the request that made it. CI runs it offline on committed responses with no server. It reads the same tables, naming rule, write path, and gate as path 1, and for content with no live-only fact it writes the same `.tf` bytes as path 1. |
+| 8 | The codebase is assembled by more than one run, and each run names what it covers | A targeted run reads one scope plus the membership facts its unit identity needs, and writes the same unit bytes as a full run writes for that unit, for content that names no read-through name. A run that writes into an existing codebase merges its rows through the shape rule each record module owns and keeps the rows for the units it did not build. The run names the units it built and the codebase units it did not read in the report. Every rule stays offline and deterministic, and a run that builds a whole codebase writes the committed golden bytes. |
+
+## Open epic — Epic 11, the codebase several runs write into (feature id `F11.x`)
+
+The design record is `docs/MULTI_RUN_CODEBASE.md`. Three phases:
+
+- **11A, the run's read set**: the selection vocabulary, the targeted read set, and the byte agreement between a
+  targeted run and a full run for one unit.
+- **11B, the records as codebase state**: the merge rule, the run's unit set against the codebase's unit set,
+  the cross-run ownership, edge and order facts, and the gate for a partial run.
+- **11C, the update run**: the existing records as a reference source, the write boundary, the run's report
+  section, and the move fact.
+
+The three levels the output sits in are the codebase root, the unit, and the unit's files. The unit level and
+the file level are unchanged, because a unit directory is already one plan against one state and already holds
+its own declarations. What Epic 11 adds is the root level read as state, and the layer that names which scopes a
+run read and which units it built.
 
 A brown-field config is an existing production config: mixed shared objects,
 per-device-group overrides, template stacks, and multiple virtual systems.

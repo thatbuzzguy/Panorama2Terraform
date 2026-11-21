@@ -1,8 +1,49 @@
 # To Do
 
 The tracking markdown for the completed pieces is removed here; the git history and the owner
-documents hold it. No piece is open. The items that need a fact a live target states are in
-`backlog.md`.
+documents hold it. The items that need a fact a live target states are in `backlog.md`.
+
+## Epic 11 — the codebase several runs write into
+
+The design record is `docs/MULTI_RUN_CODEBASE.md`; its pins are pending until each piece lands. Acceptance
+criteria for the open piece are in `acceptance.md`.
+
+### Phase 11A, the run's read set
+
+- **11A.1 (open)** — the selection vocabulary: the shape a run names as its read set, read through
+  `container_coverage.is_scope_path`, and the argument rule for a selection that names no unit in the read set
+  (exit 2, the `--path` shape). No module gains a second path rule. A run that reads a whole export declares no
+  selection: the whole export is one source, and the run's unit set stays `unit_manifest.units`.
+- **11A.2** — the targeted read set: the selected scope plus the membership facts a unit identity cannot state
+  on its own, read through `api_requests`; a name the selection excludes is not an index entry, so the join
+  reports no finding for it.
+- **11A.3** — the byte agreement between a targeted run and a full run for the same unit, for content that names
+  no read-through name; the read-through exception stays labelled by the F5.5 rule.
+
+### Phase 11B, the records as codebase state
+
+- **11B.1** — the merge rule in `codebase_state.py`, one join key per record, read through each record module's
+  `parse_rows`; a record with no existing file writes the bytes the rules state today, so the committed goldens
+  are unchanged.
+- **11B.2** — the run's unit set against the codebase's unit set, and the rule that the run writes no directory
+  for a unit it read only through the record.
+- **11B.3** — ownership, edges and the plan order read over the merged set, so an edge and `after` can name a
+  unit another run wrote.
+- **11B.4** — the gate for a partial run: the block rules read the whole codebase, the data rule reads the merged
+  records, the two two-set rules read the run's unit set, and the plan check and the rule-set check run once per
+  directory the run wrote.
+
+### Phase 11C, the update run
+
+- **11C.1** — the existing records as a reference source, read the way the state document is read, and the rule
+  that the run names the units it wrote.
+- **11C.2** — the run's report section, the sets it names and the rule that it prints only when the codebase
+  holds a unit the run did not read.
+- **11C.3** — the write boundary: the run writes what it built and deletes nothing; the tool owns every file it
+  writes and the byte difference between two runs is read through git.
+
+The move fact, the stale-file boundary, the selection for a `vsys` or a device unit, and the `--prune-cache`
+consequence are in `backlog.md`.
 
 ## Feature-sized items that stay blocked
 
