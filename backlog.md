@@ -441,7 +441,12 @@ here with that rule named.
   The rule that keeps these items out of `to-do.md` is that a piece cannot be written from a response the
   project does not hold. The conditions are: the F3.5 rulebase value verified against a live target; the device
   serial, and which element a command names, against a live target; and a response that shows how a device
-  states a per-device template variable override.
+  states a per-device template variable override. The planning record `docs/API_DOCUMENTATION_AND_MOCKS.md`
+  states which half of each shape a documented response can hold (the shape half) and which half stays on the
+  live target (the value half); it changes no condition here.
+- Open decision, from the mocking planning: the documented XML API and REST API error codes are a stable set,
+  so the response check could read a data table for the codes it reports instead of accepting only success
+  code 0. Not built; it is a scope decision on the fetch layer, and a documented code is not a measured value.
 - Decision landed for the F8.1 finding, in `src/container_coverage.py`: `is_predefined` answers a definitions
   read through the place the declared path names, as well as through the parent walk, so a read inside the
   built-in place is answered in both shapes the shape rule accepts. An entry read inside the place names no

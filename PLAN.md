@@ -89,6 +89,14 @@ run read and which units it built.
 A brown-field config is an existing production config: mixed shared objects,
 per-device-group overrides, template stacks, and multiple virtual systems.
 
+## Planning — the API documentation as a source for the response set
+
+The planning record is `docs/API_DOCUMENTATION_AND_MOCKS.md`. It is not an epic yet: the decision it puts in
+front is whether documented response shapes can stand as committed response fixtures for the shape half of
+the Epic 8 §4 facts, with the value half still gated on a live target. The recommended shape is a
+documentation-derived response builder under `tools/`, read through the injected-producer seam, so Goal 1
+and the standard-library rule are unchanged. Promoted to an epic on decision.
+
 ## Out of Scope (tracked in backlog.md)
 
 - PAN-OS version matrix testing

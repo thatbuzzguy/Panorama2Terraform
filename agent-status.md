@@ -2,6 +2,13 @@
 
 ## Current position
 
+Planning session in the worktree `api-mock-planning`, 2026-11-21. No code and no pin were written. The
+deliverable is `docs/API_DOCUMENTATION_AND_MOCKS.md`: the current state of the API-related work, what the
+PAN-OS API documentation can and cannot state, the mocking options through the injected-producer seam, and
+what is required to finish the planned API features. `PLAN.md` holds the decision point; `backlog.md` holds
+the error-code-table item. The record is not an epic until the decision on doc-derived committed responses
+is taken. This session touched no other worktree file, and Piece 11A.1 in the main tree is unchanged.
+
 Planning for Epic 11, the codebase several runs write into. No piece is open for it yet; the design record is
 `docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and the acceptance criteria for Piece 11A.1 are in
 `acceptance.md`. Four decisions are agreed, and they are the shape of the record:

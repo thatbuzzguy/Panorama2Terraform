@@ -12,6 +12,7 @@ that document instead of restating the rule.
 | [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) | Plan and run a migration, for one device or several virtual routers |
 | [CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) | What a full codebase needs and the rules behind the files the run writes. Design record for Epic 6; §3 to §11 and §14 landed |
 | [API_CONVERSION_PATH.md](API_CONVERSION_PATH.md) | The second conversion path, which reads only API responses. Design record for Epic 8, closed |
+| [API_DOCUMENTATION_AND_MOCKS.md](API_DOCUMENTATION_AND_MOCKS.md) | What the PAN-OS API documentation can give the committed response set, what it cannot, and the mocking options. Planning record, not a design decision |
 | [TEMPLATE_STACK_DEPLOYMENT.md](TEMPLATE_STACK_DEPLOYMENT.md) | The template and stack unit: which membership name enters the edge set, the scope a template or a stack entry is declared inside, and what the tool can state for a template entry the export declares and no device names. Design record for Epic 10, landed |
 | [MULTI_RUN_CODEBASE.md](MULTI_RUN_CODEBASE.md) | The codebase several runs write into: the run's read set and write set, the four records as codebase state, the cross-run ownership, edge and order facts, the gate for a partial run, and the write boundary. Design record for Epic 11, open |
 | [DEVICE_GROUP_SPLITTING.md](DEVICE_GROUP_SPLITTING.md) | Split one export into one file per device group |
