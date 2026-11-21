@@ -737,7 +737,7 @@ def test_the_committed_responses_are_not_corpus_material():
     `response` and it is read through the injected producer for the request that produced it; a file in the corpus
     is a Panorama export, so its root is not `response`, and the scan and the fixture assembler read the corpus. A
     response that lives inside the corpus is a finding, which is what the audit recorded on 2026-11-11 and what the
-    three files that had one moved out of on 2026-11-18. Measured 2026-11-18: 5 response files, 66 accepted corpus
+    three files that had one moved out of on 2026-11-18. Measured 2026-11-21: 5 response files, 67 accepted corpus
     files, 3 refused.
 
     The pin changed what it asserted on 2026-11-18: it compared the two name sets, so a response could sit inside

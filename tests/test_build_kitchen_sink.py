@@ -100,7 +100,7 @@ def test_the_read_rule_answers_for_a_fixture_the_tool_has_never_seen(tmp_path):
 def test_the_read_set_is_the_set_the_corpus_pins_read_less_the_record():
     """The corpus pins read the fixtures that are not hostile, so the tool reads the same set, less its own
     record. The pin compares the tool's decision with the rule's decision for every file in the corpus, in both
-    directions, so a file the two answer differently on is a finding. Measured 2026-11-18: 66 accepted, 65 read,
+    directions, so a file the two answer differently on is a finding. Measured 2026-11-21: 67 accepted, 66 read,
     3 skipped.
 
     Restated 2026-11-18 as the derivation, because the pin held the set as three numbers, which a file that leaves

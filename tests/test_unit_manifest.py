@@ -59,6 +59,7 @@ CONVERTER = "panorama_to_terraform.py"
 HOST = "panorama.test"
 GROUPING = "report_grouping.xml"
 MULTI = "multi_device_templates.xml"
+NEW_SITE = "template_no_device.xml"
 MANIFEST = unit_manifest.MANIFEST_FILE
 
 # The reference names the grouping fixture produces, keyed by the referrer's five facts.
@@ -238,6 +239,26 @@ def test_shared_in_device_group_is_not_a_fact_value(converter_module, tmp_path):
     assert entry["device_group"] == ""
     object_facts = {"device_group": "Shared", "vsys": "", "template": "", "vsys_device": "", "template_stack": ""}
     assert unit_manifest.facts_of(object_facts) == unit_manifest.facts_of(entry)
+
+
+def test_a_template_entry_no_device_names_keeps_the_device_fact_empty(converter_module, tmp_path):
+    """E10.3 (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4): the shape a new site takes in an export is a template
+    entry with no device inside it, so the parse records no device for the unit and the row keeps the device fact
+    as the empty fact. The entry is read as an `emitted` scope row, so the unit exists and the row is written for
+    it. `Shared` in `device_group` is the parse fallback (§2.2), so the row states no device group for the entry
+    either: the device group lists the entry, and the entry names no group. The identity, the digest, and the
+    directory name are read from the four facts the export can name, so no part of them holds a device value the
+    run did not read.
+    """
+    parser, gen = _pipeline(converter_module, FIXTURES_DIR / NEW_SITE, tmp_path)
+    entry = parser.root.find("panorama/templates").find("entry")
+    facts = unit_manifest.facts_of(parser.identity_of(entry))
+    assert facts == ("", "", "Remote-Networks", "", ""), facts
+    assert any(unit_manifest.facts_of(row) == facts for row in parser.ledger.rows()), "the unit has no ledger row"
+    row = _row(_manifest(tmp_path), facts)
+    assert row["unit"] == unit_manifest.unit_name(facts) == "Remote-Networks", row
+    assert row["directory"] == unit_manifest.directory_name(facts, gen.sanitize_name), row
+    assert row["directory"].endswith(f"_{unit_manifest.identity_digest(facts)}"), row
 
 
 def test_the_rows_are_sorted_by_the_identity_not_by_document_order(converter_module, tmp_path):

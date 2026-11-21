@@ -44,6 +44,7 @@ SCOPE_FILE = "scope.tf"
 FIXTURE = "scope_objects.xml"
 NO_SCOPE_FIXTURE = "address_objects.xml"
 PLACEMENT_FIXTURE = "report_grouping.xml"
+NEW_SITE = "template_no_device.xml"
 PLACEHOLDER = container_coverage.PLACEHOLDER_DEVICE
 
 # The resource line is read through `tests/conftest.py` (§1.1), which states the pattern once for the test set.
@@ -383,6 +384,26 @@ def test_a_template_entry_and_a_stack_entry_record_no_container_fact(converter_m
     assert stack["template_stack"] == "Edge-Stack" and stack["template"] == "", stack
     for facts in (template, stack):
         assert facts["vsys"] == "" and facts["vsys_device"] == "", facts
+
+
+def test_a_template_entry_with_no_device_prints_its_names_and_no_device(tmp_path):
+    """E10.3 (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4): the block prints the names the entry declares and nothing the
+    export cannot name. The placement rule answers no containing scope for a template entry (§3), so the block prints
+    the empty `panorama` sub-block, the entry name, and the two properties its row declares, and no device, because
+    the export names none. The device group that lists the template prints the names as data through the field its
+    own row declares, which is the only place the codebase states the relation, and that block names no device
+    either.
+    """
+    text = file_text(_generate(NEW_SITE, tmp_path), SCOPE_FILE)
+    template = _block(text, "panos_template", "Remote-Networks")
+    group = _block(text, "panos_device_group", "NewSite-FW")
+    assert "panorama = {}" in template, template
+    assert 'name = "Remote-Networks"' in template, template
+    assert 'default_vsys = "vsys1"' in template, template
+    assert 'description = "Template the new site takes"' in template, template
+    assert not any(word in template for word in ("devices", "ngfw_device", "panorama_device")), template
+    assert 'templates = [ "Remote-Networks" ]' in group, group
+    assert "devices" not in group, "the group names no device, so it prints no device list"
 
 
 # --- 6. The gate rule --------------------------------------------------------

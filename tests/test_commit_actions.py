@@ -58,6 +58,8 @@ CONVERTER = "panorama_to_terraform.py"
 ACTIONS = commit_actions.ACTIONS_FILE
 MANIFEST = unit_manifest.MANIFEST_FILE
 KITCHEN = "kitchen_sink.xml"
+NEW_SITE = "template_no_device.xml"
+PUSH = "panos_push_to_devices"
 
 # The fixtures the corpus pins read: the read rule's accepted set, not a name rule.
 FIXTURES = corpus_fixtures()
@@ -236,6 +238,27 @@ def test_the_file_is_written_only_when_it_has_content(tmp_path):
         match.group(1) for match in re.finditer(r"(import_blocks\.IMPORT_FILE|commit_actions\.ACTIONS_FILE)", source)
     ]
     assert tf_writes[-1] == "commit_actions.ACTIONS_FILE", tf_writes
+
+
+def test_a_unit_with_no_device_fact_names_the_fact_the_export_declares(tmp_path):
+    """E10.3 (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4): the fact a block names is the fact `named_fact` selects for
+    its row, so for the unit a template entry names with no device inside it the device fact is empty and both blocks
+    name the template fact. The push block states no serial (§10 rule 6), so the codebase names no device for that
+    unit at all: the device the operator adds and the serial a target names are facts only a live target states, so
+    the two blocks state the fact the row can name and no device value.
+    """
+    out = tmp_path / "new_site"
+    assert _run(FIXTURES_DIR / NEW_SITE, out).returncode == 0
+    rows = commit_actions.build_rows(_manifest(out), naming.sanitize)
+    assert [(row["action"], row["fact"], row["field"], row["entry_name"]) for row in rows] == [
+        ("panos_commit", "template", "templates", "Remote-Networks"),
+        (PUSH, "template", "name", "Remote-Networks"),
+        ("panos_commit", "device_group", "device_groups", "NewSite-FW"),
+        (PUSH, "device_group", "name", "NewSite-FW"),
+    ], rows
+    assert not any(row["fact"] == "vsys_device" for row in rows), rows
+    texts = parts(_files(out), ACTIONS)
+    assert texts and not any("devices =" in text for text in texts.values()), texts
 
 
 # --- 2. The gate rule --------------------------------------------------------
@@ -540,8 +563,6 @@ def test_two_runs_write_the_same_bytes(tmp_path):
 
 
 # --- 7. The push block (F6.10.4) ------------------------------------------------
-
-PUSH = "panos_push_to_devices"
 
 
 def test_the_push_block_names_the_fact_and_the_fact_key():

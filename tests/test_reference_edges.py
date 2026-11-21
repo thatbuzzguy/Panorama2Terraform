@@ -60,6 +60,7 @@ MULTI = "multi_device_templates.xml"
 OVERRIDE = "ownership_override.xml"
 GROUPING = "report_grouping.xml"
 SCOPE_OBJECTS = "scope_objects.xml"
+NEW_SITE = "template_no_device.xml"
 STATE_FIXTURE = "state_workspace.json"
 WORKSPACE = "production"
 
@@ -339,6 +340,25 @@ def test_a_membership_name_the_run_declares_no_entry_for_writes_no_row(converter
     assert [tuple(row[key] for key in reference_edges.FIELD_ORDER) for row in declared] == [
         (stack, template, "panos_template", "HQ-Networks")
     ], declared
+
+
+def test_a_device_group_that_lists_a_template_records_no_row(converter_module, tmp_path):
+    """E10.3 (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4): a device group that lists a template names no device, so the
+    pair the order rule would need for the two units can only come from the membership rule, and that rule reaches no
+    pair for it. The device group's template list is a field of the entry that owns the container, so no `bookkeeping`
+    row covers it and `LIST_JOIN` states no join for a row the table names no row for: the name is placed inside the
+    block the container writes, which is rule 8's condition for writing no row. So the order rule has no pair for the
+    device group unit and the template unit, and the ranks the two rows carry are the identity order, not an answer
+    for the pair. The relation reaches the output only as the names the device group block prints.
+    """
+    path = "device-group/entry/templates"
+    _own, edges, ordered = _sets(converter_module, FIXTURES_DIR / NEW_SITE, tmp_path)
+    assert not any(row.path == path for row in container_coverage.CONTAINER_TABLE), "the table names no row for it"
+    assert api_requests.LIST_JOIN.get(path) is None, "the join states no join for a row the table names no row for"
+    assert path not in api_requests.membership_lists(), api_requests.membership_lists()
+    assert edges == [], edges
+    assert [row["after"] for row in ordered] == [[], []], ordered
+    assert [row["rank"] for row in ordered] == [1, 2], ordered
 
 
 def test_the_record_round_trips_as_data(tmp_path):

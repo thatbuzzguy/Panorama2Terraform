@@ -56,6 +56,7 @@ MANIFEST = unit_manifest.MANIFEST_FILE
 DEVICE = "fw-2.example.com"
 NO_DEVICE = "localhost.localdomain"
 KITCHEN = "kitchen_sink.xml"
+NEW_SITE = "template_no_device.xml"
 
 # The fixtures that name a site value, with the rows the run writes in identity order. A fixture
 # that starts naming a value must be added here in the same change, so no fixture can become a
@@ -580,6 +581,26 @@ def test_the_provider_block_prints_target_only_for_a_unit_that_names_a_device(tm
     assert sorted(declared) == sorted(held | {naming.variable_name(DEVICE)} | {naming.variable_name("Vsys-Cert")}), (
         declared
     )
+
+
+def test_a_unit_that_names_no_device_writes_no_site_row_and_no_tfvars_line(tmp_path):
+    """E10.3 (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4): a site row is a value the run read, and the run read no
+    device value for a template unit with no device inside it, so the record holds no row for the unit and the
+    printed form holds no line for it. The unit is still a unit the manifest names, and the provider block for its
+    directory names no `target`: the same §9 rule 8, read on the shape a new site takes.
+    """
+    out = tmp_path / "new_site"
+    assert _run(FIXTURES_DIR / NEW_SITE, out).returncode == 0
+    rows = {row["directory"]: row for row in unit_manifest.parse_rows((out / MANIFEST).read_text(encoding="utf-8"))}
+    assert rows, "the entry the export declares is still a unit"
+    assert all(not row["vsys_device"] for row in rows.values()), rows
+    assert not (out / site_data.SITE_DATA_FILE).is_file(), "no value read, so the record holds no row"
+    assert not (out / site_data.TFVARS_FILE).is_file(), "no row, so the printed form holds no line"
+    files = tf_files(out)
+    for path, text in parts(files, "provider.tf").items():
+        assert "var.target" not in text, (path, text)
+    for path, text in parts(files, "variables.tf").items():
+        assert 'variable "target"' not in text, (path, text)
 
 
 # --- 5. the declaration set ----------------------------------------------------

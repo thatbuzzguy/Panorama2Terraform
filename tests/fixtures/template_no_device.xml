@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<!-- E10.3: the shape a new site takes in an export, and the only fixture that shows it.
+
+     The device group lists a template as a member and names no device, and the template entry names no device
+     inside it, so no device in the export names this template. The export states nothing about the device the
+     operator adds, so this fixture holds no device at all: it is the shape the tool can read offline.
+
+       device-group/entry/<DG>/templates/member/<template>   the membership name, no device in the group
+       templates/entry/<template>                           the entry, with no `devices` element inside it
+
+     The names are distinct from the other corpus fixtures, so a corpus pin that reads one fixture cannot read a
+     name from another one.
+-->
+<config version="10.1.0" urldb="paloaltonetworks">
+  <panorama>
+    <device-group>
+      <entry name="NewSite-FW">
+        <description>Device group for the new site</description>
+        <templates>
+          <member>Remote-Networks</member>
+        </templates>
+      </entry>
+    </device-group>
+    <templates>
+      <entry name="Remote-Networks">
+        <description>Template the new site takes</description>
+        <default_vsys>vsys1</default_vsys>
+      </entry>
+    </templates>
+  </panorama>
+</config>
