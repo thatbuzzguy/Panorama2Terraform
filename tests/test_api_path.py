@@ -25,7 +25,8 @@ Nine groups:
    index entry the run read no rows for, are findings the join reports as data rows.
 8. The entry point and the run view (`docs/API_CONVERSION_PATH.md` §6): the entry point decides the run order
    and the cross-response join, and the run view answers the entry protocol through the ledger that holds the
-   entry. Both entry points call the same run sequence.
+   entry. Both entry points call the same run sequence. F11.1: the selection argument is the shared set, and a
+   selection that names no unit is an argument error on a run, the shape `--path` already states.
 9. The entry a membership list names and the run read as its own scope: the run reads that entry twice and keeps
    both answers, so each response records its own rows and writes its own block, and the gate reads the two sets
    as agreeing.
@@ -64,6 +65,7 @@ from conftest import (
     per_scope_response,
     run_pipeline,
     tf_files,
+    written_bytes,
 )
 
 HOST = "panorama.test"
@@ -1264,6 +1266,9 @@ def test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_t
         "state",
         "workspace",
         "prune_cache",
+        # F11.1 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 1): the selection names the read set, not a source, so it
+        # sits in the shared set and the entry point adds none of its own.
+        "selection",
     ):
         assert name in accepted, (name, "the argument one run reads")
 
@@ -1294,6 +1299,72 @@ def test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_t
         encoding="utf-8"
     ), "the door owns the argument rule"
     assert "max_input_bytes=args.max_input_bytes" in entry_source, "the limit is passed to the owners"
+
+
+def _methods_for(place: str) -> tuple:
+    """The parse methods the container table rows name for one place: the rows whose destination is `emitted` are
+    the rows that write a report row, so the pin runs the methods the table names and states none of its own. A
+    place no table row names has no method to run.
+    """
+    return tuple(
+        row.method
+        for row in container_coverage.CONTAINER_TABLE
+        if row.destination == "emitted" and container_coverage.path_place(row.path) == place
+    )
+
+
+def test_a_selection_that_names_no_unit_is_an_argument_error_on_a_run(tmp_path):
+    """F11.1 (`docs/MULTI_RUN_CODEBASE.md` §2 rules 1 and 2): a selection that names no unit in the run's read set
+    is an argument error, exit 2, and writes no file, read through the shape `--path` already states, so no second
+    error shape appears. The no-unit fact is read through `unit_manifest.units` on the reads the run makes for the
+    places: the run runs the parse methods the container table rows name for a place, so a place a row names builds
+    a report row and the unit rule names a unit for it, while no table row names the built-in place, which
+    `test_no_table_row_names_a_builtin_container` holds, so its ledger holds no row and the unit rule names no unit.
+    The shape is read through `container_coverage.is_scope_path`, so this pin states no path shape of its own.
+    """
+    cache = tmp_path / "cache"
+    place = api_requests.list_container(api_requests.membership_lists()[0])
+    _, place_parser = _run(source_fetch.ApiRequest(host=HOST, path=place), PLACES[place], cache)
+    assert _methods_for(place), "the table names a method for a place it can build a unit for"
+    _rows_for(place_parser, _methods_for(place))
+    assert unit_manifest.units(place_parser.ledger), (place, "the place a table row names names a unit")
+
+    _, built_in_parser = _run(
+        source_fetch.ApiRequest(host=HOST, path=container_coverage.PREDEFINED_PLACE), PREDEFINED_PLACE_BODY, cache
+    )
+    assert _methods_for(container_coverage.PREDEFINED_PLACE) == (), (
+        "no table row names a built-in container, so no parse method runs over its response"
+    )
+    assert unit_manifest.units(built_in_parser.ledger) == [], "no row, so the unit rule names no unit for it"
+
+    # The argument error, read on a run: an argument error exits 2 and writes no file, the shape `--path` states.
+    for case in (
+        ["--host", HOST, "--selection", container_coverage.PREDEFINED_PLACE],
+        ["--host", HOST, "--selection", api_requests.scope_path(container_coverage.PREDEFINED_PLACE, "url-list")],
+        [
+            "--host",
+            HOST,
+            "--selection",
+            next(
+                row.path for row in container_coverage.CONTAINER_TABLE if not container_coverage.is_scope_path(row.path)
+            ),
+        ],
+    ):
+        out = tmp_path / "refused"
+        with pytest.raises(SystemExit) as raised:
+            api_to_terraform.run([*case, "--output-dir", str(out)], _producer())
+        assert raised.value.code == 2, (case, "an argument error exits 2")
+        assert not out.exists(), "an argument error writes no file"
+
+    # A selection that names a unit is accepted, so the rule is not a blanket refusal. The targeted read set is
+    # Piece 11A.2, so the run reads the set it reads today and the run that declares no selection is unchanged.
+    out = tmp_path / "accepted"
+    argv = ["--host", HOST, "--selection", api_requests.scope_path(place), "--output-dir", str(out)]
+    assert api_to_terraform.run(argv, _producer()) == 0, "the argument rule accepted the selection"
+    assert out.exists(), "the accepted run is the run it is today"
+    plain = tmp_path / "plain"
+    assert api_to_terraform.run(["--host", HOST, "--output-dir", str(plain)], _producer()) == 0
+    assert written_bytes(plain) == written_bytes(out), "a selection that names no read rule writes the same bytes"
 
 
 def test_the_entry_point_passes_the_index_it_built_to_the_gate_and_keeps_the_gate_code(tmp_path):

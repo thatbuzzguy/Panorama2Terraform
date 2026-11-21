@@ -548,6 +548,27 @@ def test_path_and_parent_apply_to_the_api_source_only(tmp_path):
     assert "apply to --source api" in result.stderr, result.stderr
 
 
+def test_a_selection_applies_to_the_api_source_only(tmp_path):
+    """F11.1 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 1): a selection names a read set inside a source that holds more
+    than one scope, so a file source has nothing to select from: for a file source, targeted conversion is the
+    splitter's one file per device group plus `--parent`. The selection reads the same source shape as `--path`, so
+    a file run that declares one is an argument error, exit 2, and writes no file. `--source` is path 1's argument,
+    so path 2 states no rule for it, and the refusal is read on a run.
+    """
+    out = tmp_path / "out"
+    result = run_script(
+        "panorama_to_terraform.py",
+        str(FIXTURES_DIR / CORPUS_EXPORT),
+        "--selection",
+        "shared",
+        "--output-dir",
+        str(out),
+    )
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "--selection applies to --source api" in result.stderr, result.stderr
+    assert not out.exists(), "an argument error writes no file"
+
+
 def test_parent_needs_a_path(tmp_path):
     """A whole-config source holds its own parent, so the tool does not guess one."""
     result = run_script(

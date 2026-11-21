@@ -103,6 +103,14 @@ python3 src/panorama_to_terraform.py --source api --host panorama --path /device
   holds. A path must be `/<container>` or `/<container>/entry/<name>`, and its first segment must
   name a scope container; anything else is an argument error (exit 2). Each scope is its own cache
   entry, because the path is part of the request identity, and `--offline` covers both requests.
+- `--selection` names the read set this run names, as one scope path, and a run that reads a whole
+  export declares none (`MULTI_RUN_CODEBASE.md` §2 rule 1). The shape and the argument error are the
+  `--path` rule above, so no second path rule and no second error shape appear: a selection that names
+  no unit in the read set is an argument error (exit 2) and writes no file. It applies to `--source api`
+  only, because a file source reads one scope: the file, so a file run declares no selection, and
+  targeted conversion for a file source is the splitter's one file per device group plus `--parent`
+  (§Running the splitter, and `DEVICE_GROUP_SPLITTING.md`). The read rule for a targeted run is pending,
+  so a run that declares a selection reads the set it reads today.
 - The second source is what the shadow scan reads. A run that reads one device group cannot see the
   parent it inherits from, so an inherited name stays a string. The report lists a child entry whose
   name repeats a parent entry name within the same coverage matrix row, in the shadow section of
@@ -197,8 +205,10 @@ membership responses (§2.2), the run order (§6), and the request-set gate rule
 
 - The arguments are the shared set (`panorama_to_terraform.shared_arguments`): `--host` (required), `--cache-dir`,
   `--offline`, `--insecure`, `--output-dir`, `--validate`, `--tflint`, `--data-blocks`, `--import-blocks`,
-  `--state`, `--workspace`, `--prune-cache`, `--max-input-bytes`. The entry point adds no argument of its own, so
-  it takes no input file and refuses the arguments that name one source (`--source`, `--path`, `--parent`).
+  `--state`, `--workspace`, `--prune-cache`, `--selection`, `--max-input-bytes`. The entry point adds no argument
+  of its own, so it takes no input file and refuses the arguments that name one source (`--source`, `--path`,
+  `--parent`). The selection names the read set, not a source, so it is not refused here, and its rules are the
+  ones stated in §Running the converter and in `MULTI_RUN_CODEBASE.md` §2.
 - The run reads the membership responses first, then the entries the scope index names, in index order, and the
   entry point passes the index it built to the gate, so the `request_set` rule reports for a path 2 run. A path 1
   run reports the same rule as NOT RUN.

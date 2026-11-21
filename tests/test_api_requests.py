@@ -1,6 +1,6 @@
 """F8.2: the scope index (`docs/API_CONVERSION_PATH.md` §2.2 and §8).
 
-Five groups, one per rule in `src/api_requests.py`:
+Seven groups, one per rule in `src/api_requests.py`:
 
 1. The four membership lists. They are the `parse_associations` rows in the container table, so
    the module states no second list, and it reads no membership of its own. The four lists name
@@ -13,7 +13,8 @@ Five groups, one per rule in `src/api_requests.py`:
    containers name.
 4. Order: the set is read in sorted order, one entry per scope.
 5. The rules the module reads through their owners: the one scope path definition, the request
-   shape, and the module table.
+   shape, and the module table. The selection shape (F11.1) is read through the same definition, so the
+   argument rule for a selection states no path shape of its own.
 6. The response-to-request join (F8.3): each response is read against the index entry whose request made
    it, so the element it holds is the element that request names, and the entry name inside it agrees with
    the index. The shape rule is read through `source_fetch.py`, so this file states no shape rule of its own.
@@ -25,6 +26,7 @@ No test calls the network: every response is handed by an injected producer, as
 `tests/test_source_fetch.py` does. Group 6 holds the join pins, and group 7 holds the harness pins.
 """
 
+import argparse
 import ast
 import hashlib
 
@@ -35,7 +37,16 @@ import container_coverage
 import panorama_to_terraform
 import provenance
 import source_fetch
-from conftest import FIXTURES_DIR, RESPONSES_DIR, SRC_DIR, TESTS_DIR, corpus_fixtures
+import unit_manifest
+from conftest import (
+    FIXTURES_DIR,
+    PREDEFINED_PLACE_BODY,
+    RESPONSES_DIR,
+    SRC_DIR,
+    TESTS_DIR,
+    corpus_fixtures,
+    per_scope_response,
+)
 
 HOST = "panorama.test"
 
@@ -68,6 +79,13 @@ DEVICE_GROUP_REORDERED = (
     '<entry name="Office-FW"><devices><entry name="fw-1.example.com" /></devices></entry>\n'
     '<entry name="Unassigned-DG" />'
 )
+
+# The content the selection pins read the places through (F11.1): the three membership responses this module
+# holds, the built-in read from `tests/conftest.py`, and one entry inside the shared place. `devices` and `vsys`
+# name no membership entry, so no content is held for them here and no pin measures a unit for them: the selection
+# for a device unit needs the live-target fact, which is recorded in `backlog.md`.
+SHARED_ENTRY = '<entry name="Web-Server-1"><ip-netmask>10.0.0.7</ip-netmask></entry>\n'
+PLACE_BODIES = dict(RESPONSES, shared=SHARED_ENTRY, predefined=PREDEFINED_PLACE_BODY)
 
 # The set the three membership responses name, in the order the index prints it.
 INDEX_PATHS = [
@@ -112,6 +130,49 @@ def _read(read, cache_dir, bodies=None):
 
 def _index(read, cache_dir, bodies=None):
     return api_requests.scope_index(HOST, _read(read, cache_dir, bodies), read)
+
+
+def _selection_answer(shape: str, tmp_path) -> bool:
+    """What the argument rule for a selection answers for one shape: True when it accepts it (F11.1).
+
+    The answer is read through `panorama_to_terraform.shared_checks`, so the pin states no path shape and no error
+    shape of its own. The exit code and the no-file fact are read from a run in `tests/test_api_path.py`.
+    """
+    parser = argparse.ArgumentParser()
+    panorama_to_terraform.shared_arguments(parser)
+    args = parser.parse_args(["--host", HOST, "--output-dir", str(tmp_path / "out"), "--selection", shape])
+    try:
+        panorama_to_terraform.shared_checks(parser, args)
+    except SystemExit:
+        return False
+    return True
+
+
+def _units_read(place: str, tmp_path) -> list:
+    """The unit set `unit_manifest.units` names for the read of one place (F11.1).
+
+    The response is handed by the injected producer and read through the door, and the parse methods the container
+    table rows name for that place are run. A row whose destination is `emitted` is the row that writes a report
+    row, so the unit set comes from those rows; a row that answers one fact for one element writes no report row. A
+    place no table row names runs no method, so its ledger holds no row and the unit rule names no unit for it.
+    """
+    request = source_fetch.ApiRequest(host=HOST, path=place)
+    source = source_fetch.fetch(request, tmp_path, producer=lambda r: per_scope_response(r, PLACE_BODIES[place]))
+    parser = panorama_to_terraform.PanoramaParser(source)
+    for row in [
+        row
+        for row in container_coverage.CONTAINER_TABLE
+        if row.destination == "emitted" and container_coverage.path_place(row.path) == place
+    ]:
+        getattr(parser, row.method)()
+    return unit_manifest.units(parser.ledger)
+
+
+def _function_body(module: str, name: str) -> str:
+    """One function as code, so a pin reads what it states and not the comment around it."""
+    tree = ast.parse((SRC_DIR / module).read_text(encoding="utf-8"))
+    node = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name)
+    return ast.unparse(node)
 
 
 # --- 1. the four membership lists ---------------------------------------------
@@ -343,6 +404,58 @@ def test_the_module_reads_the_layout_rules_through_their_owners():
 # The naming rule for this module is the index rule, and one pin measures it for every module:
 # `tests/test_layout.py::test_the_indexes_name_every_document_under_them`. A pin here read document
 # wording, so the check is in `tools/check_documents.py`, which is not part of the gate.
+
+
+def test_a_selection_shape_is_read_through_the_one_scope_path_definition(tmp_path):
+    """F11.1 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 2): the shape a run names as its read set is the shape `--path`
+    already states, so the argument rule for a selection states no path shape of its own. Measured on the two shapes
+    the definition validates for each place this module holds content for, built through `api_requests.scope_path`,
+    and on the table paths outside the shape: the argument rule accepts exactly the shapes the definition validates,
+    and answers no for the place the unit rule names no unit for, read through `unit_manifest.units`. The exit code
+    and the no-file fact are read from a run in `tests/test_api_path.py`, so this pin states no exit code.
+    """
+    shapes = sorted(api_requests.scope_path(place, name) for place in sorted(PLACE_BODIES) for name in ("", "Name"))
+    outside = sorted(
+        {row.path for row in container_coverage.CONTAINER_TABLE if not container_coverage.is_scope_path(row.path)}
+    )
+    assert outside, "the table holds paths outside the shape, so a refusal is measured"
+    units = {place: _units_read(place, tmp_path) for place in sorted(PLACE_BODIES)}
+    assert any(units.values()), "the unit rule names a unit for a place the table names, so both answers are measured"
+
+    for shape in shapes + outside:
+        place = container_coverage.path_place(shape)
+        answer = container_coverage.is_scope_path(shape) and bool(units.get(place))
+        assert _selection_answer(shape, tmp_path) == answer, (shape, answer, units.get(place))
+
+
+def test_the_selection_argument_states_no_rule_an_owner_states(tmp_path):
+    """F11.1 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 1): the vocabulary lives in `shared_arguments` and
+    `shared_checks`, and it decides nothing an owner decides. It reads the shape through
+    `container_coverage.is_scope_path`, the place through `container_coverage.path_place`, and the built-in place
+    through `container_coverage.PREDEFINED_PLACE`, so it states no path shape, no unit rule, no naming rule, no
+    writer, no console line, and no environment name. The argument is in the shared set, so both entry points read
+    one set, and the exit code is the argument-error shape `--path` already states, pinned on a run in
+    `tests/test_api_path.py`.
+    """
+    checks = _function_body("panorama_to_terraform.py", "shared_checks")
+    for owner in (
+        "container_coverage.is_scope_path(",
+        "container_coverage.path_place(",
+        "container_coverage.PREDEFINED_PLACE",
+    ):
+        assert owner in checks, (owner, "the argument rule reads the fact through its owner")
+    for shape in ('split("/")', "ENTRY_SEGMENT", "<container>"):
+        assert shape not in checks, (shape, "the argument rule states no path shape of its own")
+    for rule in ("sanitize", "name_ref", "print(", "write_file", "API_KEY_ENV", "unit_manifest.units("):
+        assert rule not in checks, (rule, "the vocabulary states no rule of this kind")
+
+    # The selection names the read set only, so the argument sits in the set both entry points read, and a run
+    # that declares no selection is refused nothing: the argument answers None and the run is the one it is today.
+    parser = argparse.ArgumentParser()
+    panorama_to_terraform.shared_arguments(parser)
+    plain = parser.parse_args(["--host", HOST, "--output-dir", str(tmp_path / "out")])
+    assert plain.selection is None, "a run that reads a whole export declares no selection"
+    panorama_to_terraform.shared_checks(parser, plain)
 
 
 # --- 6. the response-to-request join ------------------------------------------

@@ -601,14 +601,35 @@ def record_path(path: str) -> str:
     return path.strip("/") if path else ""
 
 
+def path_segments(path: str) -> tuple:
+    """The segments a declared path states, in order. The one place the split is read, so the shape rule and the
+    rule that names the place read the same segments.
+    """
+    return tuple(segment for segment in path.strip("/").split("/") if segment)
+
+
+def path_place(path: str) -> str:
+    """The place a declared path names: the first segment.
+
+    The shape rule states that a path names the place or one entry inside it, so the first segment is the place
+    for both shapes, and the entry name never decides the answer for the definitions rule. This is the one place
+    the place is read, so an argument rule that needs the place reads it here instead of splitting the path. An
+    answer of `''` is the answer for a path that states no segment, which the shape rule refuses.
+    """
+    segments = path_segments(path)
+    return segments[0] if segments else ""
+
+
 def is_scope_path(path: str) -> bool:
     """True when a declared path names a scope place (F5.4 AC-6.2, F8.1).
 
     The shape is `/<container>` or `/<container>/entry/<name>`, and the first segment
     must name a place the one definition validates (SCOPE_PATH_ROOTS). The CLI validates
-    through this function, so the set of readable scopes is stated once.
+    through this function, so the set of readable scopes is stated once. The selection reads
+    the same shape, so the argument rule for a selection reads through this function too
+    (`docs/MULTI_RUN_CODEBASE.md` §2 rule 2).
     """
-    segments = [segment for segment in path.strip("/").split("/") if segment]
+    segments = path_segments(path)
     if not segments or segments[0] not in SCOPE_PATH_ROOTS:
         return False
     return len(segments) == 1 or (len(segments) == 3 and segments[1] == ENTRY_SEGMENT and segments[2])

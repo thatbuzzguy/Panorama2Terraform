@@ -7145,6 +7145,10 @@ def shared_arguments(parser: argparse.ArgumentParser) -> None:
     The set names no source, because the request set is the scope set and the parent walk stays inside one
     response (F8.5): no input file, no `--source`, no `--path`, no `--parent`. Path 1 adds the source
     arguments of its own. The input limit is the door's rule, read through `source_fetch`.
+
+    F11.1 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 1): `--selection` names the run's read set, not what the run
+    writes, so it names no source and sits in the set both entry points read. The run's unit set stays
+    `unit_manifest.units`, so a selection names no directory, and a run that reads a whole export declares none.
     """
     parser.add_argument("--host", help="Panorama host. https only, a bare host is read as https")
     parser.add_argument(
@@ -7201,6 +7205,14 @@ def shared_arguments(parser: argparse.ArgumentParser) -> None:
         help="remove the cache entries no record this run wrote references. Off by default, "
         "because a run that declares nothing keeps its cache (F5.3 rule 4)",
     )
+    # F11.1 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 1): the read set this run names. The run's unit set is the set
+    # `unit_manifest.units` reads from the ledger, so a selection names the read set only and never a directory,
+    # and a run that reads a whole export declares none.
+    parser.add_argument(
+        "--selection",
+        help="the read set this run names, as one scope path (F11.1). A run that reads a whole export "
+        "declares no selection",
+    )
     # F3.8: the same input limit on both entry points, through the door's own argument rule.
     source_fetch.add_max_input_argument(parser)
 
@@ -7218,6 +7230,29 @@ def shared_checks(parser: argparse.ArgumentParser, args) -> None:
         parser.error(
             "--workspace needs --state: the workspace names the state document, and a "
             "run that declares no --state reads no state document"
+        )
+
+    # F11.1 (`docs/MULTI_RUN_CODEBASE.md` §2 rules 1 and 2): the argument rule for the selection. The shape is read
+    # through `container_coverage.is_scope_path` and the place it names through `container_coverage.path_place`, so
+    # this states no path shape of its own. A run that declares no selection reads a whole export, and the run's
+    # unit set stays `unit_manifest.units`, so a selection names the read set only and never a directory. The one
+    # place inside the shape that names no unit is the built-in place: no container table row names a built-in
+    # container, so no parse method runs over a response for it, the ledger holds no row, and `unit_manifest.units`
+    # names no unit. A selection that names no unit is an argument error, the shape `--path` already states, so it
+    # exits 2 and writes no file. `--source` is the argument path 1 adds, so the file-source refusal is in path 1's
+    # own argument block, next to `--path` and `--parent`.
+    if not args.selection:
+        return
+    if not container_coverage.is_scope_path(args.selection):
+        parser.error(
+            f"--selection must name a scope path, read through the one scope path definition "
+            f"({', '.join(sorted(container_coverage.SCOPE_PATH_ROOTS))})"
+        )
+    if container_coverage.path_place(args.selection) == container_coverage.PREDEFINED_PLACE:
+        parser.error(
+            f"--selection names no unit: the place it names is {container_coverage.PREDEFINED_PLACE}, which no "
+            "container table row names, so no parse method runs over it, the ledger holds no row, and "
+            "unit_manifest.units names no unit for it"
         )
 
 
@@ -7699,6 +7734,12 @@ def main():
         # F5.4: a file is one source and holds its own scopes, so a declared scope path has nothing to name.
         if args.path or args.parent:
             parser.error("--path and --parent apply to --source api, and a file source reads one scope: the file")
+        # F11.1 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 1): a selection names a read set inside a source that holds
+        # more than one scope, so a file source has nothing to select from: for a file source, targeted conversion
+        # is the splitter's one file per device group plus `--parent`. `--source` is this entry point's argument,
+        # so the refusal is stated here rather than in `shared_checks`, which path 2 reads without a source.
+        if args.selection:
+            parser.error("--selection applies to --source api, and a file source reads one scope: the file")
         # Check if input file exists
         if not os.path.exists(args.input_file):
             print(f"Error: Input file '{args.input_file}' not found")

@@ -1,9 +1,9 @@
 # The Codebase Across Several Runs (design record)
 
-This is the design record for Epic 11, feature id `F11.x`. Nothing here is built, so every rule below is a
-design rule pending a pin. The pins this document names are pins that already hold and that the new rules
-must not change. When a piece lands, its pins live in the module that owns its rule, and this document names
-the test module that holds them.
+This is the design record for Epic 11, feature id `F11.x`. Piece 11A.1 landed, so §2 rules 1, 2 and 4 have pins;
+every other rule below is a design rule pending a pin. The pins this document names are pins that already hold
+and that the new rules must not change. When a piece lands, its pins live in the module that owns its rule, and
+this document names the test module that holds them.
 
 The converter runs today as one run over one source and writes one output directory. A codebase that several
 runs write into needs three facts stated as data that a single run cannot state: which scopes a run read, which
@@ -42,11 +42,22 @@ Three facts already hold, and they are the reason no new naming rule or identity
    select: the whole export is one source, and the run's unit set is the units the ledger names
    (`unit_manifest.units`), so a filter that dropped units from that set would give the unit rule two shapes.
    For a file source, targeted conversion is the splitter's one file per device group plus `--parent` for the
-   ancestor (`docs/DEVICE_GROUP_SPLITTING.md`).
+   ancestor (`docs/DEVICE_GROUP_SPLITTING.md`). Pinned:
+   `tests/test_shadow_coverage.py::test_a_selection_applies_to_the_api_source_only` for the file source, and
+   `tests/test_api_requests.py::test_a_selection_shape_is_read_through_the_one_scope_path_definition`, which
+   reads the unit answer through `unit_manifest.units`.
 2. **The selection is a scope path**, read through `container_coverage.is_scope_path`, the one scope path
    definition, so no second path rule appears. It applies to the api source, the way `--path` and `--parent`
    do. A selection that names no unit in the run's read set is an argument error (exit 2), the way `--path` is,
-   and it writes no file.
+   and it writes no file. Pinned:
+   `tests/test_api_requests.py::test_a_selection_shape_is_read_through_the_one_scope_path_definition` for the
+   shape, and `tests/test_api_path.py::test_a_selection_that_names_no_unit_is_an_argument_error_on_a_run` for
+   the error read on a run.
+   `tests/test_api_requests.py::test_the_selection_argument_states_no_rule_an_owner_states` holds that the
+   argument reads the shape, the place and the built-in fact through their owners, and that a run declaring no
+   selection declares nothing.
+   holds that the argument reads the shape, the place and the built-in fact through their owners and states none
+   of its own, and that a run declaring no selection declares nothing.
 3. **The targeted read set is the selected scope plus the membership facts its unit identity needs.** The
    index states no merge rule and reads no membership of its own, so the run reads the membership container for
    each identity fact a selection cannot state on its own. A name the selection excludes is not an index entry,
