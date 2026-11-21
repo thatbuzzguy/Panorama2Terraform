@@ -443,15 +443,14 @@ here with that rule named.
   serial, and which element a command names, against a live target; and a response that shows how a device
   states a per-device template variable override.
 - Decision landed for the F8.1 finding, in `src/container_coverage.py`: `is_predefined` answers a definitions
-  read through the place the declared path names, as well as through the parent walk, so a read inside the built-in
-- Decision landed for the F8.1 finding, in `src/container_coverage.py`: `is_predefined` answers a definitions
-  read through the place the declared path names, as well as through the parent walk, so a read inside the built-in
-  place is answered in both shapes the shape rule accepts. An entry read inside the place names no finding, so the
-  report names no coverage section for it, the console prints no block, and the entry report names no row for it:
-  the header counts it through `predefined_total`, the same answer a file source gives, and it enters no gap count.
-  Measured 2026-11-21 through the committed rules and the injected producer, with no live target, and pinned by:
-  `tests/test_container_coverage.py::test_the_definitions_rule_reads_the_place_the_declared_path_names` holds the
-  rule, and `tests/test_api_path.py::test_a_predefined_entry_read_names_no_finding`,
+  read through the place the declared path names, as well as through the parent walk, so a read inside the
+  built-in place is answered in both shapes the shape rule accepts. An entry read inside the place names no
+  finding, so the report names no coverage section for it, the console prints no block, and the entry report
+  names no row for it: the header counts it through `predefined_total`, the same answer a file source gives,
+  and it enters no gap count. Measured 2026-11-21 through the committed rules and the injected producer,
+  with no live target, and pinned by:
+  `tests/test_container_coverage.py::test_the_definitions_rule_reads_the_place_the_declared_path_names` holds
+  the rule, and `tests/test_api_path.py::test_a_predefined_entry_read_names_no_finding`,
   `tests/test_api_path.py::test_a_predefined_entry_read_names_no_row_and_the_header_counts_it`, and
   `tests/test_api_path.py::test_the_join_reports_nothing_for_a_definitions_read` hold the read. The rule reads the
   place, so it needs no built-in name. Two parts stay here, because no committed response states them: the built-in
