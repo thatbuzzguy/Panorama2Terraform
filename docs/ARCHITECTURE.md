@@ -588,13 +588,12 @@ level are read through the gate's one field reader, and a pair is kept when the 
 attribute the schema declares at the block's top level for that type, when the printed value is the same
 data the parse key holds, and when one printed field answers for exactly one parse key. Measured over the
 42 matrix rows: 26 types reach a pair and four pairs name the parse key and a different attribute name,
-which are the four table rows (`static_members` for `static` on `panos_address_group`, and
-`authentications`, `dh_groups` and `encryptions` for `hash`, `dh_group` and `encryption` on
-`panos_ike_crypto_profile`); 16 rows reach no field at the block's own level, because their properties
-print inside a nested level or inside the `for_each` map, so `state_properties` cannot read them as an
-attribute; and one key, `value` for `panos_address`, is printed under four names chosen by the entry's
-declared type, so no single name is the answer and the table holds no row for it. The two shapes the
-measurement cannot state as one name, and the fixture work each needs, are recorded in
+which are the four table rows in `state_coverage.STATE_PROPERTY_NAMES`; 16 rows reach no field at the
+block's own level: 10 print none of their properties there, 4 print one there as a reference, a nested
+object, or a number text rather than as the same data the parse key holds, and 2 hold no report entry in
+the run, so no pair is read for them; and one key, `value` for `panos_address`, is printed under four names
+chosen by the entry's declared type, so no single name is the answer and the table holds no row for it. The two
+shapes the measurement cannot state as one name, and the work each needs, are recorded in
 [`../backlog.md`](../backlog.md). For `panos_address` the parse key `tags` and the provider attribute
 `tags` are the same name, so the table has no row for it.
 
@@ -2069,9 +2068,9 @@ These are decided limits, not bugs: the rulebase is not emitted, security profil
 bodies are not parsed, EDL credentials are never written, a service emits one
 protocol leg, `location.template_stack` is used only for the types `SCOPE_PLACEMENT` places inside a
 stack, a template that
-targets two devices keeps interface names as strings, a state scan compares only
-a property both sides name the same way (the parse key `tags` and the provider
-attribute `tag` are not compared), a state source is read only: it has no
+targets two devices keeps interface names as strings, a state scan compares only a property the matrix row
+declares, under the name `state_coverage.STATE_PROPERTY_NAMES` gives it or the same name where the table has no
+row (§3.2), a state source is read only: it has no
 write path, and a read-through run cannot name the scope that holds a name outside
 the run or recognise a built-in name, because no verified table for either exists,
 so such a run is labelled (§4.7). Each one is recorded in `backlog.md`.

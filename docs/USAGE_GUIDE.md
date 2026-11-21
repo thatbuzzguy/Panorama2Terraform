@@ -126,8 +126,8 @@ python3 src/panorama_to_terraform.py export.xml --state production.tfstate --wor
   identity (matrix row, entry name, and the five declared scope facts) read from the `location` block
   the state holds, so the same name in a different scope is a different object.
 - The drift section lists an owned entry with a value this run does not match. Only a property the
-  coverage matrix row declares is compared, and only when both sides hold it by the same name, so the
-  parse key `tags` and the provider attribute `tag` are not compared. Values print as JSON text, and
+  coverage matrix row declares is compared, under the name the comparison table gives it, or under the
+  same name where the table has no row for it (`docs/ARCHITECTURE.md` §3.2). Values print as JSON text, and
   member order is part of the value.
 - Both sections print in `CONVERSION_REPORT.txt` after the shadow section, in the order ownership then
   drift, and each prints only when it has a finding. The line names the run entry's source line and
@@ -656,10 +656,9 @@ The limits are recorded in [`../backlog.md`](../backlog.md) and in
 - `location.template_stack` is emitted only for the two scope types the provider places inside a
   stack (`panos_template_variable` and `panos_vsys`), and a template that targets two
   devices keeps interface names as strings.
-- The state scan compares only a property the matrix row declares that both sides hold by the same
-  name, because no rule maps a parse key to a provider attribute name, so the parse key `tags` and
-  the provider attribute `tag` are not compared. The state source is read only: a run reports what a
-  state document holds and never writes one.
+- The state scan compares only a property the coverage matrix row declares, under the name the comparison
+  table gives the parse key or the same name where the table has no row for it, the rule `ARCHITECTURE.md` §3.2
+  owns. The state source is read only: a run reports what a state document holds and never writes one.
 
 ## License
 

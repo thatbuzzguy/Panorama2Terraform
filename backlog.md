@@ -428,11 +428,11 @@ here with that rule named.
   read the entry's declared type at the state side, would close this. Measured 2026-11-21 and pinned by
   `tests/test_state_coverage.py::test_a_parse_key_the_run_prints_under_four_names_has_no_row`.
 
-- The tag text needs a table row the measurement cannot reach: the parse reads it as `comments` or as
-  `description`, and the run prints `comments`, so `description` is a parse key the table should map,
-  but no committed fixture holds a tag entry with `description`, so the measurement reads no pair for
-  it. The row enters the table with a fixture that exercises the key, because the pin reads the corpus
-  rather than a name a person picked.
+- The tag text needs a table row the measurement cannot reach: `parse_tags` stores the tag text as
+  `comments`, and the emitter reads `description` only as the fallback for the same text, so `description` is a
+  declared property the parse never fills and the measurement reads no pair for it. The row needs the parse to
+  fill the key its row declares, plus a committed fixture that shows a tag entry with the descriptive field,
+  because the pin reads the corpus rather than a name a person picked.
 
 - Epic 8 (path 2) reads the facts an export cannot carry, and each one stays blocked until a live target
   states it. The committed response set (`tests/responses/`, F8.4) shows one shape per accepted request shape

@@ -14,7 +14,8 @@ rule entry; a config entry inside a stack needs a provider location shape; the E
 report `profile_name` column needs a value the provider does not declare; the path 2 live facts in
 `docs/API_CONVERSION_PATH.md` §4 need a live target; and the two shapes the F5.6 comparison table cannot
 state as one name need a fixture that exercises them, because the table's content is read from a
-measurement over the committed corpus rather than from a name.
+measurement over the committed corpus rather than from a name; the tag half also needs the parse to fill the
+`description` key its row declares, which `parse_tags` does not read.
 
 ## Rules the layout keeps
 

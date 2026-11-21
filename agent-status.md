@@ -14,13 +14,13 @@ table has no row for, and the drift line names both names for a mapped pair. The
 are in `docs/ARCHITECTURE.md` §3.2.
 
 Measured 2026-11-21 over the 42 matrix rows against provider v2.0.14: 26 types reach a pair, four of those
-name the parse key and a different attribute name and are the table rows, 16 rows reach no field at the
-block's own level, and no printed field answers for more than one parse key. The rows are `static_members`
-for `static` on `panos_address_group`, and `authentications`, `dh_groups` and `encryptions` for `hash`,
-`dh_group` and `encryption` on `panos_ike_crypto_profile`. `panos_address` declares `tags`, the same name the
-parse key has, so the table has no row for it, and the address `value` prints under four names chosen by the
-entry's declared type, so no single name is the answer. The committed state document holds one address group
-entry, read under the name the schema declares.
+name the parse key and a different attribute name and are the table rows in `state_coverage.STATE_PROPERTY_NAMES`,
+16 rows reach no field at the block's own level, and no printed field answers for more than one parse key. On the
+16 rows: 10 print none of their properties at the block's own level, 4 print one there as a reference, a nested
+object, or a number text rather than as the same data the parse key holds, and 2 hold no report entry in the run.
+`panos_address` declares `tags`, the same name the parse key has, so the table has no row for it, and the address
+`value` prints under four names chosen by the entry's declared type, so no single name is the answer. The
+committed state document holds one address group entry, read under the name the schema declares.
 
 The pins are the six in group 7 of `tests/test_state_coverage.py`: the measured pairs against the table and
 against the live schema, the parse key the run prints under four names, the mapped pair read through the
@@ -36,7 +36,8 @@ the live provider schema ran, and the 4 skips are the `tflint` pins in `tests/te
 pins in 53 modules before the piece and 1,742 here, so the piece adds six pins, all in
 `tests/test_state_coverage.py`, which collects 24 before and 30 here. The measurement pin runs the pipeline
 for every matrix row and reads the provider schema, so the gate time is above the 246.55 s the previous piece
-measured; run-to-run time varies, and the two runs of this tree measured 243.32 s and 265.73 s.
+measured; run-to-run time varies, and the four runs of this tree measured 243.32 s, 265.73 s, 273.93 s and
+247.73 s.
 
 No piece is open. `backlog.md` holds the items that need a fact a live target states: the device the operator adds to
 a device group for a new site, and the device serial a push target names (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4);
@@ -45,7 +46,35 @@ block for a rule entry; a config entry inside a stack needs a provider location 
 field needs a rule that makes the EDL site resolve names; the per-entry report `profile_name` column needs a value the
 provider does not declare; and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4. It also holds the two
 shapes the comparison table cannot state as one name: the address `value`, which the run prints under four names, and
-the tag text, which the parse reads as `comments` or `description` but no committed fixture holds as `description`.
+the tag text, which `parse_tags` stores only as `comments`, so the `description` key the row declares is never filled.
+
+## Acceptance review of Piece F5.6 (2026-11-21)
+
+The piece is reviewed at `43d6101` and `bff26d6`, both not pushed. The measurement is confirmed by an
+independent re-run through the tool's own modules on the 42 matrix rows: 42 rows, 26 types reach a pair, 16
+rows reach no field at the block's own level, four pairs name the parse key and a different attribute name and
+are the table rows, and no printed field answers for more than one parse key. Every pin in group 7 passes on its
+own, the mapped-pair pins read the run's ledger, and the drift line shape is pinned. The gate is confirmed
+single-threaded at 1,738 passed and 4 skipped, 1,742 pins in 53 modules, `tests/test_state_coverage.py` at 30:
+273.93 s before the corrections and 247.73 s after them.
+
+Six things were wrong and are corrected, and no pin changed:
+
+- The `tags`/`tag` example was still stated in `docs/USAGE_GUIDE.md` (two places) and in the `docs/ARCHITECTURE.md`
+  limitations, and both stated that the scan compares only a property both sides name the same way, which the
+  table contradicts. The three places now state the rule and name `docs/ARCHITECTURE.md` §3.2, the owner document.
+- The reason given for the 16 rows was stated as the nested level or the `for_each` map for all of them, which is
+  true for 10. The measured split is now stated in §3.2, in the `src/state_coverage.py` comment, and in the test
+  comment.
+- The tag entry in `backlog.md` said the parse reads the tag text as `comments` or as `description`; `parse_tags`
+  stores only `comments`, so `description` is a declared property the parse never fills.
+- The row-by-row list of the four table rows in §3.2 and in `agent-status.md` restates a machine-readable table,
+  so both now name the table and its count instead.
+- `acceptance.md` criterion 4 named five pins for a group that holds six, so the missing fact — the parse key the
+  run prints under four names — is added there.
+- `tests/test_state_coverage.py` numbered its sections 1 to 5 and 7 and held the property-read-parity pin inside
+  the drift section, which contradicted its own group list, so that pin is now under its own group 5 heading and
+  the record section is group 6.
 
 ## Acceptance review of Piece E10.3 (2026-11-21)
 

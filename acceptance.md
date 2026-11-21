@@ -45,6 +45,8 @@ table.
 ## Criterion 4 — one pin per fact, in the module that owns the rule
 
 - the table against the live schema and against the run's printed field names: one pin;
+- a parse key the run prints under more than one name, so no single name answers and the table has no row:
+  one pin;
 - a drift finding that names a mapped pair: one pin;
 - the same-name rule where the table has no row: one pin;
 - no second mapping rule in `src/`: one pin;
@@ -62,10 +64,12 @@ the table has no row for prints as one name, as before.
 ## Criterion 6 — the documents
 
 `docs/ARCHITECTURE.md` §3.2 is the owner document for the drift rule and carries the decision and the
-measurement. The wrong example in that paragraph — `panos_address` declares `tags`, so `tags` and `tag`
-is not a schema fact — is removed, and the measurement record states what was measured. The closed
-backlog entry is removed. `to-do.md` and `agent-status.md` carry the current state. No test count in a
-document, no metaphor, no emoji, ASD-STE100 wording.
+measurement; every other document that states the state scan links to it. The wrong example — `panos_address`
+declares `tags`, so `tags` and `tag` is not a schema fact — is removed from §3.2, from the §3.2 limitations
+paragraph, and from `docs/USAGE_GUIDE.md`, and no document states that the scan compares only a property both
+sides name the same way. No document restates the table row by row: §3.2 names the count and points at
+`state_coverage.STATE_PROPERTY_NAMES`. The closed backlog entry is removed. `to-do.md` and `agent-status.md`
+carry the current state. No test count in a document, no metaphor, no emoji, ASD-STE100 wording.
 
 ## Criterion 7 — the gate, single-threaded, with measured counts
 
@@ -77,7 +81,9 @@ sets `addopts = "-q"`.
 
 The piece is landed at commit `43d6101`. Criterion 1, measured 2026-11-21 against provider v2.0.14 (`PaloAltoNetworks/panos ~> 2.0.14`, read through
 `tests/conftest.py::provider_schema`): over the 42 matrix rows, 26 types reach a pair, no printed field
-answers for more than one parse key, and 16 rows reach no field at the block's own level. Four pairs name
+answers for more than one parse key, and 16 rows reach no field at the block's own level — 10 print none of
+their properties there, 4 print one there as a reference, a nested object, or a number text rather than as the
+same data the parse key holds, and 2 hold no report entry in the run. Four pairs name
 the parse key and a different attribute name, and those are the four table rows: `static_members` for
 `static` on `panos_address_group`, and `authentications` for `hash`, `dh_groups` for `dh_group` and
 `encryptions` for `encryption` on `panos_ike_crypto_profile`. Every table key is a property of its own row
@@ -115,3 +121,25 @@ the `tflint` pins in `tests/test_sanity_gate.py`. Read through the per-module co
 which collects 24 before and 30 here. The measurement pin runs the pipeline for every matrix row, so the gate
 reads 42 fixtures and one provider schema; run-to-run time varies, and the recorded runs of this tree measured
 243.32 s and 265.73 s. The import rule reads clean: no test module imports another test module.
+
+## Review findings, corrected (2026-11-21)
+
+The gate was re-run single-threaded on the committed tree at `bff26d6` and reads the same: 1,738 passed and 4
+skipped (the `tflint` pins in `tests/test_sanity_gate.py`), 1,742 pins in 53 modules, `tests/test_state_coverage.py`
+30, in 273.93 s. `ruff check .`, `ruff format --check .` and `python3 tools/check_documents.py` read clean before
+and after the corrections. Every pin in group 7 passes on its own, the two mapped-pair pins read the run's ledger
+through `tests/conftest.py::run_pipeline`, and the measurement was re-run independently through the tool's own
+modules and agrees with the table. Six things were wrong and are corrected, and no pin changed:
+
+- The `tags`/`tag` example and the claim that the scan compares only a property both sides name the same way
+  remained in `docs/USAGE_GUIDE.md` (two places) and in the `docs/ARCHITECTURE.md` limitations paragraph, which the
+  table contradicts. All three now state the rule and link to §3.2.
+- The reason for the 16 rows was stated as the nested level or the `for_each` map for all of them. The measured
+  split is now stated in §3.2, in the `src/state_coverage.py` comment, and in the test comment.
+- `backlog.md` said the parse reads the tag text as `comments` or as `description`. `parse_tags` stores only
+  `comments`, so `description` is a declared property the parse never fills, which is why no pair is read for it.
+- §3.2 and `agent-status.md` restated the four table rows row by row; both name the count and the table instead.
+- Criterion 4 named five pins for a group that holds six, so the four-names fact is added to the list.
+- `tests/test_state_coverage.py` numbered its sections 1 to 5 and 7 and held the property-read-parity pin inside
+  the drift section, which contradicted its own group list. That pin is now under its own group 5 heading and the
+  record section is group 6, the order the module docstring states.
