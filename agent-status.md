@@ -2,9 +2,10 @@
 
 ## Current position
 
-The documentation update pass is in progress; its criteria are in `acceptance.md`. The pass updates the
-documents to the features and CLI options that exist, and removes finished-feature detail from the tracking
-markdown. It writes no tool code, so no pin moves.
+The documentation update pass is complete at commit `4351ca0`, with the convention-file commit at
+`e2f6f26`: it updated the documents to the features and CLI options that exist, cleared finished work
+from the tracking markdown, aligned `AGENTS.md` to name `agent-status.md`, and committed `commit.md`.
+It wrote no tool code, so no pin moved.
 
 The last landed piece is Piece 24 (E10.1, 2026-11-20, commit `50aa425`): the membership names enter the edge
 set, so the order rule ranks a stack unit after the template units its membership lists. The rule is
@@ -12,11 +13,11 @@ set, so the order rule ranks a stack unit after the template units its membershi
 `entry_coverage.REPORT_SCOPE_KEYS` and `resource_mapping.SCOPE_ANSWER`, stated in
 `docs/TEMPLATE_STACK_DEPLOYMENT.md` §2.
 
-Gate, measured 2026-11-20 on the tree at Piece 24, single-threaded: `ruff check .` clean at `py310`,
+Gate, measured 2026-11-20 on the final tree of the pass, single-threaded: `ruff check .` clean at `py310`,
 `ruff format --check .` clean on the 104 Python files, `python3 tools/check_documents.py` reports no finding,
 and `python3 -m pytest` passes 1,722 pins with the same 4 skip for the missing `tflint` binary — 1,726 pins in
-53 test modules, in 453.62 s. `pyproject.toml` sets `addopts = "-q"`, so a count is read from the per-module
-collection counts.
+53 test modules, in 380.10 s, the same pin set as before the pass because the pass adds no pin.
+`pyproject.toml` sets `addopts = "-q"`, so a count is read from the per-module collection counts.
 
 Next work is Epic 10 pieces E10.2 and E10.3, recorded in `PLAN.md` and `docs/TEMPLATE_STACK_DEPLOYMENT.md` §3
 and §4. Piece 23 closed the last `backlog.md` entry the tool could act on offline, so what stays open is the
