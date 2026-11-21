@@ -119,6 +119,20 @@ def tf_bytes(output_dir) -> dict[str, bytes]:
     return {key: value for key, value in written_bytes(output_dir).items() if Path(key).suffix == ".tf"}
 
 
+# --- The predefined read content, shared by the modules that read it (F8.1) -----
+
+# The two shapes the one scope path definition validates for the built-in place: the place, and one built-in
+# entry inside it. Two test modules read the same content, so it is stated here (§1.1). It is harness content,
+# not a committed response: no committed response names a predefined path, so the pins read it through the
+# injected producer and the response set is unchanged.
+PREDEFINED_PLACE_BODY = (
+    "<predefined>\n<url-list>\n"
+    '<entry name="url-list"><description>built-in</description></entry>\n'
+    "</url-list>\n</predefined>\n"
+)
+PREDEFINED_ENTRY_BODY = '<entry name="url-list"><description>built-in</description></entry>\n'
+
+
 # --- The rule row set, shared by the modules that read it (Epic 9, Phase 9D) -----
 
 # The rule-type set, read through the module that owns it, so no test module states its own list.
@@ -428,6 +442,20 @@ def make_parser(converter_module, xml_input_module):
         return converter_module.PanoramaParser(xml_input_module.parse_xml(FIXTURES_DIR / fixture_name))
 
     return _make
+
+
+def per_scope_response(request, body: str) -> bytes:
+    """One response in the shape the request states: `result` holds the element the path names.
+
+    For an entry read the path names the entry itself, so the tree holds no element at the place level, which is
+    the fact the definitions rule cannot read through the walk. Two modules build the predefined content through
+    this, so the shape is stated once, in the shared harness (§1.1).
+    """
+    segments = request.segments()
+    held = body if len(segments) == 3 else f"<{segments[0]}>\n{body}</{segments[0]}>\n"
+    return (
+        '<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n' + held + "</result>\n</response>\n"
+    ).encode()
 
 
 def api_producer(request, key=None, insecure=False):

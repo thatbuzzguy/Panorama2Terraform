@@ -406,11 +406,18 @@ Three rules the scan uses:
   console line per finding in the shape §3.2 states. An absent section is not a finding, an empty known
   section is not a finding, and an entry container under `predefined` is not a
   finding: those entries are PAN-OS built-in definitions, not operator objects.
-  `container_coverage.SCOPE_PATH_ROOTS` is the one definition that validates a scope path, and
+  `container_coverage.is_predefined` answers the same fact for a read, through one name stated once as
+  `PREDEFINED_PLACE`, in two ways. The parent walk reaches an element tagged with the name. The place the declared
+  path names is the name. A place read keeps the element in the tree, so the walk answers it. An entry read inside
+  the place holds the entry at the place level, because `result` is read as the place, so the walk reaches no
+  element tagged with the name and the declared place answers it. A read whose place is not the name answers False,
+  so the rule is no broader than the fact it states, and a file source declares no path, so the walk answers it
+  alone. `container_coverage.SCOPE_PATH_ROOTS` is the one definition that validates a scope path, and
   `predefined` is a place inside it, so a run can read a built-in path; it stays outside the five
   scope containers, so a built-in entry answers no scope fact. Pinned by
-  `tests/test_container_coverage.py::test_predefined_entries_are_not_findings` and
-  `::test_a_predefined_path_is_read_by_the_one_scope_path_definition`.
+  `tests/test_container_coverage.py::test_predefined_entries_are_not_findings`,
+  `::test_a_predefined_path_is_read_by_the_one_scope_path_definition`, and
+  `::test_the_definitions_rule_reads_the_place_the_declared_path_names`.
 - **The envelope is never a scanned container** (`container_coverage.ENVELOPE`:
   `response` and `result`). For a per-scope source (F5.4) `result` is read as the place the
   declared path names, so the entry under it is the declared scope entry, and a container inside

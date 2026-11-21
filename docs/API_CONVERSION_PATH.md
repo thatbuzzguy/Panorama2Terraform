@@ -149,11 +149,22 @@ segment only when the path names an entry, so the same content read as a per-sco
 whole-config export names the same container path, and the two reports disagree only on the source they
 name (§5). And no container table row names a built-in container, so the run runs no parse method over a
 predefined response and the entry report names no row for a built-in entry: the ledger counts it through
-`predefined_total`. A predefined place read keeps the `predefined` element in the tree, so
-`is_predefined` reaches it and the scan names no finding; a predefined entry read puts the entry at the
-place level, so the scan reports the place, which is the finding `backlog.md` keeps. The join answers no
-response for a built-in place, because no membership row reads `predefined`. This changes no path 1 rule,
-because the guard reads a per-scope source.
+`predefined_total`. `container_coverage.is_predefined` answers a definitions read through the place the declared
+path names, as well as through the parent walk, so a read inside the built-in place is answered in both shapes the
+shape rule accepts. The place read keeps the element in the tree, so the walk reaches it. An entry read inside the
+place holds no element at the place level, because `result` is read as the place, so the walk cannot answer it and
+the declared place answers it. The scan names no finding for a definitions read, so the report names no coverage
+section for it, the console prints no block, and the entry enters no gap count: `unaccounted` is the answer for an
+entry no row covers, and a definitions entry names no row. The join reports nothing for a definitions read, because
+a unit exists only when the ledger has a row in it, and the join states no rule that a source is definitions. The
+join answers no response for a built-in place, because no membership row reads `predefined`. This changes no path 1
+rule, because the guard reads a per-scope source and a file source declares no path. Pinned by
+`tests/test_api_path.py`: `test_no_table_row_names_a_builtin_container`,
+`test_the_join_answers_no_response_for_a_builtin_place`,
+`test_a_predefined_entry_read_names_no_finding`,
+`test_a_predefined_entry_read_names_no_row_and_the_header_counts_it`, and
+`test_the_join_reports_nothing_for_a_definitions_read`; the rule itself is pinned by
+`tests/test_container_coverage.py::test_the_definitions_rule_reads_the_place_the_declared_path_names`.
 
 **An entry a membership list names can also be the entry the run read as its own scope.** An entry inside a
 place response that holds a membership list gains an index entry (§2.2), and the run order (§6) reads that entry
@@ -187,7 +198,9 @@ Pinned by `tests/test_api_path.py`: `test_each_response_keeps_its_own_line_map`,
 `test_the_same_content_agrees_with_path_1_except_for_the_source`,
 `test_no_table_row_names_a_builtin_container`,
 `test_the_join_answers_no_response_for_a_builtin_place`,
-`test_a_predefined_entry_read_reports_the_place_as_a_finding`,
+`test_a_predefined_entry_read_names_no_finding`,
+`test_a_predefined_entry_read_names_no_row_and_the_header_counts_it`,
+`test_the_join_reports_nothing_for_a_definitions_read`,
 `test_the_committed_response_is_one_source_and_names_itself_in_the_report`, and
 `test_no_test_in_this_file_calls_a_network_producer`. The pin
 `tests/test_entry_coverage.py::test_every_row_names_the_source_that_holds_the_entry` holds unchanged, and
@@ -229,6 +242,9 @@ those pins is handed by an injected producer, and the `device-group` read is the
   `api_requests.unit_findings` reports the two directions as data rows: a unit the join answers no entry for,
   because the response its rows name is one the index made no request for; and an index entry the run read no rows
   for, so no unit answers it. Each row is the pair the join answers, and the side the join has no fact for is None.
+  A definitions read names no row, so it gains no unit and the join reports nothing for it: the rule that a read
+  inside the built-in place is definitions belongs to `container_coverage.is_predefined`, which the join reads
+  nowhere, so the join states no rule that a source is definitions.
   The join reports these as data rows only: no console line, no writer, no report section, and no exit code, which
   the gate decides. Pinned by `tests/test_api_path.py` (the unit join group):
   `test_the_unit_join_answers_the_scope_the_run_read_for_a_unit`,

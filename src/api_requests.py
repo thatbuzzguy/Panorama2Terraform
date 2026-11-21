@@ -396,10 +396,11 @@ def unit_findings(index, ledger) -> list:
     """The two directions the unit join reports as data (`docs/API_CONVERSION_PATH.md` §3).
 
     1. A unit the join answers no entry for, because the response its rows name is one the index made no
-       request for. A whole-config response holds no scope entry, and a scope no membership row reads gains no
-       entry, so a run that read the same content as a whole-config export, or as a predefined read, holds a
-       unit with no request. The join reports the unit; it states no rule that such a source is definitions,
-       and `backlog.md` keeps that decision.
+       request for. A whole-config response holds no scope entry, so a run that read the same content as a
+       whole-config export holds a unit with no request. A definitions read names no row, so it gains no unit and
+       the join reports nothing for it: the rule that a read inside the built-in place is definitions belongs to
+       `container_coverage.is_predefined`, which the join reads nowhere, so the join states no rule that a source
+       is definitions.
     2. An index entry the run read no rows for, so no unit answers it. The set is read from the membership
        responses, so an entry the index names can exist while the run read no row for it.
 

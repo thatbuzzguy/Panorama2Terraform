@@ -15,7 +15,10 @@ The scan reports a section that no row covers. A section that is absent from
 the input is not a finding: an export does not have to contain every container
 this converter knows. An entry container under `predefined` is not a finding
 either: those entries are PAN-OS built-in definitions, not operator objects, so
-no parse method is expected to read them.
+no parse method is expected to read them. F8.1 states the same fact for a read,
+through the place the declared path names, so a predefined source is answered the
+same in both shapes the path rule accepts, and the pin that holds the walk for a
+file source is unchanged.
 
 Matching is by suffix on the tag chain from the config root, because a parse
 method reads a container with a relative pattern (`findall('.//address/entry')`)
@@ -70,6 +73,10 @@ SCOPE_CONTAINERS = frozenset({"device-group", "templates", "template-stack", "de
 # decision reads `result` as the place a per-scope path names, not as a scanned container.
 ENVELOPE = frozenset({"response", "result"})
 
+# The built-in place a scope path may read (F5.4 AC-1), stated once as one name so the one definition that
+# validates a scope path and the scan rule that a predefined source is definitions read the same place.
+PREDEFINED_PLACE = "predefined"
+
 # The first path segment a scope path may name (F5.4 AC-1), and the one definition that validates a
 # scope path (F8.1). The set names the places a path may read: the five scope containers, the shared
 # section, and the built-in section. `predefined` joins it as a place, not as a scope container: no
@@ -77,8 +84,10 @@ ENVELOPE = frozenset({"response", "result"})
 # answers False for an entry whose container is `predefined`. The decision is stated inside this set
 # and nowhere else, so the CLI, the request set, and the scan read one definition. A predefined path
 # names the place or an entry inside it, the shape `is_scope_path` already states; a path that names a
-# container inside `predefined` is outside the shape rule and is recorded in `backlog.md`.
-SCOPE_PATH_ROOTS = SCOPE_CONTAINERS | frozenset({"shared", "predefined"})
+# container inside `predefined` is outside the shape rule and is recorded in `backlog.md`. Because the
+# path names the place or one entry inside it, the first segment is always the place, so the entry name
+# never decides the answer for the definitions rule.
+SCOPE_PATH_ROOTS = SCOPE_CONTAINERS | frozenset({"shared"}) | {PREDEFINED_PLACE}
 
 # The five scope facts (F3.1, F3.2, F6.10.5) in report order. F4.3 uses these keys for
 # the captured-field rule, so the facts are named in one place. `template_stack` is the scope a
@@ -605,11 +614,26 @@ def is_scope_path(path: str) -> bool:
     return len(segments) == 1 or (len(segments) == 3 and segments[1] == ENTRY_SEGMENT and segments[2])
 
 
-def is_predefined(container: ET.Element, parents: dict) -> bool:
-    """True when the container sits under a `predefined` section."""
+def is_predefined(container: ET.Element, parents: dict, source: ParsedSource | None = None) -> bool:
+    """True when the read is a definitions read (F4.2, F8.1).
+
+    The same fact, read two ways through one name:
+
+    1. the walk reaches an element tagged with the built-in place. This is the answer for a file source,
+       which declares no path, and for a per-scope place read, whose response holds the element;
+    2. the place the declared path names is the built-in place. A per-scope response holds the one element
+       its path names, so for an entry read inside the place the tree holds no element at the place level and
+       the walk reaches only the root, which the wrapper rule reads as the place. The source record holds the
+       declared path, so the rule answers for a read inside the place without a second reader.
+
+    The place is the first segment of the declared path, so the entry name never decides the answer. A read
+    whose place is not the built-in place answers False, so the rule is no broader than the fact it states.
+    """
+    if source is not None and source.scope_container == PREDEFINED_PLACE:
+        return True
     node = container
     while node is not None:
-        if node.tag == "predefined":
+        if node.tag == PREDEFINED_PLACE:
             return True
         node = parents.get(node)
     return False
@@ -642,7 +666,7 @@ def scan(source: ParsedSource, parents: dict) -> list[Finding]:
     """Find every section container the table does not cover, in report order."""
     findings = []
     for container in entry_containers(source.root, parents, source):
-        if not is_section(container, parents, source) or is_predefined(container, parents):
+        if not is_section(container, parents, source) or is_predefined(container, parents, source):
             continue
         path = section_path(container, parents, source)
         if is_known(path):

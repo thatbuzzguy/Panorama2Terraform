@@ -364,8 +364,10 @@ class EntryLedger:
 
         An entry inside a config-object entry is a property level (F4.2 AC-3.2),
         so the property matrix owns it and this report counts it on the parent row.
-        `predefined` entries are PAN-OS definitions, not operator objects.
-        An entry whose container is the envelope has no container the table can read
+        `predefined` entries are PAN-OS definitions, not operator objects, so they are
+        not rows; the definitions rule is read through `container_coverage.is_predefined`,
+        which answers for a read that declares the built-in place (F8.1) as well as for the
+        walk. An entry whose container is the envelope has no container the table can read
         (F5.4), so a file input writes no row for it; a per-scope source reads its root
         through the place rule, so its scope entry is a row.
         """
@@ -374,7 +376,7 @@ class EntryLedger:
             return False
         if container.tag in container_coverage.ENVELOPE and container is not self.source.root:
             return False
-        if container_coverage.is_predefined(container, self.parents):
+        if container_coverage.is_predefined(container, self.parents, self.source):
             return False
         return container_coverage.is_section(container, self.parents, self.source)
 
@@ -544,7 +546,7 @@ class EntryLedger:
             1
             for entry in self.entries()
             if self.parents.get(entry) is not None
-            and container_coverage.is_predefined(self.parents[entry], self.parents)
+            and container_coverage.is_predefined(self.parents[entry], self.parents, self.source)
         )
 
     def gap_count(self) -> int:

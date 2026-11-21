@@ -14,7 +14,8 @@ Three groups of checks:
    and `result` are never scanned containers, and for a per-scope source `result` is
    read as the place the declared path names. F8.1 adds the built-in section to the one scope path
    definition: `predefined` is a place a scope path may read, and it stays out of the five scope
-   containers, so a built-in entry answers no scope fact.
+   containers, so a built-in entry answers no scope fact. F8.1 also states the definitions rule through
+   that place, so a read inside the built-in place is answered in both shapes the shape rule accepts.
 3. The report. A section the table does not cover produces one finding, sorted
    by tag chain then line, naming the file name only. An absent container is not
    a finding. A finding does not change the exit code.
@@ -40,14 +41,27 @@ from pathlib import Path
 
 import container_coverage
 import resource_mapping
+import source_fetch
 import xml_input
-from conftest import FIXTURES_DIR, RESPONSES_DIR, SRC_DIR, corpus_fixtures, run_script
+from conftest import (
+    FIXTURES_DIR,
+    PREDEFINED_ENTRY_BODY,
+    PREDEFINED_PLACE_BODY,
+    RESPONSES_DIR,
+    SRC_DIR,
+    corpus_fixtures,
+    per_scope_response,
+    run_script,
+)
 
 # A path-like string constant in a parse method: a tag name or a tag chain.
 PATH_STRING_RE = re.compile(r"^[A-Za-z0-9_.\-/]+$")
 
 # The fixture that holds sections no parse method reads.
 UNKNOWN_FIXTURE = "unknown_containers.xml"
+
+# The host the pins read a request against.
+HOST = "panorama.test"
 
 # The committed response for the F5.4 child scope, named by the key-free identity of the request that produced it
 # (`docs/ARCHITECTURE.md` §1.1), so it is read as a response and not as corpus material.
@@ -128,6 +142,14 @@ def _scan(fixture_name: str):
     source = xml_input.parse_xml(FIXTURES_DIR / fixture_name)
     parents = container_coverage.parent_map(source.root)
     return source, parents, container_coverage.scan(source, parents)
+
+
+def _definitions_read(request, body: str, cache_dir):
+    """One response read through the injected producer, so the source record holds the path the request declares
+    and the pin measures the rule as the scan reads it. No pin calls a network."""
+    source = source_fetch.fetch(request, cache_dir, producer=lambda r: per_scope_response(r, body))
+    parents = container_coverage.parent_map(source.root)
+    return source, parents, container_coverage.entry_containers(source.root, parents, source)[0]
 
 
 # --- 1. Table <-> code -------------------------------------------------------
@@ -259,6 +281,52 @@ def test_predefined_entries_are_not_findings():
     assert not any("predefined" in f.path for f in findings)
 
 
+def test_the_definitions_rule_reads_the_place_the_declared_path_names(tmp_path):
+    """F8.1 AC-1 and AC-2: `is_predefined` answers a definitions read through the place the declared path names,
+    as well as through the walk, so the fact is answered in both shapes the shape rule accepts and the entry name
+    decides nothing.
+
+    For the place read the response holds the element tagged with the built-in place, so the walk reaches it and
+    both ways answer the same fact. For an entry read inside the place, `result` holds the one element the path
+    names, so the tree holds no element tagged with the place and the walk cannot answer this shape: the declared
+    place answers it. A read whose place is not the built-in place answers False, so the rule is no broader than
+    the fact it states, and the same content read through another path is not a definitions read. A file source
+    declares no path, so the walk answers it alone, which `test_predefined_entries_are_not_findings` holds
+    unchanged.
+    """
+    place = _definitions_read(source_fetch.ApiRequest(host=HOST, path="predefined"), PREDEFINED_PLACE_BODY, tmp_path)
+    entry_read = _definitions_read(
+        source_fetch.ApiRequest(host=HOST, path="predefined/entry/url-list"), PREDEFINED_ENTRY_BODY, tmp_path / "entry"
+    )
+    other = _definitions_read(
+        source_fetch.ApiRequest(host=HOST, path="device-group/entry/url-list"),
+        PREDEFINED_ENTRY_BODY,
+        tmp_path / "other",
+    )
+
+    # The place read: the response holds the element the path names, so the walk reaches the name from the tree.
+    place_source, place_parents, place_container = place
+    assert place_source.root[0].tag == container_coverage.PREDEFINED_PLACE, "the tree holds the built-in element"
+    assert place_container is not place_source.root, "the scan reads a container inside the place"
+    assert container_coverage.is_predefined(place_container, place_parents, place_source)
+    assert container_coverage.is_predefined(place_container, place_parents), "the walk answers this shape alone"
+
+    # The entry read inside the place: `result` is the root, so the walk has nothing to reach and the source
+    # record is what answers.
+    entry_source, entry_parents, entry_container = entry_read
+    assert entry_container is entry_source.root, "the tree holds no element at the place level"
+    assert not container_coverage.is_predefined(entry_container, entry_parents), "the walk cannot answer this shape"
+    assert entry_source.scope_container == container_coverage.PREDEFINED_PLACE, "the fact the rule reads is the place"
+    assert container_coverage.is_predefined(entry_container, entry_parents, entry_source)
+
+    # The entry name decides nothing: the same content through a path whose place is not the built-in place is
+    # not a definitions read.
+    other_source, other_parents, other_container = other
+    assert other_container is other_source.root
+    assert other_source.scope_container != container_coverage.PREDEFINED_PLACE
+    assert not container_coverage.is_predefined(other_container, other_parents, other_source)
+
+
 def test_property_level_entries_are_not_findings():
     """A config-object entry is a property level, so F4.2 does not report it."""
     _, _, findings = _scan("kitchen_sink.xml")
@@ -325,6 +393,16 @@ def test_a_predefined_path_is_read_by_the_one_scope_path_definition(tmp_path):
         "the shape rule is unchanged: a path names the place or an entry inside it"
     )
 
+    # In the module that owns the rule, the built-in place is one name, stated once as one constant, and the
+    # definition and the definitions rule read that constant rather than a second copy of the name.
+    text = Path(container_coverage.__file__).read_text(encoding="utf-8")
+    name = container_coverage.PREDEFINED_PLACE
+    assert text.count(f'"{name}"') == 1, "the name is stated once, as one constant"
+    assert text.count("PREDEFINED_PLACE") == 4, (
+        text.count("PREDEFINED_PLACE"),
+        "the constant, the definition that reads it, and the rule that reads it twice",
+    )
+
     entry = ET.fromstring('<predefined><url-list><entry name="url-list"/></url-list></predefined>')
     parents = container_coverage.parent_map(entry)
     built_in_entry = entry.find(".//entry[@name='url-list']")
@@ -336,7 +414,7 @@ def test_a_predefined_path_is_read_by_the_one_scope_path_definition(tmp_path):
         "--source",
         "api",
         "--host",
-        "panorama.test",
+        HOST,
         "--path",
         "/predefined/url-list",
         "--cache-dir",

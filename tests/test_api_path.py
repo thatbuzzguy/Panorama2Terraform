@@ -14,7 +14,10 @@ Nine groups:
    agrees with path 1 except for the source. For content that holds no fact from §4, the agreement reaches
    the bytes the run writes.
 5. The predefined read: no container table row names a built-in container, so the run runs no parse method
-   over a predefined response and the entry report names no row for a built-in entry.
+   over a predefined response. `container_coverage.is_predefined` answers a definitions read through the place
+   the declared path names, as well as through the walk, so a read inside the built-in place names no finding
+   and no entry row in both shapes the shape rule accepts, and the header counts the built-in entry. The join
+   reports nothing for a definitions read, because the join reads the row set and a definitions read names none.
 6. No test calls a network: every response is handed by an injected producer, as `tests/test_source_fetch.py`
    does, and the committed response set is read through it.
 7. The unit join (`docs/API_CONVERSION_PATH.md` §3): the run's unit set is read through `unit_manifest.units`,
@@ -29,7 +32,8 @@ Nine groups:
 
 Every response is read through `source_fetch.fetch` with an injected producer, so the wrapper decision, the
 origin, and the line map are the ones the run holds. No pin reads a response as a file, because the wrapper
-decision belongs to the request that produced it.
+decision belongs to the request that produced it. The predefined content is held by `tests/conftest.py`, with the
+response shape built there, because two modules read it (§1.1).
 """
 
 import argparse
@@ -51,7 +55,16 @@ import provenance
 import sanity_checks
 import source_fetch
 import unit_manifest
-from conftest import RESPONSES_DIR, SRC_DIR, TESTS_DIR, run_pipeline, tf_files
+from conftest import (
+    PREDEFINED_ENTRY_BODY,
+    PREDEFINED_PLACE_BODY,
+    RESPONSES_DIR,
+    SRC_DIR,
+    TESTS_DIR,
+    per_scope_response,
+    run_pipeline,
+    tf_files,
+)
 
 HOST = "panorama.test"
 
@@ -147,22 +160,8 @@ MEMBERSHIP_EXPORT = (
     + "</panorama>\n</config>\n</result>\n</response>\n"
 ).encode()
 
-# A predefined read in each shape the one definition validates: the place, and one built-in entry inside it.
-PREDEFINED_PLACE = (
-    "<predefined>\n<url-list>\n"
-    '<entry name="url-list"><description>built-in</description></entry>\n'
-    "</url-list>\n</predefined>\n"
-)
-PREDEFINED_ENTRY = '<entry name="url-list"><description>built-in</description></entry>\n'
-
-
-def _shape(request, body: str) -> bytes:
-    """A per-scope response in the shape the request states: `result` holds the element the path names."""
-    segments = request.segments()
-    held = body if len(segments) == 3 else f"<{segments[0]}>\n{body}</{segments[0]}>\n"
-    return (
-        '<?xml version="1.0"?>\n<response type="success" code="0">\n<result>\n' + held + "</result>\n</response>\n"
-    ).encode()
+# The predefined read content, read from `tests/conftest.py` (§1.1): the two shapes the one definition
+# validates for the built-in place, the place and one built-in entry inside it.
 
 
 def _content_tags(body: str) -> set:
@@ -172,7 +171,7 @@ def _content_tags(body: str) -> set:
 
 def _read(request, body: str, cache_dir):
     """One response, read through the injected producer. No test calls a network."""
-    return source_fetch.fetch(request, cache_dir, producer=lambda r, b=body: _shape(r, b))
+    return source_fetch.fetch(request, cache_dir, producer=lambda r, b=body: per_scope_response(r, b))
 
 
 def _run(request, body: str, cache_dir):
@@ -486,7 +485,7 @@ def _agreement_producer(request, key=None, insecure=False):
     """
     if request.path == "":
         return AGREEMENT_EXPORT
-    return _shape(request, AGREEMENT[request.path]) if request.path in AGREEMENT else None
+    return per_scope_response(request, AGREEMENT[request.path]) if request.path in AGREEMENT else None
 
 
 def _path2_run(argv, producer, monkeypatch) -> tuple:
@@ -538,7 +537,7 @@ def test_content_with_no_live_only_fact_writes_the_same_tf_bytes_as_path_1(tmp_p
     facts = {"rulebase", "device", "variable", "predefined"}
     held = _content_tags(AGREEMENT_EXPORT.decode())
     for place, body in sorted(AGREEMENT.items()):
-        held |= _content_tags(_shape(source_fetch.ApiRequest(host=HOST, path=place), body).decode())
+        held |= _content_tags(per_scope_response(source_fetch.ApiRequest(host=HOST, path=place), body).decode())
     assert not held & facts, (sorted(held), "the content holds a §4 fact")
 
     monkeypatch.setenv(source_fetch.API_KEY_ENV, "test-key")
@@ -631,7 +630,7 @@ def test_no_table_row_names_a_builtin_container(tmp_path):
     assert "predefined" in container_coverage.SCOPE_PATH_ROOTS
     assert "predefined" not in container_coverage.SCOPE_CONTAINERS, "a built-in section is a place, not a scope"
 
-    _, parser = _run(source_fetch.ApiRequest(host=HOST, path="predefined"), PREDEFINED_PLACE, tmp_path / "place")
+    _, parser = _run(source_fetch.ApiRequest(host=HOST, path="predefined"), PREDEFINED_PLACE_BODY, tmp_path / "place")
     assert parser.ledger.rows() == [], "the report names no row for a built-in entry"
     assert parser.ledger.predefined_total() == 1, "the ledger still counts the built-in entry"
     assert container_coverage.scan(parser.source, parser.parent_map) == [], (
@@ -654,27 +653,59 @@ def test_the_join_answers_no_response_for_a_builtin_place(tmp_path):
     assert "no entry for" in message and "predefined" in message, message
 
 
-def test_a_predefined_entry_read_reports_the_place_as_a_finding(tmp_path):
-    """AC-4.2: for an entry read inside the place, the entry sits at the place level, so the parent walk
-    reaches no element tagged `predefined` and the scan reports the place. This piece adds no rule that a
-    predefined source is definitions, so `backlog.md` keeps the finding. The rule that a built-in entry is not
-    a finding holds for a file source and for the place read.
+def test_a_predefined_entry_read_names_no_finding(tmp_path):
+    """F8.1 AC-3: `is_predefined` answers a definitions read through the place the declared path names, so an
+    entry read inside the built-in place names no finding and the report names no coverage section for it. The
+    pin that holds the walk for a file source is unchanged, and the place read is answered by the walk because
+    its response holds the element.
     """
     source, parser = _run(
-        source_fetch.ApiRequest(host=HOST, path="predefined/entry/url-list"), PREDEFINED_ENTRY, tmp_path / "entry"
+        source_fetch.ApiRequest(host=HOST, path="predefined/entry/url-list"), PREDEFINED_ENTRY_BODY, tmp_path / "entry"
     )
-    findings = container_coverage.scan(source, parser.parent_map)
-    assert len(findings) == 1, (findings, "the scan reads one response, so it names one position")
-    assert findings[0].path == "predefined", findings
-    assert findings[0].line == source.line_of(source.root), (
-        "the position is the line of the place element inside this response"
+    assert container_coverage.scan(source, parser.parent_map) == [], (
+        "the tree holds no element tagged with the place, so the declared place is what answers the fact"
     )
-    row = parser.ledger.rows()[0]
-    assert row["container"] == "predefined" and row["destination"] == "unaccounted", row
-    assert parser.ledger.predefined_total() == 0, "the walk never reaches the built-in element here"
-    # The scan states no rule that a predefined source is definitions, so a built-in place has no destination
-    # and the row answers `unaccounted`, which the pin above measures. The decision to give the scan a rule for
-    # a built-in place is recorded in `backlog.md`, and no pin reads `backlog.md`.
+    assert source.scope_container == container_coverage.PREDEFINED_PLACE, "the fact the rule reads is the place"
+
+
+def test_a_predefined_entry_read_names_no_row_and_the_header_counts_it(tmp_path):
+    """F8.1 AC-4: the entry report rule names no row for a definitions entry, so an entry read inside the
+    built-in place names no row, the header counts it through `predefined_total`, and it enters no gap count.
+    The destination kinds are unchanged: `unaccounted` is the answer for an entry no row covers, and a
+    definitions entry names no row, so it never reaches that answer.
+    """
+    _, parser = _run(
+        source_fetch.ApiRequest(host=HOST, path="predefined/entry/url-list"),
+        PREDEFINED_ENTRY_BODY,
+        tmp_path / "entry read",
+    )
+    assert parser.ledger.rows() == [], "the report names no row for a definitions entry"
+    assert parser.ledger.predefined_total() == 1, "the header counts it, as the file source and the place read do"
+    assert parser.ledger.gap_count() == 0, "no row to be a gap"
+    assert sum(parser.ledger.counts().values()) == 0, "no destination kind counts it"
+
+
+def test_the_join_reports_nothing_for_a_definitions_read(tmp_path):
+    """F8.1 AC-6: the join states no rule that a source is definitions, so it reports nothing for a definitions
+    read: the join reads the row set, and a definitions read names no row, so it gains no unit, the join answers
+    no pair for it, and no finding names its response. The pin that holds the direction,
+    `test_a_unit_the_index_made_no_request_for_is_a_finding`, keeps the whole-config instance.
+    """
+    index = _index(tmp_path)
+    source, parser = _run(
+        source_fetch.ApiRequest(host=HOST, path="predefined/entry/url-list"),
+        PREDEFINED_ENTRY_BODY,
+        tmp_path / "entry read",
+    )
+    assert parser.ledger.rows() == [], "the join needs a row to build a unit from"
+    assert unit_manifest.units(parser.ledger) == [], "no row, so no unit"
+    assert api_requests.join_units(index, parser.ledger) == []
+    findings = api_requests.unit_findings(index, parser.ledger)
+    assert [row for row in findings if row[1] is None] == [], "no unit of this read to report"
+    assert all(entry is not None for _facts, entry in findings), "every finding names an index entry, not this read"
+    assert not any(entry.request.cache_name() == source.name for _facts, entry in findings), (
+        "the join names no response for a read that holds no row"
+    )
 
 
 # --- 6. the committed set, read one response at a time ------------------------
@@ -805,8 +836,10 @@ def test_the_unit_join_answers_the_scope_the_run_read_for_a_unit(tmp_path):
 
 def test_a_unit_the_index_made_no_request_for_is_a_finding(tmp_path):
     """AC-3.1, the first direction: a unit the join answers no entry for, because the response its rows name
-    is one the index made no request for. A whole-config response holds no scope entry, and a built-in place
-    gains no entry, so the run read the unit through a response the index has no entry for.
+    is one the index made no request for. A whole-config response holds no scope entry, so the run read the
+    unit through a response the index has no entry for. A definitions read is no longer an instance: the join
+    reads the row set and a definitions read names no row, so the join reports nothing for it, which the pin
+    `test_the_join_reports_nothing_for_a_definitions_read` holds.
     """
     index = _index(tmp_path)
 
@@ -832,20 +865,6 @@ def test_a_unit_the_index_made_no_request_for_is_a_finding(tmp_path):
     _rows_for(place_parser, ("parse_device_groups", "parse_associations"))
     assert api_requests.join_units(index, place_parser.ledger), "the join answers this unit"
     assert [row for row in api_requests.unit_findings(index, place_parser.ledger) if row[1] is None] == []
-
-    # A built-in read is the same direction: no membership row reads `predefined`, so the index has no entry
-    # for it. The join reports the unit and states no rule that a predefined source is definitions.
-    _, predefined_parser = _run(
-        source_fetch.ApiRequest(host=HOST, path="predefined/entry/url-list"), PREDEFINED_ENTRY, tmp_path / "entry read"
-    )
-    _rows_for(predefined_parser, ("parse_address_objects",))
-    assert predefined_parser.ledger.rows(), "the ledger holds the built-in row"
-    assert not api_requests.join_units(index, predefined_parser.ledger), "the join answers nothing here"
-    built_in_findings = [row for row in api_requests.unit_findings(index, predefined_parser.ledger) if row[1] is None]
-    assert [facts for facts, _entry in built_in_findings] == unit_manifest.units(predefined_parser.ledger), (
-        built_in_findings
-    )
-    assert not any(entry.container == "predefined" for entry in index), "the index read no built-in scope"
 
 
 def test_an_index_entry_the_run_read_no_rows_for_is_a_finding(tmp_path):
@@ -956,7 +975,7 @@ def _producer(bodies: dict = None):
     set. A request this file holds no response for answers None, the way `conftest.api_producer` does.
     """
     shapes = dict(PLACES, **(ENTRIES if bodies is None else bodies))
-    return lambda request: _shape(request, shapes[request.path]) if request.path in shapes else None
+    return lambda request: per_scope_response(request, shapes[request.path]) if request.path in shapes else None
 
 
 def _run_args(tmp_path) -> tuple:
@@ -1491,7 +1510,7 @@ def _membership_producer(request, key=None, insecure=False):
     if request.path == "":
         return MEMBERSHIP_EXPORT
     container = request.segments()[0]
-    return _shape(request, MEMBERSHIP[container]) if container in MEMBERSHIP else None
+    return per_scope_response(request, MEMBERSHIP[container]) if container in MEMBERSHIP else None
 
 
 def test_the_entry_read_answers_the_entry_its_own_request_names(tmp_path):
