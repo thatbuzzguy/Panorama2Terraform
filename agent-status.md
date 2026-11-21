@@ -28,6 +28,11 @@ when one printed field answers for exactly one parse key. `state_name_for` is th
 same-name rule stands for a property the table has no row for, and the drift line names both names for a mapped
 pair. The decision and the measurement are in `docs/ARCHITECTURE.md` §3.2.
 
+Gate, measured 2026-11-21 on the committed tree, single-threaded at `f376a6a`: `ruff check .` clean at `py310`,
+`ruff format --check .` clean on the 105 Python files, `python3 tools/check_documents.py` reports no finding, and
+`python3 -m pytest` passes 1,741 pins with the same 4 skip for the missing `tflint` binary — 1,745 pins, 3 more
+than the 1,742 the F5.6 piece measured, all three in the F8.1 pins, in 54 test modules, in 306.61 s.
+
 Measured 2026-11-21 over the 42 matrix rows against provider v2.0.14: 26 types reach a pair, four of those
 name the parse key and a different attribute name and are the table rows in `state_coverage.STATE_PROPERTY_NAMES`,
 16 rows reach no field at the block's own level, and no printed field answers for more than one parse key. On the
