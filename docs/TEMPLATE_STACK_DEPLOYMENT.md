@@ -17,8 +17,7 @@ to a device needs two facts the codebase does not state today:
    a new template the operator creates on a device that the export does not name. The tool can state the name, the
    place, and the membership, but not the device the operator adds later.
 
-Piece 1 decided fact 1, and Piece 2 is recorded in §3 as landed. Piece 3 is the open decision, and it is recorded
-here when it is taken.
+Each piece is landed and recorded in its own section: piece 1 in §2, piece 2 in §3, piece 3 in §4.
 
 ## 2. Piece 1: the membership names as recorded uses (landed)
 
@@ -122,8 +121,81 @@ the decision, `docs/CODEBASE_ASSEMBLY.md` §3 rule 2 and `docs/ARCHITECTURE.md` 
 can sit inside a stack, and no `.tf` byte is written, so the golden set is unchanged. The case a config entry
 inside a stack reaches is a provider location shape the pinned schema does not state, so it stays in `backlog.md`.
 
-## 4. Piece 3: a new site from an existing template (open)
+## 4. Piece 3: a new site instantiated from an existing template (landed)
 
-A new site needs a template unit whose entry the export did not name. The tool can write the name, the place and
-the membership for a template the export declares, but the device the operator adds is a fact only a live target
-states. What stays inside this piece, and what moves to `backlog.md`, is decided when the piece is opened.
+No corpus fixture showed a template entry that no device names, so the piece added
+`tests/fixtures/template_no_device.xml`: a device group that lists one template as a member and names no device, and
+one template entry with no `devices` element inside it. Every fact below is read through the module that owns it on
+that run.
+
+**The decision.** For the unit a template entry names with no device inside it, the tool states the names the export
+declares and states nothing for a device it does not name. The device fact, `vsys_device`, is the empty fact, the
+same way the tool states no place it cannot name (F3.6), so no output names a device for that unit and no rule has
+to decide what to state for a fact the export cannot carry. The unit is still a unit the manifest names, and each
+codebase part that reads a device value answers for the empty fact as it already does.
+
+**The identity, the row, and the directory.** `PanoramaParser.identity_of` records `Shared` for `device_group`, the
+parse fallback for an entry the parse cannot place (`docs/ARCHITECTURE.md` §2.2), and `unit_manifest.facts_of`
+excludes it, so the identity is the four facts the export names plus the empty device fact. The row states placement
+through the five fact keys it already reads (§3), so no field is needed for a device the export cannot name, and the
+digest and the directory name come from the facts alone. Pinned by
+`tests/test_unit_manifest.py::test_a_template_entry_no_device_names_keeps_the_device_fact_empty`.
+
+**The site data.** A site row is a value the run read, so a unit with no device fact holds no row: the record has no
+row for the unit, `site.auto.tfvars` has no line for it, `provider.tf` names no `target`, and `variables.tf`
+declares no `target`. The `target` fact is `docs/CODEBASE_ASSEMBLY.md` §9 rule 8 read on this shape, and the pin
+there reads a fixture that names a device, so this piece pins the same rule on the fixture that shows no device:
+`tests/test_site_data.py::test_a_unit_that_names_no_device_writes_no_site_row_and_no_tfvars_line`.
+
+**The reference edges and the order.** The device group's template list is a field of the entry that owns the
+container, so `container_coverage.CONTAINER_TABLE` names no `bookkeeping` row for `device-group/entry/templates` and
+`api_requests.LIST_JOIN` states no join for a row the table names no row for. That is rule 8's condition for writing
+no row: the name is printed inside the block the container writes. So the pair the membership rule would record for
+the device group unit and the template unit does not exist, the edge record holds no row for the run, and the order
+rule has no dependency for the pair — the ranks the two rows carry are the identity order, not an answer for the
+pair. The relation reaches the output only as the names the device group block prints. Pinned by
+`tests/test_reference_edges.py::test_a_device_group_that_lists_a_template_records_no_row`, which reads the same
+tables §2's pins read.
+
+**The printed blocks.** The template block prints the empty `panorama` sub-block, because the placement rule answers
+no containing scope for a template entry (§3), the entry name, and the two properties its row declares, and it prints
+no device because the export names none. The device group block prints the template name as data through the field
+its own row declares and prints no device members. Pinned by
+`tests/test_scope_objects.py::test_a_template_entry_with_no_device_prints_its_names_and_no_device`, with
+`::test_the_four_panorama_scopes_print_the_empty_sub_block` the existing pin for the printed sub-block.
+
+**The commit and push action.** The action rule selects the fact through `unit_manifest.named_fact`, so for a unit
+whose device fact is empty both blocks name the template fact. The push block states no `devices`, because the tool
+names no serial (`docs/CODEBASE_ASSEMBLY.md` §10 rule 6), so the two blocks name the fact the row can name and no
+device value. Pinned by
+`tests/test_commit_actions.py::test_a_unit_with_no_device_fact_names_the_fact_the_export_declares`; the pins there
+that read a unit naming a device read `kitchen_sink.xml`, so this pin reads the new fixture.
+
+**No new rule.** The piece adds no naming rule, no reader, no writer, no console line, no environment name, and no
+field on the manifest row or on an edge row, and it changes no `src/` module: every part of the decision is an
+existing rule answering for a fixture that shows the shape. The piece's rule content is this section and the pins.
+The `.tf` goldens are unchanged, because the piece writes no `.tf` byte on them. The fixture is read by the corpus
+pins through `corpus_fixtures()`, so the pins that state the printed fixture set read the measured value, and the
+corpus edge, gap, property, ownership and site-row sets did not move: the fixture writes no row for them.
+
+**What stays in `backlog.md`.** The device the operator adds to the device group for a new site, and the serial a
+push target names, are facts only a live target states, so they stay in `backlog.md` and no pin asserts them.
+
+### Measurement
+
+Read 2026-11-21 through the tool's own modules on `tests/fixtures/template_no_device.xml`:
+
+- `identity_of` answers `Shared` for `device_group` and empty for `vsys`, `vsys_device` and `template_stack`, with
+  `template` as `Remote-Networks`. `facts_of` answers `('', '', 'Remote-Networks', '', '')`, the digest `93488ed8`,
+  and the directory `remote_networks_93488ed8`.
+- The run writes a manifest row for that unit and one for the device group unit `newsite_fw_9f79c4e2`.
+  `reference_edges.build_rows` answers no row, `order` answers `after` empty on both rows, and the ranks are 1 and 2
+  in the identity order. `parse_associations` answers four empty tables for the run.
+- `site_data.build_rows` answers no row and `value_variables` answers no name, so the run writes no `SITE_DATA.json`
+  and no `.tfvars`, and `provider.tf` prints `hostname = var.hostname` and no `target`.
+- The scope file prints the template block with the empty `panorama` sub-block, `name`, `default_vsys` and
+  `description`, and the device group block with `templates = [ "Remote-Networks" ]` and no device members. The
+  action file prints the commit and push blocks for the template unit on the template fact and for the device group
+  unit on the device group fact.
+- The gate reports no finding on the run and writes no `MANUAL_SETUP_REPORT.txt`; the per-entry report reads 2
+  `emitted` entries, one for the device group entry and one for the template entry.

@@ -1,16 +1,8 @@
 # To Do
 
 The tracking markdown for the completed pieces is removed here; the git history and the owner
-documents hold it. The open work is Epic 10, recorded in `PLAN.md` and
-`docs/TEMPLATE_STACK_DEPLOYMENT.md`.
-
-## Epic 10 — template and stack deployment
-
-The pieces that stay open, in the order `PLAN.md` Epic 10 states them:
-
-1. Piece E10.3 — a new site instantiated from an existing template: what the tool can state for a template entry the
-   export declares and a device the export does not name. What needs the device the operator adds stays in
-   `backlog.md`.
+documents hold it. No piece is open. The items that need a fact a live target states are in
+`backlog.md`.
 
 ## Feature-sized items that stay blocked
 

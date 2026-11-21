@@ -123,12 +123,11 @@ here with that rule named.
   entry value. Not built: the corpus holds no such entry, so the rule needs a
   fixture that shows how an export states a device-level value.
 
-- Epic 10 (template and stack deployment) holds two facts the tool cannot read offline. A new site needs a device
-  the export does not name, so the tool can state the template name, the place, and the membership, but not the site
-  the operator adds; and the device serial a push target names is a live fact, so the plan-order half is the only
-  offline part. The offline half landed 2026-11-20 through `docs/TEMPLATE_STACK_DEPLOYMENT.md` §2, which states
-  which membership name enters the edge set. Not built: the corpus holds no template entry with no device, so a
-  piece that states a new site needs a fixture that shows the shape.
+- Epic 10 (template and stack deployment) holds two facts the tool cannot read offline: the device the operator
+  adds to a device group for a new site, and the device serial a push target names. What the tool can state for a
+  template entry the export declares and no device names is decided in `docs/TEMPLATE_STACK_DEPLOYMENT.md` §4, so
+  nothing about that shape stays here. Not built: a device an operator adds is not in an export, and a serial a live
+  target names is not in a response the project holds, so both facts need a live target.
 
 - The notice set is not pinned. `docs/LICENSING.md` names the 18 files that still hold upstream text
   and the four `src/` modules that carry a copyright notice, and `git blame` is the authority for

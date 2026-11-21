@@ -16,6 +16,11 @@ the scope objects, the site values, and the commit and push action per unit. The
 `docs/CODEBASE_ASSEMBLY.md` §3 to §14, and `docs/ARCHITECTURE.md` §3.4 to §3.7, §4.1, §4.2, §4.5,
 §4.6, §4.8, and §5.
 
+The template and stack unit is recorded in `docs/TEMPLATE_STACK_DEPLOYMENT.md` §2 to §4: which membership name
+enters the edge set, the scope a template or a stack entry is declared inside, and what the tool states for a
+template entry the export declares and no device names. The facts only a live target states — the device the
+operator adds, and the device serial a push target names — are in `backlog.md`.
+
 Routing is reachable through an object attribute, so the BGP, OSPF and OSPFv3 levels are an emitter shape
 and not a provider gap, and the tool prints the levels the shape table states (`docs/ARCHITECTURE.md` §4.9).
 A value the parse cannot carry has one shape: the block prints the variable reference, never the value
@@ -66,27 +71,6 @@ markdown set.
 
 A brown-field config is an existing production config: mixed shared objects,
 per-device-group overrides, template stacks, and multiple virtual systems.
-
-## Epic 10 — template and stack deployment (Goal 6) — open
-
-A template unit and a stack unit write one scope object each, but the codebase cannot be applied to a device until
-the plan order puts the template units before the stack unit that lists them, and until the tool can state a site
-the export does not name. The design record is `docs/TEMPLATE_STACK_DEPLOYMENT.md`, and every rule it states names
-the module that holds it and the test that pins it.
-
-The pieces that stay open, in the order `docs/TEMPLATE_STACK_DEPLOYMENT.md` states them:
-
-1. **Piece E10.3.** A new site instantiated from an existing template: what the tool can state for a template
-   entry the export declares and a device the export does not name.
-
-Piece E10.2 is landed and recorded in `docs/TEMPLATE_STACK_DEPLOYMENT.md` §3: the placement read answers no
-containing scope for a template entry and a stack entry, and the manifest row states placement through the five
-fact keys it already reads, so it needs no field.
-
-Definition of done for the epic: the codebase states the site a new template needs. The plan order half is
-measured: `tests/test_reference_edges.py` reads that the order rule ranks a stack unit after each template unit its
-membership names. A fact only a live target states — the device the operator adds, and the device serial a push
-target names — stays in `backlog.md`.
 
 ## Out of Scope (tracked in backlog.md)
 

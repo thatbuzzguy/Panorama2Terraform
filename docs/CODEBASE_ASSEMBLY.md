@@ -82,7 +82,8 @@ it (§14).
    pairs the export can hold, such as a vsys inside a template (F6.10.5). `Shared` names the unit whose
    five facts are empty, because the five facts alone cannot name the shared section. `localhost.localdomain` names no firewall (F3.5), so the
    placeholder never names a unit, and `Shared` in `device_group` is the parse fallback (§2.2),
-   so it never enters an identity.
+   so it never enters an identity. A template entry the export declares with no device inside it keeps the
+   `vsys_device` fact empty, which is the new-site shape `docs/TEMPLATE_STACK_DEPLOYMENT.md` §4 decides.
 3. **The directory name.** `sanitize(unit name) + '_' + 8-hex digest of the unit identity`, in
    the `ARCHITECTURE.md` §5 shape, and the digest is always present. A collision-only rule
    would make one unit's name depend on the other units in the run, so an unrelated scope would
@@ -258,7 +259,10 @@ in `reference_edges.py`, and `main()` writes the file.
    `parse_associations` rows in the container table, and each joins to the container that defines the
    entries its names belong to through `api_requests.LIST_JOIN`: three name devices and join inside the
    container that names them, so §6 rule 2 states that order for them, and the list a stack keeps for
-   its member templates joins to `templates`, outside the stack that names it. The join is the F6.2 rule
+   its member templates joins to `templates`, outside the stack that names it. A device group's template list is
+   a field of the entry that owns the container, so the table names no row for it and `LIST_JOIN` has no key for
+   it, and the name prints inside the block: `docs/TEMPLATE_STACK_DEPLOYMENT.md` §4 records the new-site shape
+   that shows it. The join is the F6.2 rule
    and the direction is the order rule's, so no module states a second basis for membership. The module
    takes the four tables as an argument and defines no reader of them. Pinned by
    `tests/test_reference_edges.py::test_a_stack_that_names_a_template_records_one_row`,
@@ -452,7 +456,9 @@ are in `resource_mapping.py`, and `main()` calls the emitter for every run.
    variable or a virtual system the export places in no template and no template stack has no place the
    provider can put it, so the parse reports it as `skipped` with the reason and the run writes no block:
    the converter does not guess a place (the F3.6 rule). A template entry's device members are not a
-   provider field for `panos_template`, so `parse_templates` captures no device list.
+   provider field for `panos_template`, so `parse_templates` captures no device list. A template entry with no
+   device inside it prints its names and no device, which is the new-site shape
+   `docs/TEMPLATE_STACK_DEPLOYMENT.md` §4 decides.
 7. **One entry, one mark.** The membership entries inside a scope entry are marked by `_list_names`,
    the method that reads them, and the scope entry keeps the one mark its scope method gave it, so
    `parse_associations` marks nothing itself (F4.3 rule 1). The membership containers keep their
@@ -592,7 +598,9 @@ files for every run that has content.
    that names a value. `provider.tf` is the consumer for both rows: the block prints `hostname = var.hostname`
    for every unit, because one unit is one plan against one host, and prints `target = var.target` only for a
    unit whose manifest row names a device, so the `variables` gate rule (§4.6) sees no declaration with no
-   consumer, and the placeholder device names none (F3.5). `generate_provider_config()` records the pair at the
+   consumer, and the placeholder device names none (F3.5), so a unit whose row holds no device fact prints no
+   `target`: `docs/TEMPLATE_STACK_DEPLOYMENT.md` §4 records that case on the fixture that shows it.
+   `generate_provider_config()` records the pair at the
    print site, before `generate_variables()` runs, so the declaration set is what the run consumed. Neither row
    is a credential: the credential is the key §11 states, and the run holds no value for it and declares no
    variable for it.
@@ -640,7 +648,8 @@ path. The emitter is `commit_actions.py`, the file is `actions.tf`, and `main()`
    unit writes no action and commits through the parent unit's action; the shared unit names no fact,
    so it writes no action, because a commit that names no filter commits the whole config.
    `container_coverage.PLACEHOLDER_DEVICE` names no firewall (F3.5), so it never names a filter and
-   never selects a fact.
+   never selects a fact. When the device fact is empty, `named_fact` reaches the next fact the level order can name,
+   which is the new-site case `docs/TEMPLATE_STACK_DEPLOYMENT.md` §4 records.
 3. **The address names the identity the block states.** The local name is the §5 rule applied to the
    fact the block states, plus the identity digest of the identity as the block states it: the single
    fact in its `FACT_KEYS` position, the other facts empty. So the block is data the rule can read back
@@ -735,7 +744,8 @@ provider docs:
   holds an auth key. The provider can name a device (`location.ngfw_device`,
   `panos_device_group.devices`) and nothing else about a device. So the Day 1 bootstrap
   (serial registration, HA grouping, management IP, DNS and NTP, admin account) stays
-  outside the codebase. This is a forced boundary, not a preference.
+  outside the codebase. This is a forced boundary, not a preference. The device the operator adds to a device
+  group for a new site is inside that boundary (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4).
 - A resource exists for each scope: `panos_device_group` (`parent`, `devices`,
   `templates`), `panos_device_group_parent`, `panos_template` (`default_vsys`),
   `panos_template_stack` (`devices`, `templates`), `panos_template_variable`, and

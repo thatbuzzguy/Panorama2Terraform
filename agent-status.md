@@ -2,27 +2,40 @@
 
 ## Current position
 
-The last landed piece is Piece E10.2 (2026-11-20, commit `4adecbd`): a placement key can only name a location
-sub-block that declares `name`, so `resource_mapping.SCOPE_PLACEMENT` answers no containing scope for a template
-entry and for a stack entry, and `unit_manifest` needs no field for that fact because the five fact keys already
-state it. The decision is in `docs/TEMPLATE_STACK_DEPLOYMENT.md` §3. The table keeps its empty set for those two
-rows, and `docs/CODEBASE_ASSEMBLY.md` §3 rule 2 and `docs/ARCHITECTURE.md` §2.2 no longer state that a template
-can sit inside a stack, because the measurement shows the export holds the two containers as siblings of the
-device group under `<panorama>`.
+The last landed piece is Piece E10.3 (2026-11-21, commit `1977366`): for a template entry the export declares and no
+device names, the tool states the names the export declares and nothing for a device it does not name, so the
+`vsys_device` fact stays empty and no output names a device for that unit. The decision is in
+`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4, read on `tests/fixtures/template_no_device.xml`, and no `src/` module
+changed: each part of the decision is an existing rule answering for a fixture that shows the shape. The pins are
+`tests/test_unit_manifest.py::test_a_template_entry_no_device_names_keeps_the_device_fact_empty`,
+`tests/test_site_data.py::test_a_unit_that_names_no_device_writes_no_site_row_and_no_tfvars_line`,
+`tests/test_reference_edges.py::test_a_device_group_that_lists_a_template_records_no_row`,
+`tests/test_scope_objects.py::test_a_template_entry_with_no_device_prints_its_names_and_no_device`, and
+`tests/test_commit_actions.py::test_a_unit_with_no_device_fact_names_the_fact_the_export_declares`.
 
-Gate, measured 2026-11-20 on the final tree of the piece, single-threaded: `ruff check .` clean at `py310`,
+Measured on that run: `unit_manifest.facts_of` answers `('', '', 'Remote-Networks', '', '')`, so `Shared` for
+`device_group` is the parse fallback and not a fact value, the digest is `93488ed8` and the directory is
+`remote_networks_93488ed8`; `reference_edges.build_rows` answers no row and `order` answers `after` empty on both
+rows, with rank 1 for the template unit and rank 2 for the device group unit; `site_data.build_rows` answers no row
+and `value_variables` answers no name, so the run writes no site record, no `.tfvars`, no `target` in `provider.tf`
+and no `target` declaration; `commit_actions.build_rows` answers four rows and both blocks for the template unit name
+the template fact; the gate reports no finding and writes no `MANUAL_SETUP_REPORT.txt`, and the per-entry report
+reads 2 `emitted` entries. The three pins that state the printed fixture set read the new fixture through
+`corpus_fixtures()`, so they state 67 accepted, 66 read and 3 refused; the corpus edge, gap, property, ownership and
+site-row sets did not move and the `.tf` goldens are unchanged.
+
+Gate, measured 2026-11-21 on the final tree of the piece, single-threaded: `ruff check .` clean at `py310`,
 `ruff format --check .` clean on the 104 Python files, `python3 tools/check_documents.py` reports no finding, and
-`python3 -m pytest` passes 1,726 pins with the same 4 skip for the missing `tflint` binary — 1,730 pins in 53
-test modules, in 298.54 s, four pins more than the 1,726 measured at `4351ca0`. `pyproject.toml` sets
+`python3 -m pytest` passes 1,732 pins with the same 4 skip for the missing `tflint` binary — 1,736 pins in 53
+test modules, in 237.21 s, six pins more than the 1,726 measured at `4351ca0`. `pyproject.toml` sets
 `addopts = "-q"`, so a count is read from the per-module collection counts.
 
-Next work is Epic 10 piece E10.3, recorded in `PLAN.md` and `docs/TEMPLATE_STACK_DEPLOYMENT.md` §4. Piece 23
-closed the last `backlog.md` entry the tool could act on offline, so what stays open is the live facts and Epic 10's
-one open decision. The items `backlog.md` holds that need a fact a live target states: the rulebase value string and
-the rule position (F3.5), which also gate the `rulebase` row column and the import block for a rule entry; a config
-entry inside a stack needs a provider location shape; the EDL `certificate_profile` field needs a rule that makes the
-EDL site resolve names; the per-entry report `profile_name` column needs a value the provider does not declare; and
-the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4.
+No piece is open. `backlog.md` holds the items that need a fact a live target states: the device the operator adds to
+a device group for a new site, and the device serial a push target names (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4);
+the rulebase value string and the rule position (F3.5), which also gate the `rulebase` row column and the import
+block for a rule entry; a config entry inside a stack needs a provider location shape; the EDL `certificate_profile`
+field needs a rule that makes the EDL site resolve names; the per-entry report `profile_name` column needs a value the
+provider does not declare; and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4.
 
 ## Rules to keep when writing documents
 
@@ -197,6 +210,11 @@ the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4.
   `tests/test_scope_objects.py::test_a_placement_key_names_a_sub_block_that_can_hold_a_scope_name`. A config type
   has no `template_stack` sub-block, so a config entry inside a stack writes no block and is a finding recorded in
   `backlog.md`.
+- A unit that names no device fact answers for the empty fact, so no output states a device for it: `unit_manifest`
+  reads the identity from the facts `facts_of` keeps, `Shared` in `device_group` stays the parse fallback, the site
+  record holds no row because the run read no value, `provider.tf` names no `target`, and both action blocks name the
+  fact `named_fact` selects. The decision for the new-site shape is owned by `docs/TEMPLATE_STACK_DEPLOYMENT.md` §4,
+  which names the five owner test modules that pin it.
 - The entry name is never a property. A row whose provider type declares no `name` reaches the block through
   `entry_coverage.name_field`; no emitter, gate rule, or test should state the field again.
 - One place decides the shape of a value: `resource_mapping.VALUE_VARIABLES`, read at the print site. A new
