@@ -54,10 +54,8 @@ Three facts already hold, and they are the reason no new naming rule or identity
    shape, and `tests/test_api_path.py::test_a_selection_that_names_no_unit_is_an_argument_error_on_a_run` for
    the error read on a run.
    `tests/test_api_requests.py::test_the_selection_argument_states_no_rule_an_owner_states` holds that the
-   argument reads the shape, the place and the built-in fact through their owners, and that a run declaring no
-   selection declares nothing.
-   holds that the argument reads the shape, the place and the built-in fact through their owners and states none
-   of its own, and that a run declaring no selection declares nothing.
+   argument reads the shape, the place and the built-in fact through their owners and states none of its own, and
+   that a run declaring no selection declares nothing.
 3. **The targeted read set is the selected scope plus the membership facts its unit identity needs.** The
    index states no merge rule and reads no membership of its own, so the run reads the membership container for
    each identity fact a selection cannot state on its own. A name the selection excludes is not an index entry,
