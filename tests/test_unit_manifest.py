@@ -8,7 +8,9 @@ Seven groups, one per rule in `unit_manifest.py` (`docs/CODEBASE_ASSEMBLY.md` §
 2. The directory naming rule. `sanitize(unit name) + '_' + 8-hex digest of the unit identity`,
    always, so a name depends on the unit alone and not on the other units in the run. The §5 fallback word is
    stated once, in `naming.py`, so no module holds a second definition of it.
-3. The row shape. Fixed fields in the declared order, rows in identity order, read back as data.
+3. The row shape. Fixed fields in the declared order, rows in identity order, read back as data. The
+   row states the scope a unit sits in through the five fact keys, so it names no field for a place, and
+   no row carries two container facts.
 4. The reference names, recorded by `name_ref` at the site that applies the reference rule.
 5. The no-change rule. The `.tf` bytes, the report bytes, the gate inputs, and the exit codes.
 6. The CLI, and the rule that a file is written only when it has content.
@@ -386,7 +388,9 @@ def test_the_deepest_declared_scope_names_the_unit(converter_module, tmp_path):
 
 def test_the_stack_names_its_unit(converter_module, tmp_path):
     """F6.10.5: the fifth fact is the scope a stack names, so the entry that defines a stack names a
-    unit, and the level order keeps the stack shallower than the template inside it.
+    unit. The level order is read on the shapes the export can hold, so the pair measured here is the vsys
+    inside a template, not a template inside a stack: a template entry and a stack entry name no container
+    (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §3).
 
     `tests/fixtures/scope_objects.xml` is the fixture that carries the stack entry and the variable
     inside it, so the run names the stack unit and counts both entries in it.
@@ -398,8 +402,8 @@ def test_the_stack_names_its_unit(converter_module, tmp_path):
     assert row["unit"] == "Edge-Stack"
     assert row["directory"] == f"edge_stack_{unit_manifest.identity_digest(stack)}"
     assert row["entry_count"] == 2, "the stack entry and the variable inside it"
-    # The level order, read innermost first: a template inside a stack names its template.
-    assert unit_manifest.named_fact(("", "", "Edge-Networks", "", "Edge-Stack")) == ("template", "Edge-Networks")
+    # The level order, read innermost first: a vsys inside a template names its vsys.
+    assert unit_manifest.named_fact(("", "edge-vsys", "Edge-Networks", "", "")) == ("vsys", "edge-vsys")
     assert unit_manifest.named_fact(stack) == ("template_stack", "Edge-Stack")
 
 
@@ -438,6 +442,52 @@ def test_the_row_fields_are_the_declared_shape_in_order(tmp_path):
     assert text.index('"unit"') < text.index('"device_group"') < text.index('"directory"')
     # F6.3 rule 5: the two order fields print after the F6.1 fields.
     assert text.index('"references"') < text.index('"rank"') < text.index('"after"')
+
+
+def test_the_row_states_placement_through_the_fact_keys_it_already_reads(converter_module, tmp_path):
+    """Piece E10.2: the row needs no field for the scope a unit sits in, because the five fact keys are that
+    fact. A template unit and a stack unit read with no container fact, so the placement answer is the fact
+    key that names the entry itself plus the container keys left empty (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §3).
+
+    Measured on `tests/fixtures/scope_objects.xml`: the parse records `Shared` for the group of each of these
+    two entries, which is the §2.2 fallback and not a fact value, so both rows read empty.
+    """
+    _pipeline(converter_module, FIXTURES_DIR / "scope_objects.xml", tmp_path)
+    rows = _manifest(tmp_path)
+    template = _row(rows, ("", "", "Edge-Networks", "", ""))
+    stack = _row(rows, ("", "", "", "", "Edge-Stack"))
+    for row in (template, stack):
+        assert row["device_group"] == "", row
+    assert template["template"] == "Edge-Networks" and template["template_stack"] == "", template
+    assert stack["template_stack"] == "Edge-Stack" and stack["template"] == "", stack
+    # The declared shape names no field for a place: the fact keys, then the run facts.
+    assert [field for field in unit_manifest.FIELD_ORDER if field not in unit_manifest.FACT_KEYS] == [
+        "unit",
+        "directory",
+        "entry_count",
+        "references",
+        "rank",
+        "after",
+    ]
+
+
+def test_no_row_carries_two_container_facts(converter_module, tmp_path):
+    """The level order reads a row from the deepest declared scope inward, so a row that carried both the
+    `template` and the `template_stack` fact would be a template inside a stack. Piece E10.2 decides that a
+    template entry and a stack entry name no container, so no row can carry both. Measured across the fixture
+    corpus, no run builds such a row.
+    """
+    for name in corpus_fixtures():
+        fixture = FIXTURES_DIR / name
+        parser, _generator = _pipeline(converter_module, fixture, tmp_path / fixture.stem)
+        for facts in {unit_manifest.facts_of(row) for row in parser.ledger.rows()}:
+            assert not (
+                facts[unit_manifest.FACT_KEYS.index("template")]
+                and facts[unit_manifest.FACT_KEYS.index("template_stack")]
+            ), (
+                name,
+                facts,
+            )
 
 
 def test_the_manifest_round_trips_as_data(gen, tmp_path):

@@ -86,8 +86,9 @@ FACT_KEYS = container_coverage.SCOPE_FACT_KEYS
 
 # The level order the F3.9 rule states (device group, then template, then template stack, then
 # device), read from the deepest level inward, so the deepest declared scope names the unit. The
-# virtual system is the innermost scope the export declares, so it is first here, and a template
-# inside a stack names its template because the template is deeper than the stack (F6.10.5).
+# virtual system is the innermost scope the export declares, so it is first here. A template entry and
+# a stack entry name no container, so a row carries at most one of the `template` and `template_stack`
+# facts (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §3).
 NAME_LEVELS = ("vsys", "vsys_device", "template", "template_stack", "device_group")
 
 DIGEST_HEX = 8

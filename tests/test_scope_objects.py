@@ -15,7 +15,9 @@
 4. The device member rule. The PAN-OS "this device" placeholder never enters a printed list, and a
    list that held only the placeholder writes no line.
 5. Placement. A scope entry the export places in no template or template stack writes no block and
-   is reported as `skipped` with the reason, and `panorama_device` is not emitted.
+   is reported as `skipped` with the reason, and `panorama_device` is not emitted. A placement key can
+   only name a sub-block that declares `name`, so the two template-chain rows state no key: the location
+   declares no field that could hold a container name, and the scope walk names no entry above them.
 6. The gate rule. Each violation type `sanity_checks.check_scope_blocks` states is pinned, and the
    corpus produces no finding.
 7. Determinism. Two runs on the same bytes write the same bytes.
@@ -341,6 +343,46 @@ def test_a_scope_entry_the_export_places_nowhere_writes_no_block(converter_modul
     assert row["destination"] == "skipped", row
     assert "no template holds this virtual system" in row["detail"], row
     assert "panos_vsys" not in file_text(tf_files(out), SCOPE_FILE)
+
+
+def test_a_placement_key_names_a_sub_block_that_can_hold_a_scope_name():
+    """Piece E10.2: a placement is a scope name written inside another block, so a placement key can only
+    name a sub-block that declares `name`. Every key `SCOPE_PLACEMENT` names is a sub-block its own row
+    declares, and that sub-block declares `name`. The two template-chain rows state no key because their only
+    sub-block is `panorama`, which declares no `name`: the empty set is the answer that the location has no
+    field for a container, not an omission.
+    """
+    for rtype, keys in resource_mapping.SCOPE_PLACEMENT.items():
+        for key in keys:
+            assert key in resource_mapping.LOCATION_SCHEMA[rtype], (rtype, key)
+            assert "name" in resource_mapping.LOCATION_SCHEMA[rtype][key], (rtype, key)
+    for rtype in ("panos_template", "panos_template_stack"):
+        assert list(resource_mapping.LOCATION_SCHEMA[rtype]) == ["panorama"], rtype
+        assert "name" not in resource_mapping.LOCATION_SCHEMA[rtype]["panorama"], rtype
+        assert resource_mapping.SCOPE_PLACEMENT[rtype] == (), rtype
+
+
+def test_a_template_entry_and_a_stack_entry_record_no_container_fact(converter_module, tmp_path):
+    """The export holds the two template-chain containers at the section level, as siblings of the device
+    group, so the scope walk names no entry above them: `identity_of` records the `Shared` fallback for
+    `device_group`, which is not a fact value, and each entry's own level key names the entry. Measured on
+    `tests/fixtures/scope_objects.xml`, where the device group and the stack hold a template as a membership
+    name rather than as an entry inside them.
+    """
+    parser = run_pipeline(converter_module, FIXTURE, tmp_path)
+    assert parser is not None
+    template_entry = parser.source.root.find("templates/entry")
+    stack_entry = parser.source.root.find("template-stack/entry")
+    assert template_entry.get("name") == "Edge-Networks"
+    assert stack_entry.get("name") == "Edge-Stack"
+    template = parser.identity_of(template_entry)
+    stack = parser.identity_of(stack_entry)
+    for facts in (template, stack):
+        assert facts["device_group"] == "Shared", facts
+    assert template["template"] == "Edge-Networks" and template["template_stack"] == "", template
+    assert stack["template_stack"] == "Edge-Stack" and stack["template"] == "", stack
+    for facts in (template, stack):
+        assert facts["vsys"] == "" and facts["vsys_device"] == "", facts
 
 
 # --- 6. The gate rule --------------------------------------------------------

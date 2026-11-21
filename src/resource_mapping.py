@@ -1496,7 +1496,12 @@ SCOPE_LEVEL_ORDER = (
 
 # The key the parse method records for the scope a scope entry sits in, in the order the emitter
 # tries it. Both keys are scope facts (F6.10.5), so the placement key is the fact the emitter reads
-# to choose the sub-block, and the property scan counts no property for either.
+# to choose the sub-block, and the property scan counts no property for either. A key can only name a
+# sub-block that declares `name`, because a placement is a scope name written inside another block, so
+# an empty set answers that the row's type has no location field for a container name and the entry
+# places at the top of its own chain; the two template-chain rows read that way, because `LOCATION_SCHEMA`
+# declares only `panorama` for them and the export holds them as siblings of the device group
+# (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §3).
 SCOPE_PLACEMENT = {
     "panos_device_group": (),
     "panos_device_group_parent": (),
