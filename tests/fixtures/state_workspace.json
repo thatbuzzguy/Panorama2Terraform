@@ -42,6 +42,22 @@
     },
     {
       "module": "root",
+      "type": "panos_address_group",
+      "name": "web_servers_group_c3c3c3c3",
+      "provider": "provider[\"panos\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Web-Servers",
+            "static": ["Web-Server-1"],
+            "location": {"shared": {}}
+          }
+        }
+      ]
+    },
+    {
+      "module": "root",
       "type": "panos_address",
       "name": "web_range_a1b2c3d4",
       "provider": "provider[\"panos\"]",

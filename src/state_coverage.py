@@ -17,11 +17,13 @@ Five rules, stated once here.
    either way. The `shared` block names the shared section, which states no name, so it fills no
    fact. A block the converter never emits (`template_stack`, `template_stack_vsys`,
    `template_vsys`) names a scope no run entry can sit in, so an entry placed there is not keyed.
-3. The drift fact compares a property the matrix row declares that both sides hold by the same
-   name, with values that are not equal. A property one side does not hold is not compared, and a
-   property the two sides name differently is not compared: the matrix row names the key the
-   emitter reads, the state names the attribute the provider stored, and no mapping rule exists.
-   A value is compared as the two sides hold it, so member order is part of the value.
+3. The drift fact compares a property the matrix row declares, with values that are not equal. The
+   state name for a property is `STATE_PROPERTY_NAMES`, the one mapping rule: measured per matrix row
+   type against the pinned provider schema, and it holds a row only where the two names differ, so the
+   same-name rule stands for a property the table has no row for. Only the pairs the measurement
+   reached are in the table, so the scan compares nothing it did not read. A property one side does
+   not hold is not compared. A value is compared as the two sides hold it, so member order is part of
+   the value.
 4. A drift fact needs an ownership fact, so the drift section is a subset of the ownership
    section. The scan scope is the F4.4 rule on both sides: an entry no matrix row covers is not a
    finding, and a state resource whose type has no matrix row is not in the index. A run with no
@@ -60,11 +62,12 @@ OWNERSHIP_RULE = (
 
 DRIFT_RULE = (
     "An owned entry with a value this run does not match is listed here. Only a property the "
-    "coverage matrix row declares is compared, and only when both sides hold it by the same "
-    "name, because no rule maps a parse key to a provider attribute name. The values are "
-    "printed as JSON text, so one finding stays on one line. A finding is an operator action, "
-    "not a broken output, so it does not change the exit code, which the F4.1 gate still "
-    "decides."
+    "coverage matrix row declares is compared. The state name a property is read under comes from "
+    "the comparison table; where the table holds no row for a property, the two sides are compared "
+    "by the same name, and a property one side does not hold is not compared. A property the table "
+    "maps prints both names. The values are printed as JSON text, so one finding stays on one line. "
+    "A finding is an operator action, not a broken output, so it does not change the exit code, "
+    "which the F4.1 gate still decides."
 )
 
 # Which §2.2 fact each `location` sub-block fills. The sub-block names and the field names
@@ -87,6 +90,30 @@ STATE_SCOPE_KEYS = {
 # A state entry is an entry, so its identity keys are the entry name and the location. Every
 # other attribute key is a property the scan can read (F4.3 rule 3).
 STATE_IDENTITY_KEYS = frozenset({"name", "location"})
+
+# The one mapping the drift scan reads: a parse key the matrix row declares, and the attribute name the
+# pinned provider schema declares for the same value. A row exists only where the two names differ, so a
+# property the table has no row for is compared by the same name (rule 3).
+#
+# The rows are a measurement, not a choice, made 2026-11-21 per matrix row type against provider v2.0.14.
+# A pair is kept when the run prints the parse key's value as the block's own top-level field under a
+# different name, and the printed value is the same data the parse key holds, so the two sides hold the
+# pair in the same shape. Pinned by
+# `tests/test_state_coverage.py::test_the_table_rows_are_the_measured_pairs`.
+#
+# The measurement reaches nothing for 16 matrix rows: their properties print inside a nested level, or
+# inside the `for_each` map, so `state_properties` cannot read them as a top-level attribute. Two shapes
+# the measurement cannot write as one name are recorded in `backlog.md`: the address `value`, which the
+# run prints under four names chosen by the entry's declared type, and the tag text, which the parse
+# reads as `comments` or `description` but no committed fixture holds as `description`.
+STATE_PROPERTY_NAMES = {
+    "panos_address_group": {"static_members": "static"},
+    "panos_ike_crypto_profile": {
+        "authentications": "hash",
+        "dh_groups": "dh_group",
+        "encryptions": "encryption",
+    },
+}
 
 
 def nested_block(value) -> dict:
@@ -131,6 +158,15 @@ def state_facts(entry: StateEntry) -> dict | None:
             elif field == "ngfw_device" and name != container_coverage.PLACEHOLDER_DEVICE:
                 facts["vsys_device"] = name
     return facts
+
+
+def state_name_for(resource_type: str, key: str) -> str:
+    """The attribute name the state document holds for a parse key (rule 3).
+
+    The table row when the table has one, otherwise the key itself: the same-name rule is unchanged for
+    a property the table has no row for, so the table is the only mapping the scan reads.
+    """
+    return STATE_PROPERTY_NAMES.get(resource_type, {}).get(key, key)
 
 
 def state_properties(entry: StateEntry) -> dict:
@@ -203,21 +239,27 @@ def state_findings(ledger, source: StateSource | None) -> list:
 def drift_properties(matrix_row: dict, mark: dict, state_entry: StateEntry) -> tuple:
     """The declared properties the two sides hold with different values, in sorted order.
 
-    Only a property the matrix row declares is compared, and only when both sides hold it by the
-    same name (rule 3). A read through `RecordingDict.value` does not count as a property an
-    output used, so the state scan cannot move a property finding (rule 5).
+    Only a property the matrix row declares is compared. The state side is read under the name the
+    mapping table gives the key, which is the key itself where the table has no row (rule 3). A
+    property one side does not hold is not compared. A read through `RecordingDict.value` does not
+    count as a property an output used, so the state scan cannot move a property finding (rule 5).
+
+    Each item names the parse key, the state name the value was read under, and the two values, so a
+    mapped pair carries both names.
     """
     declared = set(matrix_row["properties"])
     captured = mark["captured"]
     state_values = state_properties(state_entry)
-    shared = declared & set(captured.keys()) & set(state_values)
     differing = []
-    for key in sorted(shared):
+    for key in sorted(declared & set(captured.keys())):
         run_value = captured.value(key)
         if run_value in entry_coverage.EMPTY_FIELD_VALUES:
             continue
-        if run_value != state_values[key]:
-            differing.append((key, run_value, state_values[key]))
+        name = state_name_for(matrix_row["resource"], key)
+        if name not in state_values:
+            continue
+        if run_value != state_values[name]:
+            differing.append((key, name, run_value, state_values[name]))
     return tuple(differing)
 
 
@@ -246,7 +288,16 @@ def ownership_line(finding: dict) -> str:
 
 
 def drift_line(finding: dict) -> str:
-    """One drift line: the ownership line shape, then the properties the two values disagree on."""
+    """One drift line: the ownership line shape, then the properties the two values disagree on.
+
+    A property the mapping table has no row for prints one name, the name both sides hold. A property
+    the table maps prints both names, the parse key and the state name the value was read under, so the
+    operator sees the pair the finding compared.
+    """
     parts = [ownership_line(finding), "  value differs: "]
-    parts.append(", ".join(f"{key} ({value_text(run)} vs {value_text(state)})" for key, run, state in finding["drift"]))
+    labels = []
+    for key, name, run, state in finding["drift"]:
+        label = key if key == name else f"{key} as {name}"
+        labels.append(f"{label} ({value_text(run)} vs {value_text(state)})")
+    parts.append(", ".join(labels))
     return "".join(parts).rstrip()
