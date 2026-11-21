@@ -10,10 +10,6 @@ criteria for the open piece are in `acceptance.md`.
 
 ### Phase 11A, the run's read set
 
-- **11A.1 (open)** — the selection vocabulary: the shape a run names as its read set, read through
-  `container_coverage.is_scope_path`, and the argument rule for a selection that names no unit in the read set
-  (exit 2, the `--path` shape). No module gains a second path rule. A run that reads a whole export declares no
-  selection: the whole export is one source, and the run's unit set stays `unit_manifest.units`.
 - **11A.2** — the targeted read set: the selected scope plus the membership facts a unit identity cannot state
   on its own, read through `api_requests`; a name the selection excludes is not an index entry, so the join
   reports no finding for it.

@@ -2,16 +2,12 @@
 
 ## Current position
 
-Planning session in the worktree `api-mock-planning`, 2026-11-21. No code and no pin were written. The
-deliverable is `docs/API_DOCUMENTATION_AND_MOCKS.md`: the current state of the API-related work, what the
-PAN-OS API documentation can and cannot state, the mocking options through the injected-producer seam, and
-what is required to finish the planned API features. `PLAN.md` holds the decision point; `backlog.md` holds
-the error-code-table item. The record is not an epic until the decision on doc-derived committed responses
-is taken. This session touched no other worktree file, and Piece 11A.1 in the main tree is unchanged.
+Piece 11A.1 landed, 2026-11-21: the selection vocabulary, and the argument rule for a selection that names no unit
+in the run's read set. The next piece is 11A.2, the targeted read set. The design record for Epic 11, the codebase
+several runs write into, is `docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and the result of Piece
+11A.1 is recorded in `acceptance.md`.
 
-Planning for Epic 11, the codebase several runs write into. No piece is open for it yet; the design record is
-`docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and the acceptance criteria for Piece 11A.1 are in
-`acceptance.md`. Four decisions are agreed, and they are the shape of the record:
+Four decisions are agreed, and they are the shape of the record:
 
 1. The four root records become accumulated codebase state: a run reads the existing record through its own
    module's `parse_rows`, replaces the rows for the units it built, and keeps the rows for the units it did not.
@@ -24,50 +20,52 @@ Planning for Epic 11, the codebase several runs write into. No piece is open for
 4. The merged records are the codebase-level view. The run's report gains one section that names the units the run
    built and the codebase units it did not read, so no fifth root-set file states the unit set a second time.
 
-The last landed piece is the F5.6 comparison table (commit `43d6101`) and the F8.1 definitions read (the working
-tree, pending commit): the state scan reads a property under the name `state_coverage.STATE_PROPERTY_NAMES` gives
-it, and the table holds a row only where the parse key the coverage matrix row declares and the provider attribute
-name the pinned provider schema declares differ. The content is a measurement per matrix row type, not a
-selection: the run is read on the row's own fixture, the field names printed at the block's own level are read
-through the gate's one field reader, and a pair is kept when the printed name is an attribute the pinned schema
-declares at the block's top level for that type, when the printed value is the same data the parse key holds, and
-when one printed field answers for exactly one parse key. `state_name_for` is the one lookup the scan reads, so the
-same-name rule stands for a property the table has no row for, and the drift line names both names for a mapped
-pair. The decision and the measurement are in `docs/ARCHITECTURE.md` §3.2.
+What Piece 11A.1 landed:
 
-Gate, measured 2026-11-21 on the committed tree, single-threaded at `f376a6a`: `ruff check .` clean at `py310`,
-`ruff format --check .` clean on the 105 Python files, `python3 tools/check_documents.py` reports no finding, and
-`python3 -m pytest` passes 1,741 pins with the same 4 skip for the missing `tflint` binary — 1,745 pins, 3 more
-than the 1,742 the F5.6 piece measured, all three in the F8.1 pins, in 54 test modules, in 306.61 s.
+- `shared_arguments` declares `--selection`, so both entry points read one argument set, and `shared_checks` states
+  the argument rule for it. The shape is read through `container_coverage.is_scope_path`, the place through
+  `container_coverage.path_place`, and the built-in place through `container_coverage.PREDEFINED_PLACE`, so the
+  argument states no path shape of its own, and it states no unit rule, no naming rule, no writer, no console line
+  and no environment name.
+- `container_coverage.path_segments` is the one place a path is split, `path_place` is the one place the first
+  segment is read, and `is_scope_path` reads through them, so the shape rule and the place rule read the same
+  segments. `path_place` holds no copy of the built-in name, so the pin that counts the constant's uses inside
+  `container_coverage.py` is unchanged.
+- The file-source refusal is in path 1's `main()`, next to the `--path` and `--parent` block, because `--source` is
+  path 1's argument and path 2 has none, so `shared_checks` cannot state a rule for a source it does not read.
+- The no-unit fact is decidable at argument time only for the built-in place: no container table row names a
+  built-in container, so no parse method runs over its response, the ledger holds no row, and
+  `unit_manifest.units` names no unit for it. `shared` stays accepted because a shared read builds a report row and
+  `unit_manifest.SHARED_UNIT` names its unit. `devices` and `vsys` are accepted at argument time, because the fact
+  that names which device the run read is a live-target fact, recorded in `backlog.md`.
+- The piece states no read rule, no merge rule, no report rule, and no module, so the `docs/ARCHITECTURE.md` §1
+  table is unchanged and `codebase_state.py` is named only when Piece 11B.1 lands, and the run that declares a
+  selection writes the same bytes as the same run that declares none.
 
-Measured 2026-11-21 over the 42 matrix rows against provider v2.0.14: 26 types reach a pair, four of those
-name the parse key and a different attribute name and are the table rows in `state_coverage.STATE_PROPERTY_NAMES`,
-16 rows reach no field at the block's own level, and no printed field answers for more than one parse key. On the
-16 rows: 10 print none of their properties at the block's own level, 4 print one there as a reference, a nested
-object, or a number text rather than as the same data the parse key holds, and 2 hold no report entry in the run.
-`panos_address` declares `tags`, the same name the parse key has, so the table has no row for it, and the address
-`value` prints under four names chosen by the entry's declared type, so no single name is the answer. The
-committed state document holds one address group entry, read under the name the schema declares.
+Four pins are new: `tests/test_api_requests.py::test_a_selection_shape_is_read_through_the_one_scope_path_definition`,
+`tests/test_api_requests.py::test_the_selection_argument_states_no_rule_an_owner_states`,
+`tests/test_api_path.py::test_a_selection_that_names_no_unit_is_an_argument_error_on_a_run`, which reads the exit
+code and the no-file fact from a run, and
+`tests/test_shadow_coverage.py::test_a_selection_applies_to_the_api_source_only`. The pin
+`tests/test_api_path.py::test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_that_name_one_source`
+gained `selection` in the accepted name list. The pins that hold the one path definition, the run's unit set, and
+the fact that a declared parent source names no unit are unchanged, and the committed goldens are unchanged.
 
-The pins are the six in group 7 of `tests/test_state_coverage.py`: the measured pairs against the table and
-against the live schema, the parse key the run prints under four names, the mapped pair read through the
-committed state document, the same-name rule where the table has no row, the scan reading the mapping only
-through the table, and the drift line for a mapped pair.
+Gate, measured 2026-11-21 on the tree that holds this piece, single-threaded: `ruff check .` clean at `py310`,
+`ruff format --check .` clean on the 106 Python files, `python3 tools/check_documents.py` reports no finding, and
+`python3 -m pytest` passes 1,745 pins with the same 4 skip for the missing `tflint` binary — 1,749 pins, 4 more
+than the 1,745 pins the per-module collection counts measured at `f376a6a` (1,741 passed plus the 4 skip), in 53
+test modules, in 469.96 s on the recorded run. Read through the
+per-module collection counts: `tests/test_api_requests.py` collects 26, `tests/test_api_path.py` 36, and
+`tests/test_shadow_coverage.py` 23, so the four new pins are 2, 1 and 1 in those three modules. `terraform` is
+present on this machine, so the pins that read the live provider schema ran, and the 4 skips are the `tflint` pins
+in `tests/test_sanity_gate.py`. The new pins run the pipeline for the places they read, so the gate time is above
+the 306.61 s the previous piece measured; run-to-run time varies, and the recorded runs of this tree measured
+469.96 s and 695.56 s.
 
-Gate, measured 2026-11-21 on the committed tree, single-threaded: `ruff check .` clean at `py310`,
-`ruff format --check .` clean on the 104 Python files, `python3 tools/check_documents.py` reports no
-finding, and `python3 -m pytest` passes 1,738 pins with the same 4 skip for the missing `tflint` binary —
-1,742 pins in 53 test modules, in 243.32 s. `terraform` is present on this machine, so the pins that read
-the live provider schema ran, and the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py`.
-`pyproject.toml` sets `addopts = "-q"`, so a count is read from the per-module collection counts: 1,736
-pins in 53 modules before the piece and 1,742 here, so the piece adds six pins, all in
-`tests/test_state_coverage.py`, which collects 24 before and 30 here. The measurement pin runs the pipeline
-for every matrix row and reads the provider schema, so the gate time is above the 246.55 s the previous piece
-measured; run-to-run time varies, and the four runs of this tree measured 243.32 s, 265.73 s, 273.93 s and
-247.73 s.
-
-No piece is open. `backlog.md` holds the items that need a fact a live target states: the device the operator adds to
-a device group for a new site, and the device serial a push target names (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4);
+Piece 11A.2 is open: the targeted read set. `backlog.md` holds the items that need a fact a live target states:
+the device the operator adds to a device group for a new site, and the device serial a push target names
+(`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4);
 the rulebase value string and the rule position (F3.5), which also gate the `rulebase` row column and the import
 block for a rule entry; a config entry inside a stack needs a provider location shape; the EDL `certificate_profile`
 field needs a rule that makes the EDL site resolve names; the per-entry report `profile_name` column needs a value the
