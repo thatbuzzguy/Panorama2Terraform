@@ -3,9 +3,9 @@
 This is the design record for the codebase output (Epic 6). It states what a full Terraform
 codebase needs and the rules behind the files the run writes. Every rule it states is landed,
 so every section names the module and the test that holds it, including the rule data pair and
-the iterated rule block (Epic 9, Phase 9D). The parts that stay open are the zero-change plan
-half of §7, which no test can pin because a plan needs a device, and Epic 10 pieces E10.2 and
-E10.3. Every statement about the converter names the module or the test that holds it.
+the iterated rule block (Epic 9, Phase 9D). The part that stays open is the zero-change plan
+half of §7, which no test can pin because a plan needs a device. Every statement about the
+converter names the module or the test that holds it.
 Provider facts come from the pinned provider (2.0.14) and are listed in §12.
 
 ## 1. What a codebase is
@@ -59,8 +59,9 @@ These parts are true today, so a codebase can be built on them.
 | The import block | The address that binds a written block to the object the live config already has, from the same identity data the resource block uses (§7) | `import_blocks.py`, §7 |
 | The scope object | The unit as a block in the run, so a new site is created by an apply and a name inside a location can be checked against the run (§8) | `resource_mapping.py`, §8 |
 
-§3 to §11 are landed, and §11 is the owner document for the credential rule. The open work is Epic 10
-pieces E10.2 and E10.3, recorded in `PLAN.md`.
+§3 to §11 are landed, and §11 is the owner document for the credential rule. The template and the
+stack facts are read through the rules this document states, and the new-site decision is owned by
+`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4.
 
 ## 3. The unit boundary as data (F6.1, landed)
 
@@ -783,8 +784,7 @@ a run with no network passes CI.
 The order this section planned is complete, so the steps are removed here and the git history holds
 them; what the section keeps is the shape rule it decided. `write_path.py` is the one place a run writes
 a file, and `unit_path` and `root_path` are the two builders, one per set. The LF rule is stated in
-`docs/ARCHITECTURE.md` §6, so this section does not restate it. What stays open is Epic 10 pieces E10.2
-and E10.3, recorded in `PLAN.md`.
+`docs/ARCHITECTURE.md` §6, so this section does not restate it.
 
    **The unit set** is the files one plan reads, so one directory holds them: the `.tf` files for that unit,
    and the printed form of that unit's site row (§9 rule 4). A run that names one unit writes one directory: the

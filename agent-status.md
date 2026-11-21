@@ -24,11 +24,15 @@ reads 2 `emitted` entries. The three pins that state the printed fixture set rea
 `corpus_fixtures()`, so they state 67 accepted, 66 read and 3 refused; the corpus edge, gap, property, ownership and
 site-row sets did not move and the `.tf` goldens are unchanged.
 
-Gate, measured 2026-11-21 on the final tree of the piece, single-threaded: `ruff check .` clean at `py310`,
-`ruff format --check .` clean on the 104 Python files, `python3 tools/check_documents.py` reports no finding, and
-`python3 -m pytest` passes 1,732 pins with the same 4 skip for the missing `tflint` binary — 1,736 pins in 53
-test modules, in 237.21 s, six pins more than the 1,726 measured at `4351ca0`. `pyproject.toml` sets
-`addopts = "-q"`, so a count is read from the per-module collection counts.
+Gate, measured 2026-11-21 on the reviewed tree, single-threaded: `ruff check .` clean at `py310`,
+`ruff format --check .` clean on the 104 Python files, `python3 tools/check_documents.py` reports no
+finding, and `python3 -m pytest` passes 1,732 pins with the same 4 skip for the missing `tflint` binary —
+1,736 pins in 53 test modules, in 246.55 s. `terraform` is present on this machine, so the pins that read
+the live provider schema ran, and the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py`.
+`pyproject.toml` sets `addopts = "-q"`, so a count is read from the per-module collection counts: 1,726
+pins in 53 modules at `4351ca0`, 1,730 in 53 modules at `4adecbd` (Piece E10.2), 1,736 in 53 modules here,
+so the piece adds six pins — the five pins named above plus the new fixture's instance in the
+corpus-parametrized gate pin, whose count moves from 113 to 114.
 
 No piece is open. `backlog.md` holds the items that need a fact a live target states: the device the operator adds to
 a device group for a new site, and the device serial a push target names (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4);
@@ -36,6 +40,27 @@ the rulebase value string and the rule position (F3.5), which also gate the `rul
 block for a rule entry; a config entry inside a stack needs a provider location shape; the EDL `certificate_profile`
 field needs a rule that makes the EDL site resolve names; the per-entry report `profile_name` column needs a value the
 provider does not declare; and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4.
+
+## Acceptance review of Piece E10.3 (2026-11-21)
+
+The piece is reviewed at `1977366` and `73764c2`, both not pushed, and every measurement §4 states is
+confirmed by an independent re-read through the tool's own modules on `tests/fixtures/template_no_device.xml`.
+The review record is `acceptance.md`. Two things were wrong and are corrected:
+
+- `docs/CODEBASE_ASSEMBLY.md` still named Pieces E10.2 and E10.3 as open work in three places (the top of
+  the document, the end of §2, the end of §14), which contradicts the landed state in `PLAN.md` and
+  `docs/README.md`. The three sentences are removed, and the zero-change plan half of §7 is the only part
+  of that document that stays open.
+- The pin-delta baseline. Six is the delta from Piece E10.2's 1,730 pins, not from the 1,726 measured at
+  `4351ca0`, which is ten. Read through the per-module collection counts, as the convention states.
+
+Also recorded in the review record: `acceptance.md` as written named `entry_coverage.identity_of`, while
+`identity_of` is `panorama_to_terraform.PanoramaParser.identity_of`. No code or pin changed, so no pin moved.
+
+Each of the five pins passes on its own, in the module that owns the rule, and states only the fact §4 reads
+through that module. The index rule pin `tests/test_layout.py::test_the_indexes_name_every_document_under_them`
+passes, and the import rule reads clean: no test module imports another test module, and no `src/` module
+imports anything from `tests/`.
 
 ## Rules to keep when writing documents
 
