@@ -292,23 +292,6 @@ def test_a_drift_fact_needs_an_ownership_fact(converter_module, tmp_path):
         assert len(state_coverage.drift_line(finding).splitlines()) == 1
 
 
-def test_the_state_scan_read_does_not_count_as_a_property_read(converter_module, tmp_path):
-    """AC-3.5: the state scan is not an output, so it reads through `RecordingDict.value` and the
-    property section is unchanged by it."""
-    before_out = tmp_path / "without_state"
-    after_out = tmp_path / "with_state"
-    without = run_pipeline(converter_module, RUN_FIXTURE, before_out)
-    before = sorted(entry_coverage.property_line(row) for row in without.ledger.property_findings())
-    before_rows = sorted((row["name"], row["fields"]) for row in without.ledger.rows())
-    with_state = run_pipeline(converter_module, RUN_FIXTURE, after_out, _state_args())
-    after = sorted(entry_coverage.property_line(row) for row in with_state.ledger.property_findings())
-    after_rows = sorted((row["name"], row["fields"]) for row in with_state.ledger.rows())
-    assert before == after, (before, after)
-    assert before_rows == after_rows, (before_rows, after_rows)
-    for line in _section(_report(before_out), entry_coverage.PROPERTY_HEADING).splitlines():
-        assert line in _report(after_out), line
-
-
 # --- 4. The report sections and the exit code --------------------------------
 
 
@@ -401,7 +384,27 @@ def test_the_console_prints_no_state_line_and_the_exit_code_is_unchanged(convert
     assert state_coverage.DRIFT_HEADING in report, report
 
 
-# --- 5. Determinism and the record -------------------------------------------
+# --- 5. The state scan is not an output --------------------------------------
+
+
+def test_the_state_scan_read_does_not_count_as_a_property_read(converter_module, tmp_path):
+    """AC-3.5: the state scan is not an output, so it reads through `RecordingDict.value` and the
+    property section is unchanged by it."""
+    before_out = tmp_path / "without_state"
+    after_out = tmp_path / "with_state"
+    without = run_pipeline(converter_module, RUN_FIXTURE, before_out)
+    before = sorted(entry_coverage.property_line(row) for row in without.ledger.property_findings())
+    before_rows = sorted((row["name"], row["fields"]) for row in without.ledger.rows())
+    with_state = run_pipeline(converter_module, RUN_FIXTURE, after_out, _state_args())
+    after = sorted(entry_coverage.property_line(row) for row in with_state.ledger.property_findings())
+    after_rows = sorted((row["name"], row["fields"]) for row in with_state.ledger.rows())
+    assert before == after, (before, after)
+    assert before_rows == after_rows, (before_rows, after_rows)
+    for line in _section(_report(before_out), entry_coverage.PROPERTY_HEADING).splitlines():
+        assert line in _report(after_out), line
+
+
+# --- 6. Determinism and the record -------------------------------------------
 
 
 def test_two_runs_on_the_same_bytes_write_the_same_bytes(converter_module, tmp_path):
@@ -450,9 +453,10 @@ MAPPED_STATE_NAME = "static"
 GROUP_ADDRESS = "panos_address_group.web_servers_group_c3c3c3c3"
 
 # Measured 2026-11-21, read through the measurement helper below: the matrix rows it reads, the types it
-# reached a pair for, the rows it cannot reach because their properties print inside a nested level or
-# inside the `for_each` map, so `state_properties` never reads them as an attribute, and the table rows,
-# which are the pairs where the two names differ.
+# reached a pair for, the rows that reached no field, and the table rows, which are the pairs where the two
+# names differ. Measured on the 16 rows that reach no field: 10 print none of their properties at the block's
+# own level, 4 print one there as a reference, a nested object, or a number text rather than as the same data
+# the parse key holds, and 2 hold no report entry in the run, so nothing pairs with them.
 MEASURED_ROWS = 42
 MEASURED_TYPES_WITH_PAIRS = 26
 MEASURED_ROWS_REACHING_NO_FIELD = 16
@@ -574,9 +578,10 @@ def test_a_parse_key_the_run_prints_under_four_names_has_no_row(converter_module
 
 def test_a_mapped_pair_is_compared_and_the_finding_names_both_names(converter_module, tmp_path):
     """Criterion 3: the pair the table maps is compared, and the finding names both sides. The state
-    document holds the value under `static`, the name the pinned schema declares for
-    `panos_address_group`, and the run side holds the same value under the parse key `static_members`, so
-    under the same-name rule this entry compares nothing: the finding exists only because of the table.
+    document holds the member list under `static`, the name the pinned schema declares for
+    `panos_address_group`, and the run side reads that entry's members under the parse key
+    `static_members`. The two values differ, and under the same-name rule the scan would read no state
+    attribute for that entry, so the finding exists only because of the table.
     """
     state = state_input.read_state(FIXTURES_DIR / STATE_FIXTURE, workspace=WORKSPACE)
     entry = _entry(state, GROUP_ENTRY, GROUP_TYPE)

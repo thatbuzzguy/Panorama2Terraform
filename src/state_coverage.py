@@ -101,11 +101,12 @@ STATE_IDENTITY_KEYS = frozenset({"name", "location"})
 # pair in the same shape. Pinned by
 # `tests/test_state_coverage.py::test_the_table_rows_are_the_measured_pairs`.
 #
-# The measurement reaches nothing for 16 matrix rows: their properties print inside a nested level, or
-# inside the `for_each` map, so `state_properties` cannot read them as a top-level attribute. Two shapes
-# the measurement cannot write as one name are recorded in `backlog.md`: the address `value`, which the
-# run prints under four names chosen by the entry's declared type, and the tag text, which the parse
-# reads as `comments` or `description` but no committed fixture holds as `description`.
+# The measurement reaches nothing for 16 matrix rows: 10 print none of their properties at the block's own
+# level, 4 print one there as a reference, a nested object, or a number text rather than as the same data the
+# parse key holds, and 2 hold no report entry in the run, so no pair is read for them. Two shapes the
+# measurement cannot write as one name are recorded in `backlog.md`: the address `value`, which the run prints
+# under four names chosen by the entry's declared type, and the tag text, which `parse_tags` stores only as
+# `comments`, so the `description` key the row declares is never filled for the measurement to pair.
 STATE_PROPERTY_NAMES = {
     "panos_address_group": {"static_members": "static"},
     "panos_ike_crypto_profile": {
