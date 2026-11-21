@@ -636,9 +636,10 @@ The coverage sets:
   declares, so it names the parent scope), the report section and its line shape with the parent entry
   field, one finding per parent entry, the report order, the console line, the CLI argument rules, and the
   offline run reading both cache entries
-- `tests/test_state_coverage.py` - the state scan: the ownership key, the drift rule, the two report
-  sections and their line shapes, the rule that a state read is not an output read, the exit code, and
-  the record read back with no new field
+- `tests/test_state_coverage.py` - the state scan: the ownership key, the drift rule, the comparison table
+  measured per matrix row type against the pinned provider schema, the two report sections and their line
+  shapes, the rule that a state read is not an output read, the exit code, and the record read back with no
+  new field
 - `tests/test_coverage_matrix.py` - the matrix row set, the element grounding, the per-row pipeline run, the
   row shape, and the property grounding, one check per row where the method names one
 

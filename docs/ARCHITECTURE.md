@@ -564,7 +564,9 @@ The drift line is the ownership line with the values added:
 
 The line names the run entry's source line, the same line the entry rows print, because a state entry
 has no line of its own. Values are printed as their JSON text and properties are in sorted order, so
-one finding stays on one line.
+one finding stays on one line. A property the comparison table maps prints both names, the parse key and
+the state name the value was read under, in the form `<parse key> as <state name>`; a property the table
+has no row for prints the one name both sides hold.
 
 The ownership key is §2.1 identity as the F3.9 rule reads it: the matrix row, the entry name, and the
 five declared facts, read from the `location` block the state document holds, through the block names
@@ -577,17 +579,35 @@ property rule on both sides: an entry no row covers is not a finding, and a stat
 has no row is not in the index. A run with no declared state source has no state to read, so it prints
 neither section.
 
-Drift compares only a property the row declares that both sides hold by the same name, because no rule
-maps a parse key to a provider attribute name: the parse key `tags` and the provider attribute `tag`
-are not compared, and that limit is recorded in [`../backlog.md`](../backlog.md). A value is compared as
-the two sides hold it, so member order is part of the value. A drift fact needs an ownership fact, so
-the drift section is a subset of the ownership section. The state scan is not an output, so it reads
-captured values through the non-recording read (`entry_coverage.RecordingDict.value`) and cannot move a
-property finding. Both facts are grouped by the same F3.9 scope rule, the console prints no state line
-because each fact names two identities and a second position, and both are operator actions, so neither
-changes the exit code, which the F4.1 gate still decides.
+Drift compares only a property the matrix row declares. The state name a property is read under comes
+from `state_coverage.STATE_PROPERTY_NAMES`, the one mapping rule, and a row exists only where the two
+names differ, so a property the table has no row for is compared by the name both sides hold. The rows
+are a measurement, made 2026-11-21 per matrix row type against the pinned provider schema (v2.0.14), and
+not a selection: the run is read on the row's own fixture, the field names printed at the block's own
+level are read through the gate's one field reader, and a pair is kept when the printed name is an
+attribute the schema declares at the block's top level for that type, when the printed value is the same
+data the parse key holds, and when one printed field answers for exactly one parse key. Measured over the
+42 matrix rows: 26 types reach a pair and four pairs name the parse key and a different attribute name,
+which are the four table rows (`static_members` for `static` on `panos_address_group`, and
+`authentications`, `dh_groups` and `encryptions` for `hash`, `dh_group` and `encryption` on
+`panos_ike_crypto_profile`); 16 rows reach no field at the block's own level, because their properties
+print inside a nested level or inside the `for_each` map, so `state_properties` cannot read them as an
+attribute; and one key, `value` for `panos_address`, is printed under four names chosen by the entry's
+declared type, so no single name is the answer and the table holds no row for it. The two shapes the
+measurement cannot state as one name, and the fixture work each needs, are recorded in
+[`../backlog.md`](../backlog.md). For `panos_address` the parse key `tags` and the provider attribute
+`tags` are the same name, so the table has no row for it.
+
+A value is compared as the two sides hold it, so member order is part of the value. A drift fact needs an
+ownership fact, so the drift section is a subset of the ownership section. The state scan is not an
+output, so it reads captured values through the non-recording read (`entry_coverage.RecordingDict.value`)
+and cannot move a property finding. Both facts are grouped by the same F3.9 scope rule, the console prints
+no state line because each fact names two identities and a second position, and both are operator actions,
+so neither changes the exit code, which the F4.1 gate still decides.
 Pinned by `tests/test_state_coverage.py`, including the fixed line shapes, the key, the scan scope on
-both sides, the grouping, the property-read parity, and the no-state run.
+both sides, the grouping, the property-read parity, the no-state run, the measured table rows, the mapped
+pair read through the state document, the same-name rule where the table has no row, and the scan reading
+the mapping only through the table.
 
 Rows are grouped with the F3.9 scope rule (`_report_scope_path`), the same rule
 the interface and manual reports use, so the same name in two device groups is two

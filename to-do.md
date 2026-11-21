@@ -12,7 +12,9 @@ target (F3.5), which also gate the rule data column for `rulebase` and the impor
 rule entry; a config entry inside a stack needs a provider location shape; the EDL
 `certificate_profile` field needs a rule that makes the EDL site resolve names; the per-entry
 report `profile_name` column needs a value the provider does not declare; the path 2 live facts in
-`docs/API_CONVERSION_PATH.md` §4 need a live target.
+`docs/API_CONVERSION_PATH.md` §4 need a live target; and the two shapes the F5.6 comparison table cannot
+state as one name need a fixture that exercises them, because the table's content is read from a
+measurement over the committed corpus rather than from a name.
 
 ## Rules the layout keeps
 

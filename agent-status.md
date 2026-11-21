@@ -2,44 +2,50 @@
 
 ## Current position
 
-The last landed piece is Piece E10.3 (2026-11-21, commit `1977366`): for a template entry the export declares and no
-device names, the tool states the names the export declares and nothing for a device it does not name, so the
-`vsys_device` fact stays empty and no output names a device for that unit. The decision is in
-`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4, read on `tests/fixtures/template_no_device.xml`, and no `src/` module
-changed: each part of the decision is an existing rule answering for a fixture that shows the shape. The pins are
-`tests/test_unit_manifest.py::test_a_template_entry_no_device_names_keeps_the_device_fact_empty`,
-`tests/test_site_data.py::test_a_unit_that_names_no_device_writes_no_site_row_and_no_tfvars_line`,
-`tests/test_reference_edges.py::test_a_device_group_that_lists_a_template_records_no_row`,
-`tests/test_scope_objects.py::test_a_template_entry_with_no_device_prints_its_names_and_no_device`, and
-`tests/test_commit_actions.py::test_a_unit_with_no_device_fact_names_the_fact_the_export_declares`.
+The last landed piece is the F5.6 comparison table (2026-11-21, commit `43d6101`): the state scan reads a property under the
+name `state_coverage.STATE_PROPERTY_NAMES` gives it, and the table holds a row only where the parse key the
+coverage matrix row declares and the provider attribute name the pinned provider schema declares differ. The
+content is a measurement per matrix row type, not a selection: the run is read on the row's own fixture, the
+field names printed at the block's own level are read through the gate's one field reader, and a pair is kept
+when the printed name is an attribute the pinned schema declares at the block's top level for that type, when
+the printed value is the same data the parse key holds, and when one printed field answers for exactly one
+parse key. `state_name_for` is the one lookup the scan reads, so the same-name rule stands for a property the
+table has no row for, and the drift line names both names for a mapped pair. The decision and the measurement
+are in `docs/ARCHITECTURE.md` §3.2.
 
-Measured on that run: `unit_manifest.facts_of` answers `('', '', 'Remote-Networks', '', '')`, so `Shared` for
-`device_group` is the parse fallback and not a fact value, the digest is `93488ed8` and the directory is
-`remote_networks_93488ed8`; `reference_edges.build_rows` answers no row and `order` answers `after` empty on both
-rows, with rank 1 for the template unit and rank 2 for the device group unit; `site_data.build_rows` answers no row
-and `value_variables` answers no name, so the run writes no site record, no `.tfvars`, no `target` in `provider.tf`
-and no `target` declaration; `commit_actions.build_rows` answers four rows and both blocks for the template unit name
-the template fact; the gate reports no finding and writes no `MANUAL_SETUP_REPORT.txt`, and the per-entry report
-reads 2 `emitted` entries. The three pins that state the printed fixture set read the new fixture through
-`corpus_fixtures()`, so they state 67 accepted, 66 read and 3 refused; the corpus edge, gap, property, ownership and
-site-row sets did not move and the `.tf` goldens are unchanged.
+Measured 2026-11-21 over the 42 matrix rows against provider v2.0.14: 26 types reach a pair, four of those
+name the parse key and a different attribute name and are the table rows, 16 rows reach no field at the
+block's own level, and no printed field answers for more than one parse key. The rows are `static_members`
+for `static` on `panos_address_group`, and `authentications`, `dh_groups` and `encryptions` for `hash`,
+`dh_group` and `encryption` on `panos_ike_crypto_profile`. `panos_address` declares `tags`, the same name the
+parse key has, so the table has no row for it, and the address `value` prints under four names chosen by the
+entry's declared type, so no single name is the answer. The committed state document holds one address group
+entry, read under the name the schema declares.
 
-Gate, measured 2026-11-21 on the reviewed tree, single-threaded: `ruff check .` clean at `py310`,
+The pins are the six in group 7 of `tests/test_state_coverage.py`: the measured pairs against the table and
+against the live schema, the parse key the run prints under four names, the mapped pair read through the
+committed state document, the same-name rule where the table has no row, the scan reading the mapping only
+through the table, and the drift line for a mapped pair.
+
+Gate, measured 2026-11-21 on the committed tree, single-threaded: `ruff check .` clean at `py310`,
 `ruff format --check .` clean on the 104 Python files, `python3 tools/check_documents.py` reports no
-finding, and `python3 -m pytest` passes 1,732 pins with the same 4 skip for the missing `tflint` binary —
-1,736 pins in 53 test modules, in 246.55 s. `terraform` is present on this machine, so the pins that read
+finding, and `python3 -m pytest` passes 1,738 pins with the same 4 skip for the missing `tflint` binary —
+1,742 pins in 53 test modules, in 243.32 s. `terraform` is present on this machine, so the pins that read
 the live provider schema ran, and the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py`.
-`pyproject.toml` sets `addopts = "-q"`, so a count is read from the per-module collection counts: 1,726
-pins in 53 modules at `4351ca0`, 1,730 in 53 modules at `4adecbd` (Piece E10.2), 1,736 in 53 modules here,
-so the piece adds six pins — the five pins named above plus the new fixture's instance in the
-corpus-parametrized gate pin, whose count moves from 113 to 114.
+`pyproject.toml` sets `addopts = "-q"`, so a count is read from the per-module collection counts: 1,736
+pins in 53 modules before the piece and 1,742 here, so the piece adds six pins, all in
+`tests/test_state_coverage.py`, which collects 24 before and 30 here. The measurement pin runs the pipeline
+for every matrix row and reads the provider schema, so the gate time is above the 246.55 s the previous piece
+measured; run-to-run time varies, and the two runs of this tree measured 243.32 s and 265.73 s.
 
 No piece is open. `backlog.md` holds the items that need a fact a live target states: the device the operator adds to
 a device group for a new site, and the device serial a push target names (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4);
 the rulebase value string and the rule position (F3.5), which also gate the `rulebase` row column and the import
 block for a rule entry; a config entry inside a stack needs a provider location shape; the EDL `certificate_profile`
 field needs a rule that makes the EDL site resolve names; the per-entry report `profile_name` column needs a value the
-provider does not declare; and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4.
+provider does not declare; and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4. It also holds the two
+shapes the comparison table cannot state as one name: the address `value`, which the run prints under four names, and
+the tag text, which the parse reads as `comments` or `description` but no committed fixture holds as `description`.
 
 ## Acceptance review of Piece E10.3 (2026-11-21)
 

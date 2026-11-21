@@ -415,17 +415,24 @@ here with that rule named.
   labelled.
 - Open: the provenance record names the host and the scope, never the credential. The key
   rule itself (environment only, never argv, never a generated file) is in `ARCHITECTURE.md` §3.
-- The state document is a reference source, so it reads through the same door and the same row rule
-  (F5.6); the rules are in `ARCHITECTURE.md` §3 and §3.2. A state entry has no
+- The state scan compares a property the matrix row declares under the name the comparison table gives
+  it, and the table holds a row only where the parse key and the provider attribute name differ
+  (F5.6). The rules and the measurement are in `ARCHITECTURE.md` §3.2. A state entry has no
   source line, because only the expat handler path records one, so its position is its resource
   address, and the scan reads the matrix row through the resource type instead of through a
   container path.
-- Open: the state scan compares only a property both sides hold by the same name (F5.6). The matrix
-  row names the key the emitter reads and the state document names the attribute the provider
-  stored, so no mapping rule exists between them: the parse key `tags` and the provider attribute
-  `tag` are not compared. A comparison table would have to be verified per type against the
-  provider schema, the way `LOCATION_SCHEMA` is, so the scan keeps the same-name rule until such a
-  table exists.
+
+- The address value cannot be a table row: `value` is one parse key the run prints under four names,
+  one per declared type (`fqdn`, `ip_netmask`, `ip_range`, `ip_wildcard`), so no single name is the
+  answer and the scan compares nothing for it. A table that held a set of names per key, or a scan that
+  read the entry's declared type at the state side, would close this. Measured 2026-11-21 and pinned by
+  `tests/test_state_coverage.py::test_a_parse_key_the_run_prints_under_four_names_has_no_row`.
+
+- The tag text needs a table row the measurement cannot reach: the parse reads it as `comments` or as
+  `description`, and the run prints `comments`, so `description` is a parse key the table should map,
+  but no committed fixture holds a tag entry with `description`, so the measurement reads no pair for
+  it. The row enters the table with a fixture that exercises the key, because the pin reads the corpus
+  rather than a name a person picked.
 
 - Epic 8 (path 2) reads the facts an export cannot carry, and each one stays blocked until a live target
   states it. The committed response set (`tests/responses/`, F8.4) shows one shape per accepted request shape
