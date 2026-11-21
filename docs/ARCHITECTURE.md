@@ -729,8 +729,8 @@ The rule lives in `unit_manifest.py`, and it holds six facts:
 
 - **The unit name.** The deepest scope the export declares names the unit, in the F3.9 level
   order, read innermost first: `vsys`, `vsys_device`, `template`, `template_stack`,
-  `device_group` (F6.10.5). A template inside a stack names its template, because the template is
-  deeper than the stack. `Shared` names the unit whose five facts are empty, because the five facts
+  `device_group` (F6.10.5). A row carries at most one container fact, because a template entry and a
+  stack entry name no container (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §3). `Shared` names the unit whose five facts are empty, because the five facts
   alone cannot name the shared section. The placeholder device names no unit (§2.2), so the scope above it names the unit.
 - **The identity.** `facts_of` reads a ledger row or a parsed object through one function, so both
   land on the same unit: it drops the `Shared` parse fallback from `device_group` (§2.2 rule).

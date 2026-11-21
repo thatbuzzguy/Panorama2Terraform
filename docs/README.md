@@ -12,7 +12,7 @@ that document instead of restating the rule.
 | [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) | Plan and run a migration, for one device or several virtual routers |
 | [CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) | What a full codebase needs and the rules behind the files the run writes. Design record for Epic 6; §3 to §11 and §14 landed |
 | [API_CONVERSION_PATH.md](API_CONVERSION_PATH.md) | The second conversion path, which reads only API responses. Design record for Epic 8, closed |
-| [TEMPLATE_STACK_DEPLOYMENT.md](TEMPLATE_STACK_DEPLOYMENT.md) | The template and stack unit: which membership name enters the edge set, and what the codebase cannot apply yet. Design record for Epic 10; piece 1 landed, pieces 2 and 3 open |
+| [TEMPLATE_STACK_DEPLOYMENT.md](TEMPLATE_STACK_DEPLOYMENT.md) | The template and stack unit: which membership name enters the edge set, the scope a template or a stack entry is declared inside, and what the codebase cannot apply yet. Design record for Epic 10; pieces 1 and 2 landed, piece 3 open |
 | [DEVICE_GROUP_SPLITTING.md](DEVICE_GROUP_SPLITTING.md) | Split one export into one file per device group |
 | [ADVANCED-ROUTING-ENGINE-SUPPORT.md](ADVANCED-ROUTING-ENGINE-SUPPORT.md) | Logical routers, and the routing config the converter does not read |
 | [VPN_ROUTING_CONFIG_EXAMPLES.md](VPN_ROUTING_CONFIG_EXAMPLES.md) | The XML shapes the parser reads for VPN and routing |
@@ -42,6 +42,7 @@ that document instead of restating the rule.
 | Device group to template join | `DEVICE_GROUP_SPLITTING.md` |
 | Codebase unit, ownership, order between units, import blocks, scope objects, site data, commit action, the write path, the rule data pair | `CODEBASE_ASSEMBLY.md` §3 to §11 and §14, and the modules `unit_manifest.py`, `ownership.py`, `reference_edges.py`, `import_blocks.py`, `site_data.py`, `commit_actions.py`, `write_path.py`, `rule_data.py` |
 | Which membership name enters the edge set, and the plan order that name produces | `TEMPLATE_STACK_DEPLOYMENT.md` §2, `api_requests.LIST_JOIN` for the join between a membership list and the table its owner returns, and `reference_edges.py` for the pair and the order |
+| The scope a template entry or a stack entry is declared inside, and the manifest field that states it | `TEMPLATE_STACK_DEPLOYMENT.md` §3, `resource_mapping.SCOPE_PLACEMENT` for the placement key, `resource_mapping.LOCATION_SCHEMA` for the sub-block that key can name, and `unit_manifest.FACT_KEYS` for the facts the row reads |
 | The credential rule, stated once | `CODEBASE_ASSEMBLY.md` §11 is the owner; `ARCHITECTURE.md` §3 links to it and keeps only what the fetch layer enforces, and `README.md`, `docs/USAGE_GUIDE.md` and `docs/MIGRATION_GUIDE.md` link to it |
 | Provenance record, the cache reference, and the prune action it gates | `ARCHITECTURE.md` §3.3, and `provenance.py`; the two file sets the record belongs to are `CODEBASE_ASSEMBLY.md` §14; the path 2 case, one record per request the run read, is `API_CONVERSION_PATH.md` §2.5 and `tests/test_provenance.py` |
 | Repository layout: the directories, the import rule, the flat test rule, and the four test sets | `ARCHITECTURE.md` §1.1, `AGENTS.md` (the tracking set), and the four readme indexes (`README.md`, this file, `../examples/README.md`, `../tools/README.md`) |

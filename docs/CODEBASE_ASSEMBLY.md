@@ -76,9 +76,11 @@ it (§14).
    count covers it.
 2. **The unit name.** The deepest scope the export declares names the unit, in the F3.9 level
    order, read innermost first: `vsys`, `vsys_device`, `template`, `template_stack`,
-   `device_group`. A template inside a stack names its template, because the template is deeper
-   than the stack (F6.10.5). `Shared` names the unit whose five facts are empty, because the
-   five facts alone cannot name the shared section. `localhost.localdomain` names no firewall (F3.5), so the
+   `device_group`. A row carries at most one container fact, because a template entry and a stack entry
+   name no container (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §3, pinned by
+   `tests/test_unit_manifest.py::test_no_row_carries_two_container_facts`), so the order resolves the
+   pairs the export can hold, such as a vsys inside a template (F6.10.5). `Shared` names the unit whose
+   five facts are empty, because the five facts alone cannot name the shared section. `localhost.localdomain` names no firewall (F3.5), so the
    placeholder never names a unit, and `Shared` in `device_group` is the parse fallback (§2.2),
    so it never enters an identity.
 3. **The directory name.** `sanitize(unit name) + '_' + 8-hex digest of the unit identity`, in
@@ -116,6 +118,7 @@ codes are unchanged by the record shape. Pinned by `tests/test_unit_manifest.py`
 `::test_the_rows_are_sorted_by_the_identity_not_by_document_order`,
 `::test_the_manifest_round_trips_as_data`,
 `::test_a_row_that_is_not_the_declared_shape_is_refused`,
+`::test_the_row_states_placement_through_the_fact_keys_it_already_reads`,
 `::test_the_reference_names_are_recorded_for_the_referrers_facts`,
 `::test_the_gate_reads_the_manifest_through_unit_manifest`, and `::test_two_runs_write_the_same_bytes`.
 
@@ -442,7 +445,10 @@ are in `resource_mapping.py`, and `main()` calls the emitter for every run.
    that names the scope each type places itself inside; the key is the location sub-block, so the block
    and the key agree (`ARCHITECTURE.md` §4.2 branch 0). The four Panorama scopes place themselves at the
    top of their own chain, so `location` prints the empty sub-block, the `shared = {}` shape, and
-   `panorama_device` is never emitted: the codebase states no device fact in a location (§9). A
+   `panorama_device` is never emitted: the codebase states no device fact in a location (§9). The two
+   template-chain rows state no key, because a placement key can only name a sub-block that declares
+   `name` (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §3, pinned by
+   `tests/test_scope_objects.py::test_a_placement_key_names_a_sub_block_that_can_hold_a_scope_name`). A
    variable or a virtual system the export places in no template and no template stack has no place the
    provider can put it, so the parse reports it as `skipped` with the reason and the run writes no block:
    the converter does not guess a place (the F3.6 rule). A template entry's device members are not a

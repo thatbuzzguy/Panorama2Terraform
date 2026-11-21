@@ -2,31 +2,27 @@
 
 ## Current position
 
-The documentation update pass is complete at commit `4351ca0`, with the convention-file commit at
-`e2f6f26`: it updated the documents to the features and CLI options that exist, cleared finished work
-from the tracking markdown, aligned `AGENTS.md` to name `agent-status.md`, and committed `commit.md`.
-It wrote no tool code, so no pin moved.
+The last landed piece is Piece E10.2 (2026-11-20, commit `4adecbd`): a placement key can only name a location
+sub-block that declares `name`, so `resource_mapping.SCOPE_PLACEMENT` answers no containing scope for a template
+entry and for a stack entry, and `unit_manifest` needs no field for that fact because the five fact keys already
+state it. The decision is in `docs/TEMPLATE_STACK_DEPLOYMENT.md` §3. The table keeps its empty set for those two
+rows, and `docs/CODEBASE_ASSEMBLY.md` §3 rule 2 and `docs/ARCHITECTURE.md` §2.2 no longer state that a template
+can sit inside a stack, because the measurement shows the export holds the two containers as siblings of the
+device group under `<panorama>`.
 
-The last landed piece is Piece 24 (E10.1, 2026-11-20, commit `50aa425`): the membership names enter the edge
-set, so the order rule ranks a stack unit after the template units its membership lists. The rule is
-`src/reference_edges.py` rule 8, read through `api_requests.LIST_JOIN`, `api_requests.membership_lists`,
-`entry_coverage.REPORT_SCOPE_KEYS` and `resource_mapping.SCOPE_ANSWER`, stated in
-`docs/TEMPLATE_STACK_DEPLOYMENT.md` §2.
+Gate, measured 2026-11-20 on the final tree of the piece, single-threaded: `ruff check .` clean at `py310`,
+`ruff format --check .` clean on the 104 Python files, `python3 tools/check_documents.py` reports no finding, and
+`python3 -m pytest` passes 1,726 pins with the same 4 skip for the missing `tflint` binary — 1,730 pins in 53
+test modules, in 298.54 s, four pins more than the 1,726 measured at `4351ca0`. `pyproject.toml` sets
+`addopts = "-q"`, so a count is read from the per-module collection counts.
 
-Gate, measured 2026-11-20 on the final tree of the pass, single-threaded: `ruff check .` clean at `py310`,
-`ruff format --check .` clean on the 104 Python files, `python3 tools/check_documents.py` reports no finding,
-and `python3 -m pytest` passes 1,722 pins with the same 4 skip for the missing `tflint` binary — 1,726 pins in
-53 test modules, in 380.10 s, the same pin set as before the pass because the pass adds no pin.
-`pyproject.toml` sets `addopts = "-q"`, so a count is read from the per-module collection counts.
-
-Next work is Epic 10 pieces E10.2 and E10.3, recorded in `PLAN.md` and `docs/TEMPLATE_STACK_DEPLOYMENT.md` §3
-and §4. Piece 23 closed the last `backlog.md` entry the tool could act on offline, so what stays open is the
-live facts and Epic 10's two open decisions. The items `backlog.md` holds that need a fact a live target
-states: the rulebase value string and the rule position (F3.5), which also gate the `rulebase` row column and
-the import block for a rule entry; a config entry inside a stack needs a provider location shape; the EDL
-`certificate_profile` field needs a rule that makes the EDL site resolve names; the per-entry report
-`profile_name` column needs a value the provider does not declare; and the path 2 live facts in
-`docs/API_CONVERSION_PATH.md` §4.
+Next work is Epic 10 piece E10.3, recorded in `PLAN.md` and `docs/TEMPLATE_STACK_DEPLOYMENT.md` §4. Piece 23
+closed the last `backlog.md` entry the tool could act on offline, so what stays open is the live facts and Epic 10's
+one open decision. The items `backlog.md` holds that need a fact a live target states: the rulebase value string and
+the rule position (F3.5), which also gate the `rulebase` row column and the import block for a rule entry; a config
+entry inside a stack needs a provider location shape; the EDL `certificate_profile` field needs a rule that makes the
+EDL site resolve names; the per-entry report `profile_name` column needs a value the provider does not declare; and
+the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4.
 
 ## Rules to keep when writing documents
 
@@ -195,9 +191,12 @@ the import block for a rule entry; a config entry inside a stack needs a provide
   state, and no entry measures such a row.
 - `SCOPE_PLACEMENT` and the location sub-block are one fact: a new scope type needs both the placement key and
   the `SCOPE_ANSWER` entry, and the emitter reads the placement key as the location, so a new row cannot place
-  itself in a scope it does not name. A config type has no `template_stack` sub-block, so a config entry inside
-  a stack writes no block and is a finding recorded in `backlog.md`. This is the open part of Epic 10 piece
-  E10.2.
+  itself in a scope it does not name. A placement key can only name a sub-block that declares `name`, so a row
+  that states no key answers that its type has no location field for a container name; the decision for the two
+  template-chain rows is owned by `docs/TEMPLATE_STACK_DEPLOYMENT.md` §3 and pinned by
+  `tests/test_scope_objects.py::test_a_placement_key_names_a_sub_block_that_can_hold_a_scope_name`. A config type
+  has no `template_stack` sub-block, so a config entry inside a stack writes no block and is a finding recorded in
+  `backlog.md`.
 - The entry name is never a property. A row whose provider type declares no `name` reaches the block through
   `entry_coverage.name_field`; no emitter, gate rule, or test should state the field again.
 - One place decides the shape of a value: `resource_mapping.VALUE_VARIABLES`, read at the print site. A new

@@ -17,7 +17,8 @@ to a device needs two facts the codebase does not state today:
    a new template the operator creates on a device that the export does not name. The tool can state the name, the
    place, and the membership, but not the device the operator adds later.
 
-Piece 1 decided fact 1. Pieces 2 and 3 are the open decisions, and each is recorded here when it is taken.
+Piece 1 decided fact 1, and Piece 2 is recorded in §3 as landed. Piece 3 is the open decision, and it is recorded
+here when it is taken.
 
 ## 2. Piece 1: the membership names as recorded uses (landed)
 
@@ -81,15 +82,45 @@ acyclic on every fixture, so `tests/test_reference_edges.py::test_no_corpus_fixt
 unchanged. The three fixtures that carry a stack listing a declared template are `kitchen_sink.xml`,
 `multi_device_templates.xml` and `scope_objects.xml`; each produces one row.
 
-## 3. Piece 2: the scope a template or a stack entry is declared inside (open)
+## 3. Piece 2: the scope a template or a stack entry is declared inside (landed)
 
-The parse records the scope a scope entry sits in through `resource_mapping.SCOPE_PLACEMENT`, which states the
-location sub-block for the two types that can sit inside another scope (`panos_template_variable`, `panos_vsys`)
-and an empty set for the four scope rows that place themselves at the top of their own chain. A device
-group names its base through the parent entry it declares, which the parent record reads. The decision this piece
-takes is what the read answers for a template entry and a stack entry, and whether the manifest row needs a field
-for it. The entry rule in §2 that reads the same container has landed, so this decision is the only part of
-the piece that stays open.
+`resource_mapping.SCOPE_PLACEMENT` states the key the parse records for the scope a scope entry sits in, and a key
+can only name a location sub-block that declares `name`, because a placement is a scope name written inside
+another block. `resource_mapping.LOCATION_SCHEMA` declares only `panorama` for `panos_template` and for
+`panos_template_stack`, and `panorama` declares no `name` field, so those two rows state no key: the location has
+no field that could hold a container name. A device group names its base through the parent entry it declares,
+which the parent record reads.
+
+**The decision.** A template entry and a stack entry are not declared inside another scope, so the read answers no
+containing scope. The empty set on those two rows is that answer, not an omission: the location block prints the
+empty sub-block, and the naming context the emitter reads from the same table is empty, which is the F3.1 rule for
+an entry that defines its own scope. Measured on `tests/fixtures/scope_objects.xml`, which holds `<templates>` and
+`<template-stack>` as siblings of `<device-group>` under `<panorama>`: the scope walk names no entry above either
+entry, so `identity_of` records `Shared` for `device_group` — the parse fallback, not a fact value — and each
+entry's own level key names the entry. The relation the export states between a device group and a template, and
+between a stack and a template, is a membership list of names, so §2's entry rule is the only place that relation
+is stated.
+
+**The manifest row needs no field.** The row states placement through the five fact keys it already reads: the key
+for the entry's own level names the entry and the container keys read empty, so "no containing scope" is an absent
+fact, the same way the tool states no place it cannot name (the F3.6 rule). A field for it would state the fact a
+second time, and no entry could fill it. Measured on the same fixture run: the template unit `Edge-Networks` reads
+`device_group` empty and `template` as its own name, and the stack unit `Edge-Stack` reads `device_group` empty,
+`template` empty, and `template_stack` as its own name. Because a row can carry at most one of the `template` and
+`template_stack` facts, the level order resolves one container fact per row, so `unit_manifest.NAME_LEVELS` and
+`reference_edges.LEVEL_KEYS` are unchanged.
+
+Pinned by `tests/test_scope_objects.py::test_a_placement_key_names_a_sub_block_that_can_hold_a_scope_name` and
+`::test_a_template_entry_and_a_stack_entry_record_no_container_fact`, and by
+`tests/test_unit_manifest.py::test_the_row_states_placement_through_the_fact_keys_it_already_reads` and
+`::test_no_row_carries_two_container_facts`. `::test_the_four_panorama_scopes_print_the_empty_sub_block` is the
+existing pin for the printed sub-block, and `tests/test_data_source_schema.py` pins `LOCATION_SCHEMA` against the
+live provider schema.
+
+The change this piece makes is the wording it corrects: `src/resource_mapping.py` and `src/unit_manifest.py` state
+the decision, `docs/CODEBASE_ASSEMBLY.md` §3 rule 2 and `docs/ARCHITECTURE.md` §2.2 no longer state that a template
+can sit inside a stack, and no `.tf` byte is written, so the golden set is unchanged. The case a config entry
+inside a stack reaches is a provider location shape the pinned schema does not state, so it stays in `backlog.md`.
 
 ## 4. Piece 3: a new site from an existing template (open)
 

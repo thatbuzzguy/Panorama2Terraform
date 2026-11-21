@@ -8,11 +8,7 @@ documents hold it. The open work is Epic 10, recorded in `PLAN.md` and
 
 The pieces that stay open, in the order `PLAN.md` Epic 10 states them:
 
-1. Piece E10.2 — the scope a template or a stack entry is declared inside, read through
-   `resource_mapping.SCOPE_PLACEMENT`, which states a location sub-block for `panos_template_variable` and
-   `panos_vsys` and an empty set for the six scope rows. The decision is what the read answers for a template entry
-   and a stack entry, and whether the manifest row needs a field for it.
-2. Piece E10.3 — a new site instantiated from an existing template: what the tool can state for a template entry the
+1. Piece E10.3 — a new site instantiated from an existing template: what the tool can state for a template entry the
    export declares and a device the export does not name. What needs the device the operator adds stays in
    `backlog.md`.
 

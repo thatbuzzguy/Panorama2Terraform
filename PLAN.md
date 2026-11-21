@@ -76,11 +76,12 @@ the module that holds it and the test that pins it.
 
 The pieces that stay open, in the order `docs/TEMPLATE_STACK_DEPLOYMENT.md` states them:
 
-1. **Piece E10.2.** The scope a template entry and a stack entry is declared inside, read through the placement
-   fact the parse records, extended from the device group's parent entry. The decision is what the read answers for
-   those two entries and whether the manifest row needs a field for it.
-2. **Piece E10.3.** A new site instantiated from an existing template: what the tool can state for a template
+1. **Piece E10.3.** A new site instantiated from an existing template: what the tool can state for a template
    entry the export declares and a device the export does not name.
+
+Piece E10.2 is landed and recorded in `docs/TEMPLATE_STACK_DEPLOYMENT.md` §3: the placement read answers no
+containing scope for a template entry and a stack entry, and the manifest row states placement through the five
+fact keys it already reads, so it needs no field.
 
 Definition of done for the epic: the codebase states the site a new template needs. The plan order half is
 measured: `tests/test_reference_edges.py` reads that the order rule ranks a stack unit after each template unit its
