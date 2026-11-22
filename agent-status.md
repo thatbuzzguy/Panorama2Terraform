@@ -2,11 +2,11 @@
 
 ## Current position
 
-Piece 11B.1 landed, 2026-11-22: the merge rule in `src/codebase_state.py`, one join key per record stated as data,
-the merge read through each record module's `parse_rows`, and the byte rule for a record that has no existing file.
-The pins are in `tests/test_codebase_state.py`, and the data rule's reader pin is in `tests/test_data_file_gate.py`.
-The piece is not pushed. `acceptance.md` is this piece's record. The next piece is 11B.2, the run's unit set against
-the codebase's unit set. The design record for Epic 11, the codebase several runs write into, is
+Piece 11B.1 landed and is reviewed, 2026-11-22: the merge rule in `src/codebase_state.py`, one join key per
+record stated as data, the merge read through each record module's `parse_rows`, and the byte rule for a record
+that has no existing file. The pins are in `tests/test_codebase_state.py`, and the data rule's reader pin is in
+`tests/test_data_file_gate.py`. The piece is not pushed, and the review made no change, so nothing was committed.
+`acceptance.md` is the review record. The next piece is 11B.2, the run's unit set against the codebase's unit set. The design record for Epic 11, the codebase several runs write into, is
 `docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and `backlog.md` holds the conditions this piece could
 not state as rules.
 
@@ -72,6 +72,23 @@ the tag text, which `parse_tags` stores only as `comments`, so the `description`
 
 The Phase 11A review records for Pieces 11A.1, 11A.2 and 11A.3 are not kept here: the phase is complete, and the git
 history holds them. `acceptance.md` holds the record for the current piece.
+
+## Acceptance review of Piece 11B.1 (2026-11-22)
+
+The piece is reviewed at `4a5b871` and `0ee48a8`, both not pushed, and every committed criterion is met by the
+tree. The review changed nothing and committed nothing; `acceptance.md` is the review record. The join keys were
+re-measured on the 67 accepted fixtures through the record modules' own `parse_rows`: the key is unique per row
+for every record on every fixture, and `ownership.row_key`'s `source` part separates no pair the join key does
+not already separate. The site file order is the join-key order on all 7 fixtures with site rows, and the manifest
+fact order differs from the join-key order on 26 fixtures, which is the count the order pin holds. The two-run
+counts reproduce: manifest 11 against 1 gives 11, ownership 61 against 5 gives 62, edges 9, site 3. Every pin in
+`tests/test_codebase_state.py` passes on its own, as does the new pin in `tests/test_data_file_gate.py` and the
+index pin in `tests/test_layout.py`; the four `src/` scans read the 24-module set clean with `codebase_state.py`
+in it, no test module imports another test module, and no `src/` module imports anything from `tests/`. The gate
+was re-run single-threaded and agrees with the counts recorded above: `ruff check .` clean at `py310`,
+`ruff format --check .` clean on 108 files, `tools/check_documents.py` reports no finding,
+`python3 -m pytest` passes 1,767 pins with the same 4 `tflint` skips — 1,771 pins in 54 test modules, 81 Python
+files — in 256.60 s, against the 246.53 s recorded when the piece landed.
 
 ## Acceptance review of Piece F5.6 (2026-11-21)
 
