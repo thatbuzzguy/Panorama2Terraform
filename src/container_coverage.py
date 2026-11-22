@@ -602,8 +602,9 @@ def record_path(path: str) -> str:
 
 
 def path_segments(path: str) -> tuple:
-    """The segments a declared path states, in order. The one place the split is read, so the shape rule and the
-    rule that names the place read the same segments.
+    """The segments a declared path states, in order. The place the shape rule and the rule that names the place
+    read the split, so those two rules read the same segments. Other modules split a path for a fact of their own,
+    so this is the place those two rules read it, not the one place any module splits a path.
     """
     return tuple(segment for segment in path.strip("/").split("/") if segment)
 
@@ -612,9 +613,12 @@ def path_place(path: str) -> str:
     """The place a declared path names: the first segment.
 
     The shape rule states that a path names the place or one entry inside it, so the first segment is the place
-    for both shapes, and the entry name never decides the answer for the definitions rule. This is the one place
-    the place is read, so an argument rule that needs the place reads it here instead of splitting the path. An
-    answer of `''` is the answer for a path that states no segment, which the shape rule refuses.
+    for both shapes, and the entry name never decides the answer for the definitions rule. The argument rule for a
+    selection reads the place through here instead of splitting the path, which is what
+    `tests/test_api_requests.py::test_the_selection_argument_states_no_rule_an_owner_states` pins. The read layer
+    answers the place from the record's own `scope` field through `xml_input.ParsedSource.scope_container`, so the
+    rule here is the one for a path a caller states. An answer of `''` is the answer for a path that states no
+    segment, which the shape rule refuses.
     """
     segments = path_segments(path)
     return segments[0] if segments else ""
