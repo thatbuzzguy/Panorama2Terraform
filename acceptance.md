@@ -1,142 +1,135 @@
-# Piece 11A.3 acceptance review — the bytes two runs write for one unit
+# Piece 11B.1 acceptance record — the merge rule in `codebase_state.py`
 
-Review record for commits `44eb37b` (the three pins in `tests/test_api_path.py` group 11) and `7bfb55b` (the piece's
-record, `docs/MULTI_RUN_CODEBASE.md` §2 rule 6, and the tracking markdown), read at `7bfb55b`. The piece was not
-redone here: each criterion is met, and only what the review found wrong is changed. The measurement was re-run
-independently through `tests/conftest.py::api_producer` on the committed response set, one cache, both ways, and
-every fact the piece recorded agrees. Three document lines disagreed with the landed state, and they are the only
-other change. The commits are not pushed. Pieces 11A.1 and 11A.2 landed at `a4ead15`, `153dbf2` and `3067372` and
-are not reopened; Phase 11A is complete.
+Criteria, written before the code, and the record of the piece as it landed. The piece is offline work on the
+committed fixtures; no pin calls a network. Piece 11A.3 is reviewed at `7bfb55b` and is not reopened; Phase 11A is
+complete. The tree was clean at `0250f04` when this piece began, and no committed golden changed.
 
-## Criteria, as measured
+## Criteria
 
-1. **Offline only** (met). Every response both runs read is a committed file in `tests/responses/`, read through
-   `tests/conftest.py::api_producer`, and both runs read through one cache, so the bytes compared are the bytes of
-   the same response. No pin calls a network.
-2. **What the agreement covers** (met): the unit's `.tf` bytes, read as paths from the unit directory through
-   `tests/conftest.py::tf_bytes`, and the printed form of its site row, read through `write_path.unit_path` with the
-   names `site_data` states. Both are unit-set files (`docs/CODEBASE_ASSEMBLY.md` §14). The unit set is the owner's
-   set: the pins read the unit through `api_requests.join_units`, which reads the unit set through
-   `unit_manifest.units`, and the directory through `unit_manifest.directory_name` with `naming.sanitize`, so the
-   pins state no unit rule, no join rule, no path rule, no file-shape rule and no directory rule of their own.
-3. **Measured before the pins** (met). The piece measured before any pin was written, and the review's independent
-   re-run answers the same facts, so the pins hold what the measurement had already shown.
-4. **The read-through exception stays grounded by the existing F5.5 rule** (met). The rule that answers a name the
-   codebase owns and the run read no unit for is the read-through branch of `TerraformGenerator._resolve_reference`,
-   pinned in `tests/test_data_blocks.py`. This piece states no read-through rule of its own and pins only that the
-   committed content answers nothing for either run.
-5. **One pin per stated fact**, in the module that owns the fact (met): `tests/test_api_path.py` group 11, three
-   pins, one for the `.tf` bytes, one for the printed form, one for the read-through condition, in one helper that
-   runs both ways on one cache. Each reads its fact through its owner, and no test module imports another test
-   module.
-6. **The byte difference between two runs is read through git** (met). The tool records no difference, so the write
-   path, the records, the console line, the report rule, the join, the naming rule and the gate rules are unchanged,
-   and no committed golden changed. `SOURCE.txt` is the only file that can differ, and no pin reads it as a byte rule.
-7. **The standing rules are not broken** (met). `unit_manifest.units` is the one unit set,
-   `container_coverage.is_scope_path` the one path shape, `api_requests.LIST_JOIN` the one join, `source_fetch` the
-   one reader, `container_coverage.console_line` the one console line, `naming` and
-   `unit_manifest.directory_name` the one naming rule, `write_path` the one writer,
-   `resource_mapping.VALUE_VARIABLES` the one value-shape table, `sanity_checks.blocks` the one block reader. No
-   environment name, no second console line, no new module, so the `docs/ARCHITECTURE.md` §1 table is unchanged.
-8. **A half that cannot be pinned offline without a new rule goes to `backlog.md`** (met). The printed form is
-   measured as agreement on absence, because no unit on the committed set names a value; the condition that would
-   measure it as content is recorded in `backlog.md`, no rule was invented for it, and that half of the piece stays
-   open.
-9. **The gate**, single-threaded, with the counts measured (met). The numbers are in the last section.
-10. **The documents** (met). `docs/MULTI_RUN_CODEBASE.md` §2 rule 6 names the module, the pins, the owners the pins
-    read through, and the printed-form condition; it states no test count and no row-by-row statement of the
-    agreement. Plain literal wording, no metaphor, no emoji, and every test a document names exists.
+1. **One join key per record, stated as data in `codebase_state.py`**, and the fact each key joins on is named.
+   The key for the ownership record is read through `state_coverage.ownership_key` (`docs/ARCHITECTURE.md` §3.2),
+   the one identity key rule; the keys for the other three records are the field the record states. No module
+   states a second key.
+2. **The merge is read through each record module's `parse_rows`.** The module defines no row shape, no reader, no
+   second shape rule, and it takes rows that came from `parse_rows`, so the gate's data rule
+   (`sanity_checks.DATA_FILES`, `docs/ARCHITECTURE.md` §3.2) stays the only data rule over the four records.
+3. **The merge rule, stated once**: the run's rows replace the codebase's rows for the rows the run built, and the
+   rows for the units the run did not build stay as the record states them. The merged set is keyed by row
+   identity, not by run.
+4. **The merge holds no run field, no timestamp and no order-of-writes fact**: it adds no field to a row, so a
+   merged row is the record's own shape, and the order of the merged set is read through each record module's own
+   order rule, not through which side a row came from.
+5. **A record that has no existing file writes today's bytes**, so no committed golden changes. The order the
+   merged set is written in is the order the record module's own rule states for its rows; where a record module
+   states no order rule for a row it reads back, the condition is recorded in `backlog.md` and no rule is invented.
+6. **`codebase_state.py` is a data module**: it writes no file, states no record-directory path rule, names no
+   console line, states no environment name, defines no second naming rule and no writer, and imports only the
+   standard library and the house modules, so the `src/` scans (the writer scan, the environment-name scan, the
+   console-line scan and the second-naming-rule scan) read it clean. It is named in the `docs/ARCHITECTURE.md` §1
+   module table in the same commit as the module.
+7. **One pin per stated fact**, in the module that owns the fact, with a new test module only where the fact spans
+   the four records (`tests/test_codebase_state.py`, named in `docs/MULTI_RUN_CODEBASE.md` §8 and in the root
+   `README.md` index in the same commit). Pins are grounded on a committed fixture or a committed response set,
+   never on a hand-built row, and no test module imports another test module.
+8. **Out of scope**: the unit-set comparison (11B.2), ownership, edges and the plan order over the merged set
+   (11B.3), and the gate for a partial run (11B.4). If a record's rows cannot be merged by one join key read
+   through its own `parse_rows`, the condition goes in `backlog.md` and no rule is invented for it.
+9. **The gate**, single-threaded: `ruff check .`, `ruff format --check .`, `python3 tools/check_documents.py` and
+   `python3 -m pytest`, with the new counts measured.
+10. **The documents**: `docs/MULTI_RUN_CODEBASE.md` §3 names the pins that hold, `docs/ARCHITECTURE.md` §1 names the
+    module, `README.md` names the new test module, and `to-do.md`, `agent-status.md` and `acceptance.md` state the
+    current state. Plain literal wording, no metaphor, no emoji, no test count in a document, and every test a
+    document names exists.
 
-## The measurement, re-run by the review
+## The measurement, before the code
 
-Both runs read through `tests/conftest.py::api_producer` and one cache, so both read the same bytes.
+Row identity, read through each record module's `parse_rows` on a run of the committed corpus. The run measured is
+the kitchen-sink fixture (11 units), and the order check and the key-uniqueness check are read over every fixture
+the read rule accepts.
 
-- Both runs exit 0 and read the same single committed response, the `device-group` place
-  (`tests/responses/181d42732d20ea918cb4ea333000da9280a02de1e818ee6d26300cf4b98d759c.xml`), and no other response:
-  `api_requests.targeted_read_set` answers `membership_lists()` for both shapes, and the producer answers nothing for
-  a request with no committed response, so the `templates` and `template-stack` requests enter no part.
-- The scope index is the same for both: `device-group`, and `device-group/entry/Office-FW`, read through
-  `api_requests.scope_index` with the selection and without it. That entry is inside the place the run read, so it
-  names no request of its own, which is why the join reports no row for it.
-- The join answers the same three pairs for both runs: the `Office-FW` place unit, the `Office-FW` unit with the
-  device `fw-1.example.com`, and `Unassigned-DG`. The place response lists `Unassigned-DG` with no name, so that unit
-  comes from the entry the place holds, not from a second read. The gate reports the same finding for both:
-  `the join answers no row for the index entry device-group/entry/Office-FW`, one WARN, read through
-  `sanity_checks.check_request_set`, which states no name rule of its own.
-- The unit set is the same for both, read through `unit_manifest.units`, and the three directories agree through
-  `unit_manifest.directory_name`.
-- The file set is 16 files for each run, the same names both ways, byte for byte the same for every file. The unit
-  the selection names, `office_fw_4507d824`, holds four `.tf` files — `actions.tf`, `provider.tf`, `scope.tf`,
-  `variables.tf` — non-empty and byte for byte the same.
-- No run writes `SITE_DATA.json` and neither writes `site.auto.tfvars`, so the printed form agrees as absence: no
-  unit names a value. `resource_mapping.VALUE_VARIABLES` maps only `ngfw_device` to a variable, so a site row needs
-  a device value the run read, and the device fact for a unit on path 2 is a §4 live-only fact
-  (`docs/API_CONVERSION_PATH.md` §4). The `fw_1_example_com_69e71770` unit declares `target` as a fact the tool
-  cannot read, not as a site value.
-- Neither run writes a `data` block and neither writes `read_through.tf`. Measured on the response bytes: no
-  committed response holds a reference field, so the F5.5 branch had nothing to answer for either run.
-- The gate reports the same result for both runs: 0 FAIL, 1 WARN with the same finding, 10 `.tf` files, 2 data
-  files, 2 resources, and the same result for every check.
-- What can differ between two runs is the record, not the unit. Measured with two different caches on the same
-  committed bytes: the 16-file set agrees and only `SOURCE.txt` differs, because the record names the cache entry it
-  read through its `path` field. `SOURCE.txt` is a run fact (`docs/MULTI_RUN_CODEBASE.md` §3 rule 6), so the pins read
-  both runs through one cache and state no rule for a record file.
+- `CODEBASE_MANIFEST.json`: 11 rows. Identity is the five scope facts (`unit_manifest.FACT_KEYS`), and `directory`
+  is the §5 shape of them (`naming.sanitize` plus the 8-hex `identity_digest`), so the join key is unique per row
+  for every accepted fixture. `parse_rows` states the rows in the fact order, which is not the join-key order on
+  26 of the accepted fixtures, so the merge reads the order through `unit_manifest.FACT_KEYS` and not through the
+  key.
+- `OWNERSHIP.json`: 61 rows. `parse_rows` states the rows in `ownership.row_key` order, which is
+  `state_coverage.ownership_key` plus `source`. The join key the design names, (`type`, `entry`) with the facts, is
+  unique for every row of every accepted fixture, so `source` is not needed to keep two rows apart on the committed
+  material, and the key order is the order the file states. Two sources that state one entry are two rows today, so
+  a merged set can hold only one row per key: the condition is recorded in `backlog.md`.
+- `REFERENCE_EDGES.json`: 9 rows. Identity is the four fields in field order — the referrer's directory, the
+  target's directory, the matrix row and the entry name — which is the pair of entry identities the join states. The
+  key is unique per row for every accepted fixture and the file order is the key order.
+- `SITE_DATA.json`: 3 rows. Identity is `directory`, the join to the manifest row, and it is unique per row for
+  every accepted fixture. `parse_rows` states no order rule: it reads the rows in the order the file states them,
+  which is the identity order the writer built through `unit_manifest.units`. A site row names no facts, so the
+  identity order cannot be read from the row alone, and the order of a merged site file needs a rule the record
+  module does not state; the condition is recorded in `backlog.md`. On every accepted fixture the file order is
+  already the join-key order, so reading a merged site file in the key order writes today's bytes.
+- What a second run into the same codebase directory does today: it writes each record from its own rows, so the
+  file is replaced. Kitchen-sink run, then a run of `address_objects.xml` into the same directory: the manifest
+  goes from 11 rows to 1, `OWNERSHIP.json` from 61 to 5, and the two records the second run names no rows for keep
+  the file the first run wrote, because a file is written only when it has content. The 10 manifest rows and the
+  56 ownership rows for units the second run did not build are gone.
+- The committed response set (5 files) holds one shadow pair, `device-group/entry/Production-DG` and `shared`, that
+  states the same entry name `Web-Server-1` in two scopes. The two rows have two different keys, so the join key
+  separates them; the set holds no pair of responses that states one key twice, so the collapse condition cannot be
+  pinned on it. A full offline response-set run is not possible (`api_producer` answers None for requests with no
+  committed response, and `--offline` refuses a missing cache entry), so pins read the response set through the
+  injected producer.
 
-## Pins, run one at a time
+## The pins, as landed
 
-All three are in `tests/test_api_path.py` group 11, in one helper that runs both ways through
-`conftest.api_producer` on one cache, and each passes on its own:
+Ten pins, one per stated fact, all grounded on committed material: the codebase's rows are the rows a run wrote for
+`tests/fixtures/kitchen_sink.xml` and the run's rows are the rows a run wrote for
+`tests/fixtures/address_objects.xml`, each read back through its own module's `parse_rows`. No pin builds a row by
+hand, and no test module imports another test module. The measurement the pins read is the measurement above, so the
+merge counts in the pins are the measured ones: the manifest 11 against 1 gives 11, `OWNERSHIP.json` 61 against 5
+gives 62, and the two records the second run names no rows for are the codebase's own rows.
 
-- `test_a_targeted_run_writes_the_same_tf_bytes_as_the_full_run_for_the_unit_it_selects` — the `.tf` bytes for the
-  unit the selection names, read as paths from the unit directory, asserted non-empty so the pin measures content.
-- `test_the_printed_form_of_the_unit_agrees_between_the_two_runs` — the site record and the printed form read through
-  `site_data` and `write_path.unit_path`; on the committed set both are absent for both runs, so the pin holds
-  agreement on absence, and the unit-set file set agrees.
-- `test_neither_run_writes_a_read_through_block_for_content_that_names_no_read_through_name` — the block set read
-  through `sanity_checks.blocks` and the read-through file name through its owner, `READ_THROUGH_FILE`, read as a
-  path from the directory the manifest row names; nothing for either run. The pin holds the consequence of the
-  condition, and the condition itself is the measurement above: no committed response holds a reference field, so the
-  branch had nothing to answer.
+`tests/test_codebase_state.py`:
 
-The pins that hold the single-owner claims pass unchanged:
-`tests/test_unit_manifest.py::test_the_join_reads_the_unit_set_through_this_rule`,
-`tests/test_write_path.py::test_the_splitter_writes_through_the_single_writer`,
-`tests/test_site_data.py::test_site_data_defines_no_second_naming_rule`,
-`tests/test_api_requests.py::test_the_module_reads_the_layout_rules_through_their_owners`,
-`tests/test_data_blocks.py` groups 4, 5 and 6, and
-`tests/test_layout.py::test_the_indexes_name_every_document_under_them`. The import rule reads clean: no test module
-imports another test module, `src/` imports nothing from `tests/`, and the shared facts are read from
-`tests/conftest.py`. No pin was removed: the group gained its entry and the three pins.
+- `test_the_join_key_for_the_manifest_record_is_the_unit_identity_read_as_directory` — criterion 1, the manifest key.
+- `test_the_join_key_for_the_ownership_record_is_the_entry_identity_read_through_state_coverage` — criterion 1, the
+  key read through its owner, and the fact that `source` separates no two rows on the committed material.
+- `test_the_join_key_for_the_edge_record_is_the_pair_of_entry_identities` — criterion 1, the edge key, with each half
+  of the pair naming a unit the manifest row names.
+- `test_the_join_key_for_the_site_record_is_the_unit_identity_read_as_directory` — criterion 1, the site key, read
+  against the manifest row.
+- `test_the_run_rows_replace_the_codebase_rows_for_the_rows_the_run_built` — criterion 3, the merge rule.
+- `test_a_record_with_no_existing_file_writes_the_bytes_a_single_run_writes_today` — criterion 5, the byte rule
+  between two runs, read on the four cases the golden set names.
+- `test_the_merge_adds_no_field_so_a_merged_row_reads_back_as_itself` — criterion 4, no run field, and the data rule's
+  reader reading the merged rows back as itself.
+- `test_the_order_of_a_merged_set_is_the_order_each_record_states_not_the_order_of_writes` — criterion 4, the order
+  read through each record module's own order rule, and criterion 5's determinism half: reading the two sets in the
+  other order answers the same rows in the same order.
+- `test_the_module_states_no_rule_an_owner_states_and_writes_no_file` — criterion 6, the module shape.
 
-## What the review corrected
+`tests/test_data_file_gate.py`:
 
-Three document lines disagreed with the landed state. No code, no pin and no measurement changed.
+- `test_the_data_rule_reads_a_merged_record_through_the_same_reader` — criterion 2, the table stays the only data rule
+  and its reader reads a record that holds rows from two runs the same way; the merged codebase reports no finding.
 
-- `docs/MULTI_RUN_CODEBASE.md` named only Piece 11A.1 and Piece 11A.2 as landed and said every §2 rule other than 1,
-  2, 3 and 4 was pending a pin, which its own rule 6 contradicts: rule 6 names three pins that hold. It now names
-  Piece 11A.3 and rules 1, 2, 3, 4 and 6 as pinned.
-- `PLAN.md` listed Phase 11A as one of three phases of the open epic. The phase is complete, so its detail is removed
-  and the open phases are 11B and 11C.
-- `backlog.md` said the rules in the design record are design rules pending a pin. A rule there that has pins is read
-  through the test module that holds them, so the entry now states that.
-- This record said `to-do.md` shows Phase 11A complete. `to-do.md` holds no Phase 11A detail, and its open pieces are
-  11B.1 to 11B.4 and 11C.1 to 11C.3, with 11B.1 next, so the record now states that.
+## Gate, as measured
 
-## Gate, re-measured by the review
+Read single-threaded, at the commit that holds the piece:
 
-At `7bfb55b`, single-threaded: `ruff check .` clean at `py310`; `ruff format --check .` clean on the 106 files it
-reads, 79 Python files and 27 markdown files; `python3 tools/check_documents.py` reports no finding;
-`python3 -m pytest` passes 1,757 pins with the same 4 skips for the missing `tflint` binary — 1,761 pins in 53 test
-modules, the same counts the piece measured. Read through the per-module collection counts: `tests/test_api_path.py`
-42, the 39 before the piece plus the 3 new pins, and `tests/test_api_requests.py` 32, unchanged. The piece measured
-218.96 s; the review's run measured 265.94 s on the same counts, so run-to-run time varies while the counts agree.
-`terraform` is present on this machine, so the pins that read the live provider schema ran, and the 4 skips are the
-`tflint` pins in `tests/test_sanity_gate.py`. No committed golden changed.
+- `ruff check .`: clean, `py310`.
+- `ruff format --check .`: clean on the 108 files it reads.
+- `python3 tools/check_documents.py`: no finding, every document agrees with measurement.
+- `python3 -m pytest`: 1,767 passed and the same 4 `tflint` skips — 1,771 pins in 54 test modules, in 246.53 s. The
+  new module holds 9 pins and `tests/test_data_file_gate.py` holds 28. The tree holds 81 Python files and `src/` holds
+  24 modules.
 
-## Tracking markdown
+No committed golden changed: the golden set pins the `.tf` bytes of a single run, and the byte rule pin reads the
+record bytes of the same four runs through each module's `render`.
 
-`to-do.md` holds no Phase 11A detail: the phase is complete and the git history holds it. Its open pieces are Phase
-11B (11B.1 next) and Phase 11C. `PLAN.md` names Epic 11 as open with the design record and Phase 11A complete;
-`backlog.md` holds the site-row condition this piece could not measure as content, the read-through half that needs
-the built-in name table, the move fact, the stale-file boundary, the `vsys` and device selection, and the live-target
-items. The documents and the indexes state no test count, and every test a document names exists.
+## The documents, as landed
+
+`docs/ARCHITECTURE.md` §1 names `codebase_state.py`, `docs/MULTI_RUN_CODEBASE.md` §3 names the pins that hold for
+rules 1, 2, 3, 4 and 5, `docs/MULTI_RUN_CODEBASE.md` §8 names the test module that holds them, `README.md` §Testing
+names `tests/test_codebase_state.py` and the data rule's new pin, and `docs/LICENSING.md` states the module count the
+live tree reads. The two conditions the piece cannot state as rules — the site record's order for a row it reads
+back, and the ownership key holding one row for an entry two sources state — are in `backlog.md`. `to-do.md` holds
+11B.2, 11B.3 and 11B.4; the run integration into `generate_run` is Phase 11C.

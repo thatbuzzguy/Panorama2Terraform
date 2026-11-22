@@ -105,23 +105,41 @@ Three facts already hold, and they are the reason no new naming rule or identity
 1. **The root records are state, not run output.** A run that writes into an existing codebase reads each
    record through the module that owns its shape (`parse_rows`), and merges by row identity. A record with no
    existing file is the run's own set, so the first run writes the bytes the rules state today and the committed
-   goldens are unchanged.
+   goldens are unchanged. Pinned on the four cases the golden set names by
+   `tests/test_codebase_state.py::test_a_record_with_no_existing_file_writes_the_bytes_a_single_run_writes_today`,
+   and the data rule reading a merged record through the same reader by
+   `tests/test_data_file_gate.py::test_the_data_rule_reads_a_merged_record_through_the_same_reader`.
 2. **The merge rule, stated once, in `codebase_state.py`.** The run's rows replace the codebase's rows for the
    units the run built. The rows for the units the run did not build stay as the record states them. The module
    defines no row shape, no reader, no identity key, no naming rule, no writer, no path rule, and no console
    line: it reads each shape through its own module's `parse_rows`, the identity through
-   `state_coverage.ownership_key` and `unit_manifest`, and the writer through `write_path.py`.
+   `state_coverage.ownership_key` and `unit_manifest`, and the writer through `write_path.py`. Pinned by
+   `tests/test_codebase_state.py::test_the_run_rows_replace_the_codebase_rows_for_the_rows_the_run_built`,
+   `tests/test_codebase_state.py::test_the_merge_adds_no_field_so_a_merged_row_reads_back_as_itself` and
+   `tests/test_codebase_state.py::test_the_module_states_no_rule_an_owner_states_and_writes_no_file`.
 3. **The merge key is each record's own join key**, so no second key appears: the manifest on `directory`, the
    ownership record on `directory` and (`type`, `entry`), the edge record on `directory`, the site record on
    `directory`. A record the reader cannot read as its declared shape is a refusal, the rule `parse_rows`
-   already states.
+   already states. Pinned by `tests/test_codebase_state.py::test_the_join_key_for_the_manifest_record_is_the_unit_identity_read_as_directory`,
+   `tests/test_codebase_state.py::test_the_join_key_for_the_ownership_record_is_the_entry_identity_read_through_state_coverage`,
+   `tests/test_codebase_state.py::test_the_join_key_for_the_edge_record_is_the_pair_of_entry_identities`, and
+   `tests/test_codebase_state.py::test_the_join_key_for_the_site_record_is_the_unit_identity_read_as_directory`.
+   The key for the ownership record is read through `state_coverage.ownership_key`, so the module builds no key of
+   its own. The extra part `ownership.row_key` adds for the source never separates two rows on the committed
+   material, and the condition that two sources can state one entry is recorded in `backlog.md`.
 4. **The order rule runs over the merged set**, because `rank` and `after` are facts about the codebase and not
    about a run. So `rank` can move for a row the run did not build. That is not a name change: the directory
    name is a pure function of the unit identity, so an address in a state document and an import block stay
-   stable while the plan order moves.
+   stable while the plan order moves. The order the merge writes is read through each record module's own order
+   rule, pinned by
+   `tests/test_codebase_state.py::test_the_order_of_a_merged_set_is_the_order_each_record_states_not_the_order_of_writes`;
+   the `rank` and `after` half over a merged set is pending piece 11B.3, and the condition that `site_data.py`
+   states no order rule for a row it reads back is recorded in `backlog.md`.
 5. **Determinism reads the existing record as an input.** Two runs on the same inputs — the same sources and the
    same existing records — write the same bytes. A run that merges the same record twice writes the same bytes,
-   because the rows sort by identity and the run order does not decide the merge.
+   because the rows sort by identity and the run order does not decide the merge. Pinned by
+   `tests/test_codebase_state.py::test_the_order_of_a_merged_set_is_the_order_each_record_states_not_the_order_of_writes`,
+   which reads the two sets in the other order and answers the same rows in the same order.
 6. **The reports and `SOURCE.txt` stay per run.** A run fact cannot be accumulated without a timestamp, which
    the record rule refuses, so the root reports are the last run's printed view and `SOURCE.txt` names the last
    run's sources. The codebase therefore holds no record of which run produced which unit; the operator reads
@@ -206,7 +224,7 @@ finding.
 |---|---|---|
 | The run's read set, the selection shape, the excluded names | `container_coverage.py` for the path shape, `api_requests.py` for the read set, `panorama_to_terraform.py` (`shared_arguments` and `shared_checks`) for the argument | `tests/test_api_requests.py` |
 | The run's unit set, the codebase unit set, the report section shape | `unit_manifest.py` | `tests/test_unit_manifest.py` |
-| The merge rule | `codebase_state.py`, named in `docs/ARCHITECTURE.md` §1 when it lands | `tests/test_codebase_state.py` |
+| The merge rule and the join key per record | `codebase_state.py`, named in `docs/ARCHITECTURE.md` §1 | `tests/test_codebase_state.py`, with the data rule's reader pin in `tests/test_data_file_gate.py` |
 | The ownership chain read through the record | `ownership.py` | `tests/test_ownership.py` |
 | The cross-run edge and the order over the merged set | `reference_edges.py` | `tests/test_reference_edges.py` |
 | The gate for a partial run | `sanity_checks.py` | `tests/test_sanity_gate.py` |

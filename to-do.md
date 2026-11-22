@@ -5,14 +5,11 @@ documents hold it. The items that need a fact a live target states are in `backl
 
 ## Epic 11 — the codebase several runs write into
 
-The design record is `docs/MULTI_RUN_CODEBASE.md`; its pins are pending until each piece lands. Acceptance
-criteria for the open piece are in `acceptance.md`.
+The design record is `docs/MULTI_RUN_CODEBASE.md`; each rule there names the pins that hold, and a rule whose pin
+is pending says so. Acceptance criteria for the open piece are in `acceptance.md`.
 
 ### Phase 11B, the records as codebase state
 
-- **11B.1** — the merge rule in `codebase_state.py`, one join key per record, read through each record module's
-  `parse_rows`; a record with no existing file writes the bytes the rules state today, so the committed goldens
-  are unchanged.
 - **11B.2** — the run's unit set against the codebase's unit set, and the rule that the run writes no directory
   for a unit it read only through the record.
 - **11B.3** — ownership, edges and the plan order read over the merged set, so an edge and `after` can name a
@@ -62,6 +59,8 @@ measurement over the committed corpus rather than from a name; the tag half also
   the `docs/ARCHITECTURE.md` §1 table. `rule_data.py` is a tool module named in the same table, and the
   iterated block and the rule data files add no second naming rule, no second writer, no second console
   line, and no environment name, so the pins that scan the `src/` set read it with the other modules.
+  `codebase_state.py` is a data module named in the same table, so the same pins read it: it holds no
+  writer, names no file, and states no key or shape rule of its own.
 - The corpus is the directory the scan runs over. A hostile fixture in it changes the set the scan
   reports for the other fixtures, so pins that state the printed set name the fixture count. The
   fixture assembler reads the same set by rule: a fixture the F3.8 input rule refuses is skipped,

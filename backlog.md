@@ -639,6 +639,19 @@ restated here; they are in the record and the git history. Only the open items a
 The design record is `docs/MULTI_RUN_CODEBASE.md`. A rule there that has pins is read through the test module that
 holds them, so this document holds only what a piece cannot be written from.
 
+- The order of a merged site record needs a rule `site_data.py` does not state. A site row names no scope facts, so it
+  cannot state the identity order on its own, and `parse_rows` reads the rows in the order the file states them, which
+  is the identity order the writer built through `unit_manifest.units`. The merge therefore reads a merged site set in
+  the order the join key states it, and that writes today's bytes only because the file order is already the join-key
+  order on every fixture the read rule accepts (measured 2026-11-22). No rule is invented here; the condition needs the
+  site module to state an order rule for a row it reads back.
+- The ownership join key cannot hold two rows for one entry identity. `ownership.row_key` sorts by the entry identity
+  plus `source`, because two sources can state the same entry, so the record's own shape holds one row per source; the
+  merge key is the entry identity read through `state_coverage.ownership_key`, which holds one row, so a merged set
+  keeps one row for an entry two sources state. Measured 2026-11-22 on the accepted corpus and on the committed
+  response set: no row pair shares a key, so the condition cannot be pinned on committed material and the pins hold
+  only the uniqueness. Whether the merged set should hold one row per entry identity, or one row per entry identity per
+  source, is a decision the record does not state.
 - The move fact: an entry the codebase owns and a run reads with different scope facts is a finding read through
   `state_coverage.ownership_key` and the join on `directory`. It needs a fixture that shows one entry placed in a
   different scope than the record names, because no committed fixture or response holds one.
