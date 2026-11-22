@@ -4,8 +4,9 @@
 
 Piece 11A.3 landed, 2026-11-22: the byte agreement between a targeted run and a full run for the same unit, for
 content that names no read-through name, pinned in `tests/test_api_path.py` group 11. Phase 11A is complete, so its
-piece detail is out of the tracking markdown and the git history holds it. The next piece is 11B.1, the merge rule in
-`codebase_state.py`. The design record for Epic 11, the codebase several runs write into, is
+piece detail is out of the tracking markdown and the git history holds it. The piece is reviewed at `7bfb55b`, the
+review record is `acceptance.md`, and the review's result is the section below. The next piece is 11B.1, the merge rule
+in `codebase_state.py`. The design record for Epic 11, the codebase several runs write into, is
 `docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and the record of Piece 11A.3 is `acceptance.md`.
 
 Four decisions are agreed, and they are the shape of the record:
@@ -67,6 +68,34 @@ the tag text, which `parse_tags` stores only as `comments`, so the `description`
 
 The Phase 11A review records for Pieces 11A.1 and 11A.2 are not kept here: the phase is complete, and the git
 history and `acceptance.md` hold them.
+
+## Acceptance review of Piece 11A.3 (2026-11-22)
+
+The piece is reviewed at `44eb37b` and `7bfb55b`, both not pushed. Every measured fact the record states is confirmed
+by an independent re-run through `tests/conftest.py::api_producer` on the committed response set, one cache, both
+ways: both runs exit 0 and read the same single committed response, the `device-group` place, build the same index
+(`device-group` and `device-group/entry/Office-FW`), answer the same three join pairs, name the same three units
+through `unit_manifest.units` and the same three directories through `unit_manifest.directory_name`, write the same
+16 files with every file byte-identical, and report the same result for every gate check: 0 FAIL, 1 WARN with the
+same detail, 10 `.tf` files, 2 data files, 2 resources. The four `.tf` files of `office_fw_4507d824` are non-empty
+and identical; neither run writes `SITE_DATA.json`, `site.auto.tfvars`, a `data` block or `read_through.tf`.
+`SOURCE.txt` is the only file that can differ: measured with two caches on the same committed bytes, the 16-file set
+agrees and only the record differs, because its `path` field names the cache entry the run read. Each of the three
+pins passes on its own and no pin was removed.
+
+Four lines disagreed with the landed state and are corrected; no code, pin or measurement changed:
+
+- `docs/MULTI_RUN_CODEBASE.md` named only rules 1, 2, 3 and 4 as pinned, which its own rule 6 contradicts.
+- `PLAN.md` listed the completed Phase 11A as one of the open epic's three phases.
+- `backlog.md` stated the design record's rules as pending a pin.
+- `acceptance.md` said `to-do.md` shows Phase 11A complete; `to-do.md` holds no Phase 11A detail and names the open
+  pieces of Phase 11B and Phase 11C.
+
+The gate was re-measured single-threaded at `7bfb55b`: `ruff check .` clean at `py310`, `ruff format --check .` clean
+on the 106 files it reads, `python3 tools/check_documents.py` reports no finding, `python3 -m pytest` passes 1,757
+pins with the same 4 `tflint` skips — 1,761 pins in 53 test modules, `tests/test_api_path.py` 42 and
+`tests/test_api_requests.py` 32. The piece measured 218.96 s and the review measured 265.94 s on the same counts. No
+committed golden changed.
 
 ## Acceptance review of Piece F5.6 (2026-11-21)
 

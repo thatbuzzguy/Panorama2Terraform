@@ -72,10 +72,9 @@ markdown set.
 
 ## Open epic — Epic 11, the codebase several runs write into (feature id `F11.x`)
 
-The design record is `docs/MULTI_RUN_CODEBASE.md`. Three phases:
+The design record is `docs/MULTI_RUN_CODEBASE.md`. Phase 11A, the run's read set, is complete, so its detail is
+removed here. The open phases:
 
-- **11A, the run's read set**: the selection vocabulary, the targeted read set, and the byte agreement between a
-  targeted run and a full run for one unit.
 - **11B, the records as codebase state**: the merge rule, the run's unit set against the codebase's unit set,
   the cross-run ownership, edge and order facts, and the gate for a partial run.
 - **11C, the update run**: the existing records as a reference source, the write boundary, the run's report

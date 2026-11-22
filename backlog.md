@@ -636,8 +636,8 @@ restated here; they are in the record and the git history. Only the open items a
 
 ## Design Decisions (the codebase several runs write into, open items)
 
-The design record is `docs/MULTI_RUN_CODEBASE.md`. The rules that landed there are design rules pending a pin, so
-this document holds only what a piece cannot be written from.
+The design record is `docs/MULTI_RUN_CODEBASE.md`. A rule there that has pins is read through the test module that
+holds them, so this document holds only what a piece cannot be written from.
 
 - The move fact: an entry the codebase owns and a run reads with different scope facts is a finding read through
   `state_coverage.ownership_key` and the join on `directory`. It needs a fixture that shows one entry placed in a

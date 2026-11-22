@@ -1,9 +1,9 @@
 # The Codebase Across Several Runs (design record)
 
-This is the design record for Epic 11, feature id `F11.x`. Piece 11A.1 and Piece 11A.2 landed, so §2 rules 1, 2, 3
-and 4 have pins; every other rule below is a design rule pending a pin. The pins this document names are pins that
-already hold and that the new rules must not change. When a piece lands, its pins live in the module that owns its
-rule, and this document names the test module that holds them.
+This is the design record for Epic 11, feature id `F11.x`. Piece 11A.1, Piece 11A.2 and Piece 11A.3 landed, so §2
+rules 1, 2, 3, 4 and 6 have pins; every other rule below is a design rule pending a pin. The pins this document
+names are pins that already hold and that the new rules must not change. When a piece lands, its pins live in the
+module that owns its rule, and this document names the test module that holds them.
 
 The converter runs today as one run over one source and writes one output directory. A codebase that several
 runs write into needs three facts stated as data that a single run cannot state: which scopes a run read, which
