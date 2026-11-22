@@ -586,6 +586,11 @@ The records, the reports, and the write path:
   site, the declaration set, both directions of the variable gate rule, the corpus rows, the rule that the
   corpus trips neither, the gate inputs, the report bodies, the rule that the module defines no second naming
   rule, and the byte rule between two runs
+- `tests/test_codebase_state.py` - the merge between the rows a codebase holds and the rows a run read
+  (`codebase_state.py`): the join key per record read through each record module's `parse_rows`, the merge rule, the
+  byte rule between two runs for a record with no existing file, the rule that the merge adds no field and holds no
+  run fact, the order of a merged set read through each record module's own order rule, and the rule that the module
+  states no rule an owner states and writes no file
 - `tests/test_rule_data.py` - the rule as data (`RULE_ROW_FIELDS`): the row shape and the printed CSV form of the
   same rows, the properties read through the recorded object, the `for_each` key as the chain ordinal joined to the
   identity digest read through `state_coverage` and `unit_manifest`, the chain grouping the generator reads through
@@ -598,7 +603,8 @@ The records, the reports, and the write path:
   that each row shape is read through its own module, the rule data pair read inside the unit directory its own
   rows name with the two members standing or falling together and the printed member equal to `render_csv` of the
   same rows, the rule that the data rule reads no `.tf` file and no block rule reads a data file except
-  `rule_blocks`, the truth across the corpus, and the byte rule between two runs
+  `rule_blocks`, the truth across the corpus, the same reader reading a record that holds rows from two runs, and the
+  byte rule between two runs
 - `tests/test_round_trip.py` - the cross-check (`round_trip`): the `.tf` block set read through the one gate
   reader and the entry set read through the run's ledger, the join through the one scope rule and the one unit
   rule, one finding per unit and row where the two counts do not agree, the four rule rows reading the row set

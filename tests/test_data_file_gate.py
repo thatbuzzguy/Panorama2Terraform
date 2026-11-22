@@ -30,9 +30,11 @@ shape rule either.
 """
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
+import codebase_state
 import entry_coverage
 import naming
 import ownership
@@ -196,6 +198,39 @@ def test_the_gate_reads_the_tf_files_and_the_data_files_the_table_names(tmp_path
     written = data_file_set(tmp_path)
     assert report.data_file_count == len(written), (report.data_file_count, sorted(written))
     assert not report.failed, report.render()
+
+
+def test_the_data_rule_reads_a_merged_record_through_the_same_reader(tmp_path):
+    """The table stays the only data rule over the four records, and the reader it names reads a record that holds
+    rows from two runs the same way: the rows the rule reads back are the merged rows, and the rule reports nothing
+    for a codebase that holds rows from two committed runs.
+
+    Measured 2026-11-22 on the committed material, with the rows read through each module's `parse_rows` and merged
+    through `codebase_state.merge_rows`: the kitchen-sink run is the codebase, `address_objects.xml` is the second
+    run, and the merged records are written through the write path into a copy of the first run's output. No finding,
+    and the count names the same four root records. The order half agrees here because the second run names no edge
+    row, so the order over a merged set is not what this pin measures; that half is piece 11B.3.
+    """
+    codebase_dir, run_dir = tmp_path / "codebase", tmp_path / "run"
+    assert _run(FIXTURES_DIR / KITCHEN, codebase_dir).returncode == 0
+    assert _run(FIXTURES_DIR / "address_objects.xml", run_dir).returncode == 0
+    merged_dir = tmp_path / "merged"
+    shutil.copytree(codebase_dir, merged_dir)
+    merged = {}
+    for name, module in sanity_checks.DATA_FILES:
+        record = [entry for entry in codebase_state.JOIN_KEYS if entry[0] is module][0]
+        run_file = run_dir / name
+        run_rows = module.parse_rows(run_file.read_text(encoding="utf-8")) if run_file.is_file() else []
+        codebase_rows = module.parse_rows((codebase_dir / name).read_text(encoding="utf-8"))
+        rows = codebase_state.merge_rows(record, codebase_rows, run_rows)
+        merged[module] = rows
+        assert module.parse_rows(module.render(rows)) == rows, module.__name__
+        _write(merged_dir, name, module, rows)
+    findings = sanity_checks.check_data_files(merged_dir)
+    assert findings == [], ", ".join(f.render() for f in findings)
+    written = data_file_set(merged_dir)
+    assert sanity_checks.count_data_files(merged_dir) == len(written), sorted(written)
+    assert len(written) == 8, sorted(written)
 
 
 def test_the_report_names_both_file_sets(tmp_path):

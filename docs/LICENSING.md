@@ -74,7 +74,7 @@ carries into it.
 
 ## The copyright notices in `src/`
 
-4 of the 23 modules carry a notice, and each notice names the holder for the lines that module holds. The counts
+4 of the 24 modules carry a notice, and each notice names the holder for the lines that module holds. The counts
 here are the working tree, which is what `tools/check_documents.py` reads for them, so a module added later moves
 the second number and the document is re-stated, not re-measured:
 
