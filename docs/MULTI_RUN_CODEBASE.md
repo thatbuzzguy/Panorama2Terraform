@@ -1,9 +1,9 @@
 # The Codebase Across Several Runs (design record)
 
-This is the design record for Epic 11, feature id `F11.x`. Piece 11A.1, Piece 11A.2 and Piece 11A.3 landed, so §2
-rules 1, 2, 3, 4 and 6 have pins; every other rule below is a design rule pending a pin. The pins this document
-names are pins that already hold and that the new rules must not change. When a piece lands, its pins live in the
-module that owns its rule, and this document names the test module that holds them.
+This is the design record for Epic 11, feature id `F11.x`. Every rule here that has pins names the test module that
+holds them; a rule that does not is a design rule pending a pin. The pins this document names are pins that already
+hold, so a new rule cannot change them. When a piece lands, its pins live in the module that owns its rule, and this
+document names the test module that holds them.
 
 The converter runs today as one run over one source and writes one output directory. A codebase that several
 runs write into needs three facts stated as data that a single run cannot state: which scopes a run read, which
@@ -143,7 +143,8 @@ Three facts already hold, and they are the reason no new naming rule or identity
    stable while the plan order moves. The order the merge writes is read through each record module's own order
    rule, pinned by
    `tests/test_codebase_state.py::test_the_order_of_a_merged_set_is_the_order_each_record_states_not_the_order_of_writes`;
-   the `rank` and `after` half over a merged set is pending piece 11B.3, and the condition that `site_data.py`
+   the `rank` and `after` half over a merged set is pinned by
+   `tests/test_reference_edges.py::test_the_order_rule_reads_the_merged_set`, and the condition that `site_data.py`
    states no order rule for a row it reads back is recorded in `backlog.md`.
 5. **Determinism reads the existing record as an input.** Two runs on the same inputs — the same sources and the
    same existing records — write the same bytes. A run that merges the same record twice writes the same bytes,
@@ -166,15 +167,30 @@ Three facts already hold, and they are the reason no new naming rule or identity
 2. **The ownership chain gains one source.** `ownership.parent_map` reads the declared parent source, the
    parent fact the parse captures, and the codebase's existing rows. A targeted run that reads no parent can
    still name the ancestor for a name the codebase already owns, so `kind` answers `definition` or `override`
-   through the record instead of naming no owner. No second key and no second grouping rule appear.
+   through the record instead of naming no owner. No second key and no second grouping rule appear. The grouping
+   half, read over the rows two runs wrote, is pinned by
+   `tests/test_ownership.py::test_the_owner_rule_reads_the_group_the_merged_set_can_state`; the parent-source and
+   the `parent`-chain cases read facts `parse_rows` does not read back, so that half is recorded in `backlog.md`.
 3. **The edge set can name a unit the run did not read**, through the join `reference_edges.py` already states
    on `directory` and (`type`, `entry`). So a stack unit built by a targeted run is ranked after the template
-   units the codebase holds, and `after` names a unit another run wrote.
+   units the codebase holds, and `after` names a unit another run wrote. The rule answers for the row sets it is
+   given, so a pair whose referrer and target come from two different runs is one row, and the join gains no second
+   key. Pinned by `tests/test_reference_edges.py::test_an_edge_row_can_name_a_unit_the_run_did_not_build`, the
+   acyclic half by `tests/test_reference_edges.py::test_the_acyclic_rule_reads_a_finding_from_a_unit_the_run_did_not_build`,
+   which reads a finding grouped through the manifest row of a unit the second run did not build, and the
+   single-owner constraint by
+   `tests/test_reference_edges.py::test_the_edge_rule_and_the_order_rule_read_the_row_sets_they_are_given`. The pair
+   the membership basis states across two runs cannot be stated on committed material, so that condition is
+   recorded in `backlog.md`.
 4. **A name the run uses whose owner neither the run nor the record names** keeps the plain-name rule and writes
-   no edge row, the rule `reference_edges.py` rule 1 already states.
+   no edge row, the rule `reference_edges.py` rule 1 already states, pinned by
+   `tests/test_reference_edges.py::test_a_name_no_unit_declares_writes_no_row_and_stays_in_the_manifest`.
 5. **The run states no `kind` for a row it read from the record.** The kind is what the run read for its own
    entries; a row the run did not build keeps the kind the run that wrote it stated. A kind the rule cannot
-   decide is still a finding, and a finding still does not change the exit code.
+   decide is still a finding, and a finding still does not change the exit code. Pinned by
+   `tests/test_ownership.py::test_a_merged_row_keeps_the_kind_the_run_that_wrote_it_stated`, which reads the merged
+   set through `parse_rows` and the record's own order rule. A cross-run finding line needs the report facts
+   `parse_rows` refuses, so that half is recorded in `backlog.md`.
 6. **The move fact.** An entry the codebase owns and the run reads with different scope facts is a finding read
    through `state_coverage.ownership_key` and the join on `directory`. The tool states the move, not a rename:
    the identity changes, so the local name and the import id change with it, and a plan against the live config

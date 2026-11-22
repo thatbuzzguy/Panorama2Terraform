@@ -652,6 +652,25 @@ holds them, so this document holds only what a piece cannot be written from.
   response set: no row pair shares a key, so the condition cannot be pinned on committed material and the pins hold
   only the uniqueness. Whether the merged set should hold one row per entry identity, or one row per entry identity per
   source, is a decision the record does not state.
+- The membership basis cannot state a pair across two runs on committed material. Only `template-stack/entry/templates`
+  joins outside the container that names it, and the corpus holds exactly three such facts (`kitchen_sink.xml`
+  Branch-Stack to FW-Template, `multi_device_templates.xml` Branch-Stack to HQ-Networks, `scope_objects.xml`
+  Edge-Stack to Edge-Networks), each inside one fixture: every fixture declares the membership name itself, so the
+  referrer and the target of a membership row are always units of the same run. A cross-run membership row needs a
+  pair where one fixture declares the stack and the other declares the template, so the condition stays here and no
+  rule is invented for it (measured 2026-11-22 over the 59 accepted-fixture pairs).
+- The acyclic rule cannot state a cycle whose two halves come from two runs on committed material: 0 of the 59 pairs
+  gives one, because a cycle needs two units that each declare a name the other one uses, and no committed pair holds
+  that split. The pin reads the walk over a merged set only for the cycle the codebase's own rows wrote
+  (`tests/test_reference_edges.py::test_the_acyclic_rule_reads_a_finding_from_a_unit_the_run_did_not_build`). The
+  condition needs a pair where one fixture declares one half and the other declares the other half.
+- `ownership.py`'s decision and its findings half read facts that `parse_rows` does not read back: `chain`,
+  `from_parent`, `reason`, `line` and `container`. `render` writes only the declared fields and `parse_rows` refuses a
+  row that states anything else, so a merged set holds no chain and no report fact, the finding line cannot be read
+  across two runs, and the two ancestor cases that read those facts (the declared parent source and the device-group
+  `parent` chain) answer nothing for a row read back. Only the shared-unit case, which the five scope facts state on
+  their own, answers across runs, and that is what the pin holds. The condition needs the record to hold the chain as
+  a declared field, which the record rule does not allow for a run fact.
 - The move fact: an entry the codebase owns and a run reads with different scope facts is a finding read through
   `state_coverage.ownership_key` and the join on `directory`. It needs a fixture that shows one entry placed in a
   different scope than the record names, because no committed fixture or response holds one.
