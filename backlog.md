@@ -650,6 +650,15 @@ this document holds only what a piece cannot be written from.
 - `--prune-cache` on a codebase several runs write into: the action reads the record file the run wrote, and
   `SOURCE.txt` names only the last run's sources, so an entry an earlier run read is not in the file the action
   reads. The prune rule itself is unchanged; the consequence for a multi-run codebase is not decided.
+- The site row half of the Piece 11A.3 byte agreement is measured as agreement on absence, not as content. Measured
+  2026-11-22 on the committed response set for one unit both ways: no unit names a value, so neither run writes
+  `SITE_DATA.json` or `site.auto.tfvars`. `resource_mapping.VALUE_VARIABLES` maps only `ngfw_device` to a variable,
+  so a site row needs a unit that names a device value, and the device fact a path 2 run reads is the §4 live-only
+  fact (`docs/API_CONVERSION_PATH.md` §4), which no committed response holds: the index makes no device fact request,
+  so the run reads no device value. The pin
+  `tests/test_api_path.py::test_the_printed_form_of_the_unit_agrees_between_the_two_runs` holds the absence and names
+  no value rule; the condition that would measure the half as content is a committed response that states a device
+  value for one unit.
 
 The codebase audits measured 2026-11-11 and 2026-11-12 are closed. The git history holds the findings, the
 decisions, and the measurements. Nothing from those audits stays open.

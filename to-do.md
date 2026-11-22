@@ -8,11 +8,6 @@ documents hold it. The items that need a fact a live target states are in `backl
 The design record is `docs/MULTI_RUN_CODEBASE.md`; its pins are pending until each piece lands. Acceptance
 criteria for the open piece are in `acceptance.md`.
 
-### Phase 11A, the run's read set
-
-- **11A.3** — the byte agreement between a targeted run and a full run for the same unit, for content that names
-  no read-through name; the read-through exception stays labelled by the F5.5 rule.
-
 ### Phase 11B, the records as codebase state
 
 - **11B.1** — the merge rule in `codebase_state.py`, one join key per record, read through each record module's

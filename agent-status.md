@@ -2,11 +2,11 @@
 
 ## Current position
 
-Piece 11A.2 landed, 2026-11-21: the targeted read set in `src/api_requests.py`, and the rule that a name the
-selection excludes is not an index entry, so the join reports no finding for it. The next piece is 11A.3, the byte
-agreement between a targeted run and a full run for the same unit. The design record for Epic 11, the codebase
-several runs write into, is `docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and the result of Piece
-11A.2 is recorded in `acceptance.md`.
+Piece 11A.3 landed, 2026-11-22: the byte agreement between a targeted run and a full run for the same unit, for
+content that names no read-through name, pinned in `tests/test_api_path.py` group 11. Phase 11A is complete, so its
+piece detail is out of the tracking markdown and the git history holds it. The next piece is 11B.1, the merge rule in
+`codebase_state.py`. The design record for Epic 11, the codebase several runs write into, is
+`docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and the record of Piece 11A.3 is `acceptance.md`.
 
 Four decisions are agreed, and they are the shape of the record:
 
@@ -21,44 +21,41 @@ Four decisions are agreed, and they are the shape of the record:
 4. The merged records are the codebase-level view. The run's report gains one section that names the units the run
    built and the codebase units it did not read, so no fifth root-set file states the unit set a second time.
 
-What Piece 11A.2 landed:
+What Piece 11A.3 landed:
 
-- `api_requests.targeted_read_set` states the lists a targeted run reads. It is the four membership lists for both
-  shapes, because `parse_associations` reads a membership fact only from the response that holds the container the
-  list names, and the response for an entry holds the entry itself, so an entry read states no membership fact and no
-  list states a fact the selected unit can state on its own. The set narrows through the names, not through the lists.
-- `api_requests.targeted_names` states the scopes a targeted run reads, as the pairs the join answers them with: no
-  selection is every name the tables read; a place selection is the names inside that place; an entry selection is
-  the entry plus the names the tables hold for it, which are the membership facts its identity cannot state on its
-  own. A name the selection excludes is not in the set, and a table key names no entry.
-- `api_requests.scope_index` takes the selection as an optional argument and filters its set through `targeted_names`,
-  so a name the selection excludes gains no entry and `unit_findings` reports no finding for it, while the entry the
-  selection names enters through `scope_path` because the run read the response for it. With no selection the index
-  is the index it builds today.
-- `api_to_terraform.run_order` reads the read set through `api_requests.targeted_read_set` and passes the selection
-  to `api_requests.scope_index`, and `lists_read` reads the read set through its owner, so the entry point states no
-  read set and no name rule of its own and gains no function. `run_order` stays the only place the read order is
-  stated.
-- The join, the unit rule, the gate rule, the naming rule, the console line and the report rule are unchanged: the
-  targeted index flows through `join_units`, `unit_findings`, `check_request_set` and the record, so a place read
-  that holds a name the selection excludes is not refused and the gate reports no finding for it.
-- Nine pins are new, six in `tests/test_api_requests.py` (group 8) and three in `tests/test_api_path.py` (group 10).
-  Three pins changed: the run order pin reads the order through `api_requests.targeted_read_set`, the entry point
-  owners pin holds `targeted_read_set` and `targeted_names` as `api_requests`' rules, and
-  `test_a_selection_that_names_no_unit_is_an_argument_error_on_a_run` reads the difference the read rule creates
-  instead of byte equality with a run that declares no selection. The committed goldens are unchanged.
+- No rule in `src/` changed, because the agreement the rule states already holds. Measured on the committed response
+  set for one unit both ways — the run that declares no selection, and the run that selects
+  `device-group/entry/Office-FW` — both read through `tests/conftest.py`'s `api_producer` and one cache: both exit
+  0, read the same single committed response, build the same index (`device-group`,
+  `device-group/entry/Office-FW`), report the same join finding, name the same three units through
+  `unit_manifest.units`, and write the same 16 files, byte for byte the same for every file. The unit the selection
+  names, `office_fw_4507d824`, holds four `.tf` files, non-empty and byte for byte the same.
+- The site row half is agreement on absence: no unit on the committed set names a value, so neither run writes
+  `SITE_DATA.json` or `site.auto.tfvars`. `resource_mapping.VALUE_VARIABLES` maps only `ngfw_device` to a variable,
+  so a site row needs a device value, and the device fact a path 2 run reads is a §4 live-only fact, so that half
+  stays open in `backlog.md`.
+- The read-through half is measured as nothing answered: no committed response holds a reference field, so neither
+  run writes a `data` block or `read_through.tf`. The read-through rule itself stays in `tests/test_data_blocks.py`
+  (F5.5), and this piece states no read-through rule of its own.
+- The gate reads the same result for both runs on the committed set: 0 FAIL, 1 WARN, the same WARN detail
+  (`the join answers no row for the index entry device-group/entry/Office-FW`), 10 `.tf` files, 2 data files, 2
+  resources.
+- Three pins, in `tests/test_api_path.py` group 11, one per stated fact: the `.tf` bytes read as paths from the
+  unit directory, the printed form read through `site_data` and `write_path.unit_path`, and the block set read
+  through `sanity_checks.blocks` with the file name read through its owner. `tests/test_api_path.py` collects 42.
 
-Gate, measured 2026-11-21 on the tree that holds this piece, single-threaded: `ruff check .` is clean at `py310`,
+Gate, measured 2026-11-22 on the tree that holds this piece, single-threaded: `ruff check .` is clean at `py310`,
 `ruff format --check .` is clean on the 106 files it reads (79 Python files, 27 markdown files),
-`python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` passes 1,754 pins with the same 4
-skips for the missing `tflint` binary — 1,758 pins in 53 test modules, 9 more than the 1,749 pins the previous piece
-measured, in 311.05 s. Read through the per-module collection counts: `tests/test_api_requests.py` collects 32 and
-`tests/test_api_path.py` collects 39, so the nine new pins are 6 and 3 in those two modules. `terraform` is present
-on this machine, so the pins that read the live provider schema ran, and the 4 skips are the `tflint` pins in
-`tests/test_sanity_gate.py`.
+`python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` passes 1,757 pins with the same 4
+skips for the missing `tflint` binary — 1,761 pins in 53 test modules, 3 more than the 1,758 pins the previous piece
+measured, in 218.96 s. Read through the per-module collection counts: `tests/test_api_path.py` collects 42 and
+`tests/test_api_requests.py` collects 32, so the three new pins are all in `tests/test_api_path.py`. `terraform` is
+present on this machine, so the pins that read the live provider schema ran, and the 4 skips are the `tflint` pins in
+`tests/test_sanity_gate.py`. No committed golden changed.
 
-Piece 11A.3 is open: the byte agreement between a targeted run and a full run for the same unit, for content that
-names no read-through name. `backlog.md` holds the items that need a fact a live target states:
+Piece 11B.1 is the next piece: the merge rule in `codebase_state.py`. The half of Piece 11A.3 that cannot be pinned
+offline is open in `backlog.md`: the site row needs a device value, which no committed response holds. `backlog.md`
+holds the items that need a fact a live target states:
 the device the operator adds to a device group for a new site, and the device serial a push target names
 (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4);
 the rulebase value string and the rule position (F3.5), which also gate the `rulebase` row column and the import
@@ -68,53 +65,8 @@ provider does not declare; and the path 2 live facts in `docs/API_CONVERSION_PAT
 shapes the comparison table cannot state as one name: the address `value`, which the run prints under four names, and
 the tag text, which `parse_tags` stores only as `comments`, so the `description` key the row declares is never filled.
 
-## Acceptance review of Piece 11A.2 (2026-11-21)
-
-The piece is reviewed at `153dbf2` and `3067372`, both not pushed, and the review record is `acceptance.md`. Every
-criterion is met, and nothing was wrong: no code, pin or document disagreed, so the only change is the record, which
-now states each criterion as met and carries the review's timings. The measurement is confirmed by an independent re-run through the tool's
-own modules on the committed response set and on the content `tests/test_api_path.py` holds: the run that declares no
-selection reads `device-group`, `templates`, `device-group/entry/Office-FW` and `templates/entry/HQ-Networks`, the run
-that selects `device-group` reads the first three, the join reports a finding for `HQ-Networks` on the whole set and
-none on the targeted set, the unit rule names the same units both ways, and the committed entry read answers no
-membership fact while the committed `device-group` read holds `Office-FW` and `Unassigned-DG`. A targeted run writes
-the same file set as a run that declares none, and its bytes differ.
-
-Each of the nine new pins passes on its own, in the module that owns its rule, and the three changed pins pass on
-their own: the run order pin reads the order through `api_requests.targeted_read_set`, the entry point owners pin holds
-`targeted_read_set` and `targeted_names` as `api_requests`' rules, and
-`tests/test_api_path.py::test_a_selection_that_names_no_unit_is_an_argument_error_on_a_run` keeps the argument-error
-part and reads the file set and the difference. No pin was removed. The index rule pin
-`tests/test_layout.py::test_the_indexes_name_every_document_under_them` passes, and the import rule reads clean: no
-test module imports another test module, `src/` imports nothing from `tests/`, and the shared facts are read from
-`tests/conftest.py`. The pins that hold the single-owner claims pass unchanged.
-
-The gate was re-measured single-threaded at `3067372`: `ruff check .` clean, `ruff format --check .` clean on the
-106 files it reads (79 Python, 27 markdown), `python3 tools/check_documents.py` reports no finding, and
-`python3 -m pytest` passes 1,754 pins with the same 4 `tflint` skip — 1,758 pins in 53 test modules,
-`tests/test_api_requests.py` at 32 and `tests/test_api_path.py` at 39. The piece measured 311.05 s and the review's two
-confirmation runs measured 310.75 s and 316.00 s on the same counts, so run-to-run time varies.
-Piece 11A.3 stays open.
-
-## Acceptance review of Piece 11A.1 (2026-11-21)
-
-The piece is reviewed at `22e4401`, `f2a20b8` and `c23920b`, none pushed, and the review record is `acceptance.md`.
-Every criterion is met. Three things were wrong and are corrected, and no pin changed:
-
-- The gate line stated the 106 files `ruff format --check .` reads as Python files. Measured: 79 Python files (23 in
-  `src/`, 54 in `tests/`, 2 in `tools/`) and 27 markdown files.
-- The single-split wording read as a rule for all of `src/`. It holds for the two rules that read the shape
-  definition; eight places split a path string for a fact of their own, so the two docstrings in
-  `src/container_coverage.py` now state the scope the pins ground, and the split sites are recorded in `backlog.md`.
-- `acceptance.md` criterion 3 named "the group that holds the `--path` pins" in `tests/test_api_requests.py`. That
-  module holds no `--path` pin, so the criterion now names group 5, the group that reads the module's rules through
-  their owners.
-
-Each pin the review record names passes on its own, and the import rule reads clean: no test module imports another
-test module. The gate was re-measured single-threaded, 1,745 passed and 4 skipped, 1,749 pins in 53 test modules:
-317.05 s at `c23920b` and 436.09 s on the tree that holds the corrections; `ruff check .` is clean, `ruff format
---check .` is clean
-on the 106 files it reads, and `python3 tools/check_documents.py` reports no finding. Piece 11A.2 stays open.
+The Phase 11A review records for Pieces 11A.1 and 11A.2 are not kept here: the phase is complete, and the git
+history and `acceptance.md` hold them.
 
 ## Acceptance review of Piece F5.6 (2026-11-21)
 

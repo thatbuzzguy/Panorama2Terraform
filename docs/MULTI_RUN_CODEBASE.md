@@ -82,9 +82,23 @@ Three facts already hold, and they are the reason no new naming rule or identity
    `unit_manifest.units`, the set that names the directories the run writes. The codebase's set is the merged
    manifest read through `unit_manifest.parse_rows`. Neither module counts units a second way.
 6. **A targeted run writes the same unit bytes as a full run writes for that unit**, for content that names no
-   read-through name. With a read-through scope declared, a name the codebase owns and the run did not read
-   becomes a `data` block, because the run read no unit that declares it. The run labels itself in the
-   generated `README.md`, the F5.5 rule, so the exception is stated and not guessed.
+   read-through name. The unit is read through `unit_manifest.units` (rule 5) and its directory through
+   `unit_manifest.directory_name`, the bytes through `tests/conftest.py`'s `tf_bytes` read as paths from the unit
+   directory, and the printed form through `write_path.unit_path` with the names `site_data` states, so this rule
+   states no unit rule, no path rule and no file-shape rule of its own, and it holds no row-by-row statement of the
+   agreement. With a read-through scope declared, a name the codebase owns and the run did not read becomes a
+   `data` block, because the run read no unit that declares it: that branch is the F5.5 rule, pinned in
+   `tests/test_data_blocks.py`, so this rule states the agreement for content that names no read-through name and
+   states no read-through rule of its own, and the run labels itself in the generated `README.md` so the exception
+   is stated and not guessed. Pinned on the committed response set for one unit both ways, through
+   `tests/conftest.py`'s offline producer:
+   `tests/test_api_path.py::test_a_targeted_run_writes_the_same_tf_bytes_as_the_full_run_for_the_unit_it_selects`
+   for the `.tf` bytes, read as paths from the unit directory and asserted non-empty,
+   `tests/test_api_path.py::test_the_printed_form_of_the_unit_agrees_between_the_two_runs` for the printed form, and
+   `tests/test_api_path.py::test_neither_run_writes_a_read_through_block_for_content_that_names_no_read_through_name`
+   for the condition the rule is stated on. On the committed set the printed form is measured as agreement on
+   absence, because no unit there names a value, so the condition that would measure it as content is recorded in
+   `backlog.md`.
 
 ## 3. The four records as codebase state
 
