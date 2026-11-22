@@ -10,9 +10,6 @@ criteria for the open piece are in `acceptance.md`.
 
 ### Phase 11A, the run's read set
 
-- **11A.2** — the targeted read set: the selected scope plus the membership facts a unit identity cannot state
-  on its own, read through `api_requests`; a name the selection excludes is not an index entry, so the join
-  reports no finding for it.
 - **11A.3** — the byte agreement between a targeted run and a full run for the same unit, for content that names
   no read-through name; the read-through exception stays labelled by the F5.5 rule.
 

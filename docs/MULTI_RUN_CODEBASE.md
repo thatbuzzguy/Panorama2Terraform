@@ -1,9 +1,9 @@
 # The Codebase Across Several Runs (design record)
 
-This is the design record for Epic 11, feature id `F11.x`. Piece 11A.1 landed, so §2 rules 1, 2 and 4 have pins;
-every other rule below is a design rule pending a pin. The pins this document names are pins that already hold
-and that the new rules must not change. When a piece lands, its pins live in the module that owns its rule, and
-this document names the test module that holds them.
+This is the design record for Epic 11, feature id `F11.x`. Piece 11A.1 and Piece 11A.2 landed, so §2 rules 1, 2, 3
+and 4 have pins; every other rule below is a design rule pending a pin. The pins this document names are pins that
+already hold and that the new rules must not change. When a piece lands, its pins live in the module that owns its
+rule, and this document names the test module that holds them.
 
 The converter runs today as one run over one source and writes one output directory. A codebase that several
 runs write into needs three facts stated as data that a single run cannot state: which scopes a run read, which
@@ -56,10 +56,25 @@ Three facts already hold, and they are the reason no new naming rule or identity
    `tests/test_api_requests.py::test_the_selection_argument_states_no_rule_an_owner_states` holds that the
    argument reads the shape, the place and the built-in fact through their owners and states none of its own, and
    that a run declaring no selection declares nothing.
-3. **The targeted read set is the selected scope plus the membership facts its unit identity needs.** The
-   index states no merge rule and reads no membership of its own, so the run reads the membership container for
-   each identity fact a selection cannot state on its own. A name the selection excludes is not an index entry,
-   so the join reports no finding for it.
+3. **The targeted read set is the selected scope plus the membership facts a unit identity cannot state on its
+   own**, stated once in `api_requests.py` through `targeted_read_set` and `targeted_names`. No list is dropped for
+   a selection, because `parse_associations` reads a membership fact only from the response that holds the container
+   the list names, and the response for an entry holds the entry itself, so an entry read states no membership fact:
+   each list states one fact the selected unit cannot state on its own. The set narrows through the names, so a name
+   the selection excludes is not an index entry and the join reports no finding for it, while the entry the selection
+   names enters the index through the one scope path definition, because the run read the response for it. The entry
+   point reads both sets through `api_requests` and states no read rule and no name rule of its own. Pinned:
+   `tests/test_api_requests.py::test_the_targeted_read_set_keeps_every_list_a_single_read_cannot_state` for the read
+   set, `tests/test_api_requests.py::test_the_targeted_name_set_is_the_names_inside_the_place_or_the_names_the_selection_owns`
+   for the name set, `tests/test_api_requests.py::test_a_name_the_selection_excludes_gains_no_index_entry` for the
+   index, `tests/test_api_requests.py::test_the_join_reports_no_finding_for_a_name_the_selection_excludes` and
+   `tests/test_api_requests.py::test_a_place_read_that_holds_an_excluded_name_is_not_refused` for the join, and the
+   pin
+   `tests/test_api_requests.py::test_the_entry_the_selection_names_enters_the_index_through_the_one_path_definition`
+   for the entry the selection names. The run reads the same sets, pinned by
+   `tests/test_api_path.py::test_a_targeted_run_reads_the_lists_and_the_names_the_selection_states`,
+   `tests/test_api_path.py::test_the_join_reports_no_finding_for_a_name_the_selection_excludes`, and
+   `tests/test_api_path.py::test_the_record_names_the_read_set_in_run_order_for_a_targeted_run`.
 4. **An ancestor the run reads as a reference source names no unit**, the `--parent` rule already pinned
    (`tests/test_reference_edges.py::test_a_declared_parent_source_adds_no_dependency`). The run builds rows for
    its own units and reads the ancestor for the ownership rule.

@@ -92,6 +92,14 @@ it builds a path only through `xml_input.ENTRY_SEGMENT` and `container_coverage.
 second path rule exists. The response-to-request join (§2.3) reads the two parts this rule names: the
 entry name, and the request that made the response.
 
+For a selection the set is the targeted read set: `api_requests.targeted_read_set` names the lists a targeted run
+reads, and `api_requests.targeted_names` names the scopes inside them for the selected unit, so the index builds no
+entry for a name the selection excludes (`docs/MULTI_RUN_CODEBASE.md` §2 rule 3). No list is dropped for a selection,
+because an entry read states no membership fact: the response for an entry holds the entry itself, and the method
+reads the entries inside the container. Pinned by
+`tests/test_api_requests.py::test_the_targeted_read_set_keeps_every_list_a_single_read_cannot_state` and
+`tests/test_api_requests.py::test_the_targeted_name_set_is_the_names_inside_the_place_or_the_names_the_selection_owns`.
+
 **2.3 One response per request, checked against the request that made it.** `api_requests.join_response`
 reads one response against the index entry whose request made it, and answers the entry names inside
 it in sorted order, which is what the run (§2.4) keys its parse on. A response is accepted only when
@@ -253,6 +261,12 @@ those pins is handed by an injected producer, and the `device-group` read is the
   `test_the_join_reports_the_findings_as_data_through_the_owners_names`. The pin
   `tests/test_unit_manifest.py::test_the_join_reads_the_unit_set_through_this_rule` keeps the one unit rule, and the
   pins that read `src/api_requests.py` (the import list and the string constants) hold it read through its owners.
+  For a targeted run the join reads the targeted index, so a name the selection excludes is not an entry and the join
+  reports no finding for it, while the unit set stays the set `unit_manifest.units` names: the read set keeps every
+  list, so a unit whose name the selection excludes is still answered by the place entry, and it stays a pair rather
+  than a finding. Pinned by
+  `tests/test_api_requests.py::test_the_join_reports_no_finding_for_a_name_the_selection_excludes` and
+  `tests/test_api_path.py::test_the_join_reports_no_finding_for_a_name_the_selection_excludes`.
 - **The source field on the ownership row.** `ownership.SOURCE_FIELD` is the one statement of the field name, and
   `FIELD_ORDER`, `row_key`, `scan_row` and the unit join read it through that statement. For a response read the
   field names the response through the name rule in `source_fetch.py`, so the declared row shape is unchanged and
@@ -349,14 +363,19 @@ only from the request that read the entry, and no parse method reads it off the 
 ## 6. The run order, and the join across responses
 
 **The run order is the entry point's decision.** `src/api_to_terraform.py` is the only place that states it:
-the run reads the membership responses first, in the order `api_requests.membership_lists()` names them, then
-the entries `api_requests.scope_index()` names, in index order. One response is read once, so a container two
+the run reads the membership responses first, in the order `api_requests.targeted_read_set()` names them, which is
+the four lists for a run that declares no selection, then the entries `api_requests.scope_index()` names, in index
+order. One response is read once, so a container two
 lists name (the two `template-stack` lists name one container) enters the order at the first place a list names
 it, and a container the run already read as a membership response is not read again for its index entry.
 `api_requests.py` states no read order and `provenance.py` rule 6 states no read rule for a path 2 run, so the
 record file the run wrote is the order's own statement (§2.5). Pinned by
 `tests/test_api_path.py::test_the_run_order_is_the_membership_lists_then_the_index_entries`, which reads the
-order through the owners' names and compares it with the record file the same run wrote.
+order through the owners' names and compares it with the record file the same run wrote. For a selection the entry
+part reads only the names `api_requests.targeted_names()` states for the selected unit, so a targeted run reads the
+same membership responses and fewer entries, and the record names only the read set. Pinned by
+`tests/test_api_path.py::test_a_targeted_run_reads_the_lists_and_the_names_the_selection_states` and
+`test_the_record_names_the_read_set_in_run_order_for_a_targeted_run`.
 
 The order reads a membership response and then the entries the index names, so an entry inside a place that holds
 a membership list is read twice: once inside the place response, once as the response its own request made. One

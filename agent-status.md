@@ -2,10 +2,11 @@
 
 ## Current position
 
-Piece 11A.1 landed, 2026-11-21: the selection vocabulary, and the argument rule for a selection that names no unit
-in the run's read set. The next piece is 11A.2, the targeted read set. The design record for Epic 11, the codebase
+Piece 11A.2 landed, 2026-11-21: the targeted read set in `src/api_requests.py`, and the rule that a name the
+selection excludes is not an index entry, so the join reports no finding for it. The next piece is 11A.3, the byte
+agreement between a targeted run and a full run for the same unit. The design record for Epic 11, the codebase
 several runs write into, is `docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and the result of Piece
-11A.1 is recorded in `acceptance.md`.
+11A.2 is recorded in `acceptance.md`.
 
 Four decisions are agreed, and they are the shape of the record:
 
@@ -20,51 +21,44 @@ Four decisions are agreed, and they are the shape of the record:
 4. The merged records are the codebase-level view. The run's report gains one section that names the units the run
    built and the codebase units it did not read, so no fifth root-set file states the unit set a second time.
 
-What Piece 11A.1 landed:
+What Piece 11A.2 landed:
 
-- `shared_arguments` declares `--selection`, so both entry points read one argument set, and `shared_checks` states
-  the argument rule for it. The shape is read through `container_coverage.is_scope_path`, the place through
-  `container_coverage.path_place`, and the built-in place through `container_coverage.PREDEFINED_PLACE`, so the
-  argument states no path shape of its own, and it states no unit rule, no naming rule, no writer, no console line
-  and no environment name.
-- `container_coverage.path_segments` is the place the shape rule and the place rule read the split, and
-  `path_place` is the place those two rules read the first segment, so they read the same segments; the wider claim
-  that one place in `src/` splits every path is not pinned, and the eight split sites that read a path for a fact of
-  their own are recorded in `backlog.md`. `path_place` holds no copy of the built-in name, so the pin that counts the
-  constant's uses inside `container_coverage.py` is unchanged.
-- The file-source refusal is in path 1's `main()`, next to the `--path` and `--parent` block, because `--source` is
-  path 1's argument and path 2 has none, so `shared_checks` cannot state a rule for a source it does not read.
-- The no-unit fact is decidable at argument time only for the built-in place: no container table row names a
-  built-in container, so no parse method runs over its response, the ledger holds no row, and
-  `unit_manifest.units` names no unit for it. `shared` stays accepted because a shared read builds a report row and
-  `unit_manifest.SHARED_UNIT` names its unit. `devices` and `vsys` are accepted at argument time, because the fact
-  that names which device the run read is a live-target fact, recorded in `backlog.md`.
-- The piece states no read rule, no merge rule, no report rule, and no module, so the `docs/ARCHITECTURE.md` §1
-  table is unchanged and `codebase_state.py` is named only when Piece 11B.1 lands, and the run that declares a
-  selection writes the same bytes as the same run that declares none.
+- `api_requests.targeted_read_set` states the lists a targeted run reads. It is the four membership lists for both
+  shapes, because `parse_associations` reads a membership fact only from the response that holds the container the
+  list names, and the response for an entry holds the entry itself, so an entry read states no membership fact and no
+  list states a fact the selected unit can state on its own. The set narrows through the names, not through the lists.
+- `api_requests.targeted_names` states the scopes a targeted run reads, as the pairs the join answers them with: no
+  selection is every name the tables read; a place selection is the names inside that place; an entry selection is
+  the entry plus the names the tables hold for it, which are the membership facts its identity cannot state on its
+  own. A name the selection excludes is not in the set, and a table key names no entry.
+- `api_requests.scope_index` takes the selection as an optional argument and filters its set through `targeted_names`,
+  so a name the selection excludes gains no entry and `unit_findings` reports no finding for it, while the entry the
+  selection names enters through `scope_path` because the run read the response for it. With no selection the index
+  is the index it builds today.
+- `api_to_terraform.run_order` reads the read set through `api_requests.targeted_read_set` and passes the selection
+  to `api_requests.scope_index`, and `lists_read` reads the read set through its owner, so the entry point states no
+  read set and no name rule of its own and gains no function. `run_order` stays the only place the read order is
+  stated.
+- The join, the unit rule, the gate rule, the naming rule, the console line and the report rule are unchanged: the
+  targeted index flows through `join_units`, `unit_findings`, `check_request_set` and the record, so a place read
+  that holds a name the selection excludes is not refused and the gate reports no finding for it.
+- Nine pins are new, six in `tests/test_api_requests.py` (group 8) and three in `tests/test_api_path.py` (group 10).
+  Three pins changed: the run order pin reads the order through `api_requests.targeted_read_set`, the entry point
+  owners pin holds `targeted_read_set` and `targeted_names` as `api_requests`' rules, and
+  `test_a_selection_that_names_no_unit_is_an_argument_error_on_a_run` reads the difference the read rule creates
+  instead of byte equality with a run that declares no selection. The committed goldens are unchanged.
 
-Four pins are new: `tests/test_api_requests.py::test_a_selection_shape_is_read_through_the_one_scope_path_definition`,
-`tests/test_api_requests.py::test_the_selection_argument_states_no_rule_an_owner_states`,
-`tests/test_api_path.py::test_a_selection_that_names_no_unit_is_an_argument_error_on_a_run`, which reads the exit
-code and the no-file fact from a run, and
-`tests/test_shadow_coverage.py::test_a_selection_applies_to_the_api_source_only`. The pin
-`tests/test_api_path.py::test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_that_name_one_source`
-gained `selection` in the accepted name list. The pins that hold the one path definition, the run's unit set, and
-the fact that a declared parent source names no unit are unchanged, and the committed goldens are unchanged.
+Gate, measured 2026-11-21 on the tree that holds this piece, single-threaded: `ruff check .` is clean at `py310`,
+`ruff format --check .` is clean on the 106 files it reads (79 Python files, 27 markdown files),
+`python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` passes 1,754 pins with the same 4
+skips for the missing `tflint` binary — 1,758 pins in 53 test modules, 9 more than the 1,749 pins the previous piece
+measured, in 311.05 s. Read through the per-module collection counts: `tests/test_api_requests.py` collects 32 and
+`tests/test_api_path.py` collects 39, so the nine new pins are 6 and 3 in those two modules. `terraform` is present
+on this machine, so the pins that read the live provider schema ran, and the 4 skips are the `tflint` pins in
+`tests/test_sanity_gate.py`.
 
-Gate, measured 2026-11-21 on the tree that holds this piece, single-threaded: `ruff check .` clean at `py310`,
-`ruff format --check .` clean on the 106 files it reads (79 Python files, 27 markdown files), `python3 tools/check_documents.py` reports no finding, and
-`python3 -m pytest` passes 1,745 pins with the same 4 skip for the missing `tflint` binary — 1,749 pins, 4 more
-than the 1,745 pins the per-module collection counts measured at `f376a6a` (1,741 passed plus the 4 skip), in 53
-test modules, in 469.96 s on the recorded run. Read through the
-per-module collection counts: `tests/test_api_requests.py` collects 26, `tests/test_api_path.py` 36, and
-`tests/test_shadow_coverage.py` 23, so the four new pins are 2, 1 and 1 in those three modules. `terraform` is
-present on this machine, so the pins that read the live provider schema ran, and the 4 skips are the `tflint` pins
-in `tests/test_sanity_gate.py`. The new pins run the pipeline for the places they read, so the gate time is above
-the 306.61 s the previous piece measured; run-to-run time varies, and the recorded runs of this tree measured
-469.96 s and 695.56 s.
-
-Piece 11A.2 is open: the targeted read set. `backlog.md` holds the items that need a fact a live target states:
+Piece 11A.3 is open: the byte agreement between a targeted run and a full run for the same unit, for content that
+names no read-through name. `backlog.md` holds the items that need a fact a live target states:
 the device the operator adds to a device group for a new site, and the device serial a push target names
 (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4);
 the rulebase value string and the rule position (F3.5), which also gate the `rulebase` row column and the import
