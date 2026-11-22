@@ -165,8 +165,9 @@ def data_file_set(output_dir) -> list[str]:
 # --- The records read back as data, shared by the merged-set pins (Epic 11, Piece 11B.3) ---
 
 # The join key per record, read through the table `codebase_state.py` states, so no test module states a table of its
-# own. `tests/test_codebase_state.py`, `tests/test_data_file_gate.py`, `tests/test_unit_manifest.py`,
-# `tests/test_reference_edges.py` and `tests/test_ownership.py` read this set, so it lives here.
+# own. Three test modules read this copy: `tests/test_codebase_state.py`, `tests/test_reference_edges.py` and
+# `tests/test_ownership.py`. The two that read the table without this copy, `tests/test_data_file_gate.py` and
+# `tests/test_unit_manifest.py`, read it through its owner (`codebase_state.JOIN_KEYS`), so the table is stated once.
 JOIN_RECORDS = {record[0]: record for record in codebase_state.JOIN_KEYS}
 
 
