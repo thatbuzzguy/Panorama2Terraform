@@ -1,7 +1,7 @@
 """F6.3 the reference between units: the edge record, the acyclic rule, the unit order, and the
 outputs rule decision (F6.9).
 
-Seven groups over the eight rules in `reference_edges.py` (`docs/CODEBASE_ASSEMBLY.md` §5 and §6):
+Eight groups over the eight rules in `reference_edges.py` (`docs/CODEBASE_ASSEMBLY.md` §5 and §6):
 
 1. The edge row and the join: one row per pair the data can name, joined to the manifest on
    `directory` and to the ownership record on (`type`, `entry`), including the pair the membership fact
@@ -16,10 +16,13 @@ Seven groups over the eight rules in `reference_edges.py` (`docs/CODEBASE_ASSEMB
 7. The outputs rule (F6.9, the decision): the mechanism for a name another unit in the codebase owns
    is the plain name the reference rule already returns, so no module defines an outputs writer or
    reads remote state.
+8. The row sets read as a merged set (Piece 11B.3): the join, the walk and the order read the rows they are given,
+   so an edge row and an `after` fact can name a unit another run wrote.
 
 Every test runs offline, and the module writes no `.tf` byte.
 """
 
+import ast
 import contextlib
 import io
 import json
@@ -30,8 +33,10 @@ from pathlib import Path
 import pytest
 
 import api_requests
+import codebase_state
 import container_coverage
 import entry_coverage
+import naming
 import ownership
 import reference_edges
 import resource_mapping
@@ -42,11 +47,13 @@ import unit_manifest
 from conftest import (
     FIXTURES_DIR,
     GOLDEN_DIR,
+    JOIN_RECORDS,
     SAMPLE_CONFIG,
     SRC_DIR,
     corpus_fixtures,
     run_main,
     run_pipeline,
+    run_records,
     run_script,
     tf_bytes,
 )
@@ -117,6 +124,15 @@ CORPUS_EDGES = {
 CYCLE_FACTS = ("", "", "", "fw-a.example.com", "")
 CYCLE_UNITS = ("fw_a_example_com_4febb524", "fw_b_example_com_85c521ca")
 UNIT_A, UNIT_B = CYCLE_UNITS
+
+
+# The pair group 8 reads, as committed material: `address_groups.xml` as the codebase and `security_rules.xml` as the
+# second run. The second run uses `Web-Servers`, a name the first run declares, so the pair the edge rule answers is
+# a pair only the merged set can state: `CORPUS_EDGES` shows that neither fixture alone writes an edge row.
+MERGED_CODEBASE = "address_groups.xml"
+MERGED_RUN = "security_rules.xml"
+# The pair the acyclic rule is read over: the cycle fixture as the codebase, `address_objects.xml` as the second run.
+CYCLE_PAIR = (CYCLE_FIXTURE, "address_objects.xml")
 
 
 def _run(source: Path, out_dir: Path, extra: tuple = ()) -> subprocess.CompletedProcess:
@@ -197,6 +213,11 @@ def _row(rows: list, directory: str) -> dict:
 def _facts(row: dict) -> tuple:
     """The unit identity a row states, in `FACT_KEYS` order."""
     return tuple(row[key] for key in reference_edges.FACT_KEYS)
+
+
+def _refs(rows: list) -> dict:
+    """The reference names a written record states, keyed by the referrer's identity, read through `parse_rows`."""
+    return {_facts(row): row["references"] for row in rows}
 
 
 def _section(report: str, heading: str) -> str:
@@ -973,3 +994,181 @@ def test_the_mechanism_defines_no_writer_and_no_reader(tmp_path):
     assert not [name for name in sorted(p.name for p in tmp_path.iterdir()) if "output" in name]
     files = sanity_checks.read_tf_files(tmp_path)
     assert sanity_checks.blocks(files, ("output",)) == []
+
+
+# --- 8. the row sets read as a merged set (Piece 11B.3) ------------------------
+
+
+def _merged(module, codebase_rows: list, run_rows: list) -> list:
+    """The merge, read through `codebase_state`, the one merge rule, on rows read through `parse_rows`."""
+    return codebase_state.merge_rows(JOIN_RECORDS[module], codebase_rows, run_rows)
+
+
+def test_an_edge_row_can_name_a_unit_the_run_did_not_build(tmp_path):
+    """`docs/MULTI_RUN_CODEBASE.md` §4 rule 3, read over the merged set: the join `reference_edges.py` rule 2 states is
+    the join between two row sets, so a pair whose referrer and target come from two different runs is one row, and
+    the join gains no second key. The reference half is what answers it: the membership tables name nothing
+    here, because a committed fixture declares every membership name inside itself, so that condition stays in
+    `backlog.md`.
+
+    Measured 2026-11-22 on the committed pair, each record read back through its own `parse_rows` and merged through
+    `codebase_state.merge_rows`: manifest 1 against 2 give 3, ownership 2 against 3 give 5. The second run reads
+    `Web-Servers` as a name it uses, so its own rows name no pair; over the merged rows one row names the pair, the
+    referrer being the unit the second run built and the target the unit the first run built.
+    """
+    codebase = run_records(CONVERTER, FIXTURES_DIR / MERGED_CODEBASE, tmp_path / MERGED_CODEBASE)
+    second = run_records(CONVERTER, FIXTURES_DIR / MERGED_RUN, tmp_path / MERGED_RUN)
+    units = _merged(unit_manifest, codebase[unit_manifest], second[unit_manifest])
+    owners = _merged(ownership, codebase[ownership], second[ownership])
+    assert (len(units), len(owners)) == (3, 5), (len(units), len(owners))
+
+    merged_edges = reference_edges.build_rows(owners, _refs(units), {}, naming.sanitize)
+    assert merged_edges == [
+        {
+            "referrer": "production_dg_6ce3cc69",
+            "target": "shared_45ca31c3",
+            "type": "panos_address_group",
+            "entry": "Web-Servers",
+        }
+    ], merged_edges
+    # Neither run's own row set can name the pair, so the row is the merged set's, not one run's.
+    codebase_edges = reference_edges.build_rows(
+        codebase[ownership], _refs(codebase[unit_manifest]), {}, naming.sanitize
+    )
+    run_edges = reference_edges.build_rows(second[ownership], _refs(second[unit_manifest]), {}, naming.sanitize)
+    assert codebase_edges == [] and run_edges == []
+
+    units_named = {row["directory"] for row in units}
+    second_units = {row["directory"] for row in second[unit_manifest]}
+    assert "shared_45ca31c3" not in second_units, "the target is the unit the second run did not build"
+    assert "production_dg_6ce3cc69" not in {row["directory"] for row in codebase[unit_manifest]}
+    for row in merged_edges:
+        assert row["referrer"] in units_named and row["target"] in units_named, row
+        joined = [owner for owner in owners if owner["type"] == row["type"] and owner["entry"] == row["entry"]]
+        assert joined and any(owner["owner"] == row["target"] for owner in joined), row
+
+
+def test_the_order_rule_reads_the_merged_set(tmp_path):
+    """`docs/MULTI_RUN_CODEBASE.md` §3 rule 4 and §4 rule 3, read over the merged set: `rank` and `after` are facts
+    about the codebase, so the order rule answers for the rows it is given and `after` can name a unit the run did
+    not build, which moves `rank` for a row the run did not build. The three bases are read through the same rule: the
+    edge basis answers the cross-run pair, and the level basis answers the pair the merged set can state inside itself.
+
+    Measured 2026-11-22 on the pair: over the second run's own rows the order ranks its two units 1 and 2 with an
+    empty `after`; over the merged rows `shared_45ca31c3` ranks 1, `shared_a6577c11` ranks 2 with `after` naming it,
+    and `production_dg_6ce3cc69` ranks 3 with `after` naming it. The `after` entry for the device-group unit comes
+    from the edge basis, the level basis alone naming no dependency for that pair.
+    """
+    codebase = run_records(CONVERTER, FIXTURES_DIR / MERGED_CODEBASE, tmp_path / MERGED_CODEBASE)
+    second = run_records(CONVERTER, FIXTURES_DIR / MERGED_RUN, tmp_path / MERGED_RUN)
+    units = _merged(unit_manifest, codebase[unit_manifest], second[unit_manifest])
+    owners = _merged(ownership, codebase[ownership], second[ownership])
+    merged_edges = reference_edges.build_rows(owners, _refs(units), {}, naming.sanitize)
+
+    order_over_merged = reference_edges.order(units, owners, merged_edges)
+    run_edges = reference_edges.build_rows(second[ownership], _refs(second[unit_manifest]), {}, naming.sanitize)
+    order_over_run = reference_edges.order(second[unit_manifest], second[ownership], run_edges)
+    assert [(row["directory"], row["rank"], row["after"]) for row in order_over_merged] == [
+        ("shared_45ca31c3", 1, []),
+        ("shared_a6577c11", 2, ["shared_45ca31c3"]),
+        ("production_dg_6ce3cc69", 3, ["shared_45ca31c3"]),
+    ], order_over_merged
+    assert [(row["directory"], row["rank"], row["after"]) for row in order_over_run] == [
+        ("shared_a6577c11", 1, []),
+        ("production_dg_6ce3cc69", 2, []),
+    ], order_over_run
+
+    # The basis each cross-run entry comes from, read through the same rule.
+    level_only = reference_edges.dependencies(units, [], [])
+    edge_only = reference_edges.dependencies(units, [], merged_edges)
+    assert level_only == {
+        "production_dg_6ce3cc69": [],
+        "shared_45ca31c3": [],
+        "shared_a6577c11": ["shared_45ca31c3"],
+    }, level_only
+    assert edge_only == {
+        "production_dg_6ce3cc69": ["shared_45ca31c3"],
+        "shared_45ca31c3": [],
+        "shared_a6577c11": ["shared_45ca31c3"],
+    }, edge_only
+
+
+def test_the_acyclic_rule_reads_a_finding_from_a_unit_the_run_did_not_build(tmp_path):
+    """`reference_edges.py` rule 5 (`docs/CODEBASE_ASSEMBLY.md` §6 rule 3), read over the merged set
+    (`docs/MULTI_RUN_CODEBASE.md` §4 rule 3): the walk reads the edge rows it is given, and a finding is grouped
+    through the manifest row of the unit the cycle is read from, so a finding can be read from a unit the second run
+    did not build. A cycle whose two halves come from two runs needs a
+    pair that produces none on committed material, so that condition is recorded in `backlog.md`.
+
+    Measured 2026-11-22 on `reference_cycle.xml` as the codebase and `address_objects.xml` as the second run: manifest
+    2 against 1 give 3, ownership 4 against 5 give 9, edges 2 against 0 give 2. The second run's own rows answer no
+    cycle; the merged rows answer the cycle the codebase wrote, both cycle units keep `NO_RANK`, and the second run's
+    own unit ranks 1.
+    """
+    codebase = run_records(CONVERTER, FIXTURES_DIR / CYCLE_PAIR[0], tmp_path / CYCLE_PAIR[0])
+    second = run_records(CONVERTER, FIXTURES_DIR / CYCLE_PAIR[1], tmp_path / CYCLE_PAIR[1])
+    units = _merged(unit_manifest, codebase[unit_manifest], second[unit_manifest])
+    owners = _merged(ownership, codebase[ownership], second[ownership])
+    assert (len(units), len(owners), len(codebase[reference_edges])) == (3, 9, 2)
+
+    merged_edges = reference_edges.build_rows(owners, _refs(units), {}, naming.sanitize)
+    run_edges = reference_edges.build_rows(second[ownership], _refs(second[unit_manifest]), {}, naming.sanitize)
+    assert reference_edges.cycles(run_edges) == [], run_edges
+    assert reference_edges.cycles(merged_edges) == [CYCLE_UNITS], merged_edges
+
+    findings = reference_edges.findings(merged_edges, units)
+    assert len(findings) == 1, findings
+    finding = findings[0]
+    assert _facts(finding) == CYCLE_FACTS and finding["cycle"] == CYCLE_UNITS, finding
+    assert finding["cycle"][0] not in {row["directory"] for row in second[unit_manifest]}, "read from a codebase unit"
+    assert reference_edges.cycle_line(finding) == (
+        f"  cycle  {UNIT_A} -> {UNIT_B}  names: ethernet1/2; ethernet1/1  {reference_edges.CYCLE_REASON}"
+    ), reference_edges.cycle_line(finding)
+
+    ordered = reference_edges.order(units, owners, merged_edges)
+    ranks = {row["directory"]: (row["rank"], row["after"]) for row in ordered}
+    assert ranks[UNIT_A][0] == reference_edges.NO_RANK and ranks[UNIT_B][0] == reference_edges.NO_RANK, ranks
+    assert sorted(ranks[UNIT_A][1]) == sorted([UNIT_B, "shared_45ca31c3"]), ranks
+    assert sorted(ranks[UNIT_B][1]) == sorted([UNIT_A, "shared_45ca31c3"]), ranks
+    assert ranks["shared_45ca31c3"] == (1, []), ranks
+
+
+def test_the_edge_rule_and_the_order_rule_read_the_row_sets_they_are_given():
+    """The single-owner constraint the merged-set pins read: `codebase_state.py` is the only place the join key and the
+    merge are stated, `unit_manifest.units` is the only unit rule, `LEVEL_KEYS` is the only place the level basis is
+    stated, and `reference_edges.py` takes the row sets as arguments and holds no row set, no merge rule and no join
+    key of its own, so reading a merged set through it states no second rule.
+    """
+    texts = {path.name: path.read_text(encoding="utf-8") for path in SRC_MODULES}
+    for token, holder in (
+        ("JOIN_KEYS =", "codebase_state.py"),
+        ("def join_key(", "codebase_state.py"),
+        ("def merge_rows(", "codebase_state.py"),
+        ("def units(", "unit_manifest.py"),
+        ("LEVEL_KEYS =", "reference_edges.py"),
+    ):
+        assert sorted(name for name, text in texts.items() if token in text) == [holder], (token, texts)
+    assert reference_edges.FACT_KEYS == unit_manifest.FACT_KEYS, "the fact order is read through its owner"
+
+    tree = ast.parse(texts["reference_edges.py"])
+    arguments = {
+        node.name: [argument.arg for argument in node.args.args]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+    }
+    # Each rule reads the row set as an argument, which is what makes a merged set readable through it.
+    for name, row_argument in (
+        ("build_rows", "ownership_rows"),
+        ("graph", "rows"),
+        ("cycles", "rows"),
+        ("findings", "manifest_rows"),
+        ("dependencies", "edge_rows"),
+        ("order", "edge_rows"),
+    ):
+        assert row_argument in arguments[name], (name, arguments[name])
+
+    called = {
+        node.func.attr for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+    for rule in ("units", "parse_rows", "parse_associations", "row_key", "merge_rows", "join_key"):
+        assert rule not in called, (rule, sorted(called))

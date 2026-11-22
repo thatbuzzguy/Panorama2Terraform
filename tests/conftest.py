@@ -4,8 +4,10 @@ The tool's modules live in `src/` and are not an installed package. The import r
 `docs/ARCHITECTURE.md` §1.1: `src/` is one flat namespace, so a test imports a module by plain name, and
 `pyproject.toml` `pythonpath = ["src"]` is the only place the path is stated for tests. This file builds the
 paths a test reads the layout through, states no second path rule, and holds the definitions more than one
-test module reads: the terraform binary, the two resource-line patterns, and the rule-block parser. A test
-module does not define its own copy of any of them, and no test module imports another test module.
+test module reads: the terraform binary, the two resource-line patterns, the rule-block parser, and the record
+read-back the Epic 11 pins read (the join key per record, and the four records read back through each module's
+`parse_rows`). A test module does not define its own copy of any of them, and no test module imports another test
+module.
 """
 
 import contextlib
@@ -21,6 +23,7 @@ from pathlib import Path
 import pytest
 
 import api_requests
+import codebase_state
 import entry_coverage
 import import_blocks
 import panorama_to_terraform
@@ -157,6 +160,41 @@ def data_file_set(output_dir) -> list[str]:
             if path.is_file():
                 names.append(str(path.relative_to(out)))
     return sorted(names)
+
+
+# --- The records read back as data, shared by the merged-set pins (Epic 11, Piece 11B.3) ---
+
+# The join key per record, read through the table `codebase_state.py` states, so no test module states a table of its
+# own. `tests/test_codebase_state.py`, `tests/test_data_file_gate.py`, `tests/test_unit_manifest.py`,
+# `tests/test_reference_edges.py` and `tests/test_ownership.py` read this set, so it lives here.
+JOIN_RECORDS = {record[0]: record for record in codebase_state.JOIN_KEYS}
+
+
+def record_rows(output_dir) -> dict:
+    """The four records read back through each record module's `parse_rows`, keyed by module.
+
+    The set is `sanity_checks.DATA_FILES`, read through its owner, so this states no file set of its own, and each
+    row is read through the module that owns its shape. A record the run has no content for is not written, so it
+    answers no rows. A merged set is read through `codebase_state.merge_rows`, the one merge rule, so no test module
+    states a merge of its own.
+    """
+    out = Path(output_dir)
+    rows = {}
+    for name, module in sanity_checks.DATA_FILES:
+        path = out / name
+        rows[module] = module.parse_rows(path.read_text(encoding="utf-8")) if path.is_file() else []
+    return rows
+
+
+def run_records(module_name, source, out_dir) -> dict:
+    """Run the converter on committed material and return the records read back.
+
+    `source` is a committed file, so a pin reads the run through the tool and every row through the module that owns
+    its shape: no pin builds a row by hand.
+    """
+    result = run_script(module_name, str(source), "--output-dir", str(out_dir))
+    assert result.returncode == 0, result.stdout + result.stderr
+    return record_rows(out_dir)
 
 
 # --- The content the `number` reading-rule pins read (F7.1 rule 11) ------------

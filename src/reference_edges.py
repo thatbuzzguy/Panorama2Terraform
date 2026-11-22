@@ -7,8 +7,10 @@ Eight rules, stated once here.
 1. The edge set is the names the reference rule recorded (`TerraformGenerator.name_ref`,
    `ARCHITECTURE.md` §4.3), so this module records no name and resolves no name. A name the rule resolved
    inside the run is a reference inside one root, not an edge between units, so it writes no row. A name
-   that no unit in the run declares writes no row either: the pair does not exist, and that name is
-   already stated in the manifest's `references` field.
+   that no row it is given declares writes no row either: the pair does not exist, and that name is
+   already stated in the manifest's `references` field. Read as a merged set (`docs/MULTI_RUN_CODEBASE.md`
+   §4 rule 3), the rows it is given are the two runs' rows, so the declaring unit can be a unit the run
+   did not build.
 2. The target unit is the owner from the ownership row for (`type`, `entry`), not the declaring unit
    (`ownership.py` rule 5). A name several units declare as separate objects gives one row per owner,
    because the ownership rule names the owner, not the unit that declared the name: that is the

@@ -20,6 +20,7 @@ Every test runs in process or seeds the cache, so no test opens a connection.
 """
 
 import contextlib
+import copy
 import io
 import json
 import subprocess
@@ -28,6 +29,7 @@ from pathlib import Path
 
 import pytest
 
+import codebase_state
 import container_coverage
 import entry_coverage
 import ownership
@@ -40,6 +42,7 @@ import xml_input
 from conftest import (
     FIXTURES_DIR,
     GOLDEN_DIR,
+    JOIN_RECORDS,
     RESPONSES_DIR,
     SAMPLE_CONFIG,
     SRC_DIR,
@@ -48,6 +51,7 @@ from conftest import (
     file_text,
     run_main,
     run_pipeline,
+    run_records,
     run_script,
     tf_bytes,
     tf_files,
@@ -61,6 +65,9 @@ RECORD = ownership.OWNERSHIP_FILE
 FIXTURE = "ownership_override.xml"
 GROUPING = "report_grouping.xml"
 POINTERS = "address_objects_dg_override.xml"
+# The pair group 8 reads: `address_objects.xml` as the codebase and `POINTERS` as the second run. Both can state
+# `Web-Server-1`, so the merged set holds a group of two rows that no single run's set can state.
+OWNERSHIP_PAIR = ("address_objects.xml", POINTERS)
 VSYS = "edge_dup_names_across_vsys.xml"
 STATE_FIXTURE = "state_workspace.json"
 WORKSPACE = "production"
@@ -930,3 +937,80 @@ def test_the_corpus_findings_are_the_whole_set(converter_module, tmp_path):
         if found:
             findings[name] = sorted((_facts(row)[0], row["entry"], row["reason"]) for row in found)
     assert findings == CORPUS_FINDINGS, findings
+
+
+# --- 8. the row set read as a merged set (Piece 11B.3) -------------------------
+
+
+def _merged(module, codebase_rows: list, run_rows: list) -> list:
+    """The merge, read through `codebase_state`, the one merge rule, on rows read through `parse_rows`."""
+    return codebase_state.merge_rows(JOIN_RECORDS[module], codebase_rows, run_rows)
+
+
+def test_the_owner_rule_reads_the_group_the_merged_set_can_state(tmp_path):
+    """`ownership.py` rule 4, read over the merged set (`docs/MULTI_RUN_CODEBASE.md` §4 rule 2): `decide` answers for
+    the rows that share the (`type`, `entry`) part of `state_coverage.ownership_key`, so a merged group can hold one
+    row from each run, and the ancestor it names can be a unit the second run did not build. The grouping rule is
+    unchanged: the merged set is read through the join key, and no second grouping rule appears.
+
+    Measured 2026-11-22 on the committed pair, `address_objects.xml` as the codebase and
+    `address_objects_dg_override.xml` as the second run: the manifest 1 against 2 give 3, ownership 5 against 2 give 7.
+    Each run alone holds one row for `Web-Server-1`, so each run's own decision answers `declared` for it; over the
+    merged group the rule answers `definition` for the row the codebase wrote and `override` for the row the second run
+    built, and the owner it names is the codebase's unit. The relation is the shared-unit case, which the five facts
+    state on their own.
+    """
+    codebase = run_records(CONVERTER, FIXTURES_DIR / OWNERSHIP_PAIR[0], tmp_path / OWNERSHIP_PAIR[0])
+    second = run_records(CONVERTER, FIXTURES_DIR / OWNERSHIP_PAIR[1], tmp_path / OWNERSHIP_PAIR[1])
+    merged = _merged(ownership, codebase[ownership], second[ownership])
+    assert len(merged) == 7, len(merged)
+
+    group = [row for row in merged if (row["type"], row["entry"]) == ("panos_address", "Web-Server-1")]
+    assert len(group) == 2, group
+    answers = {row["directory"]: (row["kind"], row["owner"]) for row in ownership.decide(copy.deepcopy(group))}
+    assert answers == {
+        "shared_45ca31c3": ("definition", "shared_45ca31c3"),
+        "production_dg_6ce3cc69": ("override", "shared_45ca31c3"),
+    }, answers
+    # Each run's own rows answer nothing across the two runs: the group each run holds on its own is one row.
+    for rows, expected in (
+        (codebase[ownership], ("declared", "shared_45ca31c3")),
+        (second[ownership], ("declared", "production_dg_6ce3cc69")),
+    ):
+        own = [row for row in rows if (row["type"], row["entry"]) == ("panos_address", "Web-Server-1")]
+        assert len(own) == 1, own
+        assert (own[0]["kind"], own[0]["owner"]) == expected, own
+
+
+def test_a_merged_row_keeps_the_kind_the_run_that_wrote_it_stated(tmp_path):
+    """§4 rule 5, read through `parse_rows`: the merged set holds the rows as each run wrote them, so a row the second
+    run did not build keeps the `kind` the run that wrote it stated, and the merged set reads in the record's own order
+    rule. `parse_rows` reads back only the declared fields, so the report facts the finding line reads (`line`,
+    `container`, `reason`) and the facts the ancestor rule reads (`chain`, `from_parent`) are not in a merged set: a
+    cross-run finding line, and the parent-source and `parent`-chain ancestor cases that read those facts, cannot be
+    read from committed material. That condition is recorded in `backlog.md`.
+
+    Measured 2026-11-22 on the same pair: 5 rows from the codebase against 2 from the second run give 7, the keys the
+    two runs name are disjoint, and every merged row is a row one of the two runs wrote.
+    """
+    codebase = run_records(CONVERTER, FIXTURES_DIR / OWNERSHIP_PAIR[0], tmp_path / OWNERSHIP_PAIR[0])
+    second = run_records(CONVERTER, FIXTURES_DIR / OWNERSHIP_PAIR[1], tmp_path / OWNERSHIP_PAIR[1])
+    merged = _merged(ownership, codebase[ownership], second[ownership])
+    record = JOIN_RECORDS[ownership]
+    codebase_keys = {codebase_state.join_key(record, row) for row in codebase[ownership]}
+    second_keys = {codebase_state.join_key(record, row) for row in second[ownership]}
+    assert len(merged) == 7 and not (codebase_keys & second_keys), (len(merged), codebase_keys & second_keys)
+    for row in merged:
+        writer = codebase[ownership] if codebase_state.join_key(record, row) in codebase_keys else second[ownership]
+        assert row in writer, (row, "a merged row is a row one run wrote")
+        # `parse_rows` reads back only the declared fields, so the report facts and the facts the ancestor rule
+        # reads are not in a merged set.
+        assert set(row) == set(ownership.FIELD_ORDER), sorted(row)
+
+    # Each merged row keeps the kind the run that wrote it stated.
+    for row in merged:
+        writer = codebase[ownership] if codebase_state.join_key(record, row) in codebase_keys else second[ownership]
+        source = next(r for r in writer if codebase_state.join_key(record, r) == codebase_state.join_key(record, row))
+        assert row["kind"] == source["kind"], (row, source)
+
+    assert sorted(merged, key=ownership.row_key) == merged, "the merged set reads in the record's own order"

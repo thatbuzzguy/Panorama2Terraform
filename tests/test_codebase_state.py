@@ -32,7 +32,7 @@ import sanity_checks
 import site_data
 import state_coverage
 import unit_manifest
-from conftest import EXAMPLES_DIR, FIXTURES_DIR, SRC_DIR, run_script
+from conftest import EXAMPLES_DIR, FIXTURES_DIR, JOIN_RECORDS, SRC_DIR, run_records
 
 CONVERTER = "panorama_to_terraform.py"
 # The committed material the pins read: the codebase, and a second run that names one unit inside it.
@@ -42,8 +42,7 @@ RUN_FIXTURE = "address_objects.xml"
 GOLDEN_CASES = (CODEBASE_FIXTURE, RUN_FIXTURE, "filter_containers.xml", "sample_panorama_config.xml")
 
 # The join key per record, read through the table the module states, and the four records read through the data
-# rule that owns the set, so this test module states no set of its own.
-RECORDS = {record[0]: record for record in codebase_state.JOIN_KEYS}
+# rule that owns the set, so this test module states no set of its own; both are read through `tests/conftest.py`.
 DATA_RULE = tuple(sanity_checks.DATA_FILES)
 SHAPES = {
     unit_manifest: unit_manifest.FIELD_ORDER,
@@ -62,20 +61,14 @@ def _case_path(case: str) -> Path:
 def _rows(case: str, out: Path) -> dict:
     """Run the converter on committed material and return the rows each record module reads back.
 
-    Each record is read through `parse_rows`, the one reader of its shape, so a pin reads the record the run wrote
-    and never a row it built. A record the run has no content for is not written, so it answers no rows.
+    The run and the read-back are `tests/conftest.py`'s `run_records`, the one place the test set states the
+    read-back, so a pin reads the record the run wrote and never a row it built.
     """
-    result = run_script(CONVERTER, str(_case_path(case)), "--output-dir", str(out))
-    assert result.returncode == 0, result.stdout + result.stderr
-    rows = {}
-    for name, module in DATA_RULE:
-        path = out / name
-        rows[module] = module.parse_rows(path.read_text(encoding="utf-8")) if path.is_file() else []
-    return rows
+    return run_records(CONVERTER, _case_path(case), out)
 
 
 def _merged(module, codebase_rows: list, run_rows: list) -> list:
-    return codebase_state.merge_rows(RECORDS[module], codebase_rows, run_rows)
+    return codebase_state.merge_rows(JOIN_RECORDS[module], codebase_rows, run_rows)
 
 
 # --- 1. The join key per record ------------------------------------------------
@@ -88,14 +81,14 @@ def test_the_join_key_for_the_manifest_record_is_the_unit_identity_read_as_direc
     rows = _rows(CODEBASE_FIXTURE, tmp_path)[unit_manifest]
     assert rows, "the pin reads a record with content"
     for row in rows:
-        key = codebase_state.join_key(RECORDS[unit_manifest], row)
+        key = codebase_state.join_key(JOIN_RECORDS[unit_manifest], row)
         # A key is a tuple of the fields it is built from, so the single-field key is the unit identity as the §5
         # naming rule shapes it.
         assert key == (unit_manifest.directory_name(unit_manifest.facts_of(row), naming.sanitize),), row
-    keys = [codebase_state.join_key(RECORDS[unit_manifest], row) for row in rows]
+    keys = [codebase_state.join_key(JOIN_RECORDS[unit_manifest], row) for row in rows]
     assert len(set(keys)) == len(keys), "one key names one row"
-    assert RECORDS[unit_manifest][2] == "the unit identity", "the table names the fact the key joins on"
-    assert RECORDS[unit_manifest][1] == ("directory",), "the key is the field the record states"
+    assert JOIN_RECORDS[unit_manifest][2] == "the unit identity", "the table names the fact the key joins on"
+    assert JOIN_RECORDS[unit_manifest][1] == ("directory",), "the key is the field the record states"
 
 
 def test_the_join_key_for_the_ownership_record_is_the_entry_identity_read_through_state_coverage(tmp_path):
@@ -108,7 +101,7 @@ def test_the_join_key_for_the_ownership_record_is_the_entry_identity_read_throug
     """
     rows = _rows(CODEBASE_FIXTURE, tmp_path)[ownership]
     assert rows, "the pin reads a record with content"
-    record = RECORDS[ownership]
+    record = JOIN_RECORDS[ownership]
     assert record[4] is state_coverage.ownership_key, "the key is read through its owner"
     assert record[1] == ("type", "entry"), "the key is the entry identity, read with the facts the row states"
     for row in rows:
@@ -128,7 +121,7 @@ def test_the_join_key_for_the_edge_record_is_the_pair_of_entry_identities(tmp_pa
     edges, manifest = rows[reference_edges], rows[unit_manifest]
     assert edges, "the pin reads a record with content"
     units = {row["directory"] for row in manifest}
-    record = RECORDS[reference_edges]
+    record = JOIN_RECORDS[reference_edges]
     for row in edges:
         key = codebase_state.join_key(record, row)
         assert key == (row["referrer"], row["target"], row["type"], row["entry"]), row
@@ -147,8 +140,8 @@ def test_the_join_key_for_the_site_record_is_the_unit_identity_read_as_directory
     rows = _rows(CODEBASE_FIXTURE, tmp_path)
     sites, manifest = rows[site_data], rows[unit_manifest]
     assert sites, "the pin reads a record with content"
-    units = {codebase_state.join_key(RECORDS[unit_manifest], row) for row in manifest}
-    record = RECORDS[site_data]
+    units = {codebase_state.join_key(JOIN_RECORDS[unit_manifest], row) for row in manifest}
+    record = JOIN_RECORDS[site_data]
     keys = [codebase_state.join_key(record, row) for row in sites]
     for key in keys:
         assert key in units, "the row joins to a unit the manifest names"
@@ -174,7 +167,7 @@ def test_the_run_rows_replace_the_codebase_rows_for_the_rows_the_run_built(tmp_p
     run_rows = _rows(RUN_FIXTURE, tmp_path / "run")
     for _name, module in DATA_RULE:
         merged = _merged(module, codebase[module], run_rows[module])
-        record = RECORDS[module]
+        record = JOIN_RECORDS[module]
         by_key = {codebase_state.join_key(record, row): row for row in merged}
         run_keys = {codebase_state.join_key(record, row) for row in run_rows[module]}
         assert len(by_key) == len(merged), (module.__name__, "one row per key")
@@ -236,7 +229,7 @@ def test_a_record_with_no_existing_file_writes_the_bytes_a_single_run_writes_tod
         out = tmp_path / case
         rows = _rows(case, out)
         for name, module in DATA_RULE:
-            merged = codebase_state.merge_rows(RECORDS[module], [], rows[module])
+            merged = codebase_state.merge_rows(JOIN_RECORDS[module], [], rows[module])
             assert merged == rows[module], (case, module.__name__, "no existing file is the run's own set")
             if rows[module]:
                 assert module.render(merged).encode("utf-8") == (out / name).read_bytes(), (case, name)
@@ -280,7 +273,7 @@ def test_the_order_of_a_merged_set_is_the_order_each_record_states_not_the_order
     codebase = _rows(CODEBASE_FIXTURE, tmp_path / "codebase")
     run_rows = _rows(RUN_FIXTURE, tmp_path / "run")
     for _name, module in DATA_RULE:
-        record = RECORDS[module]
+        record = JOIN_RECORDS[module]
         forward = codebase_state.merge_rows(record, codebase[module], run_rows[module])
         backward = codebase_state.merge_rows(record, list(reversed(codebase[module])), list(reversed(run_rows[module])))
         assert forward == backward, (module.__name__, "the order is not the order of writes")
@@ -294,7 +287,7 @@ def test_the_order_of_a_merged_set_is_the_order_each_record_states_not_the_order
         else:
             values = [tuple(row[field] for field in order) for row in forward]
             assert values == sorted(values), (module.__name__, "the record's own order rule")
-    manifest = RECORDS[unit_manifest]
+    manifest = JOIN_RECORDS[unit_manifest]
     merged_manifest = _merged(unit_manifest, codebase[unit_manifest], run_rows[unit_manifest])
     keys = [codebase_state.join_key(manifest, row) for row in merged_manifest]
     assert keys != sorted(keys), "the manifest row order is the fact order, not the join-key order"
