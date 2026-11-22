@@ -2,12 +2,15 @@
 
 ## Current position
 
-Piece 11B.3 landed, 2026-11-22, at `baa6e2b`: `reference_edges.py`'s edge rule and its order rule answer for the row
-sets they are given, so an edge row and an `after` fact can name a unit another run wrote. Six pins, no committed
-golden moved, not pushed. The piece is reported open for three facts it could not state from committed material,
-recorded as conditions in `backlog.md`. The next piece is 11B.4, the gate for a partial run. The design record for
-Epic 11, the codebase several runs write into, is `docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and
-`acceptance.md` is this piece's record.
+Piece 11B.3 landed, 2026-11-22, at `baa6e2b` and is reviewed at `c11ffcb`, both not pushed: `reference_edges.py`'s
+edge rule and its order rule answer for the row sets they are given, so an edge row and an `after` fact can name a
+unit another run wrote. Six pins, no committed golden moved. The acceptance review read every criterion against the
+tree and met it, and corrected five things: the pair-scan counts, the edge-pair count, the `tests/conftest.py`
+read-back comment, the claim that `reference_edges.py` rule 7 changed, and one line in `backlog.md` past 120
+characters. The piece is reported open for three facts
+it could not state from committed material, recorded as conditions in `backlog.md`. The next piece is 11B.4, the gate
+for a partial run. The design record for Epic 11, the codebase several runs write into, is
+`docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and `acceptance.md` is this piece's review record.
 
 Four decisions are agreed, and they are the shape of the record:
 
@@ -25,8 +28,9 @@ Four decisions are agreed, and they are the shape of the record:
 What Piece 11B.3 landed:
 
 - The decision, in one line: the rule functions already take the row sets as arguments, so reading a merged set
-  through them states no new rule. The only `src/` change is the wording of `reference_edges.py` rule 1 and rule 7,
-  which said "the run" for a rule that answers for the rows it is given. `codebase_state.py` and
+  through them states no new rule. The only `src/` change is the wording of `reference_edges.py` rule 1, which said
+  "the run" for a rule that answers for the rows it is given; the commit message named rule 7 as well, and the review
+  found rule 7, the unit order, unchanged. `codebase_state.py` and
   `unit_manifest.py` are unchanged, so `JOIN_KEYS`, `join_key` and `merge_rows` stay the only merge rule and join
   key, `unit_manifest.units` the only unit rule, `LEVEL_KEYS` the only level basis, the acyclic rule and its report
   section stay single, and `ownership.py`'s decision, its seven emitters and the `disable_override` rule do not
@@ -49,9 +53,12 @@ What Piece 11B.3 landed:
   over the merged group the rule answers `definition` for the row the codebase wrote and `override` for the row the
   second run built, naming the codebase's unit through the shared-unit case, which the five scope facts state on
   their own.
-- The corpus pair scan: 178 merged ownership keys are stated by both runs across the 59 accepted-fixture pairs, and
-  no merged ownership row names a unit only the other run built as the rows were written. The corpus holds 3
-  membership facts, each inside one fixture, and no pair gives a cycle whose two halves come from two runs.
+- The corpus pair scan, re-measured by the review: the read rule accepts 67 fixtures, 59 of which state ownership
+  rows, so the scan reads 4,422 ordered pairs. 178 key counts are stated by both runs, which is 89 keys across 62
+  unordered pairs read in both directions, and no merged ownership row names a unit only the other run built as the
+  rows were written. The corpus holds 3 membership facts, each inside one fixture, and 0 pair reads give a cross-run
+  membership row or a cycle whose two halves come from two runs; 337 pair reads give an edge the second run's own
+  rows cannot name, 297 of them among the pairs of the 59 fixtures that state ownership rows.
 - Six pins, one per stated fact, in the module that owns the rule, all grounded on committed runs read through
   `parse_rows` and none building a row by hand: 4 in `tests/test_reference_edges.py` and 2 in
   `tests/test_ownership.py`. The read-back the pins read is stated once in `tests/conftest.py`
@@ -59,10 +66,12 @@ What Piece 11B.3 landed:
   `codebase_state.JOIN_KEYS`), so no test module states a file set, a merge or a join key of its own, and
   `tests/test_codebase_state.py` reads them from there with its pin assertions unchanged. No test module imports
   another test module.
-- Gate, measured 2026-11-22 on the tree that holds this piece, single-threaded: `ruff check .` is clean at `py310`,
-  `ruff format --check .` is clean on the 108 files it reads (81 Python files, 27 markdown files),
+- Gate, measured 2026-11-22 on the tree that holds this piece and its review, single-threaded: `ruff check .` is
+  clean at `py310`, `ruff format --check .` is clean on the 108 files it reads (81 Python files, 27 markdown files),
   `python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` passes 1,778 pins with the same 4
-  `tflint` skips — 1,782 pins in 54 test modules, 6 more than the 1,772 pins Piece 11B.2 measured, in 352.23 s. Read
+  `tflint` skips — 1,782 pins in 54 test modules, counted from the per-module collection totals, 6 more than the
+  1,772 pins Piece 11B.2 measured — in 252.64 s, the gate re-run on the tree that holds the review corrections; the
+  piece recorded 352.23 s on the tree before them, and the pin counts are the same on both. Read
   through the per-module collection counts: `tests/test_reference_edges.py` collects 43, `tests/test_ownership.py`
   collects 42, `tests/test_unit_manifest.py` 41 and `tests/test_codebase_state.py` 10, so the 6 new pins are 4 and 2.
   `terraform` is present on this machine, so the pins that read the live provider schema ran, and the 4 skips are the

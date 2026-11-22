@@ -1,112 +1,102 @@
-# Acceptance — criteria for Piece 11B.3 (2026-11-22)
+# Acceptance — review record for Piece 11B.3 (2026-11-22)
 
-Piece 11B.3: ownership, edges and the plan order read over the merged record set, so an edge row and an `after`
-fact can name a unit another run wrote (`docs/MULTI_RUN_CODEBASE.md` §4 rules 3, 4 and 5). Baseline `f3f2b78`.
-Offline, committed fixtures only, no network.
+Piece 11B.3 (ownership, edges and the plan order read over the merged record set, so an edge row and an `after`
+fact can name a unit another run wrote) is reviewed at `baa6e2b` (the pins and the one `src/` change) and
+`c11ffcb` (the tracking markdown), both not pushed. Every committed criterion is met by the tree. The review
+corrected three counts, one comment, one wording claim and one over-long line, listed under Findings, and
+committed them as one commit
+for the `tests/conftest.py` comment and one for this record with the `backlog.md` counts and the `agent-status.md`
+update. The measurements were re-run independently through the record modules themselves, single-threaded.
 
-## Criteria
+## Criteria, read against the tree
 
-1. **The measurement is taken first, through the record modules.** For a pair of committed fixtures — the first
-   run as the codebase, the second as the second run — every record is read back through its own `parse_rows` and
-   merged through `codebase_state.merge_rows`. Per record, the measurement records whether a row names a unit the
-   second run built, a unit the first run built, or only its own units. The order rule is recorded for the same
-   pair both ways: the run's own row set, and the merged row set. Nothing is decided before the measurement.
-2. **Single-owner constraints.** `codebase_state.py` is the only merge rule and the only join key (`JOIN_KEYS`,
-   `merge_rows`); `unit_manifest.units` is the only unit rule; `reference_edges.py` defines no reader of the
-   membership tables and no fact order of its own, and takes the row sets as arguments; `LEVEL_KEYS` and the
-   membership basis (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §2) gain no second basis; the acyclic rule and its report
-   section stay single; `ownership.py`'s decision, its seven emitters, and the `disable_override` rule do not
-   change.
-3. **Out of scope.** `sanity_checks.py`, the exit-code behaviour, the two two-set rules, and the plan check
-   (Piece 11B.4). Phase 11C is out of scope. Committed goldens stay unchanged unless the measurement shows the rule
-   genuinely changes them; any moved golden is regenerated from a real run in the same commit.
-4. **One pin per stated fact**, in the module that owns the rule: `tests/test_reference_edges.py`,
-   `tests/test_ownership.py`, `tests/test_unit_manifest.py`, `tests/test_codebase_state.py`. Every pin is grounded
-   on committed runs read through `parse_rows` and `tests/conftest.py`, never on a hand-built row. No test module
-   imports another test module; a fact more than one test module reads is stated once in `tests/conftest.py`.
-5. **No second rule of any kind:** no second naming rule, console line, writer, environment name, path rule, join
-   key, membership basis, or order rule. The `src/` scans must read every module unchanged.
-6. **The gate runs single-threaded**: `ruff check .`, `ruff format --check .`,
-   `python3 tools/check_documents.py`, `python3 -m pytest`. Counts are read from the per-module collection counts.
-7. **A fact that cannot be stated from committed material is recorded as a condition in `backlog.md`** and the
-   piece is reported open for that fact.
+1. Each committed criterion, read against the tree, is met. This document is the review record.
+2. The measurement, re-run through each record's `parse_rows` and `codebase_state.merge_rows` on the committed
+   fixtures:
+   - `tests/fixtures/address_groups.xml` as the codebase and `tests/fixtures/security_rules.xml` as the second run:
+     the manifest 1 against 2 give 3 units, read through `unit_manifest.units`, and ownership 2 against 3 give 5
+     rows. Neither run's own edge set names a pair; the merged rows name one row,
+     `('production_dg_6ce3cc69', 'shared_45ca31c3', 'panos_address_group', 'Web-Servers')`, the referrer being the
+     unit the second run built and the target the unit the first run built. Over the second run's own rows its two
+     units rank 1 and 2 with an empty `after`; over the merged rows `shared_45ca31c3` ranks 1, `shared_a6577c11`
+     ranks 2 with `after` naming it, and `production_dg_6ce3cc69` ranks 3 with `after` naming it, and that entry
+     comes from the edge basis: the level basis alone names no dependency for that pair.
+   - `tests/fixtures/reference_cycle.xml` as the codebase and `tests/fixtures/address_objects.xml` as the second
+     run: manifest 2 against 1 give 3, ownership 4 against 5 give 9, edges 2 against 0 give 2. The second run's own
+     rows answer no cycle; the merged rows answer the cycle the codebase wrote, grouped through the merged manifest
+     row of `fw_a_example_com_4febb524`, a unit the second run did not build; both cycle units keep `NO_RANK`, and
+     the second run's own unit `shared_45ca31c3` ranks 1.
+   - `tests/fixtures/address_objects.xml` as the codebase and `tests/fixtures/address_objects_dg_override.xml` as
+     the second run: 5 against 2 give 7 rows, and `('panos_address', 'Web-Server-1')` is the one group the merged set
+     can hold from both runs. Each run's own group answers `declared`; over the merged group the rule answers
+     `definition` for the row the codebase wrote and `override` for the row the second run built, naming the
+     codebase's unit `shared_45ca31c3` through the shared-unit case, which the five scope facts state on their own.
+   - corpus pair scan: the read rule accepts 67 fixtures, 59 of which state ownership rows, so the scan reads 4,422
+     ordered pairs. 178 key counts are stated by both runs — 89 keys across 62 unordered pairs, read in both
+     directions — and no merged ownership row names a unit only the other run built as the rows were written. 0 pair
+     reads give a cycle whose two halves come from two runs, 0 give a membership row whose two sides come from two
+     runs, and 337 give an edge the second run's own rows cannot name: 297 where both fixtures state ownership rows,
+     and 40 where the second fixture states no ownership row at all, so its own edge set is empty. The two pairs
+     that hold a cycle read across two runs, `interfaces_ethernet.xml` with `kitchen_sink.xml` and
+     `report_grouping.xml` with `kitchen_sink.xml`, hold it inside one run's own unit set: each cycle names a unit
+     that is in both fixtures, so neither half comes from the other run.
+3. Single-owner claims. `baa6e2b` changed five files: `src/reference_edges.py`, `tests/conftest.py`,
+   `tests/test_codebase_state.py`, `tests/test_ownership.py`, `tests/test_reference_edges.py`. The only `src/`
+   change is the wording of `reference_edges.py` rule 1; rule 7, the unit order, is unchanged in the tree, so the
+   commit message's "rule 1 and rule 7" is corrected here. `codebase_state.py` and `unit_manifest.py` are unchanged.
+   `JOIN_KEYS`, `join_key` and `merge_rows` appear only in `codebase_state.py`, `units` only in
+   `unit_manifest.py`, `LEVEL_KEYS` only in `reference_edges.py`, and `state_coverage.ownership_key` is still the one
+   identity key rule; `LEVEL_KEYS` and the membership basis gained no second basis; the acyclic rule and its report
+   section stay single; `ownership.py`'s decision, its seven emitters and the `disable_override` rule do not change.
+   The single-owner scan pin reads the 24-module set clean, and no committed golden moved.
+4. The three conditions in `backlog.md` are stated only as conditions, and no pin asserts them: the cross-run
+   membership row, because the corpus holds 3 membership facts, each inside one fixture (`kitchen_sink.xml`
+   Branch-Stack to FW-Template, `multi_device_templates.xml` Branch-Stack to HQ-Networks, `scope_objects.xml`
+   Edge-Stack to Edge-Networks) and every fixture declares the membership name inside itself; the cross-run
+   half-cycle, 0 pair reads; and the ownership findings and ancestor half, which reads `chain`, `from_parent`,
+   `reason`, `line` and `container`, none of which `parse_rows` reads back. The counts reproduce, as stated in
+   criterion 2, and the pins that mention a cross-run pair read the merged set itself rather than one of the three
+   conditions.
+5. The six pins exist, pass on their own, and sit in the module that owns the rule: 4 in
+   `tests/test_reference_edges.py` (the module collects 43), 2 in `tests/test_ownership.py` (the module collects
+   42). Each runs a committed fixture through `tests/conftest.py`'s `run_records` and reads every row through the
+   record's own `parse_rows`, and none builds a row by hand. The read-back is stated once in `tests/conftest.py`
+   (`record_rows`, `run_records` and `JOIN_RECORDS`), read through `sanity_checks.DATA_FILES` and
+   `codebase_state.JOIN_KEYS`; `tests/test_codebase_state.py` reads it from there, and its pin assertions are the
+   same as before the move — only the names changed. No test module imports another test module.
+6. Index rule and import rule: `tests/test_layout.py::test_the_indexes_name_every_document_under_them` passes, no
+   test module imports another test module (the only line in `tests/` that names another test module is a comment in
+   `tests/test_schema_conformance.py`), no `src/` module imports anything from `tests/`, and the `src/` scan pins read
+   the 24-module set unchanged.
+7. Tracking markdown: `to-do.md` shows Piece 11B.4 open with no completed-piece narrative and no Phase 11A detail;
+   `agent-status.md` carries the position and the measurement; `PLAN.md` agrees; `docs/MULTI_RUN_CODEBASE.md` §4
+   rules 2 to 5 name the module and the tests that hold; `README.md` §Testing names the 54 test modules, each once,
+   and every module it names exists. No document states a test count outside `agent-status.md` and this record;
+   `python3 tools/check_documents.py` reports no finding. The wording is plain and no emoji appears in the tracking
+   markdown.
+8. Gate measured single-threaded on the tree after the corrections, the tree this record describes: `ruff check .`
+   is clean at `py310`, `ruff format --check .` is clean on the 108 files it reads (81 Python files, 27 markdown
+   files), `python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` passes 1,778 pins with the
+   same 4 `tflint` skips — 1,782 pins in 54 test modules, counted from the per-module collection totals — in 252.64 s.
+   `terraform` is present, so the pins that read the live provider schema ran, and the 4 skips are the `tflint` pins
+   in `tests/test_sanity_gate.py` at lines 712, 806, 904 and 973. These agree with the counts recorded when the
+   piece landed, which measured the same 1,778 passed and 4 skipped in 352.23 s; only the wall time differs. The
+   six pins, the index pin, the single-owner scan pins and the ownership key pin were also run on their own and pass.
 
-## Measured (2026-11-22)
+## Findings, and how they were corrected
 
-Taken through the record modules themselves, on committed fixtures, single-threaded.
-
-- `tests/fixtures/kitchen_sink.xml` as the codebase, `tests/fixtures/address_objects.xml` as the second run: the
-  manifest 11 rows against 1 give 11, ownership 61 against 5 give 62, edges 9 against 0 give 9, site 3 against 0
-  give 3. The second run writes no edge row and no site row, so those two merged sets are the codebase's own rows.
-- Corpus pair scan, 59 accepted-fixture pairs: 178 merged ownership keys are stated by both runs, and no pair gives
-  a merged ownership row whose `owner` names a unit only the other run built, so the owner rule has nothing to pin
-  across two runs. 59 pairs where the merged ownership set names an edge the second run's own rows cannot.
-- Pin pair `tests/fixtures/address_groups.xml` (codebase) + `tests/fixtures/security_rules.xml` (second run):
-  manifest 1 against 2 give 3, ownership 2 against 3 give 5. Over the run's own rows the edge set is empty; over
-  the merged rows it names `('production_dg_6ce3cc69', 'shared_45ca31c3', 'panos_address_group', 'Web-Servers')`, a
-  pair whose target is a unit the second run did not build. Over the run's own rows the order ranks those units 1
-  and 2 with an empty `after`; over the merged rows `shared_45ca31c3` ranks 1, `shared_a6577c11` ranks 2 with
-  `after` naming `shared_45ca31c3`, and `production_dg_6ce3cc69` ranks 3 with `after` naming `shared_45ca31c3`. The
-  cross-run `after` entry comes from the edge basis: the level basis alone names no dependency for that pair.
-- Cycle pair `tests/fixtures/reference_cycle.xml` (codebase) + `tests/fixtures/address_objects.xml` (second run):
-  manifest 2 against 1 give 3, ownership 4 against 5 give 9, edges 2 against 0 give 2, site 2 against 0 give 2. The
-  acyclic rule reads the merged set and reports the cycle, grouped by the merged manifest row of the unit the cycle
-  is read from, a unit the second run did not build; both cycle units keep `NO_RANK` over the merged set, and the
-  second run's own unit ranks 1. No accepted pair gives a cycle whose two halves come from two runs: 0 across the
-  59 pairs.
-- Membership basis: only `template-stack/entry/templates` joins outside the container that names it, and the
-  committed corpus holds exactly 3 such facts (`kitchen_sink.xml` Branch-Stack to FW-Template,
-  `multi_device_templates.xml` Branch-Stack to HQ-Networks, `scope_objects.xml` Edge-Stack to Edge-Networks). Every
-  fixture declares the membership name itself, so no committed pair can state a membership row whose two sides come
-  from two runs. Recorded as a condition in `backlog.md`.
-- `ownership.py`'s decision and its findings half read the report fields (`chain`, `from_parent`, `reason`, `line`,
-  `container`), which `parse_rows` refuses, so they read only the rows a run decided and cannot be read over a
-  merged set. Recorded as a condition in `backlog.md`.
-
-## Decision
-
-The modules already take the row sets as arguments, so reading a merged set through them states no new rule. The
-only change in `src/` is the wording of the rules that say "the run" for a rule that answers for the rows it is
-given. The pins state the measured behaviour. `codebase_state.py` and `unit_manifest.py` are unchanged.
-
-## Pins added
-
-Six pins, one per stated fact, in the module that owns the rule, each grounded on a committed run read through
-`parse_rows` and `tests/conftest.py` and none building a row by hand:
-
-- `tests/test_reference_edges.py::test_an_edge_row_can_name_a_unit_the_run_did_not_build` — the join between two row
-  sets, read on the pin pair.
-- `tests/test_reference_edges.py::test_the_order_rule_reads_the_merged_set` — `rank` and `after` over the merged rows,
-  with the cross-run `after` entry read through the edge basis and the level basis named on its own.
-- `tests/test_reference_edges.py::test_the_acyclic_rule_reads_a_finding_from_a_unit_the_run_did_not_build` — the walk
-  reads the edge rows it is given, and the finding is grouped through the manifest row of a unit the second run did
-  not build.
-- `tests/test_reference_edges.py::test_the_edge_rule_and_the_order_rule_read_the_row_sets_they_are_given` — the
-  single-owner constraint: `codebase_state.py` holds `JOIN_KEYS`, `join_key` and `merge_rows`, `unit_manifest.units`
-  is the only unit rule, `LEVEL_KEYS` is the only level basis, and `reference_edges.py` takes the row sets as
-  arguments and calls no rule an owner states.
-- `tests/test_ownership.py::test_the_owner_rule_reads_the_group_the_merged_set_can_state` — the group the merged set
-  can hold from both runs, read through the join key with no second grouping rule.
-- `tests/test_ownership.py::test_a_merged_row_keeps_the_kind_the_run_that_wrote_it_stated` — rule 5, read through
-  `parse_rows` and the record's own order rule.
-
-No pin was needed in `tests/test_unit_manifest.py`, and no pin moved in `tests/test_codebase_state.py`: the unit rule
-and the join key are unchanged, and the read-back the three modules read moved to `tests/conftest.py` as the fact
-more than one test module reads (`record_rows`, `run_records` and `JOIN_RECORDS`, read through
-`sanity_checks.DATA_FILES` and `codebase_state.JOIN_KEYS`), so `tests/test_codebase_state.py` reads it from there with
-its pin assertions unchanged. No test module imports another test module.
-
-## Gate (measured 2026-11-22, single-threaded)
-
-`ruff check .` clean at `py310`, `ruff format --check .` clean on the 108 files it reads (81 Python files,
-27 markdown files), `python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` passes 1,778 pins
-with the same 4 `tflint` skips — 1,782 pins in 54 test modules, 6 more than the 1,772 pins Piece 11B.2 measured, in
-352.23 s. Read through the per-module collection counts: `tests/test_reference_edges.py` collects 43 (39 before, the
-4 new pins), `tests/test_ownership.py` collects 42 (40 before, the 2 new pins), `tests/test_unit_manifest.py` 41 and
-`tests/test_codebase_state.py` 10, both unchanged. `terraform` is present, so the pins that read the live provider
-schema ran, and the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py`. `src/` holds 24 modules, which is
-the count `docs/LICENSING.md` states. No committed golden changed.
-
-The piece is open for the three facts it could not state from committed material, recorded as conditions in
-`backlog.md`: the membership row whose two sides come from two runs, the cycle whose two halves come from two runs,
-and the ownership findings and ancestor half, which reads facts `parse_rows` does not read back.
+1. The pair-scan count. The committed record says the scan ran over "59 accepted-fixture pairs". The read rule
+   accepts 67 fixtures, 59 of which state ownership rows, so 59 is a fixture count and not a pair count; the scan
+   reads 4,422 ordered pairs, and 178 is the key count read in both directions (89 keys across 62 unordered pairs).
+   Corrected in `backlog.md`, `agent-status.md` and this record.
+2. The committed record also states "59 pairs where the merged ownership set names an edge the second run's own
+   rows cannot". Measured: 337 ordered pair reads give such an edge, 297 of them among the pairs of the 59 fixtures
+   that state ownership rows. Corrected in this record.
+3. `tests/conftest.py` named five test modules as readers of `JOIN_RECORDS`. Three read it
+   (`tests/test_codebase_state.py`, `tests/test_reference_edges.py`, `tests/test_ownership.py`);
+   `tests/test_data_file_gate.py` and `tests/test_unit_manifest.py` read the table through its owner,
+   `codebase_state.JOIN_KEYS`, so the table is still stated once. The comment is corrected in `tests/conftest.py`.
+4. `baa6e2b` names `reference_edges.py` rule 1 and rule 7 as the two wording changes; the tree changed rule 1 only.
+   Recorded here; the commit is not amended.
+5. One line in the `backlog.md` cycle condition ran to 151 characters, past the 120 the tracking markdown keeps. It is
+   wrapped here.
