@@ -5,6 +5,16 @@ Completed work is not recorded here; the git history and the owner document hold
 
 ## Tech Debt
 
+- The rule that a path is split in one place covers the two rules that read the shape definition, not the whole
+  `src/` set, and no pin holds a wider one. Measured 2026-11-21, eight places split a path string for a fact of
+  their own: `api_requests.list_container` for the container a membership row names first,
+  `xml_input.ParsedSource.scope_container` for the place the record's own `scope` field states,
+  `container_coverage.py` for the entry segment inside the record's scope, `entry_coverage.py` for the matrix row's
+  element, `source_fetch.py` for the request path and the element a response names, and `panorama_to_terraform.py`
+  for the report's scope field and for the path suffix inside a state reference. A pin for one split place across
+  `src/` would need the record readers to read the place through `container_coverage.path_place`, which they cannot
+  do for a record field they own.
+
 - Property gaps the scan does not report, because the container that holds them has
   no matrix row: only an `emitted` container can name the properties an emitter reads.
   The scan scope rule pins this in

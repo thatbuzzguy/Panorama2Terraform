@@ -27,10 +27,11 @@ What Piece 11A.1 landed:
   `container_coverage.path_place`, and the built-in place through `container_coverage.PREDEFINED_PLACE`, so the
   argument states no path shape of its own, and it states no unit rule, no naming rule, no writer, no console line
   and no environment name.
-- `container_coverage.path_segments` is the one place a path is split, `path_place` is the one place the first
-  segment is read, and `is_scope_path` reads through them, so the shape rule and the place rule read the same
-  segments. `path_place` holds no copy of the built-in name, so the pin that counts the constant's uses inside
-  `container_coverage.py` is unchanged.
+- `container_coverage.path_segments` is the place the shape rule and the place rule read the split, and
+  `path_place` is the place those two rules read the first segment, so they read the same segments; the wider claim
+  that one place in `src/` splits every path is not pinned, and the eight split sites that read a path for a fact of
+  their own are recorded in `backlog.md`. `path_place` holds no copy of the built-in name, so the pin that counts the
+  constant's uses inside `container_coverage.py` is unchanged.
 - The file-source refusal is in path 1's `main()`, next to the `--path` and `--parent` block, because `--source` is
   path 1's argument and path 2 has none, so `shared_checks` cannot state a rule for a source it does not read.
 - The no-unit fact is decidable at argument time only for the built-in place: no container table row names a
@@ -52,7 +53,7 @@ gained `selection` in the accepted name list. The pins that hold the one path de
 the fact that a declared parent source names no unit are unchanged, and the committed goldens are unchanged.
 
 Gate, measured 2026-11-21 on the tree that holds this piece, single-threaded: `ruff check .` clean at `py310`,
-`ruff format --check .` clean on the 106 Python files, `python3 tools/check_documents.py` reports no finding, and
+`ruff format --check .` clean on the 106 files it reads (79 Python files, 27 markdown files), `python3 tools/check_documents.py` reports no finding, and
 `python3 -m pytest` passes 1,745 pins with the same 4 skip for the missing `tflint` binary — 1,749 pins, 4 more
 than the 1,745 pins the per-module collection counts measured at `f376a6a` (1,741 passed plus the 4 skip), in 53
 test modules, in 469.96 s on the recorded run. Read through the
@@ -72,6 +73,26 @@ field needs a rule that makes the EDL site resolve names; the per-entry report `
 provider does not declare; and the path 2 live facts in `docs/API_CONVERSION_PATH.md` §4. It also holds the two
 shapes the comparison table cannot state as one name: the address `value`, which the run prints under four names, and
 the tag text, which `parse_tags` stores only as `comments`, so the `description` key the row declares is never filled.
+
+## Acceptance review of Piece 11A.1 (2026-11-21)
+
+The piece is reviewed at `22e4401`, `f2a20b8` and `c23920b`, none pushed, and the review record is `acceptance.md`.
+Every criterion is met. Three things were wrong and are corrected, and no pin changed:
+
+- The gate line stated the 106 files `ruff format --check .` reads as Python files. Measured: 79 Python files (23 in
+  `src/`, 54 in `tests/`, 2 in `tools/`) and 27 markdown files.
+- The single-split wording read as a rule for all of `src/`. It holds for the two rules that read the shape
+  definition; eight places split a path string for a fact of their own, so the two docstrings in
+  `src/container_coverage.py` now state the scope the pins ground, and the split sites are recorded in `backlog.md`.
+- `acceptance.md` criterion 3 named "the group that holds the `--path` pins" in `tests/test_api_requests.py`. That
+  module holds no `--path` pin, so the criterion now names group 5, the group that reads the module's rules through
+  their owners.
+
+Each pin the review record names passes on its own, and the import rule reads clean: no test module imports another
+test module. The gate was re-measured single-threaded, 1,745 passed and 4 skipped, 1,749 pins in 53 test modules:
+317.05 s at `c23920b` and 436.09 s on the tree that holds the corrections; `ruff check .` is clean, `ruff format
+--check .` is clean
+on the 106 files it reads, and `python3 tools/check_documents.py` reports no finding. Piece 11A.2 stays open.
 
 ## Acceptance review of Piece F5.6 (2026-11-21)
 
