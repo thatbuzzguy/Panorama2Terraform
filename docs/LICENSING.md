@@ -88,7 +88,7 @@ the second number and the document is re-stated, not re-measured:
 Neither of the two GSW Systems files is upstream whole, so the notice covers the lines the header names and
 not the file. A notice that said "the upstream, unchanged" would claim more than the measurement supports.
 
-The other 19 modules carry no notice. This document is the authority for them, and no header is added: a
+The other 20 modules carry no notice. This document is the authority for them, and no header is added: a
 notice that names one holder for a file the two holders share is a claim the split does not support. The
 choice to keep the notice set unpinned is recorded in [`../backlog.md`](../backlog.md).
 

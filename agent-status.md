@@ -5,7 +5,11 @@
 Piece 11B.2 landed, 2026-11-22: `unit_manifest.units` is the one unit rule over either row set, so the codebase
 unit set is read through the same rule as the run's set, and the rule that the run writes no directory for a unit
 it read only through the record is stated in `write_path.py` rule 4. Five pins, no golden moved, not pushed. The
-next piece is 11B.3, ownership, edges and the plan order read over the merged set. The design record for Epic 11,
+piece is reviewed at `c079d02` and `e28c5d7`: every committed criterion is met by the tree, the measurement was
+re-run independently through the record modules on committed material, and two document lines were corrected —
+`docs/LICENSING.md` stated 19 modules without a notice while `src/` holds 24 and 4 carry one, and `README.md`
+§Testing named the facts `tests/test_write_path.py` holds but not its run set rule. No code and no pin changed.
+The next piece is 11B.3, ownership, edges and the plan order read over the merged set. The design record for Epic 11,
 the codebase several runs write into, is `docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and
 `backlog.md` holds the conditions this piece could not state as rules. `acceptance.md` is this piece's record.
 
@@ -53,7 +57,10 @@ measured, in 236.45 s. Read through the per-module collection counts: `tests/tes
 `tests/test_write_path.py` collects 23, and `tests/test_codebase_state.py` collects 10, so the 5 new pins are 2, 2
 and 1. `terraform` is present on this machine, so the pins that read the live provider schema ran, and the 4 skips
 are the `tflint` pins in `tests/test_sanity_gate.py`. `src/` holds 24 modules, which is the count
-`docs/LICENSING.md` states. No committed golden changed.
+`docs/LICENSING.md` states. No committed golden changed. Measured again on the tree that holds the review record,
+also single-threaded: the same 1,772 pins and the same 4 `tflint` skips, read from the run's progress output, in
+282.0 s of wall time, `ruff check .` clean at `py310`, `ruff format --check .` clean on the same 108 files, and
+`python3 tools/check_documents.py` reports no finding with the two corrected document lines in the tree.
 
 What Piece 11B.1 landed and was reviewed:
 

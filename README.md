@@ -618,9 +618,10 @@ The records, the reports, and the write path:
   names one set, the one function that writes bytes and forces LF, the two path builders, the rule that no module
   of the tool writes a file outside it, the reader key as the path from the codebase root, the plan check that
   runs once per unit directory and names the directory it ran on, the rule that no flag names the layout, the
-  golden set read as paths from the case directory, the single-unit case, the rule that the rule data pair names
-  the unit set, the four records read at the root with the pair read inside the unit directory and the data count
-  moving with it while the printed member enters no count, and the byte rule between two runs
+  golden set read as paths from the case directory, the single-unit case, the rule that the run writes no
+  directory for a unit it read only through the record, the rule that the rule data pair names the unit set,
+  the four records read at the root with the pair read inside the unit directory and the data count moving
+  with it while the printed member enters no count, and the byte rule between two runs
 - `tests/test_provenance.py` - the provenance record (`SOURCE.txt`): the fields, the record
   read back as data, one record per source the run read, one record per request the path 2 run read with the
   `scope` field naming the path that request declared, the `Source:` label for both sources,
