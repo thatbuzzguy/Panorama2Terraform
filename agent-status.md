@@ -68,6 +68,34 @@ provider does not declare; and the path 2 live facts in `docs/API_CONVERSION_PAT
 shapes the comparison table cannot state as one name: the address `value`, which the run prints under four names, and
 the tag text, which `parse_tags` stores only as `comments`, so the `description` key the row declares is never filled.
 
+## Acceptance review of Piece 11A.2 (2026-11-21)
+
+The piece is reviewed at `153dbf2` and `3067372`, both not pushed, and the review record is `acceptance.md`. Every
+criterion is met, and nothing was wrong: no code, pin or document disagreed, so the only change is the record, which
+now states each criterion as met and carries the review's timings. The measurement is confirmed by an independent re-run through the tool's
+own modules on the committed response set and on the content `tests/test_api_path.py` holds: the run that declares no
+selection reads `device-group`, `templates`, `device-group/entry/Office-FW` and `templates/entry/HQ-Networks`, the run
+that selects `device-group` reads the first three, the join reports a finding for `HQ-Networks` on the whole set and
+none on the targeted set, the unit rule names the same units both ways, and the committed entry read answers no
+membership fact while the committed `device-group` read holds `Office-FW` and `Unassigned-DG`. A targeted run writes
+the same file set as a run that declares none, and its bytes differ.
+
+Each of the nine new pins passes on its own, in the module that owns its rule, and the three changed pins pass on
+their own: the run order pin reads the order through `api_requests.targeted_read_set`, the entry point owners pin holds
+`targeted_read_set` and `targeted_names` as `api_requests`' rules, and
+`tests/test_api_path.py::test_a_selection_that_names_no_unit_is_an_argument_error_on_a_run` keeps the argument-error
+part and reads the file set and the difference. No pin was removed. The index rule pin
+`tests/test_layout.py::test_the_indexes_name_every_document_under_them` passes, and the import rule reads clean: no
+test module imports another test module, `src/` imports nothing from `tests/`, and the shared facts are read from
+`tests/conftest.py`. The pins that hold the single-owner claims pass unchanged.
+
+The gate was re-measured single-threaded at `3067372`: `ruff check .` clean, `ruff format --check .` clean on the
+106 files it reads (79 Python, 27 markdown), `python3 tools/check_documents.py` reports no finding, and
+`python3 -m pytest` passes 1,754 pins with the same 4 `tflint` skip — 1,758 pins in 53 test modules,
+`tests/test_api_requests.py` at 32 and `tests/test_api_path.py` at 39. The piece measured 311.05 s and the review's two
+confirmation runs measured 310.75 s and 316.00 s on the same counts, so run-to-run time varies.
+Piece 11A.3 stays open.
+
 ## Acceptance review of Piece 11A.1 (2026-11-21)
 
 The piece is reviewed at `22e4401`, `f2a20b8` and `c23920b`, none pushed, and the review record is `acceptance.md`.
