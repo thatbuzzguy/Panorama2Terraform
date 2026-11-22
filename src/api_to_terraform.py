@@ -4,13 +4,15 @@
 Four rules, stated once here.
 
 1. The run order. The run reads the membership responses first, in the order
-   `api_requests.membership_lists()` names them, then the entries `api_requests.scope_index()` names in index
+   `api_requests.targeted_read_set()` names them, then the entries `api_requests.scope_index()` names in index
    order. One response is read once: two lists can name one container, so a container named by two lists is read
    at the first place a list names it, and a container the run already read as a membership response is not read
    again for its index entry. `api_requests.py` states no read order and `provenance.py` rule 6 states no read
    rule for a path 2 run, so this is the only place the order is stated, and the record file the run wrote is
    the order's own statement
-   (`tests/test_api_path.py::test_the_run_order_is_the_membership_lists_then_the_index_entries`).
+   (`tests/test_api_path.py::test_the_run_order_is_the_membership_lists_then_the_index_entries`). For a selection
+   the entry part reads only the names the targeted name set states
+   (`tests/test_api_path.py::test_a_targeted_run_reads_the_lists_and_the_names_the_selection_states`).
 2. The cross-response join is applied in run order, through the one join rule in `panorama_to_terraform.py`,
    which the run view takes as an argument. `api_requests.py` keeps no merge rule, so the four tables stay per
    response and the join is what makes one set for the run. The same content read as one whole-config export
@@ -61,15 +63,16 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def lists_read(parts) -> tuple:
+def lists_read(parts, selection: str | None = None) -> tuple:
     """The membership lists the run read, read back from the parts it built.
 
     The read set is the entry point's decision, so no list is stated here: a list counts when the run read the
-    response for the container that holds it, read through `api_requests` for the path each list names.
+    response for the container that holds it, read through `api_requests` for the path each list names. For a
+    selection the set is the targeted read set, so the entry point reads the read set through its owner.
     """
     return tuple(
         list_path
-        for list_path in api_requests.membership_lists()
+        for list_path in api_requests.targeted_read_set(selection)
         if any(part.request.path == api_requests.scope_path(api_requests.list_container(list_path)) for part in parts)
     )
 
@@ -101,7 +104,7 @@ def run_order(args, producer=None) -> tuple:
     the tables the run read.
     """
     parts = []
-    for list_path in api_requests.membership_lists():
+    for list_path in api_requests.targeted_read_set(args.selection):
         path = api_requests.scope_path(api_requests.list_container(list_path))
         if any(part.request.path == path for part in parts):
             continue  # two lists can name one container, and one response is read once
@@ -117,9 +120,11 @@ def run_order(args, producer=None) -> tuple:
         )
 
     # Rule 2: the four tables stay per response in `api_requests`, so the join is applied here, in run order,
-    # through the one join rule, and the index reads its set from the joined tables.
+    # through the one join rule, and the index reads its set from the joined tables. The read set and the name set
+    # are `api_requests`' rules (F11.2, `docs/MULTI_RUN_CODEBASE.md` §2 rule 3), so the entry point reads them
+    # through their owner and states no name rule of its own.
     tables = panorama_to_terraform.join_results([part.parser.parse_associations() for part in parts])
-    index = api_requests.scope_index(args.host, tables, lists_read(parts))
+    index = api_requests.scope_index(args.host, tables, lists_read(parts, args.selection), args.selection)
     for entry in index:
         if any(part.request.path == entry.path for part in parts):
             continue  # one response is read once, so a container already read as its membership response

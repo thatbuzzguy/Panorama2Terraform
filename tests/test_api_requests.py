@@ -1,6 +1,7 @@
 """F8.2: the scope index (`docs/API_CONVERSION_PATH.md` §2.2 and §8).
 
-Seven groups, one per rule in `src/api_requests.py`:
+Eight groups, one per rule the module states, plus the group that reads the module through its owners and the group
+that reads the committed response set:
 
 1. The four membership lists. They are the `parse_associations` rows in the container table, so
    the module states no second list, and it reads no membership of its own. The four lists name
@@ -21,9 +22,14 @@ Seven groups, one per rule in `src/api_requests.py`:
 7. The offline harness (F8.4): one committed response per accepted request shape, each named by the request
    identity that produced it, read through the injected producer, and read as data by the record. The
    response set is not corpus material, so the scan and the fixture assembler never read it.
+8. The targeted read set (F11.2): the read set for a selection is the selected scope plus the membership facts a
+   unit identity cannot state on its own, so no list is dropped, and the names narrow to the names inside the place
+   the selection names or the names the tables hold for it. A name the selection excludes is not an index entry, so
+   the join reports no finding for it.
 
 No test calls the network: every response is handed by an injected producer, as
-`tests/test_source_fetch.py` does. Group 6 holds the join pins, and group 7 holds the harness pins.
+`tests/test_source_fetch.py` does. Group 6 holds the join pins, group 7 holds the harness pins, and group 8 holds the
+targeted read set pins.
 """
 
 import argparse
@@ -148,13 +154,12 @@ def _selection_answer(shape: str, tmp_path) -> bool:
     return True
 
 
-def _units_read(place: str, tmp_path) -> list:
-    """The unit set `unit_manifest.units` names for the read of one place (F11.1).
+def _ledger_for(place: str, tmp_path):
+    """The rows one place's read builds, read through the injected producer and through the door.
 
-    The response is handed by the injected producer and read through the door, and the parse methods the container
-    table rows name for that place are run. A row whose destination is `emitted` is the row that writes a report
-    row, so the unit set comes from those rows; a row that answers one fact for one element writes no report row. A
-    place no table row names runs no method, so its ledger holds no row and the unit rule names no unit for it.
+    The parse methods the container table rows name for that place are run, so the rows are the ones the run builds
+    for it. A row whose destination is `emitted` is the row that writes a report row; a row that answers one fact for
+    one element writes no report row. A place no table row names runs no method, so its ledger holds no row.
     """
     request = source_fetch.ApiRequest(host=HOST, path=place)
     source = source_fetch.fetch(request, tmp_path, producer=lambda r: per_scope_response(r, PLACE_BODIES[place]))
@@ -165,7 +170,12 @@ def _units_read(place: str, tmp_path) -> list:
         if row.destination == "emitted" and container_coverage.path_place(row.path) == place
     ]:
         getattr(parser, row.method)()
-    return unit_manifest.units(parser.ledger)
+    return parser.ledger
+
+
+def _units_read(place: str, tmp_path) -> list:
+    """The unit set `unit_manifest.units` names for the read of one place (F11.1), read through the rows above."""
+    return unit_manifest.units(_ledger_for(place, tmp_path))
 
 
 def _function_body(module: str, name: str) -> str:
@@ -923,3 +933,168 @@ def test_the_committed_op_response_shows_one_shape_and_names_no_live_fact(tmp_pa
             )
         ]
         assert not tables, (name, "no command-to-element table, so the shape the fixture shows cannot become a rule")
+
+
+# --- 8. the targeted read set (F11.2) -----------------------------------------
+
+# The read set and the name set are the module's rules, so the pins build the index through `api_requests` and read
+# the names through the join, and this file states no read rule and no name rule of its own.
+
+
+def _targeted_index(selection, membership) -> tuple:
+    """The index a targeted run builds, read through the read set and the name rule."""
+    return api_requests.scope_index(HOST, membership, api_requests.targeted_read_set(selection), selection)
+
+
+def test_the_targeted_read_set_keeps_every_list_a_single_read_cannot_state(tmp_path):
+    """F11.2 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 3): the read set for a selection is the selected scope plus the
+    lists that state the facts the selected unit cannot state on its own, so no list is dropped.
+
+    Measured on the committed entry response, read through the injected producer: `parse_associations` answers no
+    table for it, because the response holds the entry its own request names and the method reads the entries inside
+    the container, so an entry read states no membership fact. The places measured are the ones this module holds
+    content for; `devices` and `vsys` name no membership list, so no list is read for them and the fact that names
+    which device the run read stays a live-target fact in `backlog.md`.
+    """
+    entry = source_fetch.ApiRequest(host=HOST, path="device-group/entry/Production-DG")
+    parser = panorama_to_terraform.PanoramaParser(_read_committed(entry, tmp_path / "committed entry"))
+    assert parser.parse_associations() == {table: {} for table, _container in api_requests.LIST_JOIN.values()}, (
+        "the response for an entry holds the entry, so an entry read states no membership fact"
+    )
+
+    places = sorted(place for place in PLACE_BODIES if place != container_coverage.PREDEFINED_PLACE)
+    assert places, "the module holds content for the places the pins read"
+    for place in places:
+        for shape in (place, api_requests.scope_path(place, "Production-DG")):
+            assert api_requests.targeted_read_set(shape) == api_requests.membership_lists(), (
+                shape,
+                "no list states a fact a single read can state on its own",
+            )
+    assert api_requests.targeted_read_set(None) == api_requests.membership_lists(), (
+        "a run that reads a whole export declares no selection"
+    )
+
+
+def test_the_targeted_name_set_is_the_names_inside_the_place_or_the_names_the_selection_owns(tmp_path):
+    """F11.2 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 3): the names a targeted run reads are the names inside the place
+    the selection names, or the entry the selection names plus the names the membership tables hold for it. A name the
+    selection excludes is not in the set, and a table key names no entry, so the device that owns a list is never in
+    the set. The names come from the responses read through the injected producer, and the join is `LIST_JOIN`, so the
+    pin states no name rule and no table of its own.
+    """
+    lists = api_requests.membership_lists()
+    membership = _read(lists, tmp_path)
+
+    # No selection: the set is every name the tables read, so the run that declares none is the run it is today.
+    whole = api_requests.targeted_names(None, membership)
+    expected = set()
+    for path in lists:
+        container = api_requests.LIST_JOIN[path][1]
+        expected.update((container, name) for name in api_requests.names_read(membership, path))
+    assert whole == tuple(sorted(expected)), whole
+
+    # A place selection: the names inside that place, and no name from another place. The list is read through the
+    # join, so this pin names no list of its own.
+    path = next(p for p in lists if api_requests.LIST_JOIN[p][1] == "device-group")
+    names = api_requests.targeted_names("device-group", membership)
+    inside = tuple(sorted(("device-group", name) for name in api_requests.names_read(membership, path)))
+    assert names == inside, names
+    assert len(inside) > 1, "the place holds more than one name, so the set is read and not guessed"
+    assert not any(container != "device-group" for container, _name in names), names
+
+    # An entry selection: itself, plus the lists it owns. A device group is never a table key, so it owns no list,
+    # while a stack is, so the template the stack applies is the fact its identity cannot state on its own.
+    names = api_requests.targeted_names("template-stack/entry/Branch-Stack", membership)
+    assert names == (("template-stack", "Branch-Stack"), ("templates", "HQ-Networks")), names
+    assert not any(name == "Datacenter-FW" for _container, name in names), "an excluded name is not in the set"
+    assert not any(name == "fw-1.example.com" for _container, name in names), "a table key names no entry"
+
+
+def test_a_name_the_selection_excludes_gains_no_index_entry(tmp_path):
+    """F11.2 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 3): a name the selection excludes is not an index entry. The
+    targeted index keeps the place entries its read set names and the names it states, and holds no entry for a name
+    the selection excludes, so the join has nothing to read for it.
+    """
+    membership = _read(api_requests.membership_lists(), tmp_path)
+    selection = "device-group/entry/Office-FW"
+    full = api_requests.scope_index(HOST, membership, api_requests.membership_lists())
+    targeted = _targeted_index(selection, membership)
+
+    paths = [entry.path for entry in full]
+    assert "templates/entry/DC-Networks" in paths, "the whole set holds an entry for the excluded name"
+    assert "templates/entry/DC-Networks" not in [entry.path for entry in targeted], targeted
+    assert api_requests.names_in_index(targeted, "templates") == (), api_requests.names_in_index(targeted, "templates")
+
+    # The place the selection names keeps its entry, because its list is in the read set.
+    assert "device-group" in [entry.path for entry in targeted], targeted
+    assert api_requests.names_in_index(targeted, "device-group") == ("Office-FW",), targeted
+
+
+def test_the_join_reports_no_finding_for_a_name_the_selection_excludes(tmp_path):
+    """F11.2 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 3): the join reports no finding for a name the selection excludes,
+    because that name is not an index entry. The unit set stays `unit_manifest.units`, so the pin reads the same row
+    set both ways: the rule does not drop a unit, it drops the entry the unit could be read against.
+    """
+    membership = _read(api_requests.membership_lists(), tmp_path)
+    selection = "device-group/entry/Office-FW"
+    full = api_requests.scope_index(HOST, membership, api_requests.membership_lists())
+    targeted = _targeted_index(selection, membership)
+    ledger = _ledger_for("device-group", tmp_path / "rows")
+
+    units = [unit_manifest.unit_name(facts) for facts in unit_manifest.units(ledger)]
+    assert "Datacenter-FW" in units, "the unit rule names a unit for a name inside the response"
+
+    full_findings = api_requests.unit_findings(full, ledger)
+    assert any(entry is not None and entry.name == "Datacenter-FW" for _facts, entry in full_findings), full_findings
+    targeted_findings = api_requests.unit_findings(targeted, ledger)
+    assert not any(entry is not None and entry.name == "Datacenter-FW" for _facts, entry in targeted_findings), (
+        targeted_findings
+    )
+
+    # The rows the run read name the response the membership read, so the join still answers a pair for a unit whose
+    # name the selection excludes: it reports no finding, and the pair names the place entry.
+    pairs = api_requests.join_units(targeted, ledger)
+    answered = [entry for facts, entry in pairs if unit_manifest.unit_name(facts) == "Datacenter-FW"]
+    assert answered == [api_requests.entry_for_path(targeted, "device-group")], answered
+
+
+def test_a_place_read_that_holds_an_excluded_name_is_not_refused(tmp_path):
+    """F11.2 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 3), read on the committed bytes: the join checks a place read
+    against the names the targeted index read for its container, so a name inside that the selection excludes gains no
+    entry and the response is not refused. The refusal for a name the index read and the response does not hold is the
+    rule group 6 pins, and it is measured here on the same committed response, where the committed bytes hold only one
+    of the two names the whole set read.
+    """
+    membership = _read(api_requests.membership_lists(), tmp_path)
+    selection = "device-group/entry/Office-FW"
+    full = api_requests.scope_index(HOST, membership, api_requests.membership_lists())
+    targeted = _targeted_index(selection, membership)
+    source = _read_committed(source_fetch.ApiRequest(host=HOST, path="device-group"), tmp_path / "committed place")
+
+    assert api_requests.names_in_index(full, "device-group") == ("Datacenter-FW", "Office-FW"), full
+    with pytest.raises(ValueError) as excinfo:
+        api_requests.join_response(source, _place(full, "device-group"), full)
+    assert "Datacenter-FW" in str(excinfo.value), "the whole set read a name the committed response holds no entry for"
+
+    inside = api_requests.join_response(source, _place(targeted, "device-group"), targeted)
+    assert inside == ("Office-FW", "Unassigned-DG"), inside
+    assert api_requests.names_in_index(targeted, "device-group") == ("Office-FW",), "the excluded name gains no entry"
+
+
+def test_the_entry_the_selection_names_enters_the_index_through_the_one_path_definition(tmp_path):
+    """F11.2 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 3): the selected entry enters the targeted index because the run
+    read the response for it, even when no membership list read it, so the run can read its own scope as a scope. The
+    path is built through `api_requests.scope_path`, so the pin states no path shape of its own.
+    """
+    membership = _read(api_requests.membership_lists(), tmp_path)
+    selection = "device-group/entry/Production-DG"
+    full = api_requests.scope_index(HOST, membership, api_requests.membership_lists())
+    targeted = _targeted_index(selection, membership)
+
+    assert "Production-DG" not in api_requests.names_in_index(full, "device-group"), (
+        "no membership list read this name, so the whole set guesses no scope"
+    )
+    entry = api_requests.entry_for_path(targeted, selection)
+    assert entry is not None, targeted
+    assert entry.path == api_requests.scope_path("device-group", "Production-DG"), entry
+    assert api_requests.names_in_index(targeted, "device-group") == ("Production-DG",), targeted

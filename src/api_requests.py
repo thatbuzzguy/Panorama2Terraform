@@ -1,7 +1,7 @@
 """F8.2 the scope index, and F8.3 the response-to-request join: the set of scopes path 2 reads, as one
 entry per scope, and each response read against the request that made it.
 
-Five rules, stated once here (`docs/API_CONVERSION_PATH.md` §2.2, §2.3, §2.4 and §3):
+Six rules, stated once here (`docs/API_CONVERSION_PATH.md` §2.2, §2.3, §2.4 and §3):
 
 1. The scope set is read, not guessed. It comes from the membership responses the run read, through
    the four membership lists `parse_associations` reads (`docs/ARCHITECTURE.md` §3, rule 3). Two
@@ -32,6 +32,11 @@ Five rules, stated once here (`docs/API_CONVERSION_PATH.md` §2.2, §2.3, §2.4 
    findings the join reports as data rows: no console line, no writer, no report section, and no exit code,
    which the gate decides.
 
+6. The targeted read set (`docs/MULTI_RUN_CODEBASE.md` §2 rule 3) is the selected scope plus the membership facts a
+   unit identity cannot state on its own: `targeted_read_set` names the lists a targeted run reads, and
+   `targeted_names` names the scopes inside them for the selected unit. A name the selection excludes gains no entry,
+   so `unit_findings` reports no finding for it, and the join states no second name rule and no second list.
+
 The module reads no source and no membership of its own: `source_fetch.py` reads the bytes through
 the input door, and `PanoramaParser.parse_associations` reads the four lists. What this module owns is the
 join between a name a list read and the request that reads the scope it names, the join between a response
@@ -55,7 +60,10 @@ Usage:
         for table, names in parser.parse_associations().items():
             for owner, value in names.items():
                 membership.setdefault(table, {}).setdefault(owner, []).extend(value)
-    index = scope_index('panorama.example.com', membership, api_requests.membership_lists())
+    # F11.2: the read set is the four lists for a run that declares no selection, and the targeted read set for a
+    # run that names one. The index holds no entry for a name the selection excludes.
+    read_set = api_requests.targeted_read_set(selection)
+    index = scope_index('panorama.example.com', membership, read_set, selection)
     for entry in index:
         source = fetch(entry.request, 'panorama_cache')   # one response per entry
         # F8.5: the run parses each response on its own, so the join names the response for a section.
@@ -118,6 +126,68 @@ def membership_lists() -> tuple:
     return tuple(sorted(row.path for row in container_coverage.CONTAINER_TABLE if row.method == MEMBERSHIP_METHOD))
 
 
+def targeted_read_set(selection: str | None) -> tuple:
+    """The membership lists a targeted run reads (`docs/MULTI_RUN_CODEBASE.md` §2 rule 3).
+
+    A selection names one unit, so it names at most one of the five facts, and `parse_associations` reads a
+    membership fact only from the response that holds the container the list names: the response for an entry holds
+    the entry itself, so an entry read states no membership fact. Each list states one fact the selected unit cannot
+    state on its own, so no list is dropped for a selection: the set is `membership_lists()` for both shapes, and it
+    narrows through the names in `targeted_names` rather than through the lists. A run that declares no selection
+    reads a whole export, so that run is the run it is today. The fact the selection names is read through the table
+    that holds the association the selection is part of, and a table keys on the entry that owns the list, so that
+    association comes from the response that holds the container, not from the entry.
+    """
+    return membership_lists()
+
+
+def targeted_names(selection: str | None, membership: dict) -> tuple:
+    """The scopes a targeted run reads, as the pairs the join answers them with: (container, name), in path order.
+
+    Three shapes, read through the join's owners:
+
+    1. No selection: every name the tables read, which is the set `scope_index` builds today, because a run that
+       reads a whole export selects nothing.
+    2. A selection that names a place: the names inside that place, which are the names the table for that place
+       reads.
+    3. A selection that names an entry: the entry the selection names, plus the names the tables hold for it, which
+       are the membership facts its identity cannot state on its own. An entry read states no membership fact, so
+       these names come from the response that holds the container the list names, and the selected entry can be the
+       key of any of the four tables, so all four are read for it.
+
+    A name the selection excludes is not in the set, so `scope_index` builds no entry for it and `unit_findings`
+    reports no finding for it. A table key names no entry, so the entry that owns a list is never in the set, and the
+    module states no second join: the tables and the containers are `LIST_JOIN`'s.
+    """
+    if not selection:
+        read = set()
+        for table, container in LIST_JOIN.values():
+            for names in membership.get(table, {}).values():
+                for name in names:
+                    read.add((container, name))
+        return tuple(sorted(read))
+
+    segments = container_coverage.path_segments(selection)
+    place, name = segments[0], (segments[2] if len(segments) > 2 else "")
+    tables = sorted(table for table, container in LIST_JOIN.values() if container == place)
+    if not name:
+        read = set()
+        for table in tables:
+            for names in membership.get(table, {}).values():
+                for entry_name in names:
+                    read.add((place, entry_name))
+        return tuple(sorted(read))
+
+    read = {(place, name)}
+    for table, container in LIST_JOIN.values():
+        # The names the selected entry owns are the membership facts its identity cannot state on its own, and a
+        # table keys on the entry that owns the list, so the selected entry can be a key in any of the four tables.
+        for owner, names in membership.get(table, {}).items():
+            if owner == name:
+                read.update((container, entry_name) for entry_name in names)
+    return tuple(sorted(read))
+
+
 def list_container(list_path: str) -> str:
     """The scope container the response holds for a membership list: the segment the row names first."""
     return list_path.split("/")[0]
@@ -150,7 +220,7 @@ def scope_path(container: str, name: str = "") -> str:
     return path
 
 
-def scope_index(host, membership: dict, read) -> tuple[ScopeIndexEntry, ...]:
+def scope_index(host, membership: dict, read, selection: str | None = None) -> tuple[ScopeIndexEntry, ...]:
     """The scope index, in sorted order, one entry per scope.
 
     `membership` is the four tables `parse_associations` returned for the responses the run read, and
@@ -158,6 +228,12 @@ def scope_index(host, membership: dict, read) -> tuple[ScopeIndexEntry, ...]:
     because the module states no list of its own. A name is in the set only when the run read the
     response that read the list it came from, and an entry counts only when the run read the response
     for the container that defines it, so the index guesses no scope.
+
+    `selection` is the targeted read set (`docs/MULTI_RUN_CODEBASE.md` §2 rule 3), read through `targeted_names`, so
+    the index holds no entry for a name the selection excludes. The entry the selection names enters through the one
+    path definition, because the run read the response for it, even when no membership list read it. With no
+    selection the set is the names the tables read, so a run that declares no selection builds the index it builds
+    today.
     """
     lists = membership_lists()
     read = sorted(set(read))
@@ -179,6 +255,7 @@ def scope_index(host, membership: dict, read) -> tuple[ScopeIndexEntry, ...]:
 
     # Level 2: one entry per scope entry those containers name. A name whose entries belong to a
     # container the run did not read enters no entry, so no scope is guessed.
+    targeted = targeted_names(selection, membership)
     seen = set()
     for list_path in read:
         defines = LIST_JOIN[list_path][1]
@@ -186,6 +263,8 @@ def scope_index(host, membership: dict, read) -> tuple[ScopeIndexEntry, ...]:
             continue
         for name in names_read(membership, list_path):
             key = (defines, name)
+            if key not in targeted:
+                continue  # a name the selection excludes gains no entry, so the join reports no finding for it
             if key in seen:
                 continue  # one entry per scope, so a name two lists read gives one entry
             seen.add(key)
@@ -193,6 +272,18 @@ def scope_index(host, membership: dict, read) -> tuple[ScopeIndexEntry, ...]:
             entries.append(
                 ScopeIndexEntry(ENTRY_LEVEL, defines, name, path, source_fetch.ApiRequest(host=host, path=path))
             )
+
+    # The entry the selection names is a scope the run read, so it enters the index through the one path
+    # definition even when no membership list read it.
+    for container, name in targeted:
+        key = (container, name)
+        if not name or key in seen or container not in containers:
+            continue
+        seen.add(key)
+        path = scope_path(container, name)
+        entries.append(
+            ScopeIndexEntry(ENTRY_LEVEL, container, name, path, source_fetch.ApiRequest(host=host, path=path))
+        )
 
     return tuple(sorted(entries, key=lambda entry: (entry.level, entry.path)))
 

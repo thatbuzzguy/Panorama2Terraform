@@ -1,6 +1,6 @@
 """F8.5 the run over many sources (`docs/API_CONVERSION_PATH.md` §2.4): one response is one source.
 
-Nine groups:
+Ten groups:
 
 1. One response keeps its own line map and its own parent walk, so the run builds no tree from many
    responses. A report position can only name a line inside the response that holds the entry.
@@ -30,6 +30,11 @@ Nine groups:
 9. The entry a membership list names and the run read as its own scope: the run reads that entry twice and keeps
    both answers, so each response records its own rows and writes its own block, and the gate reads the two sets
    as agreeing.
+10. The targeted read set (F11.2, `docs/MULTI_RUN_CODEBASE.md` §2 rule 3): the entry point reads the read set and
+    the name set through `api_requests`, so a targeted run reads the same membership responses as a run that
+    declares no selection and reads entries only for the names the name rule states for the selection. A name the
+    selection excludes is not an index entry, so the join reports no finding for it, and the record names no
+    response for it.
 
 Every response is read through `source_fetch.fetch` with an injected producer, so the wrapper decision, the
 origin, and the line map are the ones the run holds. No pin reads a response as a file, because the wrapper
@@ -996,7 +1001,9 @@ def test_the_run_order_is_the_membership_lists_then_the_index_entries(tmp_path):
     """Criterion 1: the entry point is the only place that states the run order, and the record file the run
     wrote is that order's own statement. `api_requests.py` states no read order and `provenance.py` rule 6 says
     the read order for a path 2 run is the run order's decision, so this pin reads the order through the names
-    the owners state and never through a list this file states.
+    the owners state and never through a list this file states. The read set is the entry point's read of
+    `api_requests.targeted_read_set`, which is the four lists for a run that declares no selection. For a selection
+    the entry part reads only the names the name rule states, pinned by group 10.
     """
     args, argv = _run_args(tmp_path)
     parts, index = api_to_terraform.run_order(args, _producer())
@@ -1007,7 +1014,7 @@ def test_the_run_order_is_the_membership_lists_then_the_index_entries(tmp_path):
     # response is read once, so a container named by two lists enters the order at the first place a list names
     # it, and the entry part holds only the entries the run had not already read.
     named = []
-    for name in api_requests.membership_lists():
+    for name in api_requests.targeted_read_set(args.selection):
         path = api_requests.scope_path(api_requests.list_container(name))
         if path in read and path not in named:
             named.append(path)
@@ -1032,10 +1039,12 @@ def test_the_run_order_is_the_membership_lists_then_the_index_entries(tmp_path):
     ], "the record names the responses in the order it read them"
 
     # The order is stated once. The entry point reads it through the owners' names, so it states no path rule,
-    # no sort, and no list of paths of its own, and no other module states it.
+    # no sort, and no list of paths of its own, and no other module states it. The read set and the name set are
+    # `api_requests`' rules, so the entry point reads them through its owner and states no name rule of its own: it
+    # passes the selection to `scope_index`, which reads the name set.
     entry_source = (SRC_DIR / "api_to_terraform.py").read_text(encoding="utf-8")
     assert "def run_order" in entry_source, "the order is stated in the entry point"
-    for name in ("membership_lists", "scope_index", "list_container", "scope_path"):
+    for name in ("targeted_read_set", "scope_index", "list_container", "scope_path"):
         assert f"api_requests.{name}(" in entry_source, (name, "the order is read through the owner")
     assert "sorted(" not in entry_source, "the entry point states no sort rule"
     for path in PLACES:
@@ -1356,15 +1365,19 @@ def test_a_selection_that_names_no_unit_is_an_argument_error_on_a_run(tmp_path):
         assert raised.value.code == 2, (case, "an argument error exits 2")
         assert not out.exists(), "an argument error writes no file"
 
-    # A selection that names a unit is accepted, so the rule is not a blanket refusal. The targeted read set is
-    # Piece 11A.2, so the run reads the set it reads today and the run that declares no selection is unchanged.
+    # A selection that names a unit is accepted, so the rule is not a blanket refusal. The accepted run writes the
+    # same file set as a run that declares no selection, because the read rule drops no unit, and its bytes differ
+    # because the name rule reads one entry fewer for a selection, which
+    # `test_the_record_names_the_read_set_in_run_order_for_a_targeted_run` measures.
     out = tmp_path / "accepted"
     argv = ["--host", HOST, "--selection", api_requests.scope_path(place), "--output-dir", str(out)]
     assert api_to_terraform.run(argv, _producer()) == 0, "the argument rule accepted the selection"
-    assert out.exists(), "the accepted run is the run it is today"
+    assert out.exists(), "the accepted run writes files"
     plain = tmp_path / "plain"
     assert api_to_terraform.run(["--host", HOST, "--output-dir", str(plain)], _producer()) == 0
-    assert written_bytes(plain) == written_bytes(out), "a selection that names no read rule writes the same bytes"
+    accepted, plain_files = written_bytes(out), written_bytes(plain)
+    assert sorted(accepted) == sorted(plain_files), (accepted.keys(), plain_files.keys(), "the same file set")
+    assert accepted != plain_files, "a run that declares a selection is not byte-identical to one that declares none"
 
 
 def test_the_entry_point_passes_the_index_it_built_to_the_gate_and_keeps_the_gate_code(tmp_path):
@@ -1461,6 +1474,8 @@ def test_the_entry_point_states_no_rule_an_owner_states():
         "entry_coverage.py": ("REPORT_HEADING", "GAP_HEADING", "entry_line", "console_lines"),
         "api_requests.py": (
             "scope_index",
+            "targeted_read_set",
+            "targeted_names",
             "membership_lists",
             "list_container",
             "scope_path",
@@ -1724,3 +1739,138 @@ def test_the_double_read_agrees_with_the_gate(tmp_path, monkeypatch):
     unit = unit_manifest.directory_name(unit_manifest.facts_of(entries[0]), naming.sanitize)
     counted = [b for b in sanity_checks.blocks(files2, ("resource",)) if b.file.split("/")[0] == unit]
     assert len([b for b in counted if b.rtype == row["resource"]]) == 2, (unit, counted)
+
+
+# --- 10. the targeted read set (F11.2, `docs/MULTI_RUN_CODEBASE.md` §2 rule 3) ---------------
+
+# The read set and the name set are `api_requests`' rules, so these pins read a targeted run through the entry point
+# and read both sets through their owner, and this file states no read set, no name rule, and no path shape of its
+# own. The selection measured is a place, because a place names no fact a single read can state on its own, so the
+# read set is the four lists and the names narrow to the names inside the place.
+
+
+def _targeted_args(tmp_path, selection: str) -> tuple:
+    """The arguments one targeted run reads, through the entry point's own parser."""
+    argv = [
+        "--host",
+        HOST,
+        "--cache-dir",
+        str(tmp_path / "cache"),
+        "--output-dir",
+        str(tmp_path / "out"),
+        "--selection",
+        selection,
+    ]
+    return api_to_terraform.build_parser().parse_args(argv), argv
+
+
+def _targeted_index(tmp_path, selection: str) -> tuple:
+    """The index a targeted run builds, read through the read set and the name rule."""
+    tables = _membership(tmp_path)
+    return api_requests.scope_index(HOST, tables, api_requests.targeted_read_set(selection), selection)
+
+
+def test_a_targeted_run_reads_the_lists_and_the_names_the_selection_states(tmp_path):
+    """F11.2 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 3): a targeted run reads the same membership responses as a run
+    that declares no selection, because no list states a fact a single read can state on its own, and its entry part
+    holds only the names the name rule states for the selection. The entry point states no read set and no name rule,
+    so both are read here through `api_requests`.
+    """
+    selection = "device-group"
+    args, _ = _targeted_args(tmp_path, selection)
+    parts, index = api_to_terraform.run_order(args, _producer())
+    read = tuple(part.request.path for part in parts)
+
+    assert api_requests.targeted_read_set(selection) == api_requests.membership_lists(), (
+        "no list is dropped for a selection, so the set narrows through the names and not through the lists"
+    )
+
+    # The membership part of the order: the container each list names, in the order the lists name them, read as the
+    # responses the producer answers for the content this file holds.
+    lists_read = tuple(
+        api_requests.scope_path(api_requests.list_container(name))
+        for name in api_requests.targeted_read_set(selection)
+        if api_requests.list_container(name) in PLACES
+    )
+    assert lists_read, "the producer answers the responses for the lists this file holds content for"
+
+    # The entry part: the names the name rule states, in index order, read through the one join rule.
+    tables = panorama_to_terraform.join_results([part.parser.parse_associations() for part in parts])
+    names = tuple(
+        api_requests.scope_path(container, name)
+        for container, name in api_requests.targeted_names(selection, tables)
+        if api_requests.scope_path(container, name) in read
+    )
+    assert names, "the selection names a name inside a response the run read"
+    assert read == lists_read + names, (read, "the membership responses first, then the names the selection states")
+
+    # A name the selection excludes gains no entry, so the run read no response for it. The run that declares no
+    # selection reads it, which is the difference the name rule decides.
+    excluded = api_requests.scope_path("templates", "HQ-Networks")
+    plain_args, _ = _run_args(tmp_path)
+    _plain_parts, plain_index = api_to_terraform.run_order(plain_args, _producer())
+    assert excluded in [entry.path for entry in plain_index], "the run that declares no selection holds an entry for it"
+    assert excluded not in [entry.path for entry in index], index
+    assert excluded not in read, (read, "no response is read for a name that is not an entry")
+
+
+def test_the_join_reports_no_finding_for_a_name_the_selection_excludes(tmp_path):
+    """F11.2 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 3): the gate reads the join, and a name the selection excludes is
+    not an index entry, so the join has no entry to report a finding against. The unit set is still
+    `unit_manifest.units`, so the join answers a pair for a unit whose name the selection excludes, and the pair
+    names the place entry, because the read set keeps every list and the run read the response that holds the name.
+    """
+    selection = "device-group"
+    full = _index(tmp_path)
+    targeted = _targeted_index(tmp_path, selection)
+    _source, place_parser = _run(source_fetch.ApiRequest(host=HOST, path=selection), PLACES[selection], tmp_path)
+    assert _methods_for(selection), "the table names a method for a place the selection can name"
+    rows = _rows_for(place_parser, _methods_for(selection))
+    assert rows, "the join needs rows to read"
+
+    pairs = api_requests.join_units(targeted, place_parser.ledger)
+    assert [facts for facts, _entry in pairs] == unit_manifest.units(place_parser.ledger), (
+        "the join reads the same unit set for a targeted run"
+    )
+    assert all(entry is not None for _facts, entry in pairs), (pairs, "the join answers every unit it reads")
+    assert {entry.path for _facts, entry in pairs} == {selection}, (pairs, "the pair names the place entry")
+
+    full_findings = sanity_checks.check_request_set(full, place_parser.ledger)
+    targeted_findings = sanity_checks.check_request_set(targeted, place_parser.ledger)
+    assert any("HQ-Networks" in finding.detail for finding in full_findings), full_findings
+    assert not any("HQ-Networks" in finding.detail for finding in targeted_findings), targeted_findings
+    assert targeted_findings, "the targeted index keeps the entries the read set names, and reports those"
+
+
+def test_the_record_names_the_read_set_in_run_order_for_a_targeted_run(tmp_path):
+    """F11.2 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 3): the record file a targeted run wrote names the responses in the
+    order the run read them, and names only the read set, so it holds no row for a name the selection excludes. The
+    record shape is `provenance`'s rule and the read set is `api_requests`' rule, so this pin reads the rows as data
+    and states no shape of its own.
+    """
+    selection = "device-group"
+    args, argv = _targeted_args(tmp_path, selection)
+    parts, index = api_to_terraform.run_order(args, _producer())
+    assert api_to_terraform.run(argv, _producer()) == 0, "the targeted run wrote a record"
+    record = (tmp_path / "out" / provenance.PROVENANCE_FILE).read_text(encoding="utf-8")
+    rows = provenance.parse_records(record)
+    assert rows, "the record holds the responses the run read"
+    assert [row.cache_entry for row in rows] == [part.request.cache_name() for part in parts], (
+        "the record names the responses in the order it read them"
+    )
+
+    scopes = [row.scope for row in rows]
+    read_set = {
+        api_requests.scope_path(api_requests.list_container(name)) for name in api_requests.targeted_read_set(selection)
+    }
+    names = {
+        api_requests.scope_path(container, name)
+        for container, name in api_requests.targeted_names(selection, _membership(tmp_path))
+    }
+    outside = [scope for scope in scopes if scope not in read_set and scope not in names]
+    assert not outside, (scopes, "no row names a response outside the read set")
+    assert selection in scopes, "the record names the selected place, because its list is in the read set"
+    assert api_requests.scope_path(selection, "Office-FW") in scopes, (
+        "the record names the entry the selection states, which the run read as its own scope"
+    )
+    assert api_requests.scope_path("templates", "HQ-Networks") not in scopes, "no row for a name the selection excludes"
