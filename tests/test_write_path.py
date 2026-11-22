@@ -10,7 +10,10 @@ Four groups:
    protects the entries its records name. A new file shape has to name one set, so one pin reads the rule data
    pair as a derivation through `rule_data` and holds that it names the unit set: the data count names the four
    records at the root plus the pair's data member inside each unit directory its own rows name, and the printed
-   member is not a data file, the way `site.auto.tfvars` is not.
+   member is not a data file, the way `site.auto.tfvars` is not. The run writes one directory per unit its own
+   set names, read through `unit_manifest.units`, and no directory for a unit it read only through the record
+   (`docs/MULTI_RUN_CODEBASE.md` §6 rule 2), and the write path states that rule as its own rule while reading
+   both sets through `unit_manifest`.
 2. How the gate reads each set: one block reader keyed by the path from the codebase root, one data rule
    that reads the records at the root as one rule over the rows of every unit and reads the pair inside the unit
    directories its rows name, and no rule reads a report.
@@ -26,6 +29,7 @@ per-unit file carries no unit field. The directory name and the row shape are pi
 `tests/test_data_file_gate.py`; the per-type file table is pinned by `tests/test_coverage_matrix.py`.
 """
 
+import ast
 import shutil
 from pathlib import Path
 
@@ -44,12 +48,24 @@ import site_data
 import source_fetch
 import unit_manifest
 import write_path
-from conftest import FIXTURES_DIR, GOLDEN_DIR, RULE_TYPES, SRC_DIR, data_file_set, run_script
+from conftest import (
+    FIXTURES_DIR,
+    GOLDEN_DIR,
+    RULE_TYPES,
+    SRC_DIR,
+    data_file_set,
+    run_pipeline,
+    run_script,
+    written_bytes,
+)
 
 # The layout rule (`docs/ARCHITECTURE.md` §1.1): `src/` holds the tool's modules, so the pins that read a
 # module source read it through `SRC_DIR`, and the scan reads the `src/` set.
 CONVERTER = SRC_DIR / "panorama_to_terraform.py"
 KITCHEN = "kitchen_sink.xml"
+# The second run the piece reads (`docs/MULTI_RUN_CODEBASE.md` §6 rule 2): a run that names one unit inside the
+# codebase the kitchen-sink run wrote, so the codebase set names more units than the run set.
+SECOND_RUN = "address_objects.xml"
 
 # The codebase root set, as the decision states it: the four records, the report files, README.md,
 # SOURCE.txt. Each record is named through the module that owns its row shape, so the test states no second
@@ -245,6 +261,86 @@ def test_the_run_writes_one_directory_per_unit_the_manifest_names(corpus_run):
     assert any(site_data.TFVARS_FILE in {p.name for p in (corpus_run / directory).iterdir()} for directory in dirs), (
         "the printed form is written inside the unit directory its row names"
     )
+
+
+def test_the_run_writes_no_directory_for_a_unit_it_read_only_through_the_record(converter_module, corpus_run, tmp_path):
+    """Rule 4: the run writes one directory per unit its own set names, read through `unit_manifest.units` over
+    its own ledger, and it writes no directory for a unit it read only through the record. The codebase set is
+    `unit_manifest.units` over the rows the record read back through `parse_rows`; for this pair the merge adds no
+    unit, which `tests/test_codebase_state.py` pins, so the codebase set is the record's own row set.
+
+    Measured 2026-11-22 on a real run that writes into an existing codebase: the kitchen-sink run is the codebase
+    (11 units) and the `address_objects.xml` run is the second run (1 unit), so the codebase set names 10 units
+    the run read only through the record. The second run added no directory and wrote no file inside those 10:
+    every byte inside them is the byte the first run wrote. It wrote inside the one directory its own set names,
+    and the files it changed at the root are the codebase root set, the set the run owns. The gate for a partial
+    run is Piece 11B.4, so this pin measures the write and reads no gate result.
+    """
+    out = _copy(corpus_run, tmp_path / "into")
+    before = written_bytes(out)
+    parser = run_pipeline(converter_module, SECOND_RUN, out)
+    assert parser is not None, "the run refused the input"
+    after = written_bytes(out)
+
+    run_set = unit_manifest.units(parser.ledger)
+    codebase_set = unit_manifest.units(_rows(corpus_run))
+    assert len(run_set) == 1 and len(codebase_set) == 11, (run_set, codebase_set)
+    run_dirs = {unit_manifest.directory_name(facts, naming.sanitize) for facts in run_set}
+    record_only = {
+        unit_manifest.directory_name(facts, naming.sanitize) for facts in codebase_set if facts not in set(run_set)
+    }
+    assert len(record_only) == 10, sorted(record_only)
+
+    # No directory was added: the run wrote no directory for a unit it read only through the record.
+    assert sorted(p.name for p in out.iterdir() if p.is_dir()) == sorted(
+        p.name for p in corpus_run.iterdir() if p.is_dir()
+    ), "the directories are the ones the first run wrote"
+    assert not set(after) - set(before), sorted(set(after) - set(before))
+    inside = sorted(name for name in after if Path(name).parent.name in record_only)
+    assert inside, "a unit read only through the record still holds the files the first run wrote"
+    assert all(after[name] == before[name] for name in inside), inside
+
+    # The bytes the second run wrote are its own unit's files and the codebase root set.
+    changed = sorted(name for name in after if after[name] != before[name])
+    assert changed, "the run wrote the files it owns"
+    assert all("/" not in name or Path(name).parent.name in run_dirs for name in changed), changed
+
+
+def test_the_write_path_states_the_run_set_rule_and_reads_the_unit_set_through_its_owner():
+    """The piece's rule is stated in the module that owns the write path, and the write path states no unit rule
+    and no unit set of its own: it reads both sets through `unit_manifest`, keeps the two builders one per set,
+    and names no new file shape, so the `src/` scans read it with the other modules. A third builder would be a
+    new path rule, so the definitions the module holds are the byte rule, the two builders and the one writer.
+    """
+    source = Path(write_path.__file__).read_text(encoding="utf-8")
+    assert "unit_manifest.units" in source, "the rule names the unit set through its owner"
+
+    tree = ast.parse(source)
+    defined = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    defined |= {
+        target.id
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+    assert defined == {"LF", "unit_path", "root_path", "write_file"}, (defined, "two builders and one writer")
+    for name in (
+        "units",
+        "facts_of",
+        "fact",
+        "unit_name",
+        "named_fact",
+        "directory_name",
+        "identity_digest",
+        "sanitize",
+        "parse_rows",
+        "render",
+        "row_key",
+        "unit_directories",
+    ):
+        assert name not in defined, (name, "the write path reads this rule through its owner")
+    assert "import os" not in source, "the byte rule is LF, stated in the one write function"
 
 
 def test_the_record_directory_is_the_output_directory_for_the_prune(corpus_run, tmp_path):

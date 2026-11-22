@@ -28,7 +28,13 @@ stated once here.
    the edge list (F6.3) needs the whole set, so one file holds one row per unit. The file is written
    only when it has content, following the existing rule for the report files. `units` is that run
    fact, so the directories a run writes are the units this rule names (`docs/CODEBASE_ASSEMBLY.md`
-   §14), and no module counts units a second way.
+   §14), and no module counts units a second way. The same rule reads the codebase's unit set, so the
+   two sets are one rule over two row sets: the rows the run's ledger read, and the merged manifest rows
+   read back through `parse_rows` (`docs/MULTI_RUN_CODEBASE.md` §2 rule 5). Pinned by
+   `tests/test_unit_manifest.py::test_the_codebase_unit_set_is_read_through_the_one_unit_rule` and
+   `tests/test_unit_manifest.py::test_the_two_unit_sets_differ_only_by_the_units_read_through_the_record`.
+   The rule that the run writes no directory for a unit it read only through the record is stated in
+   `write_path.py` rule 4, because that module owns the two file sets.
 5. The unit order lives on this row, as `rank` and `after`, because this file is the place that
    names each unit; a fourth data file that listed directories would be a second place that states
    the unit set. This module states the row shape only. `reference_edges.order` fills the two
@@ -52,6 +58,8 @@ Usage:
     write_file(root_path(output_dir, MANIFEST_FILE), render(rows))
     for row in parse_rows((output_dir / MANIFEST_FILE).read_text(encoding='utf-8')):
         print(row['directory'], row['rank'], row['after'])
+    units(ledger)                    # the run's unit set, read through this rule (rule 4)
+    units(parse_rows(text))          # the codebase's unit set, the same rule over the rows read back
 """
 
 import hashlib
@@ -153,15 +161,21 @@ def directory_name(facts: tuple, sanitize: Callable[[str], str]) -> str:
     return f"{sanitize(unit_name(facts)) or UNNAMED}_{identity_digest(facts)}"
 
 
-def units(ledger) -> list:
-    """The units the ledger shows, in identity order (rule 1).
+def units(source) -> list:
+    """The units the source shows, in identity order (rule 1).
 
     F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the run's unit set is this list, because a unit exists
     only when the ledger has a row in it, so the set that names the directories the run writes is read
     through this one rule and no module counts units a second way. `build_rows` reads it here. A reader
     that has no ledger names no unit, so it gets the empty set.
+
+    The same rule reads the codebase's unit set (`docs/MULTI_RUN_CODEBASE.md` §2 rule 5), so `source` is
+    either row set: the rows the run's ledger read, or the rows a record read back through `parse_rows`.
+    `facts_of` already reads a ledger row and a read-back row the same way, so one rule answers both sets
+    and no module states a second unit set. The rows are one row per unit, so a row set is a unit set.
     """
-    return sorted({facts_of(row) for row in ledger.rows()}) if ledger else []
+    rows = source.rows() if hasattr(source, "rows") else list(source)
+    return sorted({facts_of(row) for row in rows}) if rows else []
 
 
 def build_rows(ledger, references: dict, sanitize: Callable[[str], str]) -> list:

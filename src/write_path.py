@@ -1,6 +1,6 @@
 """F6.10.3 the write path: the two file sets, and the one place that forces LF.
 
-`docs/CODEBASE_ASSEMBLY.md` §14 decides which set each file belongs to. Three rules, stated once here.
+`docs/CODEBASE_ASSEMBLY.md` §14 decides which set each file belongs to. Four rules, stated once here.
 
 1. **One function writes bytes.** Every file a run writes goes through `write_file`, so the byte rule
    (`docs/ARCHITECTURE.md` §6) is enforced in one place and not in an operator note: `open(..., 'w')`
@@ -14,11 +14,23 @@
 3. **A per-unit file names its unit only by its directory** (§14), so this module states no rule that puts
    a unit inside a file, and no unit-set file name names a unit. The path is the only place a file states
    the unit it belongs to, which is why a gate finding for a per-unit file names the path.
+4. **The run writes one directory per unit its own set names, and it writes no directory for a unit it read
+   only through the record** (`docs/MULTI_RUN_CODEBASE.md` §6 rule 2). The run's set is `unit_manifest.units`
+   over the rows its own ledger read; the codebase's set is `unit_manifest.units` over the merged manifest
+   rows read through `parse_rows`. A unit that only the codebase set names gets no directory and no file from
+   this run, so the files an earlier run wrote inside it stay as that run wrote them. The write path states no
+   unit rule and no unit set of its own: it reads both sets through `unit_manifest`, keeps the two builders of
+   rule 2, and names no new file shape. Pinned by
+   `tests/test_write_path.py::test_the_run_writes_no_directory_for_a_unit_it_read_only_through_the_record` and
+   `tests/test_write_path.py::test_the_write_path_states_the_run_set_rule_and_reads_the_unit_set_through_its_owner`.
 
 Usage:
     from write_path import LF, root_path, unit_path, write_file
     write_file(unit_path(output_dir, row['directory'], 'provider.tf'), text)
     write_file(root_path(output_dir, unit_manifest.MANIFEST_FILE), unit_manifest.render(rows))
+    for facts in unit_manifest.units(ledger):        # the run's set, the rule the writer uses (rule 4)
+        write_file(unit_path(output_dir, unit_manifest.directory_name(facts, naming.sanitize), 'provider.tf'), text)
+    # A unit that only `unit_manifest.units(unit_manifest.parse_rows(text))` names writes nothing here.
 """
 
 from pathlib import Path

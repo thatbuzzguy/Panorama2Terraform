@@ -7,7 +7,8 @@ the row shape through the module that owns it:
    ownership record on (`type`, `entry`) with the facts read through `state_coverage.ownership_key`, the edge
    record on the pair of entry identities, the site record on `directory`.
 2. The merge rule: the run's rows replace the codebase's rows for the rows the run built, and the rows for the
-   units the run did not build stay as the record states them.
+   units the run did not build stay as the record states them. The merge names no unit set of its own: both sets
+   are read through `unit_manifest.units`, the one unit rule.
 3. The byte rule between two runs: a record with no existing file writes the bytes a single run writes today, so no
    committed golden changes.
 4. The merge holds no run field, and the order of a merged set is read through each record's own order rule, not
@@ -194,6 +195,29 @@ def test_the_run_rows_replace_the_codebase_rows_for_the_rows_the_run_built(tmp_p
     }
     measured = {module: len(_merged(module, codebase[module], run_rows[module])) for module in counts}
     assert measured == counts, measured
+
+
+def test_the_merged_manifest_set_is_the_codebase_unit_set_read_through_the_one_unit_rule(tmp_path):
+    """The merge names no unit set of its own. The run's set and the codebase's set are read through
+    `unit_manifest.units`, the one rule that names a unit for a directory, an owner or an edge, over the rows each
+    record read back through its own `parse_rows`; `codebase_state.py` reads that rule through `unit_manifest` and
+    restates no row shape, so the scan pin that reads the merge module still reads it clean. Because the merge
+    replaces the rows for the units the run built and keeps the rows for the units it did not, the merged set
+    names no unit beyond the codebase's set and the run's set, and the run's set is inside it.
+
+    Measured 2026-11-22 on the committed pair: 11 units read through `units` over the kitchen-sink record, 1 unit
+    read through `units` over the `address_objects.xml` record, and the merged set is the same 11 units.
+    """
+    codebase = _rows(CODEBASE_FIXTURE, tmp_path / "codebase")
+    run_rows = _rows(RUN_FIXTURE, tmp_path / "run")
+    merged = _merged(unit_manifest, codebase[unit_manifest], run_rows[unit_manifest])
+    codebase_set = unit_manifest.units(codebase[unit_manifest])
+    run_set = unit_manifest.units(run_rows[unit_manifest])
+    merged_set = unit_manifest.units(merged)
+    assert codebase_set and run_set, "the pins read both runs through `parse_rows`"
+    assert merged_set == codebase_set, (merged_set, codebase_set, "the merge adds no unit")
+    assert set(run_set) <= set(merged_set), "the units the run built are inside the codebase's set"
+    assert merged_set, "the codebase set names a unit the run read only through the record"
 
 
 # --- 3. The byte rule between two runs -----------------------------------------

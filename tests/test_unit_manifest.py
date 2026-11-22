@@ -1,6 +1,7 @@
 """F6.1: the unit boundary as data, the codebase manifest.
 
-Seven groups, one per rule in `unit_manifest.py` (`docs/CODEBASE_ASSEMBLY.md` §3):
+Eight groups, one per rule in `unit_manifest.py` (`docs/CODEBASE_ASSEMBLY.md` §3), and the last group for the
+two unit sets Piece 11B.2 states (`docs/MULTI_RUN_CODEBASE.md` §2 rule 5):
 
 1. The unit. One row per combination of the five scope facts, built from the ledger
    `entry_coverage.py` already writes, so F6.1 adds no parse data. F8.7: the unit join in
@@ -31,6 +32,7 @@ from pathlib import Path
 import pytest
 
 import api_requests
+import codebase_state
 import container_coverage
 import entry_coverage
 import naming
@@ -61,6 +63,12 @@ GROUPING = "report_grouping.xml"
 MULTI = "multi_device_templates.xml"
 NEW_SITE = "template_no_device.xml"
 MANIFEST = unit_manifest.MANIFEST_FILE
+
+# The committed pair the two unit sets are read on (Piece 11B.2): the run that builds a whole codebase, and a
+# second run that names one unit inside it. Both records are read through `parse_rows`, the one reader of the
+# row shape, and the run's own set is read through `units`.
+CODEBASE_FIXTURE = "kitchen_sink.xml"
+RUN_FIXTURE = "address_objects.xml"
 
 # The reference names the grouping fixture produces, keyed by the referrer's five facts.
 GROUPING_REFERENCES = {
@@ -817,3 +825,73 @@ def test_the_manifest_names_no_path_and_no_timestamp(tmp_path):
     text = (first / MANIFEST).read_text(encoding="utf-8")
     assert str(tmp_path) not in text
     assert "timestamp" not in text
+
+
+# --- 8. the two unit sets (Epic 11, Piece 11B.2) --------------------------------
+
+
+def test_the_codebase_unit_set_is_read_through_the_one_unit_rule(converter_module, tmp_path):
+    """Rule 4 read both ways: the run's set is `units` over the rows its own ledger read, and the codebase's set
+    is the same rule over the rows a record read back through `parse_rows`. The same run answered through its
+    ledger and read back through its record answers the same units, so the piece states one rule and no second
+    unit set, and this pin states no row shape of its own: `units` reads a row through `facts_of`, the shape rule
+    both sides use, and a row set is one row per unit.
+
+    Measured 2026-11-22 on `address_objects.xml` run through the pipeline in process.
+    """
+    out = tmp_path / "run"
+    parser, _gen = _pipeline(converter_module, FIXTURES_DIR / RUN_FIXTURE, out)
+    rows = _manifest(out)
+    assert rows, "the pin reads a record with content"
+
+    run_set = unit_manifest.units(parser.ledger)
+    read_back = unit_manifest.units(rows)
+    assert run_set == read_back, (run_set, read_back, "one rule answers the same units for both row sets")
+    assert [tuple(row[key] for key in unit_manifest.FACT_KEYS) for row in rows] == read_back, (
+        "one row per unit, so the row set read back is the unit set",
+    )
+
+    # The rule reads a row through the shape rule this module owns, so a reader that has no ledger and no record
+    # names no unit: the codebase set for a codebase with no manifest record is the empty set.
+    rule = Path(unit_manifest.__file__).read_text(encoding="utf-8")
+    assert "facts_of(" in rule[rule.index("def units(") :], "the rule reads the row through its own shape rule"
+    assert unit_manifest.units([]) == [], "no row, so no unit"
+
+
+def test_the_two_unit_sets_differ_only_by_the_units_read_through_the_record(converter_module, tmp_path):
+    """The two facts, read through the one rule over two row sets: the run's set is `units` over its own ledger,
+    and the codebase's set is `units` over the merged manifest rows read through `parse_rows`. The run's set is
+    inside the codebase's set, because the merge replaces the rows for the units the run built, and the units the
+    codebase set names that the run set does not are the units the run read only through the record: for each of
+    them the merged row is the row as the record states it, not a row the run built. For a run that read nothing
+    from the record the two sets are the same set, which is the single-run case every committed golden measures,
+    so no committed golden moves.
+
+    Measured 2026-11-22 on the committed pair: the kitchen-sink run as the codebase and the
+    `address_objects.xml` run as the second run, 11 units against 1, so the difference is 10.
+    """
+    codebase_out, run_out = tmp_path / "codebase", tmp_path / "run"
+    assert _run(FIXTURES_DIR / CODEBASE_FIXTURE, codebase_out).returncode == 0
+    parser, _gen = _pipeline(converter_module, FIXTURES_DIR / RUN_FIXTURE, run_out)
+    codebase_rows, run_rows = _manifest(codebase_out), _manifest(run_out)
+    assert codebase_rows and run_rows, "both pins read a record with content"
+
+    record = next(entry for entry in codebase_state.JOIN_KEYS if entry[0] is unit_manifest)
+    merged = codebase_state.merge_rows(record, codebase_rows, run_rows)
+
+    codebase_set = unit_manifest.units(codebase_rows)
+    run_set = unit_manifest.units(parser.ledger)
+    merged_set = unit_manifest.units(merged)
+    assert len(codebase_set) == 11 and len(run_set) == 1, (codebase_set, run_set)
+    assert set(run_set) <= set(merged_set), "the units the run built are inside the codebase's set"
+
+    only_through_record = [facts for facts in merged_set if facts not in set(run_set)]
+    assert len(only_through_record) == 10, only_through_record
+    for facts in only_through_record:
+        row = next(row for row in merged if tuple(row[key] for key in unit_manifest.FACT_KEYS) == facts)
+        assert row in codebase_rows and row not in run_rows, (facts, "the run read this unit only through the record")
+
+    # The single-run case: a run that read nothing from the record names no unit through a record, so the merged
+    # set is its own set and the difference between the two sets is empty.
+    assert unit_manifest.units(codebase_state.merge_rows(record, [], codebase_rows)) == codebase_set
+    assert unit_manifest.units(codebase_state.merge_rows(record, [], run_rows)) == run_set
