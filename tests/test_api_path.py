@@ -1,6 +1,6 @@
 """F8.5 the run over many sources (`docs/API_CONVERSION_PATH.md` §2.4): one response is one source.
 
-Ten groups:
+Eleven groups:
 
 1. One response keeps its own line map and its own parent walk, so the run builds no tree from many
    responses. A report position can only name a line inside the response that holds the entry.
@@ -35,6 +35,12 @@ Ten groups:
     declares no selection and reads entries only for the names the name rule states for the selection. A name the
     selection excludes is not an index entry, so the join reports no finding for it, and the record names no
     response for it.
+11. The bytes a targeted run writes for the unit it selects (F11.3, `docs/MULTI_RUN_CODEBASE.md` §2 rule 6): for
+   content that names no read-through name, the unit's `.tf` bytes and the printed form of its site row are the same
+   for a targeted run and for a full run, measured on the committed response set for one unit both ways. The
+   read-through exception is `tests/test_data_blocks.py`'s rule, so this group states no read-through rule of its
+   own: it pins that the committed content answers nothing for either run. The printed form is measured as agreement
+   on absence, because no unit on the committed response set names a value.
 
 Every response is read through `source_fetch.fetch` with an injected producer, so the wrapper decision, the
 origin, and the line map are the ones the run holds. No pin reads a response as a file, because the wrapper
@@ -59,16 +65,20 @@ import ownership
 import panorama_to_terraform
 import provenance
 import sanity_checks
+import site_data
 import source_fetch
 import unit_manifest
+import write_path
 from conftest import (
     PREDEFINED_ENTRY_BODY,
     PREDEFINED_PLACE_BODY,
     RESPONSES_DIR,
     SRC_DIR,
     TESTS_DIR,
+    api_producer,
     per_scope_response,
     run_pipeline,
+    tf_bytes,
     tf_files,
     written_bytes,
 )
@@ -1874,3 +1884,110 @@ def test_the_record_names_the_read_set_in_run_order_for_a_targeted_run(tmp_path)
         "the record names the entry the selection states, which the run read as its own scope"
     )
     assert api_requests.scope_path("templates", "HQ-Networks") not in scopes, "no row for a name the selection excludes"
+
+
+# --- 11. the bytes a targeted run writes for the unit it selects (F11.3, `docs/MULTI_RUN_CODEBASE.md` §2 rule 6) ---
+
+# One unit, read both ways on the committed response set: the run that declares no selection, and the run that
+# selects `device-group/entry/Office-FW`. Both read through `conftest.api_producer`, so no pin calls a network, and
+# both read through the same cache, so the bytes come from the same response. The unit set is read through
+# `unit_manifest`, the unit's files through `write_path`, the printed form through `site_data`, and the block set
+# through the one block reader, so this group states no unit rule, no path rule, no file-shape rule and no
+# read-through rule of its own. The content the two runs read is inside the condition rule 6 states: the committed
+# responses name no read-through name, so the read-through branch answers nothing for either run.
+
+
+SELECTION = "device-group/entry/Office-FW"
+
+
+def _agreement_run(tmp_path, name: str, selection: str = "") -> tuple:
+    """One path 2 run on the committed response set, and the parts and the index the entry point built for it.
+
+    Both runs read through the same cache, so the record and the report name the same response, and the producer is
+    `conftest.api_producer`, so the pin reads the committed bytes and not a file copy of them.
+    """
+    argv = ["--host", HOST, "--cache-dir", str(tmp_path / "cache"), "--output-dir", str(tmp_path / name)]
+    if selection:
+        argv += ["--selection", selection]
+    args = api_to_terraform.build_parser().parse_args(argv)
+    parts, index = api_to_terraform.run_order(args, api_producer)
+    assert api_to_terraform.run(argv, api_producer) == 0, "the run wrote its output directory"
+    return tmp_path / name, parts, index
+
+
+def _agreement_unit(parts, index) -> str:
+    """The directory the run writes for the unit the selection names.
+
+    The unit is read through `api_requests.join_units` and its directory through `unit_manifest.directory_name`, so
+    this group states no unit rule, no join rule and no directory rule of its own: it only names which of the join's
+    answers is the one the selection states, through the path the name rule states.
+    """
+    entry = api_requests.entry_for_path(index, SELECTION)
+    assert entry is not None, "the run read the response for the selection, so its name is an index entry"
+    pairs = api_requests.join_units(index, _view(parts))
+    assert pairs, "the join answers a pair for the unit the selection names"
+    return unit_manifest.directory_name(next(f for f, _answered in pairs if entry.name in f), naming.sanitize)
+
+
+def test_a_targeted_run_writes_the_same_tf_bytes_as_the_full_run_for_the_unit_it_selects(tmp_path):
+    """F11.3 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 6): for content that names no read-through name, the `.tf` bytes a
+    targeted run writes for one unit are the bytes a full run writes for that unit, read as paths from the unit
+    directory (`docs/CODEBASE_ASSEMBLY.md` §14).
+    """
+    full, _parts_full, _index_full = _agreement_run(tmp_path, "full")
+    targeted, parts_targeted, index_targeted = _agreement_run(tmp_path, "targeted", SELECTION)
+    directory = _agreement_unit(parts_targeted, index_targeted)
+
+    bytes_full, bytes_targeted = tf_bytes(full / directory), tf_bytes(targeted / directory)
+    assert bytes_full and bytes_targeted, (sorted(bytes_full), sorted(bytes_targeted), "the pin measures content")
+    assert bytes_full == bytes_targeted, (directory, sorted(bytes_full), "the same .tf bytes for the unit")
+
+
+def test_the_printed_form_of_the_unit_agrees_between_the_two_runs(tmp_path):
+    """F11.3 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 6): the printed form of the site row is a unit-set file inside the
+    directory the row names, so the two runs are compared through `write_path.unit_path` and the names `site_data`
+    states. On the committed response set no unit names a value, so both runs write no record row and no printed
+    form: the half is measured as agreement on absence. The condition that would make it measure content is content
+    that names a device value, which a committed response cannot hold because the device fact a site value names is a
+    §4 live-only fact, so the condition is recorded in `backlog.md`.
+    """
+    full, _parts_full, _index_full = _agreement_run(tmp_path, "full")
+    targeted, parts_targeted, index_targeted = _agreement_run(tmp_path, "targeted", SELECTION)
+
+    directory = _agreement_unit(parts_targeted, index_targeted)
+
+    for out in (full, targeted):
+        assert not (out / site_data.SITE_DATA_FILE).is_file(), (out, "the run named no value for a site row")
+        assert not write_path.unit_path(out, directory, site_data.TFVARS_FILE).is_file(), (
+            out,
+            directory,
+            "no printed form for a unit that names no value",
+        )
+    assert tf_bytes(full / directory) == tf_bytes(targeted / directory), (
+        directory,
+        "the unit set is its .tf files plus its printed form, so the two sets agree",
+    )
+
+
+def test_neither_run_writes_a_read_through_block_for_content_that_names_no_read_through_name(tmp_path):
+    """F11.3 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 6): the agreement is stated for content that names no read-through
+    name, because the read-through branch answers a name the codebase owns and the run read no unit for. That branch
+    is F5.5's rule, pinned in `tests/test_data_blocks.py`, so this pin states no read-through rule of its own: it
+    reads the block set through `sanity_checks.blocks` and the read-through file name through its owner, and holds
+    that the committed content answers nothing for either run, which is what lets the byte agreement cover the unit's
+    whole file set.
+    """
+    full, _parts_full, _index_full = _agreement_run(tmp_path, "full")
+    targeted, parts_targeted, index_targeted = _agreement_run(tmp_path, "targeted", SELECTION)
+
+    directory = _agreement_unit(parts_targeted, index_targeted)
+
+    read_through = panorama_to_terraform.TerraformGenerator.READ_THROUGH_FILE
+    for out in (full, targeted):
+        blocks = sanity_checks.blocks(tf_files(out), ("data",))
+        assert not blocks, (out, blocks, "no read-through block for content that names no read-through name")
+        unit_file = write_path.unit_path(out, directory, read_through)
+        assert not unit_file.is_file(), (
+            unit_file,
+            "a run that names no read-through name writes no read-through file (F5.5)",
+        )
