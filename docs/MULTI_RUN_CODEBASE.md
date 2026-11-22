@@ -78,9 +78,18 @@ Three facts already hold, and they are the reason no new naming rule or identity
 4. **An ancestor the run reads as a reference source names no unit**, the `--parent` rule already pinned
    (`tests/test_reference_edges.py::test_a_declared_parent_source_adds_no_dependency`). The run builds rows for
    its own units and reads the ancestor for the ownership rule.
-5. **The run's unit set and the codebase's unit set are two facts, read through two rules.** The run's set is
-   `unit_manifest.units`, the set that names the directories the run writes. The codebase's set is the merged
-   manifest read through `unit_manifest.parse_rows`. Neither module counts units a second way.
+5. **The run's unit set and the codebase's unit set are two facts, read through one rule over two row sets.**
+   The run's set is `unit_manifest.units` over the rows its own ledger read, the set that names the directories
+   the run writes. The codebase's set is `unit_manifest.units` over the merged manifest rows read through
+   `unit_manifest.parse_rows`, so the same rule reads a row set the run read and a row set a record read back, and
+   no module counts units a second way: `codebase_state.py` restates no row shape and names no unit set of its
+   own, so it reads the unit rule through `unit_manifest`. The run's set is inside the codebase's set, because the
+   merge replaces the rows for the units the run built, and the units the codebase set names that the run set does
+   not are the units the run read only through the record. For a run that read nothing from the record the two sets
+   are the same set. Pinned by
+   `tests/test_unit_manifest.py::test_the_codebase_unit_set_is_read_through_the_one_unit_rule`,
+   `tests/test_unit_manifest.py::test_the_two_unit_sets_differ_only_by_the_units_read_through_the_record` and
+   `tests/test_codebase_state.py::test_the_merged_manifest_set_is_the_codebase_unit_set_read_through_the_one_unit_rule`.
 6. **A targeted run writes the same unit bytes as a full run writes for that unit**, for content that names no
    read-through name. The unit is read through `unit_manifest.units` (rule 5) and its directory through
    `unit_manifest.directory_name`, the bytes through `tests/conftest.py`'s `tf_bytes` read as paths from the unit
@@ -111,12 +120,13 @@ Three facts already hold, and they are the reason no new naming rule or identity
    `tests/test_data_file_gate.py::test_the_data_rule_reads_a_merged_record_through_the_same_reader`.
 2. **The merge rule, stated once, in `codebase_state.py`.** The run's rows replace the codebase's rows for the
    units the run built. The rows for the units the run did not build stay as the record states them. The module
-   defines no row shape, no reader, no identity key, no naming rule, no writer, no path rule, and no console
-   line: it reads each shape through its own module's `parse_rows`, the identity through
+   defines no row shape, no reader, no identity key, no naming rule, no writer, no path rule, no console line, and
+   no unit set of its own: it reads each shape through its own module's `parse_rows`, the identity through
    `state_coverage.ownership_key` and `unit_manifest`, and the writer through `write_path.py`. Pinned by
    `tests/test_codebase_state.py::test_the_run_rows_replace_the_codebase_rows_for_the_rows_the_run_built`,
-   `tests/test_codebase_state.py::test_the_merge_adds_no_field_so_a_merged_row_reads_back_as_itself` and
-   `tests/test_codebase_state.py::test_the_module_states_no_rule_an_owner_states_and_writes_no_file`.
+   `tests/test_codebase_state.py::test_the_merge_adds_no_field_so_a_merged_row_reads_back_as_itself`,
+   `tests/test_codebase_state.py::test_the_module_states_no_rule_an_owner_states_and_writes_no_file` and
+   `tests/test_codebase_state.py::test_the_merged_manifest_set_is_the_codebase_unit_set_read_through_the_one_unit_rule`.
 3. **The merge key is each record's own join key**, so no second key appears: the manifest on `directory`, the
    ownership record on `directory` and (`type`, `entry`), the edge record on `directory`, the site record on
    `directory`. A record the reader cannot read as its declared shape is a refusal, the rule `parse_rows`
@@ -194,8 +204,14 @@ Three facts already hold, and they are the reason no new naming rule or identity
 
 1. **The codebase is the output directory.** `--output-dir` names it, so no module gains a path rule, the write
    path keeps two builders, and no third file set appears.
-2. **The run writes what it built and deletes nothing.** A unit the run read only through the record is
-   untouched. A unit the run no longer has content for keeps the files an earlier run wrote, because the tool has
+2. **The run writes what it built and deletes nothing.** The run writes one directory per unit its own set names,
+   read through `unit_manifest.units` over the rows its own ledger read, and it writes no directory for a unit it
+   read only through the record: the files an earlier run wrote inside it stay as that run wrote them. Both sets are
+   read through `unit_manifest`, so the write path states no unit rule and no unit set of its own, keeps the two
+   builders of rule 1, and names no new file shape. The rule is stated in `write_path.py` rule 4, pinned by
+   `tests/test_write_path.py::test_the_run_writes_no_directory_for_a_unit_it_read_only_through_the_record` and
+   `tests/test_write_path.py::test_the_write_path_states_the_run_set_rule_and_reads_the_unit_set_through_its_owner`.
+   A unit the run no longer has content for keeps the files an earlier run wrote, because the tool has
    no delete rule; that boundary is recorded in `backlog.md`.
 3. **The tool owns every file it writes**, and `terraform.tfvars` stays the operator's own file
    (`CODEBASE_ASSEMBLY.md` §11). The run reports the units it wrote (§7); the byte difference between two runs is

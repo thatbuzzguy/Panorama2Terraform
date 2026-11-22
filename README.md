@@ -572,7 +572,9 @@ The records, the reports, and the write path:
   scope, the directory naming rule, the row shape read back as data, the reference names recorded by
   the reference rule, the no-change rule for the `.tf` goldens, the report bodies, the gate inputs,
   and the exit codes, and the byte rule between two runs. F8.7: the unit join in `api_requests.py` reads
-  this unit set through `unit_manifest.units`, so path 2 states no second unit rule
+  this unit set through `unit_manifest.units`, so path 2 states no second unit rule, and the same rule reads
+  the codebase's set from the rows a record read back, so the two sets differ only by the units a run read
+  only through the record
 - `tests/test_ownership.py` - the owner of a repeated name as data (`OWNERSHIP.json`): one row per entry a
   matrix row covers, the join to the manifest, the seven emitters that print the flag, the finding the rule
   cannot decide, and the golden bytes

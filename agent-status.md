@@ -2,13 +2,12 @@
 
 ## Current position
 
-Piece 11B.1 landed and is reviewed, 2026-11-22: the merge rule in `src/codebase_state.py`, one join key per
-record stated as data, the merge read through each record module's `parse_rows`, and the byte rule for a record
-that has no existing file. The pins are in `tests/test_codebase_state.py`, and the data rule's reader pin is in
-`tests/test_data_file_gate.py`. The piece is not pushed, and the review made no change, so nothing was committed.
-`acceptance.md` is the review record. The next piece is 11B.2, the run's unit set against the codebase's unit set. The design record for Epic 11, the codebase several runs write into, is
-`docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and `backlog.md` holds the conditions this piece could
-not state as rules.
+Piece 11B.2 landed, 2026-11-22: `unit_manifest.units` is the one unit rule over either row set, so the codebase
+unit set is read through the same rule as the run's set, and the rule that the run writes no directory for a unit
+it read only through the record is stated in `write_path.py` rule 4. Five pins, no golden moved, not pushed. The
+next piece is 11B.3, ownership, edges and the plan order read over the merged set. The design record for Epic 11,
+the codebase several runs write into, is `docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and
+`backlog.md` holds the conditions this piece could not state as rules. `acceptance.md` is this piece's record.
 
 Four decisions are agreed, and they are the shape of the record:
 
@@ -23,7 +22,40 @@ Four decisions are agreed, and they are the shape of the record:
 4. The merged records are the codebase-level view. The run's report gains one section that names the units the run
    built and the codebase units it did not read, so no fifth root-set file states the unit set a second time.
 
-What Piece 11B.1 landed:
+What Piece 11B.2 landed:
+
+- `src/unit_manifest.py` rule 4 now reads the same unit rule over both row sets: `units` answers for the rows the
+  run's ledger read and for the rows a record read back through `parse_rows`, because `facts_of` already reads a
+  ledger row and a read-back row the same way. A reader that has no ledger and no record names no unit, so it gets
+  the empty set. No second unit rule and no second unit set appears: `codebase_state.py` still restates no row
+  shape and names no unit set of its own, and the `src/` scans read the 24-module set clean.
+- The two facts and their difference, measured on the committed pair: the kitchen-sink run as the codebase answers
+  11 units, the `address_objects.xml` run answers 1 unit, the merged set answers the same 11, the run set is inside
+  the merged set, and the 10 units only the codebase set names are read as the record states them. For a run that
+  read nothing from the record the two sets are the same set, so no committed golden moves.
+- The write fact, measured on a real run that wrote into a copy of the kitchen-sink output: the run added no
+  directory, wrote no file inside the 10 directories the record names, and left every byte inside them as the first
+  run wrote them; it wrote inside the one directory its own set names. The rule is stated in `write_path.py` rule 4,
+  which keeps the two builders and the one writer and reads both sets through `unit_manifest`.
+- Five pins, one per fact, in the module that owns the fact: 2 in `tests/test_unit_manifest.py`, 2 in
+  `tests/test_write_path.py`, 1 in `tests/test_codebase_state.py`. Each pin is grounded on a committed run read
+  through `parse_rows`, and none builds a row by hand.
+- Two measured facts the piece left as they are, because they belong to another piece: a run writing into an
+  existing codebase exits 1 because the gate reads the whole codebase against the run's own ledger (Piece 11B.4),
+  and the run writes its own root records rather than the merged set because `generate_run` does not call the merge
+  (Phase 11C).
+
+Gate, measured 2026-11-22 on the tree that holds this piece, single-threaded: `ruff check .` is clean at `py310`,
+`ruff format --check .` is clean on the 108 files it reads (81 Python files, 27 markdown files),
+`python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` passes 1,772 pins with the same 4
+skips for the missing `tflint` binary — 1,776 pins in 54 test modules, 5 more than the 1,767 pins Piece 11B.1
+measured, in 236.45 s. Read through the per-module collection counts: `tests/test_unit_manifest.py` collects 41,
+`tests/test_write_path.py` collects 23, and `tests/test_codebase_state.py` collects 10, so the 5 new pins are 2, 2
+and 1. `terraform` is present on this machine, so the pins that read the live provider schema ran, and the 4 skips
+are the `tflint` pins in `tests/test_sanity_gate.py`. `src/` holds 24 modules, which is the count
+`docs/LICENSING.md` states. No committed golden changed.
+
+What Piece 11B.1 landed and was reviewed:
 
 - `src/codebase_state.py` states `JOIN_KEYS`, one row per record with the fields the key is built from and the fact
   the key joins on, and `merge_rows`, the merge rule in one function: the run's rows replace the codebase's rows for
@@ -49,7 +81,7 @@ What Piece 11B.1 landed:
 - Two conditions the piece cannot state as rules are in `backlog.md`, and no rule was invented for either: the site
   record's order for a row it reads back, and the ownership key holding one row for an entry two sources state.
 
-Gate, measured 2026-11-22 on the tree that holds this piece, single-threaded: `ruff check .` is clean at `py310`,
+Gate as Piece 11B.1 measured it, single-threaded, the baseline this piece reads: `ruff check .` is clean at `py310`,
 `ruff format --check .` is clean on the 108 files it reads (81 Python files, 27 markdown files),
 `python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` passes 1,767 pins with the same 4
 skips for the missing `tflint` binary — 1,771 pins in 54 test modules, 10 more than the 1,761 pins the previous piece
@@ -59,7 +91,7 @@ data rule's pins. `terraform` is present on this machine, so the pins that read 
 4 skips are the `tflint` pins in `tests/test_sanity_gate.py`. `src/` holds 24 modules, which is the count
 `docs/LICENSING.md` states. No committed golden changed.
 
-The next piece is 11B.2. `backlog.md` holds the conditions this piece recorded and the items that need a fact a live
+The next piece is 11B.3. `backlog.md` holds the conditions the pieces recorded and the items that need a fact a live
 target states:
 the device the operator adds to a device group for a new site, and the device serial a push target names
 (`docs/TEMPLATE_STACK_DEPLOYMENT.md` §4);
@@ -76,7 +108,7 @@ history holds them. `acceptance.md` holds the record for the current piece.
 ## Acceptance review of Piece 11B.1 (2026-11-22)
 
 The piece is reviewed at `4a5b871` and `0ee48a8`, both not pushed, and every committed criterion is met by the
-tree. The review changed nothing and committed nothing; `acceptance.md` is the review record. The join keys were
+tree. The review changed nothing and committed nothing; the review record is the git history. The join keys were
 re-measured on the 67 accepted fixtures through the record modules' own `parse_rows`: the key is unique per row
 for every record on every fixture, and `ownership.row_key`'s `source` part separates no pair the join key does
 not already separate. The site file order is the join-key order on all 7 fixtures with site rows, and the manifest

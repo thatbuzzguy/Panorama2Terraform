@@ -75,8 +75,8 @@ markdown set.
 The design record is `docs/MULTI_RUN_CODEBASE.md`. Phase 11A, the run's read set, is complete, so its detail is
 removed here. The open phases:
 
-- **11B, the records as codebase state**: the merge rule, the run's unit set against the codebase's unit set,
-  the cross-run ownership, edge and order facts, and the gate for a partial run.
+- **11B, the records as codebase state**: the cross-run ownership, edge and order facts, and the gate for a
+  partial run.
 - **11C, the update run**: the existing records as a reference source, the write boundary, the run's report
   section, and the move fact.
 

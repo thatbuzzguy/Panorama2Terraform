@@ -10,8 +10,6 @@ is pending says so. Acceptance criteria for the open piece are in `acceptance.md
 
 ### Phase 11B, the records as codebase state
 
-- **11B.2** — the run's unit set against the codebase's unit set, and the rule that the run writes no directory
-  for a unit it read only through the record.
 - **11B.3** — ownership, edges and the plan order read over the merged set, so an edge and `after` can name a
   unit another run wrote.
 - **11B.4** — the gate for a partial run: the block rules read the whole codebase, the data rule reads the merged
