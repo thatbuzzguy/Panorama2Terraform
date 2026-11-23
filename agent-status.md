@@ -2,13 +2,17 @@
 
 ## Current position
 
-Piece 11B.4 landed, 2026-11-22, and is not pushed: the gate for a partial run, as `docs/MULTI_RUN_CODEBASE.md` §5
-states it. Six pins, one committed module changed, no committed golden moved. The acceptance review read every
-criterion against the tree and met it, and corrected two things in the pins: the result of a check with no binary is
-`sanity_checks.SKIP` and not the word `SKIPPED`, and the single-run pin reads the directory a plan result names
-through the finding rather than through the note. Phase 11B is closed, so the next piece is 11C.1, the existing
-records as a reference source. The design record for Epic 11, the codebase several runs write into, is
-`docs/MULTI_RUN_CODEBASE.md`, the pieces are in `to-do.md`, and `acceptance.md` is this piece's review record.
+Piece 11B.4 is reviewed and closed, 2026-11-22, and neither commit is pushed: `4057502` holds the module and the
+pins, `f764957` holds the tracking markdown. The gate for a partial run, as `docs/MULTI_RUN_CODEBASE.md` §5 states
+it: six pins, one committed module changed, no committed golden moved. The acceptance review read every criterion
+against the tree and met it, re-measured the piece independently single-threaded, and corrected the things the
+first pass stated wrong: two documents and the `README.md` §Testing entry still read the plan check as running once
+per unit directory the record names, which is the pre-piece rule; the measurement attributed the 29 root findings to
+three records when two carry them; `tests/test_round_trip.py`'s pin list repeated one fact; `docs/MULTI_RUN_CODEBASE.md`
+§5 rule 5 named no pin; the wording about `sanity_checks.SKIP` read against its own value; and one `backlog.md`
+bullet lost its indent. Phase 11B is closed, so the next piece is 11C.1, the existing records as a reference source.
+The design record for Epic 11, the codebase several runs write into, is `docs/MULTI_RUN_CODEBASE.md`, the pieces are
+in `to-do.md`, and `acceptance.md` is this piece's review record.
 
 Four decisions are agreed, and they are the shape of the record:
 
@@ -47,24 +51,25 @@ What Piece 11B.4 landed:
   and `--tflint` today are unchanged, and the report bytes are unchanged.
 - Six pins, one per stated fact, in the module that owns the rule, all read on committed material and none building a
   row by hand: 4 in `tests/test_sanity_gate.py`, 1 in `tests/test_round_trip.py` and 1 in
-  `tests/test_data_file_gate.py`. The
-  pins that read the two command checks run with `terraform=None` or `tflint=None`, so they run on a machine with no
-  binary. The two-run pattern and the merged record set are facts more than one test module reads, so they are stated
+  `tests/test_data_file_gate.py`. The pins that read the two command checks pass `terraform=None` or `tflint=None`
+  and clear `PATH`, so the gate's own skip rule answers nothing on a machine that has a binary, and the pins read
+  the directory each check ran on from the result. The two-run pattern and the merged record set are facts more than one test module reads, so they are stated
   once in `tests/conftest.py` (`partial_run` and `write_merged_records`), read through `sanity_checks.DATA_FILES`,
   `codebase_state.JOIN_KEYS` and `write_path`; no test module states a pattern, a file set, a merge or a join key of
   its own, and no test module imports another test module.
 - The condition the piece could not state on committed material, recorded in `backlog.md`: the gate cannot show a
   clean partial run until the run writes the merged record at the root, which is Phase 11C. No severity rule was
   invented for it.
-- Gate, measured 2026-11-22 on the tree that holds this piece, single-threaded: `ruff check .` is clean at `py310`,
-  `ruff format --check .` is clean on the 108 files it reads (81 Python files, 27 markdown files),
-  `python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` passes 1,784 pins with the same 4
-  `tflint` skips — 1,788 pins in 54 test modules, counted from the per-module collection totals, 6 more than the
-  1,782 pins Piece 11B.3 measured — in 244.57 s. Read through the per-module collection counts:
-  `tests/test_sanity_gate.py` collects 118 (114 before), `tests/test_round_trip.py` 35 (34 before) and
-  `tests/test_data_file_gate.py` 29 (28 before). `terraform` is present on this machine, so the pins that read the
-  live provider schema ran, and the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py`. `src/` holds 24
-  modules, which is the count `docs/LICENSING.md` states. No committed golden changed.
+- Gate, measured 2026-11-22 on the tree after the review corrections, single-threaded: `ruff check .` is clean at
+  `py310`, `ruff format --check .` is clean on the 108 files it reads (81 Python files, 27 markdown files),
+  `python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` exits 0 with 1,784 pins passing and
+  the same 4 `tflint` skips, so 1,788 pins in 54 test modules, 6 more than the 1,782 pins Piece 11B.3 measured. Read
+  through the per-module collection counts: `tests/test_sanity_gate.py` collects 118 (114 before),
+  `tests/test_round_trip.py` 35 (34 before) and `tests/test_data_file_gate.py` 29 (28 before). `tflint` is absent on
+  this machine, so the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py` and each skips only for the
+  missing binary; `terraform` is present, so the pins that read the live provider schema ran. `src/` holds 24
+  modules, which is the count `docs/LICENSING.md` states. No committed golden changed, and the three single-run
+  reports read byte-identical against the module as it stood at `4057502^`.
 
 The records for Pieces 11B.1, 11B.2, 11B.3, E10.3 and F5.6 are not kept here: the git history holds them.
 
