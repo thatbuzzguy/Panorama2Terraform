@@ -318,6 +318,7 @@ The measurements taken 2026-11-22, single-threaded, in `/tmp/opencode`:
 - The gate answers the same on the pinned tool versions as on the newer ones, apart from the one ruff finding listed
   in `backlog.md`.
 
-The open fact is the Terraform floor: `>= 1.14` names a line whose upstream security support ended 2026-08-26,
-while the project measures on 1.16 (CI pins 1.16.1, this machine runs 1.16.2). The gate baseline this task starts
-from is the one measured on 2026-11-22 in the Current position above.
+The two decisions, taken 2026-11-22: the floor is `>= 1.16` with CI at 1.16.7, so no statement in the documents
+reaches past what was measured, and the Terraform minimum gets one owner the way the provider version has one. The
+pieces are 12A.1 to 12A.3 in `to-do.md`, and the gate baseline this task starts from is the one measured on
+2026-11-22 in the Current position above.

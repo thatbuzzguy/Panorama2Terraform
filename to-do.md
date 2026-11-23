@@ -18,29 +18,28 @@ is pending says so. Acceptance criteria for the open piece are in `acceptance.md
 The move fact, the stale-file boundary, the selection for a `vsys` or a device unit, and the `--prune-cache`
 consequence are in `backlog.md`.
 
-## The version pins (plan in `PLAN.md`, criteria in `acceptance.md`)
+## Epic 12 — the pins (plan in `PLAN.md`, criteria in `acceptance.md`)
 
-Run in the `pin-update` worktree, because main is held by another agent. The measurements the pieces rest on are
-in `acceptance.md`; the pieces are the parts of the move, and none of them is open until the floor is decided.
+Run in the `pin-update` worktree, because main is held by another agent. The two decisions are in `PLAN.md`: the
+floor is `>= 1.16` with CI at 1.16.7, and the minimum gets one owner. The provider pin moves to `~> 2.0.15` on the
+schema measurement, which changes no measured provider fact.
 
-- **P.1** — the floor decision. The provider half is settled by the measurement: the schema answer for 2.0.14 and
-  2.0.15 is byte-identical, so `~> 2.0.14` moves to `~> 2.0.15` and no measured provider fact changes. The Terraform
-  half is open: `>= 1.14` names a line upstream no longer supports, so the choice is the line the evidence covers
-  (1.16, newest patch 1.16.7) against the current line (1.17, newest patch 1.17.2), which needs CI and the local
-  tool to move first.
-- **P.2** — one owner for the minimum. The provider version has one owner, `tests/conftest.py::declared_provider`.
-  The minimum is written by three places (the `terraform` block in `src/panorama_to_terraform.py`, the generated
-  `README.md`, and the generated `actions.tf` header in `src/commit_actions.py`) and read by one pin, so the piece
-  decides whether the minimum gets one owner too, and moves the two pins in `tests/test_commit_actions.py` that
-  state the version as a string.
-- **P.3** — the bytes the pins state: the head comment and the `terraform` block in `src/panorama_to_terraform.py`,
-  `tests/tflint/probe.tf`, the 17 golden `provider.tf` files, the 6 golden `actions.tf` files that carry the
-  Terraform line, and `requirements.txt` and `.github/workflows/python-tests.yml` for the tool pins. A minimum
-  change is a golden change, so the template and the goldens move in one commit.
-- **P.4** — the statements that name the pinned provider: `README.md`, `docs/USAGE_GUIDE.md`,
+- **12A.1** — one owner for the minimum: the constant the `terraform` block, the generated `README.md` line and the
+  generated `actions.tf` header read, and one helper in `tests/conftest.py` beside `declared_provider`, so the pins
+  read the version through it instead of stating it as a literal string. The two pins in
+  `tests/test_commit_actions.py` that state the string move to the helper.
+- **12A.2** — the bytes the pins state: the head comment and the `terraform` block in `src/panorama_to_terraform.py`,
+  `tests/tflint/probe.tf`, the 17 golden `provider.tf` files, the 6 golden `actions.tf` files that carry the Terraform
+  line, `requirements.txt`, and `terraform_version` in `.github/workflows/python-tests.yml`. A minimum change is a
+  golden change, so the template and the goldens move in one commit.
+- **12A.3** — the statements that name the pinned provider: `README.md`, `docs/USAGE_GUIDE.md`,
   `docs/RESOURCE_MAPPING.md`, `docs/COVERAGE_MATRIX.md`, and `docs/CODEBASE_ASSEMBLY.md` §12. §12 is the one place
   that states why the 2.0.14 measurements hold for 2.0.15, so the dated measurements stay as they were measured and
-  one sentence names the schema identity.
+  one sentence names the schema identity. The gate is re-measured on the CI line, because the recorded measurements
+  name Terraform 1.16.2 while CI will run 1.16.7.
+
+The ruff half is in `backlog.md`: the newer version reports one finding the pinned version does not, so that pin
+moves with its own change or not at all.
 
 ## Feature-sized items that stay blocked
 

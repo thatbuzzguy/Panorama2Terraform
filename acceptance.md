@@ -1,9 +1,9 @@
 # Acceptance — criteria for the pin update (2026-11-22)
 
 The task is the version pins: the provider constraint, the Terraform minimum, and the tool pins CI runs the
-gate with. This is the criteria record, not a review record: no pin moves until the Terraform floor is decided,
-and a pin move is a golden change, so the template, the goldens, the probe, CI and the documents that state the
-version move in one commit with the measurements that cover the new pin.
+gate with. Two decisions were taken on these criteria, 2026-11-22: the floor is `>= 1.16` with CI at 1.16.7, and the
+Terraform minimum gets one owner. A pin move is a golden change, so the template, the goldens, the probe, CI and the
+documents that state the version move in one commit with the measurements that cover the new pin.
 
 The work is in the `pin-update` worktree, because another agent holds main. The files there are the plan; the
 measurement record for main is not changed by it.
@@ -15,8 +15,9 @@ measurement record for main is not changed by it.
    change and no rule change. The Terraform minimum is written by three places — the `terraform` block in
    `src/panorama_to_terraform.py`, the generated `README.md`, and the generated `actions.tf` header in
    `src/commit_actions.py` — and read by `tests/test_commit_actions.py::test_the_generated_terraform_block_declares_the_minimum`
-   and `::test_the_generated_readme_names_the_file_and_the_minimum`. The piece decides whether the minimum gets one
-   owner, the way the provider version has one, so a move changes one place and not five.
+   and `::test_the_generated_readme_names_the_file_and_the_minimum`. The decision is that the minimum gets the same
+   shape: one constant read by the three places, and one helper in `tests/conftest.py` read by the pins, so a move
+   changes one place and not five.
 2. **A pin move moves the goldens with it.** 17 `provider.tf` files and 6 `actions.tf` files carry the version
    strings byte for byte. The template and the goldens are one commit, and the no-change tests read the same bytes.
 3. **Provider facts stay measurements.** The documents that state provider facts name the pinned provider, so the
