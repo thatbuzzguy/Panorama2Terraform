@@ -1,6 +1,6 @@
 """F5.6 state coverage: the ownership fact and the drift fact.
 
-Seven groups, one per acceptance rule:
+Eight groups, one per acceptance rule:
 
 1. The state entry shape the scan reads: the matrix row is the row keyed by the resource type
    through the same table, the properties are read with the F4.3 rule, and the position is the
@@ -19,10 +19,13 @@ Seven groups, one per acceptance rule:
 7. The comparison table: the rows are a measurement per matrix row type against the pinned provider
    schema, the scan reads the mapping only through the table, and the same-name rule stands where the
    table has no row.
+8. The existing codebase records as a reference source: read as data through the readers the shape owners
+   state, and the half the read reaches (`docs/MULTI_RUN_CODEBASE.md` §4 rule 1).
 
 Every test uses a committed fixture, so no test opens a connection. The run side is
 `tests/fixtures/address_objects.xml`; the state side is `tests/fixtures/state_workspace.json`. The pins
-in group 7 read the live provider schema through `tests/conftest.py`, which owns the skip rule.
+in group 7 read the live provider schema through `tests/conftest.py`, which owns the skip rule, and the pins
+in group 7 and group 8 read the committed pair through `tests/conftest.py`.
 """
 
 import ast
@@ -30,22 +33,35 @@ import contextlib
 import inspect
 import io
 import sys
+from pathlib import Path
 
 import pytest
 
+import codebase_state
 import container_coverage
 import entry_coverage
 import import_blocks
+import ownership
 import provenance
 import resource_mapping
 import sanity_checks
 import state_coverage
 import state_input
-from conftest import FIXTURES_DIR, SRC_DIR, run_main, run_pipeline, written_bytes
+from conftest import (
+    CODEBASE_FIXTURE,
+    FIXTURES_DIR,
+    JOIN_RECORDS,
+    RUN_FIXTURE,
+    SRC_DIR,
+    partial_run,
+    record_rows,
+    run_main,
+    run_pipeline,
+    written_bytes,
+)
 from xml_input import parse_xml
 
 STATE_FIXTURE = "state_workspace.json"
-RUN_FIXTURE = "address_objects.xml"
 SERVICE_FIXTURE = "service_groups.xml"
 REGION_FIXTURE = "regions.xml"
 GROUP_FIXTURE = "address_groups.xml"
@@ -683,3 +699,86 @@ def test_a_mapped_pair_prints_both_names_in_the_drift_line(converter_module, tmp
     assert state_coverage.drift_line(finding) == expected, state_coverage.drift_line(finding)
     assert expected in _section(_report(out), state_coverage.DRIFT_HEADING), _report(out)
     assert len(expected.splitlines()) == 1, "one finding stays on one line"
+
+
+# --- 8. The existing codebase records as a reference source -------------------
+
+
+def test_the_reference_source_is_read_as_data_through_the_readers_the_shape_owners_state(tmp_path):
+    """§4 rule 1: an update run reads the records the codebase already holds as data, through the reader each shape
+    owner states, and `state_coverage` gains no reader, path rule, shape or unit rule of its own. Each record is
+    read through its own module's `parse_rows` and the sets are combined only through `codebase_state.merge_rows`,
+    so the read is the same data read the gate already makes and no container table, parent walk, expat line map or
+    second key appears in it.
+
+    Measured 2026-11-22 on the committed pair through `tests/conftest.py`: the kitchen-sink run is the codebase and
+    `address_objects.xml` is the second run, so the read answers 11, 61, 9 and 3 rows through `parse_rows` and the
+    merge answers 11, 62, 9 and 3. Read through `ast`, `state_coverage.py` defines no reader, writer, path rule, row
+    shape or unit rule of its own, so the entry point is the only reader and it reads through the owners.
+    """
+    codebase_dir, partial_dir, _second = partial_run(CODEBASE_FIXTURE, RUN_FIXTURE, tmp_path)
+    held = record_rows(codebase_dir)
+    built = record_rows(partial_dir)
+    merged = {module: codebase_state.merge_rows(JOIN_RECORDS[module], held[module], built[module]) for module in held}
+    assert {module.__name__: len(merged[module]) for module in merged} == {
+        "unit_manifest": 11,
+        "ownership": 62,
+        "reference_edges": 9,
+        "site_data": 3,
+    }, merged
+
+    tree = ast.parse(Path(state_coverage.__file__).read_text(encoding="utf-8"))
+    defined = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    defined |= {
+        target.id
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+    for name in (
+        "units",
+        "facts_of",
+        "row_key",
+        "parse_rows",
+        "render",
+        "read_text",
+        "write_file",
+        "root_path",
+        "unit_path",
+    ):
+        assert name not in defined, (name, "the module reads this rule through its owner")
+    assert "ownership_key" in defined and "STATE_PROPERTY_NAMES" in defined, (
+        "the reference read reaches the module through the two rules it states",
+    )
+
+
+def test_the_reference_read_reaches_the_ownership_half_and_no_property_value(tmp_path):
+    """§4 rule 1, the half the read reaches: `ownership_key` answers for a row read back from the record as it does
+    for a state entry, so the reference read reaches the ownership half of the scan. The comparison half cannot be
+    answered from the record, because `ownership.FIELD_ORDER` holds no field the comparison table names, so a merged
+    row carries no property value and the value side comes only from the state read the door makes. The finding half
+    stays on the rows the run built, because `ownership.findings` reads `line`, `container` and `reason`, which
+    `parse_rows` does not read back.
+
+    Measured 2026-11-22 on the committed pair through `tests/conftest.py`: for the pair both sides hold
+    (`panos_address_group`, `Web-Servers`), the key rule answers the same key for the state entry and for the merged
+    row, the table row for that type is one pair, and no field of that pair is a field of the ownership row.
+    """
+    codebase_dir, partial_dir, _second = partial_run(CODEBASE_FIXTURE, RUN_FIXTURE, tmp_path)
+    held = record_rows(codebase_dir)
+    built = record_rows(partial_dir)
+    merged = codebase_state.merge_rows(JOIN_RECORDS[ownership], held[ownership], built[ownership])
+    row = next(row for row in merged if row["type"] == GROUP_TYPE and row["entry"] == GROUP_ENTRY)
+    state = state_input.read_state(FIXTURES_DIR / STATE_FIXTURE, workspace=WORKSPACE)
+    entry = _entry(state, GROUP_ENTRY, GROUP_TYPE)
+
+    assert state_coverage.ownership_key(entry.resource_type, entry.entry_name, state_coverage.state_facts(entry)) == (
+        codebase_state.join_key(JOIN_RECORDS[ownership], row)
+    ), "the one key rule reaches a row read from the record as it reaches a state entry"
+    names = state_coverage.STATE_PROPERTY_NAMES[row["type"]]
+    assert names == {MAPPED_KEY: MAPPED_STATE_NAME}, names
+    assert [field for field in ownership.FIELD_ORDER if field in names] == [], (
+        "the record row shape holds no property field, so the reference read supplies no value to compare"
+    )
+    assert MAPPED_KEY not in row, row

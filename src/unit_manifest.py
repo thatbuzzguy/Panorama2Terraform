@@ -34,7 +34,11 @@ stated once here.
    `tests/test_unit_manifest.py::test_the_codebase_unit_set_is_read_through_the_one_unit_rule` and
    `tests/test_unit_manifest.py::test_the_two_unit_sets_differ_only_by_the_units_read_through_the_record`.
    The rule that the run writes no directory for a unit it read only through the record is stated in
-   `write_path.py` rule 4, because that module owns the two file sets.
+   `write_path.py` rule 4, because that module owns the two file sets. The units an update run wrote are
+   the units this rule names over the rows its own ledger built, so the directories it wrote inside are the
+   directories its own set names, read through `directory_name` and `naming.py`, the one naming rule
+   `write_path` uses for both sets. Pinned by
+   `tests/test_unit_manifest.py::test_the_units_the_run_names_are_the_units_it_wrote_files_inside`.
 5. The unit order lives on this row, as `rank` and `after`, because this file is the place that
    names each unit; a fourth data file that listed directories would be a second place that states
    the unit set. This module states the row shape only. `reference_edges.order` fills the two

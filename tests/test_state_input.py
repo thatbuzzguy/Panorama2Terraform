@@ -30,10 +30,15 @@ import provenance
 import source_fetch
 import state_input
 import xml_input
-from conftest import FIXTURES_DIR, RESPONSES_DIR, run_main, run_script
+from conftest import (
+    FIXTURES_DIR,
+    RESPONSES_DIR,
+    RUN_FIXTURE,
+    run_main,
+    run_script,
+)
 
 STATE_FIXTURE = "state_workspace.json"
-RUN_FIXTURE = "address_objects.xml"
 WORKSPACE = "production"
 
 # The committed response for the shared read, named by the key-free identity of the request that produced it

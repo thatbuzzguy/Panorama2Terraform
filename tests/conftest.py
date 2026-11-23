@@ -43,6 +43,11 @@ EXAMPLES_DIR = REPO_ROOT / "examples"
 SAMPLE_CONFIG = EXAMPLES_DIR / "sample_panorama_config.xml"
 FIXTURES_DIR = TESTS_DIR / "fixtures"
 GOLDEN_DIR = TESTS_DIR / "golden"
+# The committed pair the reference-source pins read through `partial_run`: the run that builds a whole codebase,
+# and a second run that names one unit inside it. Both records are read through `parse_rows`, the one reader of
+# the row shape, so this is the one place the pair's names are stated.
+CODEBASE_FIXTURE = "kitchen_sink.xml"
+RUN_FIXTURE = "address_objects.xml"
 # The committed API responses (F8.4). A response is not a Panorama export, so the scan and the fixture
 # assembler never read it: `FIXTURES_DIR` is the corpus, and this is a separate set (§1.1).
 RESPONSES_DIR = TESTS_DIR / "responses"

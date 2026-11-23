@@ -2,7 +2,7 @@
 file one record per source the run read, so a two-source run writes the main record and
 the parent record.
 
-Six rules, stated once here.
+Seven rules, stated once here.
 
 1. What the record states, in this field order: the source kind, the source name, the
    path, the scope the source holds, the request identity, the cache entry, the size of
@@ -34,6 +34,10 @@ Six rules, stated once here.
    `xml_input.DEFAULT_SCOPE`, a per-scope request states the path it declared, and a state source states the
    workspace the run declared. A state source has no request, so its two request fields are `-` and its record
    references nothing: it prunes nothing.
+7. The record names the sources the door read. A record read back through a record module's reader is a data read,
+   not a door source, so an update run that reads the codebase's existing records names none of them and gains no
+   source kind, no field and no record entry: its record is the record the same run writes when it reads nothing.
+   Pinned by `tests/test_provenance.py::test_an_update_run_names_only_the_sources_the_door_read`.
 
 The record is a run output, not a report body. The report bodies name the source name and
 never the path (F4.2 rule 6), so the path field here does not touch the report byte rule.

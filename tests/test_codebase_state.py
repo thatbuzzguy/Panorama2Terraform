@@ -14,6 +14,8 @@ the row shape through the module that owns it:
 4. The merge holds no run field, and the order of a merged set is read through each record's own order rule, not
    through which side a row came from.
 5. The module states no rule an owner states and writes no file, so the `src/` scans read it clean.
+6. The run's read step (`docs/MULTI_RUN_CODEBASE.md` §4 rule 1): the entry point reads the four records as data
+   through the owners' readers, the merge and the unit rule, and states no rule of its own.
 
 Every pin runs offline and is grounded on committed material: the codebase's rows are the rows a run wrote for
 `tests/fixtures/kitchen_sink.xml`, and the run's rows are the rows a run wrote for
@@ -22,6 +24,7 @@ hand. The four cases the byte rule pin reads are the four cases the golden set n
 """
 
 import ast
+import inspect
 from pathlib import Path
 
 import codebase_state
@@ -32,12 +35,18 @@ import sanity_checks
 import site_data
 import state_coverage
 import unit_manifest
-from conftest import EXAMPLES_DIR, FIXTURES_DIR, JOIN_RECORDS, SRC_DIR, run_records
+from conftest import (
+    CODEBASE_FIXTURE,
+    EXAMPLES_DIR,
+    FIXTURES_DIR,
+    JOIN_RECORDS,
+    RUN_FIXTURE,
+    SRC_DIR,
+    run_records,
+)
 
 CONVERTER = "panorama_to_terraform.py"
 # The committed material the pins read: the codebase, and a second run that names one unit inside it.
-CODEBASE_FIXTURE = "kitchen_sink.xml"
-RUN_FIXTURE = "address_objects.xml"
 # The four cases the golden set names, so the byte rule is read on the same committed material the goldens read.
 GOLDEN_CASES = (CODEBASE_FIXTURE, RUN_FIXTURE, "filter_containers.xml", "sample_panorama_config.xml")
 
@@ -358,3 +367,55 @@ def test_the_module_states_no_rule_an_owner_states_and_writes_no_file():
         assert fact, record
         assert order is None or callable(order) or all(isinstance(field, str) for field in order), record
         assert key_rule is None or key_rule is state_coverage.ownership_key, record
+
+
+# --- 6. The run's read step ----------------------------------------------------
+
+
+def test_the_run_reads_the_existing_records_through_the_readers_the_shapes_owners_state(converter_module, tmp_path):
+    """§4 rule 1: the entry point owns the read step, and every rule it uses is read through its owner. It reads the
+    file set through `sanity_checks.DATA_FILES`, the path through `write_path.root_path`, each shape through the
+    module that owns that shape's `parse_rows`, the combination through `codebase_state.merge_rows`, and the unit
+    sets through `unit_manifest.units`, so the step states no key, shape, reader, path rule, unit rule or list of
+    record names of its own and the run gains no field. The step reads the four records only, so it reads no report
+    as data, and the report rule stays the rule that reads a report as output.
+
+    Measured 2026-11-22 on the committed pair through `tests/conftest.py`: the codebase's rows read back through
+    `parse_rows` are 11, 61, 9 and 3, the rows the run built are 1, 5, 9 and 3, and `merge_rows` answers 11, 62, 9
+    and 3. The four single-run cases read nothing, so the merged set is the set each run built, which is why no
+    committed golden moves.
+    """
+    step = inspect.getsource(converter_module.generate_run)
+    read = step[step.index("for name, module in sanity_checks.DATA_FILES") :]
+    assert "for name, module in sanity_checks.DATA_FILES" in read, (
+        "the file set is read through the data rule, so the step states no set of its own",
+    )
+    assert "write_path.root_path" in read, "the path is read through the path rule"
+    assert "module.parse_rows(" in read, "each shape is read through the module that owns it"
+    assert "codebase_state.JOIN_KEYS" in read and "codebase_state.merge_rows(" in read, (
+        "the two row sets are combined through the join key and the merge rule",
+    )
+    assert "unit_manifest.units" in step, "the unit sets are read through the one unit rule"
+
+    for token in (
+        "open(",
+        "write_text",
+        ".json",
+        "CONSOLE_PREFIX",
+        "os.environ",
+        "row_key",
+        "ownership_key",
+        "FIELD_ORDER",
+        "SITE_ROW_FIELDS",
+    ):
+        assert token not in step, (token, "the read step states no rule an owner states")
+
+    codebase = _rows(CODEBASE_FIXTURE, tmp_path / "codebase")
+    run_rows = _rows(RUN_FIXTURE, tmp_path / "run")
+    merged = {module: _merged(module, codebase[module], run_rows[module]) for module in codebase}
+    assert {module.__name__: len(merged[module]) for module in merged} == {
+        "unit_manifest": 11,
+        "ownership": 62,
+        "reference_edges": 9,
+        "site_data": 3,
+    }, merged

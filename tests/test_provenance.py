@@ -1,6 +1,6 @@
 """F5.3 provenance record: what one run read, and the report label that names it.
 
-Six groups, one per acceptance rule:
+Seven groups, one per acceptance rule:
 
 1. What the record states: the eight fields, the values a file run and an api run write,
    and the byte facts measured by the door.
@@ -14,6 +14,9 @@ Six groups, one per acceptance rule:
 6. The record directory and the prune action: the record is a codebase root-set file, so the
    action reads the record file the same run wrote; what it removes, what it keeps, what it
    refuses, and what it cannot change.
+7. The reference source is not a door read (`docs/MULTI_RUN_CODEBASE.md` §4 rule 1): a record read back
+   through `parse_rows` is a data read, so an update run names none of the codebase's records and gains
+   no source kind, no field and no record entry.
 
 The path 2 case (F8.6) is pinned inside groups 1, 2 and 6: the record names the request that made each
 response, the record file holds one record per request the run read, and the action protects every entry a
@@ -38,11 +41,14 @@ import sanity_checks
 import write_path
 import xml_input
 from conftest import (
+    CODEBASE_FIXTURE,
     FIXTURES_DIR,
     RESPONSES_DIR,
+    RUN_FIXTURE,
     SAMPLE_CONFIG,
     data_file_set,
     file_text,
+    partial_run,
     run_main,
     run_script,
     tf_files,
@@ -895,3 +901,43 @@ def test_a_state_record_protects_no_entry_when_the_action_runs(converter_module,
     assert records[1].cache_entry == provenance.ABSENT, "the state record references nothing"
     assert not stale.is_file(), "the state record protected nothing"
     assert (cache / fetch_module.ApiRequest(host=HOST).cache_name()).is_file(), "the api record protects its entry"
+
+
+# --- 7. The reference source is not a door read --------------------------------
+
+
+def test_an_update_run_names_only_the_sources_the_door_read(tmp_path):
+    """§4 rule 1: the record names what the door read, and a record read back through `parse_rows` is a data read,
+    not a door source, so an update run that reads the codebase's existing records names none of them. It gains no
+    source kind, no field and no record entry: the field order is the eight fields it states today, and the run's
+    record is the record the same run would write with nothing to read.
+
+    Measured 2026-11-22 on the committed pair through `tests/conftest.py`: the kitchen-sink run is the codebase and
+    `address_objects.xml` is the second run. The update run's record holds one record, kind `file`, name
+    `address_objects.xml`, and is byte-identical to the record the same run wrote standalone. The record names none
+    of the four file names the data rule states, so no record file appears as a source.
+    """
+    codebase_dir, partial_dir, _second = partial_run(CODEBASE_FIXTURE, RUN_FIXTURE, tmp_path)
+    standalone = tmp_path / "standalone"
+    assert (
+        run_script(
+            "panorama_to_terraform.py", str(FIXTURES_DIR / "address_objects.xml"), "--output-dir", str(standalone)
+        ).returncode
+        == 0
+    )
+
+    update = provenance.parse_records((partial_dir / provenance.PROVENANCE_FILE).read_text(encoding="utf-8"))
+    single = provenance.parse_records((standalone / provenance.PROVENANCE_FILE).read_text(encoding="utf-8"))
+    assert update == single, "the reference read adds no record entry"
+    assert [(record.kind, record.name) for record in update] == [("file", "address_objects.xml")], update
+    assert len(provenance.FIELD_ORDER) == 8, provenance.FIELD_ORDER
+    assert "source" not in provenance.FIELD_ORDER and "read" not in provenance.FIELD_ORDER, (
+        "the record holds no field for a record the run read as data",
+    )
+    text = (partial_dir / provenance.PROVENANCE_FILE).read_text(encoding="utf-8")
+    assert [name for name, _module in sanity_checks.DATA_FILES if name in text] == [], (
+        "the record names no record file as a source",
+    )
+    assert (partial_dir / provenance.PROVENANCE_FILE).read_bytes() == (
+        standalone / provenance.PROVENANCE_FILE
+    ).read_bytes(), ("the reference read adds nothing to the record",)

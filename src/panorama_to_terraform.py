@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 import api_requests
+import codebase_state
 import commit_actions
 import container_coverage
 import entry_coverage
@@ -7485,9 +7486,38 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
     # F6.1: the unit as data. One row per declared scope, from the ledger the parse already writes and the
     # names `name_ref` recorded at the sites that applied the rule. The rows are built before the report,
     # because a cycle finding reads its grouping facts through the manifest row.
-    manifest_rows = reference_edges.order(
-        unit_manifest.build_rows(view, tf_gen.unit_references(), tf_gen.sanitize_name), ownership_rows, edge_rows
-    )
+    run_rows = {
+        unit_manifest: unit_manifest.build_rows(view, tf_gen.unit_references(), tf_gen.sanitize_name),
+        ownership: ownership_rows,
+        reference_edges: edge_rows,
+        # The run's own site rows are built after the emitters printed, because the declaration set is the site
+        # values the value-to-variable table mapped at the print sites, so the reference read gains the codebase's
+        # rows for that record and the run adds none to them.
+        site_data: [],
+    }
+    # Epic 11 Piece 11C.1 (`docs/MULTI_RUN_CODEBASE.md` §4 rule 1): the records the codebase already holds are a
+    # reference source, read as data. The entry point owns the read; the file set, the path, each row shape, the
+    # merge, the unit set and the order are read through their owners, so this step states no rule of its own and
+    # the run gains only the fields `parse_rows` reads back. A run that reads nothing merges into the rows it built,
+    # so a single run writes the bytes it writes today. The rows it read are not a door source, so `SOURCE.txt` names
+    # no record for them, and the run writes the rows it built rather than the merged set
+    # (`docs/MULTI_RUN_CODEBASE.md` §6 rule 2).
+    reference = {}
+    for name, module in sanity_checks.DATA_FILES:
+        path = write_path.root_path(run.output_dir, name)
+        held = module.parse_rows(path.read_text(encoding="utf-8")) if path.is_file() else []
+        record = [entry for entry in codebase_state.JOIN_KEYS if entry[0] is module][0]
+        reference[module] = codebase_state.merge_rows(record, held, run_rows[module])
+
+    # The order rule and the acyclic rule read the merged set, because `rank`, `after` and a cycle are facts about
+    # the codebase and not about a run, and every fact they read is a field `parse_rows` reads back. The ownership
+    # finding half reads `line`, `container` and `reason`, which `parse_rows` does not read back, so it stays on the
+    # rows the run built.
+    ordered = reference_edges.order(reference[unit_manifest], reference[ownership], reference[reference_edges])
+    # The rows the run writes are the rows it built, and `units` over those rows names them, so the run's set and the
+    # codebase's set stay one rule over two row sets (`docs/MULTI_RUN_CODEBASE.md` §2 rule 5).
+    run_units = set(unit_manifest.units(run_rows[unit_manifest]))
+    manifest_rows = [row for row in ordered if unit_manifest.facts_of(row) in run_units]
     # F5.6: the state scan reads the same row rule, so the matrix row that covers a run entry is the row
     # that covers the state resource. A run with no declared state source reads no state, so it reports
     # neither fact.
@@ -7497,7 +7527,7 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
         shadows,
         state_findings,
         ownership.findings(ownership_rows),
-        reference_edges.findings(edge_rows, manifest_rows),
+        reference_edges.findings(reference[reference_edges], ordered),
     )
 
     # F5.3: the provenance record, in the order the run read the sources. Written outside the report bodies,

@@ -1,7 +1,8 @@
 """F6.1: the unit boundary as data, the codebase manifest.
 
-Eight groups, one per rule in `unit_manifest.py` (`docs/CODEBASE_ASSEMBLY.md` §3), and the last group for the
-two unit sets Piece 11B.2 states (`docs/MULTI_RUN_CODEBASE.md` §2 rule 5):
+Nine groups, one per rule in `unit_manifest.py` (`docs/CODEBASE_ASSEMBLY.md` §3), and the last two groups for
+the two unit sets Piece 11B.2 states (`docs/MULTI_RUN_CODEBASE.md` §2 rule 5) and for the units an update run wrote
+(`docs/MULTI_RUN_CODEBASE.md` §4 rule 1):
 
 1. The unit. One row per combination of the five scope facts, built from the ledger
    `entry_coverage.py` already writes, so F6.1 adds no parse data. F8.7: the unit join in
@@ -16,6 +17,9 @@ two unit sets Piece 11B.2 states (`docs/MULTI_RUN_CODEBASE.md` §2 rule 5):
 5. The no-change rule. The `.tf` bytes, the report bytes, the gate inputs, and the exit codes.
 6. The CLI, and the rule that a file is written only when it has content.
 7. Determinism. Two runs on the same bytes write the same bytes.
+8. The two unit sets, read through the one rule over two row sets.
+9. The units an update run wrote: `units` over the rows its own ledger built, so the directories it wrote
+   inside are the directories its own set names.
 
 The manifest names the directory; F6.1 does not write one. Every test runs offline.
 """
@@ -43,18 +47,23 @@ import site_data
 import source_fetch
 import unit_manifest
 from conftest import (
+    CODEBASE_FIXTURE,
     FIXTURES_DIR,
     GOLDEN_DIR,
     RESOURCE_ADDRESS_RE,
     RESPONSES_DIR,
+    RUN_FIXTURE,
     SAMPLE_CONFIG,
     SRC_DIR,
     corpus_fixtures,
     data_file_set,
     file_text,
+    partial_run,
+    record_rows,
     run_script,
     tf_bytes,
     tf_files,
+    written_bytes,
 )
 
 CONVERTER = "panorama_to_terraform.py"
@@ -67,8 +76,6 @@ MANIFEST = unit_manifest.MANIFEST_FILE
 # The committed pair the two unit sets are read on (Piece 11B.2): the run that builds a whole codebase, and a
 # second run that names one unit inside it. Both records are read through `parse_rows`, the one reader of the
 # row shape, and the run's own set is read through `units`.
-CODEBASE_FIXTURE = "kitchen_sink.xml"
-RUN_FIXTURE = "address_objects.xml"
 
 # The reference names the grouping fixture produces, keyed by the referrer's five facts.
 GROUPING_REFERENCES = {
@@ -895,3 +902,49 @@ def test_the_two_unit_sets_differ_only_by_the_units_read_through_the_record(conv
     # set is its own set and the difference between the two sets is empty.
     assert unit_manifest.units(codebase_state.merge_rows(record, [], codebase_rows)) == codebase_set
     assert unit_manifest.units(codebase_state.merge_rows(record, [], run_rows)) == run_set
+
+
+# --- 9. The units an update run wrote (Epic 11, Piece 11C.1) -------------------
+
+
+def test_the_units_the_run_names_are_the_units_it_wrote_files_inside(converter_module, tmp_path):
+    """§4 rule 1: the units an update run wrote are `unit_manifest.units` over the rows its own ledger built, and the
+    units it read only through the record are the same rule over the merged rows. The run states no second unit set,
+    so the directories it wrote inside are the directories its own set names, read through `directory_name` and the
+    sanitize rule in `naming.py`, the one naming rule `write_path` uses for both sets.
+
+    Measured 2026-11-22 on the committed pair through `tests/conftest.py`: the kitchen-sink run is the codebase and
+    `address_objects.xml` is the second run. The run's own set names 1 unit, `shared_45ca31c3`, and the merged set
+    names 11, so the difference is the 10 units the run read only through the record. Inside the 1 directory its own
+    set names the tree holds 12 files and 1 byte differs from the first run, `shared_45ca31c3/address_objects.tf`,
+    the file the run wrote. Inside the 10 directories only the merged set names, all 60 bytes are the bytes the first
+    run wrote and no file there is new.
+    """
+    codebase_dir, partial_dir, second = partial_run(CODEBASE_FIXTURE, RUN_FIXTURE, tmp_path)
+    codebase_rows = record_rows(codebase_dir)[unit_manifest]
+    run_rows = record_rows(partial_dir)[unit_manifest]
+    assert codebase_rows and run_rows, "both sets read a record with content"
+
+    record = next(entry for entry in codebase_state.JOIN_KEYS if entry[0] is unit_manifest)
+    merged_set = set(unit_manifest.units(codebase_state.merge_rows(record, codebase_rows, run_rows)))
+    run_set = set(unit_manifest.units(second.ledger))
+    assert run_set <= merged_set and len(merged_set) - len(run_set) == 10, (run_set, merged_set)
+
+    run_dirs = {unit_manifest.directory_name(facts, naming.sanitize) for facts in run_set}
+    merged_dirs = {unit_manifest.directory_name(facts, naming.sanitize) for facts in merged_set}
+    assert sorted(run_dirs) == ["shared_45ca31c3"], run_dirs
+
+    before, after = written_bytes(codebase_dir), written_bytes(partial_dir)
+    inside = sorted(key for key in after if Path(key).parent.name in run_dirs)
+    assert len(inside) == 12, inside
+    assert [key for key in inside if after[key] != before.get(key)] == ["shared_45ca31c3/address_objects.tf"], (
+        "the run wrote one file inside the directory its own set names",
+    )
+    outside = sorted(key for key in after if Path(key).parent.name in merged_dirs - run_dirs)
+    assert len(outside) == 60, outside
+    assert outside == sorted(key for key in before if Path(key).parent.name in merged_dirs - run_dirs), (
+        "the run wrote no new file inside a unit its own set does not name",
+    )
+    assert all(after[key] == before[key] for key in outside), (
+        "every byte inside those 10 directories is the byte the first run wrote",
+    )

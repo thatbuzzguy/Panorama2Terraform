@@ -1,6 +1,6 @@
 """F5.6 state coverage: the ownership fact and the drift fact.
 
-Five rules, stated once here.
+Six rules, stated once here.
 
 1. The state entry shape. A state entry is one instance object the producer read
    (`state_input.StateEntry`). Its matrix row is the row keyed by its resource type, through
@@ -33,6 +33,17 @@ Five rules, stated once here.
    order is fixed: findings are sorted by line, then object type, then name. A finding is an
    operator action, not a broken output, so it does not change the exit code, which the F4.1 gate
    decides. The console prints no state line.
+6. The existing codebase records are a reference source, read as data, so the read reaches this module
+   as the two rules it states: `ownership_key` and `STATE_PROPERTY_NAMES`. The module states no reader,
+   path rule, row shape or unit rule of its own, so the entry point reads each record through the module
+   that owns its shape. The reference read reaches the ownership half, because `ownership_key` answers the
+   same key for a state entry and for a row read back through `parse_rows`. The comparison half needs a
+   value, and the ownership row shape holds no property field, so a comparison comes only from the state
+   read the door makes, and the finding half reads `line`, `container` and `reason`, which `parse_rows`
+   does not read back, so it stays on the rows the run built. Pinned by
+   `tests/test_state_coverage.py::test_the_reference_source_is_read_as_data_through_the_readers_the_shape_owners_state`
+   and
+   `tests/test_state_coverage.py::test_the_reference_read_reaches_the_ownership_half_and_no_property_value`.
 
 Usage:
     from state_coverage import state_index, state_findings, ownership_line, drift_line

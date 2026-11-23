@@ -25,6 +25,9 @@ the rows arrive through each record module's `parse_rows`, and the writer is `wr
    and reads back through `parse_rows` as itself.
 6. **The reader is each record module's `parse_rows`.** This module defines no shape and no reader, so a record it
    cannot read is a refusal the record module already states, and the gate's data rule stays the only data rule.
+   The entry point's reference read of the records a codebase already holds is that data read, so the run gains only
+   the fields `parse_rows` reads back. Pinned by
+   `tests/test_codebase_state.py::test_the_run_reads_the_existing_records_through_the_readers_the_shapes_owners_state`.
 7. **A data module.** It writes no file, states no record-directory path rule, names no console line, states no
    environment name, defines no naming rule and holds no writer of its own, and imports only the standard library
    and the house modules.
