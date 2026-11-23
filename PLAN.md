@@ -123,6 +123,30 @@ which is inside the provider's own API call and reaches no committed output, so 
 Definition of done: one place states each pin, the template, the goldens, the probe, CI and the documents state the
 same version, and every provider fact in the documents is a measurement made against that pin.
 
+## Open epic — Epic 13, the shapes an input can be (feature id `F13.x`)
+
+The design record is `docs/INPUT_SHAPES.md`. The pieces are in `to-do.md`, the criteria are in
+`acceptance.md`, and the facts that need a live target are in `backlog.md`. The epic extends
+Goal 5: an archive is a declared source, so it gains a producer behind the F5.1 door and no new
+check, and the provenance record names the source and the member it read.
+
+Three decisions, taken 2026-11-23:
+
+1. **Gzip and tar.gz are read through a producer behind the door, not through a new check.**
+   `check_bytes` stays the one definition of the two checks, and the door runs them on the
+   decompressed bytes.
+2. **The size cap applies during decompression, not after.** Without this the size check answers
+   for the compressed file only, and a bundle that expands past the cap reaches the parse.
+3. **The splitter prints the fact it reads** — the row count, the shape the tree holds, the
+   source line — instead of the current guess, through the console-line owner or the report. The
+   exit code does not change.
+
+Open decisions stay in the design record §2 until the first piece lands: the rule for a bundle
+with more than one XML member, and which bytes the provenance record names for an archive read.
+Measured offline, the entry shape the documentation states for 9.1 and for 11.1 & Later is the
+same, so the read layer agrees with the documented shape on both pages; the 10.2 comparison leg
+redirects and stays open.
+
 ## Out of Scope (tracked in backlog.md)
 
 - PAN-OS version matrix testing

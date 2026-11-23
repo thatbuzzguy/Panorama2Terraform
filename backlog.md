@@ -636,6 +636,21 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   change. F8.8 measures this through the committed single-response run and names the join position and its
   reason: `docs/API_CONVERSION_PATH.md` §3.
 
+- Open facts for Epic 13, recorded here because no offline measurement reads them (the rules are
+  in `docs/INPUT_SHAPES.md`):
+  1. Whether the Panorama UI download writes a `.tar.gz` or a plain XML file for a configuration
+     download. The UI per-device export and the Panorama-level export are different files, and
+     which one a bundle holds is a live fact.
+  2. Whether a PAN-OS backup XML declares a DOCTYPE. If it does, the door refuses every backup
+     file, and the archive piece needs a documented way in rather than a second check.
+  3. Whether a backup bundle can hold more than one XML member (HA Panorama, multi-tenant). This
+     gates the member decision in `docs/INPUT_SHAPES.md` §2.
+  4. The 10.2 documentation comparison leg: the page redirects to the current landing page, so
+     the version-by-version comparison of the "XML and XPath" page is incomplete. The 9.1 and
+     11.1 & Later legs were measured 2026-11-23 and state the same node model and entry shape.
+  5. A committed sample bundle, if one can be redacted, turns facts 1 to 3 from live facts into
+     measurements read through the fixture rules.
+
 ## Design Decisions (the value the parse cannot carry)
 
 - Decided 2026-10-31: a value the parse cannot carry prints as the variable reference, never as a

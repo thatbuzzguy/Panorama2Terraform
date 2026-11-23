@@ -16,6 +16,7 @@ that document instead of restating the rule.
 | [TEMPLATE_STACK_DEPLOYMENT.md](TEMPLATE_STACK_DEPLOYMENT.md) | The template and stack unit: which membership name enters the edge set, the scope a template or a stack entry is declared inside, and what the tool can state for a template entry the export declares and no device names. Design record for Epic 10, landed |
 | [MULTI_RUN_CODEBASE.md](MULTI_RUN_CODEBASE.md) | The codebase several runs write into: the run's read set and write set, the four records as codebase state, the cross-run ownership, edge and order facts, the gate for a partial run, and the write boundary. Design record for Epic 11, open |
 | [DEVICE_GROUP_SPLITTING.md](DEVICE_GROUP_SPLITTING.md) | Split one export into one file per device group |
+| [INPUT_SHAPES.md](INPUT_SHAPES.md) | What bytes an input can be, which entry point accepts each shape, and what the run states when a shape is refused or read. Design record for Epic 13, open |
 | [ADVANCED-ROUTING-ENGINE-SUPPORT.md](ADVANCED-ROUTING-ENGINE-SUPPORT.md) | Logical routers, and the routing config the converter does not read |
 | [VPN_ROUTING_CONFIG_EXAMPLES.md](VPN_ROUTING_CONFIG_EXAMPLES.md) | The XML shapes the parser reads for VPN and routing |
 | [LICENSING.md](LICENSING.md) | Who holds the copyright for each part, and what each grant covers |
@@ -42,6 +43,7 @@ that document instead of restating the rule.
 | Provider element per emitted type | `COVERAGE_MATRIX.md`, and `resource_mapping.COVERAGE_MATRIX` |
 | Migration workflow | `MIGRATION_GUIDE.md` |
 | Device group to template join | `DEVICE_GROUP_SPLITTING.md` |
+| Input shapes, the archive producer rule, the shape table, and the splitter diagnostic | `INPUT_SHAPES.md`; the shape table will name its owner module in the `ARCHITECTURE.md` §1 table when it lands |
 | Codebase unit, ownership, order between units, import blocks, scope objects, site data, commit action, the write path, the rule data pair | `CODEBASE_ASSEMBLY.md` §3 to §11 and §14, and the modules `unit_manifest.py`, `ownership.py`, `reference_edges.py`, `import_blocks.py`, `site_data.py`, `commit_actions.py`, `write_path.py`, `rule_data.py` |
 | The run's read set and write set, the records as codebase state, the cross-run ownership, edge and order facts, the gate for a partial run, and the write boundary | `MULTI_RUN_CODEBASE.md` §1 to §7, and the modules `unit_manifest.py`, `ownership.py`, `reference_edges.py`, `sanity_checks.py`, `write_path.py`, and `codebase_state.py` for the merge rule |
 | Which membership name enters the edge set, and the plan order that name produces | `TEMPLATE_STACK_DEPLOYMENT.md` §2, `api_requests.LIST_JOIN` for the join between a membership list and the table its owner returns, and `reference_edges.py` for the pair and the order |

@@ -40,6 +40,48 @@ to `~> 2.0.15` on the schema measurement, which changes no measured provider fac
 The ruff half is in `backlog.md`: the newer version reports one finding the pinned version does not, so that pin
 moves with its own change or not at all.
 
+## Epic 13 — the shapes an input can be (design record `docs/INPUT_SHAPES.md`)
+
+Planned in the `input-shapes` worktree, 2026-11-23. The decisions are in `PLAN.md`, the criteria
+are in `acceptance.md`, and the live facts are in `backlog.md`. This worktree touches no `src/`
+file until a piece lands.
+
+### Phase 13A, the shapes as data and the diagnostic
+
+- **13A.1** — the shape table: one table, byte shape to accepted entry point to the refusal or
+  report line the run prints. The table needs one owner module in `src/` before a pin can read
+  it; the documents link to the table and restate no rows.
+- **13A.2** — the splitter diagnostic: the fact the run reads (zero `device-group/entry` rows,
+  the shape the tree holds instead, the source line) through the console-line owner, or in the
+  report. The pins that read the printed set move in the same commit; the exit code stays.
+- **13A.3** — the committed fixture pair, one Panorama shape and one firewall shape, read through
+  the fixture assembler; the fixture-count pins move in the same commit.
+- **13A.4** — the documentation comparison: the 9.1 and 11.1 & Later legs are measured, the 10.2
+  leg redirects, so finish that leg or record the redirect as the finding.
+
+### Phase 13B, the archive producer
+
+- **13B.1** — the member decision: single-member gzip and single-XML-member tar.gz are accepted;
+  a bundle with more than one XML member is refused until a selection rule exists, and a
+  selection that reads member order is refused by the determinism rule, so the decision stays
+  open until it is taken.
+- **13B.2** — the size rule during decompression: the cap is enforced as the bytes expand, so a
+  refusal names the origin and builds no tree, and no second size definition appears.
+- **13B.3** — the provenance facts for an archive read: the origin kind, the member name as a
+  field the file case does not have, which bytes `size` and `sha256` name, and how the cache rule
+  reads for an archive.
+- **13B.4** — the pins: both checks run on the decompressed bytes through the door, no producer
+  bypasses them, and the archive path adds a producer and no check.
+
+### Phase 13C, the documents
+
+- **13C.1** — how to get the correct export: the Panorama-level export holds the device-group
+  rows, a per-device export holds the device's own config with none. Stated in `docs/USAGE_GUIDE.md`
+  and `docs/DEVICE_GROUP_SPLITTING.md`; the troubleshooting rows move from a guess to the named
+  fact.
+- **13C.2** — `docs/INPUT_SHAPES.md` moves from planning to rules when the first piece lands, and
+  the shape table names its owner module in the `docs/ARCHITECTURE.md` §1 table in the same commit.
+
 ## Feature-sized items that stay blocked
 
 Feature-sized items that stay blocked on a fact the tool cannot read offline are recorded in
