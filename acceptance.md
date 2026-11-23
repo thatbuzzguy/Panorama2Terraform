@@ -1,54 +1,53 @@
-# Acceptance — criteria for the pin update (2026-11-22)
+# Acceptance — criteria for Epic 13, the shapes an input can be (2026-11-23)
 
-The task is the version pins: the provider constraint, the Terraform minimum, and the tool pins CI runs the
-gate with. Two decisions were taken on these criteria, 2026-11-22: the floor is `>= 1.16` with CI at 1.16.7, and the
-Terraform minimum gets one owner. A pin move is a golden change, so the template, the goldens, the probe, CI and the
-documents that state the version move in one commit with the measurements that cover the new pin.
-
-The criteria were written in the `pin-update` worktree, which merged into main on 2026-11-23; the Piece 11C.1 record
-this file held before is in `a153b04`. The measurements below were taken 2026-11-22 in the worktree, on the tree
-before Piece 11C.1 landed, and the one that Piece 11C.1 moved is re-measured in `backlog.md`.
+The task is the planning of Epic 13 in the `input-shapes` worktree. The Epic 12 criteria this
+file held are in `a153b04`. The design record is `docs/INPUT_SHAPES.md`, the pieces are in
+`to-do.md`, and the live facts are in `backlog.md`.
 
 ## Criteria
 
-1. **One place states each pin.** The provider version already has one owner: `tests/conftest.py::declared_provider`
-   reads it from a golden `provider.tf`, and the schema fixture reads it from there, so a provider move is a byte
-   change and no rule change. The Terraform minimum is written by three places — the `terraform` block in
-   `src/panorama_to_terraform.py`, the generated `README.md`, and the generated `actions.tf` header in
-   `src/commit_actions.py` — and read by `tests/test_commit_actions.py::test_the_generated_terraform_block_declares_the_minimum`
-   and `::test_the_generated_readme_names_the_file_and_the_minimum`. The decision is that the minimum gets the same
-   shape: one constant read by the three places, and one helper in `tests/conftest.py` read by the pins, so a move
-   changes one place and not five.
-2. **A pin move moves the goldens with it.** 17 `provider.tf` files and 6 `actions.tf` files carry the version
-   strings byte for byte. The template and the goldens are one commit, and the no-change tests read the same bytes.
-3. **Provider facts stay measurements.** The documents that state provider facts name the pinned provider, so the
-   pin statement changes; a dated measurement is not restated. The fact that lets the 2.0.14 measurements stand for
-   2.0.15 is the schema identity measured below, and it is stated once, in `docs/CODEBASE_ASSEMBLY.md` §12.
-4. **A fact that needs a live target stays blocked regardless of the pin.** F3.5 rulebase value, the device serial,
-   and the per-device template variable override are unaffected by the pin move and stay in `backlog.md`.
-5. **The gate answers the same before and after the pin moves**, or the difference is measured before the pin moves.
-6. **The tool pins move only with their own measurement.** A lint pin move is a gate change: the new version can
-   report a finding the pinned version does not, so the finding is fixed in the same commit or the pin stays.
+1. **The archive input gains a producer, not a check.** The F5.1 rule is unchanged:
+   `check_bytes` is the one definition of the two checks, and the door runs them on the
+   decompressed bytes. No module states a second size definition, a second DTD rule, or a second
+   reader.
+2. **The size cap holds during decompression.** A pin hands the door a compressed input that
+   expands past the cap, and the refusal names the origin and builds no tree. The pin runs
+   offline on a committed fixture, so Goal 1 and the no-network rule are unchanged.
+3. **The accepted shapes are read from the bytes, not from the file name.** The single-member
+   gzip and single-XML-member tar.gz shapes are accepted only after the member decision is taken.
+   A selection rule that reads member order is refused by the determinism rule
+   (`docs/ARCHITECTURE.md` §6), so the refusal is the starting shape and the decision must be
+   taken before an emitter, a gate rule, or a report can read a selection.
+4. **One decision, stated once, for what the provenance record names for an archive read**: the
+   origin kind, the member name, which bytes `size` and `sha256` name, and how the cache rule
+   reads. The F5.3 rule already answers the byte question for the door — the record names the
+   bytes the door checked — so the decision is how the archive enters that rule, not a second
+   version of it.
+5. **The splitter diagnostic prints the fact, not a guess.** It states the number of
+   `device-group/entry` rows read, the shape the tree holds instead, and the source line. The
+   finding fits the four parts of the console-line rule (`container_coverage.console_line`,
+   `docs/ARCHITECTURE.md` §3.2), or prints in the report only because it compares two sets. The
+   exit code stays with the rules that read the files (`docs/ARCHITECTURE.md` §4.6).
+6. **Fixtures move the pins in one commit.** Each accepted shape gets a committed fixture read
+   through the fixture assembler, and the pins that state the printed fixture set name the new
+   fixture count in the same commit (`to-do.md` §Rules the layout keeps).
+7. **Version facts stay measurements.** The comparison of the "XML and XPath" page names the
+   pages measured — 9.1 and 11.1 & Later, 2026-11-23, same node model and entry shape — and the
+   10.2 leg stays open until measured. No document states a version difference it cannot name a
+   measurement for. The documentation-to-fixture relationship is owned by
+   `docs/API_DOCUMENTATION_AND_MOCKS.md`, so this epic adds no second rule for it.
+8. **Live-target facts stay in `backlog.md`**: the UI download form, the backup DOCTYPE question,
+   multi-member bundles, and the unfinished comparison leg. Nothing in the design record states
+   them as facts.
+9. **The layout rules hold**: `docs/INPUT_SHAPES.md` is named in the `docs/README.md` index and
+   carries its owner row; the shape table names its owner module in the `docs/ARCHITECTURE.md` §1
+   table when it lands; no new module states a second naming rule, writer, console line, or
+   environment name, so the pins that scan the `src/` set read it with the other modules.
+10. **No `src/` path that Epic 11C or Epic 12 runs on is touched by this worktree**, and the
+    shared tracking markdown is merged by hand against main.
 
-## Measurements taken for the criteria (2026-11-22)
+## Definition of done
 
-1. **The provider schema is identical between 2.0.14 and 2.0.15.** `terraform providers schema -json` answers
-   byte for byte the same for both: 2,146,209 bytes, md5 `dfab791bae568bdd5ccdc69ca066a5b4`, on Terraform 1.16.2.
-   So no resource, data source, action schema or value-list fact in the documents changes. Provider 2.0.15 was
-   published 2026-11-06, and its two changes are Go dependencies (pan-os-codegen #746) and the device-group
-   membership marshal (#745). The tool emits no `devices` for `panos_device_group`, so #745 is inside the provider's
-   own API call and reaches no committed output.
-2. **The committed goldens validate on provider 2.0.15.** 17 unit directories, 17 validate, with Terraform 1.16.2,
-   and 17 validate with Terraform 1.17.2. The copies were read from the worktree and only the version string was
-   changed, so this is the same content the pins run.
-3. **The tflint answer reproduces on the pinned binary.** tflint v0.66.0 with the bundled Terraform ruleset v0.17.0,
-   run with `--format=json --no-color` and one `--only` flag per rule in sorted order, answers byte for byte the
-   same as the committed `tests/tflint/probe.json`, for the probe at 2.0.14 and at 2.0.15. So the rule-set pins are
-   unchanged by the provider move, and the committed answer is still a reproducible measurement.
-4. **The Terraform lines upstream.** Latest stable 1.17.2 (2026-11-11), newest 1.16 patch 1.16.7. Security support
-   for 1.14 ended 2026-08-26 and for 1.15 ended 2026-10-21, so `>= 1.14` states a floor upstream no longer
-   supports. CI pins 1.16.1; the recorded measurements name 1.16.2, the version on this machine.
-5. **The tool pins.** pytest 9.2.0 against the pinned 9.1.1: the same run shape, the same four tflint skips at the
-   same positions, nothing else different. ruff 0.17.6 against the pinned 0.16.10: the pinned version reports
-   nothing, the newer version reports one SIM102 finding at `tests/test_state_coverage.py:653`, so a ruff move needs
-   that change in the same commit. tflint v0.66.0 is still the latest release, so the rule-set pin does not move.
+Every rule in `docs/INPUT_SHAPES.md` names its owner. Each pending decision in §2 is recorded as
+a decision before the code that reads it lands, and the pins that hold each rule run offline on
+committed material.

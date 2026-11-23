@@ -1,6 +1,21 @@
 # Agent Status
 
-## Current position
+## Current position (this worktree — Epic 13 planning, 2026-11-23)
+
+Epic 13, the shapes an input can be, is planned in the `input-shapes` worktree on branch
+`input-shapes`, based on `6134a41`. The design record is `docs/INPUT_SHAPES.md`, the pieces are in
+`to-do.md`, the criteria are in `acceptance.md`, and the live facts are in `backlog.md`. Three
+decisions, taken 2026-11-23: the archive (gzip, tar.gz) is read through a producer behind the F5.1
+door and gains no new check; the size cap applies during decompression, not after; the splitter
+prints the fact it reads instead of the current guess. The open decisions — the rule for a bundle
+with more than one XML member, and which bytes the provenance record names for an archive read —
+are recorded in the design record §2. No `src/` file is touched until a piece lands.
+
+Merge watch: the four tracking markdown files are also open on main for Epic 11C and Epic 12, so
+the merge needs a manual join. The next step is the acceptance review of the criteria, then Piece
+13A.1.
+
+## Previous position (main, Piece 11C.1, 2026-11-23)
 
 Piece 11C.1 is accepted, 2026-11-23. `d2249e0` holds the read step, the four module docstrings and the five pins,
 and `a153b04` holds the tracking markdown and the acceptance record; neither is pushed. The review ran on the tree at
