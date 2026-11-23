@@ -335,10 +335,27 @@ per-unit file names its unit only by its directory, so a gate finding names the 
 
 ## Exporting from Panorama
 
-- **Web UI:** Device -> Setup -> Operations -> save a configuration
-  snapshot and extract the XML.
-- **CLI:** `show` with `set cli config-output-format xml`.
+Check which export you got before running either script, because the two export shapes answer
+different questions.
+
+- **CLI, on Panorama:** `export config from panorama`. The file is the Panorama shape: the
+  `config` root holds `device_group`, `shared`, `templates`, and `template_stacks`. This is the
+  file the splitter reads.
+- **CLI, for one managed device:** `export config from device <serial>`, or `show config running`
+  after `set cli config-output-format xml`. The file is that device's own config: entries under
+  `devices/entry/<serial>`, no `device-group` row. The converter reads this shape directly;
+  only the splitter refuses it, and the splitter reports that it read no `device-group` row
+  ([docs/DEVICE_GROUP_SPLITTING.md](docs/DEVICE_GROUP_SPLITTING.md)).
+- **Web UI:** Device -> Setup -> Operations -> save a configuration snapshot on Panorama itself
+  and extract the XML. A snapshot saved on a managed device gives the device shape above.
 - **API:** `curl -k -X GET 'https://panorama/api/?type=export&category=configuration&key=KEY' -o config.xml`
+
+A `.tar.gz` or `.gz` file is not an accepted input. `src/xml_input.py` is the only input read and
+no producer decompresses, so archive bytes reach the parse as raw bytes and the parse answers
+"not well-formed (invalid token)". Extract the XML member first. The UI export of technical
+support data is a bundle, not a configuration export. Reading an archive through the input
+boundary is planned in Epic 13 ([docs/INPUT_SHAPES.md](docs/INPUT_SHAPES.md)); until that piece
+lands, extract first.
 
 The converter can also read the API response itself (`--source api --host panorama`),
 which fetches over https and keeps a cached copy. The response is an envelope
@@ -351,6 +368,52 @@ source, which is what the shadow scan reads ([`src/shadow_coverage.py`](src/shad
 apply to the api source only. The arguments are in
 [docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md); the rules are in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §3.
+
+### The minimum input a test run reads
+
+For an offline test, this is the smallest file the parse accepts: entry nodes keyed by the
+`name` attribute, the device join stated through the device lists, no `<!DOCTYPE`, no entity
+references, no control characters, well under the input limit. This is an illustration, not a
+pin.
+
+```xml
+<?xml version="1.0"?>
+<config version="11.1.0">
+  <shared>
+    <address>
+      <entry name="Web-Range"><ip-netmask>10.1.2.0/24</ip-netmask></entry>
+    </address>
+  </shared>
+  <device_group>
+    <entry name="DG-Test">
+      <devices><entry name="fw-1.example.com"/></devices>
+      <address>
+        <entry name="Web-Server"><ip-netmask>10.1.2.10/32</ip-netmask></entry>
+      </address>
+    </entry>
+  </device_group>
+  <templates>
+    <entry name="HQ">
+      <devices><entry name="fw-1.example.com"/></devices>
+      <vsys>
+        <entry name="vsys1">
+          <address><entry name="Vsys-Object"><ip-netmask>10.1.3.0/24</ip-netmask></entry></address>
+        </entry>
+      </vsys>
+    </entry>
+  </templates>
+  <template_stacks>
+    <entry name="HQ-stack">
+      <devices><entry name="fw-1.example.com"/></devices>
+      <parent><member>HQ</member></parent>
+    </entry>
+  </template_stacks>
+</config>
+```
+
+Run the splitter on it, then the converter on a split file, or run the converter on the whole
+file directly — splitting is optional pre-processing. The device name must appear in both the
+device group and the template, or the join copies nothing and the splitter prints that fact.
 
 ## Safe input
 
