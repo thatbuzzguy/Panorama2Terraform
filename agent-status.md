@@ -2,11 +2,27 @@
 
 ## Current position
 
-Piece 11C.1 is committed, 2026-11-23, and neither commit is pushed: `d2249e0` holds the read step, the four module
-docstrings and the five pins, and the `docs(tracking)` commit that follows it holds the tracking markdown. Its
-acceptance review is the next step, and then Piece 11C.2. The design record for Epic 11, the codebase several runs
-write into, is `docs/MULTI_RUN_CODEBASE.md`, the open pieces are in `to-do.md`, and the acceptance record for this
-piece is in `a153b04` — `acceptance.md` now holds the Epic 12 criteria.
+Piece 11C.1 is accepted, 2026-11-23. `d2249e0` holds the read step, the four module docstrings and the five pins,
+and `a153b04` holds the tracking markdown and the acceptance record; neither is pushed. The review ran on the tree at
+`d2249e0` and found nothing to fix: the code tree is unchanged between `d2249e0` and the review, the five pins are
+the ones the record names, each reads rows through `tests/conftest.py` rather than building a row by hand, no test
+module imports another test module, the fixture pair is stated once as the constants `CODEBASE_FIXTURE` and
+`RUN_FIXTURE`, the read step names no path and writes no file, and the moved golden gate still compares two
+byte-identical trees against `3b221b4`. Re-measured on the committed pair through `tests/conftest.py`: rows read
+back 11/61/9/3; the second run built 1/5/9/3; the merged set 11/62/9/3, so the replaced half is the 10 units the run
+read but did not write and no row from the run's own unit is lost; the second run wrote 3 files inside the one unit
+its set names and all three are byte-identical to what the same run wrote standalone, and inside that unit the tree
+holds 12 files of which only `shared_45ca31c3/address_objects.tf` holds bytes the run wrote rather than the bytes the
+first run wrote; the other 10 unit directories hold the bytes the first run wrote with no new file; the record names
+no data file and holds one entry for `address_objects.xml`, the input, and no output row. The gate was
+re-run single-threaded and is green: `ruff check` clean, `ruff format --check` 108 files already formatted,
+`python3 -m pytest` 1,789 passed plus the 4 tflint skips, `python3 tools/check_documents.py` reports every document
+agrees with measurement, 1,793 pins in 54 modules. Two things the review looked at and did not change are recorded
+in `backlog.md`: pins outside the five modules that read the fixture pair state the pair inline rather than through
+the conftest constants, and the site record half of the read is merged but no rule uses it. Piece 11C.2 is the next
+step. The design record for Epic 11, the codebase several runs write into, is `docs/MULTI_RUN_CODEBASE.md`, the open
+pieces are in `to-do.md`, and the acceptance record for this piece is in `a153b04` — `acceptance.md` now holds the
+Epic 12 criteria.
 
 A document-rule sanity check ran 2026-11-23 on the merged tree with the gate green. Its findings are recorded in
 `backlog.md` §Process debt. One of them is the stale minimum line in this file, which Piece 12A.3 carries.

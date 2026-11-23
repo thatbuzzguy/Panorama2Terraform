@@ -248,6 +248,18 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   are gitignored and present, and `terraform_example/` states 2.0.14 and `>= 1.14`. A pin sweep reports 49 files or
   44 depending on whether ignored files are counted, while Piece 12A.2 counts only the tracked goldens. Clear the
   tree and state which set a pin sweep reads.
+- **The committed pair is stated once as constants, but five pins name it inline.** Measured 2026-11-23 during the
+  Piece 11C.1 acceptance review: `tests/conftest.py` owns the pair as `CODEBASE_FIXTURE` and `RUN_FIXTURE`, and the
+  five modules that read the merged rows use them, while pins in three other modules pass the two names inline.
+  `docs/MULTI_RUN_CODEBASE.md` §5 rule 1 states the pattern, not the names, so nothing is broken; this is the kind of
+  second statement §1 rule 6 avoids, and the pins would read the constants instead. Owners: `tests/conftest.py` and
+  `docs/MULTI_RUN_CODEBASE.md` §5 rule 1. Measured pins: `tests/test_data_file_gate.py:802`,
+  `tests/test_round_trip.py:1031`, `tests/test_sanity_gate.py:1328`, `tests/test_sanity_gate.py:1352`,
+  `tests/test_sanity_gate.py:1411`.
+- **The site record half of the read is merged but no rule uses it.** Measured 2026-11-23 during the same review:
+  `run_rows[site_data]` is empty, so `reference[site_data]` reaches `generate_run`'s merged set and nothing reads it
+  there. The read is right because the merge rule covers all four records; what is missing is a rule that reads the
+  merged site rows, which is the next piece's work. Owner: `src/codebase_state.py`.
 
 ## Out of Scope
 
