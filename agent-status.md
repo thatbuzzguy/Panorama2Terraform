@@ -395,3 +395,42 @@ The two decisions, taken 2026-11-22: the floor is `>= 1.16` with CI at 1.16.7, s
 reaches past what was measured, and the Terraform minimum gets one owner the way the provider version has one. The
 pieces are 12A.1 to 12A.3 in `to-do.md`. The gate baseline this task starts from is the Piece 11C.1 measurement in
 the Current position above; the measurements below were taken on the tree before Piece 11C.1 landed.
+
+## Position in the `import-pairing` worktree (Epic 14 planning, 2026-11-23)
+
+Epic 14, the blocks a run binds to the live config, is planned in the `import-pairing` worktree on branch
+`import-pairing`, based on main `c845f07`. The design record is `docs/IMPORT_BINDING.md`, the pieces are in
+`to-do.md`, the criteria are in `acceptance.md`, and the live facts are in `backlog.md`. No decision is taken, so
+no piece can be written from one yet, and no `src/` file is touched until a piece lands. The shared tracking
+markdown needs a manual join against main at merge.
+
+What the record states, measured offline: the binding decision is run-wide and reaches no record, so a later run
+cannot read it back and no gate rule can name a unit that should have written blocks; the address half is already
+stable across runs; no id can name a device because an id states only what the block states; the four
+`*_policy_rules` types cannot be bound with the shape the emitter writes; a read-through name is never bound; the
+whole-block fact is measurable today and has no name and no owner; the change half of a plan is not the tool's
+output; the mode cannot ride on the selection; a mode field is a shape change, so the committed rows move with it.
+
+The nine pending decisions are in the record §2, each naming what it needs: the mode values and the level, the
+mode's owner, the declaration rule, the whole-block fact's name and owner and severity, the completeness half, the
+device fact, the rule types, the read-through order, and permanence. One Terraform behaviour stays a decision to
+take on measurement, because a pin cannot read it without a device.
+
+Gate, measured 2026-11-23 single-threaded on the tree that holds this work: `ruff check .` clean at `py310`,
+`ruff format --check .` clean on the 110 files it reads (81 Python, 29 markdown),
+`python3 tools/check_documents.py` reports no finding, `python3 -m pytest` in one process exits 0 with 1,796
+passed and the same 4 `tflint` skips in 256.8 s, the same counts as the main baseline this branch starts from,
+because no test and no `src/` file changed. `tflint` is absent, so the 4 skips are the `tflint` pins in
+`tests/test_sanity_gate.py`; `terraform` is present, so the provider-schema pins ran. The new document is named in
+the `docs/README.md` index and carries its owner row, which
+`tests/test_layout.py::test_the_indexes_name_every_document_under_them` holds.
+
+Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
+`commit.md`, `docs/README.md`, `docs/INPUT_SHAPES.md` for the record shape, `docs/CODEBASE_ASSEMBLY.md` §7 and
+§13, `docs/ARCHITECTURE.md` §3.2 and §4.6, `docs/MULTI_RUN_CODEBASE.md` §1 rules 1 and 2,
+`src/import_blocks.py`, `src/rule_data.py`, `src/unit_manifest.py`, `src/ownership.py`, `src/entry_coverage.py`,
+`src/codebase_state.py`, `src/sanity_checks.py`, `tools/check_documents.py`, `tests/test_layout.py`.
+
+The next step is the acceptance review of the criteria, then the first decision, which is whether the mode stops at
+the unit (record §2 decision 1). The second decision is the shape cost in fact 11, because it names the committed
+files a piece would move. `acceptance.md` holds the Epic 14 criteria until the first piece lands.
