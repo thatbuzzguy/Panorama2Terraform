@@ -213,10 +213,11 @@ Three facts already hold, and they are the reason no new naming rule or identity
    did not write. Pinned by
    `tests/test_data_file_gate.py::test_the_data_rule_reads_the_merged_record_as_the_codebase_set`, which reads the
    rule over the committed pair both ways: against the record the second run wrote at the root it reports 37
-   findings, 29 on the three records at the root and 8 on the rule data pair inside `production_dg_6ce3cc69`, each
-   naming a unit its own record names no row for; against the merged record, written at the root through
-   `codebase_state.merge_rows` and `write_path`, the same tree reports no finding, including the printed form
-   inside the 10 directories the run did not write.
+   findings, 29 on two records at the root (`REFERENCE_EDGES.json` 26 and `SITE_DATA.json` 3), while the manifest
+   and ownership records read as their rows and state no finding, and 8 on the rule data pair inside
+   `production_dg_6ce3cc69`, each naming a unit its own record names no row for; against the merged record,
+   written at the root through `codebase_state.merge_rows` and `write_path`, the same tree reports no finding,
+   including the printed form inside the 10 directories the run did not write.
 3. **The two rules that read two sets read the run's unit set.** `round_trip` reads the block set against
    `unit_manifest.units(ledger)`, which for a partial run names only the run's units, so a unit the run read no
    rows for enters no count. `request_set` reads the join against the run's index, which names only the scopes
@@ -233,7 +234,8 @@ Three facts already hold, and they are the reason no new naming rule or identity
    `tests/test_sanity_gate.py::test_for_a_single_run_the_run_set_and_the_record_set_are_the_same_set`, which reads
    the same sets on three single runs.
 5. **No gate rule reads a report, `README.md` or `SOURCE.txt`**, unchanged, so the run's report section adds no
-   gate rule and no file.
+   gate rule and no file. Pinned by
+   `tests/test_write_path.py::test_no_rule_reads_a_file_outside_the_two_sets`.
 6. **The severity rule and the exit-code rule are unchanged for a partial run**: FAIL for the rules that read the
    files, WARN for the two rules that read two sets, NOT RUN for a check that cannot run, and the entry point
    decides on `SanityReport.failed`. So a cross-check finding cannot change the exit code. Pinned by

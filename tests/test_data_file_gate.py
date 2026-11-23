@@ -792,8 +792,9 @@ def test_the_data_rule_reads_the_merged_record_as_the_codebase_set(tmp_path):
 
     Measured 2026-11-22 on the committed pair: the kitchen-sink run is the codebase (11 units) and
     `address_objects.xml` is the second run (1 unit, `shared_45ca31c3`). Against the record the second run wrote at
-    the root, the rule reports 37 findings: 29 on the three records at the root (`REFERENCE_EDGES.json` 26,
-    `SITE_DATA.json` 3), each naming a unit the record names no row for, and 8 on the rule data pair inside
+    the root, the rule reports 37 findings: 29 on two records at the root (`REFERENCE_EDGES.json` 26,
+    `SITE_DATA.json` 3), each naming a unit the record names no row for, while the manifest and ownership records
+    read as their rows and state no finding, and 8 on the rule data pair inside
     `production_dg_6ce3cc69`, which names no unit the record names. Against the merged record, written at the root
     through `codebase_state.merge_rows` and `write_path`, the same tree reports no finding, including the printed
     form inside the 10 directories the second run did not write, and the count names the same 8 data files.

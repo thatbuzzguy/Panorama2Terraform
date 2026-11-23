@@ -31,8 +31,6 @@ Pins, one per criterion in `acceptance.md`:
 - 5.1 the run's unit set for a partial run (`docs/MULTI_RUN_CODEBASE.md` §5 rule 3): the block side is read
   inside `unit_manifest.units(ledger)`, so a unit the run read no rows for enters no count, and the root-set fact
   (2.7) is unchanged.
-  `unit_manifest.units(ledger)`, so a unit the run read no rows for enters no count, and the root-set fact (2.7) is
-  unchanged.
 
 Four criteria could not hold as written, and each is pinned as measured with the measurement in the
 `acceptance.md` Result:

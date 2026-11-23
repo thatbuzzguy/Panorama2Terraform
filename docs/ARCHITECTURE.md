@@ -30,7 +30,7 @@ Every file in this table is a module in `src/`, except the test harness, which i
 | `shadow_coverage.py` | The cross-source shadow scan (§3.2): a child entry name that repeats a parent entry name | the key is `state_coverage.ownership_key` read with the facts the parent row declares, so one key names one parent entry; the scan compares the matrix row and entry name part of the key; both sources are read with the same row rule, so no second naming rule exists |
 | `state_input.py` | The state producer (F5.6): a Terraform state document read as a reference source, through the same door | the two byte checks run on the state bytes, and only the parse step is chosen by the kind, so a `<!DOCTYPE` inside a JSON value is not a refusal; a document the identity key cannot read is an input refusal; the state source writes no output, so no `.tf` byte changes |
 | `state_coverage.py` | The state scan (§3.2): the ownership fact and the drift fact | the matrix row is the same table the property scan uses, keyed by the resource type; the ownership key is §2.1 identity with the declared facts, never the `Shared` fallback; the scan is not an output, so it reads captured values without recording |
-| `sanity_checks.py` | The post-run sanity gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state, with two exceptions: the cross-check reads the run's ledger as well, and the request-set rule reads the run's ledger and the scope index, because both facts compare two sets (§4.6); one block reader serves every block kind a rule reads, so a fact about a block is reported once; the plan check runs once per unit directory the record names, so the report prints one result per unit and names the directory it ran on |
+| `sanity_checks.py` | The post-run sanity gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state, with two exceptions: the cross-check reads the run's ledger as well, and the request-set rule reads the run's ledger and the scope index, because both facts compare two sets (§4.6); one block reader serves every block kind a rule reads, so a fact about a block is reported once; the two checks that run an external command run once per unit directory the run wrote, read through `unit_manifest.units` over the rows its own ledger read, which for a single run is the same set as the record names (`MULTI_RUN_CODEBASE.md` §5 rule 4), so the report prints one result for each directory and names it |
 | `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4), and the prune action `--prune-cache` gates | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line; the record file is a codebase root-set file, so the action reads the record file the same run wrote |
 | `naming.py` | The §5 sanitizing rule, stated in one module (F6.6): the shape a PAN-OS name takes when it becomes a Terraform name, and the `var.` text a block prints for a site value | one rule, three callers: the local name of a block, the unit directory name, and the variable name of a site value. The gate reads it without the generator, so `TerraformGenerator.sanitize_name` is a delegate and every other module takes the rule as an argument or reads it here |
 | `unit_manifest.py` | The unit as data (F6.1): one row per declared scope, as `CODEBASE_MANIFEST.json` (§3.4) | the rows come from the ledger, so the module adds no parse data; it takes the §5 naming rule as an argument, so no second naming rule exists; the reference names arrive from §4.3, so this module resolves no name; `units` is the one unit rule over either row set — the rows the ledger read, or the rows a record read back through `parse_rows` (`MULTI_RUN_CODEBASE.md` §2 rule 5), pinned by `tests/test_unit_manifest.py::test_the_codebase_unit_set_is_read_through_the_one_unit_rule` |
@@ -1202,9 +1202,13 @@ check.
 
 The reader walks the codebase root and the directories under it and keys each `.tf` file by the path from the
 codebase root, so a finding names the unit the file belongs to: a per-unit file names its unit only by its
-directory (§14 of `CODEBASE_ASSEMBLY.md`). The plan check runs once per unit directory the manifest record
-names, because a unit is one plan and one root, so the report prints one result per unit and names the
-directory it ran on — the finding names it, or the note names it when the plan passed. `result_of` is the worst
+directory (§14 of `CODEBASE_ASSEMBLY.md`). The plan check runs once per unit directory the run wrote, read through
+`unit_manifest.units` over the rows its own ledger read, which for a single run is the same set as the record names
+(`MULTI_RUN_CODEBASE.md` §5 rule 4, pinned by
+`tests/test_sanity_gate.py::test_the_two_command_checks_run_once_per_directory_the_run_wrote` and
+`::test_for_a_single_run_the_run_set_and_the_record_set_are_the_same_set`), because a unit is one plan and one root,
+so the report prints one result for each directory the run ran on and names that directory — the finding names it,
+or the note names it when the plan passed. `result_of` is the worst
 result the check produced, so a unit that failed is not hidden behind a unit that passed. The two report counts
 name the two sets: the `.tf` files the reader read, and the data files the data rule reads, which are the four
 records at the root plus the rule data pair's data member inside each unit directory its own rows name
@@ -1241,7 +1245,7 @@ The provider fact itself is recorded in `backlog.md`, as a fact the tool cannot 
 | `request_set` | the request set agrees with the scope the run read, per unit and per index entry (F8.8, `docs/API_CONVERSION_PATH.md` §3) | WARN, or NOT RUN |
 | `control_chars` | no raw control character or DEL in a `.tf` file | FAIL |
 | `placeholders` | an expected placeholder, such as the VPN key `***CHANGE_ME***`, is listed | WARN |
-| `tflint` | the rule set `TFLINT_RULES`, run through the tflint command, once per unit directory the record names (`--tflint`) | FAIL, WARN, SKIPPED, or NOT RUN |
+| `tflint` | the rule set `TFLINT_RULES`, run through the tflint command, once per unit directory the run wrote (`--tflint`) | FAIL, WARN, SKIPPED, or NOT RUN |
 | `terraform` | `terraform init` + `terraform validate`, with `--validate` | FAIL, or SKIPPED when the binary is absent |
 
 **The rule set that runs through the `tflint` command.** The tool imports only the standard library, so the rule

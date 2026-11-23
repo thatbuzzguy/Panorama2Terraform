@@ -605,13 +605,16 @@ The records, the reports, and the write path:
   that each row shape is read through its own module, the rule data pair read inside the unit directory its own
   rows name with the two members standing or falling together and the printed member equal to `render_csv` of the
   same rows, the rule that the data rule reads no `.tf` file and no block rule reads a data file except
-  `rule_blocks`, the truth across the corpus, the same reader reading a record that holds rows from two runs, and the
+  `rule_blocks`, the truth across the corpus, the same reader reading the record set at the root as the codebase
+  set, so a row for a unit the run did not build is still verified and the printed form inside a directory the run
+  did not write is compared, and the
   byte rule between two runs
 - `tests/test_round_trip.py` - the cross-check (`round_trip`): the `.tf` block set read through the one gate
   reader and the entry set read through the run's ledger, the join through the one scope rule and the one unit
   rule, one finding per unit and row where the two counts do not agree, the four rule rows reading the row set
   through `rule_data.parse_rows` from the data member inside the unit directory, the position the reader read, the WARN
-  severity, the NOT RUN result when the caller passes no ledger, the rows that enter no count, the findings the
+  severity, the NOT RUN result when the caller passes no ledger, the rows that enter no count, the block side read
+  inside the run's unit set for a partial run, the findings the
   corpus reports, and the byte rule between two runs. F8.8: on a path 2 run the entry set is the join's own rows,
   so the cross-check and the request-set rule read one ledger and name the same unit
 - `tests/test_write_path.py` - the write path (`write_path.py`): the two file sets and the rule that every file
@@ -679,7 +682,11 @@ The gate, the fixtures, and the corpus:
   directory, the position is 0, the run-wide direction prints through the root shape, the order is the data rule's
   key, and the report section and the exit code are the gate's, not the join's. The `tflint` pins hold the rule
   set as data, the severity and exit-code tables, the committed answer for the committed probe content, the skip
-  for a missing binary, and the one result per unit directory the record names. The `rule_blocks` pins read the two
+  for a missing binary, and the one result per unit directory the run wrote, which for the single runs these pins
+  read is the same set as the record names. The partial-run pins read the committed pair through
+  `tests/conftest.py`: the three report counts as the codebase set, a `placeholders` finding for a unit the run read
+  no rows for, each command check once per directory the run wrote, and the exit code following the rules that read
+  the files. The `rule_blocks` pins read the two
   counts through `tests/conftest.py`, the printed run read clean, an entry that is not the row it names, a block for
   a unit no rule row names, and rows the reader read no block for
 - `tests/test_terraform_validate.py` - `terraform init` + `terraform
