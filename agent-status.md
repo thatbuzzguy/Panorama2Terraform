@@ -11,9 +11,12 @@ prints the fact it reads instead of the current guess. The open decisions — th
 with more than one XML member, and which bytes the provenance record names for an archive read —
 are recorded in the design record §2. No `src/` file is touched until a piece lands.
 
-Merge watch: the four tracking markdown files are also open on main for Epic 11C and Epic 12, so
-the merge needs a manual join. The next step is the acceptance review of the criteria, then Piece
-13A.1.
+Merge, 2026-11-23: the branch merged into main at `1cd7ea2`. The shared tracking markdown
+auto-merged except `acceptance.md`, joined by hand so the file carries both active records — the
+Piece 11C.2 criteria (main's task) and the Epic 13 criteria (this worktree's task), each naming
+its worktree. `tools/check_documents.py` reported no finding on the merged tree. The next step is
+the acceptance review of the criteria, then Piece 13A.1; further shared-markdown edits on either
+side still need a manual join.
 
 ## Previous position (main, Piece 11C.1, 2026-11-23)
 
