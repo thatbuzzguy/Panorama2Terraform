@@ -21,16 +21,15 @@ consequence are in `backlog.md`.
 
 Planned in the `pin-update` worktree, merged into main 2026-11-23, and the pieces run on main. The two decisions
 are in `PLAN.md`: the floor is `>= 1.16` with CI at 1.16.7, and the minimum gets one owner. The provider pin moves
-to `~> 2.0.15` on the schema measurement, which changes no measured provider fact.
+to `~> 2.0.15` on the schema measurement, which changes no measured provider fact. Piece 12A.1 landed on main
+2026-11-23 and holds the owner at the value the committed goldens carry, so the value change and the 23 byte files
+move together in 12A.2.
 
-- **12A.1** — one owner for the minimum: the constant the `terraform` block, the generated `README.md` line and the
-  generated `actions.tf` header read, and one helper in `tests/conftest.py` beside `declared_provider`, so the pins
-  read the version through it instead of stating it as a literal string. The two pins in
-  `tests/test_commit_actions.py` that state the string move to the helper.
 - **12A.2** — the bytes the pins state: the head comment and the `terraform` block in `src/panorama_to_terraform.py`,
   `tests/tflint/probe.tf`, the 17 golden `provider.tf` files, the 6 golden `actions.tf` files that carry the Terraform
   line, `requirements.txt`, and `terraform_version` in `.github/workflows/python-tests.yml`. A minimum change is a
-  golden change, so the template and the goldens move in one commit.
+  golden change, so the template and the goldens move in one commit. The print sites now read the owner constant, so
+  the value change is one edit in `src/commit_actions.py` plus the committed bytes.
 - **12A.3** — the statements that name the pinned provider: `README.md`, `docs/USAGE_GUIDE.md`,
   `docs/RESOURCE_MAPPING.md`, `docs/COVERAGE_MATRIX.md`, and `docs/CODEBASE_ASSEMBLY.md` §12. §12 is the one place
   that states why the 2.0.14 measurements hold for 2.0.15, so the dated measurements stay as they were measured and

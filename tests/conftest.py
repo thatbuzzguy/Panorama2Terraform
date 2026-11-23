@@ -25,6 +25,7 @@ import pytest
 
 import api_requests
 import codebase_state
+import commit_actions
 import entry_coverage
 import import_blocks
 import panorama_to_terraform
@@ -282,6 +283,19 @@ def corpus_fixtures() -> list[str]:
     `input_refusal`; a fixture name is not a rule.
     """
     return [path.name for path in sorted(FIXTURES_DIR.glob("*.xml")) if input_refusal(path) is None]
+
+
+def declared_terraform_minimum() -> str:
+    """Read the Terraform minimum through its owner, `commit_actions.TERRAFORM_MINIMUM`.
+
+    The minimum has one owner in `src/` (Epic 12 decision 2), so a pin reads the version through this helper
+    instead of stating it as a string. The pins that read the generated `terraform` block, the generated
+    `README.md` line and the generated `actions.tf` header read the version here, so a change to the owner moves
+    the pins with it, and the committed goldens are compared against the same value. The provider version has the
+    same shape through `declared_provider`, which reads it from a golden `provider.tf`; the minimum is read from
+    the module that owns it, because a pin cannot read an owner through a copy of the bytes it writes.
+    """
+    return commit_actions.TERRAFORM_MINIMUM
 
 
 def declared_provider() -> tuple[str, str]:

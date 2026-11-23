@@ -4283,22 +4283,27 @@ class TerraformGenerator:
         that names no device prints no `target`, because a declaration with no consumer is a finding, and the
         placeholder device names no device (F3.5).
         """
-        head = """# Palo Alto Networks PAN-OS Provider Configuration
-# Supported provider range: v2 series, baseline 2.0.14 (the latest 2.x
-# release and the version the conformance and validate gates verify).
-# Terraform 1.14 minimum: an `action` block is 1.14 syntax (F6.7).
-terraform {
-  required_version = ">= 1.14"
-  required_providers {
-    panos = {
-      source  = "PaloAltoNetworks/panos"
-      version = "~> 2.0.14"
-    }
-  }
-}
-
-provider "panos" {
-"""
+        # The minimum is read through its owner, `commit_actions.TERRAFORM_MINIMUM`, so this print site states
+        # no copy of the version. The grammar clause states the level the action shape needs (1.14), which is a
+        # measured fact about the language, not the project's minimum.
+        minimum = commit_actions.TERRAFORM_MINIMUM
+        head = (
+            "# Palo Alto Networks PAN-OS Provider Configuration\n"
+            "# Supported provider range: v2 series, baseline 2.0.14 (the latest 2.x\n"
+            "# release and the version the conformance and validate gates verify).\n"
+            f"# Terraform {minimum} minimum: an `action` block is 1.14 syntax (F6.7).\n"
+            "terraform {\n"
+            f'  required_version = ">= {minimum}"\n'
+            "  required_providers {\n"
+            "    panos = {\n"
+            '      source  = "PaloAltoNetworks/panos"\n'
+            '      version = "~> 2.0.14"\n'
+            "    }\n"
+            "  }\n"
+            "}\n"
+            "\n"
+            'provider "panos" {\n'
+        )
         for facts in self.unit_set():
             body = head
             # The host is the fact the run names and cannot read, so the block prints the reference to the name
@@ -6828,7 +6833,7 @@ unit directory.
 
 ## Prerequisites
 
-1. Install Terraform (>= 1.14, the minimum the `terraform` block declares,
+1. Install Terraform (>= {commit_actions.TERRAFORM_MINIMUM}, the minimum the `terraform` block declares,
    because an `action` block is 1.14 syntax)
 2. Install the Palo Alto Networks PAN-OS provider
 

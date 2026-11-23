@@ -15,9 +15,10 @@ Seven rule groups, one per section here:
    second one, and the rule reads no data file.
 4. **The address names the identity the block states**, so the gate reads a block back on its own:
    `read_block` returns the row the block states, and the address agrees with the names inside it.
-5. **The Terraform minimum and the file order.** `required_version = ">= 1.14"` is in the generated
-   `terraform` block and in both goldens, `actions.tf` is the last `.tf` file `main()` writes, and
-   `terraform validate` accepts the block shape.
+5. **The Terraform minimum and the file order.** The minimum has one owner, `commit_actions.TERRAFORM_MINIMUM`,
+   and the generated `terraform` block prints it through that constant; the goldens carry the same line read
+   against the owner, `actions.tf` is the last `.tf` file `main()` writes, and `terraform validate` accepts the
+   block shape.
 6. **Determinism.** Two runs on the same source write the same bytes.
 7. **The push block (F6.10.4).** `block_fields` prints `name` for the fact and `type` for the fact key through
    `ACTION_FILTERS`, so the emitter and the gate read one mapping. No `devices`, because the tool names no serial
@@ -49,6 +50,7 @@ from conftest import (
     SRC_DIR,
     TERRAFORM,
     corpus_fixtures,
+    declared_terraform_minimum,
     parts,
     run_script,
     tf_files,
@@ -509,27 +511,48 @@ def test_action_schema_is_pinned_against_the_live_schema(provider_schemas):
 
 
 def test_the_generated_terraform_block_declares_the_minimum():
-    """Actions need Terraform 1.14, so the generated `terraform` block declares it and both goldens carry
-    the same line.
+    """The minimum has one owner, so the generated `terraform` block prints it through
+    `commit_actions.TERRAFORM_MINIMUM` and both goldens carry the same line read against the owner. A pin that
+    stated the version as a string would hold a second copy of it, so the version is read through
+    `conftest.declared_terraform_minimum`.
     """
+    minimum = declared_terraform_minimum()
     for case in ("sample", "kitchen_sink"):
         # F6.10.3 (§14): `provider.tf` is a unit-set file, so the case holds one per unit, and each states
         # the same block.
         paths = sorted((GOLDEN_DIR / case).rglob("provider.tf"))
         assert paths, case
         for path in paths:
-            assert 'required_version = ">= 1.14"' in path.read_text(encoding="utf-8"), path
+            assert f'required_version = ">= {minimum}"' in path.read_text(encoding="utf-8"), path
     source = inspect.getsource(converter_module.TerraformGenerator.generate_provider_config)
-    assert 'required_version = ">= 1.14"' in source, source
+    # The one-owner rule: the print site reads the version through the constant and states no copy of it.
+    # `test_golden_files.py` pins that the bytes the print site writes are the committed golden bytes.
+    assert "commit_actions.TERRAFORM_MINIMUM" in source, source
 
 
 def test_the_generated_readme_names_the_file_and_the_minimum(tmp_path):
-    """The generated README names `actions.tf` and states the minimum."""
+    """The generated README names `actions.tf` and states the minimum through its owner, so the version the
+    README prints is the version the `terraform` block prints.
+    """
     out = tmp_path / "readme"
     assert _run(SAMPLE_CONFIG, out).returncode == 0
     text = (out / "README.md").read_text(encoding="utf-8")
     assert f"`{ACTIONS}`" in text, text
-    assert "1.14" in text, text
+    minimum = declared_terraform_minimum()
+    assert minimum in text, text
+    # The one-owner rule: the README print site states no copy of the version.
+    source = inspect.getsource(converter_module.TerraformGenerator.generate_readme)
+    assert "commit_actions.TERRAFORM_MINIMUM" in source, source
+
+
+def test_the_action_file_header_states_the_minimum_through_its_owner():
+    """The third place that prints the minimum is the header of `actions.tf`, and it prints it through the same
+    owner, so the `terraform` block, the generated `README.md` line and this header state one version.
+    """
+    minimum = declared_terraform_minimum()
+    source = inspect.getsource(commit_actions.render)
+    assert "TERRAFORM_MINIMUM" in source, source
+    assert f"Actions need Terraform {minimum} or later" in commit_actions.render([]), commit_actions.render([])
 
 
 def test_terraform_validate_accepts_an_action_block(tmp_path):

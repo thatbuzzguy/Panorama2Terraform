@@ -1,6 +1,61 @@
 # Agent Status
 
-## Current position (this worktree — Epic 13 planning, 2026-11-23)
+## Current position (main, Piece 12A.1, 2026-11-23)
+
+Piece 12A.1 is complete on main, 2026-11-23, and is not pushed. It landed the structure only: the owner holds
+`1.14`, the value the committed goldens carry, so no golden byte moved in this piece.
+
+What landed:
+
+- The owner is `src/commit_actions.py::TERRAFORM_MINIMUM`. It sits there because the minimum comes from the action
+  rule (`docs/CODEBASE_ASSEMBLY.md` §12) and `panorama_to_terraform.py` already imports `commit_actions`, so reading
+  the constant adds no import cycle in the one flat `src/` namespace and needs no new module, which
+  `tests/test_layout.py::test_the_indexes_name_every_document_under_them` would refuse.
+- The three places that print the minimum read it: `TerraformGenerator.generate_provider_config` (the head comment
+  and `required_version`), `TerraformGenerator.generate_readme`, and the `actions.tf` header in
+  `commit_actions.render`.
+- The helper is `tests/conftest.py::declared_terraform_minimum`, beside `declared_provider`, and returns the owner,
+  so a change to the owner moves the pins with it.
+- The pins in `tests/test_commit_actions.py`: `test_the_generated_terraform_block_declares_the_minimum` reads the
+  committed golden line against the owner and reads the print site through the owner;
+  `test_the_generated_readme_names_the_file_and_the_minimum` reads the emitted `README.md` through the helper and
+  the print site through the owner; `test_the_action_file_header_states_the_minimum_through_its_owner` is the new
+  pin for the third print site. The module docstring and the pins state no version string, so the module holds no
+  second copy of the version.
+- A code comment that states 1.14 as the level the action shape needs (`src/sanity_checks.py`,
+  `src/import_blocks.py`, the grammar clause of the head comment) is a measurement of the language, not the project
+  minimum, so it was not moved through the constant.
+
+The finding that needs a decision: with the owner at the decided `>= 1.16`, the pins that compare the run's bytes
+with the committed goldens fail, because 17 golden `provider.tf` files, 6 golden `actions.tf` files and
+`tests/tflint/probe.tf` carry `1.14`. That is Piece 12A.2's commit, which moves the constant and those 23 committed
+files together. Nothing disagrees on the tree as it stands, because the constant holds the golden value. The print
+sites are now one edit, so the value change in 12A.2 is the constant plus the committed bytes.
+
+The stale statement of the minimum in this file, and the statements in `README.md`, `docs/USAGE_GUIDE.md`,
+`docs/RESOURCE_MAPPING.md`, `docs/COVERAGE_MATRIX.md` and `docs/CODEBASE_ASSEMBLY.md` §12, are carried by Piece 12A.3.
+`.github/workflows/python-tests.yml` states `terraform_version: '1.16.1'`, which disagrees with the `PLAN.md` CI line
+1.16.7; that file is Piece 12A.2's.
+
+Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
+`README.md`, `commit.md`, `docs/README.md`, `docs/CODEBASE_ASSEMBLY.md` §12, `docs/ARCHITECTURE.md` §1.1,
+`pyproject.toml`, `tools/check_documents.py`, `src/commit_actions.py`, `src/panorama_to_terraform.py`,
+`tests/conftest.py`, `tests/test_commit_actions.py`, `tests/test_golden_files.py`, `tests/test_layout.py`.
+
+Gate, measured 2026-11-23 single-threaded on the tree that holds this work: `ruff check .` clean at `py310`,
+`ruff format --check .` clean on the 109 files it reads (81 Python, 28 markdown), `python3 tools/check_documents.py`
+reports no finding in 7.8 s, `python3 -m pytest` in one process with no parallel plugin exits 0 with 1,796 passed
+and the same 4 `tflint` skips, so 1,800 pins in 54 modules, in 256.3 s on the first run and 314.7 s on the
+confirming run. Read through the per-module collection counts: `tests/test_commit_actions.py` 36 (35 before),
+`tests/test_golden_files.py` 91, `tests/test_layout.py` 1; the other module counts are the Piece 11C.2 baseline.
+`tflint` is absent, so the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py`; `terraform` is present at
+1.16.2, so the provider-schema pins ran. No golden byte moved, so the golden pins read the same committed bytes as
+the baseline.
+
+Piece 12A.2 is the next step, and it needs the decision on the value and on the CI line. `acceptance.md` holds the
+Piece 12A.1 criteria until 12A.2 starts.
+
+## Position in the `input-shapes` worktree (Epic 13 planning, 2026-11-23)
 
 Epic 13, the shapes an input can be, is planned in the `input-shapes` worktree on branch
 `input-shapes`, based on `6134a41`. The design record is `docs/INPUT_SHAPES.md`, the pieces are in
