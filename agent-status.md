@@ -2,17 +2,11 @@
 
 ## Current position
 
-Piece 11B.4 is reviewed and closed, 2026-11-22, and neither commit is pushed: `4057502` holds the module and the
-pins, `f764957` holds the tracking markdown. The gate for a partial run, as `docs/MULTI_RUN_CODEBASE.md` §5 states
-it: six pins, one committed module changed, no committed golden moved. The acceptance review read every criterion
-against the tree and met it, re-measured the piece independently single-threaded, and corrected the things the
-first pass stated wrong: two documents and the `README.md` §Testing entry still read the plan check as running once
-per unit directory the record names, which is the pre-piece rule; the measurement attributed the 29 root findings to
-three records when two carry them; `tests/test_round_trip.py`'s pin list repeated one fact; `docs/MULTI_RUN_CODEBASE.md`
-§5 rule 5 named no pin; the wording about `sanity_checks.SKIP` read against its own value; and one `backlog.md`
-bullet lost its indent. Phase 11B is closed, so the next piece is 11C.1, the existing records as a reference source.
-The design record for Epic 11, the codebase several runs write into, is `docs/MULTI_RUN_CODEBASE.md`, the pieces are
-in `to-do.md`, and `acceptance.md` is this piece's review record.
+Piece 11C.1 is committed, 2026-11-23, and neither commit is pushed: `d2249e0` holds the read step, the four module
+docstrings and the five pins, and the `docs(tracking)` commit that follows it holds the tracking markdown. Its
+acceptance review is the next step, and then Piece 11C.2. The design record for Epic 11, the codebase several runs
+write into, is `docs/MULTI_RUN_CODEBASE.md`, the open pieces are in `to-do.md`, and `acceptance.md` is this piece's
+record.
 
 Four decisions are agreed, and they are the shape of the record:
 
@@ -27,51 +21,41 @@ Four decisions are agreed, and they are the shape of the record:
 4. The merged records are the codebase-level view. The run's report gains one section that names the units the run
    built and the codebase units it did not read, so no fifth root-set file states the unit set a second time.
 
-What Piece 11B.4 landed:
+What Piece 11C.1 landed:
 
-- The measurement, taken before the decision, on `tests/fixtures/kitchen_sink.xml` as the codebase (11 units) and
-  `tests/fixtures/address_objects.xml` as the second run (1 unit, `shared_45ca31c3`), read through `tests/conftest.py`
-  and `tests/conftest.py`'s `record_rows`: the second run wrote one file inside a unit directory,
-  `shared_45ca31c3/address_objects.tf`, and the gate read the tree as 61 `.tf` files across 11 unit directories, 8
-  data files and 64 blocks. Against the record the second run wrote at the root, `data_files` reports 37 FAIL findings
-  and `rule_blocks` reports 4, so the entry point exits 1. The cross-check reports 44 findings, 36 of them for units
-  the second run read no rows for. With the merged record written at the root through `codebase_state.merge_rows` and
-  `write_path`, the same tree reports 0 FAIL and 9 WARN, so the exit code is 0.
-- The decision, in one line: the exit 1 is what the run wrote at the root and not a gate rule, so no severity rule
-  and no exit-code rule changed, and the piece reads the gate rule that names which set each rule reads. The block
-  rules read every `.tf` file below the codebase root, so a finding names the path from the root and can name a unit
-  the run did not write — measured as the `placeholders` WARN at `shared_a6577c11/vpn.tf:67`, a unit the second run
-  read no rows for. The data rule reads the record set at the root as the codebase set, unchanged as a rule. The two
-  rules that read two sets read the run's unit set, so a unit the run read no rows for enters no count: the
-  cross-check reports 8 findings for the second run instead of 44, all inside `shared_45ca31c3`, and the fact that a
-  `.tf` file at the codebase root names no unit is unchanged. The plan check and the rule-set check run once per unit
-  directory the run wrote, and each result names the directory it ran on. `unit_directories` keeps reading the record
-  when a call names no run, which is how `check_rule_blocks` and `tests/conftest.py`'s `data_file_set` read it. For a
-  single run the run's set and the record's set are the same set in the same order, so the pins that read `--validate`
-  and `--tflint` today are unchanged, and the report bytes are unchanged.
-- Six pins, one per stated fact, in the module that owns the rule, all read on committed material and none building a
-  row by hand: 4 in `tests/test_sanity_gate.py`, 1 in `tests/test_round_trip.py` and 1 in
-  `tests/test_data_file_gate.py`. The pins that read the two command checks pass `terraform=None` or `tflint=None`
-  and clear `PATH`, so the gate's own skip rule answers nothing on a machine that has a binary, and the pins read
-  the directory each check ran on from the result. The two-run pattern and the merged record set are facts more than one test module reads, so they are stated
-  once in `tests/conftest.py` (`partial_run` and `write_merged_records`), read through `sanity_checks.DATA_FILES`,
-  `codebase_state.JOIN_KEYS` and `write_path`; no test module states a pattern, a file set, a merge or a join key of
-  its own, and no test module imports another test module.
-- The condition the piece could not state on committed material, recorded in `backlog.md`: the gate cannot show a
-  clean partial run until the run writes the merged record at the root, which is Phase 11C. No severity rule was
-  invented for it.
-- Gate, measured 2026-11-22 on the tree after the review corrections, single-threaded: `ruff check .` is clean at
-  `py310`, `ruff format --check .` is clean on the 108 files it reads (81 Python files, 27 markdown files),
-  `python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` exits 0 with 1,784 pins passing and
-  the same 4 `tflint` skips, so 1,788 pins in 54 test modules, 6 more than the 1,782 pins Piece 11B.3 measured. Read
-  through the per-module collection counts: `tests/test_sanity_gate.py` collects 118 (114 before),
-  `tests/test_round_trip.py` 35 (34 before) and `tests/test_data_file_gate.py` 29 (28 before). `tflint` is absent on
-  this machine, so the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py` and each skips only for the
-  missing binary; `terraform` is present, so the pins that read the live provider schema ran. `src/` holds 24
-  modules, which is the count `docs/LICENSING.md` states. No committed golden changed, and the three single-run
-  reports read byte-identical against the module as it stood at `4057502^`.
+- The measurement, taken before the decision, on `tests/fixtures/kitchen_sink.xml` as the codebase and
+  `tests/fixtures/address_objects.xml` as the second run, read through `tests/conftest.py` and its `record_rows`:
+  the rows the codebase holds read back as 11, 61, 9 and 3 for the four records, the rows the second run built as
+  1, 5, 9 and 3, and `merge_rows` answers 11, 62, 9 and 3. The second run's own unit set names 1 unit,
+  `shared_45ca31c3`, the merged set names 11, so the difference is the 10 units the second run read only through the
+  record. Inside the 1 directory its own set names the tree holds 12 files and one byte differs from the first run,
+  `shared_45ca31c3/address_objects.tf`; inside the 10 directories only the merged set names, all 60 bytes are the
+  bytes the first run wrote and no file there is new. The second run's `SOURCE.txt` is byte-identical to the record
+  the same run wrote standalone, so the reference read adds no record entry and names none of the four records.
+  The pair trees, including the reports, are byte-identical between the committed module at `3b221b4` and the tree
+  with this change, so no committed golden moved and no report moved.
+- The decision, in one line: the existing records are a reference source read as data, so the run gains only the
+  fields `parse_rows` reads back, and the entry point owns the read step while stating no key, shape, reader, path
+  rule or unit rule of its own. The order rule and the acyclic rule read the merged set, because `rank`, `after` and
+  a cycle are facts about the codebase and not about a run; the ownership finding half stays on the rows the run
+  built, because it reads `line`, `container` and `reason`, which `parse_rows` does not read back. The property half
+  has nothing to read from a record, because `ownership.FIELD_ORDER` holds no property field, so a value comes only
+  from the state read the door makes. The write boundary is unchanged and stays Piece 11C.3: the run writes the rows
+  it built, so the exit code and the data-rule findings Piece 11B.4 measured are not moved by this piece.
+- Five pins, one per stated fact, in the module that owns the fact: 1 in `tests/test_codebase_state.py`, 2 in
+  `tests/test_state_coverage.py`, 1 in `tests/test_provenance.py`, 1 in `tests/test_unit_manifest.py`. The committed
+  pair the pins read is stated once, as `CODEBASE_FIXTURE` and `RUN_FIXTURE` in `tests/conftest.py`, which the five
+  modules that read it now import from there instead of naming it themselves. No pin builds a row by hand, and no
+  test module imports another test module.
+- Gate, measured 2026-11-23 single-threaded on the tree that holds this work: `ruff check .` clean at `py310`,
+  `ruff format --check .` clean on the 108 files it reads (81 Python, 27 markdown), `python3 tools/check_documents.py`
+  reports no finding, `python3 -m pytest` exits 0 with 1,789 passed and the same 4 `tflint` skips, so 1,793 pins in
+  54 modules, in 276.34 s. Read through the per-module collection counts: `tests/test_codebase_state.py` 11
+  (10 before), `tests/test_provenance.py` 33 (32), `tests/test_state_coverage.py` 32 (30),
+  `tests/test_state_input.py` 22, `tests/test_unit_manifest.py` 42 (41). `tflint` is absent, so the 4 skips are the
+  `tflint` pins in `tests/test_sanity_gate.py`; `terraform` is present, so the provider-schema pins ran.
 
-The records for Pieces 11B.1, 11B.2, 11B.3, E10.3 and F5.6 are not kept here: the git history holds them.
+The records for Pieces 11B.1, 11B.2, 11B.3, 11B.4, E10.3 and F5.6 are not kept here: the git history holds them.
 
 ## Rules to keep when writing documents
 

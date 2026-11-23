@@ -574,7 +574,7 @@ The records, the reports, and the write path:
   and the exit codes, and the byte rule between two runs. F8.7: the unit join in `api_requests.py` reads
   this unit set through `unit_manifest.units`, so path 2 states no second unit rule, and the same rule reads
   the codebase's set from the rows a record read back, so the two sets differ only by the units a run read
-  only through the record
+  only through the record, and the units an update run wrote files inside
 - `tests/test_ownership.py` - the owner of a repeated name as data (`OWNERSHIP.json`): one row per entry a
   matrix row covers, the join to the manifest, the seven emitters that print the flag, the finding the rule
   cannot decide, and the golden bytes
@@ -591,8 +591,9 @@ The records, the reports, and the write path:
 - `tests/test_codebase_state.py` - the merge between the rows a codebase holds and the rows a run read
   (`codebase_state.py`): the join key per record read through each record module's `parse_rows`, the merge rule, the
   byte rule between two runs for a record with no existing file, the rule that the merge adds no field and holds no
-  run fact, the order of a merged set read through each record module's own order rule, and the rule that the module
-  states no rule an owner states and writes no file
+  run fact, the order of a merged set read through each record module's own order rule, the rule that the module
+  states no rule an owner states and writes no file, and the entry point's read of the existing records through the
+  owners' readers
 - `tests/test_rule_data.py` - the rule as data (`RULE_ROW_FIELDS`): the row shape and the printed CSV form of the
   same rows, the properties read through the recorded object, the `for_each` key as the chain ordinal joined to the
   identity digest read through `state_coverage` and `unit_manifest`, the chain grouping the generator reads through
@@ -629,7 +630,8 @@ The records, the reports, and the write path:
   read back as data, one record per source the run read, one record per request the path 2 run read with the
   `scope` field naming the path that request declared, the `Source:` label for both sources,
   the rule that a cache entry is not pruned while a written record references it, the action reading the record
-  file the same run wrote, and the record byte rule between two runs
+  file the same run wrote, the record byte rule between two runs, and the rule that a record read back is not a door
+  source, so an update run names none of the codebase's records
 - `tests/test_reports.py` - the two operator-facing migration reports name the scope each entry came from,
   grouped by one rule
 - `tests/test_golden_files.py` - the golden byte-for-byte gates, read as paths from the case directory

@@ -161,9 +161,24 @@ Three facts already hold, and they are the reason no new naming rule or identity
 ## 4. Ownership, edges and order across runs
 
 1. **The existing records are a reference source**, read the way the state document is read: the run writes no
-   fact it cannot read from a source, and it gains the facts the record holds. The run reads them before it
-   builds the ownership rows, so the ownership rule and the order rule run over the merged set. The step is in
-   `generate_run`, which states no rule the owners state.
+   fact it cannot read from a source, and it gains the facts the record holds. Each record is read as data through
+   its own module's `parse_rows`, and the two row sets are combined only through `codebase_state.merge_rows`, so no
+   second reader, join, key, row shape or path rule appears in the read. The step is in `generate_run`, which owns
+   the read and states no key, shape, reader, path rule or unit rule of its own, so the run gains only the fields
+   `parse_rows` reads back. The read reaches `state_coverage` through `ownership_key` and `STATE_PROPERTY_NAMES`, so
+   the ownership key half answers for a row read from the record as it answers for a state entry, and the comparison
+   half has nothing to compare, because the ownership row shape holds no property field. A record read back through
+   `parse_rows` is a data read, not a door source, so `SOURCE.txt` names no record for it and `provenance.py` gains
+   no source kind, no field and no record entry. The units the run wrote are `unit_manifest.units` over the rows its
+   own ledger built, and the units it read only through the record are the same rule over the merged rows, so the
+   naming rule `unit_manifest.directory_name` names both sets through `naming.py`. Pinned by
+   `tests/test_codebase_state.py::test_the_run_reads_the_existing_records_through_the_readers_the_shapes_owners_state`,
+   `tests/test_state_coverage.py::test_the_reference_source_is_read_as_data_through_the_readers_the_shape_owners_state`,
+   `tests/test_state_coverage.py::test_the_reference_read_reaches_the_ownership_half_and_no_property_value`,
+   `tests/test_provenance.py::test_an_update_run_names_only_the_sources_the_door_read` and
+   `tests/test_unit_manifest.py::test_the_units_the_run_names_are_the_units_it_wrote_files_inside`. The
+   finding half stays on the rows the run built, because it reads `line`, `container` and `reason`, which
+   `parse_rows` does not read back; that condition is recorded in `backlog.md` with rule 5.
 2. **The ownership chain gains one source.** `ownership.parent_map` reads the declared parent source, the
    parent fact the parse captures, and the codebase's existing rows. A targeted run that reads no parent can
    still name the ancestor for a name the codebase already owns, so `kind` answers `definition` or `override`
@@ -282,6 +297,7 @@ finding.
 
 | Rule | Owner module | Test module that holds the pins |
 |---|---|---|
+| The reference-source read step, and the rules it reads through its owners | `panorama_to_terraform.py` (`generate_run`) | `tests/test_codebase_state.py`, with the half the read reaches in `tests/test_state_coverage.py`, the record half in `tests/test_provenance.py` and the unit half in `tests/test_unit_manifest.py` |
 | The run's read set, the selection shape, the excluded names | `container_coverage.py` for the path shape, `api_requests.py` for the read set, `panorama_to_terraform.py` (`shared_arguments` and `shared_checks`) for the argument | `tests/test_api_requests.py` |
 | The run's unit set, the codebase unit set, the report section shape | `unit_manifest.py` | `tests/test_unit_manifest.py` |
 | The merge rule and the join key per record | `codebase_state.py`, named in `docs/ARCHITECTURE.md` §1 | `tests/test_codebase_state.py`, with the data rule's reader pin in `tests/test_data_file_gate.py` |

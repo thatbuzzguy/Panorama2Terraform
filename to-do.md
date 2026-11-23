@@ -10,8 +10,6 @@ is pending says so. Acceptance criteria for the open piece are in `acceptance.md
 
 ### Phase 11C, the update run
 
-- **11C.1** — the existing records as a reference source, read the way the state document is read, and the rule
-  that the run names the units it wrote.
 - **11C.2** — the run's report section, the sets it names and the rule that it prints only when the codebase
   holds a unit the run did not read.
 - **11C.3** — the write boundary: the run writes what it built and deletes nothing; the tool owns every file it
