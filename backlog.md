@@ -166,6 +166,72 @@ here with that rule named.
   tool emits no `devices` for a device group, because it names no serial, so no committed output is affected and no
   pin reads it. The plan-time effect needs a live target and stays here.
 
+## Process debt (the document rules and the pins that read them)
+
+Sanity check taken 2026-11-23 on the merged tree, single-threaded. The gate was green before these items were
+written: `ruff check .` clean, `ruff format --check .` clean on the 108 files it reads, `pytest` 1,789 passed and
+the same 4 `tflint` skips in 331.92 s, `python3 tools/check_documents.py` reports no finding in 8.4 s. The sizes
+the check measured: 24 `src/` modules and 22,881 lines, 54 test modules and 32,459 lines, 1,793 pins
+(1,144 test functions plus parametrization), 27 tracked markdown documents and about 8,800 lines, 130 numbered
+rules in the four owner documents, 719 `§` cross-references, 273 test-name claims (224 distinct names).
+
+- **The two pin criteria cannot both hold for a document.** `acceptance.md` criterion 1 says one place states each
+  pin; criterion 3 says every document that states a provider fact names the pinned provider. The provider pin is
+  stated in 11 markdown documents, 6 `src/` modules, the 17 golden `provider.tf` files and `tests/tflint/probe.tf`;
+  the Terraform minimum is stated in 8 markdown documents, 4 `src/` modules, the 17 golden `provider.tf` files and
+  the 6 golden `actions.tf` files. So a pin move is a change to about 40 files, and the one-owner rule is satisfied
+  in `src/` and not in the documents. A decision is needed: either the documents link to the pin owner and state no
+  version, or the fan-out is accepted and the piece list names the files it reaches.
+- **One pin statement is already stale.** `agent-status.md` states "Actions need Terraform 1.14 or later; the
+  committed goldens now declare it", which is true of the bytes on the tree today and is not the `>= 1.16` decision
+  `PLAN.md` records. The line is not in the Piece 12A.3 file list, so nothing moves it. It is the second live
+  statement of the minimum.
+- **Permanent rules have no owner document.** `agent-status.md` holds three rule sets that no owner document
+  states: the writing rules (lines 60 to 78), the gate and CI rules (80 to 102), and the shape-table and write-path
+  watch list (104 to 300). `docs/README.md` owns the rule that each rule lives in one document, so a rule stated
+  only in the status file is both a restatement and a rule that can be lost, because the status file is rewritten
+  between sessions and `AGENTS.md` removes completed detail from the tracking markdown. The writing rules need an
+  owner document, named by `docs/README.md` and the root index, and `agent-status.md` keeps the status and the links.
+- **The document rules are enforced outside the gate.** `AGENTS.md` names the gate as `ruff check .`,
+  `ruff format --check .` and `pytest`. `tools/check_documents.py` holds the document-review checks and states that
+  the test set does not read it, so the claim rule, the matrix parity, the no-test-count rule and the once-naming
+  rule are read only when someone runs the script by hand. It reads only the standard library, writes no file, and
+  runs in 8.4 s, so one CI step could run it. Not open as a pin: the rule that a wording check is not a pin still
+  holds either way.
+- **Two license counts are read from the working tree, which the document says they are not.**
+  `docs/LICENSING.md` line 30 states the counts are read at the commit the document names and not from the working
+  tree, and the license checks read `git blame` and `git show` at that commit. The notice count and the module count
+  at `tools/check_documents.py` lines 304 to 310 read the working tree. They agree today (4 notices, 24 modules), so
+  the check passes by coincidence; a `src/` module that carries a notice fails a document that was correct when it
+  was written. Reading both counts at the named commit settles this and the item above about the notice set not
+  being pinned.
+- **Three checks read an exact phrase, so those sentences cannot be reworded.** `tools/check_documents.py` lines 316
+  to 336 and 379 require the console line shape string to appear once in `docs/ARCHITECTURE.md`, the phrase that the
+  section states the root index names the test set, and the phrase that `README.md` §Testing names each entry once,
+  and forbid two phrases. This is allowed by the rule that a wording check is a document review and not a pin, but
+  the documents carry strings that cannot be paraphrased. The name checks in the same function (the §1 table row, the
+  function name) are the pattern that does not depend on wording.
+- **Negative pins constrain names.** Measured 2026-11-23: 105 test functions state an absence in their name, and 20
+  test modules plus `tests/conftest.py` read `src/` module sources to hold them (the writer scan, the environment-name
+  scan, the console-line scan, the second-naming-rule scan, the no-flag scan). By the rule `agent-status.md` states, a
+  source that names a forbidden word cannot be scanned, so a code file cannot use the word in a comment. Cheap to run,
+  and the exception table pattern already exists (the writer scan excludes `src/write_path.py`, `tests/conftest.py` is
+  outside the set). If the count grows, the five scans could read one table of exceptions instead of five lists.
+- **Documentation edits are coupled to test names.** Measured over the whole history: 101 of the 136 commits that
+  changed a test file also changed a markdown document, and 140 of the 289 commits (48%) changed markdown. The cause
+  is the rule that each rule names the test that pins it, so a test rename is a markdown edit, and the rule that every
+  index names every document and the §1 table names every `src/` module, so a new file is a markdown edit pinned by
+  `tests/test_layout.py::test_the_indexes_name_every_document_under_them`. Nothing is wrong here; the number is the
+  cost of the rule set, and the pins that read names rather than wording are what keeps it bounded.
+- **The pre-commit hooks contradict the gate and state a pin twice.** `.pre-commit-config.yaml` line 10 says
+  ruff-format is not part of the gate, while `PLAN.md` says the gate runs `ruff format --check .`. The hook rev
+  `v0.16.10` restates the `requirements.txt` pin with nothing tying the two, so they can move apart. Either the hooks
+  are part of the project's tooling and one file owns the pin, or they are removed.
+- **Ignored run output in the root still carries the old pin strings.** `terraform_example/` and `panorama_cache/`
+  are gitignored and present, and `terraform_example/` states 2.0.14 and `>= 1.14`. A pin sweep reports 49 files or
+  44 depending on whether ignored files are counted, while Piece 12A.2 counts only the tracked goldens. Clear the
+  tree and state which set a pin sweep reads.
+
 ## Out of Scope
 
 - The orchestrator is not this tool's job. The tool writes data an orchestrator reads: the unit

@@ -8,6 +8,9 @@ acceptance review is the next step, and then Piece 11C.2. The design record for 
 write into, is `docs/MULTI_RUN_CODEBASE.md`, the open pieces are in `to-do.md`, and the acceptance record for this
 piece is in `a153b04` — `acceptance.md` now holds the Epic 12 criteria.
 
+A document-rule sanity check ran 2026-11-23 on the merged tree with the gate green. Its findings are recorded in
+`backlog.md` §Process debt. One of them is the stale minimum line in this file, which Piece 12A.3 carries.
+
 Four decisions are agreed, and they are the shape of the record:
 
 1. The four root records become accumulated codebase state: a run reads the existing record through its own
