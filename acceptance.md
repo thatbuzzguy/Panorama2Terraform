@@ -5,8 +5,9 @@ gate with. Two decisions were taken on these criteria, 2026-11-22: the floor is 
 Terraform minimum gets one owner. A pin move is a golden change, so the template, the goldens, the probe, CI and the
 documents that state the version move in one commit with the measurements that cover the new pin.
 
-The work is in the `pin-update` worktree, because another agent holds main. The files there are the plan; the
-measurement record for main is not changed by it.
+The criteria were written in the `pin-update` worktree, which merged into main on 2026-11-23; the Piece 11C.1 record
+this file held before is in `a153b04`. The measurements below were taken 2026-11-22 in the worktree, on the tree
+before Piece 11C.1 landed, and the one that Piece 11C.1 moved is re-measured in `backlog.md`.
 
 ## Criteria
 

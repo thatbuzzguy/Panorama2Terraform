@@ -5,8 +5,8 @@
 Piece 11C.1 is committed, 2026-11-23, and neither commit is pushed: `d2249e0` holds the read step, the four module
 docstrings and the five pins, and the `docs(tracking)` commit that follows it holds the tracking markdown. Its
 acceptance review is the next step, and then Piece 11C.2. The design record for Epic 11, the codebase several runs
-write into, is `docs/MULTI_RUN_CODEBASE.md`, the open pieces are in `to-do.md`, and `acceptance.md` is this piece's
-record.
+write into, is `docs/MULTI_RUN_CODEBASE.md`, the open pieces are in `to-do.md`, and the acceptance record for this
+piece is in `a153b04` — `acceptance.md` now holds the Epic 12 criteria.
 
 Four decisions are agreed, and they are the shape of the record:
 
@@ -301,9 +301,9 @@ The records for Pieces 11B.1, 11B.2, 11B.3, 11B.4, E10.3 and F5.6 are not kept h
 
 ## The version pins (planning, 2026-11-22)
 
-Main is held by another agent, so this work sits in the `pin-update` worktree and merges back afterward. Nothing
-is pinned yet: the plan is in `PLAN.md`, the pieces are in `to-do.md`, and `acceptance.md` holds the criteria and
-the measurements the decision rests on.
+This work was planned in the `pin-update` worktree, which merged into main on 2026-11-23. Nothing was pinned at the
+time of the plan: the decisions are in `PLAN.md`, the pieces are in `to-do.md`, and `acceptance.md` holds the
+criteria and the measurements the decisions rest on.
 
 The measurements taken 2026-11-22, single-threaded, in `/tmp/opencode`:
 
@@ -320,5 +320,5 @@ The measurements taken 2026-11-22, single-threaded, in `/tmp/opencode`:
 
 The two decisions, taken 2026-11-22: the floor is `>= 1.16` with CI at 1.16.7, so no statement in the documents
 reaches past what was measured, and the Terraform minimum gets one owner the way the provider version has one. The
-pieces are 12A.1 to 12A.3 in `to-do.md`, and the gate baseline this task starts from is the one measured on
-2026-11-22 in the Current position above.
+pieces are 12A.1 to 12A.3 in `to-do.md`. The gate baseline this task starts from is the Piece 11C.1 measurement in
+the Current position above; the measurements below were taken on the tree before Piece 11C.1 landed.

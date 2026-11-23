@@ -20,9 +20,9 @@ consequence are in `backlog.md`.
 
 ## Epic 12 — the pins (plan in `PLAN.md`, criteria in `acceptance.md`)
 
-Run in the `pin-update` worktree, because main is held by another agent. The two decisions are in `PLAN.md`: the
-floor is `>= 1.16` with CI at 1.16.7, and the minimum gets one owner. The provider pin moves to `~> 2.0.15` on the
-schema measurement, which changes no measured provider fact.
+Planned in the `pin-update` worktree, merged into main 2026-11-23, and the pieces run on main. The two decisions
+are in `PLAN.md`: the floor is `>= 1.16` with CI at 1.16.7, and the minimum gets one owner. The provider pin moves
+to `~> 2.0.15` on the schema measurement, which changes no measured provider fact.
 
 - **12A.1** — one owner for the minimum: the constant the `terraform` block, the generated `README.md` line and the
   generated `actions.tf` header read, and one helper in `tests/conftest.py` beside `declared_provider`, so the pins
