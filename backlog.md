@@ -211,7 +211,24 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   and forbid two phrases. This is allowed by the rule that a wording check is a document review and not a pin, but
   the documents carry strings that cannot be paraphrased. The name checks in the same function (the §1 table row, the
   function name) are the pattern that does not depend on wording.
-- **Negative pins constrain names.** Measured 2026-11-23: 105 test functions state an absence in their name, and 20
+- **The absence pins read architecture, not behaviour.** Measured 2026-11-23: 10 test modules read a `src/` module's
+  own source through `Path(module.__file__)`, 53 assertions read that text, 20 assert a word is absent, 4 assert that a
+  module does not define a name (46 names across the four pins), and 1 asserts a module's exact definition set
+  (`tests/test_write_path.py`: `{"LF", "unit_path", "root_path", "write_file"}`). Four pins also read forbidden tokens,
+  including `open(`, `write_text`, `Path(`, `os.environ`, `API_KEY_ENV`, `import os` and `console_line`. A helper rename,
+  a function split, or a comment that names one of those tokens fails a pin although no behaviour changed. The pattern is
+  what `agent-status.md` states as the reason a scan reads only the tool's own modules, so the cost is that the scanned
+  modules cannot use the forbidden words in a comment or a helper name. One scan that reads one table of
+  (module, names, tokens) with the owner named for each row would make a new module a row and a rename a table change
+  instead of a pin body.
+- **Adding a file is a markdown edit, and a pin holds it.** Measured 2026-11-23 with two scratch files that were then
+  removed: a test module no index names fails
+  `tests/test_layout.py::test_the_indexes_name_every_document_under_them`, and a `src/` module the §1 module table does
+  not name fails the same pin. The same scratch `src/` module also failed the license check, which is the working-tree
+  reading above: the document said 24 modules and the check measured 25, so a module that carries no notice still moves
+  a count the document says was read at a pinned commit. Both are intended rules; the note is that the index rule is a
+  pin and the count rule is not, so the two are enforced in different places and cannot be checked by the same run.
+- **Negative pins read names, not behaviour.** Measured 2026-11-23: 105 test functions state an absence in their name, and 20
   test modules plus `tests/conftest.py` read `src/` module sources to hold them (the writer scan, the environment-name
   scan, the console-line scan, the second-naming-rule scan, the no-flag scan). By the rule `agent-status.md` states, a
   source that names a forbidden word cannot be scanned, so a code file cannot use the word in a comment. Cheap to run,
