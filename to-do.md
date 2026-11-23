@@ -18,6 +18,30 @@ is pending says so. Acceptance criteria for the open piece are in `acceptance.md
 The move fact, the stale-file boundary, the selection for a `vsys` or a device unit, and the `--prune-cache`
 consequence are in `backlog.md`.
 
+## The version pins (plan in `PLAN.md`, criteria in `acceptance.md`)
+
+Run in the `pin-update` worktree, because main is held by another agent. The measurements the pieces rest on are
+in `acceptance.md`; the pieces are the parts of the move, and none of them is open until the floor is decided.
+
+- **P.1** — the floor decision. The provider half is settled by the measurement: the schema answer for 2.0.14 and
+  2.0.15 is byte-identical, so `~> 2.0.14` moves to `~> 2.0.15` and no measured provider fact changes. The Terraform
+  half is open: `>= 1.14` names a line upstream no longer supports, so the choice is the line the evidence covers
+  (1.16, newest patch 1.16.7) against the current line (1.17, newest patch 1.17.2), which needs CI and the local
+  tool to move first.
+- **P.2** — one owner for the minimum. The provider version has one owner, `tests/conftest.py::declared_provider`.
+  The minimum is written by three places (the `terraform` block in `src/panorama_to_terraform.py`, the generated
+  `README.md`, and the generated `actions.tf` header in `src/commit_actions.py`) and read by one pin, so the piece
+  decides whether the minimum gets one owner too, and moves the two pins in `tests/test_commit_actions.py` that
+  state the version as a string.
+- **P.3** — the bytes the pins state: the head comment and the `terraform` block in `src/panorama_to_terraform.py`,
+  `tests/tflint/probe.tf`, the 17 golden `provider.tf` files, the 6 golden `actions.tf` files that carry the
+  Terraform line, and `requirements.txt` and `.github/workflows/python-tests.yml` for the tool pins. A minimum
+  change is a golden change, so the template and the goldens move in one commit.
+- **P.4** — the statements that name the pinned provider: `README.md`, `docs/USAGE_GUIDE.md`,
+  `docs/RESOURCE_MAPPING.md`, `docs/COVERAGE_MATRIX.md`, and `docs/CODEBASE_ASSEMBLY.md` §12. §12 is the one place
+  that states why the 2.0.14 measurements hold for 2.0.15, so the dated measurements stay as they were measured and
+  one sentence names the schema identity.
+
 ## Feature-sized items that stay blocked
 
 Feature-sized items that stay blocked on a fact the tool cannot read offline are recorded in

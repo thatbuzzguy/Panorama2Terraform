@@ -96,6 +96,32 @@ the Epic 8 §4 facts, with the value half still gated on a live target. The reco
 documentation-derived response builder under `tools/`, read through the injected-producer seam, so Goal 1
 and the standard-library rule are unchanged. Promoted to an epic on decision.
 
+## Planning — the version pins (the provider constraint, the Terraform minimum, the tool pins)
+
+The pins are measurements. The provider constraint names the provider version the schema gate reads, the Terraform
+minimum names the lowest line the project has measured on, and the CI tool pins name the versions the recorded gate
+answers were measured on. Two facts put them in front:
+
+- Provider 2.0.15 (published 2026-11-06) is the current 2.x release against the pinned 2.0.14
+  (published 2026-09-29). Its two changes are Go dependencies and the device-group membership marshal
+  (pan-os-codegen #745), and `terraform providers schema -json` answers byte for byte the same for both
+  (measured 2026-11-22). So a provider move changes no measured provider fact — the 128 resource schemas, the 128
+  data source schemas, the two action schemas and the value lists the gate reads are the same set — and changes
+  only the bytes the pin states. The provider fact this move does not settle is #745, which is inside the
+  provider's own API call and reaches no committed output, so it stays in `backlog.md`.
+- Terraform 1.14 and 1.15 are end of life upstream (security support ended 2026-08-26 and 2026-10-21), so
+  `>= 1.14` states a floor upstream no longer supports, while the project measures on the 1.16 line: CI pins
+  1.16.1 and the recorded measurements name 1.16.2. The decision is the floor — the line the evidence covers
+  (1.16, newest patch 1.16.7), or the current line (1.17, newest patch 1.17.2), which needs the CI pin and the
+  local tool to move first. The action grammar the tool writes is accepted on both, measured on the committed
+  goldens.
+
+The provider version has one owner, `tests/conftest.py::declared_provider`; the Terraform minimum is written by
+three places and read by one pin, so the piece includes deciding whether it gets one owner too. Definition of
+done: one place states each pin, the template, the goldens, the probe, CI and the documents state the same
+version, and every provider fact in the documents is a measurement made against that pin. Promoted to an epic on
+the floor decision.
+
 ## Out of Scope (tracked in backlog.md)
 
 - PAN-OS version matrix testing

@@ -298,3 +298,26 @@ The records for Pieces 11B.1, 11B.2, 11B.3, 11B.4, E10.3 and F5.6 are not kept h
   set: the writer scan, the environment-name scan, the console-line scan, and the second-naming-rule scan. So
   path 2 states no second rule of any kind, and each new path 2 rule names the module that holds it and the test
   that pins it. Its rules are in `docs/API_CONVERSION_PATH.md`.
+
+## The version pins (planning, 2026-11-22)
+
+Main is held by another agent, so this work sits in the `pin-update` worktree and merges back afterward. Nothing
+is pinned yet: the plan is in `PLAN.md`, the pieces are in `to-do.md`, and `acceptance.md` holds the criteria and
+the measurements the decision rests on.
+
+The measurements taken 2026-11-22, single-threaded, in `/tmp/opencode`:
+
+- `terraform providers schema -json` answers byte for byte the same for provider 2.0.14 and 2.0.15: 2,146,209
+  bytes, md5 `dfab791bae568bdd5ccdc69ca066a5b4`. So the provider move changes no measured provider fact and changes
+  only the bytes the pin states.
+- The 17 golden unit directories validate on provider 2.0.15 with Terraform 1.16.2, and the same 17 validate with
+  Terraform 1.17.2, so the action grammar is accepted on both lines.
+- `tests/tflint/probe.json` reproduces byte for byte on tflint v0.66.0 with the bundled ruleset v0.17.0, for the
+  probe at either provider version, read through the flags `sanity_checks.TFLINT_FLAGS` and
+  `sanity_checks.TFLINT_RULE_FLAG` state.
+- The gate answers the same on the pinned tool versions as on the newer ones, apart from the one ruff finding listed
+  in `backlog.md`.
+
+The open fact is the Terraform floor: `>= 1.14` names a line whose upstream security support ended 2026-08-26,
+while the project measures on 1.16 (CI pins 1.16.1, this machine runs 1.16.2). The gate baseline this task starts
+from is the one measured on 2026-11-22 in the Current position above.

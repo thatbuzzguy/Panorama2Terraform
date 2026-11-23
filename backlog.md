@@ -145,6 +145,26 @@ here with that rule named.
   the gate reports nothing. A pin would read every module source and compare the notice against the
   blame author, which is a document check rather than a rule the tool enforces, so it is not built.
 
+- A lint pin move is a gate change, not a version bump. Measured 2026-11-22: the pinned ruff 0.16.10 reports
+  nothing on the tree, ruff 0.17.6 reports one SIM102 finding at `tests/test_state_coverage.py:653` (a nested `if`
+  inside an `elif`), so the pin and that change move together or the pin stays. pytest 9.1.1 against pytest 9.2.0
+  is the same run on the same tree: the same shape, the same four tflint skips at the same positions, so the pytest
+  pin moves with no code change. Neither is open until the pin decision in `PLAN.md` takes the tool pins in.
+
+- The tflint answer is a measurement on a binary, and nothing in the tree can re-measure it. `tests/tflint/probe.json`
+  is the answer tflint v0.66.0 with the bundled ruleset v0.17.0 gave for `tests/tflint/probe.tf`, measured
+  2026-11-18, and it reproduces byte for byte on 2026-11-22 through the flags `sanity_checks.TFLINT_FLAGS` and
+  `sanity_checks.TFLINT_RULE_FLAG` state. The pins that run it skip on a machine with no tflint, so CI is the only
+  place that re-reads it, and the ruleset version is recorded only as the link inside each committed entry. v0.66.0
+  is still the latest release (measured 2026-11-22), so the pin does not move; a ruleset change would be a change
+  to the committed answer.
+
+- The device-group membership marshal is a provider fact the schema cannot state. Provider 2.0.15
+  (pan-os-codegen #745) marshals `panos_device_group` `devices` and `vsys` as entries, which is what the provider
+  sends to the API and not what the schema states, so the schema answer is unchanged between 2.0.14 and 2.0.15. The
+  tool emits no `devices` for a device group, because it names no serial, so no committed output is affected and no
+  pin reads it. The plan-time effect needs a live target and stays here.
+
 ## Out of Scope
 
 - The orchestrator is not this tool's job. The tool writes data an orchestrator reads: the unit
