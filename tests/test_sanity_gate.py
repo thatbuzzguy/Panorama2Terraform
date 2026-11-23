@@ -45,7 +45,12 @@ Pins:
   still exits 0;
 - the join reports NOT RUN when the gate has no index, so a path 1 pin is unchanged;
 - the join reads the same files and reports the same findings on two runs;
-- a path 2 run and a path 1 run on the same corpus report the same findings except the join rule.
+- a path 2 run and a path 1 run on the same corpus report the same findings except the join rule;
+- the gate for a partial run (Epic 11, Piece 11B.4, `docs/MULTI_RUN_CODEBASE.md` §5): the block rules read the
+  whole codebase, so a finding can name a unit the run did not write; the two rules that read two sets read the
+  run's unit set, so a unit the run read no rows for enters no count; the plan check and the rule-set check run
+  once per unit directory the run wrote, and each result names its directory; and the exit code still follows the
+  rules that read the files. The two runs the pins read are stated in `tests/conftest.py`.
 
 Every join pin runs the pipeline in process with an injected producer, because a fact from a run must be read
 from the run's ledger. `run_checks` builds no scope index, so a call with no index reports the rule as NOT RUN,
@@ -58,6 +63,7 @@ import inspect
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -91,11 +97,13 @@ from conftest import (
     corpus_fixtures,
     data_file_set,
     file_text,
+    partial_run,
     path2_run,
     run_main,
     run_pipeline,
     run_script,
     tf_files,
+    write_merged_records,
     written_bytes,
 )
 
@@ -1300,3 +1308,118 @@ def test_a_path_2_run_and_a_path_1_run_report_the_same_findings(tmp_path, monkey
     # line and on the source the record names.
     text = (tmp_path / "path1" / "SANITY_REPORT.txt").read_text(encoding="utf-8")
     assert re.search(r"^request_set\s+NOT RUN$", text, re.M), text
+
+
+# --- The gate for a partial run (Epic 11, Piece 11B.4) ------------------------
+
+
+def test_the_block_rules_read_the_whole_codebase_for_a_partial_run(tmp_path):
+    """§5 rule 1: the block rules read every `.tf` file below the codebase root, so they read a unit another run
+    wrote the same way they read a file a person wrote, and a finding names the path from the codebase root, which
+    is the unit the file belongs to.
+
+    Measured 2026-11-22 on the committed pair through `tests/conftest.py`: the kitchen-sink run is the codebase
+    (11 units) and `address_objects.xml` is the second run (1 unit, `shared_45ca31c3`). The second run wrote one
+    `.tf` file inside the one directory its own set names, so the other 10 directories hold the bytes the first run
+    wrote. The gate's three counts name the codebase and not the run's set: 61 `.tf` files across 11 unit
+    directories, 8 data files, 64 blocks. The `placeholders` WARN sits in `shared_a6577c11`, a unit the second run
+    read no rows for, so a block rule can report a finding for a unit the run did not write.
+    """
+    _, partial, run = partial_run("kitchen_sink.xml", "address_objects.xml", tmp_path)
+    run_units = [unit_manifest.directory_name(facts, naming.sanitize) for facts in unit_manifest.units(run.ledger)]
+    assert run_units == ["shared_45ca31c3"], run_units
+    files = sanity_checks.read_tf_files(partial)
+    read_units = sorted({Path(name).parent.name for name in files})
+    assert len(read_units) == 11 and run_units[0] in read_units, read_units
+    report = sanity_checks.run_checks(partial, ledger=run.ledger)
+    assert (report.file_count, report.data_file_count, report.resource_count) == (61, 8, 64), report.render()
+    finding = report.findings("placeholders")[0]
+    assert Path(finding.file).parent.name == "shared_a6577c11", finding.render()
+    assert Path(finding.file).parent.name not in run_units, "the rule read a unit the run read no rows for"
+
+
+def test_the_two_command_checks_run_once_per_directory_the_run_wrote(tmp_path, monkeypatch):
+    """§5 rule 4: the plan check and the rule-set check run once per unit directory the run wrote, read through
+    `unit_manifest.units` over the run's ledger, and each result names the directory it ran on, so a partial run
+    reports one result for the directory it wrote and none for the units it read only through the record.
+
+    Measured 2026-11-22 on the committed pair, with the merged record written at the root through
+    `codebase_state.merge_rows` and `write_path`: the record names 11 directories and the run wrote 1, so each check
+    answers one result naming `shared_45ca31c3`. Both halves read the checks with no binary, so the pin runs on a
+    machine that has neither: a SKIPPED result names the directory the check ran on, the way a passing result names
+    it in the note.
+    """
+    codebase, partial, run = partial_run("kitchen_sink.xml", "address_objects.xml", tmp_path)
+    merged = tmp_path / "merged"
+    shutil.copytree(partial, merged)
+    write_merged_records(codebase, partial, merged)
+    assert len(sanity_checks.unit_directories(merged)) == 11, "the merged record names the codebase set"
+    monkeypatch.setenv("PATH", "")
+
+    plan = sanity_checks.run_checks(merged, ledger=run.ledger, run_terraform=True, terraform=None)
+    results = plan.results("terraform")
+    assert len(results) == 1, [result.findings[0].render() for result in results]
+    assert results[0].result == sanity_checks.SKIP, results[0]
+    assert results[0].findings[0].file == "shared_45ca31c3", results[0].findings[0].render()
+
+    rules = sanity_checks.run_checks(merged, ledger=run.ledger, run_tflint=True, tflint=None)
+    results = rules.results("tflint")
+    assert len(results) == 1, [result.findings[0].render() for result in results]
+    assert results[0].result == sanity_checks.SKIP, results[0]
+    assert results[0].findings[0].file == "shared_45ca31c3", results[0].findings[0].render()
+
+
+def test_for_a_single_run_the_run_set_and_the_record_set_are_the_same_set(tmp_path, monkeypatch):
+    """§5 rule 4's single-run half: the run's set and the record's set are one rule over two row sets, so a single
+    run names the same directories in the same order and the pins that read the two command checks today are
+    unchanged. Measured 2026-11-22 on three committed runs: `kitchen_sink.xml` (11 units),
+    `interfaces_other.xml` (2) and `address_objects.xml` (1). For the committed pair the two sets differ, 1 against
+    11, which is the fact the pin above reads.
+    """
+    # The check runs with no binary, so each result is a SKIPPED finding naming the directory it ran on, and the pin
+    # can read the order without a binary.
+    monkeypatch.setenv("PATH", "")
+    for fixture, units in (("kitchen_sink.xml", 11), ("interfaces_other.xml", 2), ("address_objects.xml", 1)):
+        out = tmp_path / fixture
+        parser = run_pipeline(panorama_to_terraform, fixture, out)
+        assert parser is not None, f"{fixture}: the run refused the input"
+        run_set = [unit_manifest.directory_name(facts, naming.sanitize) for facts in unit_manifest.units(parser.ledger)]
+        assert len(run_set) == units, run_set
+        assert run_set == sanity_checks.unit_directories(out), (fixture, run_set)
+        report = sanity_checks.run_checks(out, ledger=parser.ledger, run_terraform=True, terraform=None)
+        results = report.results("terraform")
+        assert len(results) == units, report.render()
+        assert all(result.result == sanity_checks.SKIP for result in results), [result.result for result in results]
+        assert [result.findings[0].file for result in results] == run_set, [
+            result.findings[0].render() for result in results
+        ]
+
+
+def test_a_partial_run_exit_code_follows_the_rules_that_read_the_files(tmp_path):
+    """The severity rule and the exit-code rule are unchanged for a partial run: FAIL for the rules that read the
+    files, WARN for the two rules that read two sets, so a cross-check finding cannot change the exit code.
+
+    Measured 2026-11-22 on the committed pair: the second run reports 41 FAIL findings and 9 WARN findings, and the
+    entry point exits 1 for it, the rule `test_a_data_file_finding_exits_non_zero` holds for the data rule. All 41
+    FAIL findings are read by `data_files` (37) and `rule_blocks` (4) against the record the run wrote at the root,
+    while the tree holds 11 unit directories. The cross-check reports 8 WARN findings inside the run's own unit set,
+    so it cannot fail the gate. With the merged record written at the root through `codebase_state.merge_rows` and
+    `write_path`, the same tree reports 0 FAIL and 9 WARN, so `SanityReport.failed`, the fact the entry point
+    decides on, is False and the exit code is 0. The fact that the run writes the merged record at the root is
+    Piece 11C, so this pin reads the merged record written through its owner.
+    """
+    codebase, partial, run = partial_run("kitchen_sink.xml", "address_objects.xml", tmp_path)
+    report = sanity_checks.run_checks(partial, ledger=run.ledger)
+    assert (report.fail_count, report.warn_count) == (41, 9), report.render()
+    assert report.failed, "a FAIL finding from a rule that reads the files decides the exit code"
+    argv = [str(FIXTURES_DIR / "address_objects.xml"), "--output-dir", str(partial)]
+    assert run_main(panorama_to_terraform, argv) == 1
+    assert len(report.findings("data_files")) == 37, report.render()
+    assert len(report.findings("rule_blocks")) == 4, report.render()
+
+    merged = tmp_path / "merged"
+    shutil.copytree(partial, merged)
+    write_merged_records(codebase, partial, merged)
+    merged_report = sanity_checks.run_checks(merged, ledger=run.ledger)
+    assert (merged_report.fail_count, merged_report.warn_count) == (0, 9), merged_report.render()
+    assert merged_report.failed is False, "no FAIL finding, so the exit code is 0"

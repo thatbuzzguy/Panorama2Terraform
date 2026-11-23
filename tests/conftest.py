@@ -4,10 +4,11 @@ The tool's modules live in `src/` and are not an installed package. The import r
 `docs/ARCHITECTURE.md` §1.1: `src/` is one flat namespace, so a test imports a module by plain name, and
 `pyproject.toml` `pythonpath = ["src"]` is the only place the path is stated for tests. This file builds the
 paths a test reads the layout through, states no second path rule, and holds the definitions more than one
-test module reads: the terraform binary, the two resource-line patterns, the rule-block parser, and the record
+test module reads: the terraform binary, the two resource-line patterns, the rule-block parser, the record
 read-back the Epic 11 pins read (the join key per record, and the four records read back through each module's
-`parse_rows`). A test module does not define its own copy of any of them, and no test module imports another test
-module.
+`parse_rows`), and the two runs the partial-run pins read (one run writes a codebase, a second run writes into a
+copy of its output). A test module does not define its own copy of any of them, and no test module imports another
+test module.
 """
 
 import contextlib
@@ -185,6 +186,45 @@ def record_rows(output_dir) -> dict:
         path = out / name
         rows[module] = module.parse_rows(path.read_text(encoding="utf-8")) if path.is_file() else []
     return rows
+
+
+# --- The pattern the partial-run pins read (Epic 11, Piece 11B.4) -------------
+
+
+# Three test modules read the same two runs: one run writes a codebase, and a second run writes into a copy of
+# its output, so the second run's own unit set is smaller than the set the tree holds. The pins read the pattern
+# from here, so no test module states it a second time. `run_pipeline` runs in process, so the ledger is the second
+# run's own ledger, and its unit set is `unit_manifest.units` over it. The copy is the codebase the second run
+# wrote into, so the bytes inside a unit the second run did not build are the bytes the first run wrote.
+def partial_run(first_fixture: str, second_fixture: str, out_dir) -> tuple:
+    """The two runs, as the pattern states them: returns (codebase_dir, partial_dir, second_run_parser)."""
+    codebase = Path(out_dir) / "codebase"
+    partial = Path(out_dir) / "partial"
+    first = run_pipeline(panorama_to_terraform, first_fixture, codebase)
+    assert first is not None, f"{first_fixture}: the run refused the input"
+    shutil.copytree(codebase, partial)
+    second = run_pipeline(panorama_to_terraform, second_fixture, partial)
+    assert second is not None, f"{second_fixture}: the run refused the input"
+    return codebase, partial, second
+
+
+def write_merged_records(codebase_dir, run_dir, out_dir) -> dict:
+    """The merged record set, written at the root of `out_dir` through `write_path`, and returned as rows keyed by
+    module.
+
+    Both row sets are read through `record_rows`, the merge is `codebase_state.merge_rows` with the key read through
+    `JOIN_RECORDS`, and each row shape is read through its own module's `parse_rows`, so this states no file set, no
+    key and no merge of its own. A pin that reads the data rule over a codebase that holds rows from two runs reads
+    the record as the tool wrote it, so no pin builds a row by hand.
+    """
+    merged = {}
+    code_rows = record_rows(codebase_dir)
+    run_rows = record_rows(run_dir)
+    for name, module in sanity_checks.DATA_FILES:
+        rows = codebase_state.merge_rows(JOIN_RECORDS[module], code_rows[module], run_rows[module])
+        merged[module] = rows
+        write_path.write_file(write_path.root_path(Path(out_dir), name), module.render(rows))
+    return merged
 
 
 def run_records(module_name, source, out_dir) -> dict:

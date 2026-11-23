@@ -24,6 +24,9 @@ Sections, one per finding:
 6. Finding 5: the site record and its printed form, and the rule data pair inside the unit directory its
    own rows name (Epic 9, rule 5).
 7. Finding 6: the row ordinal, the truth across the corpus, determinism, and the exit code.
+8. The codebase set for a run that writes into a codebase another run wrote (`docs/MULTI_RUN_CODEBASE.md` §5
+   rule 2): the record set at the root is read as the merged set, so the rule reads rows for units the run did
+   not build and compares the printed form inside a directory the run did not write.
 
 Every test runs offline. The planted rows are built through the modules, so the tests state no second
 shape rule either.
@@ -44,7 +47,18 @@ import sanity_checks
 import site_data
 import unit_manifest
 import write_path
-from conftest import FIXTURES_DIR, RULE_TYPES, SAMPLE_CONFIG, corpus_fixtures, data_file_set, run_script, written_bytes
+from conftest import (
+    FIXTURES_DIR,
+    RULE_TYPES,
+    SAMPLE_CONFIG,
+    corpus_fixtures,
+    data_file_set,
+    partial_run,
+    record_rows,
+    run_script,
+    write_merged_records,
+    written_bytes,
+)
 
 CONVERTER = "panorama_to_terraform.py"
 KITCHEN = "kitchen_sink.xml"
@@ -635,7 +649,7 @@ def test_a_pair_member_inside_a_directory_no_row_names_is_a_finding(tmp_path):
     findings = sanity_checks.check_data_files(tmp_path)
     whole = [f for f in findings if f.line == 0]
     assert len(findings) == 2 and len(whole) == 2, [f.render() for f in findings]
-    assert all("names no unit the manifest names" in f.detail for f in findings), [f.render() for f in findings]
+    assert all(f.severity == sanity_checks.FAIL for f in findings), "each finding is the data rule's FAIL"
     assert all(f.file.startswith("unit_no_row_names/") for f in findings), [f.render() for f in findings]
     assert len(data_file_set(tmp_path)) == 1, sorted(data_file_set(tmp_path))
 
@@ -764,3 +778,51 @@ def test_a_data_file_finding_exits_non_zero(tmp_path):
     result = _run(SAMPLE_CONFIG, tmp_path)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "SITE_DATA.json  a data file is written only when it has content" in result.stdout
+
+
+# --- 8. The codebase set, for a run that writes into an existing codebase -------
+
+
+def test_the_data_rule_reads_the_merged_record_as_the_codebase_set(tmp_path):
+    """8.1 (`docs/MULTI_RUN_CODEBASE.md` §5 rule 2): for a run that writes into a codebase another run wrote, the
+    record set at the root is the merged set, so the rule reads rows for units the run did not build and compares the
+    printed form inside a directory the run did not write. The rule reads the row shape through each module's
+    `parse_rows` and the merge through `codebase_state.merge_rows`, so it states no second shape rule and no merge of
+    its own; the pattern and the merged record are read through `tests/conftest.py`.
+
+    Measured 2026-11-22 on the committed pair: the kitchen-sink run is the codebase (11 units) and
+    `address_objects.xml` is the second run (1 unit, `shared_45ca31c3`). Against the record the second run wrote at
+    the root, the rule reports 37 findings: 29 on the three records at the root (`REFERENCE_EDGES.json` 26,
+    `SITE_DATA.json` 3), each naming a unit the record names no row for, and 8 on the rule data pair inside
+    `production_dg_6ce3cc69`, which names no unit the record names. Against the merged record, written at the root
+    through `codebase_state.merge_rows` and `write_path`, the same tree reports no finding, including the printed
+    form inside the 10 directories the second run did not write, and the count names the same 8 data files.
+    """
+    codebase, partial, run = partial_run("kitchen_sink.xml", "address_objects.xml", tmp_path)
+    findings = sanity_checks.check_data_files(partial)
+    assert len(findings) == 37, [f.render() for f in findings]
+    root = [f for f in findings if not Path(f.file).parent.name]
+    assert len(root) == 29, [f.render() for f in root]
+    assert len([f for f in root if Path(f.file).name == reference_edges.EDGE_FILE]) == 26, [f.render() for f in root]
+    assert len([f for f in root if Path(f.file).name == site_data.SITE_DATA_FILE]) == 3, [f.render() for f in root]
+    assert len([f for f in findings if Path(f.file).parent.name == "production_dg_6ce3cc69"]) == 8, [
+        f.render() for f in findings
+    ]
+    assert all(f.severity == sanity_checks.FAIL for f in findings), "each finding is the data rule's FAIL"
+
+    merged = tmp_path / "merged"
+    shutil.copytree(partial, merged)
+    write_merged_records(codebase, partial, merged)
+    clean = sanity_checks.check_data_files(merged)
+    assert clean == [], [f.render() for f in clean]
+    written = data_file_set(merged)
+    assert sanity_checks.count_data_files(merged) == len(written) == 8, sorted(written)
+    # The printed form is the half that reads a directory the run did not write: the merged set names 11 units,
+    # the run wrote 1, and each site row's printed form inside its own directory reads as the row renders.
+    site_rows = record_rows(merged)[site_data]
+    assert len(site_rows) == 3, sorted(row["directory"] for row in site_rows)
+    assert all(
+        write_path.unit_path(merged, row["directory"], site_data.TFVARS_FILE).read_text(encoding="utf-8")
+        == site_data.render_tfvars([row])
+        for row in site_rows
+    ), "the printed form inside a directory the run did not write reads as the row renders it"

@@ -30,6 +30,17 @@ rows name. No rule reads a report. F6.10.3 lands that shape: the
 run writes one directory per unit, so the path a finding names is the unit directory plus the file name,
 and the plan check runs once per unit directory.
 
+For a run that writes into a codebase another run wrote (`docs/MULTI_RUN_CODEBASE.md` §5) the sets are four, and
+each is read through its owner: the block rules read every `.tf` file below the codebase root, so they read a unit
+the run did not write, and a finding names the path from the codebase root; the data rule reads the record set at
+the root as the codebase set, so it can verify a row the run did not build; the two rules that read two sets read
+the run's unit set, read through `unit_manifest.units` over the rows the run's own ledger read, so a unit the run
+read no rows for enters no count; and the two checks that run an external command run once per unit directory the
+run wrote, which is the same unit set, so each result names the directory it ran on. A call that passes no ledger
+names no run, so the two command checks read the set the record names through `unit_directories`. For a single run
+the run's set and the record's set are the same set, in the identity order the record prints, so the gate reads the
+same directories in the same order and the report is unchanged.
+
 Checks, in report order:
 
 | Check | Rule | Severity |
@@ -1627,10 +1638,13 @@ def check_data_files(output_dir: Path) -> list[Finding]:
        lines, and a finding about the whole file states no row.
 
     The four records are the codebase root set, so they are read at the root as one rule over the rows of every
-    unit. The rule data pair is a unit-set file, so the same findings read it inside each unit directory its own
-    rows name (Epic 9, rule 5): both members are named through `rule_data`, and both are read through its one
-    shape rule, so this rule states no file name and no shape rule of its own. A pair member at the codebase root
-    names no unit, and a member inside a directory its rows do not name is a finding.
+    unit. For a run that writes into a codebase another run wrote, the record set at the root is the merged set, so
+    the rule reads rows for units the run did not build and compares the printed form inside a directory the run did
+    not write (`docs/MULTI_RUN_CODEBASE.md` §5 rule 2). The rule data pair is a unit-set file, so the same findings
+    read it inside each unit directory its own rows name (Epic 9, rule 5): both members are named through
+    `rule_data`, and both are read through its one shape rule, so this rule states no file name and no shape rule of
+    its own. A pair member at the codebase root names no unit, and a member inside a directory its rows do not name
+    is a finding.
 
     Findings sort by (file, row), so the report is byte-identical between runs on the same files.
     """
@@ -1960,7 +1974,9 @@ def check_round_trip(files: dict[str, str], ledger, output_dir: Path) -> list[Fi
       names an entry here. The destination is read per entry, so an entry the run reports is not in the
       count even when its container row is `emitted`.
     - the block side through the one block reader, `blocks`, with `kinds = ('resource',)`, so a `data`
-      block, an `import` block, an `action` block and a `variable` declaration enter no count. For the four
+      block, an `import` block, an `action` block and a `variable` declaration enter no count. The block side is read
+      inside the run's unit set, so a unit the run read no rows for enters no count (`docs/MULTI_RUN_CODEBASE.md` §5
+      rule 3), and a block in the root set still reports that its count cannot be assigned. For the four
       `*_policy_rules` rows the block prints the set and not one entry, so the block side is the row set read
       through `rule_data.parse_rows` from the data member inside the unit directory the rows name: the three
       forms of the same rows are one row set, and the printed form is compared by `check_rule_blocks`.
@@ -2009,6 +2025,7 @@ def check_round_trip(files: dict[str, str], ledger, output_dir: Path) -> list[Fi
     # The unit set is the run's, read through the one unit rule, so the entry's facts and the directory the
     # reader read for the same entry land on one name.
     directories = {facts: unit_manifest.directory_name(facts, naming.sanitize) for facts in unit_manifest.units(ledger)}
+    run_units = set(directories.values())
 
     entry_counts: dict[tuple, int] = {}
     for row in ledger.rows():
@@ -2023,13 +2040,19 @@ def check_round_trip(files: dict[str, str], ledger, output_dir: Path) -> list[Fi
         key = (covered["resource"], directories[unit_manifest.facts_of(row)])
         entry_counts[key] = entry_counts.get(key, 0) + 1
 
-    # The block side, in the order the one reader read it.
+    # The block side, in the order the one reader read it, read inside the run's unit set
+    # (`docs/MULTI_RUN_CODEBASE.md` §5 rule 3): a unit the run read no rows for enters no count, so a partial run
+    # reports no finding for a unit another run wrote. A block in the root set names no unit, so the rule still
+    # reports that its count cannot be assigned, which is the fact 2.7 pins.
     blocks_read: dict[tuple, list] = {}
     for block in blocks(files, ("resource",)):
         row = entry_coverage.MATRIX_BY_RESOURCE.get(block.rtype)
         if row is None or row["resource"] not in count_rows:
             continue  # not a count row: no entry measures it
-        blocks_read.setdefault((row["resource"], Path(block.file).parent.name), []).append(block)
+        unit = Path(block.file).parent.name
+        if unit and unit not in run_units:
+            continue  # the run read no rows for that unit, so its blocks enter no count
+        blocks_read.setdefault((row["resource"], unit), []).append(block)
 
     findings = []
     for key in sorted(set(entry_counts) | set(blocks_read)):
@@ -2375,15 +2398,23 @@ def check_terraform(output_dir: Path, terraform: str | None = None, unit: str = 
 # --- The gate ----------------------------------------------------------------
 
 
-def unit_directories(output_dir: Path) -> list[str]:
-    """The unit directories the manifest record names, in the order the record prints its rows.
+def unit_directories(output_dir: Path, ledger: entry_coverage.EntryLedger | None = None) -> list[str]:
+    """The unit directories the two checks that run an external command read, in the order they run on them.
 
     F6.10.3 (`docs/CODEBASE_ASSEMBLY.md` §14): the manifest is the place that states the unit set, so the
     gate reads it through `unit_manifest` and names no second rule. A record that is not there, or that
     does not read as its rows, names no unit: the data rule reports that, and the plan check runs on the
     codebase root.
+
+    `ledger` is the run's ledger, so the set is the directories the run wrote, read through `unit_manifest.units`
+    over the rows its own ledger read (`docs/MULTI_RUN_CODEBASE.md` §5 rule 4): the run writes one directory per
+    unit its own set names and no directory for a unit it read only through the record (`write_path.py` rule 4), so
+    a check that runs a command reads only the directories the run wrote. A call with no ledger names no run, so it
+    reads the set the record names, which for a single run is the same set in the same order.
     """
     out = Path(output_dir)
+    if ledger is not None:
+        return [unit_manifest.directory_name(facts, naming.sanitize) for facts in unit_manifest.units(ledger)]
     path = out / unit_manifest.MANIFEST_FILE
     if not path.is_file():
         return []
@@ -2412,7 +2443,9 @@ def run_checks(
 
     `ledger` is the run's ledger for the cross-check and the join, the two rules that read two sets. A call
     with no ledger reports both checks as NOT RUN, so a test that reads only the output directory is
-    unchanged.
+    unchanged. The ledger also names the unit directories the two checks that run an external command run on
+    (`docs/MULTI_RUN_CODEBASE.md` §5 rule 4), so a run that writes into a codebase another run wrote runs each
+    check once per directory it wrote; a call with no ledger reads the set the record names.
 
     `index` is the run's scope index for the join, the rule that reads the join rows and the index together.
     A call with no index reports the join as NOT RUN in the same shape. A path 1 run builds no index, because
@@ -2456,9 +2489,9 @@ def run_checks(
     if run_tflint:
         binary = tflint or shutil.which("tflint")
         # F6.10.3 (§14): the rule set reads one directory of .tf files, so it runs once per unit directory the
-        # manifest record names, the same shape the plan check uses. A run that names no unit has no unit
-        # directory, so the check runs on the codebase root, which is where the gate reads the files.
-        units = unit_directories(Path(output_dir))
+        # run wrote, read through the one unit rule, the same shape the plan check uses. A run that names no unit
+        # has no unit directory, so the check runs on the codebase root, which is where the gate reads the files.
+        units = unit_directories(Path(output_dir), ledger)
         if not units:
             checks.append(check_tflint(Path(output_dir), binary, "."))
         else:
@@ -2470,10 +2503,10 @@ def run_checks(
         checks.append(CheckResult("tflint", (), ran=False, note="run the converter with --tflint"))
     if run_terraform:
         binary = terraform or shutil.which("terraform")
-        # F6.10.3 (§14): one plan reads one root, so the plan check runs once per unit directory the
-        # manifest record names. A run that names no unit has no unit directory, so the check runs on the
+        # F6.10.3 (§14): one plan reads one root, so the plan check runs once per unit directory the run wrote,
+        # read through the one unit rule. A run that names no unit has no unit directory, so the check runs on the
         # codebase root, which is where the gate reads the files.
-        units = unit_directories(Path(output_dir))
+        units = unit_directories(Path(output_dir), ledger)
         if not units:
             checks.append(check_terraform(Path(output_dir), binary, "."))
         else:

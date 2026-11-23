@@ -28,6 +28,11 @@ Pins, one per criterion in `acceptance.md`:
   rows no entry measures;
 - 4.1-4.7 the `CHECK_ORDER` position, the report order, the corpus, determinism, the exit code, and the path 2
   run, where the join reads the same ledger the cross-check reads.
+- 5.1 the run's unit set for a partial run (`docs/MULTI_RUN_CODEBASE.md` §5 rule 3): the block side is read
+  inside `unit_manifest.units(ledger)`, so a unit the run read no rows for enters no count, and the root-set fact
+  (2.7) is unchanged.
+  `unit_manifest.units(ledger)`, so a unit the run read no rows for enters no count, and the root-set fact (2.7) is
+  unchanged.
 
 Four criteria could not hold as written, and each is pinned as measured with the measurement in the
 `acceptance.md` Result:
@@ -66,6 +71,7 @@ from conftest import (
     SAMPLE_CONFIG,
     corpus_fixtures,
     data_file_set,
+    partial_run,
     path2_run,
     run_pipeline,
     run_script,
@@ -1007,3 +1013,37 @@ def test_the_cross_check_reads_the_join_ledger_on_a_path_2_run(tmp_path, monkeyp
     # so the join reports the same fact shape with no position.
     join_fact = [f for f in sanity_checks.check_request_set(index, parser.ledger) if f.file == unit]
     assert join_fact and join_fact[0].line == 0 and join_fact[0].severity == sanity_checks.WARN, join_fact
+
+
+# --- 5. The run's unit set, for a run that writes into an existing codebase ----
+
+
+def test_the_block_side_is_read_inside_the_run_s_unit_set(tmp_path):
+    """5.1 (`docs/MULTI_RUN_CODEBASE.md` §5 rule 3): for a run that writes into a codebase another run wrote, the
+    block side is read inside the run's unit set, read through `unit_manifest.units` over the rows its own ledger
+    read, so a unit the run read no rows for enters no count and the rule states no unit rule of its own.
+
+    Measured 2026-11-22 on the committed pair, read through `tests/conftest.py`: the kitchen-sink run is the
+    codebase (11 units) and `address_objects.xml` is the second run (1 unit, `shared_45ca31c3`). The rule reports
+    8 findings for the second run, all naming the run's own unit, and no finding names one of the 10 units the
+    second run read only through the record. Before the block side read the run's set the same run reported 44
+    findings, 36 of them for units it read no rows for. The count inside the run's own unit still disagrees,
+    because the reader reads the `.tf` files that unit holds, and those are the bytes the first run wrote.
+    """
+    _, partial, run = partial_run("kitchen_sink.xml", "address_objects.xml", tmp_path)
+    files = tf_files(partial)
+    findings = sanity_checks.check_round_trip(files, run.ledger, partial)
+    run_units = {unit_manifest.directory_name(facts, naming.sanitize) for facts in unit_manifest.units(run.ledger)}
+    assert len(findings) == 8, [f.render() for f in findings]
+    assert all(_fact(f)[1] == "shared_45ca31c3" for f in findings), [f.render() for f in findings]
+    assert all(Path(f.file).parent.name in run_units for f in findings), [f.render() for f in findings]
+    assert len({_fact(f)[0] for f in findings}) == 8, "one finding per row, inside one unit"
+    # The set is read through its owner, so the rule states no unit rule and no naming rule of its own.
+    rule = _rule_source()
+    assert "unit_manifest.units" in rule and "unit_manifest.directory_name" in rule, rule
+    assert "naming.sanitize" in rule, "the directory shape is read through the one naming rule"
+    # The root-set fact is unchanged: a `.tf` file at the codebase root names no unit, so 2.7 still holds.
+    planted = dict(files)
+    planted["root.tf"] = 'resource "panos_address" "root_00000000" {\n  name = "Root"\n}\n'
+    root = sanity_checks.check_round_trip(planted, run.ledger, partial)
+    assert len(root) == 9 and len([f for f in root if f.file == "root.tf"]) == 1, [f.render() for f in root]
