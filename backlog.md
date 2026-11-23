@@ -256,10 +256,6 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   `docs/MULTI_RUN_CODEBASE.md` §5 rule 1. Measured pins: `tests/test_data_file_gate.py:802`,
   `tests/test_round_trip.py:1031`, `tests/test_sanity_gate.py:1328`, `tests/test_sanity_gate.py:1352`,
   `tests/test_sanity_gate.py:1411`.
-- **The site record half of the read is merged but no rule uses it.** Measured 2026-11-23 during the same review:
-  `run_rows[site_data]` is empty, so `reference[site_data]` reaches `generate_run`'s merged set and nothing reads it
-  there. The read is right because the merge rule covers all four records; what is missing is a rule that reads the
-  merged site rows, which is the next piece's work. Owner: `src/codebase_state.py`.
 
 ## Out of Scope
 
@@ -768,6 +764,11 @@ holds them, so this document holds only what a piece cannot be written from.
   the order the join key states it, and that writes today's bytes only because the file order is already the join-key
   order on every fixture the read rule accepts (measured 2026-11-22). No rule is invented here; the condition needs the
   site module to state an order rule for a row it reads back.
+- A merged site row has a reader only through the join key, because a site row holds no scope facts, so the unit it
+  belongs to is named by the manifest row the key joins to. A unit exists only when a run's ledger has a row in it
+  (`unit_manifest.units`), so a site row for a unit no merged manifest row names names no unit. Measured 2026-11-23
+  on the committed pair: each of the 3 merged site rows joins to a unit the merged manifest names, so the condition
+  is not on committed material and no pin holds it. Owner: `src/codebase_state.py` rule 1.
 - The ownership join key cannot hold two rows for one entry identity. `ownership.row_key` sorts by the entry identity
   plus `source`, because two sources can state the same entry, so the record's own shape holds one row per source; the
   merge key is the entry identity read through `state_coverage.ownership_key`, which holds one row, so a merged set

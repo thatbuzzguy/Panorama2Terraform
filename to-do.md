@@ -11,8 +11,6 @@ Epic 12 criteria and the measurements the two pin decisions rest on.
 
 ### Phase 11C, the update run
 
-- **11C.2** — the run's report section, the sets it names and the rule that it prints only when the codebase
-  holds a unit the run did not read.
 - **11C.3** — the write boundary: the run writes what it built and deletes nothing; the tool owns every file it
   writes and the byte difference between two runs is read through git.
 

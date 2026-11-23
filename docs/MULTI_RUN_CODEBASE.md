@@ -293,13 +293,24 @@ One section, in `CONVERSION_REPORT.txt`, after the sections the report rule alre
 The console prints no line for it: the console prints one line per finding, and the run's unit set is not a
 finding.
 
+The heading, the rule paragraph and the two words that say which set names a unit are stated once in
+`entry_coverage.py` (`UNIT_HEADING`, `UNIT_RULE`, `BUILT_PART`, `RECORD_ONLY_PART`), and the writer takes the two
+row sets as an argument so it states no unit rule of its own. Pinned by
+`tests/test_reports.py::test_the_unit_section_names_the_two_unit_sets_through_the_one_unit_rule` for the two sets,
+`tests/test_reports.py::test_the_unit_section_prints_only_when_a_unit_the_run_did_not_read_is_in_the_codebase_set`
+for the print condition and the unchanged bytes,
+`tests/test_reports.py::test_the_unit_section_prints_after_the_sections_the_report_rule_already_orders` for the
+order, `tests/test_reports.py::test_the_unit_section_names_no_directory_and_groups_by_the_f3_9_rule` for the name
+and the grouping, and `tests/test_reports.py::test_the_report_prints_no_console_line_for_the_unit_section` for the
+console.
+
 ## 8. Module ownership
 
 | Rule | Owner module | Test module that holds the pins |
 |---|---|---|
 | The reference-source read step, and the rules it reads through its owners | `panorama_to_terraform.py` (`generate_run`) | `tests/test_codebase_state.py`, with the half the read reaches in `tests/test_state_coverage.py`, the record half in `tests/test_provenance.py` and the unit half in `tests/test_unit_manifest.py` |
 | The run's read set, the selection shape, the excluded names | `container_coverage.py` for the path shape, `api_requests.py` for the read set, `panorama_to_terraform.py` (`shared_arguments` and `shared_checks`) for the argument | `tests/test_api_requests.py` |
-| The run's unit set, the codebase unit set, the report section shape | `unit_manifest.py` | `tests/test_unit_manifest.py` |
+| The run's unit set and the codebase unit set | `unit_manifest.py` | `tests/test_unit_manifest.py` |
 | The merge rule and the join key per record | `codebase_state.py`, named in `docs/ARCHITECTURE.md` §1 | `tests/test_codebase_state.py`, with the data rule's reader pin in `tests/test_data_file_gate.py` |
 | The ownership chain read through the record | `ownership.py` | `tests/test_ownership.py` |
 | The cross-run edge and the order over the merged set | `reference_edges.py` | `tests/test_reference_edges.py` |
