@@ -6,7 +6,8 @@ documents hold it. The items that need a fact a live target states are in `backl
 ## Epic 11 — the codebase several runs write into
 
 The design record is `docs/MULTI_RUN_CODEBASE.md`; each rule there names the pins that hold, and a rule whose pin
-is pending says so. Acceptance criteria for the open piece are in `acceptance.md`.
+is pending says so. Acceptance criteria for the open piece are in `acceptance.md`, which after the merge holds the
+Epic 12 criteria and the measurements the two pin decisions rest on.
 
 ### Phase 11C, the update run
 
