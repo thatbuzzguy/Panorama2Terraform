@@ -201,20 +201,46 @@ Three facts already hold, and they are the reason no new naming rule or identity
 
 1. **The block rules read the whole codebase.** They read every `.tf` file below the codebase root in sorted
    path order, so they read a unit another run wrote, the same way they read a file a person wrote. A finding
-   names the path from the codebase root, which is the unit the file belongs to.
+   names the path from the codebase root, which is the unit the file belongs to. Pinned by
+   `tests/test_sanity_gate.py::test_the_block_rules_read_the_whole_codebase_for_a_partial_run`, which reads the
+   three counts the report names as the codebase set (61 `.tf` files across 11 unit directories, 8 data files, 64
+   blocks) for a run whose own set names 1 unit, and reads a `placeholders` finding for a unit the run read no
+   rows for. The two runs the pin reads are stated in `tests/conftest.py`, so no test module states the pattern a
+   second time.
 2. **The data rule reads the merged records as the codebase set**, and it can verify a row the run did not
    build, because the naming rule, the joins and the order rule are pure functions of the identity. Its
    printed-form half compares each unit's file inside the directory that row names, including the units the run
-   did not write.
+   did not write. Pinned by
+   `tests/test_data_file_gate.py::test_the_data_rule_reads_the_merged_record_as_the_codebase_set`, which reads the
+   rule over the committed pair both ways: against the record the second run wrote at the root it reports 37
+   findings, 29 on the three records at the root and 8 on the rule data pair inside `production_dg_6ce3cc69`, each
+   naming a unit its own record names no row for; against the merged record, written at the root through
+   `codebase_state.merge_rows` and `write_path`, the same tree reports no finding, including the printed form
+   inside the 10 directories the run did not write.
 3. **The two rules that read two sets read the run's unit set.** `round_trip` reads the block set against
    `unit_manifest.units(ledger)`, which for a partial run names only the run's units, so a unit the run read no
    rows for enters no count. `request_set` reads the join against the run's index, which names only the scopes
-   the run read. A call that passes no ledger or no index reports the rule as NOT RUN, unchanged.
-4. **The plan check and the rule-set check run once per unit directory the run wrote**, and each result names
-   the directory it ran on. For a full run the two sets are the same set, so the pins that hold today are
-   unchanged.
+   the run read. A call that passes no ledger or no index reports the rule as NOT RUN, unchanged. Pinned by
+   `tests/test_round_trip.py::test_the_block_side_is_read_inside_the_run_s_unit_set`, which reads the rule over the
+   committed pair: the second run reports 8 findings, all inside its own unit, against the 44 it reported before the
+   block side read the run's set, and keeps the fact that a `.tf` file at the codebase root names no unit.
+4. **The plan check and the rule-set check run once per unit directory the run wrote**, read through
+   `unit_manifest.units` over the run's ledger, and each result names the directory it ran on. For a full run the
+   two sets are the same set, so the pins that hold today are unchanged. Pinned by
+   `tests/test_sanity_gate.py::test_the_two_command_checks_run_once_per_directory_the_run_wrote`, which reads the
+   two checks on the committed pair with the merged record at the root and no binary, where the record names 11
+   directories and the run wrote 1, and by
+   `tests/test_sanity_gate.py::test_for_a_single_run_the_run_set_and_the_record_set_are_the_same_set`, which reads
+   the same sets on three single runs.
 5. **No gate rule reads a report, `README.md` or `SOURCE.txt`**, unchanged, so the run's report section adds no
    gate rule and no file.
+6. **The severity rule and the exit-code rule are unchanged for a partial run**: FAIL for the rules that read the
+   files, WARN for the two rules that read two sets, NOT RUN for a check that cannot run, and the entry point
+   decides on `SanityReport.failed`. So a cross-check finding cannot change the exit code. Pinned by
+   `tests/test_sanity_gate.py::test_a_partial_run_exit_code_follows_the_rules_that_read_the_files`. The exit code a
+   partial run gets on the committed pair is 1 because the run writes its own rows at the root instead of the
+   merged rows, which is Piece 11C, recorded in `backlog.md`; with the merged record written at the root through
+   its owner the same tree reports 0 FAIL and 9 WARN and exits 0.
 
 ## 6. What a run writes into an existing codebase
 
@@ -259,7 +285,7 @@ finding.
 | The merge rule and the join key per record | `codebase_state.py`, named in `docs/ARCHITECTURE.md` §1 | `tests/test_codebase_state.py`, with the data rule's reader pin in `tests/test_data_file_gate.py` |
 | The ownership chain read through the record | `ownership.py` | `tests/test_ownership.py` |
 | The cross-run edge and the order over the merged set | `reference_edges.py` | `tests/test_reference_edges.py` |
-| The gate for a partial run | `sanity_checks.py` | `tests/test_sanity_gate.py` |
+| The gate for a partial run | `sanity_checks.py` | `tests/test_sanity_gate.py` for the block rules and the two command checks, `tests/test_round_trip.py` for the cross-check, `tests/test_data_file_gate.py` for the data rule |
 | The write boundary, and the rule that the run deletes nothing | `write_path.py` | `tests/test_write_path.py` |
 | The run's report section | `entry_coverage.py` for the report rule, `unit_manifest.py` for the sets | `tests/test_reports.py` |
 

@@ -639,6 +639,13 @@ restated here; they are in the record and the git history. Only the open items a
 The design record is `docs/MULTI_RUN_CODEBASE.md`. A rule there that has pins is read through the test module that
 holds them, so this document holds only what a piece cannot be written from.
 
+- The gate for a partial run reads clean on committed material only when the root holds the merged record. Measured
+  2026-11-22 on the committed pair: the second run writes its own rows at the root, so `check_data_files` reports 37
+  FAIL findings and `check_rule_blocks` 4, all against a record that names 1 unit while the tree holds 11 unit
+  directories, and the entry point exits 1. With the merged record written at the root through
+  `codebase_state.merge_rows` and `write_path`, the same tree reports 0 FAIL and 9 WARN, so the exit code is 0. The
+  gate rule is not the cause: the writing half is Piece 11C, so no severity rule is invented here and the pin reads
+  the merged record written through its owner.
 - The order of a merged site record needs a rule `site_data.py` does not state. A site row names no scope facts, so it
   cannot state the identity order on its own, and `parse_rows` reads the rows in the order the file states them, which
   is the identity order the writer built through `unit_manifest.units`. The merge therefore reads a merged site set in

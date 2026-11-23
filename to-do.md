@@ -8,12 +8,6 @@ documents hold it. The items that need a fact a live target states are in `backl
 The design record is `docs/MULTI_RUN_CODEBASE.md`; each rule there names the pins that hold, and a rule whose pin
 is pending says so. Acceptance criteria for the open piece are in `acceptance.md`.
 
-### Phase 11B, the records as codebase state
-
-- **11B.4** — the gate for a partial run: the block rules read the whole codebase, the data rule reads the merged
-  records, the two two-set rules read the run's unit set, and the plan check and the rule-set check run once per
-  directory the run wrote.
-
 ### Phase 11C, the update run
 
 - **11C.1** — the existing records as a reference source, read the way the state document is read, and the rule
