@@ -159,6 +159,35 @@ def test_the_join_key_for_the_site_record_is_the_unit_identity_read_as_directory
     assert record[1] == ("directory",), "the key is the field the record states"
 
 
+def test_every_merged_site_row_names_a_unit_the_merged_manifest_names_through_the_join(tmp_path):
+    """A site row names no scope facts, so the join key is the only rule that reads it.
+
+    Measured 2026-11-23 on the committed pair: the 3 merged site rows each name a directory the merged manifest
+    names, and that directory is the §5 shape `unit_manifest.directory_name` gives a unit `unit_manifest.units`
+    names, so the merged set has a reader for every site row and the pin reads it through the one unit rule. The
+    condition that a site row can name a unit no merged manifest row names is recorded in `backlog.md`.
+    """
+    codebase = _rows(CODEBASE_FIXTURE, tmp_path / "codebase")
+    run_rows = _rows(RUN_FIXTURE, tmp_path / "run")
+    merged = {module: _merged(module, codebase[module], run_rows[module]) for _name, module in DATA_RULE}
+    sites, manifest = merged[site_data], merged[unit_manifest]
+    assert sites and manifest, "the pin reads a record with content"
+
+    units = set(unit_manifest.units(manifest))
+    assert len(sites) == 3 and len(units) == 11, (len(sites), len(units))
+    for row in sites:
+        key = codebase_state.join_key(JOIN_RECORDS[site_data], row)
+        joined = [
+            unit_row for unit_row in manifest if codebase_state.join_key(JOIN_RECORDS[unit_manifest], unit_row) == key
+        ]
+        assert joined, (key, "the site row joins to a unit the merged manifest names")
+        facts = unit_manifest.facts_of(joined[0])
+        assert facts in units, facts
+        # A site row names no facts, so the key is read through the unit rule's §5 shape, not through the row.
+        assert key == (unit_manifest.directory_name(facts, naming.sanitize),), (key, facts)
+        assert unit_manifest.unit_name(facts), facts
+
+
 # --- 2. The merge rule ---------------------------------------------------------
 
 

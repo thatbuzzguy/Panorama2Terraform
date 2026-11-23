@@ -67,6 +67,20 @@ value for it and the captured part names no field. The shape is `NAMES_NO_FIELD_
 `tests/test_property_coverage.py::test_the_bookkeeping_line_names_no_field_for_the_membership_entry_it_marks`
 pins it. The relation is the `detail` column, and the value of the relation is printed by the block of the entry
 that owns the container, through the row that covers that entry.
+
+Epic 11 (`docs/MULTI_RUN_CODEBASE.md` §7): the report gains one section that names the two unit sets. Both are read
+through `unit_manifest.units`, the one unit rule, so this module names the sets and states no unit rule of its own:
+it takes the two row sets and reads each through `unit_manifest`, and the section prints only when the codebase set
+names a unit the run set does not, so a run that read the whole codebase writes the report bytes it writes today. A
+unit is named by the name the deepest scope declares, through `unit_name` and `facts_of`, never by its directory, so
+the report keeps the rule that it names the input name and no path. The section is report content and prints no
+console line, and the grouping is the F3.9 rule the other report sections use, so no second grouping rule appears.
+Pinned in `tests/test_reports.py`:
+`tests/test_reports.py::test_the_unit_section_names_the_two_unit_sets_through_the_one_unit_rule`,
+`tests/test_reports.py::test_the_unit_section_prints_only_when_a_unit_the_run_did_not_read_is_in_the_codebase_set`,
+`tests/test_reports.py::test_the_unit_section_prints_after_the_sections_the_report_rule_already_orders`,
+`tests/test_reports.py::test_the_unit_section_names_no_directory_and_groups_by_the_f3_9_rule`, and
+`tests/test_reports.py::test_the_report_prints_no_console_line_for_the_unit_section`.
 """
 
 import re
@@ -75,6 +89,7 @@ from collections import Counter
 
 import container_coverage
 import resource_mapping
+import unit_manifest
 from container_coverage import ContainerRow
 from xml_input import ParsedSource
 
@@ -124,6 +139,22 @@ REPORT_FILE = "CONVERSION_REPORT.txt"
 REPORT_HEADING = "PER-ENTRY CONVERSION REPORT"
 GAP_HEADING = "Entries That Produced No Output"
 PROPERTY_HEADING = "Captured Properties No Output Read"
+
+# The unit section (`docs/MULTI_RUN_CODEBASE.md` §7). The heading, the rule paragraph and the line shape are here;
+# the two sets are read through `unit_manifest.units`, the one unit rule, so this module states no unit rule and no
+# second grouping rule.
+UNIT_HEADING = "The Units the Run Built and the Units It Read Only Through the Record"
+UNIT_RULE = (
+    "One line per unit, read through `unit_manifest.units`, the one unit rule, over the two row sets: the rows "
+    "this run built, and the merged rows read back through `unit_manifest.parse_rows`. The section prints only "
+    "when the codebase set names a unit the run set does not. A unit is named by the name the deepest scope "
+    "declares, never by its directory, and the lines are grouped by the F3.9 scope rule."
+)
+
+# The two parts of a unit line, which say which set names the unit. Words, not a field name: the row shape lives in
+# `unit_manifest.FIELD_ORDER` and the report states no row field.
+BUILT_PART = "built"
+RECORD_ONLY_PART = "read only through the record"
 
 # The two words a fact part starts with, stated once so the report line and the console line state the
 # same fact (`docs/ARCHITECTURE.md` §3.2).
@@ -817,6 +848,24 @@ def property_fact(row: dict) -> str:
     names them as parsed-object key names, never as an XML tag.
     """
     return f"{NO_OUTPUT_READ}: " + ", ".join(row["unused_properties"])
+
+
+def unit_part(row: dict, run_units: set) -> str:
+    """Which set names this unit: the set the run built, or the set only the record names.
+
+    `run_units` is `unit_manifest.units` over the rows the run built, so the membership answer comes from the one
+    unit rule read through its owner, and the two words are the report's, not a row field.
+    """
+    return BUILT_PART if unit_manifest.facts_of(row) in run_units else RECORD_ONLY_PART
+
+
+def unit_line(row: dict, part: str) -> str:
+    """One unit line: the part that names which set holds the unit, then the unit name.
+
+    The name is the deepest scope the export declares, read through `unit_manifest`, so the line names no directory:
+    the directory is the §5 shape of the identity, and the report names the input name only (F4.2 rule 6).
+    """
+    return f"  {part:<28} {unit_manifest.unit_name(unit_manifest.facts_of(row))}"
 
 
 def gap_fact(row: dict) -> str:

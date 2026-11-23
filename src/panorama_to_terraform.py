@@ -6203,7 +6203,13 @@ provider "panos" {
         self.write_root_file("MANUAL_SETUP_REPORT.txt", "\n".join(lines) + "\n")
 
     def generate_conversion_report(
-        self, ledger, shadows=None, state=None, ownership_findings=None, cycle_findings=None
+        self,
+        ledger,
+        shadows=None,
+        state=None,
+        ownership_findings=None,
+        cycle_findings=None,
+        unit_rows=None,
     ) -> str:
         """Generate CONVERSION_REPORT.txt for the entries the parse read (F4.3).
 
@@ -6217,7 +6223,13 @@ provider "panos" {
         result. Each prints in its own section, after the property section, only when it has a finding,
         and each is grouped by the same scope rule as the other sections. Section order is fixed: header,
         summary, gaps, property findings, shadows, repeated names, reference cycles, state ownership,
-        drift.
+        drift, then the unit section (`docs/MULTI_RUN_CODEBASE.md` §7), then the entry lines.
+
+        `unit_rows` is the two row sets the unit section names: the rows the run built, and the merged rows a
+        record read back. Both sets are read through `unit_manifest.units`, the one unit rule, so this writer
+        states no unit rule of its own; it takes the sets and prints them. The section prints only when the
+        codebase set names a unit the run set does not, so a run that read the whole codebase writes the report
+        bytes it writes today.
 
         Returns '' when the input has no report rows, and writes no file in that
         case (F4.3 AC-9): a run that read no entry has nothing to report.
@@ -6304,6 +6316,20 @@ provider "panos" {
                     lines.append(self._report_section_header(path))
                     for row in group:
                         lines.append(state_coverage.drift_line(row))
+
+        # Epic 11 (`docs/MULTI_RUN_CODEBASE.md` §7): the two unit sets, both read through `unit_manifest.units`,
+        # the one unit rule, so this writer names the sets and states no unit rule of its own. The section prints
+        # only when the codebase set names a unit the run set does not: a run that read the whole codebase has
+        # nothing to name, so its report bytes are unchanged. Report content only, no console line, and the
+        # grouping is the F3.9 rule the other sections use.
+        if unit_rows:
+            run_units = set(unit_manifest.units(unit_rows[0]))
+            if any(unit_manifest.facts_of(row) not in run_units for row in unit_rows[1]):
+                lines.extend(["", f"--- {entry_coverage.UNIT_HEADING} ---", entry_coverage.UNIT_RULE])
+                for path, group in self._group_by_scope(unit_rows[1]):
+                    lines.append(self._report_section_header(path))
+                    for row in group:
+                        lines.append(entry_coverage.unit_line(row, entry_coverage.unit_part(row, run_units)))
 
         lines.extend(
             [
@@ -7528,6 +7554,10 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
         state_findings,
         ownership.findings(ownership_rows),
         reference_edges.findings(reference[reference_edges], ordered),
+        # The report names the two sets the read step produced: the rows this run built, and the merged rows read
+        # back. The sets are read through `unit_manifest.units` in the report rule owner, so this step hands over
+        # the rows and states no unit rule of its own.
+        (run_rows[unit_manifest], reference[unit_manifest]),
     )
 
     # F5.3: the provenance record, in the order the run read the sources. Written outside the report bodies,

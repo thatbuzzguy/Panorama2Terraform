@@ -9,7 +9,10 @@ the rows arrive through each record module's `parse_rows`, and the writer is `wr
    `directory`, which is the §5 shape of the unit identity; the ownership record on (`type`, `entry`) with the
    facts, read through `state_coverage.ownership_key`, the one identity key rule; the edge record on the pair of
    entry identities with the matrix row and the entry name; the site record on `directory`. No module states a
-   second key, and no record gains a second join.
+   second key, and no record gains a second join. A site row names no scope facts, so this key is the only rule that
+   reads a merged site row: for every merged site row the key is the §5 shape `unit_manifest.directory_name` gives a
+   unit the merged manifest names, so the merged set has a reader for every site row. Pinned by
+   `tests/test_codebase_state.py::test_every_merged_site_row_names_a_unit_the_merged_manifest_names_through_the_join`.
 2. **The merge rule.** The run's rows replace the codebase's rows for the rows the run built, and the rows for the
    units the run did not build stay as the record states them. The merged set is keyed by row identity, not by run,
    so no record can state which run wrote a row.

@@ -13,14 +13,39 @@ The manual setup report's routing section (F7.1) names only the protocol entries
 `.tf` cannot hold, and its rows come from the ledger, so it uses the same grouping rule. The marker the VPN
 section names is the table's one statement, `resource_mapping.PLACEHOLDER_TEXT`, so the report, the print site
 that wrote it, and the gate rule read the same fact.
+
+Epic 11 (`docs/MULTI_RUN_CODEBASE.md` §7): the run's report gains one section that names the run's unit set and
+the codebase's unit set. Both sets are read through `unit_manifest.units`, the one unit rule, and the body is
+grouped by the same F3.9 rule this module pins, so the section adds no unit rule and no grouping rule of its own.
+It names a unit by name, never by directory, and it prints only when the codebase set names a unit the run set
+does not, so a run that read the whole codebase writes the report bytes it writes today. The section is report
+content and prints no console line; the console shape has one owner, `container_coverage.console_line`.
 """
 
 import re
+import shutil
 
+import codebase_state
+import entry_coverage
+import ownership
+import reference_edges
 import resource_mapping
-from conftest import FIXTURES_DIR, run_script
+import shadow_coverage
+import state_coverage
+import unit_manifest
+from conftest import (
+    CODEBASE_FIXTURE,
+    FIXTURES_DIR,
+    JOIN_RECORDS,
+    RUN_FIXTURE,
+    partial_run,
+    record_rows,
+    run_script,
+)
 
 FIXTURE = "report_grouping.xml"
+# The fixture that produces a reference cycle, so one report can show a finding section before the unit section.
+CYCLE_FIXTURE = "reference_cycle.xml"
 
 # A report section: an 80-character rule, the title, the rule, the body.
 SECTION_RE = re.compile(r"={80}\n(?P<title>[^\n]+)\n={80}\n(?P<body>.*?)(?=(?:={80}\n|\Z))", re.S)
@@ -300,3 +325,176 @@ def test_protocol_report_is_byte_identical_between_runs(tmp_path):
     first = _generate(tmp_path, "bgp.xml")
     second = _generate(tmp_path / "again", "bgp.xml")
     assert first["MANUAL_SETUP_REPORT.txt"] == second["MANUAL_SETUP_REPORT.txt"]
+
+
+# --- the run's unit section (Epic 11, `docs/MULTI_RUN_CODEBASE.md` §7) ---------
+
+ENTRY_LINES = "Entry lines are grouped by"
+UNIT_HEADLINE = f"--- {entry_coverage.UNIT_HEADING} ---"
+CONVERTER = "panorama_to_terraform.py"
+
+
+def _unit_pair(tmp_path, first=CODEBASE_FIXTURE, second=RUN_FIXTURE):
+    """The two runs as `tests/conftest.py::partial_run` states them, and the two row sets the section names.
+
+    Each set is read through the module that owns its shape, so this module states no reader, no join key and no
+    merge of its own. Returns the codebase directory, the run directory, the rows the run built, and the merged rows.
+    """
+    codebase, run, _second_run = partial_run(first, second, tmp_path)
+    held, built = record_rows(codebase), record_rows(run)
+    merged = {module: codebase_state.merge_rows(JOIN_RECORDS[module], held[module], built[module]) for module in held}
+    return codebase, run, built[unit_manifest], merged[unit_manifest]
+
+
+def _unit_section(report: str) -> dict[str, list[str]]:
+    """The unit section as {scope title: lines}, in the order the report prints them.
+
+    A line is read as the two words that name the set and the unit name, so the pin measures the words and the
+    names, not the spacing between them.
+    """
+    text = report[report.index(UNIT_HEADLINE) + len(UNIT_HEADLINE) : report.index(ENTRY_LINES)]
+    groups: dict[str, list[str]] = {}
+    current = None
+    rule_seen = False
+    for line in text.splitlines():
+        if not line:
+            continue
+        if not rule_seen:
+            rule_seen = True
+            continue  # the rule paragraph, which is the report rule's own statement
+        if line.startswith("  "):
+            groups[current].append(" ".join(line.strip().split()))
+        else:
+            current = line
+            groups.setdefault(line, [])
+    return groups
+
+
+def test_the_unit_section_names_the_two_unit_sets_through_the_one_unit_rule(converter_module, tmp_path):
+    """One line per unit the one unit rule names over the merged set, each named by the name the rule gives it.
+
+    The part on the line is the answer the two sets give, so the pin measures the section against the sets rather
+    than against a wording: a line whose unit is in the run's set names the run's part, and a line whose unit is
+    only in the codebase set names the record part. Both parts and both names are read through their owners.
+    """
+    _codebase, run, run_rows, merged_rows = _unit_pair(tmp_path)
+    run_units = set(unit_manifest.units(run_rows))
+    codebase_units = set(unit_manifest.units(merged_rows))
+    assert codebase_units - run_units, "the pair needs a unit the run did not read"
+
+    report = (run / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    section = _unit_section(report)
+    lines = [line for body in section.values() for line in body]
+    # One line per unit the rule names, and no line for a unit the rule does not name.
+    assert len(lines) == len(codebase_units), lines
+    assert any(entry_coverage.BUILT_PART in line for line in lines), "the run's own set must be named too"
+
+    gen = converter_module.TerraformGenerator(str(tmp_path / "out"))
+    for row in merged_rows:
+        facts = unit_manifest.facts_of(row)
+        title = converter_module.TerraformGenerator._report_section_header(gen._report_scope_path(row))
+        part = entry_coverage.BUILT_PART if facts in run_units else entry_coverage.RECORD_ONLY_PART
+        assert f"{part} {unit_manifest.unit_name(facts)}" in section[title], (title, section[title])
+
+
+def test_the_unit_section_prints_only_when_a_unit_the_run_did_not_read_is_in_the_codebase_set(tmp_path):
+    """A run that read the whole codebase names nothing, so its report bytes are the bytes it writes today.
+
+    The pair prints the section because the codebase set names a unit the run set does not. The same fixture run
+    twice puts the run in the codebase it read, so the second run's set is the codebase set and the section does
+    not print at all.
+    """
+    _codebase, run, run_rows, merged_rows = _unit_pair(tmp_path)
+    report = (run / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    assert UNIT_HEADLINE in report
+    assert set(unit_manifest.units(merged_rows)) - set(unit_manifest.units(run_rows))
+
+    for name in ("whole", "again"):
+        run_script(CONVERTER, str(FIXTURES_DIR / CODEBASE_FIXTURE), "--output-dir", str(tmp_path / name))
+    first_report = (tmp_path / "whole" / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    second_report = (tmp_path / "again" / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    assert UNIT_HEADLINE not in first_report, first_report
+    assert first_report == second_report, "a run that read the whole codebase writes the report bytes it writes today"
+
+
+def test_the_unit_section_prints_after_the_sections_the_report_rule_already_orders(tmp_path):
+    """The unit section is the last finding section, before the entry lines.
+
+    One fixture produces a reference cycle and the pair produces the unit section, so one report shows a finding
+    section and the unit section together. The order is read through the headings their owners state.
+    """
+    _codebase, run, _run_rows, _merged_rows = _unit_pair(tmp_path, first=CYCLE_FIXTURE)
+    report = (run / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    declared = [
+        entry_coverage.GAP_HEADING,
+        entry_coverage.PROPERTY_HEADING,
+        shadow_coverage.SHADOW_HEADING,
+        ownership.FINDING_HEADING,
+        reference_edges.CYCLE_HEADING,
+        state_coverage.OWNERSHIP_HEADING,
+        state_coverage.DRIFT_HEADING,
+        entry_coverage.UNIT_HEADING,
+    ]
+    present = [heading for heading in declared if f"--- {heading} ---" in report]
+    positions = [report.index(f"--- {heading} ---") for heading in present]
+    assert positions == sorted(positions), present
+    assert report.index(ENTRY_LINES) > positions[-1]
+    assert entry_coverage.UNIT_HEADING in present
+
+
+def test_the_unit_section_names_no_directory_and_groups_by_the_f3_9_rule(converter_module, tmp_path):
+    """The section titles are the scope the export declares, and the lines name a unit by name, not by directory.
+
+    The grouping rule is the one this module pins for the other report sections, read through its owner, so the
+    unit section states no grouping rule of its own.
+    """
+    _codebase, run, _run_rows, merged_rows = _unit_pair(tmp_path)
+    report = (run / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    section = _unit_section(report)
+    gen = converter_module.TerraformGenerator(str(tmp_path / "out"))
+    header = converter_module.TerraformGenerator._report_section_header
+
+    groups: dict[str, list[dict]] = {}
+    for row in merged_rows:
+        groups.setdefault(header(gen._report_scope_path(row)), []).append(row)
+    assert set(section) == set(groups), section
+    assert all(lines for lines in section.values()), "every named unit's line is inside its own group"
+    for title, rows in groups.items():
+        names = [unit_manifest.unit_name(unit_manifest.facts_of(row)) for row in rows]
+        # The name on each line is the name the one unit rule gives the row, and no line is empty.
+        pairs = list(zip(section[title], names, strict=True))
+        assert all(line.endswith(name) for line, name in pairs), (title, section[title])
+        # The directory is the §5 shape of the same identity, so it is a different string from the name.
+        for row in rows:
+            directory = unit_manifest.directory_name(unit_manifest.facts_of(row), gen.sanitize_name)
+            assert directory not in report, directory
+
+
+def test_the_report_prints_no_console_line_for_the_unit_section(tmp_path):
+    """The section is report content only, so the console prints nothing for it.
+
+    The console shape has one owner, `container_coverage.console_line`, and no scan shape prints the two words that
+    say which set names a unit, so the section's words and lines appear in the report file and not on the console.
+    A console line may still name a unit through a finding, because the finding shape names the entry it found.
+    """
+    codebase, run, _second_run = partial_run(CODEBASE_FIXTURE, RUN_FIXTURE, tmp_path)
+    # The same pair through the command, so the console is the run's own output.
+    console_dir = shutil.copytree(codebase, tmp_path / "console")
+    result = run_script(CONVERTER, str(FIXTURES_DIR / RUN_FIXTURE), "--output-dir", str(console_dir))
+    report = (console_dir / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    lines = [line for body in _unit_section(report).values() for line in body]
+    assert lines, "the section prints, so there is something to check is not on the console"
+
+    held, built = record_rows(codebase), record_rows(run)
+    merged = {module: codebase_state.merge_rows(JOIN_RECORDS[module], held[module], built[module]) for module in held}
+    codebase_units = set(unit_manifest.units(merged[unit_manifest]))
+    run_units = set(unit_manifest.units(built[unit_manifest]))
+    only_in_the_record = codebase_units - run_units
+    assert only_in_the_record, only_in_the_record
+
+    shapes = {" ".join(line.split()) for line in lines}
+    for stdout_line in result.stdout.splitlines():
+        normalized = " ".join(stdout_line.split())
+        for part in (entry_coverage.BUILT_PART, entry_coverage.RECORD_ONLY_PART):
+            assert part not in normalized, stdout_line
+        assert normalized not in shapes, stdout_line
