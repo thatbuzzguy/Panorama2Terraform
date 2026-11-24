@@ -147,6 +147,28 @@ Measured offline, the entry shape the documentation states for 9.1 and for 11.1 
 same, so the read layer agrees with the documented shape on both pages; the 10.2 comparison leg
 redirects and stays open.
 
+## Planning — Epic 14, the blocks a run binds to the live config (feature id `F14.x`)
+
+The planning record is `docs/IMPORT_BINDING.md`, written in the `import-pairing` worktree 2026-11-23. The
+pieces are in `to-do.md`, the criteria are in `acceptance.md`, and the facts that need a live target are in
+`backlog.md`. The epic extends Goal 6: a codebase that manages hardware the live config already has needs the
+run to state which unit's entries are read through an `import` block and which are added, and that decision has
+to be a record field a later run can read back, because a report is per run.
+
+Nothing here is decided, so no piece can be written from a decision yet. The phases:
+
+- **14A, the mode as data**: the two values, the level the mode sits at, the record field that holds it, the
+  argument that declares it, and the report section that names the units a run bound.
+- **14B, the facts an id needs that the tool cannot read offline**: the device serial for a bound unit, the
+  rulebase value and the position a live rulebase holds, the instance half of the import row shape, and the
+  built-in name table.
+- **14C, the plan side and permanence**: the whole-block fact, the completeness half for a bound unit, and
+  whether `imports.tf` is permanent codebase content or a first-run file.
+
+Definition of done: every rule in `docs/IMPORT_BINDING.md` names its owner, each pending decision is recorded as
+a decision before the code that reads it lands, and the pins that hold each rule run offline on committed
+material.
+
 ## Out of Scope (tracked in backlog.md)
 
 - PAN-OS version matrix testing

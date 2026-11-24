@@ -705,6 +705,11 @@ These are the facts a provider discussion contradicts:
 - The import id is base64 JSON of the location plus the name, so a colon-delimited id is the v1 shape
   and fails. The provider also declares the function `generate_import_id`; the tool builds the object
   itself, because the tool must be deterministic offline and the function resolves at plan time.
+- Open for Epic 14: no measurement reads the provider's import id object for the 22 types that declare no
+  `name`, because `entry_coverage.name_field` answers the field that names the scope for those types, so the tool
+  builds an id with a `name` key from a field the pinned schema does not call `name`. `decode_id` refuses a shape
+  it does not declare, so the provider's object for those types needs a measurement against a live target before a
+  bound unit can state an id for one of them.
 - The pinned schema has 128 resources, 128 data sources, 2 actions, 2 ephemeral resources
   (`panos_api_key`, `panos_vm_auth_key`), and the functions `address_value` and `generate_import_id`.
   `docs/CODEBASE_ASSEMBLY.md` §12 names the first three counts only. The last two are facts the tool
@@ -760,6 +765,23 @@ restated here; they are in the record and the git history. Only the open items a
 - Reports are per run. The codebase-level view is the merged records (Piece 11C.2); the run's report gains one
   section that names the units the run built and the codebase units the run did not read, and no fifth root-set
   file states the unit set a second time. The managed boundary is still not built.
+- Open facts for Epic 14, recorded here because no offline measurement reads them (the rules are in
+  `docs/IMPORT_BINDING.md`):
+  1. The device serial for a bound unit, and which declared source states it. The export names a device as a
+     hostname, so no serial reaches the parse and `unit_manifest.FACT_KEYS` holds no serial. A site value the
+     operator declares is the half that can be measured offline on a committed fixture; the fact a live target
+     states is not in any committed response.
+  2. Whether `panorama_device` has to be stated in an id for a bound unit. The field is the finding above: the
+     pinned schema declares it for `location.device_group` and the generator emits no device fact. The mode
+     decision decides whether an id needs one.
+  3. The position a live rulebase holds for a rule entry, which the F3.5 rulebase value gates and which no
+     offline source states. `rule_data.RULE_ROW_FIELDS` states `key` as the position inside a chain, and a chain
+     groups across rulebases, so it is not the position a live rulebase holds.
+  4. Whether a plan reports an `import` block for a resource that is already in state, and whether apply reads
+     the live object through it a second time. This decides whether `imports.tf` is permanent codebase content or
+     a first-run file, and no pin can read it, because a plan needs a device.
+  5. Whether a bound unit and a read-through scope can name the same entry, which needs the built-in name table
+     recorded in the coverage and gate section above.
 
 ## Design Decisions (the codebase several runs write into, open items)
 

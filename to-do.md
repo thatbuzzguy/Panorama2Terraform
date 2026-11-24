@@ -81,6 +81,46 @@ file until a piece lands.
 - **13C.2** — `docs/INPUT_SHAPES.md` moves from planning to rules when the first piece lands, and
   the shape table names its owner module in the `docs/ARCHITECTURE.md` §1 table in the same commit.
 
+## Epic 14 — the blocks a run binds to the live config (design record `docs/IMPORT_BINDING.md`)
+
+Planned in the `import-pairing` worktree, 2026-11-23. The decisions are in `docs/IMPORT_BINDING.md` §2, the
+criteria are in `acceptance.md`, and the live facts are in `backlog.md`. This worktree touches no `src/` file
+until a piece lands, and the shared tracking markdown is joined by hand against main. No piece can be written
+from an untaken decision, so each piece names the decision it needs.
+
+### Phase 14A, the mode as data
+
+- **14A.1** — the two mode values and the level the mode sits at (§2 decision 1). Needs the decision on
+  whether the mode stops at the unit, because a device group, a template, a vsys and a device are already
+  units.
+- **14A.2** — the record field that holds the mode: read through `unit_manifest.parse_rows`, merged through
+  `codebase_state.py` rule 2, and read by the `data_files` gate rule. Needs decision 2 and the answer to
+  fact 11, because a field that enters the shape moves the committed rows.
+- **14A.3** — the declaration argument: a scope-name argument read through `container_coverage.is_scope_path`
+  and `SCOPE_PATH_ROOTS`, held by the CLI and not by a rule owner. Needs decision 3, which is also the decision
+  that an order-dependent declaration is refused.
+- **14A.4** — the report section that names the units a run bound, through `entry_coverage.py` and the F3.9
+  grouping rule, so no module states a second unit set or a second grouping rule.
+
+### Phase 14B, the facts an id needs
+
+- **14B.1** — the device fact for a bound unit: the site value an operator declares, read through `site_data.py`
+  so the block and the id print the same fact through `VALUE_VARIABLES`. Needs decision 6; the half that reads a
+  live target stays in `backlog.md`.
+- **14B.2** — the rule types: the shape decision in §2 decision 7, then the instance half of
+  `import_blocks.IMPORT_ROW_FIELDS` if the shape changes. Blocked on the F3.5 rulebase value and on a source
+  that states the position a live rulebase holds, so it stays out of the pieces until both land.
+- **14B.3** — the read-through order for a bound unit, which needs decision 8 and the built-in name table.
+
+### Phase 14C, the plan side and permanence
+
+- **14C.1** — the whole-block fact: the name, the owner, the severity, and the report section that names which
+  entries of a bound unit can read as zero change. Needs decision 4.
+- **14C.2** — the completeness half for a bound unit: one block per entry the run's ledger reads as `emitted`.
+  Needs decision 5, which states whether it is the same rule as the round-trip cross-check or a second rule.
+- **14C.3** — permanence: `imports.tf` as permanent codebase content or a first-run file, decided on the
+  Terraform measurement in fact 10.
+
 ## Feature-sized items that stay blocked
 
 Feature-sized items that stay blocked on a fact the tool cannot read offline are recorded in

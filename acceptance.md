@@ -1,7 +1,7 @@
 # Acceptance criteria
 
-Two tasks are active on two branches, so this file carries both records (joined manually during
-the merge of `input-shapes`, 2026-11-23). Each section names the worktree that owns it.
+Three tasks are active on three branches, so this file carries each record, joined by hand at each merge.
+Each section names the worktree that owns it.
 
 ## Piece 12A.1, one owner for the Terraform minimum (main, the current task on main)
 
@@ -101,3 +101,64 @@ file held are in `a153b04`. The design record is `docs/INPUT_SHAPES.md`, the pie
 Every rule in `docs/INPUT_SHAPES.md` names its owner. Each pending decision in §2 is recorded as
 a decision before the code that reads it lands, and the pins that hold each rule run offline on
 committed material.
+
+## Epic 14, the blocks a run binds to the live config (the `import-pairing` worktree)
+
+The task is the planning of Epic 14 in the `import-pairing` worktree, on branch `import-pairing` from main
+`c845f07`, 2026-11-23. The design record is `docs/IMPORT_BINDING.md`, the pieces are in `to-do.md`, and the
+live facts are in `backlog.md`. No `src/` file is touched until a piece lands.
+
+### Criteria
+
+1. **The mode is data read through its record owner.** A later run reads the decision back through
+   `unit_manifest.parse_rows`, and the merged record is the codebase-level view, so no report or gate rule states
+   a second mode rule. `--selection` names the read set only (`docs/MULTI_RUN_CODEBASE.md` §2 rule 1), so the mode
+   needs its own scope-name argument, read through `container_coverage.is_scope_path` and `SCOPE_PATH_ROOTS`, the
+   one scope-path definition, and no module states a second unit set.
+2. **The mode sits at one level until the entry-level decision is taken.** A device, a virtual system, a device
+   group and a template are already units, so a per-device or per-device-group request needs no new level. If an
+   entry-level mode is taken, `OWNERSHIP.json` is the record that holds it, because that record already holds one
+   row per entry the run emits, and `unit_manifest.units` stays the one unit set.
+3. **The mode cannot depend on order.** A declaration that reads the order the entries appear in is refused by
+   `docs/ARCHITECTURE.md` §6, so the argument is an explicit list of scopes or a refusal, and a mode a run
+   declares must agree with the mode the merged record names for the same unit. The argument is held by the CLI
+   and not by a rule owner, which is the rule the no-flag scan holds.
+4. **A shape change names the committed files it moves.** A field that enters `unit_manifest.FIELD_ORDER` is
+   printed for every row, so the golden data files move in the same commit as the pins that read the row. The
+   criterion is not that no golden moves, but that a piece states which committed files it moves; a run that
+   declares no mode writes today's bytes only where the decision says so, which is the F5.5 and F6.4 precedent.
+5. **The whole-block fact is a coverage fact.** It compares the properties a matrix row declares with the fields
+   the emitter reads on a run, so it is a WARN and the exit code stays with the rules that read the files
+   (`docs/ARCHITECTURE.md` §4.6). Its owner is the property scan through `entry_coverage.py`, its report section
+   follows the F3.9 grouping rule, and the finding fits the four parts of the console-line shape
+   (`container_coverage.console_line`) or prints in the report only.
+6. **The completeness half states no rule of its own.** It compares the block set the one block reader read with
+   the entry set the run's ledger read, so it is the same shape as the round-trip cross-check; it reads the unit
+   through `unit_manifest.units` and the mode through the record, and the agreement half stays in
+   `sanity_checks.check_import_blocks`.
+7. **A device fact reaches an id only through a source the provenance record can name.** The offline half is a
+   site value the operator declares, read through `site_data.py` and printed through `VALUE_VARIABLES` so the
+   block and the id state the same fact. The rule that a run with no network passes CI is unchanged, and the live
+   half stays in `backlog.md`.
+8. **The rule types stay reported until the shape decision and the F3.5 rulebase value land.** No unverified
+   value is written, and the order pins, the iterated block rule and the goldens move together if the shape
+   changes, so a shape change cannot be a print-only change.
+9. **Read-through and binding cannot both claim one name.** A unit that binds its entries writes no `data` block
+   for a name it binds, and a read-through scope stays labelled in the generated `README.md` until the built-in
+   name table lands.
+10. **Plan facts stay measurements.** No test can pin a plan, because a plan needs a device, so the offline
+    reading is the property scan measured on a run, and the Terraform behaviour for an import block whose resource
+    is already in state is recorded as a decision to take on measurement.
+11. **Every rule names its owner, and a pending owner is named by the decision that takes it.** A document names
+    only tests that exist, and a pending pin says it is pending.
+12. **The layout rules hold**: `docs/IMPORT_BINDING.md` is named in the `docs/README.md` index and carries its
+    owner row; no new module states a second naming rule, writer, console line, or environment name, so the pins
+    that scan the `src/` set read it with the other modules.
+13. **No `src/` path that Epic 11C or Epic 12 runs on is touched by this worktree**, and the shared tracking
+    markdown is joined by hand against main.
+
+### Definition of done
+
+Every rule in `docs/IMPORT_BINDING.md` names its owner. Each pending decision in §2 is recorded as a decision
+before the code that reads it lands, each live fact is recorded in `backlog.md`, and the pins that hold each rule
+run offline on committed material.
