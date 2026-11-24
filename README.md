@@ -780,8 +780,9 @@ The gate, the fixtures, and the corpus:
 - `tests/test_build_kitchen_sink.py` - the fixture assembler (`tools/`): the read rule read on the committed
   bytes, so a hostile fixture is skipped by rule and not by name and the tool's decision agrees with `xml_input`
   for every committed fixture; the rule that the tool names no fixture except its own record, writes no file,
-  and is a generator rather than a pin on the record; the three merge cases; the byte rule between two runs; and
-  the rule that the tool reads the corpus and not the committed response set
+  and is a generator rather than a pin on the record; the three merge cases; the byte rule between two runs; the
+  rule that the tool reads the corpus and not the committed response set; and the committed shape pair, read through
+  that rule, so each half's shape comes from its bytes and not from its file name
 - `ruff check .` - lint
 - `ruff format --check .` - format
 

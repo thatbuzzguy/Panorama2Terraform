@@ -82,8 +82,9 @@ which `tools/check_documents.py` reports. Every document that describes a shape 
    decision in §2 it waits for. A decision that lands, or a line that is written for a held shape, moves the row in
    the same commit.
 4. **The shape is read from the bytes**, so no row names a file name, an extension, or a committed fixture, and the
-   pins decide acceptance from the row's content under different names. The committed fixture pair is Piece 13A.3,
-   which adds no row here, so the fixture-count pins do not move.
+   pins decide acceptance from the row's content under different names. The committed fixture pair (Piece 13A.3)
+   shows the two shapes as two files and adds no row here, so the pins read its shape from its bytes and not from
+   its name, and the pins that state the printed fixture set read the measured value, so they move with the pair.
 5. **Every entry point prints the same line for the same bytes**, which the pins measure by running both entry points
    on one row's content. A row that names `none` as its accepted entry point is a refusal row: the entry point prints
    the refusal, and the line is that refusal. A row that names an entry point is a shape that entry point accepts, so

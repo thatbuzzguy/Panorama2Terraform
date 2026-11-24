@@ -316,6 +316,24 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   part for a finding with no line is `container_coverage.position_part`. A document that states either wording is
   prose, which check 7 reads, so neither is recorded as a row. Owners: `src/split_device_groups.py`,
   `container_coverage.position_part`.
+- **The printed fixture set is stated as prose, so no pin holds its size.** Measured 2026-11-24 during Piece 13A.3:
+  the corpus pins read the set through `tests/conftest.py::corpus_fixtures`, and the places that state its size state
+  it as wording (`tests/test_build_kitchen_sink.py`, `tests/test_api_requests.py`, `tests/test_policy_order.py`,
+  `docs/ARCHITECTURE.md` §5.1, and the two pair-read facts in this document), so a fixture that joins or leaves the
+  corpus moves no pin and only the wording. `tools/check_documents.py` check 5 reads a document for a test count and
+  no fixture count. Owners: `tests/conftest.py::corpus_fixtures`.
+- **The pattern measurement in `tests/conftest.py` names corpus output counts as prose, and no pin reads them.**
+  Measured 2026-11-19 for the two patterns: 87 golden `.tf` files, 584 `.tf` files from a corpus run, 387 matches, 42
+  types and 238 addresses. Measured 2026-11-24 on the corpus that holds the committed shape pair, through
+  `conftest.tf_files`: 606 `.tf` files over the accepted corpus, and the pair's two fixtures write 14 of them. The
+  comment holds the 2026-11-19 record, so a fixture that joins or leaves the corpus moves those numbers without a pin
+  failing. Owners: `tests/conftest.py` `RESOURCE_RE` and `RESOURCE_ADDRESS_RE`.
+- **The pair shows the Panorama shape, and no row states that shape.** Measured 2026-11-24 during Piece 13A.3: rule 7
+  keeps each row's content as the smallest document that shows one shape, and the pair adds no row, so the Panorama
+  half is read only by the pins that read the pair and by `docs/INPUT_SHAPES.md` §1 fact 3, while the firewall half
+  has a row that shows it. A row for the Panorama shape would state the parts fact 3 already states, so the table
+  gains no row until a shape difference between the two halves needs one. Owners: `src/input_shapes.py` rule 7,
+  `tests/test_build_kitchen_sink.py`.
 
 ## Out of Scope
 
@@ -879,9 +897,10 @@ holds them, so this document holds only what a piece cannot be written from.
   Edge-Stack to Edge-Networks), each inside one fixture: every fixture declares the membership name itself, so the
   referrer and the target of a membership row are always units of the same run. A cross-run membership row needs a
   pair where one fixture declares the stack and the other declares the template, so the condition stays here and no
-  rule is invented for it (measured 2026-11-22: 0 of the 4,422 ordered pair reads over the 67 accepted fixtures).
-- The acyclic rule cannot state a cycle whose two halves come from two runs on committed material: 0 of the 4,422
-  ordered pair reads over the 67 accepted fixtures gives one, because a cycle needs two units that each declare a name
+  rule is invented for it (measured 2026-11-24 on the tree that holds the committed shape pair: 0 of the 4,692
+  ordered pair reads over the 69 accepted fixtures).
+- The acyclic rule cannot state a cycle whose two halves come from two runs on committed material: 0 of the 4,692
+  ordered pair reads over the 69 accepted fixtures gives one, because a cycle needs two units that each declare a name
   the other one uses, and no committed pair holds that split. The pin reads the walk over a merged set only for the
   cycle the codebase's own rows wrote
   (`tests/test_reference_edges.py::test_the_acyclic_rule_reads_a_finding_from_a_unit_the_run_did_not_build`). The

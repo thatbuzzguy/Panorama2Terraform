@@ -6,7 +6,8 @@ Four groups:
 1. The read rule: the tool reads a fixture when the F3.8 input rule accepts it, so a hostile fixture is
    skipped by rule and not by name. The tool's decision agrees with `xml_input` for every committed fixture,
    the tool names no fixture in its source except its own record, and the rule answers for a fixture the test
-   writes. F8.4 adds the pin that the tool reads the corpus and not the committed response set.
+   writes. F8.4 adds the pin that the tool reads the corpus and not the committed response set, and Piece 13A.3
+   adds the pin that reads the committed shape pair through that rule.
 2. The generator, not a pin: the tool writes no file, the record is not an input, and the tool's output for
    the committed set is not the record, because the record is curated by hand.
 3. The merge rule: an entry merges with the entry of the same name, a leaf with text always appends, and
@@ -24,6 +25,7 @@ import importlib.util
 import io
 import xml.etree.ElementTree as ET
 
+import split_device_groups
 import xml_input
 from conftest import FIXTURES_DIR, RESPONSES_DIR, TOOLS_DIR, corpus_fixtures
 
@@ -70,6 +72,40 @@ def test_the_tool_names_no_fixture_in_its_source():
     assert named == [tool.RECORD], named
 
 
+# The committed shape pair (Piece 13A.3, `docs/INPUT_SHAPES.md` §1 fact 3): the two fixtures that show the two
+# config shapes. Each value is what the two owners the shape table names answer for that file's bytes, so this is the
+# measurement the pin reads, and the pin states no shape rule of its own.
+SHAPE_PAIR = {
+    "panorama_shape.xml": (["device-group"], "device-group"),
+    "firewall_shape.xml": ([], "devices"),
+}
+
+
+def test_the_committed_shape_pair_is_read_by_rule_and_not_by_name(tmp_path):
+    """Piece 13A.3 (`docs/INPUT_SHAPES.md` §1 fact 3, §3 rule 4): both halves of the pair enter the read set because
+    the rule accepts them, and each half's shape is in its bytes. The pin reads each half through the owners the
+    shape table names for its shape, so it states no shape of its own, and it reads the same bytes under the other
+    half's name, so a file name decides nothing. Measured 2026-11-24: the Panorama half answers one device-group row
+    and holds its first entry at `device-group`, and the firewall half answers no row and holds its entry at
+    `devices`, which is the shape the table's console row states for the firewall export.
+    """
+    pair = sorted(SHAPE_PAIR)
+    for name, measured in SHAPE_PAIR.items():
+        committed = FIXTURES_DIR / name
+        assert name in corpus_fixtures(), (name, "the pair is in the set the corpus pins read")
+        # The same bytes under the other half's name: the read rule and the two owners answer the same, so the file
+        # name is not what decides the shape.
+        swapped = tmp_path / next(other for other in pair if other != name)
+        swapped.write_bytes(committed.read_bytes())
+        for path in (committed, swapped):
+            reason = tool.refusal_reason(path)
+            assert reason is None, (path.name, reason)
+            source = xml_input.parse_xml(path)
+            rows = split_device_groups.parse_device_groups(source)
+            shape = split_device_groups.tree_shape(source)
+            assert ([row["path"] for row in rows], shape["path"]) == measured, (path.name, rows, shape)
+
+
 def test_the_read_rule_answers_for_a_fixture_the_tool_has_never_seen(tmp_path):
     """A fixture a test writes is refused by the same rule: a DTD, or a parse the parser cannot read."""
     dtd = tmp_path / "new_dtd.xml"
@@ -100,8 +136,8 @@ def test_the_read_rule_answers_for_a_fixture_the_tool_has_never_seen(tmp_path):
 def test_the_read_set_is_the_set_the_corpus_pins_read_less_the_record():
     """The corpus pins read the fixtures that are not hostile, so the tool reads the same set, less its own
     record. The pin compares the tool's decision with the rule's decision for every file in the corpus, in both
-    directions, so a file the two answer differently on is a finding. Measured 2026-11-21: 67 accepted, 66 read,
-    3 skipped.
+    directions, so a file the two answer differently on is a finding. Measured 2026-11-24 on the tree that holds the
+    committed shape pair: 69 accepted, 68 read, 3 skipped.
 
     Restated 2026-11-18 as the derivation, because the pin held the set as three numbers, which a file that leaves
     the corpus can move without any rule being wrong. `tests/conftest.py::corpus_fixtures` is the rule's answer, so

@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<!-- Corpus material: the other half of the committed shape pair, the firewall export shape (`docs/INPUT_SHAPES.md`
+     §1 fact 3). The root is the config element, the tree holds one `devices/entry`, and no device-group row is
+     present. The pair is this file and tests/fixtures/panorama_shape.xml, and the read rule accepts both, so both
+     enter the set the corpus pins read and the set the fixture assembler merges. The entry name is the device serial
+     the shape shows, so the file holds its shape as bytes and not as a name. -->
+<config version="11.1.2">
+  <devices>
+    <entry name="0123456789"/>
+  </devices>
+</config>

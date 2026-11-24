@@ -1,82 +1,75 @@
 # Agent Status
 
-## Current position (main, Piece 13A.2, 2026-11-24)
+## Current position (main, Piece 13A.3, 2026-11-24)
 
-Piece 13A.2 is complete on main, 2026-11-24, and is not pushed. It is the splitter diagnostic, the
-second piece of Epic 13: the run prints the fact it read for the shape it read, through the console-line owner,
-instead of the line that guessed where the export came from. The commit holds the print site, the pins that read the
-printed set, the shape table row that moved, the document edits, and the tracking markdown. The piece record for
-Piece 13A.1 (the shape table, complete) is held by the git history at `a2df38e`.
+Piece 13A.3 is complete on main, 2026-11-24, and is not pushed. It is the committed fixture pair, the third piece
+of Epic 13: two fixtures under `tests/fixtures/`, one that shows the Panorama shape and one that shows the firewall
+export shape, read through the fixture assembler's read rule. The pair is accepted by rule and not by name, each
+half's shape comes from its bytes, and the shape table gains no row because its two held rows already show the two
+shapes as content. Every pin that states the printed fixture set moved in the same commit. The piece record for
+Piece 13A.2 (the splitter diagnostic, complete) is held by the git history at `f7de913`, and the record for
+Piece 13A.1 (the shape table, complete) is at `a2df38e`.
 
 What landed:
 
-- `src/split_device_groups.py`, the owner of the printed fact: head comment rule 6, `BLOCK_HEADER`, `NO_ENTRY_SHAPE`,
-  `row_fact`, `tree_shape` and `console_lines`. The run states its own fact phrase and its own block header, carries
-  the marker `container_coverage.CONSOLE_WARNING` for a block that has findings, and calls
-  `container_coverage.console_line`, so it builds no prefix and no second shape. The three parts the line names are
-  the row count the run read, the path the tree holds the entry at, and the source line the read layer records for
-  that entry. The entry is the first one the tree holds in source line order, read through the module's own row rule
-  (`_row`) and the walk rule it already states, so the printed line reads no rule the module does not already state.
-  A block prints only when it has a finding, so a run that read rows prints nothing new. A part the run cannot name
-  is the honest statement: `container_coverage.position_part` for a finding with no line, and `NO_ENTRY_SHAPE` for a
-  tree that holds no entry at any path. The exit code is unchanged, so a run that read no `device-group/entry` row
-  still exits 1, writes nothing, and a refusal still prints through the read layer's own print site.
-- `tests/test_split_device_groups.py`, 15 pins now (3 new): the printed fact measured through the owners that state
-  each part, the honest statement for a tree that holds no entry, and that a run which read its own table prints
-  nothing new and went on to write its files. The pins read the parts through `container_coverage.console_line`,
-  `container_coverage.position_part` and `split_device_groups.row_fact`, so the test module holds no wording of its
-  own, and one pin reads the exit code as unchanged.
-- `tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place` names `split_device_groups.py`
-  in the list of modules that call the shape, and the loop that holds "the block states the fact, not the shape" reads
-  it as a module that states no `console_line` of its own.
-- `tests/test_input_shapes.py`, 28 pins: the held rows that state a line now split into the 10 refusal rows and the
-  one console line row, so the refusal pin reads only rows that name `none` as their entry point. The console row pin
-  runs the row's content through `split_device_groups.console_lines` and reads the prefix through
-  `container_coverage.CONSOLE_PREFIX`. `OWNERS` gained `split_device_groups`. The counts moved to 11 held rows that
-  state a line, 10 refusal rows, 1 console line row, 5 accepted rows and 3 pending rows, and the pending set is the
-  two open `docs/INPUT_SHAPES.md` §2 decisions.
-- `src/input_shapes.py`: the splitter row is held, `entry_point` is `split_device_groups.py`, `printed_line` is the
-  row's wording without the console prefix, and `measured_through` is `split_device_groups.console_lines`. Rule 3
-  states why the row holds no prefix, and rule 6 states the two kinds of held line row: a refusal row and the fact an
-  entry point read.
-- The documents: `docs/INPUT_SHAPES.md` §1 items 1 and 2, §3 rules 1, 2, 3 and 5, and §4, which names the pins.
-  `docs/DEVICE_GROUP_SPLITTING.md` and `docs/USAGE_GUIDE.md` §Troubleshooting name the shape and describe what the
-  run prints without quoting the line, which `tools/check_documents.py` check 7 reads. `README.md` §Testing names the
-  console line row and the splitter pins. `docs/ARCHITECTURE.md` §1 names the splitter's printed fact, and §3.2 names
-  five kinds that print, with the splitter pin among the pins. No document holds the row's printed line.
+- `tests/fixtures/panorama_shape.xml` and `tests/fixtures/firewall_shape.xml`, the pair. Each file holds the smallest
+  content that shows one shape: the Panorama half is a `config` root with one `device-group` entry, one `templates`
+  entry and one `template-stack` entry, and the firewall half is a `config` root with one `devices/entry` and no
+  device-group row. The four entry names the pair carries are not carried by `kitchen_sink.xml`, so the pin that holds
+  the record's comment-block count and its entry-name count did not move. Both halves enter the set the corpus pins
+  read, because the read rule accepts them and not because of their names.
+- `tests/test_build_kitchen_sink.py`, 13 pins now (1 new):
+  `test_the_committed_shape_pair_is_read_by_rule_and_not_by_name` reads each half through `tool.refusal_reason`, then
+  through the two owners the shape table names for a shape (`split_device_groups.parse_device_groups` and
+  `split_device_groups.tree_shape`), and reads the same bytes under the other half's name, so the pin states no shape
+  rule of its own and a file name decides nothing. The module holds the measured answer for each half as data
+  (`SHAPE_PAIR`), and the read-rule pin's count moved to 69 accepted, 68 read, 3 skipped.
+- The count statements that name the printed fixture set, all moved in this commit: `tests/test_api_requests.py`
+  (69 accepted corpus files), `tests/test_policy_order.py` (69 accepted fixtures; the 18 blocks, 9 fixtures and 37
+  rows did not move), `docs/ARCHITECTURE.md` §5.1 (69 accepted fixtures; the 144, 79 and 65 did not move), and the two
+  pair-read facts in `backlog.md` (4,692 ordered pair reads over 69 accepted fixtures, still 0).
+- `docs/INPUT_SHAPES.md` §3 rule 4, reworded: it stated that the fixture-count pins do not move, which the pair shows
+  to be wrong, because the pair moves them; the rule now states that the pins read the measured value and move with a
+  fixture that joins the corpus. `README.md` §Testing names the new pin, and the pair's two fixture comments state the
+  shape as the content each file holds.
+- No row in `src/input_shapes.py`: the table already holds the two shapes as content measured through
+  `xml_input.parse_bytes`, so rule 7 keeps the pair out of the table, and no row's `measured_through` names a pin that
+  reads a committed fixture.
 
 Gate, measured 2026-11-24 single-threaded on the tree that holds this work: `ruff check .` clean at `py310`,
 `ruff format --check .` clean on the 112 files it reads (82 Python, 30 markdown),
-`python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` in one process exits 0 with 1,832
-passed and the same 4 `tflint` skips, so 1,836 pins in 55 modules, in 385.6 s. The Piece 13A.1 baseline was 1,829
-passed and 1,833 pins, so the count moved by the 3 pins this piece adds. `tflint` is absent, so the 4 skips are the
-`tflint` pins in `tests/test_sanity_gate.py`; `terraform` is present, so the provider-schema pins ran. No new `src/`
-module, so the `docs/LICENSING.md` counts did not move: that document is the measurement at `ac7609e`, and check 3
-reads each file total at that commit, so an edit to `src/split_device_groups.py` cannot move a number there.
+`python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` in one process exits 0 with 1,835
+passed and the same 4 `tflint` skips, so 1,839 pins in 55 modules, in 278.5 s. The Piece 13A.2 baseline was 1,832
+passed and 1,836 pins in 385.6 s, so the count moved by 3: the pin this piece adds, and the 2 cases the
+`tests/test_sanity_gate.py` fixture parametrization gains for the two accepted fixtures. The corpus pins gained no
+finding for the pair, and the two runs write 14 `.tf` files through `conftest.tf_files` (12 for the Panorama half, one
+set per unit its three entries name, and 2 for the firewall half, where the device entry names a unit that writes no
+scope block). `tflint` is absent, so the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py`; `terraform` is
+present, so the provider-schema pins ran. No new `src/` module, so the `docs/LICENSING.md` counts did not move: that
+document is the measurement at `ac7609e`, and check 3 reads each file total at that commit.
 
 Findings this piece reports:
 
-- The console-line shape pin holds a list of the modules that call the shape, so a module that starts calling
-  `container_coverage.console_line` has to be added to that list and to the list of kinds that print in
-  `docs/ARCHITECTURE.md` §3.2 in the same commit. Nothing pins that the two lists agree, so a module can call the
-  shape without being named as a kind that prints. Recorded in `backlog.md`.
-- A console line row is measured through the block its entry point states, so the fact phrase is held as data in the
-  row: `split_device_groups.row_fact` cannot reword its line without moving the row in the same commit, and the pin
-  reads the row's parts through three owners (`position_part`, the row's `line` and `path` fields, `row_fact`), so the
-  pin depends on the module's own row shape. Recorded in `backlog.md`.
-- The honest statement for a tree that holds no entry is the module's own wording, and no shape table row holds it,
-  because each row is measured through one content that shows one shape. Recorded in `backlog.md`.
+- The printed fixture set is stated as prose, so no pin holds its size: the corpus pins read the set through
+  `tests/conftest.py::corpus_fixtures`, and every place that states its size states it as wording, so a fixture that
+  joins or leaves the corpus moves no pin and only the wording, which is why the count statements had to be moved by
+  hand in this commit. Recorded in `backlog.md`.
+- The pair shows the Panorama shape, and no shape table row states that shape, because rule 7 keeps each row as the
+  smallest content that shows one shape and the pair adds no row, so the Panorama half is read only by the pins that
+  read the pair and by `docs/INPUT_SHAPES.md` §1 fact 3, while the firewall half has a row that shows it. Recorded in
+  `backlog.md`.
+- `tests/conftest.py` names corpus output counts as prose for the two resource patterns, and no pin reads them, so the
+  pair moves those numbers with no pin failing. Recorded in `backlog.md`.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`commit.md`, `README.md`, `docs/INPUT_SHAPES.md`, `docs/DEVICE_GROUP_SPLITTING.md`, `docs/USAGE_GUIDE.md`,
-`docs/ARCHITECTURE.md` §1 and §3.2, `docs/LICENSING.md`, `tools/check_documents.py`,
-`src/split_device_groups.py`, `src/input_shapes.py`, `src/container_coverage.py`, `tests/conftest.py`,
-`tests/test_split_device_groups.py`, `tests/test_input_shapes.py`, `tests/test_container_coverage.py`.
+`commit.md`, `README.md`, `docs/INPUT_SHAPES.md`, `docs/ARCHITECTURE.md` §5.1, `docs/LICENSING.md`,
+`tools/check_documents.py`, `tools/build_kitchen_sink.py`, `src/input_shapes.py`, `src/split_device_groups.py`,
+`src/xml_input.py`, `tests/conftest.py`, `tests/test_build_kitchen_sink.py`, `tests/test_input_shapes.py`,
+`tests/test_layout.py`, `tests/test_api_requests.py`, `tests/test_policy_order.py`, `tests/test_sanity_gate.py`.
 
-The next piece is Piece 13A.3, the committed fixture pair, which the fixture-count pins read in the same commit; the
-shape table reads the shapes from bytes, so the pair adds no row. Then Piece 13A.4, the unfinished 10.2 documentation
-comparison leg. The two open Epic 13 §2 decisions (the member selection for a bundle with more than one XML member,
-and the bytes the provenance record names for an archive read) are each a pending row.
+The next piece is Piece 13A.4, the unfinished 10.2 documentation comparison leg. Then the Phase 13B pieces, the
+archive producer and its pins, which need the two open Epic 13 §2 decisions: the member selection for a bundle with
+more than one XML member, and the bytes the provenance record names for an archive read.
 
 ## Position in the `input-shapes` worktree (Epic 13 planning, 2026-11-23)
 

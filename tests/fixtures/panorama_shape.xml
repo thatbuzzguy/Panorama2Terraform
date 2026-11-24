@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- Corpus material: one half of the committed shape pair, the Panorama export shape (`docs/INPUT_SHAPES.md` §1
+     fact 3). The root is the config element, and the three parts the fact names are each present as one entry:
+     device-group, templates and template-stack. The pair is this file and tests/fixtures/firewall_shape.xml, and the
+     read rule accepts both, so both enter the set the corpus pins read and the set the fixture assembler merges. -->
+<config version="11.1.2">
+  <device-group>
+    <entry name="Pair-Panorama-DG"/>
+  </device-group>
+  <templates>
+    <entry name="Pair-Panorama-Template"/>
+  </templates>
+  <template-stack>
+    <entry name="Pair-Panorama-Stack"/>
+  </template-stack>
+</config>

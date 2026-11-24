@@ -1808,7 +1808,7 @@ block's own level as well as at each level below.
     The fact is stated only when the caller holds the set for the entry, so the input layer is not the owner:
     `xml_input.py` reads no shape table and cannot know which element is a `number` field, and an input-layer
     refusal would change no CI output but would move the exit code to 1 and write no file (§4.6). Measured on the
-    accepted corpus: 144 `number` field reads across the 67 accepted fixtures, 79 integers and 65 absent, and no
+    accepted corpus: 144 `number` field reads across the 69 accepted fixtures, 79 integers and 65 absent, and no
     present-but-unreadable text, so no golden and no report golden moves. `bool` is not the same blind side,
     because an unread `bool` answers `False`, which prints, so the gate sees a field for it. Pinned by
     `tests/test_parse_helpers.py::test_the_number_rule_answers_for_the_text_it_can_read_and_the_text_it_cannot`

@@ -197,7 +197,7 @@ def test_the_key_order_is_the_xml_order_across_the_corpus(tmp_path):
     row, the file is the one the matrix row names, and the printed shape is read through the one rule-shape
     parser, so this pin states no rule type, no file name and no key rule of its own.
 
-    Measured 2026-11-21 on the 67 accepted fixtures: 18 blocks over 9 fixtures and 37 rows, no unit holds more
+    Measured 2026-11-24 on the 69 accepted fixtures: 18 blocks over 9 fixtures and 37 rows, no unit holds more
     than one chain for a rule type, and every block prints its entries in the order the export lists them.
     """
     rule_rows = [

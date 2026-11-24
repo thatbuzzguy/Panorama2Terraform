@@ -8,15 +8,12 @@ piece are in `acceptance.md`, with pointers to the Epic 13 and Epic 14 records.
 ## Epic 13 — the shapes an input can be (design record `docs/INPUT_SHAPES.md`)
 
 Planned in the `input-shapes` worktree, 2026-11-23. The decisions are in `PLAN.md`, the criteria
-are in `acceptance.md`, and the live facts are in `backlog.md`. Piece 13A.1 and Piece 13A.2 landed on main on
-2026-11-24, so the shape table has an owner module in `src/` and the splitter prints the fact it read; each
-remaining piece needs a decision, a fixture, or a live fact.
+are in `acceptance.md`, and the live facts are in `backlog.md`. Pieces 13A.1, 13A.2 and 13A.3 landed on main, so the
+shape table has an owner module in `src/`, the splitter prints the fact it read, and the two config shapes are
+committed as a fixture pair. Each remaining piece needs a decision, or a fact a live target states.
 
 ### Phase 13A, the shapes as data and the diagnostic
 
-- **13A.3** — the committed fixture pair, one Panorama shape and one firewall shape, read through
-  the fixture assembler; the fixture-count pins move in the same commit. The shape table reads the
-  shapes from bytes, so the pair adds no row.
 - **13A.4** — the documentation comparison: the 9.1 and 11.1 & Later legs are measured, the 10.2
   leg redirects, so finish that leg or record the redirect as the finding.
 
