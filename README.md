@@ -689,7 +689,11 @@ The records, the reports, and the write path:
   golden set read as paths from the case directory, the single-unit case, the rule that the run writes no
   directory for a unit it read only through the record, the rule that the rule data pair names the unit set,
   the four records read at the root with the pair read inside the unit directory and the data count moving
-  with it while the printed member enters no count, and the byte rule between two runs
+  with it while the printed member enters no count, the byte rule between two runs, and the write boundary
+  (`MULTI_RUN_CODEBASE.md` §6): the run overwrites the file shapes it has content for inside the unit directory
+  its own set names, removes no file and no directory, leaves a file outside the two sets as the operator wrote
+  it, holds no record of what it wrote, and holds no delete call while the only file removal in the tool is the
+  cache prune action
 - `tests/test_provenance.py` - the provenance record (`SOURCE.txt`): the fields, the record
   read back as data, one record per source the run read, one record per request the path 2 run read with the
   `scope` field naming the path that request declared, the `Source:` label for both sources,

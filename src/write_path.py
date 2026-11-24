@@ -1,6 +1,6 @@
 """F6.10.3 the write path: the two file sets, and the one place that forces LF.
 
-`docs/CODEBASE_ASSEMBLY.md` §14 decides which set each file belongs to. Four rules, stated once here.
+`docs/CODEBASE_ASSEMBLY.md` §14 decides which set each file belongs to. Seven rules, stated once here.
 
 1. **One function writes bytes.** Every file a run writes goes through `write_file`, so the byte rule
    (`docs/ARCHITECTURE.md` §6) is enforced in one place and not in an operator note: `open(..., 'w')`
@@ -23,6 +23,25 @@
    rule 2, and names no new file shape. Pinned by
    `tests/test_write_path.py::test_the_run_writes_no_directory_for_a_unit_it_read_only_through_the_record` and
    `tests/test_write_path.py::test_the_write_path_states_the_run_set_rule_and_reads_the_unit_set_through_its_owner`.
+5. **The tool owns every file it writes, so a file it has content for is written over the bytes an earlier run wrote
+   for it.** `write_file` writes the bytes this run built for the file shape, inside the directory its own set names,
+   so a second run inside the same unit directory replaces that file. A shape this run has no content for is not
+   written, so the bytes an earlier run wrote for it stay inside the directory. A file outside the two sets is not
+   the tool's file, so a run writes none and touches none: `terraform.tfvars` stays the operator's file through
+   `docs/CODEBASE_ASSEMBLY.md` §11, and this module names no file. Pinned by
+   `tests/test_write_path.py::test_the_run_overwrites_the_files_it_owns_in_a_unit_directory_it_wrote_into` and
+   `tests/test_write_path.py::test_the_run_writes_no_file_it_does_not_own`.
+6. **The write path holds no delete rule.** `write_file` makes the directory when it is needed and writes the bytes;
+   nothing in the module takes a file away, so a run that writes into an existing codebase leaves every file that was
+   there, inside its own unit directory, inside a unit it read only through the record, and at the codebase root. The
+   only file removal in the tool is the cache prune action, read through `provenance.py`, which acts on cache entries
+   outside the two sets. Pinned by
+   `tests/test_write_path.py::test_the_run_deletes_no_file_in_the_codebase_it_wrote_into` and
+   `tests/test_write_path.py::test_the_write_path_states_no_delete_rule_and_the_only_file_removal_is_the_cache_prune`.
+7. **The write path holds no record of what it wrote**, which is the rule `AGENTS.md` states for a historical record.
+   A run writes the bytes it built and writes nothing about which run wrote them, so the difference between two runs
+   is read through git, which is the rule `docs/MULTI_RUN_CODEBASE.md` §3 rule 6 states for the codebase. Pinned by
+   `tests/test_write_path.py::test_the_write_path_holds_no_record_of_what_it_wrote`.
 
 Usage:
     from write_path import LF, root_path, unit_path, write_file
@@ -31,6 +50,8 @@ Usage:
     for facts in unit_manifest.units(ledger):        # the run's set, the rule the writer uses (rule 4)
         write_file(unit_path(output_dir, unit_manifest.directory_name(facts, naming.sanitize), 'provider.tf'), text)
     # A unit that only `unit_manifest.units(unit_manifest.parse_rows(text))` names writes nothing here.
+    # A run that writes into a tree an earlier run wrote writes over the file it has content for (rule 5), removes
+    # nothing (rule 6), and writes no record of what it wrote (rule 7).
 """
 
 from pathlib import Path

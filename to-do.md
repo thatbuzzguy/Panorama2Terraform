@@ -1,21 +1,9 @@
 # To Do
 
 The tracking markdown for the completed pieces is removed here; the git history and the owner
-documents hold it. The items that need a fact a live target states are in `backlog.md`.
-
-## Epic 11 — the codebase several runs write into
-
-The design record is `docs/MULTI_RUN_CODEBASE.md`; each rule there names the pins that hold, and a rule whose pin
-is pending says so. The acceptance criteria for an open piece are written in `acceptance.md` when the piece starts;
-that file now holds the Piece 12A.3 record and the pointers to the Epic 13 and Epic 14 records.
-
-### Phase 11C, the update run
-
-- **11C.3** — the write boundary: the run writes what it built and deletes nothing; the tool owns every file it
-  writes and the byte difference between two runs is read through git.
-
-The move fact, the stale-file boundary, the selection for a `vsys` or a device unit, and the `--prune-cache`
-consequence are in `backlog.md`.
+documents hold it. The items that need a fact a live target states are in `backlog.md`. Epic 11 is complete as of
+2026-11-23, so its piece list and its open facts are in `backlog.md`, and the acceptance criteria for the current
+piece are in `acceptance.md`, with pointers to the Epic 13 and Epic 14 records.
 
 ## Epic 13 — the shapes an input can be (design record `docs/INPUT_SHAPES.md`)
 

@@ -1,79 +1,78 @@
 # Agent Status
 
-## Current position (main, Piece 12A.3, 2026-11-23)
+## Current position (main, Piece 11C.3, 2026-11-23)
 
-Piece 12A.3 is complete on main, 2026-11-23, and is not pushed. It closes Epic 12: the documents that state a pin
-state it through its owner, and `docs/CODEBASE_ASSEMBLY.md` §12 states the schema identity that makes the 2.0.14
-measurements hold for the pinned provider. The Epic 12 piece list is removed from `to-do.md` and the Epic 12 planning
-section from `PLAN.md`; the git history holds them.
+Piece 11C.3 is complete on main, 2026-11-23, and is not pushed. It is the write boundary of
+`docs/MULTI_RUN_CODEBASE.md` §6: each of the three §6 rules names its owner and the pin that holds it, the pins run
+offline on the committed pair, and update-run behaviour (overwrite what it owns, delete nothing, no self-record) is
+pinned. This piece closes Epic 11, so the Epic 11 piece list is removed from `to-do.md` and the Epic 11 planning
+section from `PLAN.md`; the facts that need a fact a live target or a fixture states stay in `backlog.md`, and the
+git history holds the piece records for Pieces 11B.1 to 11C.3 and 12A.1 to 12A.3. The next piece is Piece 13A.1, the
+shape table, in the `input-shapes` worktree. The commit that holds this record holds the pins, the rules and the
+tracking markdown, and neither it nor the previous commit is pushed.
+
+No behaviour changed and no committed byte moved: the three rules state what the write path already does, so no pin
+reads a gate result or an exit code and no golden moved.
 
 What landed:
 
-- `README.md`: the pinned provider statement names `~> 2.0.15` through `tests/conftest.py::declared_provider`; the
-  requirement line states the minimum through `src/commit_actions.py::TERRAFORM_MINIMUM`; the location section names
-  the `LOCATION_SCHEMA` shape as what was measured against 2.0.14 and links to §12 for the identity. A search of the
-  document for a version statement answers these three places and nothing else.
-- `docs/USAGE_GUIDE.md`: the same two statements, through the same two owners.
-- `docs/RESOURCE_MAPPING.md`: the pin statement names the owner and links to §12, so the provider measurements in the
-  body hold for the pinned provider without being restated to a different version, and the Verification section reads
-  the live schema for the pinned provider instead of naming 2.0.14.
-- `docs/COVERAGE_MATRIX.md`: the version the golden `provider.tf` declares is named through
-  `tests/conftest.py::declared_provider`.
-- `docs/CODEBASE_ASSEMBLY.md`: line 9 names the pinned provider through its owner; §12 states the schema identity and
-  names both measurements; the §10 sentence that states what the committed goldens declare now reads through the
-  minimum's owner, which closes the second live statement of the minimum.
-- `docs/ARCHITECTURE.md`: the drift-row sentence named the measured 2.0.14 as the pinned provider schema, which was
-  the pin on 2026-11-21. The sweep finds one live statement of the pin in that document, so the sentence now names it
-  as the pin then and the other 2.0.14 statements in the document stay as dated measurements.
-- This file: this record and the CI rule that states which version a document may name.
-- The grammar level stays as measured in `src/sanity_checks.py`, `src/import_blocks.py`, the grammar clause of the
-  head comment in `src/panorama_to_terraform.py`, and §12: 1.14 is the level the action shape needs. No live
-  statement of the project minimum reads 1.14, in the documents or in this file.
+- `src/write_path.py` states the rules as its own, in the module that owns the write path: rule 5 (the tool owns every
+  file it writes, so a shape it has content for is written over the bytes an earlier run wrote for it, and a shape it
+  has no content for is not written), rule 6 (the write path holds no delete rule, and the only file removal in the
+  tool is the cache prune action in `provenance.py`, which acts on cache entries outside the two sets), rule 7 (the
+  write path holds no record of what it wrote, so the difference between two runs is read through git). Rule 4, the
+  run-set rule, was already landed and keeps its pins. The module states no file name, no second naming rule, no
+  second writer and no second unit set, so the definitions it holds are the byte rule, the two builders and the one
+  writer, which `tests/test_write_path.py` already pins.
+- `tests/test_write_path.py` gained group 5, the write boundary, with the five pins: the overwrite pin, the ownership
+  pin that places an operator file at the codebase root and holds that the run leaves it as the operator wrote it,
+  the delete pin that reads the write (no file and no directory removed, including inside the ten units read only
+  through the record), the scan pin that reads removal as calls and holds that the write path holds none while the
+  only file removal in `src/` is `provenance.prune` acting through `prunable_entries` on cache entries, and the
+  no-record pin that reads each record module's declared field set and holds that none names a run, a writer, or a
+  timestamp. The module now reads the committed pair through `tests/conftest.py` instead of naming it.
+- `docs/MULTI_RUN_CODEBASE.md` §6 names each rule's owner and its pins, and the stale-file boundary stays the open
+  half. `docs/ARCHITECTURE.md` §1 names the rules `write_path.py` keeps, `README.md` §Testing names what the module
+  pins, and `acceptance.md` holds this piece's criteria with the Epic 13 and Epic 14 records as pointers. No new
+  module or test file, so `tests/test_layout.py::test_the_indexes_name_every_document_under_them` needed no change.
 
-Measurements taken 2026-11-23, single-threaded:
+Measurement of the committed pair, taken 2026-11-23 through `tests/conftest.py` with `kitchen_sink.xml` as the
+codebase and `address_objects.xml` as the second run: the solo run of the second fixture exits 0, the codebase run
+exits 0, and the second run writing into a copy of its output exits 1, which is the record-merge condition recorded
+in `backlog.md` and not the write boundary. The tree holds 83 files before and 83 after: nothing appeared and nothing
+disappeared, and 76 files are byte-identical. The 7 that differ are the six root-set files the run writes
+(`CODEBASE_MANIFEST.json`, `OWNERSHIP.json`, `CONVERSION_REPORT.txt`, `MANUAL_SETUP_REPORT.txt`, `SANITY_REPORT.txt`,
+`SOURCE.txt`) plus `shared_45ca31c3/address_objects.tf`, and that file agrees byte for byte with the solo run of the
+same fixture. Inside the run's own unit directory the first run wrote 12 files; the second run has content for 3
+shapes, so it wrote those 3 and left the other 9 as the first run wrote them. An operator `terraform.tfvars` at the
+codebase root is byte for byte as the operator wrote it.
 
-- The schema identity, recorded in §12: `terraform providers schema -json` answers byte for byte the same for 2.0.14
-  and 2.0.15, 2,146,401 bytes, md5 `b7d5dcfbe72207e90c09e38fcbed2747`, on Terraform 1.16.2 and on the CI line
-  1.16.7. The figures `PLAN.md` recorded on 2026-11-22 (2,146,209 bytes, md5
-  `dfab791bae568bdd5ccdc69ca066a5b4`) cannot be reproduced from the whole document on this run, so §12 names the
-  comparison and not the figure.
-- The binary on this machine is Terraform 1.16.2, so the CI line was measured through a 1.16.7 binary held in
-  `/tmp/opencode/tf1167`, taken from the release and checked against the published SHA256SUMS
-  (`5454efcf7fc87f0c2113111b9a5c7182f0ca1c6f0f23a1e110a50770a8fe473b`). The binary is outside the repository, and no
-  document states a measurement made on it except the schema identity, which both binaries answer the same.
-- Gate, measured single-threaded on the final tree that holds this work, including this file, with Terraform 1.16.7
-  on the path: `ruff check .` clean at `py310`, `ruff format --check .` clean on the 110 files it reads (81 Python,
-  29 markdown), `python3 tools/check_documents.py` reports no finding in 7.7 s, and `python3 -m pytest` in one process
-  with no parallel plugin exits 0 with 1,796 passed and the same 4 `tflint` skips, so 1,800 pins in 54 modules, in
-  310.1 s, which is the Piece 12A.2 baseline count: no pin count moved, because no pin reads a version as a literal
-  and no test changed. Read with `-rs`, the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py` at lines 720,
-  814, 912 and 981, and they skip for the missing binary; the provider-schema pins ran against the pinned provider on
-  the CI line, which the run measured as the same bytes as on this machine’s 1.16.2. The pytest run measured
-  the tree that holds the document edits; the two wording changes written after it are in this file and in
-  `acceptance.md`, which no test reads, so the count stands, and `ruff check .`, `ruff format --check .` and
-  `python3 tools/check_documents.py` were re-run on the final tree and answered the same.
+Gate, measured 2026-11-23 single-threaded on the tree that holds this work: `ruff check .` clean at `py310`,
+`ruff format --check .` clean on the 110 files it reads (81 Python, 29 markdown),
+`python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` in one process exits 0 with 1,801
+passed and the same 4 `tflint` skips, so 1,805 pins in 54 modules, in 251.3 s. The Piece 12A.3 baseline was 1,796
+passed, so the count moved by the five pins this piece adds. The five new pins are all in
+`tests/test_write_path.py`, which reads 28 pins (23 before). `tflint` is absent, so the 4 skips are the `tflint` pins
+in `tests/test_sanity_gate.py`; `terraform` is present, so the provider-schema pins ran.
 
 Findings this piece reports:
 
-- The sweep finds one live statement of the pin outside the five documents the piece list named: `docs/ARCHITECTURE.md`
-  §6 named the measured 2.0.14 as the pinned provider schema, so the drift rows read as measured against the pin on
-  2026-11-21. That sentence is the one this piece changes in that document, and the file is added to the piece list in
-  `acceptance.md`.
-- The one-owner rule for a pin value holds at the owner and in the pins, not across the documents. The decision this
-  piece takes, which `backlog.md` asked for, is that a document names the owner it reads the value through and states
-  the version only as the pin itself or as the measurement it made, so the value is read at six documents as well as
-  at the owner. Recorded in `backlog.md`.
-- The pins that read the provider schema answer the same on the CI line as on this machine's binary, so the gate
-  needed no exception for the CI version.
+- The write-boundary pins cannot read which shapes a run wrote from the tree, because a byte that agrees with an
+  earlier run is not marked, so the overwrite pin reads a solo run of the same fixture as the shape set. That is the
+  same reason the stale-file boundary stays open: deciding a file is stale needs a record of what the tool wrote
+  before, which the tool does not hold. Recorded in `backlog.md`.
+- The operator file has no owner constant: `docs/CODEBASE_ASSEMBLY.md` §11 states the rule in prose and
+  `src/site_data.py` owns only the printed form's name, so the pin states `terraform.tfvars` to place a file. Recorded
+  in `backlog.md`.
+- `tests/test_write_path.py` named the committed pair as its own constants; it now reads them through
+  `tests/conftest.py`, which closes that part of the recorded finding.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`commit.md`, `README.md`, `docs/USAGE_GUIDE.md`, `docs/RESOURCE_MAPPING.md`, `docs/COVERAGE_MATRIX.md`,
-`docs/CODEBASE_ASSEMBLY.md`, `docs/ARCHITECTURE.md` for the measurement records, `tools/check_documents.py`,
-`tests/conftest.py`.
-
-The next step is Piece 11C.3, the write boundary, in Epic 11. Piece 13A.1, the shape table, is the other open piece
-and needs its owner module in `src/` before a pin can read the table; it runs in the `input-shapes` worktree.
-Epic 12 has no open piece, so `acceptance.md` holds the Piece 12A.3 record until the next piece starts.
+`commit.md`, `README.md`, `docs/MULTI_RUN_CODEBASE.md` §6, §8 and §9, `docs/CODEBASE_ASSEMBLY.md` §11 and §14,
+`docs/ARCHITECTURE.md` §1 and §6, `tests/test_layout.py`, `tools/check_documents.py`, `tests/conftest.py`,
+`src/write_path.py`, `src/provenance.py`, `src/unit_manifest.py`, `src/ownership.py`, `src/site_data.py`,
+`src/reference_edges.py`, `src/rule_data.py`, `src/commit_actions.py`, `src/import_blocks.py`,
+`tests/test_write_path.py`.
 
 ## Position in the `input-shapes` worktree (Epic 13 planning, 2026-11-23)
 
@@ -92,63 +91,6 @@ Piece 11C.2 criteria (main's task) and the Epic 13 criteria (this worktree's tas
 its worktree. `tools/check_documents.py` reported no finding on the merged tree. The next step is
 the acceptance review of the criteria, then Piece 13A.1; further shared-markdown edits on either
 side still need a manual join.
-
-## Previous position (main, Piece 11C.1, 2026-11-23)
-
-Piece 11C.2 is accepted, 2026-11-23. `91444b9` holds the report section, the six pins and the three module
-docstrings; the commit that holds this record holds the tracking markdown. Neither is pushed.
-
-What landed:
-
-- The report rule owner, `src/entry_coverage.py`, states the section shape: `UNIT_HEADING`, `UNIT_RULE`,
-  `BUILT_PART`, `RECORD_ONLY_PART`, `unit_part` and `unit_line`. The writer takes the two row sets as an argument
-  and states no unit rule of its own: both sets are read through `unit_manifest.units`, the body is grouped by the
-  F3.9 rule the other report sections use, a unit is named through `unit_manifest.unit_name` and never by directory,
-  and the section prints after the drift section and before the entry lines, only when the codebase set names a unit
-  the run set does not. It prints no console line: the console shape has one owner,
-  `container_coverage.console_line`. `generate_run` hands over the two sets it already had.
-- The site-record review finding is closed. `unit_manifest.units` reads a row through `facts_of`, so a site row
-  names no unit on its own, and `src/codebase_state.py` rule 1 states that the join key on `directory` is the only
-  rule that reads a merged site row. The condition that a site row can name a unit no merged manifest row names
-  stays in `backlog.md`.
-
-Measurements taken 2026-11-23 through `tests/conftest.py`, on `tests/fixtures/kitchen_sink.xml` as the codebase and
-`tests/fixtures/address_objects.xml` as the second run: rows read back 11/61/9/3, the second run built 1/5/9/3, the
-merged set 11/62/9/3. The run set names 1 unit, the codebase set names 11, so the report names 10 units the run read
-only through the record and the section prints. The same fixture run twice puts the run inside the codebase it read,
-so its set is the codebase set: the section prints nothing and the two reports are byte-identical, which is the
-report bytes a whole-codebase run writes today. No committed golden holds a report file, so no golden moved. The
-console of the pair run holds the summary and the gap lines and no line in the unit shape.
-
-Gate, measured 2026-11-23 single-threaded on the tree that holds this work: `ruff check .` clean at `py310`,
-`ruff format --check .` clean on the 108 files it reads (81 Python, 27 markdown),
-`python3 tools/check_documents.py` reports no finding, `python3 -m pytest` exits 0 with 1,795 passed and the same 4
-`tflint` skips, so 1,799 pins in 54 modules, in 285.6 s. Read through the per-module collection counts:
-`tests/test_reports.py` 27 (22 before), `tests/test_codebase_state.py` 12 (11 before); the other module counts are
-the Piece 11C.1 baseline. `tflint` is absent, so the 4 skips are the `tflint` pins in
-`tests/test_sanity_gate.py`; `terraform` is present, so the provider-schema pins ran.
-
-Piece 11C.3, the write boundary, is the next step. `acceptance.md` holds the Piece 11C.2 criteria until 11C.3
-starts.
-
-A document-rule sanity check ran 2026-11-23 on the merged tree with the gate green. Its findings are recorded in
-`backlog.md` §Process debt. One of them is the stale minimum line in this file, which Piece 12A.3 carries.
-
-Four decisions are agreed, and they are the shape of the record:
-
-1. The four root records become accumulated codebase state: a run reads the existing record through its own
-   module's `parse_rows`, replaces the rows for the units it built, and keeps the rows for the units it did not.
-   The merge is keyed by row identity, not by run, so no record can state which run wrote it, which is what keeps
-   the no-timestamp rule and the determinism rule intact. The reports and `SOURCE.txt` stay per run.
-2. The selection names the read set, not what the run writes. A run that reads a whole export declares no
-   selection, so `unit_manifest.units` stays the only unit set.
-3. The run overwrites the files it owns in a unit directory it wrote into, names the units it wrote in its report,
-   and holds no record of what it wrote before; the byte difference between two runs is read through git.
-4. The merged records are the codebase-level view. The run's report gains one section that names the units the run
-   built and the codebase units it did not read, so no fifth root-set file states the unit set a second time.
-
-The records for Pieces 11B.1, 11B.2, 11B.3, 11B.4, 11C.1, 11C.2, E10.3 and F5.6 are not kept here: the git history
-holds them.
 
 ## Rules to keep when writing documents
 
@@ -229,6 +171,14 @@ holds them.
 - The write path landed (`docs/CODEBASE_ASSEMBLY.md` §14): the run writes one directory per unit the manifest
   names, and the codebase root holds the root set. A new file shape must name which set it belongs to, and the
   report counts, the console line and the tests that read the file set change with it.
+- The write boundary (`docs/MULTI_RUN_CODEBASE.md` §6, stated in `src/write_path.py` rules 5, 6 and 7) is pinned in
+  `tests/test_write_path.py`: the run overwrites the file shapes it has content for inside the unit directory its own
+  set names, removes no file and no directory, owns only the files in the two sets so an operator file at the
+  codebase root is left as the operator wrote it, and holds no record of what it wrote, so the difference between two
+  runs is read through git. A write-boundary pin cannot read which shapes a run wrote from the tree, because a byte
+  that agrees with an earlier run is not marked, so it reads a solo run of the same fixture as the shape set. The only
+  file-removal call in `src/` is `provenance.prune`, which acts on cache entries outside the two sets, so a delete
+  rule anywhere in `src/` would need a new pin.
 - `unit_manifest.units` is the run's unit set, so a rule that names a unit for a directory, an owner, or an
   edge reads it through that one function. A unit exists only when the ledger has a row in it, and the fact
   order is the identity join, so a new fact changes every digest and every golden in the same commit.

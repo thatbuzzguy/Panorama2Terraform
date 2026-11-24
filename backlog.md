@@ -270,7 +270,14 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   second statement §1 rule 6 avoids, and the pins would read the constants instead. Owners: `tests/conftest.py` and
   `docs/MULTI_RUN_CODEBASE.md` §5 rule 1. Measured pins: `tests/test_data_file_gate.py:802`,
   `tests/test_round_trip.py:1031`, `tests/test_sanity_gate.py:1328`, `tests/test_sanity_gate.py:1352`,
-  `tests/test_sanity_gate.py:1411`.
+  `tests/test_sanity_gate.py:1411`. Piece 11C.3 changed `tests/test_write_path.py` to read the pair through the two
+  constants, so that module names no pair of its own; the pins listed above still pass the names inline.
+
+- **The operator file has no owner constant, so the pin states its name.** `docs/CODEBASE_ASSEMBLY.md` §11 states the
+  rule in prose and `src/site_data.py` owns only the printed form's name, so a pin that places an operator file in the
+  codebase root has to state `terraform.tfvars` itself (`tests/test_write_path.py`, `OPERATOR_FILE`). Nothing is
+  broken, because no `src/` module names it; the finding is that the name has no owner the test can read. Owner:
+  `docs/CODEBASE_ASSEMBLY.md` §11.
 
 ## Out of Scope
 
@@ -853,7 +860,10 @@ holds them, so this document holds only what a piece cannot be written from.
   different scope than the record names, because no committed fixture or response holds one.
 - The stale-file boundary: a unit a run no longer has content for keeps the files an earlier run wrote, because
   the tool has no delete rule. Deciding when a file is stale needs a rule that names what the tool wrote before,
-  which the tool does not hold.
+  which the tool does not hold. The write boundary itself is pinned, so the open half is only the decision. Measured
+  2026-11-23 on the committed pair: a pin cannot read which shapes a run wrote from the tree, because a byte that
+  agrees with an earlier run is not marked, so the pin reads a solo run of the same fixture as the shape set
+  (`tests/test_write_path.py::test_the_run_overwrites_the_files_it_owns_in_a_unit_directory_it_wrote_into`).
 - The selection for a `vsys` or a device unit needs the fact that names which device the run read, the open item
   in `backlog.md` (Finding, opened by F8.2), because the four membership lists name three of the five scope facts.
 - `--prune-cache` on a codebase several runs write into: the action reads the record file the run wrote, and

@@ -270,12 +270,25 @@ Three facts already hold, and they are the reason no new naming rule or identity
    builders of rule 1, and names no new file shape. The rule is stated in `write_path.py` rule 4, pinned by
    `tests/test_write_path.py::test_the_run_writes_no_directory_for_a_unit_it_read_only_through_the_record` and
    `tests/test_write_path.py::test_the_write_path_states_the_run_set_rule_and_reads_the_unit_set_through_its_owner`.
-   A unit the run no longer has content for keeps the files an earlier run wrote, because the tool has
-   no delete rule; that boundary is recorded in `backlog.md`.
+   The delete half is stated in `write_path.py` rule 6 and pinned by
+   `tests/test_write_path.py::test_the_run_deletes_no_file_in_the_codebase_it_wrote_into` and
+   `tests/test_write_path.py::test_the_write_path_states_no_delete_rule_and_the_only_file_removal_is_the_cache_prune`,
+   which holds that the only file removal in the tool is the cache prune action and that it acts on cache entries
+   outside the two sets. Deciding when a file a run no longer has content for is stale needs a rule that names what
+   the tool wrote before, which the tool does not hold, so the stale-file boundary stays in `backlog.md`.
 3. **The tool owns every file it writes**, and `terraform.tfvars` stays the operator's own file
    (`CODEBASE_ASSEMBLY.md` §11). The run reports the units it wrote (§7); the byte difference between two runs is
    read through git, because the tool holds no record of what it wrote before, which is the rule `AGENTS.md`
-   states for a historical record.
+   states for a historical record. The owner is `write_path.py`, whose rule 5 states the ownership half and whose
+   rule 7 states the no-record half. The pins are
+   `tests/test_write_path.py::test_the_run_overwrites_the_files_it_owns_in_a_unit_directory_it_wrote_into`, which
+   holds that a file shape this run has content for is written over the earlier bytes inside the unit directory its
+   own set names, and that a shape it has no content for is not written;
+   `tests/test_write_path.py::test_the_run_writes_no_file_it_does_not_own`, which
+   holds that a file outside the two sets is left as the operator wrote it; and
+   `tests/test_write_path.py::test_the_write_path_holds_no_record_of_what_it_wrote`, which reads each record
+   module's declared field set and holds that none names a run, a writer, or a timestamp. The git half is a document
+   rule, so no pin runs git.
 
 ## 7. The run's report section
 

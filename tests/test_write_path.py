@@ -2,7 +2,7 @@
 function that writes bytes, and how the gate reads each set
 (`docs/CODEBASE_ASSEMBLY.md` §14, `docs/ARCHITECTURE.md` §6).
 
-Four groups:
+Five groups:
 
 1. The two sets: the unit set is the `.tf` files of one unit plus that unit's printed form, the codebase
    root set is the records the whole codebase owns, and the two are distinct. The path 2 case is read through
@@ -21,6 +21,10 @@ Four groups:
    tool writes a file, so the byte rule (`docs/ARCHITECTURE.md` §6) is enforced in one place. A section header
    is stated once per unit, read through the file's own once record rather than through the text it holds.
 4. Default output, not an opt-in: no flag names the layout, so a golden can pin what a default run emits.
+5. The write boundary (`docs/MULTI_RUN_CODEBASE.md` §6, Piece 11C.3): a run that writes into a codebase another
+   run wrote overwrites the file shapes it has content for inside the unit directory its own set names, removes
+   nothing, owns only the files in the two sets, and holds no record of what it wrote, so the difference between
+   two runs is read through git.
 
 Every test reads the corpus run through the rules. The run writes one directory per unit
 `unit_manifest.units` names, so the path the reader keys by names the unit the file belongs to, because a
@@ -49,9 +53,11 @@ import source_fetch
 import unit_manifest
 import write_path
 from conftest import (
+    CODEBASE_FIXTURE,
     FIXTURES_DIR,
     GOLDEN_DIR,
     RULE_TYPES,
+    RUN_FIXTURE,
     SRC_DIR,
     data_file_set,
     run_pipeline,
@@ -62,10 +68,10 @@ from conftest import (
 # The layout rule (`docs/ARCHITECTURE.md` §1.1): `src/` holds the tool's modules, so the pins that read a
 # module source read it through `SRC_DIR`, and the scan reads the `src/` set.
 CONVERTER = SRC_DIR / "panorama_to_terraform.py"
-KITCHEN = "kitchen_sink.xml"
-# The second run the piece reads (`docs/MULTI_RUN_CODEBASE.md` §6 rule 2): a run that names one unit inside the
-# codebase the kitchen-sink run wrote, so the codebase set names more units than the run set.
-SECOND_RUN = "address_objects.xml"
+# The committed pair, read through the module that owns it (`docs/MULTI_RUN_CODEBASE.md` §5 rule 1): one run
+# builds the codebase, the second names one unit inside it.
+KITCHEN = CODEBASE_FIXTURE
+SECOND_RUN = RUN_FIXTURE
 
 # The codebase root set, as the decision states it: the four records, the report files, README.md,
 # SOURCE.txt. Each record is named through the module that owns its row shape, so the test states no second
@@ -78,6 +84,11 @@ RECORDS = {
 }
 REPORT_SHAPE = ".txt"
 ROOT_TEXT = ("README.md", "SOURCE.txt")
+
+# The operator's file, as `docs/CODEBASE_ASSEMBLY.md` §11 states it: the tool writes no credential value and reads
+# no credential file. `site_data.TFVARS_FILE` is the tool's own printed form, so the tool names no operator file;
+# the pin names this one only so it can place a file outside the two sets.
+OPERATOR_FILE = "terraform.tfvars"
 
 # The unit set, as the decision states it: the per-type `.tf` files of one unit, plus the files the run
 # writes once per unit, plus that unit's printed form. The per-type table names one file per resource kind,
@@ -841,3 +852,215 @@ def test_the_golden_set_reads_as_the_unit_set_so_the_case_holds_unit_directories
     paths = sorted(str(p.relative_to(single)) for p in single.rglob("*.tf"))
     assert paths, "the single-unit case pins one unit directory"
     assert len({Path(name).parent.name for name in paths}) == 1, "one unit, so one directory"
+
+
+# --- 5. The write boundary (`docs/MULTI_RUN_CODEBASE.md` §6, Piece 11C.3) ------
+
+
+def test_the_run_overwrites_the_files_it_owns_in_a_unit_directory_it_wrote_into(converter_module, corpus_run, tmp_path):
+    """Rule 5: the tool owns every file it writes, so a file shape this run has content for is written over the
+    bytes an earlier run wrote for it, inside the unit directory its own set names. A shape it has no content for
+    is not written, so the bytes an earlier run wrote for it stay.
+
+    Measured 2026-11-23 on the committed pair: the kitchen-sink run builds the codebase and `address_objects.xml`
+    is the second run, whose own set names one unit, `shared_45ca31c3`. The first run wrote 12 files inside that
+    directory; the second run has content for 3 shapes, so it wrote 3 and left the other 9 as the first run wrote
+    them. A solo run of the same fixture writes exactly those 3 shapes inside the same directory, because the
+    directory name depends on the unit alone (`unit_manifest.py` rule 2), so the solo bytes are the bytes this run
+    built. Two of the three shapes hold the same content in both runs, so the pin compares all three and holds they
+    agree; `address_objects.tf` is the shape where the two runs build different content.
+    """
+    out = _copy(corpus_run, tmp_path / "into")
+    before = written_bytes(out)
+    parser = run_pipeline(converter_module, SECOND_RUN, out)
+    assert parser is not None, "the run refused the input"
+    after = written_bytes(out)
+
+    run_dirs = {unit_manifest.directory_name(facts, naming.sanitize) for facts in unit_manifest.units(parser.ledger)}
+    assert len(run_dirs) == 1, run_dirs
+    own = next(iter(run_dirs))
+    inside = sorted(name for name in after if Path(name).parent.name == own)
+    assert len(inside) == 12, inside
+
+    # The shapes this run has content for are the shapes a solo run of the same fixture writes.
+    solo_out = tmp_path / "solo"
+    result = run_script(CONVERTER, str(FIXTURES_DIR / SECOND_RUN), "--output-dir", str(solo_out))
+    assert result.returncode == 0, result.stderr
+    solo = written_bytes(solo_out)
+    shapes = sorted(name for name in solo if Path(name).parent.name == own)
+    assert len(shapes) == 3, shapes
+
+    for name in shapes:
+        assert after[name] == solo[name], (name, "the run wrote the bytes it built, over the earlier bytes")
+    stayed = sorted(name for name in inside if name not in shapes)
+    assert len(stayed) == 9, stayed
+    assert all(after[name] == before[name] for name in stayed), (
+        "a shape this run has no content for is not written, so the earlier bytes stay",
+    )
+    assert any(after[name] != before[name] for name in shapes), "the run replaced at least one file it owns"
+
+
+def test_the_run_writes_no_file_it_does_not_own(converter_module, corpus_run, tmp_path):
+    """Rule 5's other half: the two sets are the files the tool owns, so a file outside them is not the tool's and
+    a run writes none and touches none. `terraform.tfvars` at the codebase root is the operator's file
+    (`docs/CODEBASE_ASSEMBLY.md` §11), and the write path names no file.
+
+    The printed form's name is `site_data.TFVARS_FILE`, and the tool writes it only inside a unit directory, so a
+    file at the codebase root names neither set. The pin places an operator file at the root, through the single
+    writer so the test states no second writer, and holds that a run leaves it as the operator wrote it.
+    """
+    out = _copy(corpus_run, tmp_path / "into")
+    content = 'hostname = "panorama.test"\ntarget = "0123456789"\n'
+    write_path.write_file(out / OPERATOR_FILE, content)
+    assert site_data.TFVARS_FILE in UNIT_FILES, "the tool's printed form is a unit-set name, not a root-set name"
+
+    before = written_bytes(out)
+    parser = run_pipeline(converter_module, SECOND_RUN, out)
+    assert parser is not None, "the run refused the input"
+    after = written_bytes(out)
+
+    dirs = {row["directory"] for row in _rows(corpus_run)}
+    outside = [
+        name
+        for name in sorted(after)
+        if not (
+            Path(name).parent.name in dirs
+            if Path(name).parent.name
+            else name in RECORDS or name in ROOT_TEXT or name.endswith(REPORT_SHAPE)
+        )
+    ]
+    assert outside == [OPERATOR_FILE], (outside, "the operator file is the only file outside the two sets")
+    assert after[OPERATOR_FILE] == content.encode(), "the run left the operator file as the operator wrote it"
+    assert not set(after) - set(before), (sorted(set(after) - set(before)), "the run wrote no file it does not own")
+
+
+def test_the_run_deletes_no_file_in_the_codebase_it_wrote_into(converter_module, corpus_run, tmp_path):
+    """Rule 6: the write path holds no delete rule, so a run that writes into an existing codebase leaves every
+    file that was there, at the codebase root, inside its own unit directory, and inside the units it read only
+    through the record. The pin reads the write and no gate result: the second run's exit code is the record-merge
+    condition recorded in `backlog.md`, not the write boundary.
+    """
+    out = _copy(corpus_run, tmp_path / "into")
+    before = written_bytes(out)
+    dirs_before = sorted(p.name for p in out.iterdir() if p.is_dir())
+    files_before = sorted(name for name in before if Path(name).parent.name not in dirs_before)
+    assert files_before, "the codebase root holds the record set"
+
+    parser = run_pipeline(converter_module, SECOND_RUN, out)
+    assert parser is not None, "the run refused the input"
+    after = written_bytes(out)
+
+    assert sorted(after) == sorted(before), (sorted(set(before) - set(after)), "no file was removed")
+    assert sorted(p.name for p in out.iterdir() if p.is_dir()) == dirs_before, "no directory was removed"
+    run_dirs = {unit_manifest.directory_name(facts, naming.sanitize) for facts in unit_manifest.units(parser.ledger)}
+    changed = sorted(name for name in after if after[name] != before[name])
+    assert changed, "the run wrote the files it owns"
+    for name in changed:
+        parent = Path(name).parent.name
+        assert parent in run_dirs or not parent, (name, "the change is in the run's own unit or at the root")
+    record_only = [directory for directory in dirs_before if directory not in run_dirs]
+    assert len(record_only) == 10, record_only
+    inside = [name for name in before if Path(name).parent.name in record_only]
+    assert all(after[name] == before[name] for name in inside), "a unit read only through the record keeps its files"
+
+
+def test_the_write_path_states_no_delete_rule_and_the_only_file_removal_is_the_cache_prune():
+    """Rule 6 as a scan: the write path holds no removal call at all, and the only file removal in the tool is the
+    cache prune action in `provenance.py`, which acts on cache entries outside the two sets. The scan reads calls
+    and not words, so the module that owns the rule can state it in prose. A `pop` or a `discard` removes an item
+    from a collection, not a file, so the scan names both kinds and holds that the file kind appears once.
+    """
+    file_removals = {"unlink", "remove", "rmtree", "rmdir"}
+    collection_removals = {"pop", "discard"}
+
+    hits = []
+    for path in sorted(SRC_DIR.glob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Call):
+                continue
+            name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
+            if name in file_removals | collection_removals:
+                hits.append((path.name, name))
+    assert hits, "the scan reads the removal calls the tool holds"
+    assert not [hit for hit in hits if hit[0] == "write_path.py"], hits
+
+    removals = sorted({hit for hit in hits if hit[1] in file_removals})
+    assert removals == [("provenance.py", "unlink")], removals
+    assert all(hit[1] in collection_removals for hit in hits if hit[0] != "provenance.py"), hits
+
+    # The one file removal is the action, and the decision it acts through names cache entries, not codebase files.
+    source = Path(provenance.__file__).read_text(encoding="utf-8")
+    action = source[source.index("def prune") :]
+    assert "prunable_entries(cache, records)" in action, "the action removes what the decision names"
+    assert "Path(cache_dir)" in action, "the action reads the cache directory, outside the two sets"
+    for builder in ("unit_path", "root_path"):
+        assert builder not in action, (builder, "the action takes no codebase path")
+
+
+def test_the_write_path_holds_no_record_of_what_it_wrote():
+    """Rule 7: the write path holds no record of what it wrote, so the difference between two runs is read through
+    git (`docs/MULTI_RUN_CODEBASE.md` §3 rule 6), which is the rule `AGENTS.md` states for a historical record. The
+    pin reads the record modules' declared field sets and holds that none of them names a run, a writer, or a
+    timestamp, so a record row is the same shape for two runs on the same bytes. The git half is a document rule, so
+    no pin runs git.
+
+    The write path is the half that can be pinned: it holds no record shape, because its definitions are the byte
+    rule, the two builders and the one writer, and it names no file, so nothing in the module can say which run
+    wrote a file. The scan reads the module's names and its string literals, so a rule stated in prose is not the
+    pin's subject.
+    """
+    source = Path(write_path.__file__).read_text(encoding="utf-8")
+    field_sets = {
+        unit_manifest.__name__: unit_manifest.FIELD_ORDER,
+        ownership.__name__: ownership.FIELD_ORDER,
+        reference_edges.__name__: reference_edges.FIELD_ORDER,
+        site_data.__name__: site_data.SITE_ROW_FIELDS,
+        rule_data.__name__: rule_data.RULE_ROW_FIELDS,
+        commit_actions.__name__: commit_actions.ACTION_ROW_FIELDS,
+        import_blocks.__name__: import_blocks.IMPORT_ROW_FIELDS,
+        provenance.__name__: provenance.FIELD_ORDER,
+    }
+    field_words = ("run", "writer", "timestamp", "time", "date", "created", "wrote", "written")
+    offenders = [
+        (module, field)
+        for module, fields in field_sets.items()
+        for field in fields
+        if any(word in field for word in field_words)
+    ]
+    assert not offenders, offenders
+
+    # The code section, read as names and as string literals: the module's own names cannot name a run, and the
+    # docstrings are the rule in prose, so they are not part of this scan. The module names no file, which is why a
+    # record module owns its own name and the writer takes a path from its caller.
+    code = source[source.index("from pathlib import Path") :]
+    tree = ast.parse(code)
+    docstrings = {
+        node.value.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
+    }
+    defined = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    assert defined == {"unit_path", "root_path", "write_file"}, defined
+    held = {
+        target.id
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+    assert held == {"LF"}, held
+    for shape in ("FIELD_ORDER", "parse_rows", "render", "record_for"):
+        assert shape not in defined and shape not in held, (shape, "the write path holds no record shape")
+
+    names = defined | held | {node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)}
+    named = [name for name in names if any(word in name for word in field_words)]
+    assert not named, (sorted(names), "no name in the write path names a run")
+    literals = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value not in docstrings
+    ]
+    assert literals, "the byte rule is the one string the module holds"
+    for text in literals:
+        for extension in (".tf", ".json", ".txt", ".csv"):
+            assert extension not in text, (text, extension, "the write path names no file")
