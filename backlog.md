@@ -723,11 +723,20 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
      file, and the archive piece needs a documented way in rather than a second check.
   3. Whether a backup bundle can hold more than one XML member (HA Panorama, multi-tenant). This
      gates the member decision in `docs/INPUT_SHAPES.md` §2.
-  4. The 10.2 documentation comparison leg: the page redirects to the current landing page, so
-     the version-by-version comparison of the "XML and XPath" page is incomplete. The 9.1 and
-     11.1 & Later legs were measured 2026-11-23 and state the same node model and entry shape.
-  5. A committed sample bundle, if one can be redacted, turns facts 1 to 3 from live facts into
+  4. A committed sample bundle, if one can be redacted, turns facts 1 to 3 from live facts into
      measurements read through the fixture rules.
+
+- Finding, measured 2026-11-24 on the 10.2 leg of the "XML and XPath" page. The live page address
+  `https://docs.paloaltonetworks.com/pan-os/10-2/pan-os-panorama-api/about-the-pan-os-xml-api/structure-of-a-pan-os-xml-api-request/xml-and-xpath`
+  answers `301` to
+  `https://docs.paloaltonetworks.com/ngfw/api/getting-started/structure-of-a-pan-os-xml-api-request`,
+  which is the unversioned page and states no node model and no entry shape, so the leg has no live form to
+  read. The leg was read through the stored captures of that address: capture `20250602181153` answers `200` for
+  the 10.2 page, and the two captures from 2026 answer the same redirect. What that leg answered is the measurement
+  in `docs/INPUT_SHAPES.md` §1 fact 4, which this entry does not restate. The finding is the condition: nothing in
+  the tree reads a documentation page, so a re-measurement of the 10.2 leg can only read a stored capture, and no
+  pin can hold it. The 9.1 leg and the 11.1 & Later leg answer `200` today, so those two legs can still be read
+  from the site.
 
 ## Design Decisions (the value the parse cannot carry)
 

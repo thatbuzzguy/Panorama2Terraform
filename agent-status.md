@@ -1,95 +1,56 @@
 # Agent Status
 
-## Current position (main, Piece 13A.3, 2026-11-24)
+## Current position (main, Piece 13A.4, 2026-11-24)
 
-Piece 13A.3 is complete on main, 2026-11-24, and is not pushed. It is the committed fixture pair, the third piece
-of Epic 13: two fixtures under `tests/fixtures/`, one that shows the Panorama shape and one that shows the firewall
-export shape, read through the fixture assembler's read rule. The pair is accepted by rule and not by name, each
-half's shape comes from its bytes, and the shape table gains no row because its two held rows already show the two
-shapes as content. Every pin that states the printed fixture set moved in the same commit. The piece record for
-Piece 13A.2 (the splitter diagnostic, complete) is held by the git history at `f7de913`, and the record for
-Piece 13A.1 (the shape table, complete) is at `a2df38e`.
+Piece 13A.4 is complete on main, 2026-11-24, and is not pushed. It is the documentation comparison, the fourth
+piece of Epic 13, and it closes Phase 13A. The piece measured the 10.2 leg of the PAN-OS API documentation page
+"XML and XPath", and changed no code, no test and no fixture, so the shape table gained no row and no row's
+`measured_through` moved: the table holds byte shapes that a pin can read through an owner module, and what a
+documentation page states is not a byte shape.
 
-What landed:
+What the 10.2 leg answered, measured 2026-11-24:
 
-- `tests/fixtures/panorama_shape.xml` and `tests/fixtures/firewall_shape.xml`, the pair. Each file holds the smallest
-  content that shows one shape: the Panorama half is a `config` root with one `device-group` entry, one `templates`
-  entry and one `template-stack` entry, and the firewall half is a `config` root with one `devices/entry` and no
-  device-group row. The four entry names the pair carries are not carried by `kitchen_sink.xml`, so the pin that holds
-  the record's comment-block count and its entry-name count did not move. Both halves enter the set the corpus pins
-  read, because the read rule accepts them and not because of their names.
-- `tests/test_build_kitchen_sink.py`, 13 pins now (1 new):
-  `test_the_committed_shape_pair_is_read_by_rule_and_not_by_name` reads each half through `tool.refusal_reason`, then
-  through the two owners the shape table names for a shape (`split_device_groups.parse_device_groups` and
-  `split_device_groups.tree_shape`), and reads the same bytes under the other half's name, so the pin states no shape
-  rule of its own and a file name decides nothing. The module holds the measured answer for each half as data
-  (`SHAPE_PAIR`), and the read-rule pin's count moved to 69 accepted, 68 read, 3 skipped.
-- The count statements that name the printed fixture set, all moved in this commit: `tests/test_api_requests.py`
-  (69 accepted corpus files), `tests/test_policy_order.py` (69 accepted fixtures; the 18 blocks, 9 fixtures and 37
-  rows did not move), `docs/ARCHITECTURE.md` §5.1 (69 accepted fixtures; the 144, 79 and 65 did not move), and the two
-  pair-read facts in `backlog.md` (4,692 ordered pair reads over 69 accepted fixtures, still 0).
-- `docs/INPUT_SHAPES.md` §3 rule 4, reworded: it stated that the fixture-count pins do not move, which the pair shows
-  to be wrong, because the pair moves them; the rule now states that the pins read the measured value and move with a
-  fixture that joins the corpus. `README.md` §Testing names the new pin, and the pair's two fixture comments state the
-  shape as the content each file holds.
-- No row in `src/input_shapes.py`: the table already holds the two shapes as content measured through
-  `xml_input.parse_bytes`, so rule 7 keeps the pair out of the table, and no row's `measured_through` names a pin that
-  reads a committed fixture.
+- The live page address for the leg answers `301` to
+  `https://docs.paloaltonetworks.com/ngfw/api/getting-started/structure-of-a-pan-os-xml-api-request`, which is the
+  unversioned page and states no node model and no entry shape, so the live leg has no 10.2 form to read. The
+  redirect is the finding in `backlog.md`, with the date and the address that answered.
+- The leg was read through a stored capture of that address, capture `20250602181153`, which answers `200` for the
+  10.2 page. It states the four node types — root, element, attribute, text — and the entry shape
+  `<entry name=...>`, where the entry name is an attribute node, the name/value pair. The two captures from 2026
+  (`20260130182944` and `20260131063159`) answer the same redirect, so the stored 10.2 form ends at the 2025-06-02
+  capture.
+- The 9.1 leg and the 11.1 & Later leg were read again on 2026-11-24 and answer `200`. Each states the same four
+  node types and the same entry shape, so all three legs agree with each other, and the read layer agrees with the
+  documented shape on all three: `xml_input.ENTRY_SEGMENT` names the `entry` segment, and the entry name is read
+  from the `name` attribute. The measurement is `docs/INPUT_SHAPES.md` §1 fact 4.
+- Measured through the read rule on the committed corpus: 72 files under `tests/fixtures/`, 69 accepted, 3 skipped
+  (`hostile_bad_control_char.xml`, `hostile_billion_laughs.xml`, `hostile_xxe.xml`). The accepted set holds 576
+  `entry` elements, and 4 of them carry no `name` attribute, in `entry_gaps.xml`, `filter_containers.xml` and
+  `robust_empty_names.xml`; those are the entries the report path names, so the corpus states the documented entry
+  shape and the case where an entry carries none.
 
 Gate, measured 2026-11-24 single-threaded on the tree that holds this work: `ruff check .` clean at `py310`,
 `ruff format --check .` clean on the 112 files it reads (82 Python, 30 markdown),
-`python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` in one process exits 0 with 1,835
-passed and the same 4 `tflint` skips, so 1,839 pins in 55 modules, in 278.5 s. The Piece 13A.2 baseline was 1,832
-passed and 1,836 pins in 385.6 s, so the count moved by 3: the pin this piece adds, and the 2 cases the
-`tests/test_sanity_gate.py` fixture parametrization gains for the two accepted fixtures. The corpus pins gained no
-finding for the pair, and the two runs write 14 `.tf` files through `conftest.tf_files` (12 for the Panorama half, one
-set per unit its three entries name, and 2 for the firewall half, where the device entry names a unit that writes no
-scope block). `tflint` is absent, so the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py`; `terraform` is
-present, so the provider-schema pins ran. No new `src/` module, so the `docs/LICENSING.md` counts did not move: that
-document is the measurement at `ac7609e`, and check 3 reads each file total at that commit.
+`python3 tools/check_documents.py` reports no finding in 9.7 s, and `python3 -m pytest` in one process, with no
+parallel plugin, exits 0 with 1,835 passed and the same 4 `tflint` skips, so 1,839 pins in 55 test modules, in
+258.58 s. No test and no `src/` file changed, so every count is the Piece 13A.3 baseline. `tflint` is absent, so the
+4 skips are the `tflint` pins in `tests/test_sanity_gate.py`; `terraform` (1.16.2 on this machine) is present, so the
+provider-schema pins ran. No `src/` file changed, so the `docs/LICENSING.md` counts did not move.
 
 Findings this piece reports:
 
-- The printed fixture set is stated as prose, so no pin holds its size: the corpus pins read the set through
-  `tests/conftest.py::corpus_fixtures`, and every place that states its size states it as wording, so a fixture that
-  joins or leaves the corpus moves no pin and only the wording, which is why the count statements had to be moved by
-  hand in this commit. Recorded in `backlog.md`.
-- The pair shows the Panorama shape, and no shape table row states that shape, because rule 7 keeps each row as the
-  smallest content that shows one shape and the pair adds no row, so the Panorama half is read only by the pins that
-  read the pair and by `docs/INPUT_SHAPES.md` §1 fact 3, while the firewall half has a row that shows it. Recorded in
-  `backlog.md`.
-- `tests/conftest.py` names corpus output counts as prose for the two resource patterns, and no pin reads them, so the
-  pair moves those numbers with no pin failing. Recorded in `backlog.md`.
+- The 10.2 leg's answer comes from a stored capture, because the live address answers a redirect. Nothing in the
+  tree reads a documentation page, so no pin can hold the comparison and a re-measurement of that leg can only read
+  an archive copy. Recorded in `backlog.md`.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`commit.md`, `README.md`, `docs/INPUT_SHAPES.md`, `docs/ARCHITECTURE.md` §5.1, `docs/LICENSING.md`,
-`tools/check_documents.py`, `tools/build_kitchen_sink.py`, `src/input_shapes.py`, `src/split_device_groups.py`,
-`src/xml_input.py`, `tests/conftest.py`, `tests/test_build_kitchen_sink.py`, `tests/test_input_shapes.py`,
-`tests/test_layout.py`, `tests/test_api_requests.py`, `tests/test_policy_order.py`, `tests/test_sanity_gate.py`.
+`commit.md`, `README.md`, `docs/INPUT_SHAPES.md`, `docs/API_DOCUMENTATION_AND_MOCKS.md`, `docs/README.md`,
+`tools/check_documents.py`, `tools/build_kitchen_sink.py`, `src/input_shapes.py`, `src/xml_input.py`,
+`pyproject.toml`, and the corpus through the read rule.
 
-The next piece is Piece 13A.4, the unfinished 10.2 documentation comparison leg. Then the Phase 13B pieces, the
-archive producer and its pins, which need the two open Epic 13 §2 decisions: the member selection for a bundle with
-more than one XML member, and the bytes the provenance record names for an archive read.
-
-## Position in the `input-shapes` worktree (Epic 13 planning, 2026-11-23)
-
-Epic 13, the shapes an input can be, is planned in the `input-shapes` worktree on branch
-`input-shapes`, based on `6134a41`. The design record is `docs/INPUT_SHAPES.md`, the pieces are in
-`to-do.md`, the criteria are in `acceptance.md`, and the live facts are in `backlog.md`. Three
-decisions, taken 2026-11-23: the archive (gzip, tar.gz) is read through a producer behind the F5.1
-door and gains no new check; the size cap applies during decompression, not after; the splitter
-prints the fact it reads instead of the current guess. The open decisions — the rule for a bundle
-with more than one XML member, and which bytes the provenance record names for an archive read —
-are recorded in the design record §2 and stand as pending rows in the table. Piece 13A.1 landed on main on
-2026-11-24, so the table has its owner module in `src/`, and each further piece touches `src/` only for the row
-its decision moves.
-
-Merge, 2026-11-23: the branch merged into main at `1cd7ea2`. The shared tracking markdown
-auto-merged except `acceptance.md`, joined by hand so the file carries both active records — the
-Piece 11C.2 criteria (main's task) and the Epic 13 criteria (this worktree's task), each naming
-its worktree. `tools/check_documents.py` reported no finding on the merged tree. The next step is
-the acceptance review of the criteria, then Piece 13A.1; further shared-markdown edits on either
-side still need a manual join.
+The next piece is Phase 13B, the archive producer and its pins, which needs the two open `docs/INPUT_SHAPES.md` §2
+decisions taken: the rule for a bundle with more than one XML member (decision 4), and which bytes the provenance
+record names for an archive read (decision 5). Phase 13C, the documents, needs no decision.
 
 ## Rules to keep when writing documents
 

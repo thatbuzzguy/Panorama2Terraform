@@ -7,7 +7,7 @@ refused or read. The document index is in [README.md](README.md). The read rule 
 [ARCHITECTURE.md](ARCHITECTURE.md) §3.2. The pieces are in `to-do.md`, the criteria are in
 `acceptance.md`, and the facts that need a live target are in `backlog.md`.
 
-## 1. Facts measured offline
+## 1. Facts measured, not pinned
 
 1. No producer decompresses anything. `src/xml_input.py` states no archive rule, and
    `read_input` hands raw bytes to the door, so archive magic bytes reach `reject_dtd`, the
@@ -25,12 +25,16 @@ refused or read. The document index is in [README.md](README.md). The read rule 
    holds `devices/entry/<serial>` — or `localhost.localdomain` — with no device-group row. Both
    are converter inputs; only the splitter refuses the second
    (`docs/DEVICE_GROUP_SPLITTING.md` §Troubleshooting).
-4. Measured 2026-11-23 against the published PAN-OS API documentation, page "XML and XPath":
-   the four node types — root, element, attribute, text — and the entry shape `<entry name=...>`
-   are stated the same on the 9.1 (EoL) page and the 11.1 & Later page. The read layer keys
-   entries by the `name` attribute, so it agrees with the documented shape on both pages. The
-   10.2 page redirects to the current landing page, so the version-by-version comparison is not
-   complete, and any version difference that would change the read stays a measurement.
+4. Measured against the published PAN-OS API documentation, page "XML and XPath", on three version
+   legs: the 9.1 (EoL) leg and the 11.1 & Later leg, read 2026-11-23, and the 10.2 leg, read
+   2026-11-24. Each leg states the four node types — root, element, attribute, text — and the entry
+   shape `<entry name=...>`, where the entry name is an attribute node, the name/value pair. The read
+   layer reads the entry name from the `name` attribute, through `xml_input.ENTRY_SEGMENT`, so it
+   agrees with the documented shape on all three legs, and the committed corpus states its entries in
+   that shape. The comparison is complete, and no leg states a version difference. The 10.2 leg was
+   read through the stored capture of its page address (capture `20250602181153`, the page the site
+   stated on 2024-03-20), because the live address for that leg answers a redirect; the redirect, the
+   date, and the address that answered are the finding in `backlog.md`.
 
 ## 2. The archive producer (decision, 2026-11-23)
 
@@ -110,4 +114,6 @@ when it has a finding. The exit code does not change: the exit code stays with t
 
 Recorded in `backlog.md`, under Design Decisions (input sources): the file form the UI download
 writes, whether a backup XML declares a DOCTYPE, whether a bundle can hold more than one XML
-member, and the unfinished 10.2 documentation comparison leg. No document states these as facts.
+member, and the condition that the 10.2 leg can only be read from a stored capture, because its live
+page address answers a redirect. No document states these as facts: §1 fact 4 states the measurement
+the piece made, and `backlog.md` states the redirect finding with the address that answered.

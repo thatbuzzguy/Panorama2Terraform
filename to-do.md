@@ -8,16 +8,13 @@ piece are in `acceptance.md`, with pointers to the Epic 13 and Epic 14 records.
 ## Epic 13 — the shapes an input can be (design record `docs/INPUT_SHAPES.md`)
 
 Planned in the `input-shapes` worktree, 2026-11-23. The decisions are in `PLAN.md`, the criteria
-are in `acceptance.md`, and the live facts are in `backlog.md`. Pieces 13A.1, 13A.2 and 13A.3 landed on main, so the
-shape table has an owner module in `src/`, the splitter prints the fact it read, and the two config shapes are
-committed as a fixture pair. Each remaining piece needs a decision, or a fact a live target states.
-
-### Phase 13A, the shapes as data and the diagnostic
-
-- **13A.4** — the documentation comparison: the 9.1 and 11.1 & Later legs are measured, the 10.2
-  leg redirects, so finish that leg or record the redirect as the finding.
+are in `acceptance.md`, and the live facts are in `backlog.md`. Phase 13A is complete as of 2026-11-24, so its
+pieces are in the git history. Each remaining piece needs a decision, or a fact a live target states.
 
 ### Phase 13B, the archive producer
+
+Blocked on the two open `docs/INPUT_SHAPES.md` §2 decisions: the rule for a bundle with more than one XML member
+(decision 4), and which bytes the provenance record names for an archive read (decision 5).
 
 - **13B.1** — the member decision: single-member gzip and single-XML-member tar.gz are accepted;
   a bundle with more than one XML member is refused until a selection rule exists, and a

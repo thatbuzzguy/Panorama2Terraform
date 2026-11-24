@@ -100,9 +100,10 @@ Open decisions stay in the design record §2 until each is taken: the rule for a
 than one XML member, and which bytes the provenance record names for an archive read. The shape
 table has its owner module since Piece 13A.1, so each open decision is a pending row that names the
 decision, and a decision that is taken moves its row in the same commit.
-Measured offline, the entry shape the documentation states for 9.1 and for 11.1 & Later is the
-same, so the read layer agrees with the documented shape on both pages; the 10.2 comparison leg
-redirects and stays open.
+Measured on three legs of the "XML and XPath" page — the 9.1 (EoL) leg and the 11.1 & Later leg on 2026-11-23,
+and the 10.2 leg on 2026-11-24 — the node model and the entry shape are the same on each, so the read layer agrees
+with the documented shape on all three. The 10.2 leg was read through a stored capture, because its live address
+answers a redirect; the redirect finding and the address that answered are in `backlog.md`.
 
 ## Planning — Epic 14, the blocks a run binds to the live config (feature id `F14.x`)
 
