@@ -1,9 +1,9 @@
 terraform {
-  required_version = ">= 1.14"
+  required_version = ">= 1.16"
   required_providers {
     panos = {
       source  = "PaloAltoNetworks/panos"
-      version = "~> 2.0.14"
+      version = "~> 2.0.15"
     }
     http = {
       source  = "hashicorp/http"

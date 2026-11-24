@@ -20,16 +20,10 @@ consequence are in `backlog.md`.
 ## Epic 12 — the pins (plan in `PLAN.md`, criteria in `acceptance.md`)
 
 Planned in the `pin-update` worktree, merged into main 2026-11-23, and the pieces run on main. The two decisions
-are in `PLAN.md`: the floor is `>= 1.16` with CI at 1.16.7, and the minimum gets one owner. The provider pin moves
-to `~> 2.0.15` on the schema measurement, which changes no measured provider fact. Piece 12A.1 landed on main
-2026-11-23 and holds the owner at the value the committed goldens carry, so the value change and the 23 byte files
-move together in 12A.2.
+are in `PLAN.md`: the floor is `>= 1.16` with CI at 1.16.7, and the minimum has one owner,
+`src/commit_actions.py::TERRAFORM_MINIMUM`, read by the pins through `tests/conftest.py::declared_terraform_minimum`.
+The provider pin has `~> 2.0.15`. The pieces that landed are not recorded here; the git history holds them.
 
-- **12A.2** — the bytes the pins state: the head comment and the `terraform` block in `src/panorama_to_terraform.py`,
-  `tests/tflint/probe.tf`, the 17 golden `provider.tf` files, the 6 golden `actions.tf` files that carry the Terraform
-  line, `requirements.txt`, and `terraform_version` in `.github/workflows/python-tests.yml`. A minimum change is a
-  golden change, so the template and the goldens move in one commit. The print sites now read the owner constant, so
-  the value change is one edit in `src/commit_actions.py` plus the committed bytes.
 - **12A.3** — the statements that name the pinned provider: `README.md`, `docs/USAGE_GUIDE.md`,
   `docs/RESOURCE_MAPPING.md`, `docs/COVERAGE_MATRIX.md`, and `docs/CODEBASE_ASSEMBLY.md` §12. §12 is the one place
   that states why the 2.0.14 measurements hold for 2.0.15, so the dated measurements stay as they were measured and

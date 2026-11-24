@@ -1,53 +1,67 @@
 # Acceptance criteria
 
 This file carries the record for each active task, joined by hand at each merge. Each section names the worktree or
-branch that owns it. The Epic 12 record is main's; the Epic 13 and Epic 14 records came from the `input-shapes` and
-`import-pairing` worktrees and merged into main 2026-11-23, so their pieces run on main.
+branch that owns it. The Piece 12A.2 record is main's, the current task on main. The Epic 13 and Epic 14 records are
+retained because both epics still have open pieces in `to-do.md`; their criteria are not restated here, and each
+section names the worktree it came from.
 
-## Piece 12A.1, one owner for the Terraform minimum (main, the current task on main)
+## Piece 12A.2, the bytes the pins state (main, the current task on main)
 
-Piece 12A.1 of Epic 12, the pins (`PLAN.md`, Epic 12 decision 2). This is the whole piece: the byte
-sweep is Piece 12A.2 and the document statements are Piece 12A.3, so no golden file and no document
-version statement is changed here.
+Piece 12A.2 of Epic 12, the pins (`PLAN.md`, Epic 12 decisions 1 and 2). The decisions are already taken: the
+Terraform minimum is `>= 1.16`, CI runs the 1.16 line at its newest patch (1.16.7), and the provider pin moves to
+`~> 2.0.15` on the schema identity measurement. Piece 12A.1 landed the owner and the helper and held the owner at
+the value the committed goldens carried; this piece moves the owner value and the committed bytes together. The
+document statements are Piece 12A.3, so no document version statement is changed here.
 
-Owner: `src/commit_actions.py`, `TERRAFORM_MINIMUM`. It is the module whose rule the minimum comes from
-(`docs/CODEBASE_ASSEMBLY.md` §12: actions need the action grammar level), and `panorama_to_terraform.py`
-already imports it, so `src/` stays one flat namespace with no cycle and no new module, because a new
-`src/` module is an index edit pinned by
-`tests/test_layout.py::test_the_indexes_name_every_document_under_them`.
+### Files this piece moves
 
-Helper: `tests/conftest.py::declared_terraform_minimum`, beside `declared_provider`, the one place the
-test set reads the version.
-
-Pin module: `tests/test_commit_actions.py`.
+1. `src/commit_actions.py::TERRAFORM_MINIMUM`, the owner, from `1.14` to `1.16`.
+2. `src/panorama_to_terraform.py::TerraformGenerator.generate_provider_config`: the head comment and the
+   `terraform` block, so the bytes the print site writes are the bytes the goldens carry.
+3. `tests/tflint/probe.tf`: its `required_version` line and its panos provider version line.
+4. The 17 committed golden `provider.tf` files under `tests/golden/`: the Terraform minimum line, the provider
+   version line, and the head comment that names the baseline version.
+5. The 6 committed golden `actions.tf` files under `tests/golden/`: the header line that names the minimum.
+6. `.github/workflows/python-tests.yml`: `terraform_version` from `1.16.1` to `1.16.7`.
+7. `requirements.txt`: read and reported. It pins pytest 9.1.1 and ruff 0.16.10 and names no version belonging to
+   this piece, so the finding is that the file holds no pin for this piece; nothing is changed in it. The ruff pin
+   stays in `backlog.md`.
 
 ### Criteria
 
-1. The minimum is stated once in `src/`. The three generated places that print it read the constant: the
-   `terraform` block in `panorama_to_terraform.py`, the generated `README.md` line, and the `actions.tf`
-   header in `commit_actions.py`.
-2. No test file states the version as a string. The two pins in `tests/test_commit_actions.py` that state it
-   read it through `declared_terraform_minimum`, so a change to the owner moves the pins with it.
-3. The pins that read the goldens read them as committed bytes and compare them with the owner, so a
-   disagreement between the owner and the goldens is a pin failure and not a silent difference.
-4. The pin that reads the generated `terraform` block reads the print site through the owner, so it holds the
-   one-owner rule and not a second copy of the version.
-5. No golden byte moves in this piece, so the gate must be green on the goldens as committed.
-6. `tests/tflint/probe.tf`, `requirements.txt` and `.github/workflows/python-tests.yml` are not read by this
-   piece; they are Piece 12A.2 files. The `README.md`, `docs/USAGE_GUIDE.md`, `docs/RESOURCE_MAPPING.md`,
-   `docs/COVERAGE_MATRIX.md` and `docs/CODEBASE_ASSEMBLY.md` §12 statements are Piece 12A.3 files.
-7. A code comment that states the action grammar level (1.14) is a measured fact about the language, not the
-   project minimum, so it is not moved through the constant in this piece.
-8. The gate is measured single-threaded and conservatively: `ruff check .`, `ruff format --check .`,
+1. The minimum is stated once in `src/`, at the owner. The three places that print it read the constant: the
+   `terraform` block in `panorama_to_terraform.py`, the generated `README.md` line, and the `actions.tf` header in
+   `commit_actions.render`. No print site states the version as a string.
+2. The pins read the minimum through `tests/conftest.py::declared_terraform_minimum` and read the provider version
+   through `tests/conftest.py::declared_provider`, so a pin holds the owner rule and not a second copy of a version.
+   A pin that asserts a version as a literal string is a finding this piece reports and does not fix, unless the
+   pin fails.
+3. A pin that compares generated bytes with a golden reads committed bytes, so the template and the goldens must
+   move in one commit. Before the commit the disagreement is visible: `tests/test_golden_files.py` fails, and after
+   it the same pins pass.
+4. A statement that names the level the action grammar needs (1.14) is a measurement of the language, not the
+   project minimum, so it stays as it was measured. Only what states the project minimum moves.
+5. The provider move changes no measured provider fact. Re-measured on this tree: `terraform providers schema -json`
+   answers byte for byte the same for 2.0.14 and 2.0.15, so the schema pins, the two action rows, the value lists,
+   and the committed tflint answer are unchanged by the move.
+6. The provider cache must serve the pinned provider. The schema pins skip only for a missing binary, so once
+   `terraform` is present `terraform init` must resolve 2.0.15 or the pins fail. Measured on this tree; no pin is
+   worked around.
+7. `tests/tflint/probe.json` is the committed answer for the committed probe content, so it moves only if the
+   answer changes. The probe edit keeps every line number the committed answer names, and no rule in the set reads
+   the `required_version` or the provider version string, so the committed answer is unchanged. This is a finding
+   reported from the committed bytes, because the binary is not on this machine and the pin skips for it.
+8. The documents that state the pinned versions (`README.md`, `docs/USAGE_GUIDE.md`, `docs/RESOURCE_MAPPING.md`,
+   `docs/COVERAGE_MATRIX.md`, `docs/CODEBASE_ASSEMBLY.md` §12) are Piece 12A.3 files and are not moved here, apart
+   from the stale minimum line in `agent-status.md`, which the status record this piece writes has to state
+   correctly.
+9. The gate is measured single-threaded and conservatively: `ruff check .`, `ruff format --check .`,
    `python3 tools/check_documents.py`, `python3 -m pytest`, one process, no parallel plugin.
 
-### The finding this piece reports
+### Definition of done
 
-The decided value `>= 1.16` cannot be written into the owner in this piece. The generator prints the owner, so
-writing 1.16 changes the bytes the golden pins read: the 17 golden `provider.tf` files and the 6 golden
-`actions.tf` files. That is Piece 12A.2's commit, which moves the template and the goldens together. So this
-piece lands the owner, the helper and the pins, and the constant holds the value the committed goldens carry.
-The measurement of the disagreement is recorded in `agent-status.md`.
+One place states each pin, the template, the goldens, the probe, CI and the documents agree on the versions, and
+the gate is green on the tree that holds the move.
 
 ## Epic 13, the shapes an input can be (the `input-shapes` worktree)
 
@@ -107,8 +121,9 @@ committed material.
 
 The task was the planning of Epic 14 in the `import-pairing` worktree, on branch `import-pairing` from main
 `c845f07`, 2026-11-23, merged into main at `9fe33c7`. The design record is `docs/IMPORT_BINDING.md`, the pieces are
-in `to-do.md`, and the live facts are in `backlog.md`. No `src/` file was touched during the planning, and no
-decision is taken yet, so no piece can be written from a decision.
+in `to-do.md`, and the live facts are in `backlog.md`. No decision is taken, so no piece can be written from one
+yet, and no `src/` file is touched until a piece lands. The shared tracking markdown needs a manual join against
+main at merge.
 
 ### Criteria
 

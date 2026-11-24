@@ -1,59 +1,84 @@
 # Agent Status
 
-## Current position (main, Piece 12A.1, 2026-11-23)
+## Current position (main, Piece 12A.2, 2026-11-23)
 
-Piece 12A.1 is complete on main, 2026-11-23, and is not pushed. It landed the structure only: the owner holds
-`1.14`, the value the committed goldens carry, so no golden byte moved in this piece.
+Piece 12A.2 is complete on main, 2026-11-23, and is not pushed. It moves the owner value and the committed bytes in
+one commit, as `acceptance.md` requires, so no pin sees a disagreement between the template and the goldens.
 
 What landed:
 
-- The owner is `src/commit_actions.py::TERRAFORM_MINIMUM`. It sits there because the minimum comes from the action
-  rule (`docs/CODEBASE_ASSEMBLY.md` §12) and `panorama_to_terraform.py` already imports `commit_actions`, so reading
-  the constant adds no import cycle in the one flat `src/` namespace and needs no new module, which
-  `tests/test_layout.py::test_the_indexes_name_every_document_under_them` would refuse.
-- The three places that print the minimum read it: `TerraformGenerator.generate_provider_config` (the head comment
-  and `required_version`), `TerraformGenerator.generate_readme`, and the `actions.tf` header in
-  `commit_actions.render`.
-- The helper is `tests/conftest.py::declared_terraform_minimum`, beside `declared_provider`, and returns the owner,
-  so a change to the owner moves the pins with it.
-- The pins in `tests/test_commit_actions.py`: `test_the_generated_terraform_block_declares_the_minimum` reads the
-  committed golden line against the owner and reads the print site through the owner;
-  `test_the_generated_readme_names_the_file_and_the_minimum` reads the emitted `README.md` through the helper and
-  the print site through the owner; `test_the_action_file_header_states_the_minimum_through_its_owner` is the new
-  pin for the third print site. The module docstring and the pins state no version string, so the module holds no
-  second copy of the version.
-- A code comment that states 1.14 as the level the action shape needs (`src/sanity_checks.py`,
-  `src/import_blocks.py`, the grammar clause of the head comment) is a measurement of the language, not the project
-  minimum, so it was not moved through the constant.
+- The owner, `src/commit_actions.py::TERRAFORM_MINIMUM`, reads the value Epic 12 decision 1 takes. It is the one
+  place the codebase states the Terraform minimum.
+- The print sites read the value through the owner, so they state no copy of it: the `terraform` block and the
+  generated `README.md` line in `src/panorama_to_terraform.py`, and the header of `actions.tf` in
+  `commit_actions.render`. The grammar clause of the head comment still names the level the action shape needs,
+  which is a measurement of the language and not the project minimum.
+- The head comment in `src/panorama_to_terraform.py` names the provider baseline as a value, because the provider
+  pin's owner is `tests/conftest.py::declared_provider`, which reads it from a committed golden `provider.tf`, and
+  `src/` reads nothing under `tests/`. The pins that read the provider schema read the version through that helper,
+  so no test asserts a version string: `git grep` over `tests/` for an assertion that compares a provider version
+  or a minimum answers nothing, and the version strings in the test modules are dated measurements.
+- The committed bytes: the 17 golden `provider.tf` files (the head comment baseline, the `required_version` line,
+  and the provider version line), the 6 golden `actions.tf` header lines, and `tests/tflint/probe.tf` (its
+  `required_version` and its panos version line). `tests/tflint/probe.json` is unchanged: the 8 committed findings
+  sit at probe.tf lines 8, 15, 24, 25, 26, 27, 30 and 38, none at the two lines the probe edit changes, and no rule
+  in the set reads a `required_version` or a provider version string. The pin that re-measures the answer against
+  the binary skipped, because tflint is absent here.
+- `.github/workflows/python-tests.yml`: `terraform_version` moves to the CI version Epic 12 decision 1 takes, and
+  the comment there says the workflow is the one place that states it.
+- `requirements.txt` names no version belonging to this piece (pytest 9.1.1 and ruff 0.16.10 only), so nothing was
+  changed in it; the finding is recorded in `backlog.md`, and the ruff pin stays there.
+- The stale minimum line in this file, which `backlog.md` recorded as the second live statement of the minimum, is
+  closed: the rules section now states the value through the owner.
 
-The finding that needs a decision: with the owner at the decided `>= 1.16`, the pins that compare the run's bytes
-with the committed goldens fail, because 17 golden `provider.tf` files, 6 golden `actions.tf` files and
-`tests/tflint/probe.tf` carry `1.14`. That is Piece 12A.2's commit, which moves the constant and those 23 committed
-files together. Nothing disagrees on the tree as it stands, because the constant holds the golden value. The print
-sites are now one edit, so the value change in 12A.2 is the constant plus the committed bytes.
+Measurements taken 2026-11-23:
 
-The stale statement of the minimum in this file, and the statements in `README.md`, `docs/USAGE_GUIDE.md`,
-`docs/RESOURCE_MAPPING.md`, `docs/COVERAGE_MATRIX.md` and `docs/CODEBASE_ASSEMBLY.md` §12, are carried by Piece 12A.3.
-`.github/workflows/python-tests.yml` states `terraform_version: '1.16.1'`, which disagrees with the `PLAN.md` CI line
-1.16.7; that file is Piece 12A.2's.
+- Before the goldens moved, `python3 -m pytest tests/test_golden_files.py` answered 23 failed and 68 passed, which
+  is exactly the 17 `provider.tf` pins and the 6 `actions.tf` pins, so the disagreement between the owner and the
+  committed bytes was the 23 files this piece moves.
+- The schema identity was re-measured on this tree: `terraform providers schema -json` answers byte for byte the
+  same for provider 2.0.14 and 2.0.15, 2,146,401 bytes, md5 `b7d5dcfbe72207e90c09e38fcbed2747`. The size and hash
+  recorded in `PLAN.md` on 2026-11-22 (2,146,209 bytes, `dfab791bae568bdd5ccdc69ca066a5b4`) cannot be reproduced
+  from the whole document on this run; the identity the decision rests on holds.
+- The provider cache serves 2.0.15: `terraform init` resolved and installed `paloaltonetworks/panos` v2.0.15 in
+  1.9 s, which also shows the constraint picks 2.0.15 as the newest 2.0.x, so the head comment's statement that the
+  baseline is the latest 2.x release still holds. `terraform` is present at 1.16.2, the version the recorded
+  measurements name, so the schema pins ran on this machine; CI runs the version its own file states.
+
+Gate, measured 2026-11-23 single-threaded on the tree that holds this work, including this file: `ruff check .` clean
+at `py310`, `ruff format --check .` clean on the 110 files it reads (81 Python, 29 markdown),
+`python3 tools/check_documents.py` reports no finding in 7.0 s, `python3 -m pytest` in one process with no parallel
+plugin exits 0 with 1,796 passed and the same 4 `tflint` skips, so 1,800 pins in 54 modules, in 257.5 s, which is the
+Piece 12A.1 baseline count: no pin count moved, because no pin reads a version as a literal. The runs on the same
+code before this rewrite answered the same counts in 256.5 s, 253.1 s, 313.0 s and 248.5 s. Read with `-rs`, the 4
+skips are the `tflint` pins in `tests/test_sanity_gate.py` at lines 720, 814, 912 and 981, and they skip for the
+missing binary; `terraform` is present, so the provider-schema pins ran against the pinned provider.
+
+Findings this piece reports:
+
+- `requirements.txt` names no version belonging to the piece: it pins only pytest 9.1.1 and ruff 0.16.10 and states
+  no Terraform or provider version, so the piece list named a file that holds nothing to move. Nothing was changed
+  in it, and the finding is recorded in `backlog.md`.
+- The provider version is stated as a literal at the print site in `src/panorama_to_terraform.py`, because the
+  provider pin's owner is a test helper that `src/` cannot read, so the one-owner rule for the provider holds in the
+  test set only. Measured after the move, the minimum is stated as a value in `src/` only at its owner, and the
+  `src/` statements that still read 1.14 are the grammar measurements.
+- The comments in `src/commit_actions.py` and `src/panorama_to_terraform.py` were shortened to what the print site
+  needs, because the longer form restated a rule `backlog.md` already holds. The comment in the workflow names the
+  decision the version comes from and states no second copy of it, and the CI rules section in this file points to
+  the workflow as the CI owner instead of stating a version, so the CI version is stated at the pin and not in the
+  gate rules.
+- No test asserts a version as a string, so no pin failed and no test file was changed. The version strings in the
+  test modules are dated measurements, and the documents that state the pinned versions are Piece 12A.3's.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`README.md`, `commit.md`, `docs/README.md`, `docs/CODEBASE_ASSEMBLY.md` §12, `docs/ARCHITECTURE.md` §1.1,
-`pyproject.toml`, `tools/check_documents.py`, `src/commit_actions.py`, `src/panorama_to_terraform.py`,
-`tests/conftest.py`, `tests/test_commit_actions.py`, `tests/test_golden_files.py`, `tests/test_layout.py`.
+`README.md`, `commit.md`, `requirements.txt`, `.github/workflows/python-tests.yml`, `pyproject.toml`,
+`tools/check_documents.py`, `src/commit_actions.py`, `src/panorama_to_terraform.py`, `tests/conftest.py`,
+`tests/test_commit_actions.py`, `tests/test_golden_files.py`, `tests/test_sanity_gate.py`, `tests/tflint/probe.tf`,
+`tests/tflint/probe.json`, and the 23 committed golden files.
 
-Gate, measured 2026-11-23 single-threaded on the tree that holds this work: `ruff check .` clean at `py310`,
-`ruff format --check .` clean on the 109 files it reads (81 Python, 28 markdown), `python3 tools/check_documents.py`
-reports no finding in 7.8 s, `python3 -m pytest` in one process with no parallel plugin exits 0 with 1,796 passed
-and the same 4 `tflint` skips, so 1,800 pins in 54 modules, in 256.3 s on the first run and 314.7 s on the
-confirming run. Read through the per-module collection counts: `tests/test_commit_actions.py` 36 (35 before),
-`tests/test_golden_files.py` 91, `tests/test_layout.py` 1; the other module counts are the Piece 11C.2 baseline.
-`tflint` is absent, so the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py`; `terraform` is present at
-1.16.2, so the provider-schema pins ran. No golden byte moved, so the golden pins read the same committed bytes as
-the baseline.
-
-Piece 12A.2 is the next step, and it needs the decision on the value and on the CI line. `acceptance.md` holds the
-Piece 12A.1 criteria until 12A.2 starts.
+The next step is Piece 12A.3, the document statements. `acceptance.md` holds the Piece 12A.2 criteria until 12A.3
+starts.
 
 ## Position in the `input-shapes` worktree (Epic 13 planning, 2026-11-23)
 
@@ -173,6 +198,10 @@ holds them.
   assert on a non-zero run, so the `terraform-gate` CI job, which has the binaries, is where they run; the
   matrix legs skip them. A pin that reads which directory one of those two checks ran on passes no binary, so it
   runs on a machine that has neither and reads the directory from the result.
+- The Terraform version CI runs is stated in the `terraform-gate` job of `.github/workflows/python-tests.yml`, which
+  is the CI owner for the tool pins, and the documents read it as the CI statement of that pin. A document that
+  names a Terraform version names the version its measurement was made on, so the recorded answers name 1.16.2 while
+  the CI job runs the version Epic 12 decision 1 takes; Piece 12A.3 brings the statements up to the CI version.
 
 ## Watch for the shape tables and the write path
 
@@ -332,8 +361,10 @@ holds them.
   as a fact the tool names as a variable. It states no row, no value, no mapping result, no count, no path and
   no timestamp, so the report rule holds for the site record with the README as the file-inventory exception
   (`tests/test_site_data.py`).
-- Actions need Terraform 1.14 or later; the committed goldens now declare it, so a change to the minimum is a
-  golden change.
+- Actions need the Terraform minimum, and the value `src/commit_actions.py::TERRAFORM_MINIMUM` states it, so the
+  committed goldens carry the same value and a change to the minimum is a golden change. The level the action shape
+  needs is 1.14, measured with `terraform validate`, which is a language fact and is stated separately from the
+  minimum.
 - The credential rule has one statement and one owner document, `docs/CODEBASE_ASSEMBLY.md` §11, so every other
   document links to it. `source_fetch.py` is the only tool module that states the environment name, and the pin
   `tests/test_variables.py::test_the_generated_block_names_the_environment_the_fetch_layer_reads` holds both

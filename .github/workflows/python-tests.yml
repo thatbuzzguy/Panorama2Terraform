@@ -64,9 +64,11 @@ jobs:
         pip install -r requirements.txt
 
     - name: Set up Terraform
+      # The CI Terraform version, stated once here. It is the line Epic 12 decision 1 takes, and the gate answers
+      # recorded in the documents name the version they were measured on, not this one.
       uses: hashicorp/setup-terraform@v3
       with:
-        terraform_version: '1.16.1'
+        terraform_version: '1.16.7'
 
     - name: Set up tflint
       # The version is pinned, because the severities and the exit codes the pins hold were measured on it, and the

@@ -181,11 +181,16 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   the Terraform minimum is stated in 8 markdown documents, 4 `src/` modules, the 17 golden `provider.tf` files and
   the 6 golden `actions.tf` files. So a pin move is a change to about 40 files, and the one-owner rule is satisfied
   in `src/` and not in the documents. A decision is needed: either the documents link to the pin owner and state no
-  version, or the fan-out is accepted and the piece list names the files it reaches.
-- **One pin statement is already stale.** `agent-status.md` states "Actions need Terraform 1.14 or later; the
-  committed goldens now declare it", which is true of the bytes on the tree today and is not the `>= 1.16` decision
-  `PLAN.md` records. The line is not in the Piece 12A.3 file list, so nothing moves it. It is the second live
-  statement of the minimum.
+  version, or the fan-out is accepted and the piece list names the files it reaches. Measured 2026-11-23 after
+  Piece 12A.2: the minimum is now stated as a value in `src/` only at its owner, and the three `src/` statements
+  that still read 1.14 are the grammar measurements (`src/sanity_checks.py`, `src/import_blocks.py`, the grammar
+  clause of the head comment in `src/panorama_to_terraform.py`). The provider version is still stated as a literal
+  at the print site in `src/panorama_to_terraform.py`, because its owner is `tests/conftest.py::declared_provider`
+  and `src/` reads nothing under `tests/`, so the one-owner rule for the provider holds in the test set only.
+- **`requirements.txt` holds no pin for the tool pins.** Piece 12A.2 named the file, and the file pins only pytest
+  9.1.1 and ruff 0.16.10 and names no Terraform or provider version, so the piece list named a file that holds
+  nothing belonging to the piece. Nothing was changed in it. If the tool pins are meant to be recorded there, the
+  file needs a Terraform or provider entry and a pin that reads it; otherwise the piece lists should not name it.
 - **Permanent rules have no owner document.** `agent-status.md` holds three rule sets that no owner document
   states: the writing rules (lines 60 to 78), the gate and CI rules (80 to 102), and the shape-table and write-path
   watch list (104 to 300). `docs/README.md` owns the rule that each rule lives in one document, so a rule stated

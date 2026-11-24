@@ -4283,13 +4283,13 @@ class TerraformGenerator:
         that names no device prints no `target`, because a declaration with no consumer is a finding, and the
         placeholder device names no device (F3.5).
         """
-        # The minimum is read through its owner, `commit_actions.TERRAFORM_MINIMUM`, so this print site states
-        # no copy of the version. The grammar clause states the level the action shape needs (1.14), which is a
-        # measured fact about the language, not the project's minimum.
+        # The minimum is read through its owner, `commit_actions.TERRAFORM_MINIMUM`. The grammar clause states the
+        # level the action shape needs (1.14), a measured fact about the language and not the project minimum. The
+        # provider baseline is written as the value, because its owner is a test helper.
         minimum = commit_actions.TERRAFORM_MINIMUM
         head = (
             "# Palo Alto Networks PAN-OS Provider Configuration\n"
-            "# Supported provider range: v2 series, baseline 2.0.14 (the latest 2.x\n"
+            "# Supported provider range: v2 series, baseline 2.0.15 (the latest 2.x\n"
             "# release and the version the conformance and validate gates verify).\n"
             f"# Terraform {minimum} minimum: an `action` block is 1.14 syntax (F6.7).\n"
             "terraform {\n"
@@ -4297,7 +4297,7 @@ class TerraformGenerator:
             "  required_providers {\n"
             "    panos = {\n"
             '      source  = "PaloAltoNetworks/panos"\n'
-            '      version = "~> 2.0.14"\n'
+            '      version = "~> 2.0.15"\n'
             "    }\n"
             "  }\n"
             "}\n"

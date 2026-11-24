@@ -64,14 +64,11 @@ import unit_manifest
 
 ACTIONS_FILE = "actions.tf"
 
-# The Terraform minimum, stated once (Epic 12 decision 2). This module owns it because the minimum comes from
-# the action rule: the two action blocks are the reason the codebase declares a minimum at all. The three
-# generated places that print it read it here — the `terraform` block and the generated `README.md` line in
-# `panorama_to_terraform.py`, which already imports this module, and the header of `actions.tf` below — and the
-# pins read it through `tests/conftest.py::declared_terraform_minimum`, so no test states the version as a
-# string. The value is the line the project has measured on; the change to the decided `>= 1.16` moves the
-# golden bytes, so it lands with them in the same commit (Piece 12A.2).
-TERRAFORM_MINIMUM = "1.14"
+# The Terraform minimum, stated once (Epic 12 decision 2). This module owns it because the minimum comes from the
+# action rule: the two action blocks are the reason the codebase declares a minimum at all. The print sites read
+# it here, and the pins read it through `tests/conftest.py::declared_terraform_minimum`. A change to the value is a
+# change to the golden bytes the pins compare, so the constant and the goldens move in the same commit.
+TERRAFORM_MINIMUM = "1.16"
 
 # The block level an action's fields live at. Terraform 1.14 requires it: `terraform validate` refuses
 # a field at the action's own level, so the shape is a grammar fact and not a style choice.

@@ -2,7 +2,7 @@
 # each unit the manifest names. The block names the fact its own unit declares, and no fact
 # another unit owns. The push block states no `devices`, because the tool names no serial, so
 # the provider pushes to all devices in the target.
-# Actions need Terraform 1.14 or later, which the `terraform` block declares (§12).
+# Actions need Terraform 1.16 or later, which the `terraform` block declares (§12).
 
 action "panos_commit" "dev_dg_8c337f4a" {
   config {
