@@ -17,12 +17,20 @@ element, so a report can name the line an entry came from. The tests here pin
 that the extra job did not change the tree or the checks. F5.1 puts both checks
 behind one producer boundary, so a source that hands bytes is refused the same way a
 file is; the tests for that are at the end of this file.
+
+Piece 13B.2 adds the archive producer behind the same boundary. It adds no check, so
+the two checks run on the bytes it expands, and the read cap is applied while the bytes
+expand, so a bundle that expands past the cap is refused before a tree is built. Those
+tests are at the end of this file, with the boundary tests.
 """
 
 import argparse
 import copy
+import gzip
+import io
 import subprocess
 import sys
+import tarfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -526,6 +534,21 @@ def _api_origin(xml_input_module):
     return xml_input_module.SourceOrigin(kind="api", name="panorama:export")
 
 
+def _one_member(data: bytes) -> bytes:
+    """One gzip member, built through the standard library so the pin reads a shape and not a name."""
+    return gzip.compress(data)
+
+
+def _one_member_tar(data: bytes) -> bytes:
+    """A gzip stream that holds a tar archive with exactly one member, the content the pin hands in."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+        info = tarfile.TarInfo("config")
+        info.size = len(data)
+        archive.addfile(info, io.BytesIO(data))
+    return buffer.getvalue()
+
+
 def test_boundary_refuses_producer_bytes_over_the_limit(xml_input_module):
     """A source that hands bytes is refused for size before the parse.
 
@@ -595,7 +618,9 @@ def test_file_producer_runs_the_checks_through_the_boundary(xml_input_module, tm
     """parse_xml is a producer, not a second copy of the two checks.
 
     F3.8 pinned that no entry point keeps its own check. F5.1 pins that no producer
-    keeps its own check either: every producer hands its bytes to the boundary.
+    keeps its own check either: every producer hands its bytes to the boundary. An
+    accepted shape is handed to the boundary as the bytes the producer expanded, so the
+    checks run on those bytes and not on the compressed stream.
     """
     source = tmp_path / "in.xml"
     data = f'<?xml version="1.0"?>\n{BODY}'.encode()
@@ -613,3 +638,89 @@ def test_file_producer_runs_the_checks_through_the_boundary(xml_input_module, tm
     assert calls == [(len(data), "file", source.name)], calls
     assert parsed.origin.kind == "file"
     assert parsed.origin.path == source
+
+    # The same producer, the same boundary, for a shape the producer expands.
+    archive = tmp_path / "in.bin"
+    archive.write_bytes(_one_member(data))
+    calls.clear()
+    parsed = xml_input_module.parse_xml(archive)
+    assert calls == [(len(data), "file", archive.name)], calls
+    assert parsed.root.tag == "config", "the door parsed the bytes the producer expanded"
+
+
+def test_the_archive_producer_runs_the_checks_on_the_bytes_it_expands(xml_input_module, monkeypatch):
+    """Piece 13B.2: the archive producer states no check, so `check_bytes` stays the one definition and the door runs
+    it on the expanded bytes. The pins record what the door is handed through the door's own reference, so the pins
+    hold no reader and no size rule of their own. The tree the producer gets is the tree `xml.etree` builds from the
+    same body, for both accepted shapes, so the producer changes no tree rule.
+    """
+    data = f'<?xml version="1.0"?>\n{BODY}'.encode()
+    origin = _api_origin(xml_input_module)
+    real_check = xml_input_module.check_bytes
+    handed = []
+
+    def recording(handed_bytes, source, limit):
+        handed.append(len(handed_bytes))
+        return real_check(handed_bytes, source, limit)
+
+    monkeypatch.setattr(xml_input_module, "check_bytes", recording)
+    for shape in (_one_member(data), _one_member_tar(data)):
+        parsed = xml_input_module.parse_archive(shape, origin)
+        assert _shape(parsed.root) == _shape(ET.fromstring(data)), shape[:3]
+    assert handed == [len(data), len(data)], handed
+
+
+def test_the_cap_stops_the_expansion_before_a_tree_is_built(xml_input_module, monkeypatch):
+    """Piece 13B.2 criterion 1: the size rule holds while the bytes expand, so a bundle that expands past the cap is
+    refused before the parse builds a tree. The pins read the cap as the producer's own read step, the same
+    `max_input_bytes + 1` the file read states, and hold that the bytes the door is handed stop there: the compressed
+    bundle is under the limit, so the refusal can only answer for the expansion. The parse never runs, so no tree
+    exists, and the refusal names the origin the pins handed, which is a source with no file behind it.
+    """
+    bundle = gzip.compress((f'<?xml version="1.0"?>\n{BODY}').encode() * 20)
+    origin = _api_origin(xml_input_module)
+    limit = 200
+    assert len(bundle) < limit, "the bundle itself passes the size check, so the refusal is the expansion's answer"
+
+    real_check = xml_input_module.check_bytes
+    real_parse = xml_input_module._parse_with_lines
+    handed, parsed = [], []
+
+    def recording_check(handed_bytes, source, max_input_bytes):
+        handed.append(len(handed_bytes))
+        return real_check(handed_bytes, source, max_input_bytes)
+
+    def recording_parse(data, source):
+        parsed.append(len(data))
+        return real_parse(data, source)
+
+    monkeypatch.setattr(xml_input_module, "check_bytes", recording_check)
+    monkeypatch.setattr(xml_input_module, "_parse_with_lines", recording_parse)
+    with pytest.raises(xml_input_module.UnsafeInputError) as excinfo:
+        xml_input_module.parse_archive(bundle, origin, limit)
+    assert handed == [limit + 1], handed
+    assert parsed == [], "the producer refused before the parse, so no tree was built"
+    message = str(excinfo.value)
+    assert "panorama:export" in message, "the refusal names the origin, not a path"
+    assert "limit of 200 bytes" in message
+
+
+def test_the_archive_producer_opens_no_file(xml_input_module, monkeypatch):
+    """Piece 13B.2 criterion 5: the producer reads no file, so the read-once rule holds for an archive read exactly as
+    it holds for a producer with no file behind it. The tar member is read from the bytes the producer expanded, so
+    the producer opens nothing and the door is handed the bytes it checks.
+    """
+    data = f'<?xml version="1.0"?>\n{BODY}'.encode()
+    real_open = Path.open
+    opened = []
+
+    def counting_open(self, *args, **kwargs):
+        opened.append(self)
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", counting_open)
+    origin = _api_origin(xml_input_module)
+    for shape in (_one_member(data), _one_member_tar(data)):
+        parsed = xml_input_module.parse_archive(shape, origin)
+        assert parsed.root.tag == "config"
+    assert opened == [], "the producer opened nothing"

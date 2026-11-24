@@ -9,12 +9,20 @@ refused or read. The document index is in [README.md](README.md). The read rule 
 
 ## 1. Facts measured, not pinned
 
-1. No producer decompresses anything. `src/xml_input.py` states no archive rule, and
-   `read_input` hands raw bytes to the door, so archive magic bytes reach `reject_dtd`, the
-   prolog scan cannot read them, and the parse answers the line the shape table states for the
-   magic-bytes row (`src/input_shapes.py`). The splitter's line for the shape it read is therefore only
-   reached when the bytes already are XML: a bundle member read after extraction, or a per-device
-   export.
+1. `src/xml_input.py` holds the archive producer, `parse_archive`, which reads the shape from the bytes and
+   expands one accepted member: the single-member gzip, and a gzip stream that holds a tar archive with exactly one
+   member. The producer runs no check, so `check_bytes` stays the one definition of the two checks and the door runs
+   them on the bytes the producer hands it, which for an accepted shape are the expanded bytes. The read cap is
+   applied while the bytes expand, at the count the read step already states, `max_input_bytes + 1`, so a bundle that
+   expands past the cap answers the size rule before the parse builds a tree. Bytes that are not an accepted shape
+   reach the door unchanged, so the parse answers the line the shape table states for the magic-bytes row, and the
+   producer writes no refusal wording of its own. A stream with more than one member is not an accepted shape,
+   because rule 4 has no owner to print its refusal, so this piece pins no answer for it. Pinned by
+   `tests/test_safe_input.py::test_the_archive_producer_runs_the_checks_on_the_bytes_it_expands`,
+   `tests/test_safe_input.py::test_the_cap_stops_the_expansion_before_a_tree_is_built`, and
+   `tests/test_safe_input.py::test_the_archive_producer_opens_no_file`. The splitter's line for the shape it read is
+   reached when the bytes the splitter sees are XML, which now includes a bundle the producer expanded, and a
+   per-device export.
 2. The splitter answers through `device_associations`, so the fact it can state is the row set
    it read: zero `device-group/entry` rows, and the shape the tree holds instead, which is the path the entry sits
    at. Piece 13A.2 wrote the line for that fact, so the run prints the fact through
@@ -39,17 +47,29 @@ refused or read. The document index is in [README.md](README.md). The read rule 
 ## 2. The archive producer (decision, 2026-11-23; rules 4 and 5 taken 2026-11-24)
 
 A gzip or tar.gz input is read through a producer behind the F5.1 door, so the F5.1 rule holds
-unchanged: adding a source means adding a producer, not a check. Rule 1 to rule 3 are rules that
-need an owner before the first piece lands; rule 4 and rule 5 are the two decisions, taken
+unchanged: adding a source means adding a producer, not a check. Rule 1 to rule 3 are the rules
+that needed an owner before the first piece landed; the producer `xml_input.parse_archive` is that
+owner, landed by Piece 13B.2 on 2026-11-24. Rule 4 and rule 5 are the two decisions, taken
 2026-11-24.
 
 1. `check_bytes` stays the one definition of the two checks, and the door runs them on the
-   bytes it parses — for an archive, the decompressed bytes.
+   bytes it parses — for an archive, the decompressed bytes. The producer states no check, so
+   the door runs the two checks on what the producer hands it. Pinned by
+   `tests/test_safe_input.py::test_the_archive_producer_runs_the_checks_on_the_bytes_it_expands`, which records what
+   the door is handed, and `tests/test_safe_input.py::test_file_producer_runs_the_checks_through_the_boundary`,
+   which reads the file producer for one shape of each kind.
 2. The size cap must be applied during decompression, not after. Without this the size check
    answers for the compressed file only, and a bundle that expands past the cap reaches the
-   parse. No second size definition may appear. Pending, Piece 13B.2.
+   parse. No second size definition may appear. The producer stops at the count the read step already states,
+   `max_input_bytes + 1`, and hands the bytes it expanded to the door, so the size rule stays `check_bytes` and
+   answers with the line the table holds for a size refusal, naming the origin. Landed by Piece 13B.2, pinned by
+   `tests/test_safe_input.py::test_the_cap_stops_the_expansion_before_a_tree_is_built` and
+   `tests/test_input_shapes.py::test_the_decompression_row_is_measured_against_the_expansion_and_not_the_compressed_size`.
 3. The shape is read from the magic bytes, not from the file extension, following the DTD
-   rule's shape: the check asks the parser, not a text search.
+   rule's shape: the check asks the parser, not a text search. The producer reads the shape through
+   `xml_input.GZIP_MAGIC` and `xml_input.TAR_MAGIC`, so the pins read it through the producer's own definitions and
+   hold no shape rule of their own. Pinned by
+   `tests/test_input_shapes.py::test_the_shape_is_decided_from_the_bytes_and_not_from_a_file_name`.
 4. **Taken 2026-11-24, the member rule.** One member is accepted: a single-member gzip, and a
    tar.gz that holds exactly one XML member. When the archive holds more than one XML member, the
    run reads one only when the operator declares which member to read, as an argument; with no

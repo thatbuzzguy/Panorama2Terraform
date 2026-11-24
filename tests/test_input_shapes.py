@@ -13,11 +13,14 @@ restates no row (`docs/INPUT_SHAPES.md` §3). These pins measure the table in fo
   refusal;
 - every accepted row answers no refusal when the shared read rule reads its content, and every pending row reads no
   owner today, so the table prints nothing for it and each pending row names the piece that will state its line;
+- the archive rows are read through the producer the table names, so the pins measure the shape from the bytes, and
+  the decompression row is measured against a limit that is above its content and below what its content expands to,
+  which is the only way the refusal it states can come from the expansion;
 
 The pins decide each shape from the row's bytes and not from a file name, and no row names a file name or a fixture.
-The pins call `xml_input.check_bytes`, `xml_input.read_input`, `xml_input.parse_bytes`, `state_input.parse_state` and
-`split_device_groups.console_lines` through each row's own `measured_through`, so this module holds no second size
-check, no second DTD rule, no second reader, and no second console line.
+The pins call `xml_input.check_bytes`, `xml_input.read_input`, `xml_input.parse_bytes`, `xml_input.parse_archive`,
+`state_input.parse_state` and `split_device_groups.console_lines` through each row's own `measured_through`, so this
+module holds no second size check, no second DTD rule, no second reader, and no second console line.
 """
 
 import ast
@@ -41,11 +44,17 @@ from conftest import FIXTURES_DIR, SRC_DIR, input_refusal, run_script
 # hold no reader of their own.
 OWNERS = {"xml_input": xml_input, "state_input": state_input, "split_device_groups": split_device_groups}
 
-# The limit the size pins measure against, which is under every row's content, so the size half of a refusal reads
-# as a plain byte count and the pins can compare the numbers a line prints. A row states the origin and the byte
-# counts as placeholders, which the pins fill with what they measure. Every other row is measured under the door's
-# default limit, so the size check cannot answer before the rule the row states.
+# The limit the size pins measure against, which is under every row's content that is not a compressed stream, so
+# the size half of a refusal reads as a plain byte count and the pins can compare the numbers a line prints. A row
+# states the origin and the byte counts as placeholders, which the pins fill with what they measure. Every other row
+# is measured under the door's default limit, so the size check cannot answer before the rule the row states.
 MEASURE_LIMIT = 10
+
+# The limit the decompression row is measured against. It sits above the row's compressed content and below what
+# that content expands to, so the refusal the pins read for that row can only come from the expansion, which is the
+# rule the row states. The pins read the shape through `xml_input.GZIP_MAGIC`, the producer's own definition, so the
+# pins hold no shape rule and no content of their own.
+EXPANSION_LIMIT = 120
 
 # The placeholders a line may hold, which are the only parts the pins measure. A part the row states as data, such
 # as the DTD name or the JSON key, is compared as wording and is not a placeholder.
@@ -100,8 +109,13 @@ def _origin(path: Path) -> xml_input.SourceOrigin:
 
 def _limit(row: dict) -> int:
     """The limit one row is measured against: the pins' own limit when the row's line carries `{limit}`, which is
-    the size half of a line, otherwise the door's default limit."""
-    return MEASURE_LIMIT if "{limit}" in row["printed_line"] else xml_input.DEFAULT_MAX_INPUT_BYTES
+    the size half of a line, otherwise the door's default limit. A compressed row is measured against the limit that
+    sits between its content and what its content expands to, so the refusal can only come from the expansion."""
+    if "{limit}" not in row["printed_line"]:
+        return xml_input.DEFAULT_MAX_INPUT_BYTES
+    if row["content"][: len(xml_input.GZIP_MAGIC)] == xml_input.GZIP_MAGIC:
+        return EXPANSION_LIMIT
+    return MEASURE_LIMIT
 
 
 def _answer(row: dict, path: Path) -> Exception | None:
@@ -111,7 +125,9 @@ def _answer(row: dict, path: Path) -> Exception | None:
         if reader is xml_input.read_input:
             path.write_bytes(row["content"])
             reader(path, _limit(row))
-        elif reader is xml_input.check_bytes:
+        elif reader in (xml_input.check_bytes, xml_input.parse_archive):
+            # The producer and the door take the limit the pins measure the row against, because the row states a
+            # size line. Every other owner is called with the content and the origin alone.
             reader(row["content"], _origin(path), _limit(row))
         else:
             reader(row["content"], _origin(path))
@@ -177,11 +193,11 @@ def test_the_table_is_data_with_one_row_shape():
         "a pending row states no line"
     )
     held_lines = _rows(input_shapes.STATUS_HELD, states_line=True)
-    assert len(held_lines) == 11, "the pins measure every held row that states a line"
-    assert len(_refusal_rows()) == 10, "the pins measure every held refusal row through its owner"
+    assert len(held_lines) == 12, "the pins measure every held row that states a line"
+    assert len(_refusal_rows()) == 11, "the pins measure every held refusal row through its owner"
     assert len(_console_rows()) == 1, "the pins measure the held console line row through its owner"
-    assert len(_rows(input_shapes.STATUS_HELD, states_line=False)) == 5, "the pins measure every accepted row"
-    assert len(_rows(input_shapes.STATUS_PENDING)) == 3, "the pins read the pending rows as pending"
+    assert len(_rows(input_shapes.STATUS_HELD, states_line=False)) == 7, "the pins measure every accepted row"
+    assert len(_rows(input_shapes.STATUS_PENDING)) == 2, "the pins read the pending rows as pending"
 
 
 def test_the_pins_define_no_row_shape_and_no_row_of_their_own():
@@ -239,9 +255,15 @@ def test_no_row_names_a_file_name_or_a_fixture():
 def test_the_shape_is_decided_from_the_bytes_and_not_from_a_file_name(tmp_path):
     """Criterion 4, measured: the same bytes answer the same way under three different names, so a name decides
     nothing. The magic-bytes row is refused under a name that says XML, and the accepted XML row is accepted under a
-    name that says archive, both read through the shared read rule (`tests/conftest.py::input_refusal`)."""
+    name that says archive, both read through the shared read rule (`tests/conftest.py::input_refusal`). The two
+    accepted archive rows answer the same way under the same three names, so the shape is read from the bytes and not
+    from the extension."""
     refused_row = _row("bytes the parser cannot read as one XML document, the magic bytes of a compressed member")
     accepted_row = _row("XML bytes, no DTD, within the input limit")
+    archive_rows = [
+        _row("a gzip stream that holds exactly one member, read through the archive producer"),
+        _row("a gzip stream that holds a tar archive with exactly one member, read through the archive producer"),
+    ]
     for name in ("shape.bin", "shape.xml", "shape.gz"):
         refused = tmp_path / name
         refused.write_bytes(refused_row["content"])
@@ -249,6 +271,30 @@ def test_the_shape_is_decided_from_the_bytes_and_not_from_a_file_name(tmp_path):
         accepted.write_bytes(accepted_row["content"])
         assert input_refusal(refused) is not None, (name, "the read rule refuses these bytes under any name")
         assert input_refusal(accepted) is None, (name, "the read rule accepts these bytes under any name")
+        for row in archive_rows:
+            shape = tmp_path / (name + ".shape")
+            shape.write_bytes(row["content"])
+            assert input_refusal(shape) is None, (name, row["shape"], "the read rule accepts this shape under any name")
+
+
+def test_the_decompression_row_is_measured_against_the_expansion_and_not_the_compressed_size(tmp_path):
+    """Criterion 8, the decompression half: the row's content is under the limit the pins measure it against, so the
+    size check passes for the compressed bytes and the refusal the row states can only come from what the content
+    expands to. The pins read the row through the producer, the owner the row names, and hold that the answer is the
+    line the door states for a size refusal, with the origin and the limit as the parts the pins measure. The row
+    states no size number, because the pins cannot read an expansion as a content size."""
+    row = _row(
+        "the bytes a compressed stream expands to, past the input limit, refused while the cap is applied during "
+        "decompression"
+    )
+    assert len(row["content"]) < EXPANSION_LIMIT, (row["shape"], "the compressed bytes pass the size check")
+    path = tmp_path / "input"
+    error = _answer(row, path)
+    assert error is not None, (row["shape"], "the producer refuses this shape before the parse")
+    assert panorama_to_terraform.is_refusal(error), (row["shape"], "the refusal kind is the one the door states")
+    assert "{size}" not in row["printed_line"], (row["shape"], "the pins state no size they cannot read from the row")
+    assert _printed(error) == _line(row, path), (row["shape"], "the printed line is the row's wording")
+    assert f"limit of {EXPANSION_LIMIT} bytes" in _printed(error), (row["shape"], "the line names the limit")
 
 
 def test_the_dtd_row_is_measured_by_the_parser_and_not_by_a_text_search(tmp_path):
@@ -367,10 +413,11 @@ def test_a_pending_row_states_no_line_and_names_the_piece_that_will_state_its_li
 def test_the_pending_rows_name_pieces_and_no_taken_decision():
     """The status rule read as a set (`docs/INPUT_SHAPES.md` §3 rule 3): the pending rows name the pieces that will
     state their lines, so a row that names a §2 decision would name a decision this piece took. Both §2 decisions are
-    taken, so the pending set is the three pieces, one for each rule that still needs an owner. The splitter row is
-    held, because the run prints the line Piece 13A.2 wrote for it, and no pending row holds a line."""
+    taken, so the pending set is the two pieces that still need an owner. The splitter row is held, because the run
+    prints the line Piece 13A.2 wrote for it, and no pending row holds a line. The archive rows are held, because the
+    producer Piece 13B.2 wrote measures them."""
     pending = {row["pending_on"] for row in input_shapes.SHAPE_TABLE if row["status"] == input_shapes.STATUS_PENDING}
-    assert pending == {"Piece 13B.2", "Piece 13B.3", "Piece 13B.4"}, pending
+    assert pending == {"Piece 13B.3", "Piece 13B.4"}, pending
     for row in input_shapes.SHAPE_TABLE:
         assert not (row["status"] == input_shapes.STATUS_PENDING and row["printed_line"]), (row["shape"], "both")
 

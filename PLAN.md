@@ -107,10 +107,11 @@ Two more decisions, taken 2026-11-24, are in the design record §2:
    the member name enters the record as a field the file case does not have. The cache rule for an archive entry is
    not decided, so Piece 13B.3 decides it with its owner.
 
-The shape table has its owner module since Piece 13A.1, so each rule that still needs an owner is a pending row that
-names the piece, and a decision that is taken moves its row in the same commit. No archive row is held yet, because
-no owner function reads a member list or the decompressed bytes, and the pins read a held row only through an owner
-function they call.
+Decision 2 landed 2026-11-24 with Piece 13B.2, through `xml_input.parse_archive`, so the cap is applied while the
+bytes expand and the accepted shape rows and the decompression row are held, measured through the producer. The shape
+table has its owner module since Piece 13A.1, so each rule that still needs an owner is a pending row that names the
+piece, and a decision that is taken moves its row in the same commit. Decision 4's refusal still has no owner, so its
+row stays pending until Piece 13B.4 writes it.
 Measured on three legs of the "XML and XPath" page — the 9.1 (EoL) leg and the 11.1 & Later leg on 2026-11-23,
 and the 10.2 leg on 2026-11-24 — the node model and the entry shape are the same on each, so the read layer agrees
 with the documented shape on all three. The 10.2 leg was read through a stored capture, because its live address

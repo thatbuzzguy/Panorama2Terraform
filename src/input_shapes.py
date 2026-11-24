@@ -35,7 +35,10 @@ Seven rules, stated once here. The table is data, so a document links to it and 
    the owner does.
 7. **The content is the smallest document that shows the shape**, so a pin can read a shape without a committed
    fixture. The committed fixture pair is Piece 13A.3 and adds no row here. Each content is well under the input
-   limit, so the size half of a refusal reads as a plain byte count.
+   limit, so the size half of a refusal reads as a plain byte count. An archive row shows its shape as the compressed
+   stream, because the shape is the stream and not the text inside it, so its content is one literal stream and no
+   call builds it. The decompression row's content is the smallest stream that shows the shape: it is under the limit
+   the pins measure it against, and it expands past that limit, so the refusal can only come from the expansion.
 """
 
 # One row shape, read by the pins and named by the `docs/ARCHITECTURE.md` §1 rule column.
@@ -208,13 +211,54 @@ SHAPE_TABLE = (
         "measured_through": "split_device_groups.console_lines",
     },
     {
-        "shape": "a single-member gzip, or a tar.gz with one XML member, read through the archive producer",
-        "content": b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x00not xml",
-        "entry_point": "none",
+        "shape": "a gzip stream that holds exactly one member, read through the archive producer",
+        # One member, written as a stored block so the XML inside it can be read from the literal. The header states
+        # no name, so the stream is the smallest one that shows the shape.
+        "content": (
+            b'\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x00\x01=\x00\xc2\xff<?xml version="1.0"?>\x0a<config><entry n'
+            b'ame="host-1"/></config>Q\x9d:\xd2=\x00\x00\x00'
+        ),
+        "entry_point": "every entry point",
         "printed_line": "",
-        "status": "pending",
-        "pending_on": "Piece 13B.2",
-        "measured_through": "",
+        "status": "held",
+        "pending_on": "",
+        "measured_through": "xml_input.parse_archive",
+    },
+    {
+        "shape": "a gzip stream that holds a tar archive with exactly one member, read through the archive producer",
+        # One tar member, so the stream holds the header block, the data block and the terminator. The member names
+        # no file, and its content is the accepted XML row's content.
+        "content": (
+            b"\x1f\x8b\x08\x00~\xfc\x05k\x02\xff\xed\xd2\xb1\x0a\xc20\x14\x85\xe1\xcc>E\xc8\xaeM\xb0\x9a%m\x9f\xa5"
+            b"\x94\xa8\x05\x9b@\x1bE\xdf\xde\x10\x04\xc1]\x1d\xfc\xbf\xe5\\\xce\x1d\xeer\x87\x18\x0e\xe3Q|\x94\xce"
+            b"\xf6u]2{O\xad\xed\xee5\x97\xde\x9a\xad\x15R\x8b/\xb8,\xa9\x9f\xf3I\xf1\x9f\\w\x9b\xce\xf2\xea\xe7e"
+            b"\x8c\xa1Qf\xa3U\xd7\xae\xdcP\xde\xa2u>\xa4\xf9.C?\xf9F\x9d\xe2\x92\xd6FU\xad\xab\x9ek\x01\x00\x00"
+            b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf8\x95\x07\xe3\x1a`$\x00(\x00\x00"
+        ),
+        "entry_point": "every entry point",
+        "printed_line": "",
+        "status": "held",
+        "pending_on": "",
+        "measured_through": "xml_input.parse_archive",
+    },
+    {
+        "shape": (
+            "the bytes a compressed stream expands to, past the input limit, refused while the cap is applied "
+            "during decompression"
+        ),
+        # The content is under the limit the pins measure this row against and expands past it, so the refusal can
+        # only come from the expansion. The pins read the row through the producer, which is where the cap is applied.
+        "content": (
+            b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff\xb3\xb1\xaf\xc8\xcdQ(K-*\xce\xcc\xcf\xb3U2\xd43P\xb2\xb7"
+            b"\xe3\xb2I\xce\xcfK\xcbL\xb7\xb3I\xcd+)\xaaT\xc8K\xccM\xb5U\xca\xc8/.\xd15T\xb2\xb3II-N.\xca,(\x01"
+            b"\xea\xb0K$\x11\xd8\xe8#\xeb\xb6\xd1\x07[\x00\xa4\xa1\x16\x02\x00^\xc8/C\x8f\x00\x00\x00"
+        ),
+        "entry_point": "none",
+        "printed_line": "Error: refusing to read {origin}: the input is larger than the limit, which exceeds the "
+        "input limit of {limit} bytes. Pass --max-input-bytes N to raise the limit for a trusted file.",
+        "status": "held",
+        "pending_on": "",
+        "measured_through": "xml_input.parse_archive",
     },
     {
         "shape": "a bundle that holds more than one XML member, refused when the operator names no member",

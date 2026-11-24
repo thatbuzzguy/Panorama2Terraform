@@ -733,7 +733,20 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   through, and a pin that read archive bytes through a reader of its own would state a second rule. A pending row
   must also show its shape in bytes, so a shape the pins cannot read from bytes — an empty stream with no member, or
   a member count — stays pending. No committed archive file is added, because no pin runs on it. The three pending
-  rows name the pieces that will give their rules an owner: Piece 13B.2, Piece 13B.3, Piece 13B.4.
+  rows name the pieces that will give their rules an owner: Piece 13B.3 and Piece 13B.4.
+
+- Finding, measured 2026-11-24 on Piece 13B.2: the archive shape rows are held, because the producer
+  `xml_input.parse_archive` is an owner the pins can call, so a row that names an accepted shape has an owner to read
+  it through. No committed archive file is added, and none can be: `tests/fixtures/` is corpus material the fixture
+  assembler reads with the two checks on the committed bytes, and a compressed stream cannot be read by that rule, so
+  a compressed fixture would be skipped and would show no shape. The committed material for an archive shape is the
+  table's own content, which must be one literal stream, because the table module states no rule an owner states and
+  the pins read the table through `ast`, so no call may build a row's content. The pins measure the decompression row
+  against a limit they hold as their own constant, which sits between the row's content and what that content expands
+  to; the row states no byte count, because the pins cannot read an expansion as a content size, and §3 rule 2 forbids
+  a row stating a number the pins cannot read from it. What stays open is the cache rule and the record field the
+  member name enters, which Piece 13B.3 decides, and the member-selection argument and the refusal it prints, which
+  Piece 13B.4 writes.
 
 - Finding, measured 2026-11-24 on the 10.2 leg of the "XML and XPath" page. The live page address
   `https://docs.paloaltonetworks.com/pan-os/10-2/pan-os-panorama-api/about-the-pan-os-xml-api/structure-of-a-pan-os-xml-api-request/xml-and-xpath`

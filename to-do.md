@@ -14,13 +14,10 @@ owner its rule states, and Phase 13C needs no decision.
 
 ### Phase 13B, the archive producer
 
-The two `docs/INPUT_SHAPES.md` §2 decisions are taken (2026-11-24), so the pieces can be written. Each piece still
-needs an owner before its rule can be measured: no owner function reads a member list or the decompressed bytes
-today, so the three pending rows in `src/input_shapes.py` name these pieces. The member declaration is an operator
-argument held by the CLI, not by a rule owner, so it lands with the CLI argument rule that Piece 13B.4 writes.
-
-- **13B.2** — the size rule during decompression: the cap is enforced as the bytes expand, so a refusal names the
-  origin and builds no tree, and no second size definition appears.
+Piece 13B.2 landed the owner its rule states, `xml_input.parse_archive`, on 2026-11-24, so the accepted shape rows
+and the decompression row are held and measured through it. Each remaining piece still needs its own owner: the two
+pending rows in `src/input_shapes.py` name these pieces. The member declaration is an operator argument held by the
+CLI, not by a rule owner, so it lands with the CLI argument rule that Piece 13B.4 writes.
 - **13B.3** — the provenance facts for an archive read: the origin kind, the member name as a field the file case
   does not have, and how the cache rule reads for an archive. The record names the decompressed bytes, so the cache
   rule is the part that stays open.

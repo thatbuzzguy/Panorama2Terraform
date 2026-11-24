@@ -48,6 +48,14 @@ producer and keeps the size check before the read. A producer that hands bytes w
 file behind it gets the same refusal as a file. The tree shape does not change, so the
 container table, the entry ledger, the parent walk and the line map are unchanged.
 
+F5.1 also holds the archive producer, `parse_archive`. The shape is read from the bytes
+and not from a name, and one accepted member is expanded: a single-member gzip, and a gzip
+stream that holds a tar archive with exactly one member. The two checks run on the bytes the
+producer hands the door, which for an accepted shape are the expanded bytes. The read cap is
+applied while the bytes expand, so a bundle that expands past the cap is refused before a tree
+is built. The producer adds no check and no refusal wording: a shape it does not accept is
+handed to the door unchanged, and the parse answers it with the line the shape table holds.
+
 F5.3 records the size and the SHA-256 hex of the bytes the door parsed, so the
 provenance record names the bytes it checked, not whatever file stands at the origin
 path now. The door is the only place that can know which bytes were parsed.
@@ -98,8 +106,11 @@ Usage:
 
 import argparse
 import hashlib
+import io
+import tarfile
 import xml.etree.ElementTree as ET
 import xml.parsers.expat as expat
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -117,6 +128,13 @@ ENTRY_SEGMENT = "entry"
 # are the characters a source may state as content, so the door does not refuse them.
 CONTROL_CHARS = {chr(code) for code in range(0x20)} | {chr(0x7F)}
 ESCAPE_SHAPES = frozenset("\t\r\n")
+
+# The shape the archive producer reads from the bytes, not from a name (`docs/INPUT_SHAPES.md` §2 rule 3): the gzip
+# magic, and the tar magic that a tar header states at byte 257. A stream that holds one of these is read by the
+# producer; every other shape is answered by the door.
+GZIP_MAGIC = b"\x1f\x8b"
+TAR_MAGIC = b"ustar"
+TAR_MAGIC_AT = 257
 
 
 def control_chars(text: str) -> list[str]:
@@ -439,16 +457,80 @@ def parse_bytes(data: bytes, origin: SourceOrigin, max_input_bytes: int = DEFAUL
     return _parse_with_lines(data, origin)
 
 
-def parse_xml(path, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ParsedSource:
-    """The file producer (F5.1): read the file, then check and parse the bytes.
+def _single_tar_member(data: bytes) -> bytes | None:
+    """The content of the only member of a tar archive, or None when the archive holds no single member.
 
-    The size is checked before the read, so an over-limit file is never allocated.
-    The bytes that passed both checks are the bytes that are parsed, so the input is
-    read once and no check can be handed different bytes.
+    `data` is already expanded, so this reads the archive structure and not a compressed stream: the producer
+    expands once. A stream the tar reader cannot read, or one that holds more than one member, is not an accepted
+    shape, so this answers None and the door answers the bytes with the line the shape table already holds.
+    """
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
+            members = [member for member in archive if member.isfile()]
+            if len(members) != 1:
+                return None
+            handle = archive.extractfile(members[0])
+            return None if handle is None else handle.read()
+    except tarfile.TarError:
+        return None
+
+
+def _expand_one_member(data: bytes, max_input_bytes: int) -> bytes | None:
+    """Expand one accepted gzip member, or None when the bytes are not an accepted shape.
+
+    The read stops at `max_input_bytes + 1`, which is the cap `read_input` already states, applied while the bytes
+    expand. This states no size rule of its own: `check_bytes` stays the one definition of the size check, and the
+    door runs it on the bytes this function hands back, so a bundle that expands past the cap is refused before a
+    tree is built, and without the whole expansion being read.
+
+    A stream with more than one member is not an accepted shape. The refusal the member rule prints for it has no
+    owner yet (`docs/INPUT_SHAPES.md` §2 rule 4, Piece 13B.4), so this function states no refusal: it answers None,
+    the producer hands the bytes to the door unchanged, and the parse answers them.
+    """
+    if not data.startswith(GZIP_MAGIC):
+        return None
+    reader = zlib.decompressobj(16 | zlib.MAX_WBITS)
+    try:
+        expanded = reader.decompress(data, max_input_bytes + 1)
+    except zlib.error:
+        # A stream with the magic and no readable member is not an accepted shape, so the door gets the bytes
+        # unchanged and the parse answers them with the line the shape table holds for them.
+        return None
+    if len(expanded) > max_input_bytes:
+        # The cap stopped the expansion. These are the bytes the door checks, so the size refusal is the answer.
+        return expanded
+    if not reader.eof or reader.unused_data:
+        return None
+    if expanded[TAR_MAGIC_AT : TAR_MAGIC_AT + len(TAR_MAGIC)] == TAR_MAGIC:
+        return _single_tar_member(expanded)
+    return expanded
+
+
+def parse_archive(data: bytes, origin: SourceOrigin, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ParsedSource:
+    """The archive producer (F5.1): read the shape from the bytes, expand one member, hand the bytes to the door.
+
+    Adding a source means adding a producer, not a check, so this function runs no check and states no refusal: the
+    two checks stay `check_bytes`, run by the door on the bytes the producer hands it, which for an accepted shape
+    are the expanded bytes. Bytes that are not an accepted shape are handed to the door unchanged, so the answer a
+    producer gets for them is the answer the door already gives.
+
+    Raises UnsafeInputError for a size or DTD refusal, and
+    xml.etree.ElementTree.ParseError for malformed XML.
+    """
+    member = _expand_one_member(data, max_input_bytes)
+    return parse_bytes(data if member is None else member, origin, max_input_bytes)
+
+
+def parse_xml(path, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ParsedSource:
+    """The file producer (F5.1): read the file, hand the bytes to the producer, and parse what the door checks.
+
+    The size is checked before the read, so an over-limit file is never allocated. The shape is read from the bytes
+    the read returned, and the bytes that passed both checks are the bytes that are parsed, so the input is read
+    once and no check can be handed different bytes.
     """
     origin = SourceOrigin.for_path(Path(path))
     data = read_input(origin.path, max_input_bytes)
-    return parse_bytes(data, origin, max_input_bytes)
+    return parse_archive(data, origin, max_input_bytes)
 
 
 def positive_int(text: str) -> int:
