@@ -1,56 +1,61 @@
 # Agent Status
 
-## Current position (main, Piece 13A.4, 2026-11-24)
+## Current position (main, Piece 13B.1, 2026-11-24)
 
-Piece 13A.4 is complete on main, 2026-11-24, and is not pushed. It is the documentation comparison, the fourth
-piece of Epic 13, and it closes Phase 13A. The piece measured the 10.2 leg of the PAN-OS API documentation page
-"XML and XPath", and changed no code, no test and no fixture, so the shape table gained no row and no row's
-`measured_through` moved: the table holds byte shapes that a pin can read through an owner module, and what a
-documentation page states is not a byte shape.
+Piece 13B.1 is complete on main, 2026-11-24, and is not pushed. It records the two `docs/INPUT_SHAPES.md` §2
+decisions the owner took on 2026-11-24 — the member rule, and which bytes the provenance record names for an archive
+read — and moves the table rows and the pins those decisions settle. It builds no archive producer, so no rule lands
+as code.
 
-What the 10.2 leg answered, measured 2026-11-24:
+The two decisions, as recorded in `docs/INPUT_SHAPES.md` §2:
 
-- The live page address for the leg answers `301` to
-  `https://docs.paloaltonetworks.com/ngfw/api/getting-started/structure-of-a-pan-os-xml-api-request`, which is the
-  unversioned page and states no node model and no entry shape, so the live leg has no 10.2 form to read. The
-  redirect is the finding in `backlog.md`, with the date and the address that answered.
-- The leg was read through a stored capture of that address, capture `20250602181153`, which answers `200` for the
-  10.2 page. It states the four node types — root, element, attribute, text — and the entry shape
-  `<entry name=...>`, where the entry name is an attribute node, the name/value pair. The two captures from 2026
-  (`20260130182944` and `20260131063159`) answer the same redirect, so the stored 10.2 form ends at the 2025-06-02
-  capture.
-- The 9.1 leg and the 11.1 & Later leg were read again on 2026-11-24 and answer `200`. Each states the same four
-  node types and the same entry shape, so all three legs agree with each other, and the read layer agrees with the
-  documented shape on all three: `xml_input.ENTRY_SEGMENT` names the `entry` segment, and the entry name is read
-  from the `name` attribute. The measurement is `docs/INPUT_SHAPES.md` §1 fact 4.
-- Measured through the read rule on the committed corpus: 72 files under `tests/fixtures/`, 69 accepted, 3 skipped
-  (`hostile_bad_control_char.xml`, `hostile_billion_laughs.xml`, `hostile_xxe.xml`). The accepted set holds 576
-  `entry` elements, and 4 of them carry no `name` attribute, in `entry_gaps.xml`, `filter_containers.xml` and
-  `robust_empty_names.xml`; those are the entries the report path names, so the corpus states the documented entry
-  shape and the case where an entry carries none.
+- The member rule: one member is accepted, which is a single-member gzip and a tar.gz that holds exactly one XML
+  member. A bundle with more than one XML member is read only when the operator declares which member to read, as an
+  argument; with no declaration the run refuses. A selection that reads the member order stays refused by the
+  determinism rule (`docs/ARCHITECTURE.md` §6). The declaration is held by the CLI, not by a rule owner, and the
+  shape is still read from the bytes, so no rule about a name changes.
+- The provenance bytes: for an archive read the record names the decompressed bytes, because F5.3 states that the
+  record names the bytes the door checked and §2 rule 1 states that the door checks the decompressed bytes.
+  `SourceOrigin.kind` names the archive, and the member name enters the record as a field the file case does not
+  have. The cache rule for an archive entry stays open and is Piece 13B.3's.
+
+What moved:
+
+- No archive row moved from `pending` to `held`. `held` is a row the pins measure through the owner function the row
+  names, and the owners `tests/test_input_shapes.py` calls are `xml_input`, `state_input` and `split_device_groups`:
+  none of them reads a member list or the decompressed bytes. Measured offline on 2026-11-24, `check_bytes` answers
+  compressed bytes with no archive rule at all — the size half answers on the bytes handed and the DTD half finds no
+  prolog in them — and the parse answers the magic-bytes line, so the answer for archive bytes today is the line the
+  magic-bytes row states, not an accepted shape. The finding is in `backlog.md`.
+- The three pending rows now name the piece that will give their rules an owner, because no §2 decision is open:
+  Piece 13B.2 for the accepted single-member row, Piece 13B.3 for the row that names the record's bytes, and
+  Piece 13B.4 for the row the member rule refuses. Two rows also state the fact the decisions settled: the refused
+  bundle row states that no declaration is what makes it a refusal, and the provenance row states that the bytes the
+  record names are the decompressed ones.
+- The pins move in the same commit: `tests/test_input_shapes.py::test_a_pending_row_states_no_line_and_names_the_piece_that_will_state_its_line`
+  and `tests/test_input_shapes.py::test_the_pending_rows_name_pieces_and_no_taken_decision` read the decision as
+  data, so no pin runs an archive. No fixture is added, so the fixture-count pins do not move and no test function
+  is added or removed.
+- `docs/INPUT_SHAPES.md` §3 rule 3 states that a pending row names the piece that will give its rule an owner once
+  its decision is taken, and that a pending row cannot be held by a decision alone.
 
 Gate, measured 2026-11-24 single-threaded on the tree that holds this work: `ruff check .` clean at `py310`,
 `ruff format --check .` clean on the 112 files it reads (82 Python, 30 markdown),
-`python3 tools/check_documents.py` reports no finding in 9.7 s, and `python3 -m pytest` in one process, with no
+`python3 tools/check_documents.py` reports no finding in 10.9 s, and `python3 -m pytest` in one process, with no
 parallel plugin, exits 0 with 1,835 passed and the same 4 `tflint` skips, so 1,839 pins in 55 test modules, in
-258.58 s. No test and no `src/` file changed, so every count is the Piece 13A.3 baseline. `tflint` is absent, so the
-4 skips are the `tflint` pins in `tests/test_sanity_gate.py`; `terraform` (1.16.2 on this machine) is present, so the
-provider-schema pins ran. No `src/` file changed, so the `docs/LICENSING.md` counts did not move.
-
-Findings this piece reports:
-
-- The 10.2 leg's answer comes from a stored capture, because the live address answers a redirect. Nothing in the
-  tree reads a documentation page, so no pin can hold the comparison and a re-measurement of that leg can only read
-  an archive copy. Recorded in `backlog.md`.
+362.85 s; the same run on the tree before the tracking markdown was written took 348.71 s. Every count is the Piece
+13A.4 baseline at `81eb6b0`, because no fixture, no test function, and no `src/` rule changed. `tflint` is absent,
+so the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py`; `terraform` (1.16.2 on this machine) is
+present, so the provider-schema pins ran. No `src/` rule changed, so the `docs/LICENSING.md` counts did not move.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`commit.md`, `README.md`, `docs/INPUT_SHAPES.md`, `docs/API_DOCUMENTATION_AND_MOCKS.md`, `docs/README.md`,
-`tools/check_documents.py`, `tools/build_kitchen_sink.py`, `src/input_shapes.py`, `src/xml_input.py`,
-`pyproject.toml`, and the corpus through the read rule.
+`commit.md`, `README.md`, `docs/README.md`, `docs/INPUT_SHAPES.md`, `docs/ARCHITECTURE.md` §3, §3.3 and §6,
+`src/input_shapes.py`, `src/xml_input.py`, `tests/test_input_shapes.py`, `tests/conftest.py`,
+`tools/check_documents.py`, `pyproject.toml`.
 
-The next piece is Phase 13B, the archive producer and its pins, which needs the two open `docs/INPUT_SHAPES.md` §2
-decisions taken: the rule for a bundle with more than one XML member (decision 4), and which bytes the provenance
-record names for an archive read (decision 5). Phase 13C, the documents, needs no decision.
+The next piece is Piece 13B.2, the size rule during decompression, which needs an owner before the accepted archive
+row can be held. Piece 13B.3 takes the cache rule for an archive entry, and Piece 13B.4 writes the producer and its
+pins. Phase 13C needs no decision.
 
 ## Rules to keep when writing documents
 
@@ -108,9 +113,10 @@ record names for an archive read (decision 5). Phase 13C, the documents, needs n
 - The input shape table is data with one owner module (`src/input_shapes.py`, `SHAPE_TABLE`), so a document links to
   it and restates no row, which `tools/check_documents.py` check 7 reads, and each held row is measured through the
   owner its `measured_through` names, so an owner that rewords a refusal moves the row in the same commit. A pending
-  row states no line and names no owner until its decision is taken, so no pin measures a line for it. A row whose
-  line is a console line holds no prefix, because the prefix is the part `container_coverage` states, so the pin reads
-  the prefix through that owner.
+  row states no line and names no owner, so no pin measures a line for it, and a pending row names the piece that
+  will give its rule an owner once its decision is taken: a decision cannot hold a row by itself, because the pins
+  read a held row only through an owner function they call. A row whose line is a console line holds no prefix,
+  because the prefix is the part `container_coverage` states, so the pin reads the prefix through that owner.
 - `state_coverage.ownership_key` is the one identity key rule, so the shadow scan, the ownership order and the
   state scan read their keys through it and no module states a second key. The key names the parent scope for a
   shadow, so the report line names which parent entry the child repeats, and the parent entry stays in the

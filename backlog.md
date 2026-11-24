@@ -721,10 +721,19 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
      which one a bundle holds is a live fact.
   2. Whether a PAN-OS backup XML declares a DOCTYPE. If it does, the door refuses every backup
      file, and the archive piece needs a documented way in rather than a second check.
-  3. Whether a backup bundle can hold more than one XML member (HA Panorama, multi-tenant). This
-     gates the member decision in `docs/INPUT_SHAPES.md` §2.
+  3. Whether a backup bundle can hold more than one XML member (HA Panorama, multi-tenant), which states how often
+     the refusal the member rule prints is reached in practice. The rule is decided, so this fact no longer gates it.
   4. A committed sample bundle, if one can be redacted, turns facts 1 to 3 from live facts into
      measurements read through the fixture rules.
+
+- Finding, measured 2026-11-24 on Piece 13B.1: the two decisions settle shapes the pins cannot read today, so no
+  archive row moves from `pending` to `held`. `tests/test_input_shapes.py` reads a held row through the owner
+  function the row names, and the owners it calls are `xml_input`, `state_input` and `split_device_groups`; none of
+  them reads a member list or the decompressed bytes, so a row that names a member shape has no owner to read it
+  through, and a pin that read archive bytes through a reader of its own would state a second rule. A pending row
+  must also show its shape in bytes, so a shape the pins cannot read from bytes — an empty stream with no member, or
+  a member count — stays pending. No committed archive file is added, because no pin runs on it. The three pending
+  rows name the pieces that will give their rules an owner: Piece 13B.2, Piece 13B.3, Piece 13B.4.
 
 - Finding, measured 2026-11-24 on the 10.2 leg of the "XML and XPath" page. The live page address
   `https://docs.paloaltonetworks.com/pan-os/10-2/pan-os-panorama-api/about-the-pan-os-xml-api/structure-of-a-pan-os-xml-api-request/xml-and-xpath`

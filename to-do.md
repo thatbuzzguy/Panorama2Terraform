@@ -9,24 +9,24 @@ piece are in `acceptance.md`, with pointers to the Epic 13 and Epic 14 records.
 
 Planned in the `input-shapes` worktree, 2026-11-23. The decisions are in `PLAN.md`, the criteria
 are in `acceptance.md`, and the live facts are in `backlog.md`. Phase 13A is complete as of 2026-11-24, so its
-pieces are in the git history. Each remaining piece needs a decision, or a fact a live target states.
+pieces are in the git history. Phase 13B's two decisions are taken on 2026-11-24, so each remaining piece needs the
+owner its rule states, and Phase 13C needs no decision.
 
 ### Phase 13B, the archive producer
 
-Blocked on the two open `docs/INPUT_SHAPES.md` §2 decisions: the rule for a bundle with more than one XML member
-(decision 4), and which bytes the provenance record names for an archive read (decision 5).
+The two `docs/INPUT_SHAPES.md` §2 decisions are taken (2026-11-24), so the pieces can be written. Each piece still
+needs an owner before its rule can be measured: no owner function reads a member list or the decompressed bytes
+today, so the three pending rows in `src/input_shapes.py` name these pieces. The member declaration is an operator
+argument held by the CLI, not by a rule owner, so it lands with the CLI argument rule that Piece 13B.4 writes.
 
-- **13B.1** — the member decision: single-member gzip and single-XML-member tar.gz are accepted;
-  a bundle with more than one XML member is refused until a selection rule exists, and a
-  selection that reads member order is refused by the determinism rule, so the decision stays
-  open until it is taken.
-- **13B.2** — the size rule during decompression: the cap is enforced as the bytes expand, so a
-  refusal names the origin and builds no tree, and no second size definition appears.
-- **13B.3** — the provenance facts for an archive read: the origin kind, the member name as a
-  field the file case does not have, which bytes `size` and `sha256` name, and how the cache rule
-  reads for an archive.
-- **13B.4** — the pins: both checks run on the decompressed bytes through the door, no producer
-  bypasses them, and the archive path adds a producer and no check.
+- **13B.2** — the size rule during decompression: the cap is enforced as the bytes expand, so a refusal names the
+  origin and builds no tree, and no second size definition appears.
+- **13B.3** — the provenance facts for an archive read: the origin kind, the member name as a field the file case
+  does not have, and how the cache rule reads for an archive. The record names the decompressed bytes, so the cache
+  rule is the part that stays open.
+- **13B.4** — the pins: both checks run on the decompressed bytes through the door, no producer bypasses them, and
+  the archive path adds a producer and no check. The member rule's owner, and the refusal it prints for a bundle with
+  no declaration, land with this piece.
 
 ### Phase 13C, the documents
 

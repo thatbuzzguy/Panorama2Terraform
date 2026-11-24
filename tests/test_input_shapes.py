@@ -12,7 +12,7 @@ restates no row (`docs/INPUT_SHAPES.md` §3). These pins measure the table in fo
   through the module that owns the shape, because a console line row is the fact an entry point read rather than a
   refusal;
 - every accepted row answers no refusal when the shared read rule reads its content, and every pending row reads no
-  owner today, so the table prints nothing for it.
+  owner today, so the table prints nothing for it and each pending row names the piece that will state its line;
 
 The pins decide each shape from the row's bytes and not from a file name, and no row names a file name or a fixture.
 The pins call `xml_input.check_bytes`, `xml_input.read_input`, `xml_input.parse_bytes`, `state_input.parse_state` and
@@ -335,14 +335,22 @@ def test_a_held_console_row_prints_the_fact_through_the_block_its_owner_states(r
 
 
 @pytest.mark.parametrize("row", _rows(input_shapes.STATUS_PENDING))
-def test_a_pending_row_states_no_line_and_names_the_decision_it_waits_for(row, tmp_path):
-    """Criterion 5: a pending row states no line, names the decision or the piece it waits for, names no entry point
-    and no owner, so the pins can read nothing from it. Today its bytes are answered only by a held row that shows
-    the same bytes, which is what the pins measure."""
+def test_a_pending_row_states_no_line_and_names_the_piece_that_will_state_its_line(row, tmp_path):
+    """The pending half of the status rule (`docs/INPUT_SHAPES.md` §3 rule 3), measured: a pending row states no
+    line, names the piece that will state its line, names no entry point and no owner, so the pins can read nothing
+    from it. Today its bytes are answered only by a held row that shows the same bytes, which is what the pins
+    measure."""
     assert row["printed_line"] == "", (row["shape"], "no line exists for a pending row yet")
-    assert row["pending_on"], (row["shape"], "a pending row names the decision or the piece it waits for")
+    assert row["pending_on"], (row["shape"], "a pending row names the piece that will state its line")
+    assert row["pending_on"].startswith("Piece "), (
+        row["shape"],
+        "a pending row names a piece, because both §2 decisions are taken",
+    )
     assert row["entry_point"] == "none", (row["shape"], "no entry point reads a pending shape today")
-    assert row["measured_through"] == "", (row["shape"], "the pending rule has no owner yet")
+    assert row["measured_through"] == "", (
+        row["shape"],
+        "the pending rule has no owner, so no pin can hold this row as measured",
+    )
     same_bytes = [row2 for row2 in _rows(input_shapes.STATUS_HELD) if row2["content"] == row["content"]]
     assert same_bytes, (row["shape"], "the same bytes are answered today by a held row")
     for held in same_bytes:
@@ -356,12 +364,13 @@ def test_a_pending_row_states_no_line_and_names_the_decision_it_waits_for(row, t
             )
 
 
-def test_the_pending_rows_are_the_open_decisions():
-    """Criterion 5, read as a set: the pending rows name the two open §2 decisions, so a decision that lands moves a
-    row in the same commit, and no pending row holds a line. The splitter row is held now, because the run prints the
-    line Piece 13A.2 wrote for it."""
+def test_the_pending_rows_name_pieces_and_no_taken_decision():
+    """The status rule read as a set (`docs/INPUT_SHAPES.md` §3 rule 3): the pending rows name the pieces that will
+    state their lines, so a row that names a §2 decision would name a decision this piece took. Both §2 decisions are
+    taken, so the pending set is the three pieces, one for each rule that still needs an owner. The splitter row is
+    held, because the run prints the line Piece 13A.2 wrote for it, and no pending row holds a line."""
     pending = {row["pending_on"] for row in input_shapes.SHAPE_TABLE if row["status"] == input_shapes.STATUS_PENDING}
-    assert pending == {"§2 decision 4", "§2 decision 5"}, pending
+    assert pending == {"Piece 13B.2", "Piece 13B.3", "Piece 13B.4"}, pending
     for row in input_shapes.SHAPE_TABLE:
         assert not (row["status"] == input_shapes.STATUS_PENDING and row["printed_line"]), (row["shape"], "both")
 

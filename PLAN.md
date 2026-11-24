@@ -96,10 +96,21 @@ Three decisions, taken 2026-11-23:
    source line — instead of the current guess, through the console-line owner or the report. The
    exit code does not change.
 
-Open decisions stay in the design record §2 until each is taken: the rule for a bundle with more
-than one XML member, and which bytes the provenance record names for an archive read. The shape
-table has its owner module since Piece 13A.1, so each open decision is a pending row that names the
-decision, and a decision that is taken moves its row in the same commit.
+Two more decisions, taken 2026-11-24, are in the design record §2:
+
+4. **The member rule.** One member is accepted: a single-member gzip, and a tar.gz that holds exactly one XML
+   member. A bundle with more than one XML member is read only when the operator declares which member to read, as
+   an argument held by the CLI; with no declaration the run refuses. A selection that reads member order stays
+   refused by the determinism rule (§6).
+5. **The provenance bytes.** For an archive read the record names the decompressed bytes, because the record names
+   the bytes the door checked and the door checks the decompressed bytes. `SourceOrigin.kind` names the archive, and
+   the member name enters the record as a field the file case does not have. The cache rule for an archive entry is
+   not decided, so Piece 13B.3 decides it with its owner.
+
+The shape table has its owner module since Piece 13A.1, so each rule that still needs an owner is a pending row that
+names the piece, and a decision that is taken moves its row in the same commit. No archive row is held yet, because
+no owner function reads a member list or the decompressed bytes, and the pins read a held row only through an owner
+function they call.
 Measured on three legs of the "XML and XPath" page — the 9.1 (EoL) leg and the 11.1 & Later leg on 2026-11-23,
 and the 10.2 leg on 2026-11-24 — the node model and the entry shape are the same on each, so the read layer agrees
 with the documented shape on all three. The 10.2 leg was read through a stored capture, because its live address

@@ -36,28 +36,34 @@ refused or read. The document index is in [README.md](README.md). The read rule 
    stated on 2024-03-20), because the live address for that leg answers a redirect; the redirect, the
    date, and the address that answered are the finding in `backlog.md`.
 
-## 2. The archive producer (decision, 2026-11-23)
+## 2. The archive producer (decision, 2026-11-23; rules 4 and 5 taken 2026-11-24)
 
 A gzip or tar.gz input is read through a producer behind the F5.1 door, so the F5.1 rule holds
-unchanged: adding a source means adding a producer, not a check. Rules pending, each needing an
-owner before the first piece lands:
+unchanged: adding a source means adding a producer, not a check. Rule 1 to rule 3 are rules that
+need an owner before the first piece lands; rule 4 and rule 5 are the two decisions, taken
+2026-11-24.
 
 1. `check_bytes` stays the one definition of the two checks, and the door runs them on the
    bytes it parses — for an archive, the decompressed bytes.
 2. The size cap must be applied during decompression, not after. Without this the size check
    answers for the compressed file only, and a bundle that expands past the cap reaches the
-   parse. No second size definition may appear.
+   parse. No second size definition may appear. Pending, Piece 13B.2.
 3. The shape is read from the magic bytes, not from the file extension, following the DTD
    rule's shape: the check asks the parser, not a text search.
-4. Accepted shapes pending decision: single-member gzip, and a tar.gz whose single XML member
-   is read. The member selection for a bundle with more than one XML member is open: the run
-   refuses, or the run names one member by a rule. A selection that depends on member order
-   conflicts with `docs/ARCHITECTURE.md` §6, so the refusal is the starting shape.
-5. The provenance facts for an archive read are an open decision: what `SourceOrigin.kind`
-   states, whether the record names the archive bytes or the decompressed bytes for `size` and
-   `sha256` (F5.3 says the record names the bytes the door checked), and how the cache rule —
-   the cache holds exactly the bytes the boundary parsed — reads for an archive. The member
-   name enters the record as a field the file case does not have.
+4. **Taken 2026-11-24, the member rule.** One member is accepted: a single-member gzip, and a
+   tar.gz that holds exactly one XML member. When the archive holds more than one XML member, the
+   run reads one only when the operator declares which member to read, as an argument; with no
+   declaration the run refuses. A selection that reads the member order stays refused by the
+   determinism rule (`docs/ARCHITECTURE.md` §6), so no member can be chosen by order. The
+   declaration is held by the CLI, not by a rule owner, so no module states a member rule the CLI
+   holds instead. The shape is still read from the bytes, so this decision changes no rule about
+   a name.
+5. **Taken 2026-11-24, the provenance bytes.** For an archive read the record names the
+   decompressed bytes, because F5.3 states that the record names the bytes the door checked and
+   rule 1 states that the door checks the decompressed bytes. `SourceOrigin.kind` names the
+   archive, and the member name enters the record as a field the file case does not have. What
+   stays open is the cache rule — how the rule that the cache holds the bytes the boundary parsed
+   reads for an archive — which Piece 13B.3 decides with its owner.
 
 ## 3. The shape table (rules, Piece 13A.1, 2026-11-24)
 
@@ -83,8 +89,10 @@ which `tools/check_documents.py` reports. Every document that describes a shape 
    wording measured by running the content through the owner, so no row states a number the pins cannot read from it.
 3. **The status vocabulary is two words.** `held` is a row the pins measure today; `pending` is a row whose line does
    not exist yet, and a pending row states no line, names no entry point as accepting its shape, and names the
-   decision in §2 it waits for. A decision that lands, or a line that is written for a held shape, moves the row in
-   the same commit.
+   decision in §2 it waits for, or the piece that will give its rule an owner once the decision is taken. Both §2
+   decisions are taken, so every pending row names a piece. A decision that lands, or a line that is written for a
+   held shape, moves the row in the same commit. A pending row cannot be held by a decision alone, because the pins
+   read a held row only through an owner function they call, and the table module states no rule an owner states.
 4. **The shape is read from the bytes**, so no row names a file name, an extension, or a committed fixture, and the
    pins decide acceptance from the row's content under different names. The committed fixture pair (Piece 13A.3)
    shows the two shapes as two files and adds no row here, so the pins read its shape from its bytes and not from
